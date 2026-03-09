@@ -1637,14 +1637,15 @@ export class PjeCalcEngine {
         oc.juros = jurosTotal.toDP(2).toNumber();
         oc.valor_final = valorFinal.toDP(2).toNumber();
 
-        totalCorrigido += oc.valor_corrigido;
-        totalJuros += oc.juros;
-        totalFinal += oc.valor_final;
+        // FIX #4: Acumular com Decimal.js
+        totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
+        totalJuros = totalJuros.plus(oc.juros);
+        totalFinal = totalFinal.plus(oc.valor_final);
       }
 
-      vr.total_corrigido = Number(new Decimal(totalCorrigido).toDP(2));
-      vr.total_juros = Number(new Decimal(totalJuros).toDP(2));
-      vr.total_final = Number(new Decimal(totalFinal).toDP(2));
+      vr.total_corrigido = totalCorrigido.toDP(2).toNumber();
+      vr.total_juros = totalJuros.toDP(2).toNumber();
+      vr.total_final = totalFinal.toDP(2).toNumber();
     }
   }
 
