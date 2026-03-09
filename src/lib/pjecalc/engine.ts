@@ -1502,8 +1502,9 @@ export class PjeCalcEngine {
               const fatorComposto = Math.pow(1 + taxaMensal, mesesJuros);
               juros = Number(new Decimal(valorCorrigido).times(fatorComposto - 1).toDP(2));
             } else if (this.correcaoConfig.juros_tipo === 'selic') {
-              const mesesJuros = this.mesesEntre(dataAjuiz || dataComp, dataLiq);
-              juros = Number(new Decimal(valorCorrigido).times(0.01).times(mesesJuros).toDP(2));
+              // FIX #2: SELIC como índice de correção já inclui juros — não aplicar juros separados
+              // Juros SELIC separados só se aplica quando o índice de correção NÃO é SELIC
+              juros = 0;
             }
           }
         }
