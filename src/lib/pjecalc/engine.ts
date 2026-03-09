@@ -1613,8 +1613,7 @@ export class PjeCalcEngine {
             if (fatorSelic !== null) {
               jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
             } else {
-              const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-              jurosTotal = jurosTotal.plus(valorCorrigido.times(0.01).times(meses));
+              console.warn(`[PjeCalcEngine] BLOQUEIO: SELIC (juros) ausente para ${segInicio}→${segFim}.`);
             }
           } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
             const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
