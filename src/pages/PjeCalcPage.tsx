@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MainLayoutPremium } from "@/components/layout/MainLayoutPremium";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,9 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { usePjeCalcData } from "@/hooks/usePjeCalcData";
+import { usePjeCalculator } from "@/hooks/usePjeCalculator";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft, Save, Play, FileText, Calendar, Clock, Users,
@@ -30,7 +28,6 @@ import { ModuloCS } from "@/components/cases/pjecalc/ModuloCS";
 import { ModuloIR } from "@/components/cases/pjecalc/ModuloIR";
 import { ModuloCorrecao } from "@/components/cases/pjecalc/ModuloCorrecao";
 import { ModuloResumo } from "@/components/cases/pjecalc/ModuloResumo";
-import { ModuloCartaoPonto } from "@/components/cases/pjecalc/ModuloCartaoPonto";
 import { ModuloCartaoPontoDiario } from "@/components/cases/pjecalc/ModuloCartaoPontoDiario";
 import { ModuloSeguroDesemprego } from "@/components/cases/pjecalc/ModuloSeguroDesemprego";
 import { ModuloHonorarios } from "@/components/cases/pjecalc/ModuloHonorarios";
@@ -44,21 +41,27 @@ import { ModuloDadosProcesso } from "@/components/cases/pjecalc/ModuloDadosProce
 import { ModuloPrevidenciaPrivada } from "@/components/cases/pjecalc/ModuloPrevidenciaPrivada";
 import { ModuloTabelasRegionais } from "@/components/cases/pjecalc/ModuloTabelasRegionais";
 import { ExcecoesSabado } from "@/components/cases/pjecalc/ExcecoesSabado";
-import { PerfilAcesso, isModuloVisivel, type PerfilTipo } from "@/components/cases/pjecalc/PerfilAcesso";
+import { PerfilAcesso, type PerfilTipo } from "@/components/cases/pjecalc/PerfilAcesso";
 import { WizardCalculo } from "@/components/cases/pjecalc/WizardCalculo";
 
 // Phase 4 components
 import { VerbaPreview } from "@/components/cases/pjecalc/VerbaPreview";
 import { PainelRevisao } from "@/components/cases/pjecalc/PainelRevisao";
 import { DashboardProdutividade } from "@/components/cases/pjecalc/DashboardProdutividade";
-import { AuditLog, registrarAuditLog } from "@/components/cases/pjecalc/AuditLog";
+import { AuditLog } from "@/components/cases/pjecalc/AuditLog";
 import { ObservacoesModulo } from "@/components/cases/pjecalc/ObservacoesModulo";
 import { AssistenteContextual } from "@/components/cases/pjecalc/AssistenteContextual";
 import { ImportadorFichaFinanceira } from "@/components/cases/pjecalc/ImportadorFichaFinanceira";
 import { MemoriaCalculoExpandida } from "@/components/cases/pjecalc/MemoriaCalculoExpandida";
 import { ModuloAjusteSentenca } from "@/components/cases/pjecalc/ModuloAjusteSentenca";
 import { ComparacaoCenarios } from "@/components/cases/pjecalc/ComparacaoCenarios";
-import { calcularCompletude, getRastreabilidadeGeral, type ModuleStatus } from "@/lib/pjecalc/completude";
+import { getRastreabilidadeGeral, type ModuleStatus } from "@/lib/pjecalc/completude";
+
+import type { PjecalcFaltaRow, PjecalcFeriasRow, PjecalcVerbaRow } from "@/lib/pjecalc/types";
+
+// =====================================================
+// CONSTANTS
+// =====================================================
 
 const MODULOS = [
   { id: 'dados_processo', label: 'Dados do Processo', icon: Briefcase, desc: 'Identificação processual' },
@@ -82,7 +85,6 @@ const MODULOS = [
   { id: 'custas', label: 'Custas', icon: Receipt, desc: 'Custas processuais' },
   { id: 'resumo', label: 'Resumo', icon: FileBarChart, desc: 'Resultado da liquidação' },
   { id: 'tabelas_regionais', label: 'Tabelas Regionais', icon: MapPin, desc: 'Pisos, VT e Sal. Família' },
-  // Phase 4 extra modules
   { id: 'memoria', label: 'Memória de Cálculo', icon: FileText, desc: 'Detalhamento linha a linha' },
   { id: 'comparacao', label: 'Comparar Cenários', icon: GitCompareArrows, desc: 'Lado a lado' },
   { id: 'revisao', label: 'Revisão Técnica', icon: ClipboardCheck, desc: 'Conferência final' },
@@ -93,8 +95,7 @@ const MODULOS = [
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
-// Status icon/color mapping for completude indicators
-const STATUS_CONFIG: Record<ModuleStatus, { icon: any; color: string; bg: string }> = {
+const STATUS_CONFIG: Record<ModuleStatus, { icon: typeof Check | null; color: string; bg: string }> = {
   nao_iniciado: { icon: null, color: 'text-muted-foreground/40', bg: '' },
   incompleto: { icon: XCircle, color: 'text-destructive', bg: 'bg-destructive/10' },
   preenchido: { icon: Check, color: 'text-primary', bg: 'bg-primary/10' },
@@ -102,13 +103,15 @@ const STATUS_CONFIG: Record<ModuleStatus, { icon: any; color: string; bg: string
   validado: { icon: CheckCircle2, color: 'text-[hsl(var(--success))]', bg: 'bg-[hsl(var(--success))]/10' },
 };
 
+// =====================================================
+// PAGE COMPONENT
+// =====================================================
+
 export default function PjeCalcPage() {
   const { id: caseId } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [activeModule, setActiveModule] = useState('parametros');
-  const [saving, setSaving] = useState(false);
-  const [selectedVerbaForGrid, setSelectedVerbaForGrid] = useState<any>(null);
+  const [selectedVerbaForGrid, setSelectedVerbaForGrid] = useState<PjecalcVerbaRow | null>(null);
   const [previewVerbaId, setPreviewVerbaId] = useState<string | null>(null);
   const [verbaSearch, setVerbaSearch] = useState('');
   const [verbaFilterTipo, setVerbaFilterTipo] = useState<'all' | 'principal' | 'reflexa'>('all');
@@ -116,30 +119,14 @@ export default function PjeCalcPage() {
   const [expandedFeriasId, setExpandedFeriasId] = useState<string | null>(null);
   const [perfilAcesso, setPerfilAcesso] = useState<PerfilTipo>('perito');
   const [showWizard, setShowWizard] = useState(false);
-  // DATA — Via unified hook (service layer)
-  // =====================================================
-  const {
-    params, faltas, ferias, historicos, verbas, resultado,
-    isLoading: paramsLoading, completude: hookCompletude, invalidate,
-  } = usePjeCalcData(caseId);
-
-  // Case data (from cases table, not pjecalc)
-  const { data: caseData } = useQuery({
-    queryKey: ["case", caseId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("cases").select("*").eq("id", caseId).single();
-      if (error) throw error;
-      return data;
-    },
-  });
 
   // =====================================================
-  // Phase 4: Completude indicators (use hook's completude)
+  // ALL DATA VIA HOOK — zero direct supabase access
   // =====================================================
-  const completude = hookCompletude;
+  const calc = usePjeCalculator(caseId);
 
   // =====================================================
-  // PARÂMETROS - LOCAL STATE
+  // LOCAL FORM STATE (synced from hook data)
   // =====================================================
   const [formParams, setFormParams] = useState({
     estado: 'SP', municipio: '', data_admissao: '', data_demissao: '',
@@ -155,71 +142,63 @@ export default function PjeCalcPage() {
   });
 
   useEffect(() => {
-    if (params) {
+    if (calc.params) {
       setFormParams({
-        estado: params.estado || 'SP', municipio: params.municipio || '',
-        data_admissao: params.data_admissao || '', data_demissao: params.data_demissao || '',
-        data_ajuizamento: params.data_ajuizamento || '',
-        data_inicial: params.data_inicial || '', data_final: params.data_final || '',
-        prescricao_quinquenal: params.prescricao_quinquenal || false,
-        prescricao_fgts: params.prescricao_fgts || false,
-        regime_trabalho: params.regime_trabalho || 'tempo_integral',
-        carga_horaria_padrao: params.carga_horaria_padrao || 220,
-        maior_remuneracao: params.maior_remuneracao?.toString() || '',
-        ultima_remuneracao: params.ultima_remuneracao?.toString() || '',
-        prazo_aviso_previo: params.prazo_aviso_previo || 'nao_apurar',
-        prazo_aviso_dias: params.prazo_aviso_dias?.toString() || '',
-        projetar_aviso_indenizado: params.projetar_aviso_indenizado || false,
-        limitar_avos_periodo: params.limitar_avos_periodo || false,
-        zerar_valor_negativo: params.zerar_valor_negativo || false,
-        sabado_dia_util: params.sabado_dia_util ?? true,
-        considerar_feriado_estadual: params.considerar_feriado_estadual || false,
-        considerar_feriado_municipal: params.considerar_feriado_municipal || false,
-        comentarios: params.comentarios || '',
+        estado: calc.params.estado || 'SP',
+        municipio: calc.params.municipio || '',
+        data_admissao: calc.params.data_admissao || '',
+        data_demissao: calc.params.data_demissao || '',
+        data_ajuizamento: calc.params.data_ajuizamento || '',
+        data_inicial: calc.params.data_inicial || '',
+        data_final: calc.params.data_final || '',
+        prescricao_quinquenal: calc.params.prescricao_quinquenal || false,
+        prescricao_fgts: calc.params.prescricao_fgts || false,
+        regime_trabalho: calc.params.regime_trabalho || 'tempo_integral',
+        carga_horaria_padrao: calc.params.carga_horaria_padrao || 220,
+        maior_remuneracao: calc.params.maior_remuneracao?.toString() || '',
+        ultima_remuneracao: calc.params.ultima_remuneracao?.toString() || '',
+        prazo_aviso_previo: calc.params.prazo_aviso_previo || 'nao_apurar',
+        prazo_aviso_dias: calc.params.prazo_aviso_dias?.toString() || '',
+        projetar_aviso_indenizado: calc.params.projetar_aviso_indenizado || false,
+        limitar_avos_periodo: calc.params.limitar_avos_periodo || false,
+        zerar_valor_negativo: calc.params.zerar_valor_negativo || false,
+        sabado_dia_util: calc.params.sabado_dia_util ?? true,
+        considerar_feriado_estadual: calc.params.considerar_feriado_estadual || false,
+        considerar_feriado_municipal: calc.params.considerar_feriado_municipal || false,
+        comentarios: calc.params.comentarios || '',
       });
     }
-  }, [params]);
+  }, [calc.params]);
 
   // =====================================================
-  // SAVE PARAMS (with audit log)
+  // SAVE PARAMS — via hook mutation
   // =====================================================
-  const saveParams = async () => {
-    setSaving(true);
-    try {
-      const payload = {
-        case_id: caseId!, estado: formParams.estado, municipio: formParams.municipio,
-        data_admissao: formParams.data_admissao, data_demissao: formParams.data_demissao || null,
-        data_ajuizamento: formParams.data_ajuizamento, data_inicial: formParams.data_inicial || null,
-        data_final: formParams.data_final || null, prescricao_quinquenal: formParams.prescricao_quinquenal,
-        prescricao_fgts: formParams.prescricao_fgts, regime_trabalho: formParams.regime_trabalho,
-        carga_horaria_padrao: formParams.carga_horaria_padrao,
-        maior_remuneracao: formParams.maior_remuneracao ? parseFloat(formParams.maior_remuneracao) : null,
-        ultima_remuneracao: formParams.ultima_remuneracao ? parseFloat(formParams.ultima_remuneracao) : null,
-        prazo_aviso_previo: formParams.prazo_aviso_previo,
-        prazo_aviso_dias: formParams.prazo_aviso_dias ? parseInt(formParams.prazo_aviso_dias) : null,
-        projetar_aviso_indenizado: formParams.projetar_aviso_indenizado,
-        limitar_avos_periodo: formParams.limitar_avos_periodo,
-        zerar_valor_negativo: formParams.zerar_valor_negativo,
-        sabado_dia_util: formParams.sabado_dia_util,
-        considerar_feriado_estadual: formParams.considerar_feriado_estadual,
-        considerar_feriado_municipal: formParams.considerar_feriado_municipal,
-        comentarios: formParams.comentarios,
-      };
-
-      if (params?.id) {
-        await supabase.from("pjecalc_parametros" as any).update(payload).eq("id", params.id);
-      } else {
-        await supabase.from("pjecalc_parametros" as any).insert(payload);
-      }
-      // Phase 4: audit log
-      registrarAuditLog(caseId!, 'Parâmetros', params?.id ? 'edicao' : 'criacao');
-      queryClient.invalidateQueries({ queryKey: ["pjecalc_parametros", caseId] });
-      toast.success("Parâmetros salvos!");
-    } catch (e) {
-      toast.error("Erro: " + (e as Error).message);
-    } finally {
-      setSaving(false);
-    }
+  const handleSaveParams = () => {
+    calc.saveParams.mutate({
+      case_id: caseId!,
+      estado: formParams.estado,
+      municipio: formParams.municipio,
+      data_admissao: formParams.data_admissao,
+      data_demissao: formParams.data_demissao || undefined,
+      data_ajuizamento: formParams.data_ajuizamento,
+      data_inicial: formParams.data_inicial || undefined,
+      data_final: formParams.data_final || undefined,
+      prescricao_quinquenal: formParams.prescricao_quinquenal,
+      prescricao_fgts: formParams.prescricao_fgts,
+      regime_trabalho: formParams.regime_trabalho,
+      carga_horaria_padrao: formParams.carga_horaria_padrao,
+      maior_remuneracao: formParams.maior_remuneracao ? parseFloat(formParams.maior_remuneracao) : null,
+      ultima_remuneracao: formParams.ultima_remuneracao ? parseFloat(formParams.ultima_remuneracao) : null,
+      prazo_aviso_previo: formParams.prazo_aviso_previo,
+      prazo_aviso_dias: formParams.prazo_aviso_dias ? parseInt(formParams.prazo_aviso_dias) : null,
+      projetar_aviso_indenizado: formParams.projetar_aviso_indenizado,
+      limitar_avos_periodo: formParams.limitar_avos_periodo,
+      zerar_valor_negativo: formParams.zerar_valor_negativo,
+      sabado_dia_util: formParams.sabado_dia_util,
+      considerar_feriado_estadual: formParams.considerar_feriado_estadual,
+      considerar_feriado_municipal: formParams.considerar_feriado_municipal,
+      comentarios: formParams.comentarios,
+    });
   };
 
   // =====================================================
@@ -230,8 +209,8 @@ export default function PjeCalcPage() {
       return <GradeOcorrencias
         caseId={caseId!} verbaId={selectedVerbaForGrid.id}
         verbaNome={selectedVerbaForGrid.nome}
-        periodoInicio={selectedVerbaForGrid.periodo_inicio}
-        periodoFim={selectedVerbaForGrid.periodo_fim}
+        periodoInicio={selectedVerbaForGrid.periodo_inicio ?? undefined}
+        periodoFim={selectedVerbaForGrid.periodo_fim ?? undefined}
         onClose={() => setSelectedVerbaForGrid(null)}
       />;
     }
@@ -262,10 +241,9 @@ export default function PjeCalcPage() {
         case 'custas': return <ModuloCustas caseId={caseId!} />;
         case 'resumo': return <ModuloResumo caseId={caseId!} />;
         case 'tabelas_regionais': return <ModuloTabelasRegionais caseId={caseId!} estado={formParams.estado} municipio={formParams.municipio} />;
-        // Phase 4 modules
-        case 'memoria': return resultado?.resultado ? <MemoriaCalculoExpandida resultado={resultado.resultado as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
+        case 'memoria': return calc.rawResultado?.resultado ? <MemoriaCalculoExpandida resultado={calc.rawResultado.resultado as Record<string, unknown>} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
         case 'comparacao': return <ComparacaoCenarios caseId={caseId!} />;
-        case 'revisao': return <PainelRevisao caseId={caseId!} validacao={null} resultado={(resultado?.resultado || null) as any} modulosStatus={completude} />;
+        case 'revisao': return <PainelRevisao caseId={caseId!} validacao={null} resultado={(calc.rawResultado?.resultado || null) as Record<string, unknown> | null} modulosStatus={calc.completude} />;
         case 'rastreabilidade': return renderRastreabilidade();
         case 'auditoria': return <AuditLog caseId={caseId!} />;
         case 'dashboard': return <DashboardProdutividade />;
@@ -273,7 +251,6 @@ export default function PjeCalcPage() {
       }
     })();
 
-    // Wrap with contextual assistant (Item 11) and observations (Item 10)
     const showAssistant = !['memoria', 'comparacao', 'revisao', 'rastreabilidade', 'auditoria', 'dashboard'].includes(activeModule);
 
     return (
@@ -282,10 +259,10 @@ export default function PjeCalcPage() {
           <AssistenteContextual
             modulo={activeModule}
             params={formParams}
-            hasHistorico={historicos.length > 0}
-            hasVerbas={verbas.length > 0}
-            hasFaltas={faltas.length > 0}
-            hasFerias={ferias.length > 0}
+            hasHistorico={calc.historicos.length > 0}
+            hasVerbas={calc.verbas.length > 0}
+            hasFaltas={calc.faltas.length > 0}
+            hasFerias={calc.ferias.length > 0}
           />
         )}
         {moduleContent}
@@ -295,7 +272,7 @@ export default function PjeCalcPage() {
   };
 
   // =====================================================
-  // Phase 4, Item 5: Rastreabilidade Jurídica
+  // RASTREABILIDADE
   // =====================================================
   const renderRastreabilidade = () => {
     const items = getRastreabilidadeGeral();
@@ -330,14 +307,14 @@ export default function PjeCalcPage() {
   };
 
   // =====================================================
-  // MÓDULO: PARÂMETROS (same as before)
+  // PARÂMETROS
   // =====================================================
   const renderParametros = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Parâmetros do Cálculo</h2>
-        <Button onClick={saveParams} disabled={saving} size="sm">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+        <Button onClick={handleSaveParams} disabled={calc.saveParams.isPending} size="sm">
+          {calc.saveParams.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
           Salvar
         </Button>
       </div>
@@ -417,36 +394,38 @@ export default function PjeCalcPage() {
           <div className="flex items-center gap-2"><Checkbox checked={formParams.considerar_feriado_municipal} onCheckedChange={v => setFormParams(p => ({ ...p, considerar_feriado_municipal: !!v }))} /><Label className="text-xs">Considerar Feriado Municipal</Label></div>
         </CardContent>
       </Card>
-      {/* Phase 10: Saturday exceptions per period */}
       <ExcecoesSabado caseId={caseId!} globalSabadoDiaUtil={formParams.sabado_dia_util} />
     </div>
   );
 
   // =====================================================
-  // MÓDULO: FALTAS
+  // FALTAS — via hook mutations
   // =====================================================
   const renderFaltas = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Faltas</h2>
-        <Button size="sm" onClick={async () => {
-          await supabase.from("pjecalc_faltas" as any).insert({ case_id: caseId!, data_inicial: new Date().toISOString().slice(0, 10), data_final: new Date().toISOString().slice(0, 10), justificada: false });
-          queryClient.invalidateQueries({ queryKey: ["pjecalc_faltas", caseId] });
-          registrarAuditLog(caseId!, 'Faltas', 'criacao');
+        <Button size="sm" onClick={() => {
+          calc.addFalta.mutate({
+            case_id: caseId!,
+            data_inicial: new Date().toISOString().slice(0, 10),
+            data_final: new Date().toISOString().slice(0, 10),
+            justificada: false,
+          });
         }}><Plus className="h-4 w-4 mr-1" /> Nova Falta</Button>
       </div>
       <p className="text-xs text-muted-foreground">Informe todas as faltas durante o contrato.</p>
-      {faltas.length === 0 ? (
+      {calc.faltas.length === 0 ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Nenhuma falta registrada.</CardContent></Card>
       ) : (
         <div className="space-y-2">
-          {faltas.map((f: any) => (
+          {calc.faltas.map((f: PjecalcFaltaRow) => (
             <Card key={f.id}><CardContent className="p-3 flex items-center gap-3">
-              <Input type="date" defaultValue={f.data_inicial} className="h-8 text-xs w-36" onBlur={async e => { await supabase.from("pjecalc_faltas" as any).update({ data_inicial: e.target.value }).eq("id", f.id); queryClient.invalidateQueries({ queryKey: ["pjecalc_faltas", caseId] }); }} />
+              <Input type="date" defaultValue={f.data_inicial ?? ''} className="h-8 text-xs w-36" onBlur={e => calc.updateFalta.mutate({ id: f.id, updates: { data_inicial: e.target.value } })} />
               <span className="text-xs text-muted-foreground">a</span>
-              <Input type="date" defaultValue={f.data_final} className="h-8 text-xs w-36" onBlur={async e => { await supabase.from("pjecalc_faltas" as any).update({ data_final: e.target.value }).eq("id", f.id); queryClient.invalidateQueries({ queryKey: ["pjecalc_faltas", caseId] }); }} />
-              <div className="flex items-center gap-1"><Checkbox defaultChecked={f.justificada} onCheckedChange={async v => { await supabase.from("pjecalc_faltas" as any).update({ justificada: !!v }).eq("id", f.id); queryClient.invalidateQueries({ queryKey: ["pjecalc_faltas", caseId] }); }} /><Label className="text-xs">Justificada</Label></div>
-              <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" onClick={async () => { await supabase.from("pjecalc_faltas" as any).delete().eq("id", f.id); queryClient.invalidateQueries({ queryKey: ["pjecalc_faltas", caseId] }); }}><Trash2 className="h-3 w-3" /></Button>
+              <Input type="date" defaultValue={f.data_final ?? ''} className="h-8 text-xs w-36" onBlur={e => calc.updateFalta.mutate({ id: f.id, updates: { data_final: e.target.value } })} />
+              <div className="flex items-center gap-1"><Checkbox defaultChecked={f.justificada} onCheckedChange={v => calc.updateFalta.mutate({ id: f.id, updates: { justificada: !!v } })} /><Label className="text-xs">Justificada</Label></div>
+              <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" onClick={() => calc.removeFalta.mutate(f.id)}><Trash2 className="h-3 w-3" /></Button>
             </CardContent></Card>
           ))}
         </div>
@@ -455,77 +434,61 @@ export default function PjeCalcPage() {
   );
 
   // =====================================================
-  // MÓDULO: FÉRIAS
+  // FÉRIAS — via hook mutations
   // =====================================================
   const renderFerias = () => {
-    const expandedId = expandedFeriasId;
-    const setExpandedId = setExpandedFeriasId;
-
-    const addGozoPeriodo = async (feriaId: string, currentPeriodos: any[]) => {
+    const addGozoPeriodo = (feriaId: string, currentPeriodos: Array<{ inicio: string; fim: string; dias: number }>) => {
       if (currentPeriodos.length >= 3) { toast.error("Máximo de 3 períodos (CLT Art. 134 §1º)"); return; }
       const updated = [...currentPeriodos, { inicio: '', fim: '', dias: 0 }];
-      await supabase.from("pjecalc_ferias" as any).update({ periodos_gozo: updated }).eq("id", feriaId);
-      queryClient.invalidateQueries({ queryKey: ["pjecalc_ferias", caseId] });
+      calc.updateFerias.mutate({ id: feriaId, updates: { periodos_gozo: updated } });
     };
 
-    const updateGozoPeriodo = async (feriaId: string, periodos: any[], idx: number, field: string, value: string) => {
+    const updateGozoPeriodo = (feriaId: string, periodos: Array<{ inicio: string; fim: string; dias: number }>, idx: number, field: string, value: string) => {
       const updated = [...periodos];
       updated[idx] = { ...updated[idx], [field]: value };
-      // Auto-calc dias
       if (updated[idx].inicio && updated[idx].fim) {
         const d1 = new Date(updated[idx].inicio), d2 = new Date(updated[idx].fim);
         updated[idx].dias = Math.max(0, Math.floor((d2.getTime() - d1.getTime()) / 86400000) + 1);
       }
-      await supabase.from("pjecalc_ferias" as any).update({ periodos_gozo: updated }).eq("id", feriaId);
-      queryClient.invalidateQueries({ queryKey: ["pjecalc_ferias", caseId] });
+      calc.updateFerias.mutate({ id: feriaId, updates: { periodos_gozo: updated } });
     };
 
-    const removeGozoPeriodo = async (feriaId: string, periodos: any[], idx: number) => {
-      const updated = periodos.filter((_: any, i: number) => i !== idx);
-      await supabase.from("pjecalc_ferias" as any).update({ periodos_gozo: updated }).eq("id", feriaId);
-      queryClient.invalidateQueries({ queryKey: ["pjecalc_ferias", caseId] });
+    const removeGozoPeriodo = (feriaId: string, periodos: Array<{ inicio: string; fim: string; dias: number }>, idx: number) => {
+      const updated = periodos.filter((_, i) => i !== idx);
+      calc.updateFerias.mutate({ id: feriaId, updates: { periodos_gozo: updated } });
     };
 
     return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Férias</h2>
-        <Button size="sm" variant="outline" onClick={async () => {
-          if (!formParams.data_admissao || !formParams.data_demissao) { toast.error("Preencha as datas de admissão e demissão."); return; }
-          await supabase.from("pjecalc_ferias" as any).delete().eq("case_id", caseId!);
-          const adm = new Date(formParams.data_admissao); const dem = new Date(formParams.data_demissao);
-          const periodos: any[] = []; let aqInicio = new Date(adm);
-          while (aqInicio < dem) {
-            const aqFim = new Date(aqInicio); aqFim.setFullYear(aqFim.getFullYear() + 1); aqFim.setDate(aqFim.getDate() - 1);
-            const concInicio = new Date(aqFim); concInicio.setDate(concInicio.getDate() + 1);
-            const concFim = new Date(concInicio); concFim.setFullYear(concFim.getFullYear() + 1); concFim.setDate(concFim.getDate() - 1);
-            const situacao = concFim <= dem ? 'gozadas' : 'indenizadas';
-            periodos.push({ case_id: caseId!, relativas: `${aqInicio.getFullYear()}/${aqFim.getFullYear()}`, periodo_aquisitivo_inicio: aqInicio.toISOString().slice(0, 10), periodo_aquisitivo_fim: aqFim > dem ? dem.toISOString().slice(0, 10) : aqFim.toISOString().slice(0, 10), periodo_concessivo_inicio: concInicio.toISOString().slice(0, 10), periodo_concessivo_fim: concFim.toISOString().slice(0, 10), prazo_dias: formParams.regime_trabalho === 'tempo_integral' ? 30 : 18, situacao, dobra: situacao === 'indenizadas' ? false : (concFim > dem), periodos_gozo: [] });
-            aqInicio = new Date(aqFim); aqInicio.setDate(aqInicio.getDate() + 1);
-          }
-          if (periodos.length > 0) await supabase.from("pjecalc_ferias" as any).insert(periodos);
-          queryClient.invalidateQueries({ queryKey: ["pjecalc_ferias", caseId] });
-          registrarAuditLog(caseId!, 'Férias', 'criacao', { valorNovo: `${periodos.length} períodos` });
-          toast.success(`${periodos.length} período(s) gerado(s)`);
-        }}><Calculator className="h-4 w-4 mr-1" /> Gerar Automaticamente</Button>
+        <Button size="sm" variant="outline" onClick={() => {
+          calc.generateFeriasAuto.mutate({
+            dataAdmissao: formParams.data_admissao,
+            dataDemissao: formParams.data_demissao,
+            regimeTrabalho: formParams.regime_trabalho,
+          });
+        }} disabled={calc.generateFeriasAuto.isPending}>
+          {calc.generateFeriasAuto.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Calculator className="h-4 w-4 mr-1" />}
+          Gerar Automaticamente
+        </Button>
       </div>
       <p className="text-[10px] text-muted-foreground">CLT Art. 134 §1º (Reforma Trabalhista): Férias podem ser fracionadas em até 3 períodos, sendo um deles ≥ 14 dias e os demais ≥ 5 dias.</p>
-      {ferias.length === 0 ? (
+      {calc.ferias.length === 0 ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Clique em "Gerar Automaticamente".</CardContent></Card>
       ) : (
         <div className="space-y-2">
-          {ferias.map((f: any) => {
-            const periodos = f.periodos_gozo || [];
-            const totalDiasGozo = periodos.reduce((s: number, p: any) => s + (p.dias || 0), 0);
-            const isExpanded = expandedId === f.id;
+          {calc.ferias.map((f: PjecalcFeriasRow) => {
+            const periodos = (f as unknown as { periodos_gozo?: Array<{ inicio: string; fim: string; dias: number }> }).periodos_gozo || [];
+            const totalDiasGozo = periodos.reduce((s, p) => s + (p.dias || 0), 0);
+            const isExpanded = expandedFeriasId === f.id;
             return (
               <Card key={f.id}>
                 <CardContent className="p-3 space-y-2">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <div className="text-xs font-medium min-w-[80px]">{f.relativas}</div>
                     <div className="text-[10px] font-mono text-muted-foreground">{f.periodo_aquisitivo_inicio} a {f.periodo_aquisitivo_fim}</div>
-                    <Input type="number" defaultValue={f.prazo_dias} className="h-7 text-xs w-16 text-center" onBlur={e => supabase.from("pjecalc_ferias" as any).update({ prazo_dias: parseInt(e.target.value) || 30 }).eq("id", f.id)} />
-                    <Select defaultValue={f.situacao} onValueChange={async v => { await supabase.from("pjecalc_ferias" as any).update({ situacao: v }).eq("id", f.id); queryClient.invalidateQueries({ queryKey: ["pjecalc_ferias", caseId] }); }}>
+                    <Input type="number" defaultValue={f.dias} className="h-7 text-xs w-16 text-center" onBlur={e => calc.updateFerias.mutate({ id: f.id, updates: { dias: parseInt(e.target.value) || 30 } })} />
+                    <Select defaultValue={f.situacao} onValueChange={v => calc.updateFerias.mutate({ id: f.id, updates: { situacao: v } })}>
                       <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="gozadas">Gozadas</SelectItem>
@@ -534,12 +497,12 @@ export default function PjeCalcPage() {
                         <SelectItem value="gozadas_parcialmente">Goz. Parcial</SelectItem>
                       </SelectContent>
                     </Select>
-                    <div className="flex items-center gap-1"><Checkbox defaultChecked={f.dobra} onCheckedChange={v => supabase.from("pjecalc_ferias" as any).update({ dobra: !!v }).eq("id", f.id)} /><Label className="text-[10px]">Dobra</Label></div>
-                    <div className="flex items-center gap-1"><Checkbox defaultChecked={f.abono} onCheckedChange={v => supabase.from("pjecalc_ferias" as any).update({ abono: !!v }).eq("id", f.id)} /><Label className="text-[10px]">Abono</Label></div>
-                    <Button variant="ghost" size="sm" className="h-6 text-[10px] ml-auto" onClick={() => setExpandedId(isExpanded ? null : f.id)}>
+                    <div className="flex items-center gap-1"><Checkbox defaultChecked={f.dobra} onCheckedChange={v => calc.updateFerias.mutate({ id: f.id, updates: { dobra: !!v } })} /><Label className="text-[10px]">Dobra</Label></div>
+                    <div className="flex items-center gap-1"><Checkbox defaultChecked={f.abono} onCheckedChange={v => calc.updateFerias.mutate({ id: f.id, updates: { abono: !!v } })} /><Label className="text-[10px]">Abono</Label></div>
+                    <Button variant="ghost" size="sm" className="h-6 text-[10px] ml-auto" onClick={() => setExpandedFeriasId(isExpanded ? null : f.id)}>
                       {periodos.length > 0 ? `${periodos.length} período(s)` : 'Fracionar'} <ChevronRight className={cn("h-3 w-3 ml-1 transition-transform", isExpanded && "rotate-90")} />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async () => { await supabase.from("pjecalc_ferias" as any).delete().eq("id", f.id); queryClient.invalidateQueries({ queryKey: ["pjecalc_ferias", caseId] }); }}>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => calc.removeFerias.mutate(f.id)}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -548,13 +511,13 @@ export default function PjeCalcPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-medium text-muted-foreground">Períodos de Gozo (Art. 134 §1º CLT)</span>
                         <div className="flex items-center gap-2">
-                          {totalDiasGozo > 0 && <Badge variant="outline" className="text-[9px]">{totalDiasGozo}/{f.prazo_dias}d</Badge>}
+                          {totalDiasGozo > 0 && <Badge variant="outline" className="text-[9px]">{totalDiasGozo}/{f.dias}d</Badge>}
                           <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => addGozoPeriodo(f.id, periodos)} disabled={periodos.length >= 3}>
                             <Plus className="h-3 w-3 mr-1" /> Período
                           </Button>
                         </div>
                       </div>
-                      {periodos.map((p: any, idx: number) => (
+                      {periodos.map((p, idx) => (
                         <div key={idx} className="flex items-center gap-2">
                           <Badge variant="secondary" className="text-[9px] w-5 justify-center">{idx + 1}</Badge>
                           <Input type="date" value={p.inicio || ''} onChange={e => updateGozoPeriodo(f.id, periodos, idx, 'inicio', e.target.value)} className="h-7 text-xs w-32" />
@@ -578,28 +541,34 @@ export default function PjeCalcPage() {
   };
 
   // =====================================================
-  // MÓDULO: HISTÓRICO SALARIAL
+  // HISTÓRICO SALARIAL — via hook mutations
   // =====================================================
   const renderHistorico = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Histórico Salarial</h2>
         <div className="flex gap-2">
-          <ImportadorFichaFinanceira caseId={caseId!} onImported={() => queryClient.invalidateQueries({ queryKey: ["pjecalc_historico", caseId] })} />
-          <Button size="sm" onClick={async () => {
+          <ImportadorFichaFinanceira caseId={caseId!} onImported={() => calc.invalidate()} />
+          <Button size="sm" onClick={() => {
             if (!formParams.data_admissao) { toast.error("Preencha a data de admissão."); return; }
-            await supabase.from("pjecalc_historico_salarial" as any).insert({ case_id: caseId!, nome: `Salário Base ${historicos.length + 1}`, periodo_inicio: formParams.data_admissao, periodo_fim: formParams.data_demissao || new Date().toISOString().slice(0, 10), tipo_valor: 'informado', incidencia_fgts: true, incidencia_cs: true });
-            queryClient.invalidateQueries({ queryKey: ["pjecalc_historico", caseId] });
-            registrarAuditLog(caseId!, 'Histórico', 'criacao');
+            calc.addHistorico.mutate({
+              case_id: caseId!,
+              nome: `Salário Base ${calc.historicos.length + 1}`,
+              periodo_inicio: formParams.data_admissao,
+              periodo_fim: formParams.data_demissao || new Date().toISOString().slice(0, 10),
+              tipo_valor: 'informado',
+              incidencia_fgts: true,
+              incidencia_cs: true,
+            });
           }}><Plus className="h-4 w-4 mr-1" /> Nova Base</Button>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">Cadastre as bases de cálculo.</p>
-      {historicos.length === 0 ? (
+      {calc.historicos.length === 0 ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Nenhuma base cadastrada.</CardContent></Card>
-      ) : historicos.map((h: any) => (
+      ) : calc.historicos.map((h) => (
         <Card key={h.id}>
-          <CardHeader className="pb-2"><div className="flex items-center justify-between"><CardTitle className="text-sm">{h.nome}</CardTitle><div className="flex gap-2"><Badge variant="secondary" className="text-[10px]">{h.tipo_valor}</Badge>{h.incidencia_fgts && <Badge variant="outline" className="text-[10px]">FGTS</Badge>}{h.incidencia_cs && <Badge variant="outline" className="text-[10px]">CS</Badge>}<Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => { await supabase.from("pjecalc_historico_salarial" as any).delete().eq("id", h.id); queryClient.invalidateQueries({ queryKey: ["pjecalc_historico", caseId] }); }}><Trash2 className="h-3 w-3" /></Button></div></div></CardHeader>
+          <CardHeader className="pb-2"><div className="flex items-center justify-between"><CardTitle className="text-sm">{h.nome}</CardTitle><div className="flex gap-2"><Badge variant="secondary" className="text-[10px]">{h.tipo_valor}</Badge>{h.incidencia_fgts && <Badge variant="outline" className="text-[10px]">FGTS</Badge>}{h.incidencia_cs && <Badge variant="outline" className="text-[10px]">CS</Badge>}<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => calc.removeHistorico.mutate(h.id)}><Trash2 className="h-3 w-3" /></Button></div></div></CardHeader>
           <CardContent><div className="grid grid-cols-4 gap-2 text-xs"><div><Label className="text-[10px]">Início</Label><div className="font-mono">{h.periodo_inicio}</div></div><div><Label className="text-[10px]">Fim</Label><div className="font-mono">{h.periodo_fim}</div></div><div><Label className="text-[10px]">Valor</Label><div className="font-mono">{h.valor_informado ? `R$ ${h.valor_informado.toFixed(2)}` : '—'}</div></div><div><Label className="text-[10px]">Tipo</Label><div>{h.tipo_valor}</div></div></div></CardContent>
         </Card>
       ))}
@@ -607,10 +576,10 @@ export default function PjeCalcPage() {
   );
 
   // =====================================================
-  // MÓDULO: VERBAS (with preview - Phase 4 Item 2)
+  // VERBAS — via hook mutations
   // =====================================================
   const renderVerbas = () => {
-    const filteredVerbas = verbas.filter((v: any) => {
+    const filteredVerbas = calc.verbas.filter((v) => {
       if (verbaFilterTipo !== 'all' && v.tipo !== verbaFilterTipo) return false;
       if (verbaFilterCarac !== 'all' && v.caracteristica !== verbaFilterCarac) return false;
       if (!verbaSearch) return true;
@@ -627,38 +596,43 @@ export default function PjeCalcPage() {
             caseId={caseId!}
             periodoInicio={formParams.data_admissao}
             periodoFim={formParams.data_demissao || new Date().toISOString().slice(0,10)}
-            ordemBase={verbas.length}
-            onInsert={() => { queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] }); registrarAuditLog(caseId!, 'Verbas', 'criacao', { valorNovo: 'catálogo' }); }}
+            ordemBase={calc.verbas.length}
+            onInsert={() => calc.invalidate()}
           />
-          <Button size="sm" variant="outline" onClick={async () => {
-            const verbasExpresso = [
-              { nome: 'Horas Extras 50%', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', tipo: 'principal', multiplicador: 1.5, divisor_informado: formParams.carga_horaria_padrao },
-              { nome: 'RSR s/ Horas Extras', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', tipo: 'reflexa', multiplicador: 1 },
-              { nome: '13º Salário', caracteristica: '13_salario', ocorrencia_pagamento: 'dezembro', tipo: 'reflexa', multiplicador: 1 },
-              { nome: 'Férias + 1/3', caracteristica: 'ferias', ocorrencia_pagamento: 'periodo_aquisitivo', tipo: 'reflexa', multiplicador: 1.3333 },
-            ];
-            const periodo = formParams.data_admissao && formParams.data_demissao ? { inicio: formParams.data_admissao, fim: formParams.data_demissao } : { inicio: new Date().toISOString().slice(0, 10), fim: new Date().toISOString().slice(0, 10) };
-            for (const ve of verbasExpresso) { await supabase.from("pjecalc_verbas" as any).insert({ case_id: caseId!, nome: ve.nome, tipo: ve.tipo, caracteristica: ve.caracteristica, ocorrencia_pagamento: ve.ocorrencia_pagamento, multiplicador: ve.multiplicador, divisor_informado: ve.divisor_informado || 30, periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: verbas.length }); }
-            queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
-            registrarAuditLog(caseId!, 'Verbas', 'criacao', { valorNovo: '4 verbas expressas' });
-            toast.success("Verbas expressas adicionadas!");
+          <Button size="sm" variant="outline" onClick={() => {
+            const periodo = formParams.data_admissao && formParams.data_demissao
+              ? { inicio: formParams.data_admissao, fim: formParams.data_demissao }
+              : { inicio: new Date().toISOString().slice(0, 10), fim: new Date().toISOString().slice(0, 10) };
+            calc.addVerbasBatch.mutate([
+              { case_id: caseId!, nome: 'Horas Extras 50%', caracteristica: 'COMUM', ocorrencia_pagamento: 'MENSAL', tipo: 'principal', multiplicador: 1.5, divisor_informado: formParams.carga_horaria_padrao, periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: calc.verbas.length },
+              { case_id: caseId!, nome: 'RSR s/ Horas Extras', caracteristica: 'COMUM', ocorrencia_pagamento: 'MENSAL', tipo: 'reflexa', multiplicador: 1, periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: calc.verbas.length + 1 },
+              { case_id: caseId!, nome: '13º Salário', caracteristica: '13_SALARIO', ocorrencia_pagamento: 'DEZEMBRO', tipo: 'reflexa', multiplicador: 1, periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: calc.verbas.length + 2 },
+              { case_id: caseId!, nome: 'Férias + 1/3', caracteristica: 'FERIAS', ocorrencia_pagamento: 'PERIODO_AQUISITIVO', tipo: 'reflexa', multiplicador: 1.3333, periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: calc.verbas.length + 3 },
+            ]);
           }}><Briefcase className="h-4 w-4 mr-1" /> Expresso</Button>
-          <Button size="sm" onClick={async () => {
-            const periodo = formParams.data_admissao && formParams.data_demissao ? { inicio: formParams.data_admissao, fim: formParams.data_demissao } : { inicio: new Date().toISOString().slice(0, 10), fim: new Date().toISOString().slice(0, 10) };
-            await supabase.from("pjecalc_verbas" as any).insert({ case_id: caseId!, nome: `Verba ${verbas.length + 1}`, tipo: 'principal', periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: verbas.length });
-            queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
+          <Button size="sm" onClick={() => {
+            const periodo = formParams.data_admissao && formParams.data_demissao
+              ? { inicio: formParams.data_admissao, fim: formParams.data_demissao }
+              : { inicio: new Date().toISOString().slice(0, 10), fim: new Date().toISOString().slice(0, 10) };
+            calc.addVerba.mutate({
+              case_id: caseId!,
+              nome: `Verba ${calc.verbas.length + 1}`,
+              tipo: 'principal',
+              periodo_inicio: periodo.inicio,
+              periodo_fim: periodo.fim,
+              ordem: calc.verbas.length,
+            });
           }}><Plus className="h-4 w-4 mr-1" /> Manual</Button>
         </div>
       </div>
 
-      {/* Search bar */}
-      {verbas.length > 0 && (
+      {calc.verbas.length > 0 && (
         <div className="flex gap-2 items-center flex-wrap">
           <div className="relative flex-1 min-w-[160px] max-w-xs">
             <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
             <Input placeholder="Buscar verba..." value={verbaSearch} onChange={e => setVerbaSearch(e.target.value)} className="pl-8 h-7 text-xs" />
           </div>
-          <Select value={verbaFilterTipo} onValueChange={(v: any) => setVerbaFilterTipo(v)}>
+          <Select value={verbaFilterTipo} onValueChange={(v: 'all' | 'principal' | 'reflexa') => setVerbaFilterTipo(v)}>
             <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos tipos</SelectItem>
@@ -666,7 +640,7 @@ export default function PjeCalcPage() {
               <SelectItem value="reflexa">Reflexa</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={verbaFilterCarac} onValueChange={(v: any) => setVerbaFilterCarac(v)}>
+          <Select value={verbaFilterCarac} onValueChange={v => setVerbaFilterCarac(v)}>
             <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas caract.</SelectItem>
@@ -676,17 +650,17 @@ export default function PjeCalcPage() {
               <SelectItem value="aviso_previo">Aviso Prévio</SelectItem>
             </SelectContent>
           </Select>
-          <Badge variant="outline" className="text-[10px]">{filteredVerbas.length}/{verbas.length}</Badge>
+          <Badge variant="outline" className="text-[10px]">{filteredVerbas.length}/{calc.verbas.length}</Badge>
         </div>
       )}
 
-      {verbas.length === 0 ? (
+      {calc.verbas.length === 0 ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Use "Catálogo", "Expresso" ou "Manual".</CardContent></Card>
       ) : filteredVerbas.length === 0 ? (
         <Card><CardContent className="p-6 text-center text-sm text-muted-foreground">Nenhuma verba encontrada para "{verbaSearch}".</CardContent></Card>
       ) : (
         <div className="space-y-2">
-          {filteredVerbas.map((v: any) => (
+          {filteredVerbas.map((v: PjecalcVerbaRow) => (
             <div key={v.id}>
               <Card className="hover:border-primary/30 transition-colors">
                 <CardContent className="p-3">
@@ -706,14 +680,14 @@ export default function PjeCalcPage() {
                       <Button variant="outline" size="sm" className="h-7 text-[10px] px-2" onClick={() => setSelectedVerbaForGrid(v)}>
                         <BarChart3 className="h-3 w-3 mr-1" /> Grade
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={async () => { await supabase.from("pjecalc_verbas" as any).delete().eq("id", v.id); queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] }); registrarAuditLog(caseId!, 'Verbas', 'exclusao', { valorAnterior: v.nome }); }}><Trash2 className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => calc.removeVerba.mutate({ id: v.id, nome: v.nome })}><Trash2 className="h-3 w-3" /></Button>
                     </div>
                   </div>
                 </CardContent>
               </Card>
               {previewVerbaId === v.id && (
                 <div className="mt-1">
-                  <VerbaPreview verba={v as any} engine={null} onClose={() => setPreviewVerbaId(null)} />
+                  <VerbaPreview verba={v as Record<string, unknown>} engine={null} onClose={() => setPreviewVerbaId(null)} />
                 </div>
               )}
             </div>
@@ -727,7 +701,7 @@ export default function PjeCalcPage() {
   // =====================================================
   // MAIN RENDER
   // =====================================================
-  if (!caseData) {
+  if (calc.isLoading || !calc.caseData) {
     return (
       <MainLayoutPremium title="PJe-Calc">
         <div className="flex items-center justify-center py-24">
@@ -742,12 +716,12 @@ export default function PjeCalcPage() {
       title="PJe-Calc"
       breadcrumbs={[
         { label: "Casos", href: "/casos" },
-        { label: caseData.cliente, href: `/casos/${caseId}` },
+        { label: calc.caseData.cliente, href: `/casos/${caseId}` },
         { label: "PJe-Calc" },
       ]}
     >
       <div className="flex gap-4 h-[calc(100vh-140px)]">
-        {/* Sidebar de módulos com indicadores de completude (Phase 4 Item 1) */}
+        {/* Sidebar de módulos */}
         <div className="w-56 flex-shrink-0">
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <Button variant="ghost" size="sm" onClick={() => navigate(`/casos/${caseId}`)}>
@@ -757,13 +731,11 @@ export default function PjeCalcPage() {
           </div>
           <ScrollArea className="h-[calc(100vh-200px)]">
             <div className="space-y-0.5 pr-3">
-              {/* Separator before Phase 4 modules */}
               {MODULOS.map((mod, idx) => {
                 const isActive = activeModule === mod.id;
-                const status = completude[mod.id] as ModuleStatus | undefined;
+                const status = calc.completude[mod.id] as ModuleStatus | undefined;
                 const statusCfg = status ? STATUS_CONFIG[status] : STATUS_CONFIG.nao_iniciado;
                 const StatusIcon = statusCfg.icon;
-                const isPhase4 = ['memoria', 'comparacao', 'revisao', 'rastreabilidade', 'auditoria', 'dashboard'].includes(mod.id);
 
                 return (
                   <div key={mod.id}>
