@@ -687,7 +687,7 @@ export default function PjeCalcPage() {
               </Card>
               {previewVerbaId === v.id && (
                 <div className="mt-1">
-                  <VerbaPreview verba={v as Record<string, unknown>} engine={null} onClose={() => setPreviewVerbaId(null)} />
+                  <VerbaPreview verba={v as any} engine={null} onClose={() => setPreviewVerbaId(null)} />
                 </div>
               )}
             </div>
