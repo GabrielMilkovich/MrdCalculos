@@ -1573,16 +1573,40 @@ export class PjeCalcEngine {
     
     if (!valorParcela && this.params.ultima_remuneracao) {
       const salMedio = this.params.ultima_remuneracao;
-      if (salMedio <= SEGURO_DESEMP_2025.faixa1_ate) {
-        valorParcela = salMedio * SEGURO_DESEMP_2025.faixa1_mult;
-      } else if (salMedio <= SEGURO_DESEMP_2025.faixa2_ate) {
-        valorParcela = SEGURO_DESEMP_2025.faixa2_base + (salMedio - SEGURO_DESEMP_2025.faixa1_ate) * SEGURO_DESEMP_2025.faixa2_mult;
+      const faixasDB = this.getSeguroDesempregoDB();
+      
+      if (faixasDB) {
+        // Use DB faixas
+        let calculado = false;
+        for (const f of faixasDB) {
+          if (salMedio >= f.valor_inicial && salMedio <= f.valor_final) {
+            valorParcela = f.valor_soma + (salMedio - f.valor_inicial) * (f.percentual / 100);
+            valorParcela = Math.max(valorParcela, f.valor_piso);
+            valorParcela = Math.min(valorParcela, f.valor_teto);
+            calculado = true;
+            break;
+          }
+        }
+        if (!calculado && faixasDB.length > 0) {
+          const last = faixasDB[faixasDB.length - 1];
+          valorParcela = last.valor_teto;
+        }
       } else {
-        valorParcela = SEGURO_DESEMP_2025.teto;
+        // Fallback to hardcoded constants
+        if (salMedio <= SEGURO_DESEMP_2025.faixa1_ate) {
+          valorParcela = salMedio * SEGURO_DESEMP_2025.faixa1_mult;
+        } else if (salMedio <= SEGURO_DESEMP_2025.faixa2_ate) {
+          valorParcela = SEGURO_DESEMP_2025.faixa2_base + (salMedio - SEGURO_DESEMP_2025.faixa1_ate) * SEGURO_DESEMP_2025.faixa2_mult;
+        } else {
+          valorParcela = SEGURO_DESEMP_2025.teto;
+        }
+        valorParcela = Math.min(valorParcela, SEGURO_DESEMP_2025.teto);
       }
     }
 
-    valorParcela = Math.min(valorParcela, SEGURO_DESEMP_2025.teto);
+    if (!this.getSeguroDesempregoDB()) {
+      valorParcela = Math.min(valorParcela, SEGURO_DESEMP_2025.teto);
+    }
     const total = valorParcela * this.seguroConfig.parcelas;
 
     return {
@@ -1591,6 +1615,16 @@ export class PjeCalcEngine {
       valor_parcela: Number(new Decimal(valorParcela).toDP(2)),
       total: Number(new Decimal(total).toDP(2)),
     };
+  }
+
+  private getSeguroDesempregoDB(): PjeSeguroDesempregoDB[] | null {
+    if (this.seguroDesempregoDB.length === 0) return null;
+    // Find faixas for the most recent competencia <= demissao date
+    const refDate = this.params.data_demissao || this.params.data_final || new Date().toISOString().slice(0, 10);
+    const competencias = [...new Set(this.seguroDesempregoDB.map(f => f.competencia))].sort().reverse();
+    const comp = competencias.find(c => c <= refDate) || competencias[0];
+    const faixas = this.seguroDesempregoDB.filter(f => f.competencia === comp).sort((a, b) => a.faixa - b.faixa);
+    return faixas.length > 0 ? faixas : null;
   }
 
   // =====================================================
