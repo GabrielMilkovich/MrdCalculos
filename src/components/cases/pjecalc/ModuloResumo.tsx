@@ -669,6 +669,8 @@ export function ModuloResumo({ caseId }: Props) {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              <RelatorioConsolidado processoNumero={caseData?.numero_processo || undefined} clienteNome={caseData?.cliente} />
+
               {/* Operations dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
