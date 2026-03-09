@@ -1627,8 +1627,15 @@ export class PjeCalcEngine {
     return faixas.length > 0 ? faixas : null;
   }
 
-  // =====================================================
-  // CALCULAR HONORÁRIOS
+  private getSalarioFamiliaDB(competencia: string): PjeSalarioFamiliaDB | null {
+    if (this.salarioFamiliaDB.length === 0) return null;
+    const compDate = competencia + '-01';
+    const competencias = [...new Set(this.salarioFamiliaDB.map(f => f.competencia))].sort().reverse();
+    const comp = competencias.find(c => c <= compDate) || competencias[0];
+    const faixa = this.salarioFamiliaDB.find(f => f.competencia === comp && f.faixa === 1);
+    return faixa || null;
+  }
+
   // =====================================================
 
   calcularHonorarios(principalCorrigido: number, juros: number, fgts: number): { sucumbenciais: number; contratuais: number } {
