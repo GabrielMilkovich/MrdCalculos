@@ -2414,11 +2414,8 @@ export class PjeCalcEngine {
         if (fatorDB !== null) {
           indiceCorrecao = fatorDB;
         } else {
-          const [ano, mes] = oc.competencia.split('-').map(Number);
-          const dataComp = new Date(ano, mes - 1, 1);
-          const meses = this.mesesEntre(dataComp, dataLiq);
-          const taxas: Record<string, number> = { 'IPCA-E': 1.0045, 'SELIC': 1.01, 'TR': 1.0001, 'IPCA': 1.004 };
-          indiceCorrecao = Math.pow(taxas[this.correcaoConfig.indice] || 1.004, meses);
+          console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+          indiceCorrecao = 1;
         }
         const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
         oc.indice_correcao = Number(new Decimal(indiceCorrecao).toDP(6));
