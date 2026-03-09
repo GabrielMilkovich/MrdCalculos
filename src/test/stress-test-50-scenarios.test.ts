@@ -65,7 +65,7 @@ function validarINSSProgressivo(base: number): {
     anterior = faixa.ate;
   }
 
-  const teto = 908.85; // teto INSS 2025 (aprox)
+  const teto = 951.63; // teto INSS 2025 (Portaria MPS/MF nº 6/2025)
   return {
     contribuicao: Math.round(total * 100) / 100,
     valido: total <= teto + 0.01 && total >= 0,
