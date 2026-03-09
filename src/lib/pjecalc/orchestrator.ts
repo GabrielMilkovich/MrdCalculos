@@ -495,9 +495,45 @@ async function loadIndicesDB(): Promise<PjeIndiceRow[]> {
   }
 }
 
-// =====================================================
-// MAIN: executarLiquidacao
-// =====================================================
+async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeguroDesempregoDB[]> {
+  try {
+    const { data } = await supabase
+      .from('pjecalc_seguro_desemprego' as any)
+      .select('competencia, faixa, valor_inicial, valor_final, percentual, valor_soma, valor_piso, valor_teto')
+      .order('competencia', { ascending: false })
+      .order('faixa');
+    if (data && data.length > 0) {
+      console.log(`[ORCHESTRATOR] Loaded ${data.length} seguro-desemprego faixas from DB`);
+      return (data as any[]).map(r => ({
+        competencia: r.competencia, faixa: Number(r.faixa),
+        valor_inicial: Number(r.valor_inicial), valor_final: Number(r.valor_final),
+        percentual: Number(r.percentual), valor_soma: Number(r.valor_soma),
+        valor_piso: Number(r.valor_piso), valor_teto: Number(r.valor_teto),
+      }));
+    }
+    return [];
+  } catch { return []; }
+}
+
+async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeSalarioFamiliaDB[]> {
+  try {
+    const { data } = await supabase
+      .from('pjecalc_salario_familia' as any)
+      .select('competencia, faixa, valor_inicial, valor_final, valor_cota')
+      .order('competencia', { ascending: false })
+      .order('faixa');
+    if (data && data.length > 0) {
+      console.log(`[ORCHESTRATOR] Loaded ${data.length} salário-família faixas from DB`);
+      return (data as any[]).map(r => ({
+        competencia: r.competencia, faixa: Number(r.faixa),
+        valor_inicial: Number(r.valor_inicial), valor_final: Number(r.valor_final),
+        valor_cota: Number(r.valor_cota),
+      }));
+    }
+    return [];
+  } catch { return []; }
+}
+
 
 export async function executarLiquidacao(
   caseId: string,
