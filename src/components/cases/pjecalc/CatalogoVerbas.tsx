@@ -6,9 +6,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { BookOpen, Search, Loader2 } from "lucide-react";
+import { BookOpen, Search, Loader2, Zap, UserMinus, Scale, Clock, Timer, ShieldAlert, LogOut, Handshake, PackagePlus } from "lucide-react";
+import { TEMPLATES_EXPRESSO, type TemplateExpresso } from "@/lib/pjecalc/templates-expresso";
 
 // =====================================================
 // CATÁLOGO OFICIAL DE VERBAS TRABALHISTAS
@@ -57,6 +59,24 @@ const CATALOGO: VerbaCatalogo[] = [
 
 const CATEGORIAS = [...new Set(CATALOGO.map(v => v.categoria))];
 
+const ICON_MAP: Record<string, React.ReactNode> = {
+  UserMinus: <UserMinus className="h-5 w-5" />,
+  Scale: <Scale className="h-5 w-5" />,
+  Clock: <Clock className="h-5 w-5" />,
+  Timer: <Timer className="h-5 w-5" />,
+  ShieldAlert: <ShieldAlert className="h-5 w-5" />,
+  Zap: <Zap className="h-5 w-5" />,
+  LogOut: <LogOut className="h-5 w-5" />,
+  Handshake: <Handshake className="h-5 w-5" />,
+};
+
+const CAT_COLORS: Record<string, string> = {
+  rescisao: 'border-destructive/30 bg-destructive/5',
+  horas_extras: 'border-primary/30 bg-primary/5',
+  adicionais: 'border-accent/30 bg-accent/5',
+  misto: 'border-secondary/30 bg-secondary/5',
+};
+
 interface Props {
   caseId: string;
   periodoInicio: string;
@@ -71,6 +91,7 @@ export function CatalogoVerbas({ caseId, periodoInicio, periodoFim, ordemBase, o
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [inserting, setInserting] = useState(false);
   const [catFilter, setCatFilter] = useState<string | null>(null);
+  const [tab, setTab] = useState<'catalogo' | 'templates'>('templates');
 
   const filtered = CATALOGO.filter(v => {
     if (catFilter && v.categoria !== catFilter) return false;
@@ -120,6 +141,37 @@ export function CatalogoVerbas({ caseId, periodoInicio, periodoFim, ordemBase, o
     finally { setInserting(false); }
   };
 
+  const inserirTemplate = async (template: TemplateExpresso) => {
+    setInserting(true);
+    try {
+      let ordem = ordemBase;
+      for (const v of template.verbas) {
+        await supabase.from("pjecalc_verbas" as any).insert({
+          case_id: caseId,
+          nome: v.nome,
+          tipo: v.tipo,
+          caracteristica: v.caracteristica,
+          ocorrencia_pagamento: v.ocorrencia_pagamento,
+          multiplicador: v.multiplicador,
+          divisor_informado: v.divisor_informado,
+          tipo_divisor: v.tipo_divisor,
+          tipo_quantidade: v.tipo_quantidade,
+          quantidade_informada: v.quantidade_informada,
+          compor_principal: v.compor_principal,
+          incidencias: v.incidencias,
+          exclusoes: v.exclusoes,
+          periodo_inicio: periodoInicio,
+          periodo_fim: periodoFim,
+          ordem: ordem++,
+        });
+      }
+      toast.success(`Template "${template.nome}" inserido — ${template.verbas.length} verba(s)`);
+      setOpen(false);
+      onInsert();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setInserting(false); }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -133,54 +185,106 @@ export function CatalogoVerbas({ caseId, periodoInicio, periodoFim, ordemBase, o
             <BookOpen className="h-5 w-5" /> Catálogo de Verbas Trabalhistas
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar verba..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 text-xs" />
-            </div>
-            <Button size="sm" disabled={selected.size === 0 || inserting} onClick={inserir}>
-              {inserting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Adicionar ({selected.size})
-            </Button>
-          </div>
-          <div className="flex gap-1 flex-wrap">
-            <Badge variant={catFilter === null ? 'default' : 'outline'} className="text-[10px] cursor-pointer" onClick={() => setCatFilter(null)}>Todas</Badge>
-            {CATEGORIAS.map(c => (
-              <Badge key={c} variant={catFilter === c ? 'default' : 'outline'} className="text-[10px] cursor-pointer" onClick={() => setCatFilter(c === catFilter ? null : c)}>{c}</Badge>
-            ))}
-          </div>
-          <ScrollArea className="h-[50vh]">
-            <div className="space-y-1.5 pr-3">
-              {filtered.map((v, idx) => {
-                const realIdx = CATALOGO.indexOf(v);
-                const isSelected = selected.has(realIdx);
-                return (
-                  <Card key={idx} className={`cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary/5' : 'hover:border-primary/30'}`} onClick={() => toggle(idx)}>
-                    <CardContent className="p-3 flex items-start gap-3">
-                      <Checkbox checked={isSelected} className="mt-0.5" />
+
+        <Tabs value={tab} onValueChange={v => setTab(v as any)}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="templates" className="text-xs">
+              <PackagePlus className="h-3.5 w-3.5 mr-1" /> Lançamento Expresso
+            </TabsTrigger>
+            <TabsTrigger value="catalogo" className="text-xs">
+              <BookOpen className="h-3.5 w-3.5 mr-1" /> Catálogo Individual
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ── TEMPLATES EXPRESSO ── */}
+          <TabsContent value="templates" className="mt-3">
+            <p className="text-xs text-muted-foreground mb-3">
+              Selecione um template para inserir automaticamente todas as verbas configuradas.
+            </p>
+            <ScrollArea className="h-[50vh]">
+              <div className="space-y-2 pr-3">
+                {TEMPLATES_EXPRESSO.map(tmpl => (
+                  <Card
+                    key={tmpl.id}
+                    className={`cursor-pointer transition-all hover:shadow-md ${CAT_COLORS[tmpl.categoria] || ''}`}
+                    onClick={() => !inserting && inserirTemplate(tmpl)}
+                  >
+                    <CardContent className="p-4 flex items-start gap-3">
+                      <div className="mt-0.5 text-muted-foreground">
+                        {ICON_MAP[tmpl.icone] || <PackagePlus className="h-5 w-5" />}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{v.nome}</span>
-                          <Badge variant={v.tipo === 'principal' ? 'default' : 'secondary'} className="text-[9px]">{v.tipo === 'principal' ? 'P' : 'R'}</Badge>
-                          <Badge variant="outline" className="text-[9px]">{v.categoria}</Badge>
+                          <span className="text-sm font-semibold">{tmpl.nome}</span>
+                          <Badge variant="outline" className="text-[9px]">{tmpl.verbas.length} verbas</Badge>
                         </div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">{v.descricao}</div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5 flex gap-3">
-                          <span>×{v.multiplicador} ÷{v.divisor_informado}</span>
-                          <span>{v.ocorrencia_pagamento}</span>
-                          {v.incidencias.fgts && <span className="text-primary">FGTS</span>}
-                          {v.incidencias.contribuicao_social && <span className="text-primary">CS</span>}
-                          {v.incidencias.irpf && <span className="text-primary">IR</span>}
+                        <div className="text-[11px] text-muted-foreground mt-1">{tmpl.descricao}</div>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {tmpl.verbas.map((v, i) => (
+                            <Badge key={i} variant="secondary" className="text-[9px] font-normal">{v.nome}</Badge>
+                          ))}
                         </div>
                       </div>
+                      {inserting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     </CardContent>
                   </Card>
-                );
-              })}
+                ))}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          {/* ── CATÁLOGO INDIVIDUAL ── */}
+          <TabsContent value="catalogo" className="mt-3">
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Buscar verba..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 text-xs" />
+                </div>
+                <Button size="sm" disabled={selected.size === 0 || inserting} onClick={inserir}>
+                  {inserting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Adicionar ({selected.size})
+                </Button>
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                <Badge variant={catFilter === null ? 'default' : 'outline'} className="text-[10px] cursor-pointer" onClick={() => setCatFilter(null)}>Todas</Badge>
+                {CATEGORIAS.map(c => (
+                  <Badge key={c} variant={catFilter === c ? 'default' : 'outline'} className="text-[10px] cursor-pointer" onClick={() => setCatFilter(c === catFilter ? null : c)}>{c}</Badge>
+                ))}
+              </div>
+              <ScrollArea className="h-[50vh]">
+                <div className="space-y-1.5 pr-3">
+                  {filtered.map((v, idx) => {
+                    const realIdx = CATALOGO.indexOf(v);
+                    const isSelected = selected.has(realIdx);
+                    return (
+                      <Card key={idx} className={`cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary/5' : 'hover:border-primary/30'}`} onClick={() => toggle(idx)}>
+                        <CardContent className="p-3 flex items-start gap-3">
+                          <Checkbox checked={isSelected} className="mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">{v.nome}</span>
+                              <Badge variant={v.tipo === 'principal' ? 'default' : 'secondary'} className="text-[9px]">{v.tipo === 'principal' ? 'P' : 'R'}</Badge>
+                              <Badge variant="outline" className="text-[9px]">{v.categoria}</Badge>
+                            </div>
+                            <div className="text-[10px] text-muted-foreground mt-0.5">{v.descricao}</div>
+                            <div className="text-[10px] text-muted-foreground mt-0.5 flex gap-3">
+                              <span>×{v.multiplicador} ÷{v.divisor_informado}</span>
+                              <span>{v.ocorrencia_pagamento}</span>
+                              {v.incidencias.fgts && <span className="text-primary">FGTS</span>}
+                              {v.incidencias.contribuicao_social && <span className="text-primary">CS</span>}
+                              {v.incidencias.irpf && <span className="text-primary">IR</span>}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             </div>
-          </ScrollArea>
-        </div>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
