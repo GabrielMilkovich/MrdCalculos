@@ -84,6 +84,7 @@ const MODULOS = [
   { id: 'honorarios', label: 'Honorários', icon: Scale, desc: 'Sucumbenciais e contratuais' },
   { id: 'custas', label: 'Custas', icon: Receipt, desc: 'Custas processuais' },
   { id: 'resumo', label: 'Resumo', icon: FileBarChart, desc: 'Resultado da liquidação' },
+  { id: 'esocial', label: 'eSocial', icon: Building2, desc: 'Exportação S-2500/S-2501' },
   { id: 'tabelas_regionais', label: 'Tabelas Regionais', icon: MapPin, desc: 'Pisos, VT e Sal. Família' },
   { id: 'memoria', label: 'Memória de Cálculo', icon: FileText, desc: 'Detalhamento linha a linha' },
   { id: 'comparacao', label: 'Comparar Cenários', icon: GitCompareArrows, desc: 'Lado a lado' },
