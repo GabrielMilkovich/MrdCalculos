@@ -168,15 +168,15 @@ describe('PJe-Calc Differential Tests', () => {
       [hist], [he50],
     );
 
-    // HE 50% = (3000 × 1.5 / 220) × 10 × 1 = R$ 204.55 por competência
+    // HE 50% = (3000 / 220 = 13.63 trunc) × 1.5 = 20.44 trunc × 10 = 204.40 (ROUND_DOWN)
     expect(result.verbas.length).toBe(1);
     const vr = result.verbas[0];
     expect(vr.ocorrencias.length).toBe(6);
-    // Each occurrence: 3000 * 1.5 / 220 * 10 = 204.545..
+    // Each occurrence: 3000/220=13.63 × 1.5=20.44 × 10 = 204.40
     for (const oc of vr.ocorrencias) {
-      expect(oc.devido).toBeCloseTo(204.55, 1);
+      expect(oc.devido).toBeCloseTo(204.40, 1);
     }
-    expect(vr.total_diferenca).toBeCloseTo(1227.27, 0);
+    expect(vr.total_diferenca).toBeCloseTo(1226.40, 0);
     // FGTS = 8% of each competência's base (historico value), not just HE difference
     expect(result.fgts.total_depositos).toBeGreaterThan(0);
   });
