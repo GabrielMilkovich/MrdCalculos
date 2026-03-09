@@ -179,7 +179,7 @@ export function gerarS2501(
   const competencias = new Set<string>();
   for (const v of result.verbas) {
     for (const o of v.ocorrencias) {
-      if (o.ativa) competencias.add(fmtMesAno(o.competencia));
+      competencias.add(fmtMesAno(o.competencia));
     }
   }
   const comps = Array.from(competencias).sort();
@@ -189,7 +189,7 @@ export function gerarS2501(
     let baseSeg = 0;
     for (const v of result.verbas) {
       const ocorrsDoMes = v.ocorrencias.filter(
-        o => o.ativa && fmtMesAno(o.competencia) === comp
+        o => fmtMesAno(o.competencia) === comp
       );
       baseSeg += ocorrsDoMes.reduce((s, o) => s + o.diferenca, 0);
     }
