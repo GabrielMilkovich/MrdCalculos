@@ -1803,9 +1803,8 @@ export class PjeCalcEngine {
         const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, compClean, compLiq);
         if (fatorDB !== null) fatorCorrecao = fatorDB;
         else {
-          const meses = this.mesesEntre(new Date(compClean + '-01'), dataLiq);
-          const taxas: Record<string, number> = { 'IPCA-E': 1.0045, 'SELIC': 1.01, 'TR': 1.0001 };
-          fatorCorrecao = Math.pow(taxas[this.correcaoConfig.indice] || 1.004, meses);
+          console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para FGTS ${compClean}→${compLiq}. Usando fator=1.`);
+          fatorCorrecao = 1;
         }
       }
       
