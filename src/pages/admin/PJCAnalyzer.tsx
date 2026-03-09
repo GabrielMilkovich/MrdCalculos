@@ -83,7 +83,15 @@ export default function PJCAnalyzerPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <input type="file" accept=".PJC,.pjc,.xml" onChange={handleFile} className="block" />
+            <input type="file" accept=".PJC,.pjc,.xml,.zip" onChange={handleFile} className="block" />
+            <div className="flex gap-2 mt-3">
+              <Button variant="outline" size="sm" onClick={() => loadFromPublic('caso-real-v2.pjc')}>
+                <Download className="h-4 w-4 mr-1" /> Maria Madalena
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => loadFromPublic('rosicleia-pereira-chaves.pjc')}>
+                <Download className="h-4 w-4 mr-1" /> Rosicléia Chaves
+              </Button>
+            </div>
             {loading && <p className="mt-2 text-muted-foreground">Analisando...</p>}
             {error && <p className="mt-2 text-destructive">{error}</p>}
           </CardContent>
