@@ -2935,7 +2935,8 @@ export class PjeCalcEngine {
   private calcularVerbaReflexa(reflexa: PjeVerba, principalResult: PjeVerbaResult): PjeVerbaResult {
     const comportamento = reflexa.comportamento_reflexo || 'valor_mensal';
     const ocorrencias: PjeOcorrenciaResult[] = [];
-    let totalDevido = 0, totalPago = 0, totalDiferenca = 0;
+    // FIX #4: Acumular totais com Decimal.js
+    let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
 
     // Base Integralization (Fase 6): converter meses fracionários em meses completos
     // para reflexos em férias e 13º (PJe-Calc integraliza a base antes de aplicar a fórmula)
