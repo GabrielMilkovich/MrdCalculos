@@ -231,6 +231,20 @@ export async function deleteVerba(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function insertVerbasBatch(payloads: PjecalcVerbaInsert[]): Promise<void> {
+  if (payloads.length === 0) return;
+  for (const p of payloads) {
+    const { error } = await fromView('pjecalc_verbas').insert(p);
+    if (error) throw error;
+  }
+}
+
+export async function getCaseBasic(caseId: string): Promise<{ id: string; cliente: string; numero_processo: string | null; status: string; tags: string[] | null } | null> {
+  const { data, error } = await supabase.from('cases').select('id, cliente, numero_processo, status, tags').eq('id', caseId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 // =====================================================
 // OCORRÊNCIAS
 // =====================================================
