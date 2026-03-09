@@ -3,6 +3,13 @@
 // OCR via Mistral API + Extração Estruturada via OpenAI (Lovable AI)
 // Auto-Preenchimento PJe-Calc
 // =====================================================
+// IMPROVEMENTS v2:
+// 1. Native PDF text extraction (skip OCR for digital PDFs)
+// 2. Deterministic regex parsers before AI
+// 3. Template cache by CNPJ/empresa
+// 4. Cross-document validation
+// 5. Post-extraction completeness check
+// =====================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -28,6 +35,589 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
+}
+
+// =====================================================
+// IMPROVEMENT #1: NATIVE PDF TEXT EXTRACTION
+// Detect digital PDFs and extract text without OCR
+// =====================================================
+
+async function tryNativePdfExtraction(fileUrl: string): Promise<{
+  text: string;
+  method: "native" | "ocr-needed";
+  quality: "good" | "poor";
+  pageCount: number;
+}> {
+  try {
+    // Download the PDF
+    const resp = await fetch(fileUrl);
+    if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
+    const buffer = await resp.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+
+    // Simple PDF text extraction: look for text streams in the PDF
+    // This works for digitally-created PDFs (not scanned)
+    const pdfStr = new TextDecoder("latin1").decode(bytes);
+    
+    // Count pages
+    const pageMatches = pdfStr.match(/\/Type\s*\/Page[^s]/g) || [];
+    const pageCount = Math.max(pageMatches.length, 1);
+    
+    // Extract text between BT/ET markers (text objects in PDF)
+    const textObjects: string[] = [];
+    const btEtRegex = /BT\s([\s\S]*?)ET/g;
+    let match;
+    while ((match = btEtRegex.exec(pdfStr)) !== null) {
+      const block = match[1];
+      // Extract text from Tj, TJ, and ' operators
+      const tjMatches = block.match(/\(([^)]*)\)\s*Tj/g) || [];
+      const tjArrMatches = block.match(/\[([^\]]*)\]\s*TJ/gi) || [];
+      
+      for (const tj of tjMatches) {
+        const textMatch = tj.match(/\(([^)]*)\)/);
+        if (textMatch) textObjects.push(textMatch[1]);
+      }
+      for (const tjArr of tjArrMatches) {
+        const innerTexts = tjArr.match(/\(([^)]*)\)/g) || [];
+        for (const it of innerTexts) {
+          const m = it.match(/\(([^)]*)\)/);
+          if (m) textObjects.push(m[1]);
+        }
+      }
+    }
+    
+    // Also try to extract from stream content
+    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let streamMatch;
+    while ((streamMatch = streamRegex.exec(pdfStr)) !== null) {
+      const content = streamMatch[1];
+      // Look for readable text in uncompressed streams
+      if (content.length < 50000) {
+        const readableText = content.match(/\(([^)]{2,})\)/g) || [];
+        for (const rt of readableText) {
+          const m = rt.match(/\(([^)]+)\)/);
+          if (m && /[a-zA-ZÀ-ú]/.test(m[1])) textObjects.push(m[1]);
+        }
+      }
+    }
+    
+    const extractedText = textObjects.join(" ").replace(/\\n/g, "\n").replace(/\s+/g, " ").trim();
+    
+    // Quality check: good text has letters, numbers, and reasonable length
+    const letterCount = (extractedText.match(/[a-zA-ZÀ-ú]/g) || []).length;
+    const hasGoodText = extractedText.length > 500 && letterCount > 100;
+    
+    // Check for common labor document keywords
+    const laborKeywords = ["salário", "salario", "admissão", "admissao", "demissão", "demissao", 
+      "CTPS", "FGTS", "INSS", "remuneração", "remuneracao", "férias", "ferias",
+      "contrato", "empregado", "empregador", "CLT", "rescisão", "rescisao"];
+    const hasLaborContent = laborKeywords.some(kw => extractedText.toLowerCase().includes(kw.toLowerCase()));
+    
+    if (hasGoodText && hasLaborContent) {
+      console.log(`[NATIVE-PDF] SUCCESS: ${extractedText.length} chars, ${letterCount} letters, ${pageCount} pages`);
+      return { text: extractedText, method: "native", quality: "good", pageCount };
+    }
+    
+    if (hasGoodText) {
+      console.log(`[NATIVE-PDF] Partial: ${extractedText.length} chars but no labor keywords detected`);
+      return { text: extractedText, method: "native", quality: "good", pageCount };
+    }
+    
+    console.log(`[NATIVE-PDF] Poor quality: ${extractedText.length} chars, ${letterCount} letters — needs OCR`);
+    return { text: extractedText, method: "ocr-needed", quality: "poor", pageCount };
+    
+  } catch (err) {
+    console.warn(`[NATIVE-PDF] Extraction failed:`, err);
+    return { text: "", method: "ocr-needed", quality: "poor", pageCount: 1 };
+  }
+}
+
+// =====================================================
+// IMPROVEMENT #2: DETERMINISTIC REGEX PARSERS
+// Extract structured data from text without AI when possible
+// =====================================================
+
+interface RegexExtractionResult {
+  tipo_documento?: string;
+  dados_processo?: any;
+  reclamante?: any;
+  reclamada?: any;
+  contrato?: any;
+  rubricas?: any[];
+  confianca_geral?: number;
+  _regex_fields: string[];
+}
+
+function tryRegexExtraction(text: string): RegexExtractionResult {
+  const fields: string[] = [];
+  const result: RegexExtractionResult = { _regex_fields: fields };
+
+  // CPF patterns
+  const cpfMatch = text.match(/CPF[:\s]*(\d{3}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?\d{2})/i);
+  if (cpfMatch) {
+    result.reclamante = result.reclamante || {};
+    result.reclamante.cpf = cpfMatch[1].replace(/\s/g, '');
+    fields.push("cpf");
+  }
+
+  // CNPJ patterns
+  const cnpjMatch = text.match(/CNPJ[:\s]*(\d{2}[.\s]?\d{3}[.\s]?\d{3}[/\s]?\d{4}[-.\s]?\d{2})/i);
+  if (cnpjMatch) {
+    result.reclamada = result.reclamada || {};
+    result.reclamada.cnpj = cnpjMatch[1].replace(/\s/g, '');
+    fields.push("cnpj");
+  }
+
+  // Processo number (CNJ format)
+  const processoMatch = text.match(/(\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4})/);
+  if (processoMatch) {
+    result.dados_processo = result.dados_processo || {};
+    result.dados_processo.numero_processo = processoMatch[1];
+    fields.push("numero_processo");
+  }
+
+  // Data de admissão
+  const admissaoPatterns = [
+    /admiss[ãa]o[:\s]*(\d{2}[/.-]\d{2}[/.-]\d{4})/i,
+    /data\s*de\s*admiss[ãa]o[:\s]*(\d{2}[/.-]\d{2}[/.-]\d{4})/i,
+    /admitido\s*em[:\s]*(\d{2}[/.-]\d{2}[/.-]\d{4})/i,
+  ];
+  for (const pat of admissaoPatterns) {
+    const m = text.match(pat);
+    if (m) {
+      result.contrato = result.contrato || {};
+      const parts = m[1].split(/[/.-]/);
+      result.contrato.data_admissao = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      fields.push("data_admissao");
+      break;
+    }
+  }
+
+  // Data de demissão/rescisão
+  const demissaoPatterns = [
+    /demiss[ãa]o[:\s]*(\d{2}[/.-]\d{2}[/.-]\d{4})/i,
+    /rescis[ãa]o[:\s]*(\d{2}[/.-]\d{2}[/.-]\d{4})/i,
+    /desligamento[:\s]*(\d{2}[/.-]\d{2}[/.-]\d{4})/i,
+    /afastamento[:\s]*(\d{2}[/.-]\d{2}[/.-]\d{4})/i,
+  ];
+  for (const pat of demissaoPatterns) {
+    const m = text.match(pat);
+    if (m) {
+      result.contrato = result.contrato || {};
+      const parts = m[1].split(/[/.-]/);
+      result.contrato.data_demissao = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      fields.push("data_demissao");
+      break;
+    }
+  }
+
+  // Salário base
+  const salarioPatterns = [
+    /sal[áa]rio\s*(?:base|contratual|mensal)?[:\s]*R?\$?\s*([\d.,]+)/i,
+    /remunera[çc][ãa]o[:\s]*R?\$?\s*([\d.,]+)/i,
+  ];
+  for (const pat of salarioPatterns) {
+    const m = text.match(pat);
+    if (m) {
+      result.contrato = result.contrato || {};
+      result.contrato.salario_base = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
+      fields.push("salario_base");
+      break;
+    }
+  }
+
+  // Cargo/Função
+  const cargoPatterns = [
+    /(?:cargo|fun[çc][ãa]o|profiss[ãa]o)[:\s]*([A-ZÀ-Ú][a-zà-ú\s]+(?:[A-ZÀ-Ú][a-zà-ú\s]*)*)/i,
+  ];
+  for (const pat of cargoPatterns) {
+    const m = text.match(pat);
+    if (m && m[1].trim().length > 2 && m[1].trim().length < 80) {
+      result.contrato = result.contrato || {};
+      result.contrato.cargo_funcao = m[1].trim();
+      fields.push("cargo");
+      break;
+    }
+  }
+
+  // Document type detection
+  if (/TRCT|Termo\s*de\s*Rescis[ãa]o/i.test(text)) {
+    result.tipo_documento = "trct";
+  } else if (/Carteira\s*de\s*Trabalho|CTPS/i.test(text)) {
+    result.tipo_documento = "ctps";
+  } else if (/CART[ÃA]O\s*DE\s*PONTO|REGISTRO\s*DE\s*PONTO|FREQU[ÊE]NCIA/i.test(text)) {
+    result.tipo_documento = "cartao_ponto";
+  } else if (/DEMONSTRATIVO\s*DE\s*PAGAMENTO|HOLERITE|CONTRACHEQUE/i.test(text)) {
+    result.tipo_documento = "holerite";
+  } else if (/FICHA\s*FINANCEIRA/i.test(text)) {
+    result.tipo_documento = "ficha_financeira";
+  } else if (/EXTRATO\s*(DE\s*)?FGTS|FUNDO\s*DE\s*GARANTIA/i.test(text)) {
+    result.tipo_documento = "extrato_fgts";
+  } else if (/SENTEN[ÇC]A|AC[ÓO]RD[ÃA]O|DECIS[ÃA]O/i.test(text)) {
+    result.tipo_documento = "sentenca";
+  }
+
+  // Extract monetary values from tables (holerite/ficha financeira patterns)
+  if (result.tipo_documento === "holerite" || result.tipo_documento === "ficha_financeira") {
+    const rubricaRegex = /(\d{3,5})\s*[-|]\s*([A-ZÀ-Ú][A-ZÀ-Ú\s./]+?)\s+(\d[\d.,]*)/g;
+    const rubricas: any[] = [];
+    let rubMatch;
+    while ((rubMatch = rubricaRegex.exec(text)) !== null) {
+      const valor = parseFloat(rubMatch[3].replace(/\./g, '').replace(',', '.'));
+      if (valor > 0 && valor < 999999) {
+        rubricas.push({
+          codigo: rubMatch[1],
+          denominacao: rubMatch[2].trim(),
+          tipo: "vencimento",
+          valores_mensais: [{ competencia: new Date().toISOString().slice(0, 7), valor }]
+        });
+      }
+    }
+    if (rubricas.length > 0) {
+      result.rubricas = rubricas;
+      fields.push(`rubricas_regex(${rubricas.length})`);
+    }
+  }
+
+  if (fields.length > 0) {
+    result.confianca_geral = Math.min(0.95, 0.7 + fields.length * 0.03);
+  }
+
+  return result;
+}
+
+// =====================================================
+// IMPROVEMENT #3: TEMPLATE CACHE BY CNPJ
+// Reuse validated mappings for same company
+// =====================================================
+
+async function tryTemplateCacheExtraction(
+  supabase: any,
+  cnpj: string | null,
+  ocrText: string
+): Promise<any | null> {
+  if (!cnpj) return null;
+  
+  try {
+    // Look for cached template mapping for this CNPJ
+    const { data: cached } = await supabase
+      .from("rubrica_map" as any)
+      .select("*")
+      .eq("empresa_cnpj", cnpj.replace(/[^\d]/g, ''))
+      .eq("ativo", true)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    
+    if (!cached || cached.length === 0) return null;
+    
+    console.log(`[TEMPLATE-CACHE] Found ${cached.length} cached mappings for CNPJ ${cnpj}`);
+    
+    // Use cached rubrica mappings to extract from text
+    const extractedRubricas: any[] = [];
+    
+    for (const mapping of cached) {
+      const regex = new RegExp(mapping.regex_pattern || mapping.codigo_origem, 'gi');
+      const matches = ocrText.match(regex);
+      if (matches) {
+        // Find value near the match
+        const idx = ocrText.indexOf(matches[0]);
+        const context = ocrText.substring(idx, idx + 200);
+        const valorMatch = context.match(/(\d[\d.,]*\d)/);
+        if (valorMatch) {
+          const valor = parseFloat(valorMatch[1].replace(/\./g, '').replace(',', '.'));
+          if (valor > 0 && valor < 999999) {
+            extractedRubricas.push({
+              codigo: mapping.codigo_origem,
+              denominacao: mapping.nome_padronizado || mapping.nome_origem,
+              tipo: mapping.tipo || "vencimento",
+              categoria: mapping.categoria || "outros",
+              valores_mensais: [{ competencia: new Date().toISOString().slice(0, 7), valor }]
+            });
+          }
+        }
+      }
+    }
+    
+    if (extractedRubricas.length > 3) {
+      console.log(`[TEMPLATE-CACHE] Extracted ${extractedRubricas.length} rubricas from cache`);
+      return { rubricas: extractedRubricas, _from_cache: true };
+    }
+    
+    return null;
+  } catch (err) {
+    console.warn("[TEMPLATE-CACHE] Error:", err);
+    return null;
+  }
+}
+
+// Save successful extraction as template for future use
+async function saveTemplateCache(
+  supabase: any,
+  cnpj: string | null,
+  extracted: any
+) {
+  if (!cnpj || !extracted.rubricas?.length) return;
+  
+  try {
+    const cleanCnpj = cnpj.replace(/[^\d]/g, '');
+    
+    for (const rub of extracted.rubricas) {
+      if (!rub.codigo || !rub.denominacao) continue;
+      
+      await supabase.from("rubrica_map" as any).upsert({
+        empresa_cnpj: cleanCnpj,
+        codigo_origem: rub.codigo,
+        nome_origem: rub.denominacao,
+        nome_padronizado: rub.denominacao,
+        tipo: rub.tipo || "vencimento",
+        categoria: rub.categoria || "outros",
+        ativo: true,
+      }, { onConflict: 'empresa_cnpj,codigo_origem' }).then(({ error }: any) => {
+        if (error) console.warn("[TEMPLATE-CACHE] Save error:", error.message);
+      });
+    }
+    
+    console.log(`[TEMPLATE-CACHE] Saved ${extracted.rubricas.length} mappings for CNPJ ${cleanCnpj}`);
+  } catch (err) {
+    console.warn("[TEMPLATE-CACHE] Save failed:", err);
+  }
+}
+
+// =====================================================
+// IMPROVEMENT #4: CROSS-DOCUMENT VALIDATION
+// Compare extracted data across documents in same case
+// =====================================================
+
+async function crossValidateExtraction(
+  supabase: any,
+  caseId: string,
+  extracted: any,
+  documentId: string
+): Promise<{ warnings: string[]; conflicts: any[] }> {
+  const warnings: string[] = [];
+  const conflicts: any[] = [];
+  
+  try {
+    // Get existing facts for this case
+    const { data: existingFacts } = await supabase
+      .from("facts")
+      .select("chave, valor, origem, confianca")
+      .eq("case_id", caseId);
+    
+    if (!existingFacts || existingFacts.length === 0) return { warnings, conflicts };
+    
+    const factMap = new Map(existingFacts.map((f: any) => [f.chave, f]));
+    
+    // Cross-validate critical fields
+    const checks = [
+      { key: "data_admissao", newVal: extracted.contrato?.data_admissao, label: "Data de Admissão" },
+      { key: "data_demissao", newVal: extracted.contrato?.data_demissao, label: "Data de Demissão" },
+      { key: "salario_base", newVal: extracted.contrato?.salario_base?.toString(), label: "Salário Base" },
+      { key: "reclamante", newVal: extracted.reclamante?.nome, label: "Nome do Reclamante" },
+      { key: "cnpj_reclamada", newVal: extracted.reclamada?.cnpj, label: "CNPJ da Reclamada" },
+      { key: "cargo", newVal: extracted.contrato?.cargo_funcao, label: "Cargo/Função" },
+    ];
+    
+    for (const check of checks) {
+      if (!check.newVal) continue;
+      const existing = factMap.get(check.key);
+      if (!existing) continue;
+      
+      const existingVal = existing.valor?.toString().trim().toLowerCase();
+      const newVal = check.newVal.toString().trim().toLowerCase();
+      
+      if (existingVal && newVal && existingVal !== newVal) {
+        // Check for date format differences
+        if (check.key.startsWith("data_")) {
+          const existDate = existingVal.replace(/[^\d]/g, '');
+          const newDate = newVal.replace(/[^\d]/g, '');
+          if (existDate === newDate) continue; // same date, different format
+        }
+        
+        // Check for monetary value tolerance (< 1%)
+        if (check.key === "salario_base") {
+          const existNum = parseFloat(existingVal.replace(/[^\d.,]/g, '').replace(',', '.'));
+          const newNum = parseFloat(newVal.replace(/[^\d.,]/g, '').replace(',', '.'));
+          if (!isNaN(existNum) && !isNaN(newNum)) {
+            const diff = Math.abs(existNum - newNum) / Math.max(existNum, newNum);
+            if (diff < 0.01) continue; // within 1% tolerance
+          }
+        }
+        
+        const warning = `CONFLITO: ${check.label} — anterior: "${existing.valor}" vs novo: "${check.newVal}"`;
+        warnings.push(warning);
+        conflicts.push({
+          campo: check.key,
+          valor_anterior: existing.valor,
+          valor_novo: check.newVal,
+          descricao: warning,
+          document_id: documentId,
+        });
+        console.warn(`[CROSS-VALIDATE] ${warning}`);
+      }
+    }
+    
+    // Cross-validate salary history: check for duplicate competencias with different values
+    if (extracted.rubricas?.length > 0) {
+      const { data: existingHist } = await supabase
+        .from("pjecalc_hist_salarial_mes")
+        .select("competencia, valor, hist_salarial_id")
+        .eq("calculo_id", (await supabase.from("pjecalc_calculos").select("id").eq("case_id", caseId).maybeSingle())?.data?.id)
+        .limit(500);
+      
+      if (existingHist?.length > 0) {
+        const histMap = new Map<string, number>();
+        for (const h of existingHist) {
+          histMap.set(h.competencia, Number(h.valor));
+        }
+        
+        for (const rub of extracted.rubricas) {
+          if (!rub.valores_mensais) continue;
+          for (const vm of rub.valores_mensais) {
+            const comp = vm.competencia?.length === 7 ? vm.competencia + "-01" : vm.competencia;
+            const existing = histMap.get(comp);
+            if (existing !== undefined && Math.abs(existing - vm.valor) > 1) {
+              warnings.push(`Salário ${rub.denominacao} comp ${vm.competencia}: existente R$ ${existing.toFixed(2)} vs novo R$ ${vm.valor.toFixed(2)}`);
+            }
+          }
+        }
+      }
+    }
+    
+    // Store conflicts in case_controversies
+    for (const conflict of conflicts) {
+      await supabase.from("case_controversies").insert({
+        case_id: caseId,
+        campo: conflict.campo,
+        descricao: conflict.descricao,
+        status: "pendente",
+        document_ids: [documentId],
+        prioridade: "alta",
+      }).then(({ error }: any) => {
+        if (error) console.warn("[CROSS-VALIDATE] Insert conflict:", error.message);
+      });
+    }
+    
+  } catch (err) {
+    console.warn("[CROSS-VALIDATE] Error:", err);
+  }
+  
+  return { warnings, conflicts };
+}
+
+// =====================================================
+// IMPROVEMENT #5: POST-EXTRACTION COMPLETENESS CHECK
+// Verify all required data is present
+// =====================================================
+
+interface CompletenessResult {
+  score: number; // 0-100
+  missing: string[];
+  warnings: string[];
+  ready_for_liquidation: boolean;
+}
+
+function checkExtractedCompleteness(extracted: any): CompletenessResult {
+  const missing: string[] = [];
+  const warnings: string[] = [];
+  let maxScore = 0;
+  let score = 0;
+  
+  // Critical fields (high weight)
+  const criticalFields = [
+    { key: "contrato.data_admissao", label: "Data de Admissão", weight: 15 },
+    { key: "contrato.data_demissao", label: "Data de Demissão", weight: 10 },
+    { key: "contrato.salario_base", label: "Salário Base", weight: 15 },
+    { key: "reclamante.nome", label: "Nome do Reclamante", weight: 10 },
+    { key: "reclamada.cnpj", label: "CNPJ da Reclamada", weight: 5 },
+  ];
+  
+  // Important fields (medium weight)
+  const importantFields = [
+    { key: "contrato.cargo_funcao", label: "Cargo/Função", weight: 5 },
+    { key: "reclamada.nome", label: "Nome da Reclamada", weight: 5 },
+    { key: "dados_processo.numero_processo", label: "Número do Processo", weight: 5 },
+    { key: "rubricas", label: "Histórico Salarial (Rubricas)", weight: 15, isArray: true },
+  ];
+  
+  // Data quality checks
+  const qualityFields = [
+    { key: "ferias", label: "Férias", weight: 5, isArray: true },
+    { key: "cartao_ponto.registros", label: "Cartão de Ponto", weight: 5, isArray: true },
+    { key: "fgts", label: "Dados de FGTS", weight: 5, isObject: true },
+  ];
+  
+  const allFields = [...criticalFields, ...importantFields, ...qualityFields];
+  
+  for (const field of allFields) {
+    maxScore += field.weight;
+    const value = getNestedValue(extracted, field.key);
+    
+    if ((field as any).isArray) {
+      if (Array.isArray(value) && value.length > 0) {
+        score += field.weight;
+      } else {
+        missing.push(field.label);
+      }
+    } else if ((field as any).isObject) {
+      if (value && typeof value === 'object') {
+        score += field.weight;
+      } else {
+        missing.push(field.label);
+      }
+    } else {
+      if (value && value !== '' && value !== null && value !== undefined) {
+        score += field.weight;
+      } else {
+        missing.push(field.label);
+      }
+    }
+  }
+  
+  // Check period continuity if we have salary history
+  if (extracted.rubricas?.length > 0) {
+    const allCompetencias = new Set<string>();
+    for (const rub of extracted.rubricas) {
+      for (const vm of (rub.valores_mensais || [])) {
+        if (vm.competencia) allCompetencias.add(vm.competencia);
+      }
+    }
+    
+    if (allCompetencias.size > 1) {
+      const sorted = [...allCompetencias].sort();
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      
+      // Check for gaps
+      const [fy, fm] = first.split('-').map(Number);
+      const [ly, lm] = last.split('-').map(Number);
+      const expectedMonths = (ly - fy) * 12 + (lm - fm) + 1;
+      
+      if (allCompetencias.size < expectedMonths * 0.8) {
+        warnings.push(`Período salarial com lacunas: ${allCompetencias.size} de ${expectedMonths} meses esperados (${first} a ${last})`);
+      }
+    }
+  }
+  
+  // Check confidence level
+  if (extracted.confianca_geral && extracted.confianca_geral < 0.7) {
+    warnings.push(`Confiança geral baixa: ${(extracted.confianca_geral * 100).toFixed(0)}% — revisão manual recomendada`);
+  }
+  
+  const finalScore = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+  
+  return {
+    score: finalScore,
+    missing,
+    warnings,
+    ready_for_liquidation: finalScore >= 60 && missing.filter(m => 
+      ["Data de Admissão", "Salário Base", "Nome do Reclamante"].includes(m)
+    ).length === 0,
+  };
+}
+
+function getNestedValue(obj: any, path: string): any {
+  return path.split('.').reduce((o, k) => o?.[k], obj);
 }
 
 // =====================================================
@@ -302,11 +892,9 @@ PARA CARTÃO DE PONTO:
 O campo texto_ocr_completo DEVE conter o texto integral do documento.`;
 
 // =====================================================
-// STAGE 1: Mistral OCR — extract raw text from document
-// Supports PDFs via /v1/ocr API and images via chat API
+// STAGE 1: Mistral OCR
 // =====================================================
 
-// OCR for PDFs using dedicated Mistral OCR API (/v1/ocr)
 async function mistralOcrPdf(
   documentUrl: string,
   mistralApiKey: string
@@ -344,7 +932,6 @@ async function mistralOcrPdf(
       }
 
       const data = await response.json();
-      // OCR API returns { pages: [{ markdown: "..." }, ...] }
       const pages = data.pages || [];
       const fullText = pages.map((p: any) => p.markdown || p.text || "").join("\n\n---PAGE BREAK---\n\n");
       if (fullText.length > 50) {
@@ -361,7 +948,6 @@ async function mistralOcrPdf(
   throw new Error(`Mistral OCR failed: ${lastError?.message}`);
 }
 
-// OCR for images using Mistral chat API
 async function mistralOcrImage(
   base64Data: string,
   mimeType: string,
@@ -380,21 +966,13 @@ async function mistralOcrImage(
         },
         body: JSON.stringify({
           model: "mistral-small-latest",
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Extraia TODO o texto deste documento trabalhista brasileiro. Preserve a formatação de tabelas, valores monetários e datas exatamente como aparecem. Inclua TODAS as linhas, colunas e dados sem omitir nada. Retorne apenas o texto extraído, sem comentários."
-                },
-                {
-                  type: "image_url",
-                  image_url: { url: `data:${mimeType};base64,${base64Data}` },
-                },
-              ],
-            },
-          ],
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: "Extraia TODO o texto deste documento trabalhista brasileiro. Preserve a formatação de tabelas, valores monetários e datas exatamente como aparecem. Inclua TODAS as linhas, colunas e dados sem omitir nada. Retorne apenas o texto extraído, sem comentários." },
+              { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Data}` } },
+            ],
+          }],
           max_tokens: 16000,
           temperature: 0,
         }),
@@ -403,10 +981,7 @@ async function mistralOcrImage(
       if (!response.ok) {
         const errText = await response.text();
         console.error(`[OCR] Mistral ${response.status}:`, errText.substring(0, 200));
-        if (response.status === 429) {
-          await delay(RETRY_DELAY_MS * attempt * 3);
-          continue;
-        }
+        if (response.status === 429) { await delay(RETRY_DELAY_MS * attempt * 3); continue; }
         lastError = new Error(`Mistral OCR ${response.status}`);
         if (response.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
         break;
@@ -429,21 +1004,20 @@ async function mistralOcrImage(
 }
 
 // =====================================================
-// STAGE 2: OpenAI (Lovable AI) — structured extraction from OCR text
+// STAGE 2: AI Structured extraction
 // =====================================================
+
 async function extractStructured(
   ocrText: string,
   lovableApiKey: string
 ): Promise<any> {
   let lastError: Error | null = null;
-  // Cascade: try Google Gemini first (cheaper/faster), then OpenAI as fallback
   const models = [
     "google/gemini-3-flash-preview",
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
   ];
 
-  // Truncate OCR text to avoid token limits and timeouts
   const maxChars = 80000;
   const truncatedOcr = ocrText.length > maxChars
     ? ocrText.substring(0, maxChars) + "\n\n[... TEXTO TRUNCADO ...]"
@@ -465,7 +1039,7 @@ async function extractStructured(
               { role: "system", content: SYSTEM_PROMPT },
               {
                 role: "user",
-              content: `Analise o texto abaixo extraído por OCR de um documento trabalhista e extraia os dados usando a função extrair_dados_documento. NÃO repita o texto OCR na resposta. Para cartão de ponto, extraia no máximo os 60 primeiros registros diários como amostra.\n\n--- TEXTO DO DOCUMENTO ---\n${truncatedOcr}\n--- FIM DO TEXTO ---`
+                content: `Analise o texto abaixo extraído por OCR de um documento trabalhista e extraia os dados usando a função extrair_dados_documento. NÃO repita o texto OCR na resposta. Para cartão de ponto, extraia no máximo os 60 primeiros registros diários como amostra.\n\n--- TEXTO DO DOCUMENTO ---\n${truncatedOcr}\n--- FIM DO TEXTO ---`
               },
             ],
             tools: EXTRACTION_TOOLS,
@@ -478,7 +1052,6 @@ async function extractStructured(
         if (!response.ok) {
           const errText = await response.text();
           console.error(`[EXTRACT] ${model} ${response.status}:`, errText.substring(0, 200));
-          // 402 = no credits — skip directly to next model, no retries
           if (response.status === 402) {
             console.warn(`[EXTRACT] ${model} returned 402 (no credits), skipping to next model`);
             lastError = new Error(`Créditos insuficientes (${model})`);
@@ -496,7 +1069,6 @@ async function extractStructured(
         if (toolCall?.function?.arguments) {
           try {
             const extracted = JSON.parse(toolCall.function.arguments);
-            // Store OCR text separately — don't require model to return it
             extracted.texto_ocr_completo = ocrText;
             console.log(`[EXTRACT] SUCCESS with ${model}: tipo=${extracted.tipo_documento}, rubricas=${extracted.rubricas?.length || 0}`);
             return extracted;
@@ -507,7 +1079,6 @@ async function extractStructured(
           }
         }
 
-        // Fallback: try to extract JSON from content
         const content = data.choices?.[0]?.message?.content || "";
         const jsonMatch = content.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
@@ -516,9 +1087,7 @@ async function extractStructured(
             if (!parsed.texto_ocr_completo) parsed.texto_ocr_completo = ocrText;
             console.log(`[EXTRACT] SUCCESS (content fallback) with ${model}`);
             return parsed;
-          } catch {
-            // ignore parse error, try next attempt
-          }
+          } catch { /* ignore */ }
         }
 
         lastError = new Error("Modelo não retornou dados estruturados");
@@ -541,7 +1110,6 @@ async function extractStructured(
 async function autoFill(supabase: any, caseId: string, extracted: any) {
   const fills: string[] = [];
 
-  // Helper: await and log errors without crashing
   async function safeOp(label: string, fn: () => Promise<any>) {
     try {
       const result = await fn();
@@ -555,7 +1123,6 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
     }
   }
 
-  // Map tipo_demissao from AI output to valid enum values
   function mapTipoDemissao(val: string | undefined): string | null {
     if (!val) return null;
     const map: Record<string, string> = {
@@ -570,9 +1137,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
   }
 
   try {
-    // =====================================================
-    // 0. ENSURE pjecalc_calculos exists — get calculo_id
-    // =====================================================
+    // 0. ENSURE pjecalc_calculos exists
     let { data: calcRow } = await supabase
       .from("pjecalc_calculos")
       .select("id")
@@ -580,7 +1145,6 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       .maybeSingle();
 
     if (!calcRow) {
-      // Pre-created in processDocumentInBackground, but just in case
       const { data: caseRow } = await supabase.from("cases").select("criado_por").eq("id", caseId).maybeSingle();
       const userId = caseRow?.criado_por;
       if (userId) {
@@ -599,9 +1163,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       return fills;
     }
 
-    // =====================================================
-    // 1. DADOS DO PROCESSO → update pjecalc_calculos directly
-    // =====================================================
+    // 1. DADOS DO PROCESSO
     if (extracted.dados_processo || extracted.reclamante || extracted.reclamada) {
       const dp = extracted.dados_processo || {};
       const rec = extracted.reclamante || {};
@@ -619,7 +1181,6 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
         }).eq("id", calculoId)
       );
 
-      // Also update the cases table for display
       if (rec.nome || dp.numero_processo) {
         await supabase.from("cases").update({
           cliente: rec.nome || undefined,
@@ -629,9 +1190,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       }
     }
 
-    // =====================================================
-    // 2. PARÂMETROS DO CONTRATO → update pjecalc_calculos directly
-    // =====================================================
+    // 2. PARÂMETROS DO CONTRATO
     if (extracted.contrato) {
       const c = extracted.contrato;
       const dp = extracted.dados_processo || {};
@@ -646,7 +1205,6 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
         }).eq("id", calculoId)
       );
 
-      // Also create employment_contracts record
       if (c.data_admissao) {
         await safeOp("contrato_emprego", () =>
           supabase.from("employment_contracts").upsert({
@@ -662,9 +1220,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       }
     }
 
-    // =====================================================
-    // 3. HISTÓRICO SALARIAL → pjecalc_hist_salarial (real table)
-    // =====================================================
+    // 3. HISTÓRICO SALARIAL
     if (extracted.rubricas?.length > 0) {
       const vencimentos = extracted.rubricas.filter((r: any) => r.tipo === "vencimento");
 
@@ -674,7 +1230,6 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
         const tipoVar = ["salario_base"].includes(rub.categoria) ? "FIXO" : "VARIAVEL";
         const firstVal = rub.valores_mensais?.[0]?.valor || 0;
 
-        // Upsert into real table (has unique constraint on calculo_id, nome)
         const { data: histData, error: histErr } = await supabase
           .from("pjecalc_hist_salarial")
           .upsert({
@@ -696,7 +1251,6 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
 
         const histId = histData?.id;
 
-        // Insert monthly values into real table (has unique on hist_salarial_id, competencia)
         if (histId && rub.valores_mensais?.length > 0) {
           for (const vm of rub.valores_mensais) {
             if (!vm.competencia || vm.valor === undefined || vm.valor === null) continue;
@@ -718,9 +1272,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       fills.push(`historico_salarial (${vencimentos.length} rubricas, ${totalMensais} valores mensais)`);
     }
 
-    // =====================================================
-    // 4. VERBAS DO CÁLCULO → pjecalc_verba_base (real table)
-    // =====================================================
+    // 4. VERBAS DO CÁLCULO
     if (extracted.rubricas?.length > 0) {
       const vencimentos = extracted.rubricas.filter((r: any) => r.tipo === "vencimento");
 
@@ -754,9 +1306,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       fills.push(`verbas (${vencimentos.length})`);
     }
 
-    // =====================================================
-    // 5. FÉRIAS — use view insert (trigger handles it)
-    // =====================================================
+    // 5. FÉRIAS
     if (extracted.ferias?.length > 0) {
       for (const f of extracted.ferias) {
         await safeOp(`ferias_${f.periodo_aquisitivo_inicio}`, () =>
@@ -776,16 +1326,11 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       fills.push(`ferias (${extracted.ferias.length})`);
     }
 
-    // =====================================================
-    // 6. CARTÃO DE PONTO (registros diários)
-    // =====================================================
+    // 6. CARTÃO DE PONTO
     if (extracted.cartao_ponto?.registros?.length > 0) {
       const registros = extracted.cartao_ponto.registros;
-      // pjecalc_cartao_ponto is a VIEW without INSTEAD OF INSERT trigger.
-      // Insert directly into the real table: pjecalc_apuracao_diaria
       for (let i = 0; i < registros.length; i += 50) {
         const batch = registros.slice(i, i + 50).map((r: any) => {
-          // Parse hours to minutes for the real table schema
           const horasNormais = parseFloat(r.horas_normais) || 0;
           const horasExtras = parseFloat(r.horas_extras) || 0;
           const horasNoturnas = parseFloat(r.horas_noturnas) || 0;
@@ -814,20 +1359,16 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       fills.push(`cartao_ponto (${registros.length} dias)`);
     }
 
-    // =====================================================
-    // 7. TRCT — Verbas rescisórias
-    // =====================================================
+    // 7. TRCT
     if (extracted.trct) {
       const trct = extracted.trct;
 
-      // Update contract with TRCT info
       if (trct.data_aviso_previo) {
         await supabase.from("pjecalc_calculos").update({
           data_demissao: trct.data_aviso_previo,
         }).eq("id", calculoId);
       }
 
-      // Insert TRCT verbas as "pago" entries
       if (trct.verbas_rescisorias?.length > 0) {
         for (const verba of trct.verbas_rescisorias) {
           await supabase.from("pjecalc_ocorrencias").insert({
@@ -854,7 +1395,6 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
         fills.push(`trct_verbas (${trct.verbas_rescisorias.length})`);
       }
 
-      // Store TRCT totals as facts
       const trctFacts: Array<{chave: string; valor: string}> = [];
       if (trct.total_bruto) trctFacts.push({ chave: "trct_total_bruto", valor: String(trct.total_bruto) });
       if (trct.total_liquido) trctFacts.push({ chave: "trct_total_liquido", valor: String(trct.total_liquido) });
@@ -881,19 +1421,14 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       if (trctFacts.length > 0) fills.push(`trct_fatos (${trctFacts.length})`);
     }
 
-    // =====================================================
     // 8. FGTS
-    // =====================================================
     if (extracted.fgts) {
-      // pjecalc_fgts_config is a VIEW without INSTEAD OF INSERT trigger.
-      // FGTS config is derived from pjecalc_calculos, so just update that table.
       await safeOp("fgts_config", () =>
         supabase.from("pjecalc_calculos").update({
           multa_477_habilitada: true,
         }).eq("id", calculoId)
       );
 
-      // Store FGTS deposits as facts
       if (extracted.fgts.depositos?.length > 0) {
         for (const dep of extracted.fgts.depositos) {
           await supabase.from("facts").upsert({
@@ -918,13 +1453,10 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       }
     }
 
-    // =====================================================
-    // 9. SENTENÇA — pedidos deferidos → verbas + parâmetros
-    // =====================================================
+    // 9. SENTENÇA
     if (extracted.sentenca) {
       const sent = extracted.sentenca;
 
-      // Create verbas from deferidos → real table
       if (sent.pedidos_deferidos?.length > 0) {
         for (let i = 0; i < sent.pedidos_deferidos.length; i++) {
           const pedido = sent.pedidos_deferidos[i];
@@ -946,7 +1478,6 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
         fills.push(`sentenca_pedidos (${sent.pedidos_deferidos.length} deferidos)`);
       }
 
-      // Store indeferidos as facts
       if (sent.pedidos_indeferidos?.length > 0) {
         await supabase.from("facts").upsert({
           case_id: caseId,
@@ -957,7 +1488,6 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
         }, { onConflict: 'case_id,chave' });
       }
 
-      // Parâmetros de liquidação → update pjecalc_calculos directly
       if (sent.parametros_liquidacao) {
         const pl = sent.parametros_liquidacao;
 
@@ -978,7 +1508,6 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
           );
         }
 
-        // Store correction/juros info as facts
         if (pl.indice_correcao) {
           await supabase.from("facts").upsert({
             case_id: caseId, chave: "indice_correcao", valor: pl.indice_correcao, tipo: "texto", origem: "ia_extracao",
@@ -999,9 +1528,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       }
     }
 
-    // =====================================================
-    // 10. FALTAS (from cartão de ponto observations)
-    // =====================================================
+    // 10. FALTAS
     if (extracted.cartao_ponto?.registros?.length > 0) {
       const faltas = extracted.cartao_ponto.registros.filter(
         (r: any) => r.observacao && /falta|ausencia|ausência/i.test(r.observacao) && !r.entrada1
@@ -1021,9 +1548,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       if (faltas.length > 0) fills.push(`faltas (${faltas.length})`);
     }
 
-    // =====================================================
-    // 11. STORE ALL EXTRACTED FACTS
-    // =====================================================
+    // 11. FACTS
     const allFacts: Array<{chave: string; valor: string; tipo: string}> = [];
 
     const rec = extracted.reclamante || {};
@@ -1068,9 +1593,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       fills.push(`facts (${allFacts.length})`);
     }
 
-    // =====================================================
     // 12. AUTO-CONFIGURE MODULES
-    // =====================================================
     await autoConfigureModules(supabase, caseId, extracted, fills);
 
   } catch (err) {
@@ -1080,11 +1603,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
   return fills;
 }
 
-/**
- * Auto-configura todos os módulos do cálculo com defaults sensatos
- */
 async function autoConfigureModules(supabase: any, caseId: string, extracted: any, fills: string[]) {
-  // Wait for pjecalc_calculos to be created by trigger
   await new Promise(r => setTimeout(r, 500));
 
   const { data: calculoRow } = await supabase
@@ -1096,7 +1615,6 @@ async function autoConfigureModules(supabase: any, caseId: string, extracted: an
   if (!calculoRow) return;
   const calcId = calculoRow.id;
 
-  // Configure calculos defaults
   const { error: calcErr } = await supabase.from("pjecalc_calculos").update({
     honorarios_percentual: extracted.sentenca?.parametros_liquidacao?.honorarios_percentual || 15,
     honorarios_sobre: 'condenacao',
@@ -1109,7 +1627,6 @@ async function autoConfigureModules(supabase: any, caseId: string, extracted: an
   if (calcErr) console.error("[FILL] calculos config:", calcErr.message);
   else fills.push("modulos_config");
 
-  // Correcao monetaria config
   const { data: existCorrecao } = await supabase
     .from("pjecalc_atualizacao_config")
     .select("id, regime_padrao")
@@ -1125,7 +1642,6 @@ async function autoConfigureModules(supabase: any, caseId: string, extracted: an
     });
   }
 
-  // Juros config
   const { data: existJuros } = await supabase
     .from("pjecalc_atualizacao_config")
     .select("id")
@@ -1143,7 +1659,8 @@ async function autoConfigureModules(supabase: any, caseId: string, extracted: an
 }
 
 // =====================================================
-// BACKGROUND PROCESSING FUNCTION
+// ENHANCED BACKGROUND PROCESSING
+// Now with: native PDF, regex, template cache, cross-validation, completeness
 // =====================================================
 
 async function processDocumentInBackground(
@@ -1155,7 +1672,6 @@ async function processDocumentInBackground(
   supabase: any
 ) {
   try {
-    // Detect MIME type
     let mimeType = doc.mime_type || "application/pdf";
     if (!mimeType || mimeType === "application/octet-stream") {
       const fn = (doc.file_name || "").toLowerCase();
@@ -1167,11 +1683,22 @@ async function processDocumentInBackground(
 
     const isPdf = mimeType === "application/pdf";
     let ocrText: string;
+    let extractionMethod = "ocr";
 
+    // ============ IMPROVEMENT #1: Try native PDF extraction first ============
     if (isPdf) {
-      // PDFs: use Mistral OCR API (/v1/ocr) with the signed URL directly — no download needed
-      console.log(`[EXTRACT] Using Mistral OCR API for PDF: ${doc.file_name}`);
-      ocrText = await mistralOcrPdf(fileUrl, MISTRAL_API_KEY);
+      const nativeResult = await tryNativePdfExtraction(fileUrl);
+      
+      if (nativeResult.method === "native" && nativeResult.quality === "good") {
+        console.log(`[EXTRACT] Using NATIVE text extraction (${nativeResult.text.length} chars) — NO OCR NEEDED`);
+        ocrText = nativeResult.text;
+        extractionMethod = "native_pdf";
+      } else {
+        // Fallback to Mistral OCR
+        console.log(`[EXTRACT] Native extraction insufficient, using Mistral OCR`);
+        ocrText = await mistralOcrPdf(fileUrl, MISTRAL_API_KEY);
+        extractionMethod = "mistral_ocr";
+      }
     } else {
       // Images: download and use chat API with base64
       console.log(`[EXTRACT] Using Mistral chat API for image: ${doc.file_name}`);
@@ -1187,28 +1714,51 @@ async function processDocumentInBackground(
           await delay(1000);
         }
       }
-      if (!fileBuffer || fileBuffer.byteLength === 0) {
-        throw new Error("Empty file downloaded");
-      }
+      if (!fileBuffer || fileBuffer.byteLength === 0) throw new Error("Empty file downloaded");
       const base64Data = arrayBufferToBase64(fileBuffer);
-      console.log(`[EXTRACT] File: ${fileBuffer.byteLength} bytes, base64: ${base64Data.length} chars`);
       fileBuffer = null;
       ocrText = await mistralOcrImage(base64Data, mimeType, MISTRAL_API_KEY);
+      extractionMethod = "mistral_ocr_image";
     }
-    console.log(`[EXTRACT] OCR complete: ${ocrText.length} chars`);
+    console.log(`[EXTRACT] Text ready: ${ocrText.length} chars via ${extractionMethod}`);
 
-    // Keep full OCR for storage but extractStructured will truncate internally
+    // ============ IMPROVEMENT #2: Try regex extraction first ============
+    const regexResult = tryRegexExtraction(ocrText);
+    console.log(`[EXTRACT] Regex pre-extraction: ${regexResult._regex_fields.length} fields found: [${regexResult._regex_fields.join(", ")}]`);
+
+    // ============ IMPROVEMENT #3: Try template cache ============
+    const detectedCnpj = regexResult.reclamada?.cnpj || null;
+    const cachedResult = await tryTemplateCacheExtraction(supabase, detectedCnpj, ocrText);
+    if (cachedResult) {
+      console.log(`[EXTRACT] Template cache hit: ${cachedResult.rubricas?.length || 0} rubricas from cache`);
+    }
+
+    // Stage 2: AI structured extraction (always run for complete data)
     const fullOcrText = ocrText;
-    console.log(`[EXTRACT] OCR total: ${ocrText.length} chars`);
-
-    // Stage 2: Structured extraction from OCR text
     const extracted = await extractStructured(ocrText, LOVABLE_API_KEY);
-    // Ensure texto_ocr_completo has the full text for chunking
     extracted.texto_ocr_completo = fullOcrText;
-    // Release OCR text from memory
     ocrText = "";
 
-    // Pre-create pjecalc_calculos with user_id to avoid NULL user_id errors from view triggers
+    // Merge regex results into extracted (regex wins for fields it found)
+    if (regexResult._regex_fields.length > 0) {
+      if (regexResult.tipo_documento && !extracted.tipo_documento) {
+        extracted.tipo_documento = regexResult.tipo_documento;
+      }
+      if (regexResult.dados_processo) {
+        extracted.dados_processo = { ...(extracted.dados_processo || {}), ...regexResult.dados_processo };
+      }
+      if (regexResult.reclamante) {
+        extracted.reclamante = { ...(extracted.reclamante || {}), ...regexResult.reclamante };
+      }
+      if (regexResult.reclamada) {
+        extracted.reclamada = { ...(extracted.reclamada || {}), ...regexResult.reclamada };
+      }
+      if (regexResult.contrato) {
+        extracted.contrato = { ...(extracted.contrato || {}), ...regexResult.contrato };
+      }
+    }
+
+    // Pre-create pjecalc_calculos
     let userId = doc.owner_user_id;
     if (!userId) {
       const { data: caseRow } = await supabase.from("cases").select("criado_por").eq("id", doc.case_id).maybeSingle();
@@ -1225,12 +1775,26 @@ async function processDocumentInBackground(
           case_id: doc.case_id,
           user_id: userId,
         });
-        console.log(`[EXTRACT] Pre-created pjecalc_calculos for case ${doc.case_id}`);
       }
+    }
+
+    // ============ IMPROVEMENT #4: Cross-document validation ============
+    const crossValidation = await crossValidateExtraction(supabase, doc.case_id, extracted, document_id);
+    if (crossValidation.warnings.length > 0) {
+      console.warn(`[EXTRACT] Cross-validation warnings: ${crossValidation.warnings.join(" | ")}`);
     }
 
     // Auto-fill pjecalc tables
     const fills = await autoFill(supabase, doc.case_id, extracted);
+
+    // ============ IMPROVEMENT #3b: Save template cache ============
+    const cnpjForCache = extracted.reclamada?.cnpj || detectedCnpj;
+    await saveTemplateCache(supabase, cnpjForCache, extracted);
+
+    // ============ IMPROVEMENT #5: Post-extraction completeness check ============
+    const completeness = checkExtractedCompleteness(extracted);
+    console.log(`[EXTRACT] Completeness: ${completeness.score}%, missing: [${completeness.missing.join(", ")}], ready: ${completeness.ready_for_liquidation}`);
+
     const extractedOcrText = extracted.texto_ocr_completo || "";
     await supabase.from("documents").update({
       status: "extracted",
@@ -1243,6 +1807,7 @@ async function processDocumentInBackground(
       metadata: {
         ...(doc.metadata || {}),
         extraction_completed_at: new Date().toISOString(),
+        extraction_method: extractionMethod,
         text_length: extractedOcrText.length,
         extracted_text_preview: extractedOcrText.substring(0, 500),
         tipo_detectado: extracted.tipo_documento,
@@ -1253,10 +1818,19 @@ async function processDocumentInBackground(
         has_cartao_ponto: !!extracted.cartao_ponto?.registros?.length,
         has_ferias: !!extracted.ferias?.length,
         has_sentenca: !!extracted.sentenca,
+        // New v2 metadata
+        regex_fields_extracted: regexResult._regex_fields,
+        template_cache_used: !!cachedResult,
+        cross_validation_warnings: crossValidation.warnings,
+        cross_validation_conflicts: crossValidation.conflicts.length,
+        completeness_score: completeness.score,
+        completeness_missing: completeness.missing,
+        completeness_warnings: completeness.warnings,
+        ready_for_liquidation: completeness.ready_for_liquidation,
       },
     }).eq("id", document_id);
 
-    // Store extracted text as chunks for search
+    // Store extracted text as chunks
     if (extractedOcrText.length > 100) {
       await supabase.from("document_chunks").delete().eq("document_id", document_id);
       await supabase.from("doc_chunks").delete().eq("document_id", document_id);
@@ -1289,7 +1863,7 @@ async function processDocumentInBackground(
       }
     }
 
-    console.log(`[EXTRACT] COMPLETE: tipo=${extracted.tipo_documento}, fills=[${fills.join(", ")}]`);
+    console.log(`[EXTRACT] COMPLETE: tipo=${extracted.tipo_documento}, method=${extractionMethod}, fills=[${fills.join(", ")}], completeness=${completeness.score}%`);
 
   } catch (extractError) {
     console.error("[EXTRACT] FAILURE:", extractError);
@@ -1302,7 +1876,7 @@ async function processDocumentInBackground(
 }
 
 // =====================================================
-// MAIN HANDLER — Returns immediately, processes in background
+// MAIN HANDLER
 // =====================================================
 
 serve(async (req) => {
@@ -1331,7 +1905,6 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Fetch document
     const { data: doc, error: docErr } = await supabase
       .from("documents")
       .select("*")
@@ -1345,7 +1918,6 @@ serve(async (req) => {
       );
     }
 
-    // Get file URL
     let fileUrl = doc.arquivo_url;
     if (!fileUrl && doc.storage_path) {
       for (const bucket of ["juriscalculo-documents", "case-documents"]) {
@@ -1368,19 +1940,16 @@ serve(async (req) => {
 
     console.log(`[EXTRACT] Starting for document ${document_id}: ${doc.file_name}`);
 
-    // Update status immediately
     await supabase.from("documents").update({
       status: "extracting",
       processing_started_at: new Date().toISOString(),
       error_message: null,
     }).eq("id", document_id);
 
-    // Start background processing — does NOT block the response
     EdgeRuntime.waitUntil(
       processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, LOVABLE_API_KEY, supabase)
     );
 
-    // Return immediately
     return new Response(
       JSON.stringify({
         success: true,
