@@ -87,7 +87,7 @@ export function gerarS2500(
   const competencias = new Set<string>();
   for (const v of result.verbas) {
     for (const o of v.ocorrencias) {
-      if (o.ativa) competencias.add(fmtMesAno(o.competencia));
+      competencias.add(fmtMesAno(o.competencia));
     }
   }
   const comps = Array.from(competencias).sort();
@@ -98,7 +98,7 @@ export function gerarS2500(
 
     for (const v of result.verbas) {
       const ocorrsDoMes = v.ocorrencias.filter(
-        o => o.ativa && fmtMesAno(o.competencia) === comp
+        o => fmtMesAno(o.competencia) === comp
       );
       if (ocorrsDoMes.length === 0) continue;
 
