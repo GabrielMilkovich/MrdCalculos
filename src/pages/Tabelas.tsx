@@ -36,15 +36,12 @@ const PAGE_SIZE = 24;
 
 const TABELA_CONFIG: Record<string, { title: string; description: string; slug: string }> = {
   "salario-minimo": { title: "Salário Mínimo", description: "Valores históricos do salário mínimo nacional", slug: "salario_minimo" },
-  "pisos-salariais": { title: "Pisos Salariais", description: "Pisos salariais por categoria profissional", slug: "pisos_salariais" },
   "salario-familia": { title: "Salário-família", description: "Tabela de cotas do salário-família", slug: "salario_familia" },
   "seguro-desemprego": { title: "Seguro-desemprego", description: "Faixas de cálculo do seguro-desemprego", slug: "seguro_desemprego" },
-  "vale-transporte": { title: "Vale-transporte", description: "Valores de passagens por linha/município", slug: "vale_transporte" },
   "feriados": { title: "Feriados e Pontos Facultativos", description: "Calendário de feriados nacionais, estaduais e municipais", slug: "feriados" },
   "verbas": { title: "Verbas", description: "Cadastro de verbas trabalhistas padrão", slug: "verbas" },
   "contribuicao-social": { title: "Contribuição Social", description: "Tabelas de alíquotas do INSS (segurado e empregador)", slug: "contribuicao_social" },
   "imposto-renda": { title: "Imposto de Renda", description: "Tabela progressiva do IRRF e deduções", slug: "imposto_renda" },
-  "custas-judiciais": { title: "Custas Judiciais", description: "Tabelas de custas por tribunal", slug: "custas_judiciais" },
   "correcao-monetaria": { title: "Correção Monetária", description: "Índices IPCA-E, INPC, TR e SELIC", slug: "correcao_monetaria" },
   "juros-mora": { title: "Juros de Mora", description: "Tabelas de juros conforme ADC 58/59 STF", slug: "juros_mora" },
   "atualizacao-indices": { title: "Atualização de Tabelas e Índices", description: "Gestão e importação de séries de índices", slug: "" },
