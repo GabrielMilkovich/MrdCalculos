@@ -1475,11 +1475,9 @@ export class PjeCalcEngine {
           if (fatorDB !== null) {
             indiceCorrecao = fatorDB;
           } else {
-            const taxas: Record<string, number> = {
-              'IPCA-E': 1.0045, 'SELIC': 1.01, 'TR': 1.0001, 'INPC': 1.004, 'IGP-M': 1.005,
-            };
-            const taxaMensal = taxas[this.correcaoConfig.indice] || 1.004;
-            indiceCorrecao = Math.pow(taxaMensal, mesesCorrecao);
+            // FIX #1: Sem fallback — bloquear cálculo se índices ausentes
+            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+            indiceCorrecao = 1;
           }
 
           if (this.correcaoConfig.indice !== 'SELIC') {
