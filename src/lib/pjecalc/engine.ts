@@ -1931,9 +1931,9 @@ export class PjeCalcEngine {
           const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
           empregador.push({
             competencia: comp,
-            empresa: this.csConfig.apurar_empresa ? Number(new Decimal(base).times(aliqEmp).toDP(2)) : 0,
-            sat: this.csConfig.apurar_sat ? Number(new Decimal(base).times(aliqSat).toDP(2)) : 0,
-            terceiros: this.csConfig.apurar_terceiros ? Number(new Decimal(base).times(aliqTerc).toDP(2)) : 0,
+            empresa: this.csConfig.apurar_empresa ? Number(new Decimal(base).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+            sat: this.csConfig.apurar_sat ? Number(new Decimal(base).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+            terceiros: this.csConfig.apurar_terceiros ? Number(new Decimal(base).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
           });
         }
       }
