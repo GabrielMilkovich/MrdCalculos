@@ -1388,12 +1388,12 @@ export class PjeCalcEngine {
       tipo: verba.tipo,
       caracteristica: verba.caracteristica,
       ocorrencias,
-      total_devido: Number(new Decimal(totalDevido).toDP(2)),
-      total_pago: Number(new Decimal(totalPago).toDP(2)),
-      total_diferenca: Number(new Decimal(totalDiferenca).toDP(2)),
-      total_corrigido: Number(new Decimal(totalDiferenca).toDP(2)),
+      total_devido: totalDevido.toDP(2).toNumber(),
+      total_pago: totalPago.toDP(2).toNumber(),
+      total_diferenca: totalDiferenca.toDP(2).toNumber(),
+      total_corrigido: totalDiferenca.toDP(2).toNumber(),
       total_juros: 0,
-      total_final: Number(new Decimal(totalDiferenca).toDP(2)),
+      total_final: totalDiferenca.toDP(2).toNumber(),
     };
   }
 
