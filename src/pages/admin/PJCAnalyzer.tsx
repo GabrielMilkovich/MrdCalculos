@@ -7,8 +7,26 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight, FileText, Upload, AlertTriangle, CheckCircle } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Upload, AlertTriangle, CheckCircle, Download } from "lucide-react";
 import { analyzePJC, type PJCAnalysis, type VerbaAnalysis } from "@/lib/pjecalc/pjc-analyzer";
+import JSZip from "jszip";
+
+async function extractXmlFromPjc(data: ArrayBuffer): Promise<string> {
+  const bytes = new Uint8Array(data);
+  // Check for ZIP signature (PK\x03\x04)
+  if (bytes[0] === 0x50 && bytes[1] === 0x4B) {
+    const zip = await JSZip.loadAsync(data);
+    // Find the .PJC or .xml file inside
+    const files = Object.keys(zip.files);
+    const pjcFile = files.find(f => f.endsWith('.PJC') || f.endsWith('.pjc') || f.endsWith('.xml')) || files[0];
+    if (!pjcFile) throw new Error('Nenhum arquivo encontrado dentro do ZIP');
+    const content = await zip.files[pjcFile].async('string');
+    return content;
+  }
+  // Already plain XML
+  const decoder = new TextDecoder('iso-8859-1');
+  return decoder.decode(data);
+}
 
 export default function PJCAnalyzerPage() {
   const [analysis, setAnalysis] = useState<PJCAnalysis | null>(null);
@@ -21,8 +39,25 @@ export default function PJCAnalyzerPage() {
     setLoading(true);
     setError(null);
     try {
-      const text = await file.text();
-      const result = analyzePJC(text);
+      const buffer = await file.arrayBuffer();
+      const xml = await extractXmlFromPjc(buffer);
+      const result = analyzePJC(xml);
+      setAnalysis(result);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadFromPublic = async (filename: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const resp = await fetch(`/reports/${filename}`);
+      const buffer = await resp.arrayBuffer();
+      const xml = await extractXmlFromPjc(buffer);
+      const result = analyzePJC(xml);
       setAnalysis(result);
     } catch (err) {
       setError((err as Error).message);
