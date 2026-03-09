@@ -1939,8 +1939,8 @@ export class PjeCalcEngine {
       }
     }
 
-    const totalDevidos = segurado_devidos.reduce((s, x) => s + x.diferenca, 0);
-    const totalPagos = segurado_pagos.reduce((s, x) => s + x.diferenca, 0);
+    const totalDevidos = segurado_devidos.reduce((s, x) => new Decimal(s).plus(x.diferenca), new Decimal(0)).toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+    const totalPagos = segurado_pagos.reduce((s, x) => new Decimal(s).plus(x.diferenca), new Decimal(0)).toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
 
     return {
       segurado_devidos, segurado_pagos, empregador,
