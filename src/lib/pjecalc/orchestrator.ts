@@ -720,7 +720,8 @@ export async function executarLiquidacao(
     tax_table_versions: {
       inss: faixasINSSDB.length > 0 ? 'db' : '2025.01',
       irrf: faixasIRDB.length > 0 ? 'db' : '2025.01',
-      seguro: '2025.01',
+      seguro: seguroDesempregoDB.length > 0 ? 'db' : '2025.01',
+      salario_familia: salarioFamiliaDB.length > 0 ? 'db' : '2025.01',
     },
     index_series_version: indicesDB.length > 0 ? `db_${indicesDB.length}` : 'embedded',
     input_hash: simpleHash({
