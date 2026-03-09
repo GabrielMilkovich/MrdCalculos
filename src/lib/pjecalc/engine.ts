@@ -24,6 +24,7 @@ import type {
   PjeLiquidacaoResult, PjeValidationItem, PjeValidationResult,
   PjePrevidenciaPrivadaResult, PjeSalarioFamiliaResult,
   PjeCombinacaoIndice, PjeCombinacaoJuros,
+  PjeSeguroDesempregoDB, PjeSalarioFamiliaDB,
 } from './engine-types';
 
 import {
@@ -57,6 +58,8 @@ export class PjeCalcEngine {
   private prevPrivadaConfig: PjePrevidenciaPrivadaConfig;
   private pensaoConfig: PjePensaoConfig;
   private salarioFamiliaConfig: PjeSalarioFamiliaConfig;
+  private seguroDesempregoDB: PjeSeguroDesempregoDB[];
+  private salarioFamiliaDB: PjeSalarioFamiliaDB[];
   // Map of verba results by verba_id for reflexa resolution
   private verbaResultsMap: Map<string, PjeVerbaResult> = new Map();
 
@@ -82,6 +85,8 @@ export class PjeCalcEngine {
     prevPrivadaConfig: PjePrevidenciaPrivadaConfig = { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false },
     pensaoConfig: PjePensaoConfig = { apurar: false, percentual: 0, base: 'liquido' },
     salarioFamiliaConfig: PjeSalarioFamiliaConfig = { apurar: false, numero_filhos: 0 },
+    seguroDesempregoDB: PjeSeguroDesempregoDB[] = [],
+    salarioFamiliaDB: PjeSalarioFamiliaDB[] = [],
   ) {
     this.params = params;
     this.historicos = historicos;
@@ -115,6 +120,8 @@ export class PjeCalcEngine {
     this.prevPrivadaConfig = prevPrivadaConfig;
     this.pensaoConfig = pensaoConfig;
     this.salarioFamiliaConfig = salarioFamiliaConfig;
+    this.seguroDesempregoDB = seguroDesempregoDB;
+    this.salarioFamiliaDB = salarioFamiliaDB;
   }
 
   // =====================================================
@@ -1566,16 +1573,40 @@ export class PjeCalcEngine {
     
     if (!valorParcela && this.params.ultima_remuneracao) {
       const salMedio = this.params.ultima_remuneracao;
-      if (salMedio <= SEGURO_DESEMP_2025.faixa1_ate) {
-        valorParcela = salMedio * SEGURO_DESEMP_2025.faixa1_mult;
-      } else if (salMedio <= SEGURO_DESEMP_2025.faixa2_ate) {
-        valorParcela = SEGURO_DESEMP_2025.faixa2_base + (salMedio - SEGURO_DESEMP_2025.faixa1_ate) * SEGURO_DESEMP_2025.faixa2_mult;
+      const faixasDB = this.getSeguroDesempregoDB();
+      
+      if (faixasDB) {
+        // Use DB faixas
+        let calculado = false;
+        for (const f of faixasDB) {
+          if (salMedio >= f.valor_inicial && salMedio <= f.valor_final) {
+            valorParcela = f.valor_soma + (salMedio - f.valor_inicial) * (f.percentual / 100);
+            valorParcela = Math.max(valorParcela, f.valor_piso);
+            valorParcela = Math.min(valorParcela, f.valor_teto);
+            calculado = true;
+            break;
+          }
+        }
+        if (!calculado && faixasDB.length > 0) {
+          const last = faixasDB[faixasDB.length - 1];
+          valorParcela = last.valor_teto;
+        }
       } else {
-        valorParcela = SEGURO_DESEMP_2025.teto;
+        // Fallback to hardcoded constants
+        if (salMedio <= SEGURO_DESEMP_2025.faixa1_ate) {
+          valorParcela = salMedio * SEGURO_DESEMP_2025.faixa1_mult;
+        } else if (salMedio <= SEGURO_DESEMP_2025.faixa2_ate) {
+          valorParcela = SEGURO_DESEMP_2025.faixa2_base + (salMedio - SEGURO_DESEMP_2025.faixa1_ate) * SEGURO_DESEMP_2025.faixa2_mult;
+        } else {
+          valorParcela = SEGURO_DESEMP_2025.teto;
+        }
+        valorParcela = Math.min(valorParcela, SEGURO_DESEMP_2025.teto);
       }
     }
 
-    valorParcela = Math.min(valorParcela, SEGURO_DESEMP_2025.teto);
+    if (!this.getSeguroDesempregoDB()) {
+      valorParcela = Math.min(valorParcela, SEGURO_DESEMP_2025.teto);
+    }
     const total = valorParcela * this.seguroConfig.parcelas;
 
     return {
@@ -1586,8 +1617,25 @@ export class PjeCalcEngine {
     };
   }
 
-  // =====================================================
-  // CALCULAR HONORÁRIOS
+  private getSeguroDesempregoDB(): PjeSeguroDesempregoDB[] | null {
+    if (this.seguroDesempregoDB.length === 0) return null;
+    // Find faixas for the most recent competencia <= demissao date
+    const refDate = this.params.data_demissao || this.params.data_final || new Date().toISOString().slice(0, 10);
+    const competencias = [...new Set(this.seguroDesempregoDB.map(f => f.competencia))].sort().reverse();
+    const comp = competencias.find(c => c <= refDate) || competencias[0];
+    const faixas = this.seguroDesempregoDB.filter(f => f.competencia === comp).sort((a, b) => a.faixa - b.faixa);
+    return faixas.length > 0 ? faixas : null;
+  }
+
+  private getSalarioFamiliaDB(competencia: string): PjeSalarioFamiliaDB | null {
+    if (this.salarioFamiliaDB.length === 0) return null;
+    const compDate = competencia + '-01';
+    const competencias = [...new Set(this.salarioFamiliaDB.map(f => f.competencia))].sort().reverse();
+    const comp = competencias.find(c => c <= compDate) || competencias[0];
+    const faixa = this.salarioFamiliaDB.find(f => f.competencia === comp && f.faixa === 1);
+    return faixa || null;
+  }
+
   // =====================================================
 
   calcularHonorarios(principalCorrigido: number, juros: number, fgts: number): { sucumbenciais: number; contratuais: number } {
@@ -2286,8 +2334,12 @@ export class PjeCalcEngine {
       }
       if (remuneracao === 0) remuneracao = this.params.ultima_remuneracao || 0;
 
-      // Verificar se remuneração está dentro do limite
-      if (remuneracao > SALARIO_FAMILIA_2025.limite_remuneracao) continue;
+      // Verificar se remuneração está dentro do limite e obter valor da cota
+      const sfDB = this.getSalarioFamiliaDB(comp);
+      const limiteRemuneracao = sfDB ? sfDB.valor_final : SALARIO_FAMILIA_2025.limite_remuneracao;
+      const valorCotaRef = sfDB ? sfDB.valor_cota : SALARIO_FAMILIA_2025.valor_cota;
+      
+      if (remuneracao > limiteRemuneracao) continue;
 
       // Contar filhos elegíveis na competência
       const [anoComp, mesComp] = comp.split('-').map(Number);
@@ -2307,9 +2359,8 @@ export class PjeCalcEngine {
 
       if (filhosElegiveis <= 0) continue;
 
-      const valorCota = SALARIO_FAMILIA_2025.valor_cota;
-      const totalComp = Number(new Decimal(valorCota).times(filhosElegiveis).toDP(2));
-      cotas.push({ competencia: comp, filhos_elegíveis: filhosElegiveis, valor_cota: valorCota, total: totalComp });
+      const totalComp = Number(new Decimal(valorCotaRef).times(filhosElegiveis).toDP(2));
+      cotas.push({ competencia: comp, filhos_elegíveis: filhosElegiveis, valor_cota: valorCotaRef, total: totalComp });
       totalSF += totalComp;
     }
 
