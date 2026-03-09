@@ -2953,9 +2953,9 @@ export class PjeCalcEngine {
           }
           const result = this.calcularOcorrencia(reflexa, oc.competencia, baseValor);
           ocorrencias.push(result);
-          totalDevido += result.devido;
-          totalPago += result.pago;
-          totalDiferenca += result.diferenca;
+          totalDevido = totalDevido.plus(result.devido);
+          totalPago = totalPago.plus(result.pago);
+          totalDiferenca = totalDiferenca.plus(result.diferenca);
         }
         break;
       }
