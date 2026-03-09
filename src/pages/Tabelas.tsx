@@ -66,9 +66,13 @@ function fmtDate(d: string) {
 }
 
 // ============================================
-// Health Dashboard (Visão Geral)
+// Health Dashboard (Painel de Controle)
 // ============================================
 function HealthDashboard() {
+  const qc = useQueryClient();
+  const [checkingUrls, setCheckingUrls] = useState(false);
+  const [urlResults, setUrlResults] = useState<Record<string, { ok: boolean; error?: string }>>({});
+
   const { data: registry, isLoading } = useQuery({
     queryKey: ["reference_table_registry"],
     queryFn: async () => {
@@ -76,33 +80,101 @@ function HealthDashboard() {
       if (error) throw error;
       return (data || []) as any[];
     },
+    refetchInterval: 60_000,
   });
 
   const { data: importRuns } = useQuery({
     queryKey: ["reference_import_runs_recent"],
     queryFn: async () => {
       const { data, error } = await supabase.from("reference_import_runs" as any)
-        .select("*").order("started_at", { ascending: false }).limit(20);
+        .select("*").order("started_at", { ascending: false }).limit(30);
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    refetchInterval: 60_000,
+  });
+
+  const { data: syncStatuses } = useQuery({
+    queryKey: ["sync_status_all"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sync_status" as any).select("*");
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    refetchInterval: 30_000,
+  });
+
+  const { data: sources } = useQuery({
+    queryKey: ["reference_sources_all"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("reference_sources" as any).select("*").order("name");
       if (error) throw error;
       return (data || []) as any[];
     },
   });
 
+  // Derived metrics
+  const totalTables = registry?.length || 0;
+  const okTables = registry?.filter((r: any) => r.status === 'ok').length || 0;
+  const warningTables = registry?.filter((r: any) => r.status === 'warning').length || 0;
+  const brokenTables = registry?.filter((r: any) => r.status === 'broken').length || 0;
+  const neverImported = registry?.filter((r: any) => !r.last_import_at).length || 0;
+
+  const recentErrors = (importRuns || []).filter((r: any) => r.result === 'error' || r.result === 'failed');
+  const last24hRuns = (importRuns || []).filter((r: any) => {
+    if (!r.started_at) return false;
+    return (Date.now() - new Date(r.started_at).getTime()) < 86_400_000;
+  });
+
+  const syncErrors = (syncStatuses || []).filter((s: any) => s.status === 'error');
+
+  // Source URL health check
+  const checkSourceUrls = async () => {
+    setCheckingUrls(true);
+    const results: typeof urlResults = {};
+    for (const src of (sources || [])) {
+      if (!src.url) continue;
+      try {
+        await fetch(src.url, { method: 'HEAD', mode: 'no-cors' });
+        results[src.id] = { ok: true };
+      } catch {
+        results[src.id] = { ok: false, error: 'URL inacessível' };
+      }
+    }
+    setUrlResults(results);
+    setCheckingUrls(false);
+    const failures = Object.values(results).filter(r => !r.ok).length;
+    if (failures > 0) {
+      toast.error(`${failures} fonte(s) com URL inacessível!`);
+    } else {
+      toast.success('Todas as fontes estão acessíveis.');
+    }
+  };
+
   const statusIcon = (status: string) => {
     switch (status) {
-      case "ok": return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case "warning": return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-      case "broken": return <XCircle className="h-4 w-4 text-red-500" />;
+      case "ok": return <CheckCircle className="h-4 w-4 text-emerald-500" />;
+      case "warning": return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+      case "broken": return <XCircle className="h-4 w-4 text-destructive" />;
       default: return <Clock className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
   const statusColor = (status: string) => {
     switch (status) {
-      case "ok": return "border-green-500/30 bg-green-500/5";
-      case "warning": return "border-yellow-500/30 bg-yellow-500/5";
-      case "broken": return "border-red-500/30 bg-red-500/5";
+      case "ok": return "border-emerald-500/30 bg-emerald-500/5";
+      case "warning": return "border-amber-500/30 bg-amber-500/5";
+      case "broken": return "border-destructive/30 bg-destructive/5";
       default: return "border-border";
+    }
+  };
+
+  const resultBadge = (result: string) => {
+    switch (result) {
+      case "success": return <Badge variant="secondary" className="text-[9px] bg-emerald-500/15 text-emerald-600">Sucesso</Badge>;
+      case "error": case "failed": return <Badge variant="destructive" className="text-[9px]">Erro</Badge>;
+      case "pending": return <Badge variant="outline" className="text-[9px]">Pendente</Badge>;
+      default: return <Badge variant="outline" className="text-[9px]">{result}</Badge>;
     }
   };
 
@@ -110,57 +182,268 @@ function HealthDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Status cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        {(registry || []).map((r: any) => {
-          const urlKey = Object.entries(TABELA_CONFIG).find(([_, v]) => v.slug === r.slug)?.[0];
-          return (
-            <Link
-              key={r.id}
-              to={urlKey ? `/tabelas/${urlKey}` : "#"}
-              className={`block border rounded-lg p-3 transition-all hover:shadow-md ${statusColor(r.status)}`}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                {statusIcon(r.status)}
-                <span className="text-xs font-semibold truncate">{r.name}</span>
-              </div>
-              <div className="text-[10px] text-muted-foreground space-y-0.5">
-                <div>Frequência: <span className="font-medium">{r.update_frequency}</span></div>
-                <div>
-                  Última: <span className="font-medium">
-                    {r.last_import_at ? new Date(r.last_import_at).toLocaleDateString("pt-BR") : "Nunca"}
-                  </span>
-                </div>
-                <div className="flex gap-1 mt-1">
-                  {r.is_auto_importable && <Badge variant="secondary" className="text-[9px] h-4">Auto</Badge>}
-                  {r.requires_manual_input && <Badge variant="outline" className="text-[9px] h-4">Manual</Badge>}
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+      {/* KPI Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-foreground">{totalTables}</div>
+            <div className="text-[10px] text-muted-foreground">Total de Tabelas</div>
+          </CardContent>
+        </Card>
+        <Card className={okTables === totalTables ? "border-emerald-500/30" : ""}>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-emerald-500">{okTables}</div>
+            <div className="text-[10px] text-muted-foreground">Atualizadas</div>
+          </CardContent>
+        </Card>
+        <Card className={warningTables > 0 ? "border-amber-500/30" : ""}>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-amber-500">{warningTables}</div>
+            <div className="text-[10px] text-muted-foreground">Com Alerta</div>
+          </CardContent>
+        </Card>
+        <Card className={brokenTables > 0 ? "border-destructive/30" : ""}>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-destructive">{brokenTables}</div>
+            <div className="text-[10px] text-muted-foreground">Com Erro</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-foreground">{last24hRuns.length}</div>
+            <div className="text-[10px] text-muted-foreground">Importações 24h</div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Recent import runs */}
+      {/* Alerts Panel */}
+      {(recentErrors.length > 0 || syncErrors.length > 0 || neverImported > 0) && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-4 w-4" /> Alertas Ativos
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {syncErrors.map((s: any) => (
+              <div key={s.id} className="flex items-start gap-2 text-xs p-2 rounded bg-background border border-destructive/20">
+                <XCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-semibold">{s.serie_nome || `Série ${s.serie_id}`}:</span>{' '}
+                  <span className="text-muted-foreground">{s.error_message}</span>
+                  {s.last_sync_attempt && (
+                    <span className="text-muted-foreground/60 ml-1">
+                      ({new Date(s.last_sync_attempt).toLocaleString("pt-BR")})
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+            {recentErrors.slice(0, 5).map((r: any) => (
+              <div key={r.id} className="flex items-start gap-2 text-xs p-2 rounded bg-background border border-destructive/20">
+                <XCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-semibold">{r.table_slug}:</span>{' '}
+                  <span className="text-muted-foreground">
+                    Importação falhou em {r.started_at ? new Date(r.started_at).toLocaleString("pt-BR") : "—"}
+                  </span>
+                  {r.errors && Array.isArray(r.errors) && r.errors.length > 0 && (
+                    <span className="text-destructive ml-1">— {(r.errors as string[])[0]}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+            {neverImported > 0 && (
+              <div className="flex items-start gap-2 text-xs p-2 rounded bg-background border border-amber-500/20">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+                <span><span className="font-semibold">{neverImported} tabela(s)</span> nunca foram importadas.</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sync Status (BCB APIs) */}
+      {(syncStatuses || []).length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2"><RefreshCw className="h-4 w-4" /> Sincronização Automática (BCB)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {(syncStatuses || []).map((s: any) => (
+                <div key={s.id} className={`p-3 rounded border ${s.status === 'error' ? 'border-destructive/30 bg-destructive/5' : 'border-border bg-muted/20'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold">{s.serie_nome || `Série ${s.serie_id}`}</span>
+                    {s.status === 'ok' ? (
+                      <Badge variant="secondary" className="text-[9px] bg-emerald-500/15 text-emerald-600">OK</Badge>
+                    ) : s.status === 'error' ? (
+                      <Badge variant="destructive" className="text-[9px]">Erro</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[9px]">{s.status}</Badge>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground space-y-0.5">
+                    <div>Última tentativa: {s.last_sync_attempt ? new Date(s.last_sync_attempt).toLocaleString("pt-BR") : "Nunca"}</div>
+                    <div>Último dado: {s.last_processed_date || "—"}</div>
+                    {s.error_message && <div className="text-destructive">{s.error_message}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Source URLs Health */}
+      {(sources || []).length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-2"><FileText className="h-4 w-4" /> Fontes de Dados</CardTitle>
+              <Button size="sm" variant="outline" onClick={checkSourceUrls} disabled={checkingUrls}>
+                {checkingUrls ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                Verificar URLs
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {(sources || []).map((src: any) => {
+                const urlCheck = urlResults[src.id];
+                return (
+                  <div key={src.id} className={`flex items-center justify-between p-2.5 rounded border text-xs ${
+                    urlCheck ? (urlCheck.ok ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-destructive/20 bg-destructive/5') : 'border-border'
+                  }`}>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      {urlCheck ? (
+                        urlCheck.ok ? <CheckCircle className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> : <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+                      ) : (
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-semibold truncate">{src.name}</div>
+                        {src.url && <div className="text-muted-foreground truncate text-[10px]">{src.url}</div>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <Badge variant={src.active ? "secondary" : "outline"} className="text-[9px]">
+                        {src.active ? "Ativa" : "Inativa"}
+                      </Badge>
+                      <Badge variant="outline" className="text-[9px]">{src.type}</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Table Status Grid */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2"><History className="h-4 w-4" /> Histórico de Importações</CardTitle>
+          <CardTitle className="text-sm">Status por Tabela</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {(registry || []).map((r: any) => {
+              const urlKey = Object.entries(TABELA_CONFIG).find(([_, v]) => v.slug === r.slug)?.[0];
+              const daysSinceImport = r.last_import_at
+                ? Math.floor((Date.now() - new Date(r.last_import_at).getTime()) / 86_400_000)
+                : null;
+
+              return (
+                <Link
+                  key={r.id}
+                  to={urlKey ? `/tabelas/${urlKey}` : "#"}
+                  className={`block border rounded-lg p-3 transition-all hover:shadow-md ${statusColor(r.status)}`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    {statusIcon(r.status)}
+                    <span className="text-xs font-semibold truncate">{r.name}</span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground space-y-0.5">
+                    <div>Frequência: <span className="font-medium">{r.update_frequency}</span></div>
+                    <div className="flex items-center gap-1">
+                      Última:{' '}
+                      <span className={`font-medium ${daysSinceImport && daysSinceImport > 60 ? 'text-destructive' : ''}`}>
+                        {r.last_import_at ? new Date(r.last_import_at).toLocaleDateString("pt-BR") : "Nunca"}
+                      </span>
+                      {daysSinceImport !== null && daysSinceImport > 30 && (
+                        <Badge variant="outline" className="text-[8px] h-3 px-1 text-destructive border-destructive/30">
+                          {daysSinceImport}d
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex gap-1 mt-1">
+                      {r.is_auto_importable && <Badge variant="secondary" className="text-[9px] h-4">Auto</Badge>}
+                      {r.requires_manual_input && <Badge variant="outline" className="text-[9px] h-4">Manual</Badge>}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Recent import runs - Enhanced */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2"><History className="h-4 w-4" /> Histórico de Importações</CardTitle>
+            <Badge variant="outline" className="text-[10px]">{(importRuns || []).length} registros</Badge>
+          </div>
         </CardHeader>
         <CardContent>
           {(importRuns || []).length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4">Nenhuma importação registrada.</p>
           ) : (
-            <DataTable
-              headers={["Tabela", "Início", "Resultado", "Registros", "Trigger"]}
-              rows={(importRuns || []).map((r: any) => [
-                r.table_slug,
-                r.started_at ? new Date(r.started_at).toLocaleString("pt-BR") : "—",
-                r.result,
-                r.stats?.rows_inserted != null ? String(r.stats.rows_inserted) : "—",
-                r.trigger,
-              ])}
-              aligns={["left", "center", "center", "right", "center"]}
-            />
+            <div className="overflow-x-auto border border-border rounded">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-primary/10 border-b border-border">
+                    <th className="p-2 font-semibold text-left">Tabela</th>
+                    <th className="p-2 font-semibold text-center">Início</th>
+                    <th className="p-2 font-semibold text-center">Duração</th>
+                    <th className="p-2 font-semibold text-center">Resultado</th>
+                    <th className="p-2 font-semibold text-right">Registros</th>
+                    <th className="p-2 font-semibold text-center">Trigger</th>
+                    <th className="p-2 font-semibold text-center">Erros</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(importRuns || []).map((r: any, ri: number) => {
+                    const duration = r.started_at && r.finished_at
+                      ? Math.round((new Date(r.finished_at).getTime() - new Date(r.started_at).getTime()) / 1000)
+                      : null;
+                    const hasErrors = r.errors && ((Array.isArray(r.errors) && r.errors.length > 0) || (typeof r.errors === 'object' && Object.keys(r.errors).length > 0));
+                    return (
+                      <tr key={r.id} className={ri % 2 === 0 ? "bg-muted/20" : "bg-muted/40"}>
+                        <td className="p-2 border-b border-border/30 font-medium">{r.table_slug}</td>
+                        <td className="p-2 border-b border-border/30 text-center">{r.started_at ? new Date(r.started_at).toLocaleString("pt-BR") : "—"}</td>
+                        <td className="p-2 border-b border-border/30 text-center font-mono">{duration !== null ? `${duration}s` : "—"}</td>
+                        <td className="p-2 border-b border-border/30 text-center">{resultBadge(r.result)}</td>
+                        <td className="p-2 border-b border-border/30 text-right font-mono">{r.stats?.rows_inserted != null ? String(r.stats.rows_inserted) : "—"}</td>
+                        <td className="p-2 border-b border-border/30 text-center">
+                          <Badge variant="outline" className="text-[9px]">{r.trigger}</Badge>
+                        </td>
+                        <td className="p-2 border-b border-border/30 text-center">
+                          {hasErrors ? (
+                            <Badge variant="destructive" className="text-[9px]">
+                              {Array.isArray(r.errors) ? r.errors.length : '!'}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
