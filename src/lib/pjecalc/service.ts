@@ -119,6 +119,11 @@ export async function deleteFalta(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function updateFalta(id: string, updates: Partial<PjecalcFaltaInsert>): Promise<void> {
+  const { error } = await fromView('pjecalc_faltas').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
 // =====================================================
 // FÉRIAS
 // =====================================================
