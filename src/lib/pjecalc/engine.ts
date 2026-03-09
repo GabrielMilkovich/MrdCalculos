@@ -1765,10 +1765,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            const taxas: Record<string, number> = { 'IPCA-E': 0.0045, 'IPCA': 0.004, 'SELIC': 0.01, 'TR': 0.0001, 'TAXA_LEGAL': 0.008 };
-            const taxa = taxas[indiceNorm] || 0.004;
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-            fatorTotal = fatorTotal.times(Math.pow(1 + taxa, meses));
+            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indiceNorm} ausente para FGTS ${segInicio}→${segFim}. Usando fator=1.`);
           }
         }
         fatorCorrecao = fatorTotal.toDP(6).toNumber();
