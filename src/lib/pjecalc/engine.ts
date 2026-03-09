@@ -1952,26 +1952,30 @@ export class PjeCalcEngine {
   }
 
   // Helper: calcular INSS progressivo para uma competência
+  // PJe-Calc usa ROUND_HALF_EVEN (Banker's rounding) para CS e IR
+  private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_EVEN;
+
   private calcularINSSProgressivo(comp: string, base: number): number {
     if (this.csConfig.aliquota_segurado_tipo === 'fixa' && this.csConfig.aliquota_segurado_fixa) {
-      return base * (this.csConfig.aliquota_segurado_fixa / 100);
+      return new Decimal(base).times(this.csConfig.aliquota_segurado_fixa).div(100)
+        .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
     }
     const faixas = this.getFaixasINSSParaCompetencia(comp);
     const teto = faixas[faixas.length - 1].ate;
-    let baseRestante = this.csConfig.limitar_teto ? Math.min(base, teto) : base;
-    let imposto = 0;
-    let faixaAnterior = 0;
+    let baseRestante = new Decimal(this.csConfig.limitar_teto ? Math.min(base, teto) : base);
+    let imposto = new Decimal(0);
+    let faixaAnterior = new Decimal(0);
     for (const faixa of faixas) {
-      const limiteNaFaixa = faixa.ate - faixaAnterior;
-      const baseNaFaixa = Math.min(baseRestante, limiteNaFaixa);
-      if (baseNaFaixa > 0) {
-        imposto += baseNaFaixa * faixa.aliquota;
-        baseRestante -= baseNaFaixa;
+      const limiteNaFaixa = new Decimal(faixa.ate).minus(faixaAnterior);
+      const baseNaFaixa = Decimal.min(baseRestante, limiteNaFaixa);
+      if (baseNaFaixa.gt(0)) {
+        imposto = imposto.plus(baseNaFaixa.times(faixa.aliquota).toDP(2, PjeCalcEngine.ROUND_CS_IR));
+        baseRestante = baseRestante.minus(baseNaFaixa);
       }
-      if (baseRestante <= 0) break;
-      faixaAnterior = faixa.ate;
+      if (baseRestante.lte(0)) break;
+      faixaAnterior = new Decimal(faixa.ate);
     }
-    return imposto;
+    return imposto.toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
   }
 
   // =====================================================
