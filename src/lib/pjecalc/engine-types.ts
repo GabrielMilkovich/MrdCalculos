@@ -224,6 +224,25 @@ export interface PjeSalarioFamiliaResult {
   total: number;
 }
 
+export interface PjeSeguroDesempregoDB {
+  competencia: string;
+  faixa: number;
+  valor_inicial: number;
+  valor_final: number;
+  percentual: number;
+  valor_soma: number;
+  valor_piso: number;
+  valor_teto: number;
+}
+
+export interface PjeSalarioFamiliaDB {
+  competencia: string;
+  faixa: number;
+  valor_inicial: number;
+  valor_final: number;
+  valor_cota: number;
+}
+
 export interface PjeFGTSConfig {
   apurar: boolean;
   destino: 'pagar_reclamante' | 'recolher_conta';
