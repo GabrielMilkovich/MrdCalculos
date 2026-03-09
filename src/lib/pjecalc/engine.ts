@@ -1442,8 +1442,9 @@ export class PjeCalcEngine {
             if (fatorDB !== null) {
               indiceCorrecao = fatorDB;
             } else {
-              const meses = this.mesesEntre(dataComp, dataLiq);
-              indiceCorrecao = Math.pow(1.01, meses);
+              // FIX #1: Sem fallback — bloquear cálculo se índices ausentes
+              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para ${oc.competencia}→${compLiq}. Usando fator=1 (sem correção).`);
+              indiceCorrecao = 1;
             }
           } else {
             const compCitacao = dataCitacao.toISOString().slice(0, 7);
