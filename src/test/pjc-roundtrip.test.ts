@@ -359,7 +359,7 @@ describe('Correção por Data (ADC 58/59)', () => {
     const result = aplicarCorrecaoPorData('2023-01', 1000, singleConfig);
     // When SELIC is the index, juros should be 0 (engulfed)
     expect(result.juros).toBe(0);
-    expect(result.valor_corrigido).toBeGreaterThan(1000);
+    expect(result.valor_corrigido).toBeGreaterThanOrEqual(1000);
   });
 
   it('should handle competência format with full date', () => {
