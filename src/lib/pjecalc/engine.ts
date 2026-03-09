@@ -85,6 +85,8 @@ export class PjeCalcEngine {
     prevPrivadaConfig: PjePrevidenciaPrivadaConfig = { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false },
     pensaoConfig: PjePensaoConfig = { apurar: false, percentual: 0, base: 'liquido' },
     salarioFamiliaConfig: PjeSalarioFamiliaConfig = { apurar: false, numero_filhos: 0 },
+    seguroDesempregoDB: PjeSeguroDesempregoDB[] = [],
+    salarioFamiliaDB: PjeSalarioFamiliaDB[] = [],
   ) {
     this.params = params;
     this.historicos = historicos;
