@@ -1542,9 +1542,9 @@ export class PjeCalcEngine {
     };
 
     for (const vr of verbaResults) {
-      let totalCorrigido = 0;
-      let totalJuros = 0;
-      let totalFinal = 0;
+      let totalCorrigido = new Decimal(0);
+      let totalJuros = new Decimal(0);
+      let totalFinal = new Decimal(0);
 
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
