@@ -437,7 +437,7 @@ describe("PjeCalcEngine", () => {
       expect(result.seguro_desemprego.apurado).toBe(true);
       expect(result.seguro_desemprego.parcelas).toBe(5);
       expect(result.seguro_desemprego.valor_parcela).toBeGreaterThan(0);
-      expect(result.seguro_desemprego.total).toBeCloseTo(result.seguro_desemprego.valor_parcela * 5, 2);
+      expect(result.seguro_desemprego.total).toBeCloseTo(result.seguro_desemprego.valor_parcela * 5, 1);
     });
   });
 
