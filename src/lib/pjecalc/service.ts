@@ -147,6 +147,22 @@ export async function deleteFerias(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function updateFerias(id: string, updates: Partial<PjecalcFeriasInsert & { periodos_gozo?: unknown[]; prazo_dias?: number; relativas?: string }>): Promise<void> {
+  const { error } = await fromView('pjecalc_ferias').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteFeriasByCaseId(caseId: string): Promise<void> {
+  const { error } = await fromView('pjecalc_ferias').delete().eq('case_id', caseId);
+  if (error) throw error;
+}
+
+export async function insertFeriasBatch(payloads: PjecalcFeriasInsert[]): Promise<void> {
+  if (payloads.length === 0) return;
+  const { error } = await fromView('pjecalc_ferias').insert(payloads);
+  if (error) throw error;
+}
+
 // =====================================================
 // HISTÓRICO SALARIAL
 // =====================================================
