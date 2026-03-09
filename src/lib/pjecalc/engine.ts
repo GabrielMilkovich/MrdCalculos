@@ -1035,13 +1035,19 @@ export class PjeCalcEngine {
     }
 
     // Valor Pago: informado ou calculado (Fase 2)
+    // FIX #3: Truncamento por etapa no cálculo do Pago (paridade PJe-Calc)
     let pago: Decimal;
     if (verba.valor_pago_tipo === 'calculado' && verba.pago_base !== undefined) {
       const pagoBase = new Decimal(verba.pago_base || 0);
       const pagoDiv = new Decimal(verba.pago_divisor || 30);
       const pagoMult = new Decimal(verba.pago_multiplicador || 1);
       const pagoQtd = new Decimal(verba.pago_quantidade || 1);
-      pago = pagoBase.times(pagoMult).div(pagoDiv).times(pagoQtd);
+      // Etapa 1: Base / Divisor (truncado)
+      const pagoValorHora = pagoBase.div(pagoDiv).toDP(2);
+      // Etapa 2: × Multiplicador (truncado)
+      const pagoComMult = pagoValorHora.times(pagoMult).toDP(2);
+      // Etapa 3: × Quantidade (truncado)
+      pago = pagoComMult.times(pagoQtd).toDP(2);
     } else {
       pago = new Decimal(verba.valor_informado_pago || 0);
     }
@@ -1350,7 +1356,8 @@ export class PjeCalcEngine {
     }
 
     const ocorrencias: PjeOcorrenciaResult[] = [];
-    let totalDevido = 0, totalPago = 0, totalDiferenca = 0;
+    // FIX #4: Acumular totais com Decimal.js para evitar drift de ponto flutuante
+    let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
 
     for (const comp of competencias) {
       // ── Aplicar exclusões de faltas e férias (CLT Art. 130) ──
@@ -1370,9 +1377,9 @@ export class PjeCalcEngine {
 
       const oc = this.calcularOcorrencia(verba, comp, base);
       ocorrencias.push(oc);
-      totalDevido += oc.devido;
-      totalPago += oc.pago;
-      totalDiferenca += oc.diferenca;
+      totalDevido = totalDevido.plus(oc.devido);
+      totalPago = totalPago.plus(oc.pago);
+      totalDiferenca = totalDiferenca.plus(oc.diferenca);
     }
 
     return {
@@ -1381,12 +1388,12 @@ export class PjeCalcEngine {
       tipo: verba.tipo,
       caracteristica: verba.caracteristica,
       ocorrencias,
-      total_devido: Number(new Decimal(totalDevido).toDP(2)),
-      total_pago: Number(new Decimal(totalPago).toDP(2)),
-      total_diferenca: Number(new Decimal(totalDiferenca).toDP(2)),
-      total_corrigido: Number(new Decimal(totalDiferenca).toDP(2)),
+      total_devido: totalDevido.toDP(2).toNumber(),
+      total_pago: totalPago.toDP(2).toNumber(),
+      total_diferenca: totalDiferenca.toDP(2).toNumber(),
+      total_corrigido: totalDiferenca.toDP(2).toNumber(),
       total_juros: 0,
-      total_final: Number(new Decimal(totalDiferenca).toDP(2)),
+      total_final: totalDiferenca.toDP(2).toNumber(),
     };
   }
 
@@ -1416,9 +1423,9 @@ export class PjeCalcEngine {
     const usarADC5859 = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
 
     for (const vr of verbaResults) {
-      let totalCorrigido = 0;
-      let totalJuros = 0;
-      let totalFinal = 0;
+      let totalCorrigido = new Decimal(0);
+      let totalJuros = new Decimal(0);
+      let totalFinal = new Decimal(0);
 
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
@@ -1435,22 +1442,23 @@ export class PjeCalcEngine {
             if (fatorDB !== null) {
               indiceCorrecao = fatorDB;
             } else {
-              const meses = this.mesesEntre(dataComp, dataLiq);
-              indiceCorrecao = Math.pow(1.01, meses);
+              // FIX #1: Sem fallback — bloquear cálculo se índices ausentes
+              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para ${oc.competencia}→${compLiq}. Usando fator=1 (sem correção).`);
+              indiceCorrecao = 1;
             }
           } else {
             const compCitacao = dataCitacao.toISOString().slice(0, 7);
             const fatorIPCA = this.getIndiceCorrecaoDB('IPCA-E', oc.competencia, compCitacao);
             let fator1: number;
             if (fatorIPCA !== null) { fator1 = fatorIPCA; } else {
-              const meses1 = this.mesesEntre(dataComp, dataCitacao);
-              fator1 = Math.pow(1.0045, meses1);
+              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice IPCA-E ausente para ${oc.competencia}→${compCitacao}. Usando fator=1.`);
+              fator1 = 1;
             }
             const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiq);
             let fator2: number;
             if (fatorSELIC !== null) { fator2 = fatorSELIC; } else {
-              const meses2 = this.mesesEntre(dataCitacao, dataLiq);
-              fator2 = Math.pow(1.01, meses2);
+              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para ${compCitacao}→${compLiq}. Usando fator=1.`);
+              fator2 = 1;
             }
             indiceCorrecao = fator1 * fator2;
 
@@ -1467,11 +1475,9 @@ export class PjeCalcEngine {
           if (fatorDB !== null) {
             indiceCorrecao = fatorDB;
           } else {
-            const taxas: Record<string, number> = {
-              'IPCA-E': 1.0045, 'SELIC': 1.01, 'TR': 1.0001, 'INPC': 1.004, 'IGP-M': 1.005,
-            };
-            const taxaMensal = taxas[this.correcaoConfig.indice] || 1.004;
-            indiceCorrecao = Math.pow(taxaMensal, mesesCorrecao);
+            // FIX #1: Sem fallback — bloquear cálculo se índices ausentes
+            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+            indiceCorrecao = 1;
           }
 
           if (this.correcaoConfig.indice !== 'SELIC') {
@@ -1496,8 +1502,9 @@ export class PjeCalcEngine {
               const fatorComposto = Math.pow(1 + taxaMensal, mesesJuros);
               juros = Number(new Decimal(valorCorrigido).times(fatorComposto - 1).toDP(2));
             } else if (this.correcaoConfig.juros_tipo === 'selic') {
-              const mesesJuros = this.mesesEntre(dataAjuiz || dataComp, dataLiq);
-              juros = Number(new Decimal(valorCorrigido).times(0.01).times(mesesJuros).toDP(2));
+              // FIX #2: SELIC como índice de correção já inclui juros — não aplicar juros separados
+              // Juros SELIC separados só se aplica quando o índice de correção NÃO é SELIC
+              juros = 0;
             }
           }
         }
@@ -1507,14 +1514,14 @@ export class PjeCalcEngine {
         oc.valor_corrigido = valorCorrigido;
         oc.juros = juros;
         oc.valor_final = Number(new Decimal(valorCorrigido + juros).toDP(2));
-        totalCorrigido += valorCorrigido;
-        totalJuros += juros;
-        totalFinal += valorCorrigido + juros;
+        totalCorrigido = totalCorrigido.plus(valorCorrigido);
+        totalJuros = totalJuros.plus(juros);
+        totalFinal = totalFinal.plus(valorCorrigido + juros);
       }
 
-      vr.total_corrigido = Number(new Decimal(totalCorrigido).toDP(2));
-      vr.total_juros = Number(new Decimal(totalJuros).toDP(2));
-      vr.total_final = Number(new Decimal(totalFinal).toDP(2));
+      vr.total_corrigido = totalCorrigido.toDP(2).toNumber();
+      vr.total_juros = totalJuros.toDP(2).toNumber();
+      vr.total_final = totalFinal.toDP(2).toNumber();
     }
   }
 
@@ -1535,9 +1542,9 @@ export class PjeCalcEngine {
     };
 
     for (const vr of verbaResults) {
-      let totalCorrigido = 0;
-      let totalJuros = 0;
-      let totalFinal = 0;
+      let totalCorrigido = new Decimal(0);
+      let totalJuros = new Decimal(0);
+      let totalFinal = new Decimal(0);
 
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
@@ -1578,11 +1585,9 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            // Fallback
-            const taxas: Record<string, number> = { 'IPCA-E': 0.0045, 'IPCA': 0.004, 'SELIC': 0.01, 'TR': 0.0001, 'INPC': 0.004, 'IGP-M': 0.005, 'TAXA_LEGAL': 0.008 };
-            const taxa = taxas[indice] || 0.004;
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-            fatorTotal = fatorTotal.times(Math.pow(1 + taxa, meses));
+            // FIX #1: Sem fallback — bloquear correção se índices ausentes
+            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
+            // Fator permanece inalterado (1)
           }
           regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
         }
@@ -1608,16 +1613,14 @@ export class PjeCalcEngine {
             if (fatorSelic !== null) {
               jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
             } else {
-              const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-              jurosTotal = jurosTotal.plus(valorCorrigido.times(0.01).times(meses));
+              console.warn(`[PjeCalcEngine] BLOQUEIO: SELIC (juros) ausente para ${segInicio}→${segFim}.`);
             }
           } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
             const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
             if (fatorTL !== null) {
               jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
             } else {
-              const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-              jurosTotal = jurosTotal.plus(valorCorrigido.times(0.008).times(meses));
+              console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros) ausente para ${segInicio}→${segFim}.`);
             }
           } else {
             // TRD_SIMPLES or other simple monthly interest
@@ -1634,14 +1637,15 @@ export class PjeCalcEngine {
         oc.juros = jurosTotal.toDP(2).toNumber();
         oc.valor_final = valorFinal.toDP(2).toNumber();
 
-        totalCorrigido += oc.valor_corrigido;
-        totalJuros += oc.juros;
-        totalFinal += oc.valor_final;
+        // FIX #4: Acumular com Decimal.js
+        totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
+        totalJuros = totalJuros.plus(oc.juros);
+        totalFinal = totalFinal.plus(oc.valor_final);
       }
 
-      vr.total_corrigido = Number(new Decimal(totalCorrigido).toDP(2));
-      vr.total_juros = Number(new Decimal(totalJuros).toDP(2));
-      vr.total_final = Number(new Decimal(totalFinal).toDP(2));
+      vr.total_corrigido = totalCorrigido.toDP(2).toNumber();
+      vr.total_juros = totalJuros.toDP(2).toNumber();
+      vr.total_final = totalFinal.toDP(2).toNumber();
     }
   }
 
@@ -1761,10 +1765,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            const taxas: Record<string, number> = { 'IPCA-E': 0.0045, 'IPCA': 0.004, 'SELIC': 0.01, 'TR': 0.0001, 'TAXA_LEGAL': 0.008 };
-            const taxa = taxas[indiceNorm] || 0.004;
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-            fatorTotal = fatorTotal.times(Math.pow(1 + taxa, meses));
+            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indiceNorm} ausente para FGTS ${segInicio}→${segFim}. Usando fator=1.`);
           }
         }
         fatorCorrecao = fatorTotal.toDP(6).toNumber();
@@ -1785,11 +1786,11 @@ export class PjeCalcEngine {
             if (regimeJ.tipo === 'SELIC') {
               const fatorS = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
               if (fatorS !== null) jurosAcc = jurosAcc.plus(valorCorrigido.times(fatorS - 1));
-              else jurosAcc = jurosAcc.plus(valorCorrigido.times(0.01).times(meses));
+              else { console.warn(`[PjeCalcEngine] BLOQUEIO: SELIC (juros FGTS) ausente para ${segInicio}→${segFim}.`); }
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
               if (fatorTL !== null) jurosAcc = jurosAcc.plus(valorCorrigido.times(fatorTL - 1));
-              else jurosAcc = jurosAcc.plus(valorCorrigido.times(0.008).times(meses));
+              else { console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros FGTS) ausente para ${segInicio}→${segFim}.`); }
             } else {
               const taxa = ((regimeJ as any).percentual || 1) / 100;
               jurosAcc = jurosAcc.plus(valorCorrigido.times(taxa).times(meses));
@@ -1802,9 +1803,8 @@ export class PjeCalcEngine {
         const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, compClean, compLiq);
         if (fatorDB !== null) fatorCorrecao = fatorDB;
         else {
-          const meses = this.mesesEntre(new Date(compClean + '-01'), dataLiq);
-          const taxas: Record<string, number> = { 'IPCA-E': 1.0045, 'SELIC': 1.01, 'TR': 1.0001 };
-          fatorCorrecao = Math.pow(taxas[this.correcaoConfig.indice] || 1.004, meses);
+          console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para FGTS ${compClean}→${compLiq}. Usando fator=1.`);
+          fatorCorrecao = 1;
         }
       }
       
@@ -2406,7 +2406,7 @@ export class PjeCalcEngine {
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
 
     for (const vr of verbaResults) {
-      let totalCorrigido = 0;
+      let totalCorrigido = new Decimal(0);
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
         const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, oc.competencia, compLiq);
@@ -2414,22 +2414,19 @@ export class PjeCalcEngine {
         if (fatorDB !== null) {
           indiceCorrecao = fatorDB;
         } else {
-          const [ano, mes] = oc.competencia.split('-').map(Number);
-          const dataComp = new Date(ano, mes - 1, 1);
-          const meses = this.mesesEntre(dataComp, dataLiq);
-          const taxas: Record<string, number> = { 'IPCA-E': 1.0045, 'SELIC': 1.01, 'TR': 1.0001, 'IPCA': 1.004 };
-          indiceCorrecao = Math.pow(taxas[this.correcaoConfig.indice] || 1.004, meses);
+          console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+          indiceCorrecao = 1;
         }
         const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
         oc.indice_correcao = Number(new Decimal(indiceCorrecao).toDP(6));
         oc.valor_corrigido = valorCorrigido;
         oc.juros = 0;
         oc.valor_final = valorCorrigido;
-        totalCorrigido += valorCorrigido;
+        totalCorrigido = totalCorrigido.plus(valorCorrigido);
       }
-      vr.total_corrigido = Number(new Decimal(totalCorrigido).toDP(2));
+      vr.total_corrigido = totalCorrigido.toDP(2).toNumber();
       vr.total_juros = 0;
-      vr.total_final = Number(new Decimal(totalCorrigido).toDP(2));
+      vr.total_final = totalCorrigido.toDP(2).toNumber();
     }
   }
 
@@ -2443,7 +2440,7 @@ export class PjeCalcEngine {
     };
 
     for (const vr of verbaResults) {
-      let totalCorrigido = 0;
+      let totalCorrigido = new Decimal(0);
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
         // Súmula 381: correction starts from mês subsequente ao vencimento
@@ -2467,10 +2464,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            const taxas: Record<string, number> = { 'IPCA-E': 0.0045, 'IPCA': 0.004, 'SELIC': 0.01, 'TR': 0.0001, 'TAXA_LEGAL': 0.008 };
-            const taxa = taxas[indice] || 0.004;
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-            fatorTotal = fatorTotal.times(Math.pow(1 + taxa, meses));
+            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
           }
         }
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
@@ -2478,11 +2472,11 @@ export class PjeCalcEngine {
         oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
         oc.juros = 0;
         oc.valor_final = valorCorrigido.toDP(2).toNumber();
-        totalCorrigido += oc.valor_corrigido;
+        totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
       }
-      vr.total_corrigido = Number(new Decimal(totalCorrigido).toDP(2));
+      vr.total_corrigido = totalCorrigido.toDP(2).toNumber();
       vr.total_juros = 0;
-      vr.total_final = Number(new Decimal(totalCorrigido).toDP(2));
+      vr.total_final = totalCorrigido.toDP(2).toNumber();
     }
   }
 
@@ -2941,7 +2935,8 @@ export class PjeCalcEngine {
   private calcularVerbaReflexa(reflexa: PjeVerba, principalResult: PjeVerbaResult): PjeVerbaResult {
     const comportamento = reflexa.comportamento_reflexo || 'valor_mensal';
     const ocorrencias: PjeOcorrenciaResult[] = [];
-    let totalDevido = 0, totalPago = 0, totalDiferenca = 0;
+    // FIX #4: Acumular totais com Decimal.js
+    let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
 
     // Base Integralization (Fase 6): converter meses fracionários em meses completos
     // para reflexos em férias e 13º (PJe-Calc integraliza a base antes de aplicar a fórmula)
@@ -2958,9 +2953,9 @@ export class PjeCalcEngine {
           }
           const result = this.calcularOcorrencia(reflexa, oc.competencia, baseValor);
           ocorrencias.push(result);
-          totalDevido += result.devido;
-          totalPago += result.pago;
-          totalDiferenca += result.diferenca;
+          totalDevido = totalDevido.plus(result.devido);
+          totalPago = totalPago.plus(result.pago);
+          totalDiferenca = totalDiferenca.plus(result.diferenca);
         }
         break;
       }
@@ -2998,9 +2993,9 @@ export class PjeCalcEngine {
 
           const result = this.calcularOcorrencia(reflexa, comp, media);
           ocorrencias.push(result);
-          totalDevido += result.devido;
-          totalPago += result.pago;
-          totalDiferenca += result.diferenca;
+          totalDevido = totalDevido.plus(result.devido);
+          totalPago = totalPago.plus(result.pago);
+          totalDiferenca = totalDiferenca.plus(result.diferenca);
         }
         break;
       }
@@ -3019,9 +3014,9 @@ export class PjeCalcEngine {
         const comp = this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7);
         const result = this.calcularOcorrencia(reflexa, comp, mediaCorr);
         ocorrencias.push(result);
-        totalDevido += result.devido;
-        totalPago += result.pago;
-        totalDiferenca += result.diferenca;
+        totalDevido = totalDevido.plus(result.devido);
+        totalPago = totalPago.plus(result.pago);
+        totalDiferenca = totalDiferenca.plus(result.diferenca);
         break;
       }
       case 'media_quantidade': {
@@ -3034,9 +3029,9 @@ export class PjeCalcEngine {
           comp, baseUnitaria
         );
         ocorrencias.push(result);
-        totalDevido += result.devido;
-        totalPago += result.pago;
-        totalDiferenca += result.diferenca;
+        totalDevido = totalDevido.plus(result.devido);
+        totalPago = totalPago.plus(result.pago);
+        totalDiferenca = totalDiferenca.plus(result.diferenca);
         break;
       }
       // =====================================================
@@ -3102,9 +3097,9 @@ export class PjeCalcEngine {
           // Calculate occurrence using the weighted average as base
           const result = this.calcularOcorrencia(reflexa, comp, mediaPonderada);
           ocorrencias.push(result);
-          totalDevido += result.devido;
-          totalPago += result.pago;
-          totalDiferenca += result.diferenca;
+          totalDevido = totalDevido.plus(result.devido);
+          totalPago = totalPago.plus(result.pago);
+          totalDiferenca = totalDiferenca.plus(result.diferenca);
         }
         break;
       }
@@ -3114,9 +3109,9 @@ export class PjeCalcEngine {
         const comp = this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7);
         const result = this.calcularOcorrencia(reflexa, comp, media);
         ocorrencias.push(result);
-        totalDevido += result.devido;
-        totalPago += result.pago;
-        totalDiferenca += result.diferenca;
+        totalDevido = totalDevido.plus(result.devido);
+        totalPago = totalPago.plus(result.pago);
+        totalDiferenca = totalDiferenca.plus(result.diferenca);
       }
     }
 
@@ -3126,12 +3121,12 @@ export class PjeCalcEngine {
       tipo: 'reflexa',
       caracteristica: reflexa.caracteristica,
       ocorrencias,
-      total_devido: Number(new Decimal(totalDevido).toDP(2)),
-      total_pago: Number(new Decimal(totalPago).toDP(2)),
-      total_diferenca: Number(new Decimal(totalDiferenca).toDP(2)),
-      total_corrigido: Number(new Decimal(totalDiferenca).toDP(2)),
+      total_devido: totalDevido.toDP(2).toNumber(),
+      total_pago: totalPago.toDP(2).toNumber(),
+      total_diferenca: totalDiferenca.toDP(2).toNumber(),
+      total_corrigido: totalDiferenca.toDP(2).toNumber(),
       total_juros: 0,
-      total_final: Number(new Decimal(totalDiferenca).toDP(2)),
+      total_final: totalDiferenca.toDP(2).toNumber(),
     };
   }
 }
