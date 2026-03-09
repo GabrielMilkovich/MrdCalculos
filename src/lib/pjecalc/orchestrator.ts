@@ -665,6 +665,8 @@ export async function executarLiquidacao(
     prevPrivadaConfig,   // 19: previdência privada
     pensaoConfig,        // 20: pensão alimentícia
     salarioFamiliaConfig,// 21: salário família
+    seguroDesempregoDB,  // 22: seguro-desemprego DB rows
+    salarioFamiliaDB,    // 23: salário-família DB rows
   );
 
   const result = engine.liquidar();
