@@ -120,6 +120,8 @@ export class PjeCalcEngine {
     this.prevPrivadaConfig = prevPrivadaConfig;
     this.pensaoConfig = pensaoConfig;
     this.salarioFamiliaConfig = salarioFamiliaConfig;
+    this.seguroDesempregoDB = seguroDesempregoDB;
+    this.salarioFamiliaDB = salarioFamiliaDB;
   }
 
   // =====================================================
