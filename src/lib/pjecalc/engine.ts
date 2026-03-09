@@ -24,6 +24,7 @@ import type {
   PjeLiquidacaoResult, PjeValidationItem, PjeValidationResult,
   PjePrevidenciaPrivadaResult, PjeSalarioFamiliaResult,
   PjeCombinacaoIndice, PjeCombinacaoJuros,
+  PjeSeguroDesempregoDB, PjeSalarioFamiliaDB,
 } from './engine-types';
 
 import {
