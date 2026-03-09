@@ -2327,8 +2327,12 @@ export class PjeCalcEngine {
       }
       if (remuneracao === 0) remuneracao = this.params.ultima_remuneracao || 0;
 
-      // Verificar se remuneração está dentro do limite
-      if (remuneracao > SALARIO_FAMILIA_2025.limite_remuneracao) continue;
+      // Verificar se remuneração está dentro do limite e obter valor da cota
+      const sfDB = this.getSalarioFamiliaDB(comp);
+      const limiteRemuneracao = sfDB ? sfDB.valor_final : SALARIO_FAMILIA_2025.limite_remuneracao;
+      const valorCotaRef = sfDB ? sfDB.valor_cota : SALARIO_FAMILIA_2025.valor_cota;
+      
+      if (remuneracao > limiteRemuneracao) continue;
 
       // Contar filhos elegíveis na competência
       const [anoComp, mesComp] = comp.split('-').map(Number);
@@ -2348,9 +2352,8 @@ export class PjeCalcEngine {
 
       if (filhosElegiveis <= 0) continue;
 
-      const valorCota = SALARIO_FAMILIA_2025.valor_cota;
-      const totalComp = Number(new Decimal(valorCota).times(filhosElegiveis).toDP(2));
-      cotas.push({ competencia: comp, filhos_elegíveis: filhosElegiveis, valor_cota: valorCota, total: totalComp });
+      const totalComp = Number(new Decimal(valorCotaRef).times(filhosElegiveis).toDP(2));
+      cotas.push({ competencia: comp, filhos_elegíveis: filhosElegiveis, valor_cota: valorCotaRef, total: totalComp });
       totalSF += totalComp;
     }
 
