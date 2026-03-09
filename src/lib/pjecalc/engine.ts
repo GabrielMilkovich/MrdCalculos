@@ -1620,8 +1620,7 @@ export class PjeCalcEngine {
             if (fatorTL !== null) {
               jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
             } else {
-              const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-              jurosTotal = jurosTotal.plus(valorCorrigido.times(0.008).times(meses));
+              console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros) ausente para ${segInicio}→${segFim}.`);
             }
           } else {
             // TRD_SIMPLES or other simple monthly interest
