@@ -520,6 +520,8 @@ export async function executarLiquidacao(
     pensaoConfig,
     prevPrivadaConfig,
     salarioFamiliaConfig,
+    seguroDesempregoDB,
+    salarioFamiliaDB,
   ] = await Promise.all([
     svc.getHistoricoOcorrencias(caseId),
     loadIndicesDB(),
@@ -529,6 +531,8 @@ export async function executarLiquidacao(
     loadPensaoConfig(caseId),
     loadPrevPrivadaConfig(caseId),
     loadSalarioFamiliaConfig(caseId),
+    loadSeguroDesempregoDB(),
+    loadSalarioFamiliaDBRows(),
   ]);
 
   // 3. Convert to engine types
