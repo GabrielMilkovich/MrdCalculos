@@ -241,9 +241,9 @@ export default function PjeCalcPage() {
         case 'custas': return <ModuloCustas caseId={caseId!} />;
         case 'resumo': return <ModuloResumo caseId={caseId!} />;
         case 'tabelas_regionais': return <ModuloTabelasRegionais caseId={caseId!} estado={formParams.estado} municipio={formParams.municipio} />;
-        case 'memoria': return calc.rawResultado?.resultado ? <MemoriaCalculoExpandida resultado={calc.rawResultado.resultado as Record<string, unknown>} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
+        case 'memoria': return calc.rawResultado?.resultado ? <MemoriaCalculoExpandida resultado={calc.rawResultado.resultado as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
         case 'comparacao': return <ComparacaoCenarios caseId={caseId!} />;
-        case 'revisao': return <PainelRevisao caseId={caseId!} validacao={null} resultado={(calc.rawResultado?.resultado || null) as Record<string, unknown> | null} modulosStatus={calc.completude} />;
+        case 'revisao': return <PainelRevisao caseId={caseId!} validacao={null} resultado={(calc.rawResultado?.resultado || null) as any} modulosStatus={calc.completude} />;
         case 'rastreabilidade': return renderRastreabilidade();
         case 'auditoria': return <AuditLog caseId={caseId!} />;
         case 'dashboard': return <DashboardProdutividade />;
