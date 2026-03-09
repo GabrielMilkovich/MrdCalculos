@@ -2422,11 +2422,11 @@ export class PjeCalcEngine {
         oc.valor_corrigido = valorCorrigido;
         oc.juros = 0;
         oc.valor_final = valorCorrigido;
-        totalCorrigido += valorCorrigido;
+        totalCorrigido = totalCorrigido.plus(valorCorrigido);
       }
-      vr.total_corrigido = Number(new Decimal(totalCorrigido).toDP(2));
+      vr.total_corrigido = totalCorrigido.toDP(2).toNumber();
       vr.total_juros = 0;
-      vr.total_final = Number(new Decimal(totalCorrigido).toDP(2));
+      vr.total_final = totalCorrigido.toDP(2).toNumber();
     }
   }
 
