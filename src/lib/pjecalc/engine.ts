@@ -3097,9 +3097,9 @@ export class PjeCalcEngine {
           // Calculate occurrence using the weighted average as base
           const result = this.calcularOcorrencia(reflexa, comp, mediaPonderada);
           ocorrencias.push(result);
-          totalDevido += result.devido;
-          totalPago += result.pago;
-          totalDiferenca += result.diferenca;
+          totalDevido = totalDevido.plus(result.devido);
+          totalPago = totalPago.plus(result.pago);
+          totalDiferenca = totalDiferenca.plus(result.diferenca);
         }
         break;
       }
