@@ -1356,7 +1356,8 @@ export class PjeCalcEngine {
     }
 
     const ocorrencias: PjeOcorrenciaResult[] = [];
-    let totalDevido = 0, totalPago = 0, totalDiferenca = 0;
+    // FIX #4: Acumular totais com Decimal.js para evitar drift de ponto flutuante
+    let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
 
     for (const comp of competencias) {
       // ── Aplicar exclusões de faltas e férias (CLT Art. 130) ──
@@ -1376,9 +1377,9 @@ export class PjeCalcEngine {
 
       const oc = this.calcularOcorrencia(verba, comp, base);
       ocorrencias.push(oc);
-      totalDevido += oc.devido;
-      totalPago += oc.pago;
-      totalDiferenca += oc.diferenca;
+      totalDevido = totalDevido.plus(oc.devido);
+      totalPago = totalPago.plus(oc.pago);
+      totalDiferenca = totalDiferenca.plus(oc.diferenca);
     }
 
     return {
