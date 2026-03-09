@@ -119,6 +119,11 @@ export async function deleteFalta(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function updateFalta(id: string, updates: Partial<PjecalcFaltaInsert>): Promise<void> {
+  const { error } = await fromView('pjecalc_faltas').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
 // =====================================================
 // FÉRIAS
 // =====================================================
@@ -139,6 +144,22 @@ export async function insertFerias(payload: PjecalcFeriasInsert): Promise<void> 
 
 export async function deleteFerias(id: string): Promise<void> {
   const { error } = await fromView('pjecalc_ferias').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function updateFerias(id: string, updates: Partial<PjecalcFeriasInsert & { periodos_gozo?: unknown[]; prazo_dias?: number; relativas?: string }>): Promise<void> {
+  const { error } = await fromView('pjecalc_ferias').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteFeriasByCaseId(caseId: string): Promise<void> {
+  const { error } = await fromView('pjecalc_ferias').delete().eq('case_id', caseId);
+  if (error) throw error;
+}
+
+export async function insertFeriasBatch(payloads: PjecalcFeriasInsert[]): Promise<void> {
+  if (payloads.length === 0) return;
+  const { error } = await fromView('pjecalc_ferias').insert(payloads);
   if (error) throw error;
 }
 
@@ -208,6 +229,20 @@ export async function insertVerba(payload: PjecalcVerbaInsert): Promise<{ id: st
 export async function deleteVerba(id: string): Promise<void> {
   const { error } = await fromView('pjecalc_verbas').delete().eq('id', id);
   if (error) throw error;
+}
+
+export async function insertVerbasBatch(payloads: PjecalcVerbaInsert[]): Promise<void> {
+  if (payloads.length === 0) return;
+  for (const p of payloads) {
+    const { error } = await fromView('pjecalc_verbas').insert(p);
+    if (error) throw error;
+  }
+}
+
+export async function getCaseBasic(caseId: string): Promise<{ id: string; cliente: string; numero_processo: string | null; status: string; tags: string[] | null } | null> {
+  const { data, error } = await supabase.from('cases').select('id, cliente, numero_processo, status, tags').eq('id', caseId).maybeSingle();
+  if (error) throw error;
+  return data;
 }
 
 // =====================================================
