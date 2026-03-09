@@ -2549,12 +2549,18 @@ export class PjeCalcEngine {
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
             if (regimeJ.tipo === 'SELIC') {
               const fatorS = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
-              if (fatorS !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
-              else jurosAcc = jurosAcc.plus(baseJuros.times(0.01).times(meses));
+              if (fatorS !== null) {
+                jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
+              } else {
+                console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para juros ${segInicio}→${segFim}. Juros=0 neste segmento.`);
+              }
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
-              if (fatorTL !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
-              else jurosAcc = jurosAcc.plus(baseJuros.times(0.008).times(meses));
+              if (fatorTL !== null) {
+                jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
+              } else {
+                console.warn(`[PjeCalcEngine] BLOQUEIO: Índice TAXA_LEGAL ausente para juros ${segInicio}→${segFim}. Juros=0 neste segmento.`);
+              }
             } else {
               const taxa = ((regimeJ as any).percentual || 1) / 100;
               jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
