@@ -2472,11 +2472,11 @@ export class PjeCalcEngine {
         oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
         oc.juros = 0;
         oc.valor_final = valorCorrigido.toDP(2).toNumber();
-        totalCorrigido += oc.valor_corrigido;
+        totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
       }
-      vr.total_corrigido = Number(new Decimal(totalCorrigido).toDP(2));
+      vr.total_corrigido = totalCorrigido.toDP(2).toNumber();
       vr.total_juros = 0;
-      vr.total_final = Number(new Decimal(totalCorrigido).toDP(2));
+      vr.total_final = totalCorrigido.toDP(2).toNumber();
     }
   }
 
