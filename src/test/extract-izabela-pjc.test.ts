@@ -32,7 +32,7 @@ describe('Extract Izabela Cristina PJC', () => {
     // Write first 2000 chars for debugging
     console.log('XML preview:', xmlContent.substring(0, 2000));
     
-    const analysis = makeAnalyzerWork(xmlContent);
+    const analysis = analyzePJC(xmlContent);
     
     console.log('\n=== PARÂMETROS ===');
     console.log(JSON.stringify(analysis.parametros, null, 2));
