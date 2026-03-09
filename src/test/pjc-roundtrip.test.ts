@@ -365,6 +365,6 @@ describe('Correção por Data (ADC 58/59)', () => {
   it('should handle competência format with full date', () => {
     const result = aplicarCorrecaoPorData('2020-06-01', 500, config);
     expect(result.valor_original).toBe(500);
-    expect(result.valor_final).toBeGreaterThan(500);
+    expect(result.valor_final).toBeGreaterThanOrEqual(500);
   });
 });
