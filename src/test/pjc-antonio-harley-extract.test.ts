@@ -70,11 +70,11 @@ describe('PJC Extraction — Antônio Harley Marques Gomes', () => {
   it('should extract historicos salariais', () => {
     console.log(`=== HISTÓRICOS SALARIAIS (${analysis.historicos_salariais.length}) ===`);
     for (const h of analysis.historicos_salariais) {
-      console.log(`${h.nome}: ${h.registros.length} registros`);
-      for (const r of h.registros.slice(0, 3)) {
-        console.log(`  ${r.competencia}: R$ ${r.valor.toFixed(2)}`);
+      console.log(`${h.nome}: ${h.ocorrencias_count} ocorrências, ${h.competencias.length} competências`);
+      for (const c of h.competencias.slice(0, 3)) {
+        console.log(`  ${c.comp}: R$ ${c.valor.toFixed(2)}`);
       }
-      if (h.registros.length > 3) console.log(`  ... +${h.registros.length - 3} mais`);
+      if (h.competencias.length > 3) console.log(`  ... +${h.competencias.length - 3} mais`);
     }
     expect(analysis.historicos_salariais.length).toBeGreaterThan(0);
   });
@@ -94,7 +94,7 @@ describe('PJC Extraction — Antônio Harley Marques Gomes', () => {
     }
     console.log(`=== FALTAS (${analysis.faltas.length}) ===`);
     for (const f of analysis.faltas) {
-      console.log(`  ${f.data}: tipo=${f.tipo}`);
+      console.log(`  ${f.data_inicio}→${f.data_fim}: tipo=${f.tipo} justificada=${f.justificada}`);
     }
   });
 
