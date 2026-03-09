@@ -2043,11 +2043,10 @@ export class PjeCalcEngine {
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const tabelaIR = this.getFaixasIRParaCompetencia(compLiq);
     
-    let irAnosAnteriores = 0;
+    let irAnosAnteriores = new Decimal(0);
     let irAnoLiquidacao = new Decimal(0);
     let ir13Exclusivo = new Decimal(0);
     let irFeriasSeparado = new Decimal(0);
-    let irAnosAnteriores = new Decimal(0);
 
     const R = PjeCalcEngine.ROUND_CS_IR;
 
