@@ -99,15 +99,9 @@ function calcularFatorCorrecao(
     .sort((a, b) => a.competencia.localeCompare(b.competencia));
 
   if (dados.length === 0) {
-    // Fallback: approximate monthly rates
-    const taxas: Record<string, number> = {
-      'IPCAE': 0.0045, 'IPCA-E': 0.0045, 'IPCA': 0.004,
-      'SELIC': 0.01, 'TR': 0.0001, 'INPC': 0.004, 'IGP-M': 0.005,
-      'TAXA_LEGAL': 0.008,
-    };
-    const taxa = taxas[indice] || 0.004;
-    const meses = mesesEntre(compOrigem, compDestino);
-    return Math.pow(1 + taxa, meses);
+    // FIX #1: Sem fallback — bloquear cálculo se índices ausentes
+    console.warn(`[CorrecaoPorData] BLOQUEIO: Índice ${indice} sem dados para ${compOrigem}→${compDestino}. Retornando fator=1 (sem correção).`);
+    return 1;
   }
 
   // PJe-Calc rule: only use indices from CLOSED months (last complete month).
