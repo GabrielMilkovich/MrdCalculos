@@ -1451,8 +1451,8 @@ export class PjeCalcEngine {
             const fatorIPCA = this.getIndiceCorrecaoDB('IPCA-E', oc.competencia, compCitacao);
             let fator1: number;
             if (fatorIPCA !== null) { fator1 = fatorIPCA; } else {
-              const meses1 = this.mesesEntre(dataComp, dataCitacao);
-              fator1 = Math.pow(1.0045, meses1);
+              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice IPCA-E ausente para ${oc.competencia}→${compCitacao}. Usando fator=1.`);
+              fator1 = 1;
             }
             const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiq);
             let fator2: number;
