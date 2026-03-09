@@ -1,21 +1,16 @@
 /**
  * Extraction test for Izabela Cristina PJC file
- * Loads the ZIP, extracts XML, runs analyzer, and prints the full ground truth.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import JSZip from 'jszip';
 import { analyzePJC } from '../lib/pjecalc/pjc-analyzer';
-import { JSDOM } from 'jsdom';
 
-// We need DOMParser in Node
-function makeAnalyzerWork(xmlString: string) {
-  const dom = new JSDOM('', { contentType: 'text/xml' });
-  const parser = new dom.window.DOMParser();
-  // Monkey-patch global DOMParser for the analyzer
-  (globalThis as any).DOMParser = dom.window.DOMParser;
-  return analyzePJC(xmlString);
+// Provide DOMParser for Node environment
+import { JSDOM } from 'jsdom';
+if (typeof globalThis.DOMParser === 'undefined') {
+  (globalThis as any).DOMParser = new JSDOM('').window.DOMParser;
 }
 
 describe('Extract Izabela Cristina PJC', () => {
