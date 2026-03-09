@@ -23,3 +23,4 @@ export { createReflexosFeriasCalculator } from './calculators/reflexos-ferias';
 export { createFGTSCalculator } from './calculators/fgts';
 export { createINSSCalculator } from './calculators/inss';
 export { createAtualizacaoMonetariaCalculator } from './calculators/atualizacao-monetaria';
+export { createIntrajornadaCalculator } from './calculators/intrajornada';
