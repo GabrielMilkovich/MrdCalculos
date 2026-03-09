@@ -1457,8 +1457,8 @@ export class PjeCalcEngine {
             const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiq);
             let fator2: number;
             if (fatorSELIC !== null) { fator2 = fatorSELIC; } else {
-              const meses2 = this.mesesEntre(dataCitacao, dataLiq);
-              fator2 = Math.pow(1.01, meses2);
+              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para ${compCitacao}→${compLiq}. Usando fator=1.`);
+              fator2 = 1;
             }
             indiceCorrecao = fator1 * fator2;
 
