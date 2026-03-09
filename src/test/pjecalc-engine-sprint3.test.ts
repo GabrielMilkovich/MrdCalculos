@@ -143,8 +143,8 @@ describe('Cenário 1 — Simples', () => {
     expect(result.verbas.length).toBe(1);
     expect(result.verbas[0].ocorrencias.length).toBe(18);
 
-    // Fórmula: (3000 × 1.5 / 220) × 40 × 1 = 818.18 por mês
-    const expectedPerMonth = Number(new Decimal(3000).times(1.5).div(220).times(40).toDP(2));
+    // Fórmula PJe-Calc (truncamento por etapa): (3000/220→trunc) × 1.5 → trunc × 40 → trunc
+    const expectedPerMonth = new Decimal(3000).div(220).toDP(2).times(1.5).toDP(2).times(40).toDP(2).toNumber();
     expect(result.verbas[0].ocorrencias[0].devido).toBeCloseTo(expectedPerMonth, 1);
 
     // Total diferença = 818.18 * 18 = 14727.27 (approx)
