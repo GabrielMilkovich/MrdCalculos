@@ -58,6 +58,8 @@ export class PjeCalcEngine {
   private prevPrivadaConfig: PjePrevidenciaPrivadaConfig;
   private pensaoConfig: PjePensaoConfig;
   private salarioFamiliaConfig: PjeSalarioFamiliaConfig;
+  private seguroDesempregoDB: PjeSeguroDesempregoDB[];
+  private salarioFamiliaDB: PjeSalarioFamiliaDB[];
   // Map of verba results by verba_id for reflexa resolution
   private verbaResultsMap: Map<string, PjeVerbaResult> = new Map();
 
