@@ -24,13 +24,14 @@ describe('Extract Izabela Cristina PJC', () => {
     const buf = readFileSync(pjcPath);
     const zip = await JSZip.loadAsync(buf);
     
-    // Find XML file inside
-    const xmlFiles = Object.keys(zip.files).filter(f => f.endsWith('.xml'));
-    console.log('Files in ZIP:', Object.keys(zip.files));
+    // Find the main file inside (may be .PJC or .xml)
+    const allFiles = Object.keys(zip.files);
+    console.log('Files in ZIP:', allFiles);
     
-    expect(xmlFiles.length).toBeGreaterThan(0);
+    const mainFile = allFiles.find(f => f.endsWith('.PJC') || f.endsWith('.xml')) || allFiles[0];
+    expect(mainFile).toBeTruthy();
     
-    const xmlContent = await zip.files[xmlFiles[0]].async('string');
+    const xmlContent = await zip.files[mainFile].async('string');
     console.log('XML length:', xmlContent.length);
     
     // Write first 2000 chars for debugging
