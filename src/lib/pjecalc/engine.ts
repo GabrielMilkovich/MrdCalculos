@@ -1931,16 +1931,16 @@ export class PjeCalcEngine {
           const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
           empregador.push({
             competencia: comp,
-            empresa: this.csConfig.apurar_empresa ? Number(new Decimal(base).times(aliqEmp).toDP(2)) : 0,
-            sat: this.csConfig.apurar_sat ? Number(new Decimal(base).times(aliqSat).toDP(2)) : 0,
-            terceiros: this.csConfig.apurar_terceiros ? Number(new Decimal(base).times(aliqTerc).toDP(2)) : 0,
+            empresa: this.csConfig.apurar_empresa ? Number(new Decimal(base).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+            sat: this.csConfig.apurar_sat ? Number(new Decimal(base).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+            terceiros: this.csConfig.apurar_terceiros ? Number(new Decimal(base).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
           });
         }
       }
     }
 
-    const totalDevidos = segurado_devidos.reduce((s, x) => s + x.diferenca, 0);
-    const totalPagos = segurado_pagos.reduce((s, x) => s + x.diferenca, 0);
+    const totalDevidos = segurado_devidos.reduce((s, x) => new Decimal(s).plus(x.diferenca), new Decimal(0)).toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+    const totalPagos = segurado_pagos.reduce((s, x) => new Decimal(s).plus(x.diferenca), new Decimal(0)).toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
 
     return {
       segurado_devidos, segurado_pagos, empregador,
@@ -1952,26 +1952,30 @@ export class PjeCalcEngine {
   }
 
   // Helper: calcular INSS progressivo para uma competência
+  // PJe-Calc usa ROUND_HALF_EVEN (Banker's rounding) para CS e IR
+  private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_EVEN;
+
   private calcularINSSProgressivo(comp: string, base: number): number {
     if (this.csConfig.aliquota_segurado_tipo === 'fixa' && this.csConfig.aliquota_segurado_fixa) {
-      return base * (this.csConfig.aliquota_segurado_fixa / 100);
+      return new Decimal(base).times(this.csConfig.aliquota_segurado_fixa).div(100)
+        .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
     }
     const faixas = this.getFaixasINSSParaCompetencia(comp);
     const teto = faixas[faixas.length - 1].ate;
-    let baseRestante = this.csConfig.limitar_teto ? Math.min(base, teto) : base;
-    let imposto = 0;
-    let faixaAnterior = 0;
+    let baseRestante = new Decimal(this.csConfig.limitar_teto ? Math.min(base, teto) : base);
+    let imposto = new Decimal(0);
+    let faixaAnterior = new Decimal(0);
     for (const faixa of faixas) {
-      const limiteNaFaixa = faixa.ate - faixaAnterior;
-      const baseNaFaixa = Math.min(baseRestante, limiteNaFaixa);
-      if (baseNaFaixa > 0) {
-        imposto += baseNaFaixa * faixa.aliquota;
-        baseRestante -= baseNaFaixa;
+      const limiteNaFaixa = new Decimal(faixa.ate).minus(faixaAnterior);
+      const baseNaFaixa = Decimal.min(baseRestante, limiteNaFaixa);
+      if (baseNaFaixa.gt(0)) {
+        imposto = imposto.plus(baseNaFaixa.times(faixa.aliquota).toDP(2, PjeCalcEngine.ROUND_CS_IR));
+        baseRestante = baseRestante.minus(baseNaFaixa);
       }
-      if (baseRestante <= 0) break;
-      faixaAnterior = faixa.ate;
+      if (baseRestante.lte(0)) break;
+      faixaAnterior = new Decimal(faixa.ate);
     }
-    return imposto;
+    return imposto.toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
   }
 
   // =====================================================
@@ -2039,50 +2043,52 @@ export class PjeCalcEngine {
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const tabelaIR = this.getFaixasIRParaCompetencia(compLiq);
     
-    let irAnosAnteriores = 0;
-    let irAnoLiquidacao = 0;
-    let ir13Exclusivo = 0;
-    let irFeriasSeparado = 0;
+    let irAnosAnteriores = new Decimal(0);
+    let irAnoLiquidacao = new Decimal(0);
+    let ir13Exclusivo = new Decimal(0);
+    let irFeriasSeparado = new Decimal(0);
+
+    const R = PjeCalcEngine.ROUND_CS_IR;
 
     // ═══ Art. 12-A: Tabela acumulada para anos anteriores (RRA) ═══
     if (mesesAnosAnteriores > 0 && baseAnosAnteriores > 0) {
-      const propDeducoes = deducoes * (baseAnosAnteriores / Math.max(baseBruta, 1));
-      const deducaoDep = this.irConfig.dependentes * tabelaIR.deducao_dependente * mesesAnosAnteriores;
+      const propDeducoes = new Decimal(deducoes).times(baseAnosAnteriores).div(Math.max(baseBruta, 1)).toDP(2, R).toNumber();
+      const deducaoDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(mesesAnosAnteriores).toDP(2, R).toNumber();
       const baseTrib = Math.max(0, baseAnosAnteriores - propDeducoes - deducaoDep);
       for (const faixa of tabelaIR.faixas) {
         if (baseTrib <= faixa.ate * mesesAnosAnteriores) {
-          irAnosAnteriores = baseTrib * faixa.aliquota - faixa.deducao * mesesAnosAnteriores;
+          irAnosAnteriores = new Decimal(baseTrib).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(mesesAnosAnteriores)).toDP(2, R);
           break;
         }
       }
-      if (irAnosAnteriores < 0) irAnosAnteriores = 0;
+      if (irAnosAnteriores.lt(0)) irAnosAnteriores = new Decimal(0);
     }
 
     // ═══ Ano de liquidação: tabela mensal simples ═══
     if (mesesAnoLiquidacao > 0 && baseAnoLiquidacao > 0) {
-      const propDeducoes = deducoes * (baseAnoLiquidacao / Math.max(baseBruta, 1));
-      const deducaoDep = this.irConfig.dependentes * tabelaIR.deducao_dependente * mesesAnoLiquidacao;
+      const propDeducoes = new Decimal(deducoes).times(baseAnoLiquidacao).div(Math.max(baseBruta, 1)).toDP(2, R).toNumber();
+      const deducaoDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(mesesAnoLiquidacao).toDP(2, R).toNumber();
       const baseTrib = Math.max(0, baseAnoLiquidacao - propDeducoes - deducaoDep);
       for (const faixa of tabelaIR.faixas) {
         if (baseTrib <= faixa.ate * mesesAnoLiquidacao) {
-          irAnoLiquidacao = baseTrib * faixa.aliquota - faixa.deducao * mesesAnoLiquidacao;
+          irAnoLiquidacao = new Decimal(baseTrib).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(mesesAnoLiquidacao)).toDP(2, R);
           break;
         }
       }
-      if (irAnoLiquidacao < 0) irAnoLiquidacao = 0;
+      if (irAnoLiquidacao.lt(0)) irAnoLiquidacao = new Decimal(0);
     }
 
     // Fallback: se não há separação por ano, aplicar tabela acumulada total
     if (mesesAnosAnteriores === 0 && mesesAnoLiquidacao === 0 && baseBruta > 0) {
-      const deducaoDependentes = this.irConfig.dependentes * tabelaIR.deducao_dependente * meses;
+      const deducaoDependentes = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
       const baseTributavel = Math.max(0, baseBruta - deducoes - deducaoDependentes);
       for (const faixa of tabelaIR.faixas) {
         if (baseTributavel <= faixa.ate * meses) {
-          irAnoLiquidacao = baseTributavel * faixa.aliquota - faixa.deducao * meses;
+          irAnoLiquidacao = new Decimal(baseTributavel).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(meses)).toDP(2, R);
           break;
         }
       }
-      if (irAnoLiquidacao < 0) irAnoLiquidacao = 0;
+      if (irAnoLiquidacao.lt(0)) irAnoLiquidacao = new Decimal(0);
       mesesAnoLiquidacao = meses;
     }
 
@@ -2090,39 +2096,39 @@ export class PjeCalcEngine {
     if (this.irConfig.tributacao_exclusiva_13 && base13 > 0) {
       for (const faixa of tabelaIR.faixas) {
         if (base13 <= faixa.ate) {
-          ir13Exclusivo = base13 * faixa.aliquota - faixa.deducao;
+          ir13Exclusivo = new Decimal(base13).times(faixa.aliquota).minus(faixa.deducao).toDP(2, R);
           break;
         }
       }
-      if (ir13Exclusivo < 0) ir13Exclusivo = 0;
+      if (ir13Exclusivo.lt(0)) ir13Exclusivo = new Decimal(0);
     }
 
     // Tributação separada de férias
     if (this.irConfig.tributacao_separada_ferias && baseFerias > 0) {
       for (const faixa of tabelaIR.faixas) {
         if (baseFerias <= faixa.ate * meses) {
-          irFeriasSeparado = baseFerias * faixa.aliquota - faixa.deducao * meses;
+          irFeriasSeparado = new Decimal(baseFerias).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(meses)).toDP(2, R);
           break;
         }
       }
-      if (irFeriasSeparado < 0) irFeriasSeparado = 0;
+      if (irFeriasSeparado.lt(0)) irFeriasSeparado = new Decimal(0);
     }
 
-    const imposto = irAnosAnteriores + irAnoLiquidacao + ir13Exclusivo + irFeriasSeparado;
-    const deducaoDependentes = this.irConfig.dependentes * tabelaIR.deducao_dependente * meses;
+    const imposto = irAnosAnteriores.plus(irAnoLiquidacao).plus(ir13Exclusivo).plus(irFeriasSeparado);
+    const deducaoDependentes = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
     const baseTributavel = Math.max(0, baseBruta - deducoes - deducaoDependentes);
 
     return {
-      base_calculo: Number(new Decimal(baseBruta + base13 + baseFerias).toDP(2)),
-      deducoes: Number(new Decimal(deducoes + deducaoDependentes).toDP(2)),
-      base_tributavel: Number(new Decimal(baseTributavel + base13 + baseFerias).toDP(2)),
-      imposto_devido: Number(new Decimal(imposto).toDP(2)),
+      base_calculo: Number(new Decimal(baseBruta + base13 + baseFerias).toDP(2, R)),
+      deducoes: Number(new Decimal(deducoes + deducaoDependentes).toDP(2, R)),
+      base_tributavel: Number(new Decimal(baseTributavel + base13 + baseFerias).toDP(2, R)),
+      imposto_devido: imposto.toDP(2, R).toNumber(),
       meses_rra: meses,
       metodo: meses > 1 ? 'art_12a_rra' : 'tabela_mensal',
-      ir_anos_anteriores: Number(new Decimal(irAnosAnteriores).toDP(2)),
-      ir_ano_liquidacao: Number(new Decimal(irAnoLiquidacao).toDP(2)),
-      ir_13_exclusivo: Number(new Decimal(ir13Exclusivo).toDP(2)),
-      ir_ferias_separado: Number(new Decimal(irFeriasSeparado).toDP(2)),
+      ir_anos_anteriores: irAnosAnteriores.toDP(2, R).toNumber(),
+      ir_ano_liquidacao: irAnoLiquidacao.toDP(2, R).toNumber(),
+      ir_13_exclusivo: ir13Exclusivo.toDP(2, R).toNumber(),
+      ir_ferias_separado: irFeriasSeparado.toDP(2, R).toNumber(),
       meses_anos_anteriores: mesesAnosAnteriores,
       meses_ano_liquidacao: mesesAnoLiquidacao || meses,
     };
@@ -2542,12 +2548,18 @@ export class PjeCalcEngine {
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
             if (regimeJ.tipo === 'SELIC') {
               const fatorS = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
-              if (fatorS !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
-              else jurosAcc = jurosAcc.plus(baseJuros.times(0.01).times(meses));
+              if (fatorS !== null) {
+                jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
+              } else {
+                console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para juros ${segInicio}→${segFim}. Juros=0 neste segmento.`);
+              }
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
-              if (fatorTL !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
-              else jurosAcc = jurosAcc.plus(baseJuros.times(0.008).times(meses));
+              if (fatorTL !== null) {
+                jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
+              } else {
+                console.warn(`[PjeCalcEngine] BLOQUEIO: Índice TAXA_LEGAL ausente para juros ${segInicio}→${segFim}. Juros=0 neste segmento.`);
+              }
             } else {
               const taxa = ((regimeJ as any).percentual || 1) / 100;
               jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
