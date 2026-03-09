@@ -8,6 +8,7 @@ import Casos from "./pages/Casos";
 import CasoDetalhe from "./pages/CasoDetalhe";
 import Tabelas from "./pages/Tabelas";
 import PjeCalcPage from "./pages/PjeCalcPage";
+import NovoCalculo from "./pages/NovoCalculo";
 import PJCAnalyzer from "./pages/admin/PJCAnalyzer";
 import NotFound from "./pages/NotFound";
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/tabelas" element={<Tabelas />} />
           <Route path="/tabelas/:tipo" element={<Tabelas />} />
           <Route path="/pjecalc/:id" element={<PjeCalcPage />} />
+          <Route path="/novo-calculo" element={<NovoCalculo />} />
           <Route path="/admin/pjc-analyzer" element={<PJCAnalyzer />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
