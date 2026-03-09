@@ -2440,7 +2440,7 @@ export class PjeCalcEngine {
     };
 
     for (const vr of verbaResults) {
-      let totalCorrigido = 0;
+      let totalCorrigido = new Decimal(0);
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
         // Súmula 381: correction starts from mês subsequente ao vencimento
