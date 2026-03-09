@@ -269,8 +269,6 @@ export function createIntrajornadaCalculator(rulesData: CalculatorRules): Calcul
         versao: this.version,
         outputs: {
           total_bruto: arredondarMoeda(totalGeral),
-          total_intrajornada: arredondarMoeda(totalBruto),
-          total_dsr_intrajornada: arredondarMoeda(totalDSR),
           verbas,
         },
         auditLines,
