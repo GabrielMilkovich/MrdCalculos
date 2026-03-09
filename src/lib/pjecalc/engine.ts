@@ -1514,14 +1514,14 @@ export class PjeCalcEngine {
         oc.valor_corrigido = valorCorrigido;
         oc.juros = juros;
         oc.valor_final = Number(new Decimal(valorCorrigido + juros).toDP(2));
-        totalCorrigido += valorCorrigido;
-        totalJuros += juros;
-        totalFinal += valorCorrigido + juros;
+        totalCorrigido = totalCorrigido.plus(valorCorrigido);
+        totalJuros = totalJuros.plus(juros);
+        totalFinal = totalFinal.plus(valorCorrigido + juros);
       }
 
-      vr.total_corrigido = Number(new Decimal(totalCorrigido).toDP(2));
-      vr.total_juros = Number(new Decimal(totalJuros).toDP(2));
-      vr.total_final = Number(new Decimal(totalFinal).toDP(2));
+      vr.total_corrigido = totalCorrigido.toDP(2).toNumber();
+      vr.total_juros = totalJuros.toDP(2).toNumber();
+      vr.total_final = totalFinal.toDP(2).toNumber();
     }
   }
 
