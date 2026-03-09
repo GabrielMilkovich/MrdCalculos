@@ -1585,11 +1585,9 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            // Fallback
-            const taxas: Record<string, number> = { 'IPCA-E': 0.0045, 'IPCA': 0.004, 'SELIC': 0.01, 'TR': 0.0001, 'INPC': 0.004, 'IGP-M': 0.005, 'TAXA_LEGAL': 0.008 };
-            const taxa = taxas[indice] || 0.004;
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-            fatorTotal = fatorTotal.times(Math.pow(1 + taxa, meses));
+            // FIX #1: Sem fallback — bloquear correção se índices ausentes
+            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
+            // Fator permanece inalterado (1)
           }
           regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
         }
