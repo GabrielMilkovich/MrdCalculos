@@ -292,7 +292,8 @@ describe("PjeCalcEngine", () => {
       });
       const result = engine.liquidar();
       const he = result.verbas[0];
-      const expected = new Decimal(3500).times(1.5).div(220).times(20).times(2).toDP(2).toNumber();
+      // Step-by-step truncation with dobra=2
+      const expected = new Decimal(3500).div(220).toDP(2).times(1.5).toDP(2).times(20).toDP(2).times(2).toDP(2).toNumber();
       expect(he.ocorrencias[0].devido).toBeCloseTo(expected, 2);
     });
 
