@@ -41,6 +41,7 @@ const calculatorRegistry: Map<string, (rules: CalculatorRules) => Calculator> = 
   ['inss', createINSSCalculator],
   ['atualizacao_monetaria', createAtualizacaoMonetariaCalculator],
   ['verbas_rescisorias', createVerbasRescisoriasCalculator],
+  ['intrajornada', createIntrajornadaCalculator],
 ]);
 
 // Registrar uma nova calculadora
