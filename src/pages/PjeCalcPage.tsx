@@ -54,6 +54,7 @@ import { AssistenteContextual } from "@/components/cases/pjecalc/AssistenteConte
 import { ImportadorFichaFinanceira } from "@/components/cases/pjecalc/ImportadorFichaFinanceira";
 import { MemoriaCalculoExpandida } from "@/components/cases/pjecalc/MemoriaCalculoExpandida";
 import { ModuloAjusteSentenca } from "@/components/cases/pjecalc/ModuloAjusteSentenca";
+import { ModuloESocial } from "@/components/cases/pjecalc/ModuloESocial";
 import { ComparacaoCenarios } from "@/components/cases/pjecalc/ComparacaoCenarios";
 import { getRastreabilidadeGeral, type ModuleStatus } from "@/lib/pjecalc/completude";
 
