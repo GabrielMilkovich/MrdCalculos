@@ -3014,9 +3014,9 @@ export class PjeCalcEngine {
         const comp = this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7);
         const result = this.calcularOcorrencia(reflexa, comp, mediaCorr);
         ocorrencias.push(result);
-        totalDevido += result.devido;
-        totalPago += result.pago;
-        totalDiferenca += result.diferenca;
+        totalDevido = totalDevido.plus(result.devido);
+        totalPago = totalPago.plus(result.pago);
+        totalDiferenca = totalDiferenca.plus(result.diferenca);
         break;
       }
       case 'media_quantidade': {
