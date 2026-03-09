@@ -30,6 +30,7 @@ import { createFGTSCalculator } from './calculators/fgts';
 import { createINSSCalculator } from './calculators/inss';
 import { createAtualizacaoMonetariaCalculator } from './calculators/atualizacao-monetaria';
 import { createVerbasRescisoriasCalculator } from './calculators/verbas-rescisorias';
+import { createIntrajornadaCalculator } from './calculators/intrajornada';
 
 // Registry de calculadoras disponíveis
 const calculatorRegistry: Map<string, (rules: CalculatorRules) => Calculator> = new Map([
