@@ -1374,12 +1374,24 @@ export class PjeCalcEngine {
     const totalDevidos = segurado_devidos.reduce((s, x) => new Decimal(s).plus(x.diferenca), new Decimal(0)).toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
     const totalPagos = segurado_pagos.reduce((s, x) => new Decimal(s).plus(x.diferenca), new Decimal(0)).toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
 
+    // Segregação reclamante vs beneficiário (PJe-Calc: inssReclamante / inssBeneficiario)
+    let csReclamante: number | undefined;
+    let csBeneficiario: number | undefined;
+    if (this.csConfig.separar_reclamante_beneficiario) {
+      // Reclamante: CS cobrada do trabalhador (deduzida do líquido)
+      csReclamante = this.csConfig.cobrar_reclamante ? totalDevidos : 0;
+      // Beneficiário: CS sobre pagos (recolhimento que a empresa deveria ter feito)
+      csBeneficiario = totalPagos;
+    }
+
     return {
       segurado_devidos, segurado_pagos, empregador,
       total_segurado_devidos: totalDevidos,
       total_segurado_pagos: totalPagos,
       total_segurado: totalDevidos + totalPagos,
       total_empregador: empregador.reduce((s, x) => s + x.empresa + x.sat + x.terceiros, 0),
+      cs_reclamante: csReclamante,
+      cs_beneficiario: csBeneficiario,
     };
   }
 
