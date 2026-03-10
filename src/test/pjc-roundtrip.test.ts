@@ -357,7 +357,7 @@ describe('Correção por Data (ADC 58/59)', () => {
       data_liquidacao: '2025-10-31',
       arredondamento: 'por_linha',
     };
-    const result = aplicarCorrecaoPorData('2023-01', 1000, singleConfig);
+    const result = aplicarCorrecaoPorData('2023-01', 1000, singleConfig, ALL_TEST_INDICES as IndiceDB[]);
     // When SELIC is the index, juros should be 0 (engulfed)
     expect(result.juros).toBe(0);
     expect(result.valor_corrigido).toBeGreaterThanOrEqual(1000);
