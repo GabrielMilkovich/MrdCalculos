@@ -189,6 +189,7 @@ function createEngine(
     { ...defaultHonorarios, ...overrides?.honorarios },
     { ...defaultCustas, ...overrides?.custas },
     { ...defaultSeguro, ...overrides?.seguro },
+    ALL_TEST_INDICES,
   );
 }
 
