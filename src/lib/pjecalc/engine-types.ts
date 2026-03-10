@@ -455,6 +455,10 @@ export interface PjeCSResult {
   total_segurado_pagos: number;
   total_segurado: number;
   total_empregador: number;
+  /** CS segregada: parte do reclamante (deduzida do líquido) */
+  cs_reclamante?: number;
+  /** CS segregada: parte do beneficiário (recolhimento patronal-segurado) */
+  cs_beneficiario?: number;
 }
 
 export interface PjeIRResult {
