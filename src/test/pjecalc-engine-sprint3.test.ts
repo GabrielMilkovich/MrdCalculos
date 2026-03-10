@@ -357,6 +357,7 @@ describe('Cenário 3 — Complexo', () => {
       params, [], [], [], [verba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
     expect(result.validacao).toBeDefined();
