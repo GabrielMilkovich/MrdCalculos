@@ -129,17 +129,32 @@ export class PjeCalcEngine {
   // =====================================================
   
   getPeriodoCalculo(): { inicio: string; fim: string } {
-    const datas = [this.params.data_admissao];
-    if (this.params.prescricao_quinquenal && this.params.data_prescricao_quinquenal) {
-      datas.push(this.params.data_prescricao_quinquenal);
-    }
-    if (this.params.data_inicial) datas.push(this.params.data_inicial);
-    const inicio = datas.sort().pop()!;
+    let inicio: string;
     
+    // Prescrição quinquenal: recalcular automaticamente data início = ajuizamento - 5 anos
+    if (this.params.prescricao_quinquenal) {
+      if (this.params.data_prescricao_quinquenal) {
+        inicio = this.params.data_prescricao_quinquenal;
+      } else if (this.params.data_ajuizamento) {
+        const ajuiz = new Date(this.params.data_ajuizamento);
+        const prescDate = new Date(ajuiz.getFullYear() - 5, ajuiz.getMonth(), ajuiz.getDate());
+        inicio = prescDate.toISOString().slice(0, 10);
+      } else {
+        inicio = this.params.data_inicial || this.params.data_admissao;
+      }
+      // Prescrição não pode ser anterior à admissão
+      if (inicio < this.params.data_admissao) inicio = this.params.data_admissao;
+    } else {
+      inicio = this.params.data_inicial || this.params.data_admissao;
+    }
+    
+    // Fim: usar data_demissao, data_final, ou data de liquidação como fallback
     const fimCandidatos: string[] = [];
     if (this.params.data_demissao) fimCandidatos.push(this.params.data_demissao);
     if (this.params.data_final) fimCandidatos.push(this.params.data_final);
-    const fim = fimCandidatos.sort()[0] || new Date().toISOString().slice(0, 10);
+    const fim = fimCandidatos.sort()[0] 
+      || this.correcaoConfig?.data_liquidacao 
+      || new Date().toISOString().slice(0, 10);
 
     return { inicio, fim };
   }
