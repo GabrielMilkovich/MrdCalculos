@@ -293,6 +293,7 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
           dobra: oc.dobra,
           devido: oc.devido,
           pago: oc.pago,
+          indice_acumulado: oc.indice_acumulado,
         }))
       : undefined;
 
