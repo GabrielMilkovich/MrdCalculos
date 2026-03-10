@@ -239,7 +239,7 @@ describe('Diagnóstico Correção — Islan & Carla', () => {
       console.log(`\n═══ DIAGNÓSTICO ${caseName} ═══`);
       console.log(`Correção: indice=${data.inputs.correcaoConfig.indice}, data_liq=${data.inputs.correcaoConfig.data_liquidacao}`);
       console.log(`Combinações: ${JSON.stringify(data.inputs.correcaoConfig.combinacoes_indice?.map(c => ({ indice: c.indice, de: c.de })))}`);
-      console.log(`Juros: tipo=${data.inputs.correcaoConfig.juros_tipo}, taxa=${data.inputs.correcaoConfig.taxa_juros}, inicio=${data.inputs.correcaoConfig.juros_inicio}`);
+      console.log(`Juros: tipo=${data.inputs.correcaoConfig.juros_tipo}, pct=${data.inputs.correcaoConfig.juros_percentual}, inicio=${data.inputs.correcaoConfig.juros_inicio}`);
       console.log(`juros_apos_deducao_cs=${data.inputs.correcaoConfig.juros_apos_deducao_cs}`);
 
       let gtCount = 0, fbCount = 0;
