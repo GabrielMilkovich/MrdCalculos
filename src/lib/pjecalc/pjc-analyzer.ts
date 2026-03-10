@@ -165,9 +165,21 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   const root = doc.documentElement; // <Calculo>
 
   // --- Parâmetros ---
+  // Some PJC files have nomeBeneficiario at root (gprec format),
+  // others have the name under <Reclamante><nome>
+  let beneficiario = getTextContent(root, 'nomeBeneficiario');
+  if (!beneficiario) {
+    const reclamanteEl = root.getElementsByTagName('Reclamante')[0];
+    beneficiario = reclamanteEl ? getTextContent(reclamanteEl, 'nome') : '';
+  }
+  let cpf = getTextContent(root, 'documentoFiscalBeneficiario');
+  if (!cpf) {
+    const reclamanteEl = root.getElementsByTagName('Reclamante')[0];
+    cpf = reclamanteEl ? getTextContent(reclamanteEl, 'numeroDocumentoFiscal') : '';
+  }
   const parametros = {
-    beneficiario: getTextContent(root, 'nomeBeneficiario'),
-    cpf: getTextContent(root, 'documentoFiscalBeneficiario'),
+    beneficiario,
+    cpf,
     reclamado: extractReclamado(root),
     cnpj: extractReclamadoCNPJ(root),
     admissao: tsToDate(getTextContent(root, 'dataAdmissao')),
@@ -620,7 +632,8 @@ function parseOcorrencias(verbaEl: Element): {
 // XML HELPERS (direct child text only)
 // =====================================================
 
-function getTextContent(parent: Element, tagName: string): string {
+function getTextContent(parent: Element | undefined | null, tagName: string): string {
+  if (!parent) return '';
   // Get first matching element
   const els = parent.getElementsByTagName(tagName);
   if (els.length === 0) return '';
