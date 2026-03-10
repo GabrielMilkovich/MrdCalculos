@@ -460,6 +460,14 @@ export interface PjeOcorrenciaResult {
   devido_integral?: number;
   /** Rastreabilidade de arredondamento por etapa (Método PJe-Calc) */
   arredondamento_trace?: { etapa: string; valor_cheio: string; valor_truncado: string }[];
+  /** Per-occurrence paid value breakdown (Feature #3: rubric-specific paid values) */
+  pago_breakdown?: {
+    base: number;
+    divisor: number;
+    multiplicador: number;
+    quantidade: number;
+    formula: string;
+  };
 }
 
 export interface PjeFGTSResult {
