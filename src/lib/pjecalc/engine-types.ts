@@ -286,6 +286,10 @@ export interface PjeCSConfig {
   periodos_simples: { inicio: string; fim: string }[];
   /** CNAE da atividade econômica para lookup automático SAT/RAT */
   cnae?: string;
+  /** Diferenciação CS: 'bruto' aplica sobre valor bruto (devido), 'liquido' sobre diferença (devido-pago) */
+  base_cs_segurado?: 'bruto' | 'liquido';
+  /** Separar CS do reclamante (inssReclamante) vs beneficiário (inssBeneficiario) */
+  separar_reclamante_beneficiario?: boolean;
 }
 
 export interface PjeIRConfig {
