@@ -342,7 +342,7 @@ describe('Correção por Data (ADC 58/59)', () => {
   });
 
   it('should produce regime segments', () => {
-    const result = aplicarCorrecaoPorData('2019-06', 1000, config);
+    const result = aplicarCorrecaoPorData('2019-06', 1000, config, ALL_TEST_INDICES as IndiceDB[]);
     expect(result.regimes_aplicados.length).toBeGreaterThan(0);
     // Should have at least correction regimes
     const correcaoRegimes = result.regimes_aplicados.filter(r => r.tipo === 'correcao');
