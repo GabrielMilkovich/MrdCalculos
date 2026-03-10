@@ -2139,8 +2139,12 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.valor_corrigido === 0) { totalFinal += oc.valor_final; continue; }
 
-        // Note: pjc_ground_truth_applied only means correction was from PJC ground truth.
-        // Interest must still be calculated separately (pjc_indice_acumulado is correction-only).
+        // Skip interest for occurrences where PJC ground truth already includes interest
+        if (oc.pjc_ground_truth_applied) {
+          totalJuros += oc.juros;
+          totalFinal += oc.valor_final;
+          continue;
+        }
 
         // Pro-rata CS share for this occurrence
         const csShare = totalCorrigido > 0
