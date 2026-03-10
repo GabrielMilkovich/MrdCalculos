@@ -1288,14 +1288,15 @@ export class PjeCalcEngine {
     }
 
     // ═══ Track 1: CS sobre salários DEVIDOS ═══
-    // When useCorrigido=true (juros_apos_deducao_cs flow), CS is on corrected values
+    // base_cs_segurado: 'bruto' usa oc.devido, 'liquido' (default) usa oc.diferenca
+    const usarBruto = this.csConfig.base_cs_segurado === 'bruto';
     const basesDevidos: Record<string, number> = {};
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
       if (!verba?.incidencias.contribuicao_social) continue;
       if (verba.caracteristica === 'ferias') continue;
       for (const oc of vr.ocorrencias) {
-        const val = useCorrigido ? oc.valor_corrigido : oc.diferenca;
+        const val = useCorrigido ? oc.valor_corrigido : (usarBruto ? oc.devido : oc.diferenca);
         if (val <= 0) continue;
         basesDevidos[oc.competencia] = (basesDevidos[oc.competencia] || 0) + val;
       }
