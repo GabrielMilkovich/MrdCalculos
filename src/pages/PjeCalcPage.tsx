@@ -350,8 +350,24 @@ export default function PjeCalcPage() {
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div><Label className="text-xs">Admissão *</Label><Input type="date" value={formParams.data_admissao} onChange={e => setFormParams(p => ({ ...p, data_admissao: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
           <div><Label className="text-xs">Demissão</Label><Input type="date" value={formParams.data_demissao} onChange={e => setFormParams(p => ({ ...p, data_demissao: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+          <div><Label className="text-xs">Data Inicial (Período)</Label><Input type="date" value={formParams.data_inicial} onChange={e => setFormParams(p => ({ ...p, data_inicial: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+          <div><Label className="text-xs">Data Final (Período)</Label><Input type="date" value={formParams.data_final} onChange={e => setFormParams(p => ({ ...p, data_final: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Datas Processuais</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div><Label className="text-xs">Ajuizamento *</Label><Input type="date" value={formParams.data_ajuizamento} onChange={e => setFormParams(p => ({ ...p, data_ajuizamento: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
-          <div><Label className="text-xs">Data Inicial</Label><Input type="date" value={formParams.data_inicial} onChange={e => setFormParams(p => ({ ...p, data_inicial: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+          <div>
+            <Label className="text-xs">Citação *</Label>
+            <Input type="date" value={formParams.data_citacao} onChange={e => setFormParams(p => ({ ...p, data_citacao: e.target.value }))} className="mt-1 h-8 text-xs" />
+            <p className="text-[9px] text-muted-foreground mt-0.5">Obrigatório para ADC 58 (transição IPCA-E → SELIC)</p>
+          </div>
+          <div>
+            <Label className="text-xs">Liquidação *</Label>
+            <Input type="date" value={formParams.data_liquidacao} onChange={e => setFormParams(p => ({ ...p, data_liquidacao: e.target.value }))} className="mt-1 h-8 text-xs" />
+            <p className="text-[9px] text-muted-foreground mt-0.5">Data base para correção monetária e juros</p>
+          </div>
         </CardContent>
       </Card>
       <Card>
