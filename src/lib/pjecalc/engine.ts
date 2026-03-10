@@ -2120,16 +2120,17 @@ export class PjeCalcEngine {
         // Base for interest = corrected - CS share
         const baseJuros = new Decimal(oc.valor_corrigido).minus(csShare);
 
-        if (combinacoes_juros.length > 0 && combinacoes_indice.length > 0) {
+        if (!jurosDisabled && combinacoes_juros.length > 0 && combinacoes_indice.length > 0) {
           const compDate = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
+          const jurosEffectiveStart = jurosStartDate || compDate;
           const breakpoints = new Set<string>();
-          breakpoints.add(compDate);
+          breakpoints.add(jurosEffectiveStart);
           breakpoints.add(dataLiq);
           for (const cj of combinacoes_juros) {
-            if (cj.de && cj.de > compDate && cj.de <= dataLiq) breakpoints.add(cj.de);
+            if (cj.de && cj.de > jurosEffectiveStart && cj.de <= dataLiq) breakpoints.add(cj.de);
           }
           for (const ci of combinacoes_indice) {
-            if (ci.de && ci.de > compDate && ci.de <= dataLiq) breakpoints.add(ci.de);
+            if (ci.de && ci.de > jurosEffectiveStart && ci.de <= dataLiq) breakpoints.add(ci.de);
           }
           const datas = Array.from(breakpoints).sort();
 
@@ -2139,7 +2140,6 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            // SELIC as correction already includes interest
             if (indiceNorm === 'SELIC') continue;
             
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
@@ -2148,18 +2148,10 @@ export class PjeCalcEngine {
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
             if (regimeJ.tipo === 'SELIC') {
               const fatorS = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
-              if (fatorS !== null) {
-                jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
-              } else {
-                console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para juros ${segInicio}→${segFim}. Juros=0 neste segmento.`);
-              }
+              if (fatorS !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
-              if (fatorTL !== null) {
-                jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
-              } else {
-                console.warn(`[PjeCalcEngine] BLOQUEIO: Índice TAXA_LEGAL ausente para juros ${segInicio}→${segFim}. Juros=0 neste segmento.`);
-              }
+              if (fatorTL !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
             } else {
               const taxa = ((regimeJ as any).percentual || 1) / 100;
               jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
