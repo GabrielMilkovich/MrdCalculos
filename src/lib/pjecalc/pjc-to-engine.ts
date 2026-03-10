@@ -433,16 +433,20 @@ function buildDefaultFGTSConfig(): PjeFGTSConfig {
 }
 
 function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
+  const csConf = a.cs_config;
   return {
-    apurar_segurado: true,
-    cobrar_reclamante: true,
+    apurar_segurado: csConf?.apurar_segurado ?? (a.resultado.inss_reclamante > 0),
+    cobrar_reclamante: csConf?.apurar_segurado ?? (a.resultado.inss_reclamante > 0),
     cs_sobre_salarios_pagos: false,
     aliquota_segurado_tipo: 'empregado',
     limitar_teto: true,
-    apurar_empresa: true,
-    apurar_sat: true,
-    apurar_terceiros: true,
+    apurar_empresa: csConf?.apurar_empresa ?? (a.resultado.inss_reclamado > 0),
+    apurar_sat: (csConf?.aliquota_sat ?? 0) > 0,
+    apurar_terceiros: (csConf?.aliquota_terceiros ?? 0) > 0,
     aliquota_empregador_tipo: 'atividade',
+    aliquota_empresa_fixa: csConf?.aliquota_empresa ?? 20,
+    aliquota_sat_fixa: csConf?.aliquota_sat ?? 0,
+    aliquota_terceiros_fixa: csConf?.aliquota_terceiros ?? 0,
     periodos_simples: [],
   };
 }
