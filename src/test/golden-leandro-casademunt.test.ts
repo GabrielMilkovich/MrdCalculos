@@ -136,12 +136,13 @@ describe('Golden Test: Leandro Casademunt — Integridade Aritmética', () => {
     expect(liquido.toNumber()).toBeCloseTo(s.resumo.liquido_reclamante, 2);
   });
 
-  it('total reclamado = líquido + CS + honorários + IRPF', () => {
+  it('total reclamado = líquido + CS + honorários + IRPF + custas', () => {
     const total = new Decimal(s.resumo.liquido_reclamante)
       .plus(s.resumo.contribuicao_social_salarios)
       .plus(s.resumo.honorarios_liquidos)
       .plus(s.resumo.irrf_honorarios)
-      .plus(s.resumo.irpf_reclamante);
+      .plus(s.resumo.irpf_reclamante)
+      .plus(1000.00); // custas judiciais
     expect(total.toNumber()).toBeCloseTo(s.resumo.total_reclamado, 2);
   });
 });
