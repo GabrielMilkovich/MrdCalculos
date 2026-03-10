@@ -76,8 +76,9 @@ describe.each(CASES)('Golden PJC: $reclamante ($file)', (caseConfig) => {
     expect(a.verbas.length).toBeGreaterThan(0);
   });
 
-  it('should have resultado with liquido_exequente > 0', () => {
-    expect(a.resultado.liquido_exequente).toBeGreaterThan(0);
+  it('should have resultado with liquido_exequente >= 0', () => {
+    // Some PJC files don't have pre-computed results (not liquidated)
+    expect(a.resultado.liquido_exequente).toBeGreaterThanOrEqual(0);
   });
 
   it('should have historico salarial', () => {
