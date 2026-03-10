@@ -1055,6 +1055,16 @@ export class PjeCalcEngine {
     const combinacoes_juros = this.correcaoConfig.combinacoes_juros || [];
     const dataLiq = this.correcaoConfig.data_liquidacao;
 
+    // Determine interest start date based on juros_inicio config
+    let jurosStartDate: string | null = null;
+    if (this.correcaoConfig.juros_inicio === 'ajuizamento' && this.params.data_ajuizamento) {
+      jurosStartDate = this.params.data_ajuizamento;
+    } else if (this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao) {
+      jurosStartDate = this.params.data_citacao;
+    }
+    // If juros start is after data_liquidacao, no interest applies
+    const jurosDisabled = jurosStartDate != null && jurosStartDate > dataLiq;
+
     // Map IPCA-E → IPCAE for index lookup compatibility
     const normalizeIndice = (ind: string): string => {
       const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M' };
