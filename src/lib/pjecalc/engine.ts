@@ -2067,8 +2067,8 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
         
-        // GT disabled — let engine compute from DB indices
-        if (false && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // Use PJC ground truth correction factor when available (includes interest)
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
           const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
           oc.indice_correcao = fatorTotal.toDP(6).toNumber();
