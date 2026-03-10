@@ -895,6 +895,7 @@ export class PjeCalcEngine {
         juros: 0,
         valor_final: diferenca.toDP(2).toNumber(),
         formula,
+        pjc_indice_acumulado: pre.indice_acumulado,
       });
 
       totalDevido = totalDevido.plus(devido);

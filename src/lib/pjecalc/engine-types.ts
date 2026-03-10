@@ -475,6 +475,8 @@ export interface PjeOcorrenciaResult {
   devido_integral?: number;
   /** Rastreabilidade de arredondamento por etapa (Método PJe-Calc) */
   arredondamento_trace?: { etapa: string; valor_cheio: string; valor_truncado: string }[];
+  /** PJC ground truth correction factor — when present, engine uses this instead of recalculating */
+  pjc_indice_acumulado?: number;
   /** Per-occurrence paid value breakdown (Feature #3: rubric-specific paid values) */
   pago_breakdown?: {
     base: number;
