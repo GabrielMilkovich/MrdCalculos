@@ -357,24 +357,52 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   }
 
   // --- Atualização ---
+  const indiceBase = getTextContent(root, 'indiceTrabalhista') || 'IPCAE';
+  
+  // Check if "juros após dedução CS" is enabled (Critério 8 PJe-Calc)
+  const jurosAposCS = getTextContent(root, 'jurosAposDeducaoCS') === 'true'
+    || getTextContent(root, 'jurosAposDeducaoCsReclamante') === 'true'
+    // Default to true for ADC 58/59 cases (standard PJe-Calc behavior)
+    || true;
+
   const atualizacao: AtualizacaoAnalysis = {
+    indice_base: indiceBase,
     combinacoes_indice: [],
     combinacoes_juros: [],
+    juros_apos_deducao_cs: jurosAposCS,
   };
+  
   const combIndEls = root.getElementsByTagName('CombinacaoDeIndice');
   for (const el of Array.from(combIndEls)) {
-    atualizacao.combinacoes_indice.push({
-      a_partir_de: tsToDate(getTextContent(el, 'dataInicial') || getTextContent(el, 'aPartirDe')),
-      indice: getTextContent(el, 'tipoIndice') || getTextContent(el, 'indice') || getTextContent(el, 'tipo'),
-    });
+    // PJC uses outroIndiceTrabalhista + apartirDeOutroIndice (timestamp)
+    const indice = getTextContent(el, 'outroIndiceTrabalhista')
+      || getTextContent(el, 'tipoIndice') || getTextContent(el, 'indice') || getTextContent(el, 'tipo');
+    const dateStr = tsToDate(
+      getTextContent(el, 'apartirDeOutroIndice')
+      || getTextContent(el, 'dataInicial')
+      || getTextContent(el, 'aPartirDe')
+    );
+    if (indice && dateStr) {
+      atualizacao.combinacoes_indice.push({ a_partir_de: dateStr, indice });
+    }
   }
   const combJurEls = root.getElementsByTagName('CombinacaoDeJuros');
   for (const el of Array.from(combJurEls)) {
-    atualizacao.combinacoes_juros.push({
-      a_partir_de: tsToDate(getTextContent(el, 'dataInicial') || getTextContent(el, 'aPartirDe')),
-      tipo: getTextContent(el, 'tipoJuros') || getTextContent(el, 'tipo'),
-      taxa: parseNum(getTextContent(el, 'taxa') || getTextContent(el, 'taxaMensal')),
-    });
+    // PJC uses outroJuros + apartirDeOutroJuros (timestamp)
+    const tipo = getTextContent(el, 'outroJuros')
+      || getTextContent(el, 'tipoJuros') || getTextContent(el, 'tipo');
+    const dateStr = tsToDate(
+      getTextContent(el, 'apartirDeOutroJuros')
+      || getTextContent(el, 'dataInicial')
+      || getTextContent(el, 'aPartirDe')
+    );
+    if (tipo && dateStr) {
+      atualizacao.combinacoes_juros.push({
+        a_partir_de: dateStr,
+        tipo,
+        taxa: parseNum(getTextContent(el, 'taxa') || getTextContent(el, 'taxaMensal')),
+      });
+    }
   }
 
   // --- CS Config ---
