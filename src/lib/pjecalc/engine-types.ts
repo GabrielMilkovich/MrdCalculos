@@ -138,6 +138,9 @@ export interface PjeVerba {
   valor_informado_devido?: number;
   valor_informado_pago?: number;
   
+  /** Constante mensal fixa (PJe-Calc <Constante>) — usado em verbas 'informado' com valor fixo por mês */
+  constante_mensal?: number;
+  
   // Valor Pago Calculado (Fase 2)
   valor_pago_tipo?: 'informado' | 'calculado';
   pago_base?: number;
@@ -283,6 +286,10 @@ export interface PjeCSConfig {
   periodos_simples: { inicio: string; fim: string }[];
   /** CNAE da atividade econômica para lookup automático SAT/RAT */
   cnae?: string;
+  /** Diferenciação CS: 'bruto' aplica sobre valor bruto (devido), 'liquido' sobre diferença (devido-pago) */
+  base_cs_segurado?: 'bruto' | 'liquido';
+  /** Separar CS do reclamante (inssReclamante) vs beneficiário (inssBeneficiario) */
+  separar_reclamante_beneficiario?: boolean;
 }
 
 export interface PjeIRConfig {
@@ -448,6 +455,10 @@ export interface PjeCSResult {
   total_segurado_pagos: number;
   total_segurado: number;
   total_empregador: number;
+  /** CS segregada: parte do reclamante (deduzida do líquido) */
+  cs_reclamante?: number;
+  /** CS segregada: parte do beneficiário (recolhimento patronal-segurado) */
+  cs_beneficiario?: number;
 }
 
 export interface PjeIRResult {

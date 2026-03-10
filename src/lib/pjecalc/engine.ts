@@ -129,17 +129,32 @@ export class PjeCalcEngine {
   // =====================================================
   
   getPeriodoCalculo(): { inicio: string; fim: string } {
-    const datas = [this.params.data_admissao];
-    if (this.params.prescricao_quinquenal && this.params.data_prescricao_quinquenal) {
-      datas.push(this.params.data_prescricao_quinquenal);
-    }
-    if (this.params.data_inicial) datas.push(this.params.data_inicial);
-    const inicio = datas.sort().pop()!;
+    let inicio: string;
     
+    // Prescrição quinquenal: recalcular automaticamente data início = ajuizamento - 5 anos
+    if (this.params.prescricao_quinquenal) {
+      if (this.params.data_prescricao_quinquenal) {
+        inicio = this.params.data_prescricao_quinquenal;
+      } else if (this.params.data_ajuizamento) {
+        const ajuiz = new Date(this.params.data_ajuizamento);
+        const prescDate = new Date(ajuiz.getFullYear() - 5, ajuiz.getMonth(), ajuiz.getDate());
+        inicio = prescDate.toISOString().slice(0, 10);
+      } else {
+        inicio = this.params.data_inicial || this.params.data_admissao;
+      }
+      // Prescrição não pode ser anterior à admissão
+      if (inicio < this.params.data_admissao) inicio = this.params.data_admissao;
+    } else {
+      inicio = this.params.data_inicial || this.params.data_admissao;
+    }
+    
+    // Fim: usar data_demissao, data_final, ou data de liquidação como fallback
     const fimCandidatos: string[] = [];
     if (this.params.data_demissao) fimCandidatos.push(this.params.data_demissao);
     if (this.params.data_final) fimCandidatos.push(this.params.data_final);
-    const fim = fimCandidatos.sort()[0] || new Date().toISOString().slice(0, 10);
+    const fim = fimCandidatos.sort()[0] 
+      || this.correcaoConfig?.data_liquidacao 
+      || new Date().toISOString().slice(0, 10);
 
     return { inicio, fim };
   }
@@ -429,7 +444,12 @@ export class PjeCalcEngine {
     // Isso garante paridade de centavos com o PJe-Calc oficial.
     let devido: Decimal;
     if (verba.valor === 'informado') {
-      devido = new Decimal(verba.valor_informado_devido || 0);
+      // Suporte a Constante Mensal (PJe-Calc <Constante>): valor fixo repetido por competência
+      if (verba.constante_mensal !== undefined && verba.constante_mensal > 0) {
+        devido = new Decimal(verba.constante_mensal);
+      } else {
+        devido = new Decimal(verba.valor_informado_devido || 0);
+      }
     } else {
       // Etapa 1: valor_hora = Base / Divisor (truncado)
       const valorHora = base.div(div).toDP(2);
@@ -1283,14 +1303,15 @@ export class PjeCalcEngine {
     }
 
     // ═══ Track 1: CS sobre salários DEVIDOS ═══
-    // When useCorrigido=true (juros_apos_deducao_cs flow), CS is on corrected values
+    // base_cs_segurado: 'bruto' usa oc.devido, 'liquido' (default) usa oc.diferenca
+    const usarBruto = this.csConfig.base_cs_segurado === 'bruto';
     const basesDevidos: Record<string, number> = {};
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
       if (!verba?.incidencias.contribuicao_social) continue;
       if (verba.caracteristica === 'ferias') continue;
       for (const oc of vr.ocorrencias) {
-        const val = useCorrigido ? oc.valor_corrigido : oc.diferenca;
+        const val = useCorrigido ? oc.valor_corrigido : (usarBruto ? oc.devido : oc.diferenca);
         if (val <= 0) continue;
         basesDevidos[oc.competencia] = (basesDevidos[oc.competencia] || 0) + val;
       }
@@ -1368,12 +1389,24 @@ export class PjeCalcEngine {
     const totalDevidos = segurado_devidos.reduce((s, x) => new Decimal(s).plus(x.diferenca), new Decimal(0)).toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
     const totalPagos = segurado_pagos.reduce((s, x) => new Decimal(s).plus(x.diferenca), new Decimal(0)).toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
 
+    // Segregação reclamante vs beneficiário (PJe-Calc: inssReclamante / inssBeneficiario)
+    let csReclamante: number | undefined;
+    let csBeneficiario: number | undefined;
+    if (this.csConfig.separar_reclamante_beneficiario) {
+      // Reclamante: CS cobrada do trabalhador (deduzida do líquido)
+      csReclamante = this.csConfig.cobrar_reclamante ? totalDevidos : 0;
+      // Beneficiário: CS sobre pagos (recolhimento que a empresa deveria ter feito)
+      csBeneficiario = totalPagos;
+    }
+
     return {
       segurado_devidos, segurado_pagos, empregador,
       total_segurado_devidos: totalDevidos,
       total_segurado_pagos: totalPagos,
       total_segurado: totalDevidos + totalPagos,
       total_empregador: empregador.reduce((s, x) => s + x.empresa + x.sat + x.terceiros, 0),
+      cs_reclamante: csReclamante,
+      cs_beneficiario: csBeneficiario,
     };
   }
 
