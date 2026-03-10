@@ -1055,6 +1055,16 @@ export class PjeCalcEngine {
     const combinacoes_juros = this.correcaoConfig.combinacoes_juros || [];
     const dataLiq = this.correcaoConfig.data_liquidacao;
 
+    // Determine interest start date based on juros_inicio config
+    let jurosStartDate: string | null = null;
+    if (this.correcaoConfig.juros_inicio === 'ajuizamento' && this.params.data_ajuizamento) {
+      jurosStartDate = this.params.data_ajuizamento;
+    } else if (this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao) {
+      jurosStartDate = this.params.data_citacao;
+    }
+    // If juros start is after data_liquidacao, no interest applies
+    const jurosDisabled = jurosStartDate != null && jurosStartDate > dataLiq;
+
     // Map IPCA-E → IPCAE for index lookup compatibility
     const normalizeIndice = (ind: string): string => {
       const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M' };
@@ -1116,37 +1126,44 @@ export class PjeCalcEngine {
 
         // Calculate interest segment-by-segment
         let jurosTotal = new Decimal(0);
+        const jurosEffectiveStart = jurosStartDate || compDateJuros;
 
-        for (let i = 0; i < datas.length - 1; i++) {
-          const segInicio = datas[i];
-          const segFim = datas[i + 1];
-          const regimeIndice = this.getRegimeParaData(combinacoes_indice, segInicio);
-          const indiceNorm = normalizeIndice(regimeIndice?.indice || 'SEM_CORRECAO');
-          const regimeJuros = this.getRegimeParaData(combinacoes_juros, segInicio);
+        if (!jurosDisabled) {
+          for (let i = 0; i < datas.length - 1; i++) {
+            const segInicio = datas[i];
+            const segFim = datas[i + 1];
+            // Skip segments before the effective interest start date
+            if (segFim <= jurosEffectiveStart) continue;
+            const realStart = segInicio < jurosEffectiveStart ? jurosEffectiveStart : segInicio;
 
-          // SELIC as correction index already includes interest
-          if (indiceNorm === 'SELIC') continue;
-          if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
+            const regimeIndice = this.getRegimeParaData(combinacoes_indice, realStart);
+            const indiceNorm = normalizeIndice(regimeIndice?.indice || 'SEM_CORRECAO');
+            const regimeJuros = this.getRegimeParaData(combinacoes_juros, realStart);
 
-          if (regimeJuros.tipo === 'SELIC') {
-            const fatorSelic = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
-            if (fatorSelic !== null) {
-              jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
+            // SELIC as correction index already includes interest
+            if (indiceNorm === 'SELIC') continue;
+            if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
+
+            if (regimeJuros.tipo === 'SELIC') {
+              const fatorSelic = this.getIndiceCorrecaoDB('SELIC', realStart.slice(0, 7), segFim.slice(0, 7));
+              if (fatorSelic !== null) {
+                jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
+              } else {
+                console.warn(`[PjeCalcEngine] BLOQUEIO: SELIC (juros) ausente para ${realStart}→${segFim}.`);
+              }
+            } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
+              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', realStart.slice(0, 7), segFim.slice(0, 7));
+              if (fatorTL !== null) {
+                jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
+              } else {
+                console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros) ausente para ${realStart}→${segFim}.`);
+              }
             } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: SELIC (juros) ausente para ${segInicio}→${segFim}.`);
+              // TRD_SIMPLES or other simple monthly interest
+              const meses = this.mesesEntre(new Date(realStart), new Date(segFim));
+              const taxa = (regimeJuros.percentual || 1) / 100;
+              jurosTotal = jurosTotal.plus(valorCorrigido.times(taxa).times(meses));
             }
-          } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
-            const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
-            if (fatorTL !== null) {
-              jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
-            } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros) ausente para ${segInicio}→${segFim}.`);
-            }
-          } else {
-            // TRD_SIMPLES or other simple monthly interest
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-            const taxa = (regimeJuros.percentual || 1) / 100;
-            jurosTotal = jurosTotal.plus(valorCorrigido.times(taxa).times(meses));
           }
         }
 
@@ -2074,6 +2091,15 @@ export class PjeCalcEngine {
     const combinacoes_indice = this.correcaoConfig.combinacoes_indice || [];
     const dataLiq = this.correcaoConfig.data_liquidacao;
 
+    // Determine interest start date
+    let jurosStartDate: string | null = null;
+    if (this.correcaoConfig.juros_inicio === 'ajuizamento' && this.params.data_ajuizamento) {
+      jurosStartDate = this.params.data_ajuizamento;
+    } else if (this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao) {
+      jurosStartDate = this.params.data_citacao;
+    }
+    const jurosDisabled = jurosStartDate != null && jurosStartDate > dataLiq;
+
     const normalizeIndice = (ind: string): string => {
       const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR' };
       return map[ind] || ind;
@@ -2094,16 +2120,17 @@ export class PjeCalcEngine {
         // Base for interest = corrected - CS share
         const baseJuros = new Decimal(oc.valor_corrigido).minus(csShare);
 
-        if (combinacoes_juros.length > 0 && combinacoes_indice.length > 0) {
+        if (!jurosDisabled && combinacoes_juros.length > 0 && combinacoes_indice.length > 0) {
           const compDate = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
+          const jurosEffectiveStart = jurosStartDate || compDate;
           const breakpoints = new Set<string>();
-          breakpoints.add(compDate);
+          breakpoints.add(jurosEffectiveStart);
           breakpoints.add(dataLiq);
           for (const cj of combinacoes_juros) {
-            if (cj.de && cj.de > compDate && cj.de <= dataLiq) breakpoints.add(cj.de);
+            if (cj.de && cj.de > jurosEffectiveStart && cj.de <= dataLiq) breakpoints.add(cj.de);
           }
           for (const ci of combinacoes_indice) {
-            if (ci.de && ci.de > compDate && ci.de <= dataLiq) breakpoints.add(ci.de);
+            if (ci.de && ci.de > jurosEffectiveStart && ci.de <= dataLiq) breakpoints.add(ci.de);
           }
           const datas = Array.from(breakpoints).sort();
 
@@ -2113,7 +2140,6 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            // SELIC as correction already includes interest
             if (indiceNorm === 'SELIC') continue;
             
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
@@ -2122,32 +2148,31 @@ export class PjeCalcEngine {
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
             if (regimeJ.tipo === 'SELIC') {
               const fatorS = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
-              if (fatorS !== null) {
-                jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
-              } else {
-                console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para juros ${segInicio}→${segFim}. Juros=0 neste segmento.`);
-              }
+              if (fatorS !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
-              if (fatorTL !== null) {
-                jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
-              } else {
-                console.warn(`[PjeCalcEngine] BLOQUEIO: Índice TAXA_LEGAL ausente para juros ${segInicio}→${segFim}. Juros=0 neste segmento.`);
-              }
+              if (fatorTL !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
             } else {
               const taxa = ((regimeJ as any).percentual || 1) / 100;
               jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
             }
           }
           oc.juros = jurosAcc.toDP(2).toNumber();
-        } else {
+        } else if (!jurosDisabled) {
           // Legacy single interest
           const [ano, mes] = oc.competencia.split('-').map(Number);
           const dataComp = new Date(ano, mes - 1, 1);
+          const jurosStart = jurosStartDate ? new Date(jurosStartDate) : dataComp;
           const dataLiqD = new Date(dataLiq);
-          const meses = this.mesesEntre(dataComp, dataLiqD);
-          const taxa = (this.correcaoConfig.juros_percentual || 1) / 100;
-          oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2));
+          if (jurosStart < dataLiqD) {
+            const meses = this.mesesEntre(jurosStart, dataLiqD);
+            const taxa = (this.correcaoConfig.juros_percentual || 1) / 100;
+            oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2));
+          } else {
+            oc.juros = 0;
+          }
+        } else {
+          oc.juros = 0;
         }
 
         oc.valor_final = Number(new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2));
@@ -2251,8 +2276,9 @@ export class PjeCalcEngine {
     // ── 5. FGTS ──
     const fgts = this.calcularFGTS(verbaResults);
 
-    // ── 6. Contribuição Social (recalculate if juros_apos_deducao_cs — CS was already computed above but we need the full result) ──
-    const cs = this.calcularCS(verbaResults);
+    // ── 6. Contribuição Social ──
+    // PJe-Calc calculates CS on corrected values (valor_corrigido), not nominal
+    const cs = this.calcularCS(verbaResults, true);
 
     // ── 7. IR ──
     const ir = this.calcularIR(verbaResults, cs);
