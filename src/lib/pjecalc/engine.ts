@@ -1129,6 +1129,25 @@ export class PjeCalcEngine {
                     jurosMora = jurosMora.plus(valorCorrigido.times(taxa).times(meses));
                   }
                 }
+              } else if (combinacoes_indice.length > 0) {
+                // No juros combinations but index combinations — respect index regime
+                const breakpointsI = new Set<string>();
+                breakpointsI.add(jurosEffectiveStart);
+                breakpointsI.add(dataLiq);
+                for (const ci of combinacoes_indice) {
+                  if (ci.de && ci.de > jurosEffectiveStart && ci.de <= dataLiq) breakpointsI.add(ci.de);
+                }
+                const datasI = Array.from(breakpointsI).sort();
+                for (let j = 0; j < datasI.length - 1; j++) {
+                  const segIni = datasI[j];
+                  const segFin = datasI[j + 1];
+                  const regimeI = this.getRegimeParaData(combinacoes_indice, segIni);
+                  const indNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
+                  if (indNorm === 'SELIC' || indNorm === 'SEM_CORRECAO' || indNorm === 'Sem Correção' || indNorm === 'NENHUM') continue;
+                  const meses = this.mesesEntre(new Date(segIni), new Date(segFin));
+                  const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
+                  jurosMora = jurosMora.plus(valorCorrigido.times(taxa).times(meses));
+                }
               } else {
                 const meses = this.mesesEntre(new Date(jurosEffectiveStart), new Date(dataLiq));
                 const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
