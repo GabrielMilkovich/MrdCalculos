@@ -37,6 +37,13 @@ export interface PJCAnalysis {
     honorarios: { nome: string; cpf: string; valor: number }[];
     custas: number;
   };
+  cs_config?: {
+    apurar_segurado: boolean;
+    apurar_empresa: boolean;
+    aliquota_empresa: number;
+    aliquota_sat: number;
+    aliquota_terceiros: number;
+  };
   verbas: VerbaAnalysis[];
   historicos_salariais: HistoricoAnalysis[];
   apuracao_diaria_count: number;
