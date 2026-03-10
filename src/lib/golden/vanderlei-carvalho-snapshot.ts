@@ -1,65 +1,20 @@
 /**
- * GROUND TRUTH SNAPSHOT — Vanderlei Silva de Carvalho vs Grupo Casas Bahia S.A.
- * Fonte: Arquivo .PJC real (vanderlei-carvalho.pjc)
- * PJe-Calc Cidadão v2.13.2
- * Extraído via PJC Analyzer em 10/03/2026
+ * GROUND TRUTH SNAPSHOT — Vanderlei Benedito de Carvalho vs Magazine Luiza S/A
+ * PJe-Calc v2.13.2 — Extraído via PJC Analyzer em 10/03/2026
  */
-
 import type { GoldenRubrica } from './maria-madalena-snapshot';
 
-export interface VanderleiCarvalhoGoldenSnapshot {
+export const VANDERLEI_CARVALHO_SNAPSHOT = {
   meta: {
-    reclamante: string;
-    reclamado: string;
-    cpf: string;
-    cnpj: string;
-    admissao: string;
-    demissao: string;
-    ajuizamento: string;
-    inicio_calculo: string;
-    termino_calculo: string;
-    carga_horaria: number;
-    sabado_dia_util: boolean;
-    projeta_aviso: boolean;
-    feriado_estadual: boolean;
-    feriado_municipal: boolean;
-    regime: string;
-    indices_acumulados: string;
-    dia_fechamento: number;
-    pje_calc_version: string;
-    zera_negativo: boolean;
-    prescricao_quinquenal: boolean;
-    prescricao_fgts: boolean;
-    limitar_avos: boolean;
-  };
-  faltas: never[];
-  ferias: never[];
-  rubricas: GoldenRubrica[];
-  resumo: {
-    liquido_exequente: number;
-    inss_reclamante: number;
-    inss_reclamado: number;
-    imposto_renda: number;
-    fgts_deposito: number;
-    honorarios_nome: string;
-    honorarios_cpf: string;
-    honorarios_valor: number;
-    custas: number;
-  };
-}
-
-// Placeholder — will be populated after running extract test
-export const VANDERLEI_CARVALHO_SNAPSHOT: VanderleiCarvalhoGoldenSnapshot = {
-  meta: {
-    reclamante: 'VANDERLEI SILVA DE CARVALHO',
-    reclamado: 'GRUPO CASAS BAHIA S.A.',
-    cpf: '',
-    cnpj: '33041260000164',
-    admissao: '', // TODO: fill from extract output
-    demissao: '',
-    ajuizamento: '',
-    inicio_calculo: '',
-    termino_calculo: '',
+    reclamante: 'VANDERLEI BENEDITO DE CARVALHO',
+    reclamado: 'MAGAZINE LUIZA S/A',
+    cpf: '250.086.888-55',
+    cnpj: '47960950000121',
+    admissao: '2017-06-19',
+    demissao: '2021-06-23',
+    ajuizamento: '2021-07-08',
+    inicio_calculo: '2017-06-19',
+    termino_calculo: '2021-06-23',
     carga_horaria: 220,
     sabado_dia_util: true,
     projeta_aviso: true,
@@ -74,18 +29,34 @@ export const VANDERLEI_CARVALHO_SNAPSHOT: VanderleiCarvalhoGoldenSnapshot = {
     prescricao_fgts: false,
     limitar_avos: false,
   },
-  faltas: [],
-  ferias: [],
-  rubricas: [], // TODO: fill from extract output
+  faltas: [] as never[],
+  ferias: [{ dias: 30, situacao: 'GOZADAS' }, { dias: 30, situacao: 'GOZADAS' }, { dias: 30, situacao: 'GOZADAS' }, { dias: 30, situacao: 'GOZADAS' }],
+  rubricas: [
+    { codigo: 'VENDAS_NAO_FATURADAS_TST', descricao: 'VENDAS NÃO FATURAS (TST)', valor_corrigido: 0, juros: 0, total: 12855.48, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'HORAS_EXTRAS', descricao: 'HORAS EXTRAS', valor_corrigido: 0, juros: 0, total: 12855.48, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'INTRAJORNADA_ATE_LEI', descricao: 'INTERVALO INTRAJORNADA - ATÉ A LEI', valor_corrigido: 0, juros: 0, total: 1441.13, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'INTRAJORNADA_INDENIZATORIO', descricao: 'INTERVALO INTRAJORNADA - INDENIZATÓRIO', valor_corrigido: 0, juros: 0, total: 8402.26, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
+    { codigo: '13_HORAS_EXTRAS', descricao: '13º SALÁRIO SOBRE HORAS EXTRAS', valor_corrigido: 0, juros: 0, total: 12855.48, tipo: 'REFLEXO_13' as const, rubrica_principal: 'HORAS_EXTRAS', source: { page: 1, line: 'PJC-devido' } },
+    { codigo: '13_INTRAJORNADA_ATE_LEI', descricao: '13º SALÁRIO SOBRE INTRAJORNADA ATÉ A LEI', valor_corrigido: 0, juros: 0, total: 1441.13, tipo: 'REFLEXO_13' as const, rubrica_principal: 'INTRAJORNADA_ATE_LEI', source: { page: 1, line: 'PJC-devido' } },
+    { codigo: '13_VENDAS_NAO_FATURADAS_TST', descricao: '13º SALÁRIO SOBRE VENDAS NÃO FATURAS (TST)', valor_corrigido: 0, juros: 0, total: 1076.45, tipo: 'REFLEXO_13' as const, rubrica_principal: 'VENDAS_NAO_FATURADAS_TST', source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'AP_HORAS_EXTRAS', descricao: 'AVISO PRÉVIO SOBRE HORAS EXTRAS', valor_corrigido: 0, juros: 0, total: 18.28, tipo: 'REFLEXO_AP' as const, rubrica_principal: 'HORAS_EXTRAS', source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'AP_VENDAS_NAO_FATURADAS_TST', descricao: 'AVISO PRÉVIO SOBRE VENDAS NÃO FATURAS (TST)', valor_corrigido: 0, juros: 0, total: 143.14, tipo: 'REFLEXO_AP' as const, rubrica_principal: 'VENDAS_NAO_FATURADAS_TST', source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'FERIAS_HORAS_EXTRAS', descricao: 'FÉRIAS + 1/3 SOBRE HORAS EXTRAS', valor_corrigido: 0, juros: 0, total: 395.82, tipo: 'REFLEXO_FERIAS' as const, rubrica_principal: 'HORAS_EXTRAS', source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'FERIAS_INTRAJORNADA_ATE_LEI', descricao: 'FÉRIAS + 1/3 SOBRE INTRAJORNADA ATÉ A LEI', valor_corrigido: 0, juros: 0, total: 127.09, tipo: 'REFLEXO_FERIAS' as const, rubrica_principal: 'INTRAJORNADA_ATE_LEI', source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'FERIAS_VENDAS_NAO_FATURADAS_TST', descricao: 'FÉRIAS + 1/3 SOBRE VENDAS NÃO FATURAS (TST)', valor_corrigido: 0, juros: 0, total: 1067.14, tipo: 'REFLEXO_FERIAS' as const, rubrica_principal: 'VENDAS_NAO_FATURADAS_TST', source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'RSR_VENDAS_NAO_FATURADAS_TST', descricao: 'RSR SOBRE VENDAS NÃO FATURAS (TST)', valor_corrigido: 0, juros: 0, total: 2729.75, tipo: 'REFLEXO_RSR' as const, rubrica_principal: 'VENDAS_NAO_FATURADAS_TST', source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'RSR_HORAS_EXTRAS', descricao: 'RSR SOBRE HORAS EXTRAS', valor_corrigido: 0, juros: 0, total: 1203.03, tipo: 'REFLEXO_RSR' as const, rubrica_principal: 'HORAS_EXTRAS', source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'RSR_INTRAJORNADA_ATE_LEI', descricao: 'RSR SOBRE INTRAJORNADA ATÉ A LEI', valor_corrigido: 0, juros: 0, total: 305.62, tipo: 'REFLEXO_RSR' as const, rubrica_principal: 'INTRAJORNADA_ATE_LEI', source: { page: 1, line: 'PJC-devido' } },
+  ] as GoldenRubrica[],
   resumo: {
-    liquido_exequente: 0,
-    inss_reclamante: 0,
-    inss_reclamado: 0,
+    liquido_exequente: 61849.71,
+    inss_reclamante: 3383.98,
+    inss_reclamado: 9371.87,
     imposto_renda: 0,
     fgts_deposito: 0,
     honorarios_nome: 'MARCOS ROBERTO DIAS',
     honorarios_cpf: '005.377.166-45',
-    honorarios_valor: 0,
-    custas: 0,
+    honorarios_valor: 6400.39,
+    custas: 1000,
   },
 };
