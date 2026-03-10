@@ -14,6 +14,8 @@ export interface PJCAnalysis {
     ajuizamento: string;
     inicio_calculo: string;
     termino_calculo: string;
+    /** Real liquidation date from <dataDeLiquidacao> or <dataLiquidacao> */
+    data_liquidacao: string;
     carga_horaria: number;
     sabado_dia_util: boolean;
     projeta_aviso: boolean;
