@@ -20,6 +20,7 @@ import {
   PjeSeguroConfig,
   PjeCartaoPonto,
 } from '@/lib/pjecalc/engine';
+import { ALL_TEST_INDICES } from './fixtures/indices-oficiais';
 
 // ════════════════════════════════════════════════════════
 // HELPERS
@@ -136,6 +137,7 @@ describe('Cenário 1 — Simples', () => {
       params, [], [], [], [verba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
 
@@ -159,6 +161,7 @@ describe('Cenário 1 — Simples', () => {
       params, [], [], [], [verba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
 
@@ -175,6 +178,7 @@ describe('Cenário 1 — Simples', () => {
       params, [], [], [], [verba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
     expect(result.resumo.liquido_reclamante).toBeGreaterThan(0);
@@ -221,6 +225,7 @@ describe('Cenário 2 — Médio', () => {
       params, [], faltas, [], [heVerba, dsrVerba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
 
@@ -243,6 +248,7 @@ describe('Cenário 2 — Médio', () => {
       params, [], [], [], [verba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
     expect(result.fgts.multa_valor).toBeGreaterThan(0);
@@ -305,6 +311,7 @@ describe('Cenário 3 — Complexo', () => {
       params, [], [], [], [he, dsr, treze], [],
       defaultFgts, defaultCS, defaultIR, correcao,
       honorarios, custas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
 
@@ -316,10 +323,10 @@ describe('Cenário 3 — Complexo', () => {
     expect(trezeResult).toBeDefined();
     expect(trezeResult!.total_diferenca).toBeGreaterThan(0);
 
-    // Without real indices, correction = bruto (fator=1)
+    // With index data, correction should increase the principal
     expect(result.resumo.principal_corrigido).toBeGreaterThanOrEqual(result.resumo.principal_bruto);
 
-    // Without real indices, juros = 0 (no fallback rates)
+    // With index data, juros should be >= 0
     expect(result.resumo.juros_mora).toBeGreaterThanOrEqual(0);
 
     // Multa 523 applied
@@ -350,6 +357,7 @@ describe('Cenário 3 — Complexo', () => {
       params, [], [], [], [verba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
     expect(result.validacao).toBeDefined();
@@ -367,7 +375,7 @@ describe('Cenário 3 — Complexo', () => {
       params, [], [], [], [verba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
-      [], [], [], [], [],
+      ALL_TEST_INDICES, [], [], [], [],
       { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false },
       { apurar: false, percentual: 0, base: 'liquido' },
       sfConfig,

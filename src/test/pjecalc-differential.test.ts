@@ -23,6 +23,7 @@ import {
   type PjePensaoConfig,
   type PjeSalarioFamiliaConfig,
 } from '@/lib/pjecalc/engine';
+import { ALL_TEST_INDICES } from './fixtures/indices-oficiais';
 
 // ── Helpers ──
 
@@ -108,7 +109,7 @@ function makeEngine(
     { ...defaultCorrecao, ...overrides?.correcao },
     { ...defaultHonorarios, ...overrides?.honorarios },
     { ...defaultCustas, ...overrides?.custas },
-    defaultSeguro, [], [], [], [], [], defaultPrevPrivada, defaultPensao, defaultSF,
+    defaultSeguro, ALL_TEST_INDICES, [], [], [], [], defaultPrevPrivada, defaultPensao, defaultSF,
   );
   return engine.liquidar();
 }

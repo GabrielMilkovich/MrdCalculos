@@ -8,6 +8,7 @@ import { resolve } from 'path';
 import { analyzePJC } from '../lib/pjecalc/pjc-analyzer';
 import { convertPjcToEngineInputs } from '../lib/pjecalc/pjc-to-engine';
 import { PjeCalcEngine } from '../lib/pjecalc/engine';
+import { ALL_TEST_INDICES } from './fixtures/indices-oficiais';
 
 let inputs: ReturnType<typeof convertPjcToEngineInputs>;
 
@@ -67,6 +68,7 @@ describe('PJC → Engine Bridge', () => {
       inputs.honorariosConfig,
       inputs.custasConfig,
       inputs.seguroConfig,
+      ALL_TEST_INDICES,
     );
     expect(engine).toBeDefined();
     const result = engine.liquidar();
@@ -89,6 +91,7 @@ describe('PJC → Engine Bridge', () => {
       inputs.honorariosConfig,
       inputs.custasConfig,
       inputs.seguroConfig,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
     // Check if any verba with calculated pago has breakdown

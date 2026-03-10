@@ -6,7 +6,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { parsePJCXml, exportPJCXml, compararPJC, type PJCReal } from '../lib/pjecalc/pjc-xml-real';
-import { aplicarCorrecaoPorData, type CorrecaoPorDataConfig } from '../lib/pjecalc/correction-by-date';
+import { aplicarCorrecaoPorData, type CorrecaoPorDataConfig, type IndiceDB } from '../lib/pjecalc/correction-by-date';
+import { ALL_TEST_INDICES } from './fixtures/indices-oficiais';
 
 // =====================================================
 // SAMPLE PJC DATA (based on real case)
@@ -326,22 +327,22 @@ describe('Correção por Data (ADC 58/59)', () => {
   };
 
   it('should return zero for zero input', () => {
-    const result = aplicarCorrecaoPorData('2020-01', 0, config);
+    const result = aplicarCorrecaoPorData('2020-01', 0, config, ALL_TEST_INDICES as IndiceDB[]);
     expect(result.valor_corrigido).toBe(0);
     expect(result.juros).toBe(0);
     expect(result.valor_final).toBe(0);
   });
 
   it('should apply correction with positive value', () => {
-    const result = aplicarCorrecaoPorData('2020-01', 1000, config);
-    // Without real indices in DB, correction returns fator=1 (no fallback)
+    const result = aplicarCorrecaoPorData('2020-01', 1000, config, ALL_TEST_INDICES as IndiceDB[]);
+    // With real index data, correction should increase value
     expect(result.valor_corrigido).toBeGreaterThanOrEqual(1000);
     expect(result.valor_final).toBeGreaterThanOrEqual(result.valor_corrigido);
     expect(result.fator_correcao).toBeGreaterThanOrEqual(1);
   });
 
   it('should produce regime segments', () => {
-    const result = aplicarCorrecaoPorData('2019-06', 1000, config);
+    const result = aplicarCorrecaoPorData('2019-06', 1000, config, ALL_TEST_INDICES as IndiceDB[]);
     expect(result.regimes_aplicados.length).toBeGreaterThan(0);
     // Should have at least correction regimes
     const correcaoRegimes = result.regimes_aplicados.filter(r => r.tipo === 'correcao');
@@ -356,14 +357,14 @@ describe('Correção por Data (ADC 58/59)', () => {
       data_liquidacao: '2025-10-31',
       arredondamento: 'por_linha',
     };
-    const result = aplicarCorrecaoPorData('2023-01', 1000, singleConfig);
+    const result = aplicarCorrecaoPorData('2023-01', 1000, singleConfig, ALL_TEST_INDICES as IndiceDB[]);
     // When SELIC is the index, juros should be 0 (engulfed)
     expect(result.juros).toBe(0);
     expect(result.valor_corrigido).toBeGreaterThanOrEqual(1000);
   });
 
   it('should handle competência format with full date', () => {
-    const result = aplicarCorrecaoPorData('2020-06-01', 500, config);
+    const result = aplicarCorrecaoPorData('2020-06-01', 500, config, ALL_TEST_INDICES as IndiceDB[]);
     expect(result.valor_original).toBe(500);
     expect(result.valor_final).toBeGreaterThanOrEqual(500);
   });

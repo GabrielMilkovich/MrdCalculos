@@ -16,6 +16,7 @@ import {
   type PjeCustasConfig,
   type PjeSeguroConfig,
 } from "@/lib/pjecalc/engine";
+import { ALL_TEST_INDICES } from "./fixtures/indices-oficiais";
 
 // =====================================================
 // HELPERS
@@ -188,6 +189,7 @@ function createEngine(
     { ...defaultHonorarios, ...overrides?.honorarios },
     { ...defaultCustas, ...overrides?.custas },
     { ...defaultSeguro, ...overrides?.seguro },
+    ALL_TEST_INDICES,
   );
 }
 
