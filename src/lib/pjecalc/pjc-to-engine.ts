@@ -372,15 +372,34 @@ function buildDefaultIRConfig(a: PJCAnalysis): PjeIRConfig {
 }
 
 function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
+  // Normalize PJC index names to engine format
+  const normalizeIndice = (ind: string): string => {
+    const map: Record<string, string> = {
+      'IPCA_E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA-E': 'IPCA-E',
+      'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC',
+      'IGP_M': 'IGP-M', 'IGP-M': 'IGP-M',
+      'SEM_CORRECAO': 'SEM_CORRECAO', 'Sem Correção': 'SEM_CORRECAO',
+    };
+    return map[ind] || ind;
+  };
+
+  const normalizeJuros = (tipo: string): string => {
+    const map: Record<string, string> = {
+      'TRD_SIMPLES': 'TRD_SIMPLES', 'SELIC': 'SELIC', 'TAXA_LEGAL': 'TAXA_LEGAL',
+      'NENHUM': 'NENHUM', 'Nenhum': 'NENHUM',
+    };
+    return map[tipo] || tipo;
+  };
+
   // Convert PJC combinacoes to engine format
   const combinacoes_indice: PjeCombinacaoIndice[] = a.atualizacao.combinacoes_indice.map(ci => ({
     de: ci.a_partir_de,
-    indice: ci.indice,
+    indice: normalizeIndice(ci.indice),
   }));
   
   const combinacoes_juros: PjeCombinacaoJuros[] = a.atualizacao.combinacoes_juros.map(cj => ({
     de: cj.a_partir_de,
-    tipo: cj.tipo,
+    tipo: normalizeJuros(cj.tipo),
     percentual: cj.taxa,
   }));
   
