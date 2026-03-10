@@ -303,7 +303,7 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
       valor: 'calculado' as const,
       caracteristica,
       ocorrencia_pagamento: ocorrenciaPagamento,
-      compor_principal: v.compor_principal === 'DIFERENCA' || v.compor_principal === 'DEVIDO',
+      compor_principal: v.compor_principal !== 'NAO_COMPOR',
       zerar_valor_negativo: false,
       dobrar_valor_devido: v.formula.dobra,
       periodo_inicio: v.periodo_inicio,
