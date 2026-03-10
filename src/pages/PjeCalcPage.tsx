@@ -132,7 +132,8 @@ export default function PjeCalcPage() {
   // =====================================================
   const [formParams, setFormParams] = useState({
     estado: 'SP', municipio: '', data_admissao: '', data_demissao: '',
-    data_ajuizamento: '', data_inicial: '', data_final: '',
+    data_ajuizamento: '', data_citacao: '', data_inicial: '', data_final: '',
+    data_liquidacao: '',
     prescricao_quinquenal: false, prescricao_fgts: false,
     regime_trabalho: 'tempo_integral', carga_horaria_padrao: 220,
     maior_remuneracao: '', ultima_remuneracao: '',
@@ -140,6 +141,7 @@ export default function PjeCalcPage() {
     projetar_aviso_indenizado: false, limitar_avos_periodo: false,
     zerar_valor_negativo: false, sabado_dia_util: true,
     considerar_feriado_estadual: false, considerar_feriado_municipal: false,
+    tipo_mes: 'civil' as 'civil' | 'comercial',
     comentarios: '',
   });
 
