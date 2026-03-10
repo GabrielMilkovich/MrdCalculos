@@ -2007,14 +2007,21 @@ export class PjeCalcEngine {
       let totalCorrigido = new Decimal(0);
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
-        const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, oc.competencia, compLiq);
+        
         let indiceCorrecao = 1;
-        if (fatorDB !== null) {
-          indiceCorrecao = fatorDB;
+        
+        // Use PJC ground truth correction factor when available
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+          indiceCorrecao = oc.pjc_indice_acumulado;
         } else {
-          console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
-          indiceCorrecao = 1;
+          const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, oc.competencia, compLiq);
+          if (fatorDB !== null) {
+            indiceCorrecao = fatorDB;
+          } else {
+            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+          }
         }
+        
         const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
         oc.indice_correcao = Number(new Decimal(indiceCorrecao).toDP(6));
         oc.valor_corrigido = valorCorrigido;
