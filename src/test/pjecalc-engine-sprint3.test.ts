@@ -225,6 +225,7 @@ describe('Cenário 2 — Médio', () => {
       params, [], faltas, [], [heVerba, dsrVerba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
 
