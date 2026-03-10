@@ -2020,8 +2020,8 @@ export class PjeCalcEngine {
         
         let indiceCorrecao = 1;
         
-        // Use PJC ground truth correction factor when available (includes interest)
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // GT disabled — let engine compute from DB indices
+        if (false && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
         } else {
