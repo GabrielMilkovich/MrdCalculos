@@ -1080,12 +1080,19 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
-        // ═══ PJC indice_acumulado: DO NOT use for correction.
-        // This field's semantics are ambiguous (may be index value, not factor).
-        // Let the engine compute correction from its own DB indices instead.
-        // Store for diagnostic purposes only.
+        // ═══ PJC Ground Truth: if pjc_indice_acumulado is available, it's the TOTAL factor
+        // (correction + interest combined, since SELIC includes both). Use directly as valor_final.
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
-          oc.pjc_ground_truth_applied = false; // Disable GT override
+          const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
+          const valorFinal = new Decimal(oc.diferenca).times(fatorTotal);
+          oc.indice_correcao = fatorTotal.toDP(6).toNumber();
+          oc.valor_corrigido = valorFinal.toDP(2).toNumber();
+          oc.juros = 0;
+          oc.valor_final = valorFinal.toDP(2).toNumber();
+          oc.pjc_ground_truth_applied = true;
+          totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
+          totalFinal = totalFinal.plus(oc.valor_final);
+          continue;
         }
 
         // Súmula 381: correction starts from mês subsequente ao vencimento
