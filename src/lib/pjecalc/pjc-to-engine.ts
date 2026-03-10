@@ -487,20 +487,40 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     return map[tipo] || tipo;
   };
 
-  // Convert PJC combinacoes to engine format
-  const combinacoes_indice: PjeCombinacaoIndice[] = a.atualizacao.combinacoes_indice.map(ci => ({
-    de: ci.a_partir_de,
-    indice: normalizeIndice(ci.indice),
-  }));
+  const indiceBase = normalizeIndice(a.atualizacao.indice_base || 'IPCAE');
   
-  const combinacoes_juros: PjeCombinacaoJuros[] = a.atualizacao.combinacoes_juros.map(cj => ({
-    de: cj.a_partir_de,
-    tipo: normalizeJuros(cj.tipo),
-    percentual: cj.taxa,
-  }));
-  
+  // Build 2-phase combinations: base index + switch date
+  // Phase 1: indiceBase from beginning
+  // Phase 2: outroIndiceTrabalhista from switchDate
+  const combinacoes_indice: PjeCombinacaoIndice[] = [];
+  const combinacoes_juros: PjeCombinacaoJuros[] = [];
+
+  // Filter out empty/invalid entries
+  const validCombIdx = a.atualizacao.combinacoes_indice.filter(ci => ci.a_partir_de && ci.indice);
+  const validCombJur = a.atualizacao.combinacoes_juros.filter(cj => cj.a_partir_de && cj.tipo);
+
+  if (validCombIdx.length > 0) {
+    // Phase 1: base index from the beginning
+    combinacoes_indice.push({ indice: indiceBase });
+    // Phase 2+: switches from PJC
+    for (const ci of validCombIdx) {
+      combinacoes_indice.push({ de: ci.a_partir_de, indice: normalizeIndice(ci.indice) });
+    }
+  }
+
+  if (validCombJur.length > 0) {
+    // Phase 1: TRD_SIMPLES 1% a.m. from the beginning (standard pre-ADC 58)
+    combinacoes_juros.push({ tipo: 'TRD_SIMPLES', percentual: 1 });
+    // Phase 2+: switches from PJC
+    for (const cj of validCombJur) {
+      combinacoes_juros.push({ de: cj.a_partir_de, tipo: normalizeJuros(cj.tipo), percentual: cj.taxa });
+    }
+  }
+
+  const hasCombinations = combinacoes_indice.length > 0;
+
   return {
-    indice: combinacoes_indice.length > 0 ? 'COMBINACAO' : 'IPCA-E',
+    indice: hasCombinations ? 'COMBINACAO' : indiceBase,
     epoca: 'mensal',
     juros_tipo: 'simples_mensal',
     juros_percentual: 1,
@@ -508,8 +528,9 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     multa_523: false,
     multa_523_percentual: 10,
     data_liquidacao: a.parametros.termino_calculo || new Date().toISOString().slice(0, 10),
-    combinacoes_indice: combinacoes_indice.length > 0 ? combinacoes_indice : undefined,
+    combinacoes_indice: hasCombinations ? combinacoes_indice : undefined,
     combinacoes_juros: combinacoes_juros.length > 0 ? combinacoes_juros : undefined,
+    juros_apos_deducao_cs: a.atualizacao.juros_apos_deducao_cs,
   };
 }
 
