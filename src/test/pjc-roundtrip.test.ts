@@ -6,7 +6,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { parsePJCXml, exportPJCXml, compararPJC, type PJCReal } from '../lib/pjecalc/pjc-xml-real';
-import { aplicarCorrecaoPorData, type CorrecaoPorDataConfig } from '../lib/pjecalc/correction-by-date';
+import { aplicarCorrecaoPorData, type CorrecaoPorDataConfig, type IndiceDB } from '../lib/pjecalc/correction-by-date';
+import { ALL_TEST_INDICES } from './fixtures/indices-oficiais';
 
 // =====================================================
 // SAMPLE PJC DATA (based on real case)
