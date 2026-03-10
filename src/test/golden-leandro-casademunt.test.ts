@@ -43,7 +43,8 @@ describe('Golden Test: Leandro Casademunt — PJC Parsing', () => {
     });
 
     it('CPF = 313.088.228-63', () => {
-      expect(analysis.parametros.cpf).toContain('31308822863');
+      const cpfClean = analysis.parametros.cpf.replace(/\D/g, '');
+      expect(cpfClean).toBe('31308822863');
     });
 
     it('CNPJ = 33.041.260/0001-64', () => {
