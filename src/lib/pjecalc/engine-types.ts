@@ -138,6 +138,9 @@ export interface PjeVerba {
   valor_informado_devido?: number;
   valor_informado_pago?: number;
   
+  /** Constante mensal fixa (PJe-Calc <Constante>) — usado em verbas 'informado' com valor fixo por mês */
+  constante_mensal?: number;
+  
   // Valor Pago Calculado (Fase 2)
   valor_pago_tipo?: 'informado' | 'calculado';
   pago_base?: number;
