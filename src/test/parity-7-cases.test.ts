@@ -227,6 +227,37 @@ describe.each(CASES)('Paridade: $nome ($file)', (caseSpec) => {
 });
 
 // ═══════════════════════════════════════════════════
+// DIAGNÓSTICO DE CORREÇÃO
+// ═══════════════════════════════════════════════════
+
+describe('Diagnóstico Correção — Islan & Carla', () => {
+  it('deve detalhar valores de correção', () => {
+    for (const caseName of ['islan-rodrigues.pjc', 'carla-pego.pjc']) {
+      const data = caseResults.get(caseName);
+      if (!data) continue;
+
+      console.log(`\n═══ DIAGNÓSTICO ${caseName} ═══`);
+      console.log(`Correção: indice=${data.inputs.correcaoConfig.indice}, data_liq=${data.inputs.correcaoConfig.data_liquidacao}`);
+      console.log(`Combinações: ${JSON.stringify(data.inputs.correcaoConfig.combinacoes_indice?.map(c => ({ indice: c.indice, de: c.de })))}`);
+      console.log(`Juros: tipo=${data.inputs.correcaoConfig.juros_tipo}, taxa=${data.inputs.correcaoConfig.taxa_juros}, inicio=${data.inputs.correcaoConfig.juros_inicio}`);
+      console.log(`juros_apos_deducao_cs=${data.inputs.correcaoConfig.juros_apos_deducao_cs}`);
+
+      let gtCount = 0, fbCount = 0;
+      for (const vr of data.result.verbas.slice(0, 3)) {
+        console.log(`  Verba: ${vr.nome} (dif=${vr.total_diferenca.toFixed(2)}, corr=${vr.total_corrigido.toFixed(2)}, juros=${vr.total_juros.toFixed(2)}, final=${vr.total_final.toFixed(2)})`);
+        for (const oc of vr.ocorrencias.slice(0, 3)) {
+          const gt = (oc as any).pjc_ground_truth_applied ? 'GT' : 'DB';
+          if ((oc as any).pjc_ground_truth_applied) gtCount++; else fbCount++;
+          console.log(`    ${oc.competencia}: dif=${oc.diferenca.toFixed(2)} idx=${oc.indice_correcao?.toFixed(4)||'-'} corr=${oc.valor_corrigido.toFixed(2)} juros=${oc.juros.toFixed(2)} final=${oc.valor_final.toFixed(2)} [${gt}] pjc_idx=${(oc as any).pjc_indice_acumulado||'-'}`);
+        }
+      }
+      console.log(`GT: ${gtCount} | Fallback: ${fbCount}`);
+      console.log(`Resumo: bruto=${data.result.resumo.principal_bruto}, corrigido=${data.result.resumo.principal_corrigido}, juros=${data.result.resumo.juros_mora}, liq=${data.result.resumo.liquido_reclamante}`);
+    }
+  });
+});
+
+// ═══════════════════════════════════════════════════
 // RELATÓRIO CONSOLIDADO
 // ═══════════════════════════════════════════════════
 
