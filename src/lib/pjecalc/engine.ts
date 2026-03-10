@@ -429,7 +429,12 @@ export class PjeCalcEngine {
     // Isso garante paridade de centavos com o PJe-Calc oficial.
     let devido: Decimal;
     if (verba.valor === 'informado') {
-      devido = new Decimal(verba.valor_informado_devido || 0);
+      // Suporte a Constante Mensal (PJe-Calc <Constante>): valor fixo repetido por competência
+      if (verba.constante_mensal !== undefined && verba.constante_mensal > 0) {
+        devido = new Decimal(verba.constante_mensal);
+      } else {
+        devido = new Decimal(verba.valor_informado_devido || 0);
+      }
     } else {
       // Etapa 1: valor_hora = Base / Divisor (truncado)
       const valorHora = base.div(div).toDP(2);
