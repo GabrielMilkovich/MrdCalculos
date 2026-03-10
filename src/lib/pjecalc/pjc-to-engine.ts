@@ -182,9 +182,22 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     const baseVerbaIds = v.formula.base_verbas.map(bv => bv.id);
     
     // Map historico references
+    // base_tabelada = "HISTORICO_SALARIAL" means "use all matching historicos" — leave empty for fallback
+    // base_tabelada = "SALARIO_MINIMO" or "MAIOR_REMUNERACAO" → map to tabelas
     const baseHistIds: string[] = [];
+    const baseTabelaIds: string[] = [];
     if (v.formula.base_tabelada) {
-      baseHistIds.push(v.formula.base_tabelada);
+      if (v.formula.base_tabelada === 'HISTORICO_SALARIAL') {
+        // Leave baseHistIds empty — engine fallback will search all historicos by competência
+      } else if (v.formula.base_tabelada === 'SALARIO_MINIMO') {
+        baseTabelaIds.push('salario_minimo');
+      } else if (v.formula.base_tabelada === 'MAIOR_REMUNERACAO') {
+        baseTabelaIds.push('maior_remuneracao');
+      } else if (v.formula.base_tabelada === 'ULTIMA_REMUNERACAO') {
+        baseTabelaIds.push('ultima_remuneracao');
+      } else {
+        // Unknown type — leave empty for fallback
+      }
     }
     
     // Map divisor type
