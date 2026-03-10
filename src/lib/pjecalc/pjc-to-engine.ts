@@ -283,7 +283,7 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     // Build pre-computed occurrences from PJC ground truth
     // This injects exact base/div/mult/qtd/pago values so the engine doesn't need
     // cartão ponto or complex historico resolution — achieving PJC parity
-    const ocorrenciasPrecomputadas = (!isReflexo && v.ocorrencias_all.length > 0)
+    const ocorrenciasPrecomputadas = (v.ocorrencias_all.length > 0)
       ? v.ocorrencias_all.map(oc => ({
           competencia: oc.competencia.slice(0, 7),
           base: oc.base,
