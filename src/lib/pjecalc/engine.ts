@@ -1124,41 +1124,46 @@ export class PjeCalcEngine {
 
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
 
-        // Calculate interest segment-by-segment (skip if juros disabled)
+        // Calculate interest segment-by-segment
         let jurosTotal = new Decimal(0);
+        const jurosEffectiveStart = jurosStartDate || compDateJuros;
 
         if (!jurosDisabled) {
-        // Use jurosStartDate to limit interest calculation
-        const jurosEffectiveStart = jurosStartDate || compDateJuros;
-          const segInicio = datas[i];
-          const segFim = datas[i + 1];
-          const regimeIndice = this.getRegimeParaData(combinacoes_indice, segInicio);
-          const indiceNorm = normalizeIndice(regimeIndice?.indice || 'SEM_CORRECAO');
-          const regimeJuros = this.getRegimeParaData(combinacoes_juros, segInicio);
+          for (let i = 0; i < datas.length - 1; i++) {
+            const segInicio = datas[i];
+            const segFim = datas[i + 1];
+            // Skip segments before the effective interest start date
+            if (segFim <= jurosEffectiveStart) continue;
+            const realStart = segInicio < jurosEffectiveStart ? jurosEffectiveStart : segInicio;
 
-          // SELIC as correction index already includes interest
-          if (indiceNorm === 'SELIC') continue;
-          if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
+            const regimeIndice = this.getRegimeParaData(combinacoes_indice, realStart);
+            const indiceNorm = normalizeIndice(regimeIndice?.indice || 'SEM_CORRECAO');
+            const regimeJuros = this.getRegimeParaData(combinacoes_juros, realStart);
 
-          if (regimeJuros.tipo === 'SELIC') {
-            const fatorSelic = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
-            if (fatorSelic !== null) {
-              jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
+            // SELIC as correction index already includes interest
+            if (indiceNorm === 'SELIC') continue;
+            if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
+
+            if (regimeJuros.tipo === 'SELIC') {
+              const fatorSelic = this.getIndiceCorrecaoDB('SELIC', realStart.slice(0, 7), segFim.slice(0, 7));
+              if (fatorSelic !== null) {
+                jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
+              } else {
+                console.warn(`[PjeCalcEngine] BLOQUEIO: SELIC (juros) ausente para ${realStart}→${segFim}.`);
+              }
+            } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
+              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', realStart.slice(0, 7), segFim.slice(0, 7));
+              if (fatorTL !== null) {
+                jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
+              } else {
+                console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros) ausente para ${realStart}→${segFim}.`);
+              }
             } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: SELIC (juros) ausente para ${segInicio}→${segFim}.`);
+              // TRD_SIMPLES or other simple monthly interest
+              const meses = this.mesesEntre(new Date(realStart), new Date(segFim));
+              const taxa = (regimeJuros.percentual || 1) / 100;
+              jurosTotal = jurosTotal.plus(valorCorrigido.times(taxa).times(meses));
             }
-          } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
-            const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
-            if (fatorTL !== null) {
-              jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
-            } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros) ausente para ${segInicio}→${segFim}.`);
-            }
-          } else {
-            // TRD_SIMPLES or other simple monthly interest
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-            const taxa = (regimeJuros.percentual || 1) / 100;
-            jurosTotal = jurosTotal.plus(valorCorrigido.times(taxa).times(meses));
           }
         }
 
