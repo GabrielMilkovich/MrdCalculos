@@ -80,6 +80,7 @@ export interface VerbaAnalysis {
   gerar_reflexo?: string;
   compor_principal?: string;
   ocorrencias_count: number;
+  ocorrencias_all: OcorrenciaAnalysis[];
   ocorrencias_sample: OcorrenciaAnalysis[];
   total_devido?: number;
   total_pago?: number;
