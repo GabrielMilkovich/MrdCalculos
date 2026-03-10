@@ -132,7 +132,8 @@ export default function PjeCalcPage() {
   // =====================================================
   const [formParams, setFormParams] = useState({
     estado: 'SP', municipio: '', data_admissao: '', data_demissao: '',
-    data_ajuizamento: '', data_inicial: '', data_final: '',
+    data_ajuizamento: '', data_citacao: '', data_inicial: '', data_final: '',
+    data_liquidacao: '',
     prescricao_quinquenal: false, prescricao_fgts: false,
     regime_trabalho: 'tempo_integral', carga_horaria_padrao: 220,
     maior_remuneracao: '', ultima_remuneracao: '',
@@ -140,6 +141,7 @@ export default function PjeCalcPage() {
     projetar_aviso_indenizado: false, limitar_avos_periodo: false,
     zerar_valor_negativo: false, sabado_dia_util: true,
     considerar_feriado_estadual: false, considerar_feriado_municipal: false,
+    tipo_mes: 'civil' as 'civil' | 'comercial',
     comentarios: '',
   });
 
@@ -151,8 +153,10 @@ export default function PjeCalcPage() {
         data_admissao: calc.params.data_admissao || '',
         data_demissao: calc.params.data_demissao || '',
         data_ajuizamento: calc.params.data_ajuizamento || '',
+        data_citacao: (calc.params as any).data_citacao || '',
         data_inicial: calc.params.data_inicial || '',
         data_final: calc.params.data_final || '',
+        data_liquidacao: (calc.params as any).data_liquidacao || '',
         prescricao_quinquenal: calc.params.prescricao_quinquenal || false,
         prescricao_fgts: calc.params.prescricao_fgts || false,
         regime_trabalho: calc.params.regime_trabalho || 'tempo_integral',
@@ -167,6 +171,7 @@ export default function PjeCalcPage() {
         sabado_dia_util: calc.params.sabado_dia_util ?? true,
         considerar_feriado_estadual: calc.params.considerar_feriado_estadual || false,
         considerar_feriado_municipal: calc.params.considerar_feriado_municipal || false,
+        tipo_mes: (calc.params as any).tipo_mes || 'civil',
         comentarios: calc.params.comentarios || '',
       });
     }
@@ -183,8 +188,10 @@ export default function PjeCalcPage() {
       data_admissao: formParams.data_admissao,
       data_demissao: formParams.data_demissao || undefined,
       data_ajuizamento: formParams.data_ajuizamento,
+      data_citacao: formParams.data_citacao || undefined,
       data_inicial: formParams.data_inicial || undefined,
       data_final: formParams.data_final || undefined,
+      data_liquidacao: formParams.data_liquidacao || undefined,
       prescricao_quinquenal: formParams.prescricao_quinquenal,
       prescricao_fgts: formParams.prescricao_fgts,
       regime_trabalho: formParams.regime_trabalho,
@@ -199,8 +206,9 @@ export default function PjeCalcPage() {
       sabado_dia_util: formParams.sabado_dia_util,
       considerar_feriado_estadual: formParams.considerar_feriado_estadual,
       considerar_feriado_municipal: formParams.considerar_feriado_municipal,
+      tipo_mes: formParams.tipo_mes,
       comentarios: formParams.comentarios,
-    });
+    } as any);
   };
 
   // =====================================================
@@ -342,8 +350,24 @@ export default function PjeCalcPage() {
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div><Label className="text-xs">Admissão *</Label><Input type="date" value={formParams.data_admissao} onChange={e => setFormParams(p => ({ ...p, data_admissao: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
           <div><Label className="text-xs">Demissão</Label><Input type="date" value={formParams.data_demissao} onChange={e => setFormParams(p => ({ ...p, data_demissao: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+          <div><Label className="text-xs">Data Inicial (Período)</Label><Input type="date" value={formParams.data_inicial} onChange={e => setFormParams(p => ({ ...p, data_inicial: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+          <div><Label className="text-xs">Data Final (Período)</Label><Input type="date" value={formParams.data_final} onChange={e => setFormParams(p => ({ ...p, data_final: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Datas Processuais</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <div><Label className="text-xs">Ajuizamento *</Label><Input type="date" value={formParams.data_ajuizamento} onChange={e => setFormParams(p => ({ ...p, data_ajuizamento: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
-          <div><Label className="text-xs">Data Inicial</Label><Input type="date" value={formParams.data_inicial} onChange={e => setFormParams(p => ({ ...p, data_inicial: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+          <div>
+            <Label className="text-xs">Citação *</Label>
+            <Input type="date" value={formParams.data_citacao} onChange={e => setFormParams(p => ({ ...p, data_citacao: e.target.value }))} className="mt-1 h-8 text-xs" />
+            <p className="text-[9px] text-muted-foreground mt-0.5">Obrigatório para ADC 58 (transição IPCA-E → SELIC)</p>
+          </div>
+          <div>
+            <Label className="text-xs">Liquidação *</Label>
+            <Input type="date" value={formParams.data_liquidacao} onChange={e => setFormParams(p => ({ ...p, data_liquidacao: e.target.value }))} className="mt-1 h-8 text-xs" />
+            <p className="text-[9px] text-muted-foreground mt-0.5">Data base para correção monetária e juros</p>
+          </div>
         </CardContent>
       </Card>
       <Card>
@@ -355,7 +379,7 @@ export default function PjeCalcPage() {
       </Card>
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Regime e Jornada</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-3 gap-4">
           <div>
             <Label className="text-xs">Regime de Trabalho</Label>
             <Select value={formParams.regime_trabalho} onValueChange={v => setFormParams(p => ({ ...p, regime_trabalho: v }))}>
@@ -364,6 +388,16 @@ export default function PjeCalcPage() {
             </Select>
           </div>
           <div><Label className="text-xs">Carga Horária Mensal</Label><Input type="number" value={formParams.carga_horaria_padrao} onChange={e => setFormParams(p => ({ ...p, carga_horaria_padrao: parseInt(e.target.value) || 220 }))} className="mt-1 h-8 text-xs" /></div>
+          <div>
+            <Label className="text-xs">Tipo de Mês</Label>
+            <Select value={formParams.tipo_mes} onValueChange={(v: 'civil' | 'comercial') => setFormParams(p => ({ ...p, tipo_mes: v }))}>
+              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="civil">Civil (dias reais)</SelectItem>
+                <SelectItem value="comercial">Comercial (30 dias — Art. 64 CLT)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
       <Card>
