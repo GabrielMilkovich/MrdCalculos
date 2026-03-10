@@ -1080,19 +1080,15 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
-        // ═══ PJC Ground Truth: if pjc_indice_acumulado is available, it's the TOTAL factor
-        // (correction + interest combined for SELIC cases). Use it directly as valor_final.
+        // ═══ PJC Ground Truth: if pjc_indice_acumulado is available, use it as the
+        // CORRECTION factor (monetary correction only). Interest is still calculated separately
+        // unless the active correction index is SELIC (which already includes interest).
+        let usePjcGroundTruth = false;
+        let fatorTotal = new Decimal(1);
+        
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
-          const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
-          const valorFinal = new Decimal(oc.diferenca).times(fatorTotal);
-          oc.indice_correcao = fatorTotal.toDP(6).toNumber();
-          oc.valor_corrigido = valorFinal.toDP(2).toNumber();
-          oc.juros = 0; // Interest already embedded in the PJC factor
-          oc.valor_final = valorFinal.toDP(2).toNumber();
-          oc.pjc_ground_truth_applied = true;
-          totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
-          totalFinal = totalFinal.plus(oc.valor_final);
-          continue;
+          fatorTotal = new Decimal(oc.pjc_indice_acumulado);
+          usePjcGroundTruth = true;
         }
 
         // Súmula 381: correction starts from mês subsequente ao vencimento
@@ -1100,7 +1096,7 @@ export class PjeCalcEngine {
         const compDateJuros = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
         const compDateCorrecao = this.mesSubsequente(oc.competencia) + '-01';
         
-        // Build breakpoints using correction start date
+        // Build breakpoints for interest calculation (even when using PJC ground truth correction)
         const breakpoints = new Set<string>();
         breakpoints.add(compDateCorrecao);
         breakpoints.add(dataLiq);
