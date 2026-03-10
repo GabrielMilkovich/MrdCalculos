@@ -22,7 +22,7 @@ describe('Debug PJC correction data', () => {
       console.log(`total_diferenca: ${firstVerba.total_diferenca}`);
       const ocs = firstVerba.ocorrencias_all.slice(0, 5);
       for (const oc of ocs) {
-        console.log(`  ${oc.competencia}: devido=${oc.devido} pago=${oc.pago} dif=${oc.diferenca} indice_acumulado=${oc.indice_acumulado}`);
+        console.log(`  ${oc.competencia}: devido=${oc.devido} pago=${oc.pago} dif=${oc.devido - oc.pago} indice_acumulado=${oc.indice_acumulado}`);
       }
     }
     
