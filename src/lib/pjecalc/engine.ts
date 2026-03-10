@@ -2158,14 +2158,21 @@ export class PjeCalcEngine {
             }
           }
           oc.juros = jurosAcc.toDP(2).toNumber();
-        } else {
+        } else if (!jurosDisabled) {
           // Legacy single interest
           const [ano, mes] = oc.competencia.split('-').map(Number);
           const dataComp = new Date(ano, mes - 1, 1);
+          const jurosStart = jurosStartDate ? new Date(jurosStartDate) : dataComp;
           const dataLiqD = new Date(dataLiq);
-          const meses = this.mesesEntre(dataComp, dataLiqD);
-          const taxa = (this.correcaoConfig.juros_percentual || 1) / 100;
-          oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2));
+          if (jurosStart < dataLiqD) {
+            const meses = this.mesesEntre(jurosStart, dataLiqD);
+            const taxa = (this.correcaoConfig.juros_percentual || 1) / 100;
+            oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2));
+          } else {
+            oc.juros = 0;
+          }
+        } else {
+          oc.juros = 0;
         }
 
         oc.valor_final = Number(new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2));
