@@ -327,7 +327,7 @@ describe('Correção por Data (ADC 58/59)', () => {
   };
 
   it('should return zero for zero input', () => {
-    const result = aplicarCorrecaoPorData('2020-01', 0, config);
+    const result = aplicarCorrecaoPorData('2020-01', 0, config, ALL_TEST_INDICES as IndiceDB[]);
     expect(result.valor_corrigido).toBe(0);
     expect(result.juros).toBe(0);
     expect(result.valor_final).toBe(0);
