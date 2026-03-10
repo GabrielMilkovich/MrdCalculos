@@ -192,6 +192,19 @@ export interface PjeVerba {
   
   ordem: number;
   reflexas?: PjeVerba[];
+  
+  /** Pre-computed occurrences from PJC ground truth. When present, engine uses these 
+   *  directly instead of computing from historicos/cartão. Enables PJC round-trip parity. */
+  ocorrencias_precomputadas?: {
+    competencia: string;
+    base: number;
+    divisor: number;
+    multiplicador: number;
+    quantidade: number;
+    dobra: boolean;
+    devido: number;
+    pago: number;
+  }[];
 }
 
 export interface PjeOcorrencia {
