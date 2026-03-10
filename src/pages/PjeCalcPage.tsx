@@ -379,7 +379,7 @@ export default function PjeCalcPage() {
       </Card>
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Regime e Jornada</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-3 gap-4">
           <div>
             <Label className="text-xs">Regime de Trabalho</Label>
             <Select value={formParams.regime_trabalho} onValueChange={v => setFormParams(p => ({ ...p, regime_trabalho: v }))}>
@@ -388,6 +388,16 @@ export default function PjeCalcPage() {
             </Select>
           </div>
           <div><Label className="text-xs">Carga Horária Mensal</Label><Input type="number" value={formParams.carga_horaria_padrao} onChange={e => setFormParams(p => ({ ...p, carga_horaria_padrao: parseInt(e.target.value) || 220 }))} className="mt-1 h-8 text-xs" /></div>
+          <div>
+            <Label className="text-xs">Tipo de Mês</Label>
+            <Select value={formParams.tipo_mes} onValueChange={(v: 'civil' | 'comercial') => setFormParams(p => ({ ...p, tipo_mes: v }))}>
+              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="civil">Civil (dias reais)</SelectItem>
+                <SelectItem value="comercial">Comercial (30 dias — Art. 64 CLT)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
       <Card>
