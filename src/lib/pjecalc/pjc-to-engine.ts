@@ -33,9 +33,18 @@ export interface PjcEngineInputs {
 }
 
 export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string): PjcEngineInputs {
+  let historicos = convertHistoricos(analysis.historicos_salariais);
+  
+  // If historicos have no occurrences, synthesize them from verba occurrences
+  // PJe-Calc stores salary values inside OcorrenciaDeVerba.base, not always in OcorrenciaHistorico
+  const totalOcorrencias = historicos.reduce((s, h) => s + h.ocorrencias.length, 0);
+  if (totalOcorrencias === 0) {
+    historicos = synthesizeHistoricosFromVerbas(analysis, historicos);
+  }
+  
   return {
     params: convertParametros(analysis, caseId),
-    historicos: convertHistoricos(analysis.historicos_salariais),
+    historicos,
     faltas: convertFaltas(analysis.faltas),
     ferias: convertFerias(analysis.ferias),
     verbas: convertVerbas(analysis.verbas, analysis.dag),
@@ -48,6 +57,56 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     custasConfig: buildDefaultCustasConfig(),
     seguroConfig: { apurar: false, parcelas: 0, recebeu: false },
   };
+}
+
+/**
+ * When PJC historicos have no occurrences, extract base values from
+ * each Calculada verba's occurrences to build per-verba synthetic historicos.
+ * This ensures each verba gets its own salary base per competência.
+ */
+function synthesizeHistoricosFromVerbas(
+  analysis: PJCAnalysis, 
+  existingHistoricos: PjeHistoricoSalarial[]
+): PjeHistoricoSalarial[] {
+  const syntheticHistoricos: PjeHistoricoSalarial[] = [];
+  
+  for (const v of analysis.verbas) {
+    if (v.tipo !== 'Calculada' || !v.ativo) continue;
+    if (v.formula.base_tabelada !== 'HISTORICO_SALARIAL') continue;
+    if (v.ocorrencias_all.length === 0) continue;
+    
+    const comps: { comp: string; valor: number }[] = [];
+    for (const oc of v.ocorrencias_all) {
+      if (oc.base > 0) {
+        comps.push({ comp: oc.competencia.slice(0, 7), valor: oc.base });
+      }
+    }
+    
+    if (comps.length === 0) continue;
+    comps.sort((a, b) => a.comp.localeCompare(b.comp));
+    
+    const histId = `hist-synth-${v.id}`;
+    syntheticHistoricos.push({
+      id: histId,
+      nome: `Salário para ${v.nome}`,
+      periodo_inicio: comps[0].comp + '-01',
+      periodo_fim: comps[comps.length - 1].comp + '-28',
+      tipo_valor: 'informado',
+      incidencia_fgts: v.incidencias.fgts,
+      incidencia_cs: v.incidencias.inss,
+      fgts_recolhido: false,
+      cs_recolhida: false,
+      ocorrencias: comps.map((c, idx) => ({
+        id: `${histId}-oc-${idx}`,
+        historico_id: histId,
+        competencia: c.comp,
+        valor: c.valor,
+        tipo: 'informado' as const,
+      })),
+    });
+  }
+  
+  return [...existingHistoricos, ...syntheticHistoricos];
 }
 
 // =====================================================
@@ -182,9 +241,24 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     const baseVerbaIds = v.formula.base_verbas.map(bv => bv.id);
     
     // Map historico references
+    // base_tabelada = "HISTORICO_SALARIAL" means "use all matching historicos" — leave empty for fallback
+    // base_tabelada = "SALARIO_MINIMO" or "MAIOR_REMUNERACAO" → map to tabelas
     const baseHistIds: string[] = [];
+    const baseTabelaIds: string[] = [];
     if (v.formula.base_tabelada) {
-      baseHistIds.push(v.formula.base_tabelada);
+      if (v.formula.base_tabelada === 'HISTORICO_SALARIAL') {
+        // Link to per-verba synthetic historico if it exists
+        if (v.tipo === 'Calculada' && v.ocorrencias_all.length > 0) {
+          baseHistIds.push(`hist-synth-${v.id}`);
+        }
+        // Else: leave empty — engine fallback will search all historicos by competência
+      } else if (v.formula.base_tabelada === 'SALARIO_MINIMO') {
+        baseTabelaIds.push('salario_minimo');
+      } else if (v.formula.base_tabelada === 'MAIOR_REMUNERACAO') {
+        baseTabelaIds.push('maior_remuneracao');
+      } else if (v.formula.base_tabelada === 'ULTIMA_REMUNERACAO') {
+        baseTabelaIds.push('ultima_remuneracao');
+      }
     }
     
     // Map divisor type
@@ -221,7 +295,7 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
       base_calculo: {
         historicos: baseHistIds,
         verbas: baseVerbaIds,
-        tabelas: [],
+        tabelas: baseTabelaIds,
         proporcionalizar: false,
         integralizar: false,
       },
