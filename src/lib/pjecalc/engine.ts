@@ -2192,7 +2192,13 @@ export class PjeCalcEngine {
       
       processed.add(verba.id);
       
-      // Calculate
+      // Calculate — precomputed occurrences take priority (PJC ground truth)
+      if (verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
+        const result = this.calcularVerba(verba); // calcularVerba handles precomputed
+        verbaResults.push(result);
+        this.verbaResultsMap.set(verba.id, result);
+        return;
+      }
       if (verba.tipo === 'reflexa' && verba.verba_principal_id) {
         const principalResult = this.verbaResultsMap.get(verba.verba_principal_id);
         if (principalResult) {
