@@ -1125,7 +1125,7 @@ export class PjeCalcEngine {
                   if (normalizeIndice(regimeI?.indice || '') === 'SELIC') continue;
                   const meses = this.mesesEntre(new Date(segIni), new Date(segFin));
                   if (regimeJ.tipo === 'SIMPLES') {
-                    const taxa = (regimeJ.taxa_mensal ?? this.correcaoConfig.juros_percentual ?? 1) / 100;
+                    const taxa = (regimeJ.percentual ?? this.correcaoConfig.juros_percentual ?? 1) / 100;
                     jurosMora = jurosMora.plus(valorCorrigido.times(taxa).times(meses));
                   }
                 }
