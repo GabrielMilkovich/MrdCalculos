@@ -1405,7 +1405,19 @@ export class PjeCalcEngine {
       if (!verba?.incidencias.contribuicao_social) continue;
       if (verba.caracteristica === 'ferias') continue;
       for (const oc of vr.ocorrencias) {
-        const val = useCorrigido ? oc.valor_corrigido : (usarBruto ? oc.devido : oc.diferenca);
+        // ═══ CS Base Rule: When PJC ground truth is applied (SELIC factor includes interest),
+        // use nominal diferenca as CS base — SELIC's interest component must NOT inflate CS.
+        // PJe-Calc calculates CS on inflation-only corrected values; since we can't separate
+        // inflation from interest in the combined SELIC factor, nominal is the correct base.
+        let val: number;
+        if (useCorrigido && oc.pjc_ground_truth_applied) {
+          // Ground truth SELIC: fall back to nominal to avoid interest inflating CS
+          val = Math.abs(oc.diferenca);
+        } else if (useCorrigido) {
+          val = oc.valor_corrigido;
+        } else {
+          val = usarBruto ? oc.devido : oc.diferenca;
+        }
         if (val <= 0) continue;
         basesDevidos[oc.competencia] = (basesDevidos[oc.competencia] || 0) + val;
       }
