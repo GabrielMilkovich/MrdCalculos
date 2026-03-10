@@ -153,8 +153,10 @@ export default function PjeCalcPage() {
         data_admissao: calc.params.data_admissao || '',
         data_demissao: calc.params.data_demissao || '',
         data_ajuizamento: calc.params.data_ajuizamento || '',
+        data_citacao: (calc.params as any).data_citacao || '',
         data_inicial: calc.params.data_inicial || '',
         data_final: calc.params.data_final || '',
+        data_liquidacao: (calc.params as any).data_liquidacao || '',
         prescricao_quinquenal: calc.params.prescricao_quinquenal || false,
         prescricao_fgts: calc.params.prescricao_fgts || false,
         regime_trabalho: calc.params.regime_trabalho || 'tempo_integral',
@@ -169,6 +171,7 @@ export default function PjeCalcPage() {
         sabado_dia_util: calc.params.sabado_dia_util ?? true,
         considerar_feriado_estadual: calc.params.considerar_feriado_estadual || false,
         considerar_feriado_municipal: calc.params.considerar_feriado_municipal || false,
+        tipo_mes: (calc.params as any).tipo_mes || 'civil',
         comentarios: calc.params.comentarios || '',
       });
     }
