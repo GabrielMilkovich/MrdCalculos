@@ -1108,28 +1108,29 @@ export class PjeCalcEngine {
         }
         const datas = Array.from(breakpoints).sort();
 
-        // Calculate correction factor segment-by-segment
-        let fatorTotal = new Decimal(1);
+        // Calculate correction factor segment-by-segment (skip if PJC ground truth already set)
         const regimesUsados: string[] = [];
 
-        for (let i = 0; i < datas.length - 1; i++) {
-          const segInicio = datas[i];
-          const segFim = datas[i + 1];
-          const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
-          const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
+        if (!usePjcGroundTruth) {
+          for (let i = 0; i < datas.length - 1; i++) {
+            const segInicio = datas[i];
+            const segFim = datas[i + 1];
+            const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
+            const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
 
-          if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') {
+            if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') {
+              regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
+              continue;
+            }
+
+            const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
+            if (fatorDB !== null && fatorDB > 0) {
+              fatorTotal = fatorTotal.times(fatorDB);
+            } else {
+              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
+            }
             regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
-            continue;
           }
-
-          const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
-          if (fatorDB !== null && fatorDB > 0) {
-            fatorTotal = fatorTotal.times(fatorDB);
-          } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
-          }
-          regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
         }
 
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
