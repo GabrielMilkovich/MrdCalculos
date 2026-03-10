@@ -1554,6 +1554,7 @@ export class PjeCalcEngine {
     let baseFerias = 0;
     
     // Art. 12-A: Separar rendimentos por ano para tributação correta
+    // PJe-Calc: IR base is on CORRECTED values (valor_corrigido), not nominal
     const anoLiq = parseInt(this.correcaoConfig.data_liquidacao.slice(0, 4));
     let baseAnosAnteriores = 0;
     let baseAnoLiquidacao = 0;
@@ -1567,23 +1568,25 @@ export class PjeCalcEngine {
       if (!verba?.incidencias.irpf) continue;
       if (verba.caracteristica === 'ferias') {
         if (this.irConfig.tributacao_separada_ferias) {
-          baseFerias += vr.total_diferenca;
+          baseFerias += vr.total_final; // Use corrected+interest value
         }
         continue;
       }
       if (verba.caracteristica === '13_salario' && this.irConfig.tributacao_exclusiva_13) {
-        base13 += vr.total_diferenca;
+        base13 += vr.total_final; // Use corrected+interest value
       } else {
-        baseBruta += vr.total_diferenca;
+        baseBruta += vr.total_final; // Use corrected+interest value
         // Classificar por ano para Art. 12-A
         for (const oc of vr.ocorrencias) {
           if (oc.diferenca <= 0) continue;
           const anoComp = parseInt(oc.competencia.slice(0, 4));
+          // Use valor_final (corrected + interest) as IR base
+          const valorIR = oc.valor_final || oc.diferenca;
           if (anoComp < anoLiq) {
-            baseAnosAnteriores += oc.diferenca;
+            baseAnosAnteriores += valorIR;
             competenciasAnosAnteriores.add(oc.competencia);
           } else {
-            baseAnoLiquidacao += oc.diferenca;
+            baseAnoLiquidacao += valorIR;
             competenciasAnoLiquidacao.add(oc.competencia);
           }
         }

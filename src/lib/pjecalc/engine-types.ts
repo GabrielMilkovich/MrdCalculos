@@ -477,6 +477,8 @@ export interface PjeOcorrenciaResult {
   arredondamento_trace?: { etapa: string; valor_cheio: string; valor_truncado: string }[];
   /** PJC ground truth correction factor — when present, engine uses this instead of recalculating */
   pjc_indice_acumulado?: number;
+  /** Flag: true when pjc_indice_acumulado was applied (includes interest — skip separate juros) */
+  pjc_ground_truth_applied?: boolean;
   /** Per-occurrence paid value breakdown (Feature #3: rubric-specific paid values) */
   pago_breakdown?: {
     base: number;
