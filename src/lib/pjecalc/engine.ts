@@ -1080,23 +1080,25 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
-        // ═══ PJC Ground Truth: if pjc_indice_acumulado is available, use it as the
-        // CORRECTION factor (monetary correction only). Interest is still calculated separately
-        // unless the active correction index is SELIC (which already includes interest).
-        let usePjcGroundTruth = false;
-        let fatorTotal = new Decimal(1);
-        
+        // ═══ PJC Ground Truth: if pjc_indice_acumulado is available, it's the TOTAL factor
+        // (correction + interest combined, since SELIC includes both). Use directly as valor_final.
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
-          fatorTotal = new Decimal(oc.pjc_indice_acumulado);
-          usePjcGroundTruth = true;
+          const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
+          const valorFinal = new Decimal(oc.diferenca).times(fatorTotal);
+          oc.indice_correcao = fatorTotal.toDP(6).toNumber();
+          oc.valor_corrigido = valorFinal.toDP(2).toNumber();
+          oc.juros = 0;
+          oc.valor_final = valorFinal.toDP(2).toNumber();
+          oc.pjc_ground_truth_applied = true;
+          totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
+          totalFinal = totalFinal.plus(oc.valor_final);
+          continue;
         }
 
         // Súmula 381: correction starts from mês subsequente ao vencimento
-        // Interest starts from vencimento (competência original)
         const compDateJuros = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
         const compDateCorrecao = this.mesSubsequente(oc.competencia) + '-01';
         
-        // Build breakpoints for interest calculation (even when using PJC ground truth correction)
         const breakpoints = new Set<string>();
         breakpoints.add(compDateCorrecao);
         breakpoints.add(dataLiq);
@@ -1108,29 +1110,27 @@ export class PjeCalcEngine {
         }
         const datas = Array.from(breakpoints).sort();
 
-        // Calculate correction factor segment-by-segment (skip if PJC ground truth already set)
+        let fatorTotal = new Decimal(1);
         const regimesUsados: string[] = [];
 
-        if (!usePjcGroundTruth) {
-          for (let i = 0; i < datas.length - 1; i++) {
-            const segInicio = datas[i];
-            const segFim = datas[i + 1];
-            const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
-            const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
+        for (let i = 0; i < datas.length - 1; i++) {
+          const segInicio = datas[i];
+          const segFim = datas[i + 1];
+          const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
+          const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
 
-            if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') {
-              regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
-              continue;
-            }
-
-            const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
-            if (fatorDB !== null && fatorDB > 0) {
-              fatorTotal = fatorTotal.times(fatorDB);
-            } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
-            }
+          if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') {
             regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
+            continue;
           }
+
+          const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
+          if (fatorDB !== null && fatorDB > 0) {
+            fatorTotal = fatorTotal.times(fatorDB);
+          } else {
+            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
+          }
+          regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
         }
 
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
@@ -1150,7 +1150,6 @@ export class PjeCalcEngine {
             const indiceNorm = normalizeIndice(regimeIndice?.indice || 'SEM_CORRECAO');
             const regimeJuros = this.getRegimeParaData(combinacoes_juros, realStart);
 
-            // SELIC as correction index already includes interest
             if (indiceNorm === 'SELIC') continue;
             if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
 
@@ -1158,15 +1157,11 @@ export class PjeCalcEngine {
               const fatorSelic = this.getIndiceCorrecaoDB('SELIC', realStart.slice(0, 7), segFim.slice(0, 7));
               if (fatorSelic !== null) {
                 jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
-              } else {
-                console.warn(`[PjeCalcEngine] BLOQUEIO: SELIC (juros) ausente para ${realStart}→${segFim}.`);
               }
             } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', realStart.slice(0, 7), segFim.slice(0, 7));
               if (fatorTL !== null) {
                 jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
-              } else {
-                console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros) ausente para ${realStart}→${segFim}.`);
               }
             } else {
               const meses = this.mesesEntre(new Date(realStart), new Date(segFim));
