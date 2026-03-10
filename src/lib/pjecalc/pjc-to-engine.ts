@@ -527,7 +527,7 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     juros_inicio: 'ajuizamento',
     multa_523: false,
     multa_523_percentual: 10,
-    data_liquidacao: a.parametros.termino_calculo || new Date().toISOString().slice(0, 10),
+    data_liquidacao: a.parametros.data_liquidacao || a.parametros.termino_calculo || new Date().toISOString().slice(0, 10),
     combinacoes_indice: hasCombinations ? combinacoes_indice : undefined,
     combinacoes_juros: combinacoes_juros.length > 0 ? combinacoes_juros : undefined,
     juros_apos_deducao_cs: a.atualizacao.juros_apos_deducao_cs,
