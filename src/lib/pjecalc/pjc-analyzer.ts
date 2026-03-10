@@ -570,6 +570,7 @@ function parseVerbaReflexo(el: Element, verbaMap: Map<string, VerbaAnalysis>): V
     gerar_reflexo: getTextContent(el, 'gerarReflexo'),
     compor_principal: getTextContent(el, 'comporPrincipal'),
     ocorrencias_count: ocorrencias.length,
+    ocorrencias_all: ocorrencias,
     ocorrencias_sample: ocorrencias.slice(0, 5),
     total_devido,
     total_pago,
