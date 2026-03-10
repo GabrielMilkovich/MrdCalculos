@@ -86,12 +86,12 @@ describe('Golden Test: Leandro Casademunt — PJC Parsing', () => {
       expect(analysis.resultado.liquido_exequente).toBeCloseTo(gt.gprec.liquido_exequente, 0);
     });
 
-    it('INSS reclamante (gprec) = R$ 31.229,34', () => {
-      expect(analysis.resultado.inss_reclamante).toBeCloseTo(gt.gprec.inss_beneficiario, 0);
+    it('INSS reclamante (dadosEstruturados) = R$ 46.218,89', () => {
+      expect(analysis.resultado.inss_reclamante).toBeCloseTo(gt.estruturado.inss_reclamante, 0);
     });
 
-    it('INSS reclamado (gprec) = R$ 123.799,95', () => {
-      expect(analysis.resultado.inss_reclamado).toBeCloseTo(gt.gprec.inss_executado, 0);
+    it('INSS reclamado (dadosEstruturados) = R$ 108.810,40', () => {
+      expect(analysis.resultado.inss_reclamado).toBeCloseTo(gt.estruturado.inss_reclamado, 0);
     });
 
     it('imposto de renda = R$ 58.920,35', () => {
