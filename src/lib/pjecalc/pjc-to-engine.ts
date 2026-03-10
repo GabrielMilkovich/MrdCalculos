@@ -234,7 +234,7 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
       base_calculo: {
         historicos: baseHistIds,
         verbas: baseVerbaIds,
-        tabelas: [],
+        tabelas: baseTabelaIds,
         proporcionalizar: false,
         integralizar: false,
       },
