@@ -2251,8 +2251,9 @@ export class PjeCalcEngine {
     // ── 5. FGTS ──
     const fgts = this.calcularFGTS(verbaResults);
 
-    // ── 6. Contribuição Social (recalculate if juros_apos_deducao_cs — CS was already computed above but we need the full result) ──
-    const cs = this.calcularCS(verbaResults);
+    // ── 6. Contribuição Social ──
+    // PJe-Calc calculates CS on corrected values (valor_corrigido), not nominal
+    const cs = this.calcularCS(verbaResults, true);
 
     // ── 7. IR ──
     const ir = this.calcularIR(verbaResults, cs);
