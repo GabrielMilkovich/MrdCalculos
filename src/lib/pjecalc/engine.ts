@@ -2151,17 +2151,11 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.valor_corrigido === 0) { totalFinal += oc.valor_final; continue; }
 
-        // Skip interest ONLY for SELIC ground truth (SELIC already includes interest)
-        // For IPCA-E/other ground truth, interest must still be applied
+        // Skip interest for occurrences where PJC ground truth already includes interest
         if (oc.pjc_ground_truth_applied) {
-          const regimeAtDate = this.getRegimeParaData(combinacoes_indice, this.mesSubsequente(oc.competencia) + '-01');
-          const indiceAtivo = normalizeIndice(regimeAtDate?.indice || this.correcaoConfig.indice || '');
-          if (indiceAtivo === 'SELIC') {
-            totalJuros += oc.juros;
-            totalFinal += oc.valor_final;
-            continue;
-          }
-          // For non-SELIC ground truth, fall through to calculate interest normally
+          totalJuros += oc.juros;
+          totalFinal += oc.valor_final;
+          continue;
         }
 
         // Pro-rata CS share for this occurrence
