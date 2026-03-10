@@ -30,6 +30,31 @@ export interface PjeParametros {
   considerar_feriado_municipal: boolean;
   /** Art. 64 CLT: 'comercial' usa 30 dias fixos; 'civil' usa dias reais do mês */
   tipo_mes?: 'civil' | 'comercial';
+  /** Multi-link: identifier for this employment contract (vínculos múltiplos) */
+  vinculo_id?: string;
+  /** Multi-link: label for this contract (e.g. "1º Vínculo - 2015/2020") */
+  vinculo_label?: string;
+}
+
+/**
+ * Multi-employment link container.
+ * Allows running the engine independently per contract and consolidating results.
+ */
+export interface PjeMultiVinculo {
+  vinculos: PjeVinculoData[];
+  /** Consolidation mode: 'independente' runs each separately; 'acumulado' merges salary histories */
+  modo_consolidacao: 'independente' | 'acumulado';
+}
+
+export interface PjeVinculoData {
+  vinculo_id: string;
+  label: string;
+  params: PjeParametros;
+  historicos: PjeHistoricoSalarial[];
+  faltas: PjeFalta[];
+  ferias: PjeFerias[];
+  verbas: PjeVerba[];
+  cartaoPonto: PjeCartaoPonto[];
 }
 
 export interface PjeHistoricoSalarial {
