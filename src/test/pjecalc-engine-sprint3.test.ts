@@ -161,6 +161,7 @@ describe('Cenário 1 — Simples', () => {
       params, [], [], [], [verba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
 
