@@ -483,6 +483,7 @@ export class PjeCalcEngine {
     // Valor Pago: informado ou calculado (Fase 2)
     // FIX #3: Truncamento por etapa no cálculo do Pago (paridade PJe-Calc)
     let pago: Decimal;
+    let pagoBreakdown: PjeOcorrenciaResult['pago_breakdown'] | undefined;
     if (verba.valor_pago_tipo === 'calculado' && verba.pago_base !== undefined) {
       const pagoBase = new Decimal(verba.pago_base || 0);
       const pagoDiv = new Decimal(verba.pago_divisor || 30);
@@ -494,6 +495,13 @@ export class PjeCalcEngine {
       const pagoComMult = pagoValorHora.times(pagoMult).toDP(2);
       // Etapa 3: × Quantidade (truncado)
       pago = pagoComMult.times(pagoQtd).toDP(2);
+      pagoBreakdown = {
+        base: pagoBase.toNumber(),
+        divisor: pagoDiv.toNumber(),
+        multiplicador: pagoMult.toNumber(),
+        quantidade: pagoQtd.toNumber(),
+        formula: `(${pagoBase.toFixed(2)} ÷ ${pagoDiv.toFixed(2)}) × ${pagoMult.toFixed(4)} × ${pagoQtd.toFixed(4)} = ${pago.toFixed(2)}`,
+      };
     } else {
       pago = new Decimal(verba.valor_informado_pago || 0);
     }
@@ -576,6 +584,7 @@ export class PjeCalcEngine {
       base_integral: baseIntegral,
       quantidade_integral: qtdIntegral,
       devido_integral: devidoIntegral,
+      pago_breakdown: pagoBreakdown,
     };
   }
 
@@ -2644,4 +2653,69 @@ export class PjeCalcEngine {
       total_final: totalDiferenca.toDP(2).toNumber(),
     };
   }
+}
+
+// =====================================================
+// MULTI-VÍNCULO: Execute engine per contract and merge
+// =====================================================
+
+import type { PjeMultiVinculo } from './engine-types';
+
+export interface MultiVinculoResult {
+  vinculos: { vinculo_id: string; label: string; resultado: PjeLiquidacaoResult }[];
+  consolidado: PjeLiquidacaoResult;
+}
+
+/**
+ * Runs independent liquidation per employment link and merges results.
+ */
+export function liquidarMultiVinculo(
+  multi: PjeMultiVinculo,
+  fgtsConfig: PjeFGTSConfig,
+  csConfig: PjeCSConfig,
+  irConfig: PjeIRConfig,
+  correcaoConfig: PjeCorrecaoConfig,
+  honorariosConfig: PjeHonorariosConfig,
+  custasConfig: PjeCustasConfig,
+  seguroConfig: PjeSeguroConfig,
+  indicesDB: PjeIndiceRow[] = [],
+  faixasINSSDB: PjeINSSFaixaRow[] = [],
+  faixasIRDB: PjeIRFaixaRow[] = [],
+): MultiVinculoResult {
+  const resultados: MultiVinculoResult['vinculos'] = [];
+
+  for (const v of multi.vinculos) {
+    const engine = new PjeCalcEngine(
+      { ...v.params, vinculo_id: v.vinculo_id, vinculo_label: v.label },
+      v.historicos, v.faltas, v.ferias, v.verbas, v.cartaoPonto,
+      fgtsConfig, csConfig, irConfig, correcaoConfig, honorariosConfig, custasConfig, seguroConfig,
+      indicesDB, faixasINSSDB, faixasIRDB,
+    );
+    const resultado = engine.liquidar();
+    resultados.push({ vinculo_id: v.vinculo_id, label: v.label, resultado });
+  }
+
+  // Consolidate: merge all verba results and recalculate totals
+  const consolidado = resultados[0]?.resultado ?? resultados[0]?.resultado;
+  if (resultados.length > 1) {
+    // Merge verbas from all vinculos
+    const allVerbas = resultados.flatMap(r => r.resultado.verbas);
+    consolidado.verbas = allVerbas;
+    
+    // Sum resumo values
+    consolidado.resumo = {
+      ...consolidado.resumo,
+      principal_bruto: resultados.reduce((s, r) => s + r.resultado.resumo.principal_bruto, 0),
+      principal_corrigido: resultados.reduce((s, r) => s + r.resultado.resumo.principal_corrigido, 0),
+      juros_mora: resultados.reduce((s, r) => s + r.resultado.resumo.juros_mora, 0),
+      fgts_total: resultados.reduce((s, r) => s + r.resultado.resumo.fgts_total, 0),
+      cs_segurado: resultados.reduce((s, r) => s + r.resultado.resumo.cs_segurado, 0),
+      cs_empregador: resultados.reduce((s, r) => s + r.resultado.resumo.cs_empregador, 0),
+      ir_retido: resultados.reduce((s, r) => s + r.resultado.resumo.ir_retido, 0),
+      liquido_reclamante: resultados.reduce((s, r) => s + r.resultado.resumo.liquido_reclamante, 0),
+      total_reclamada: resultados.reduce((s, r) => s + r.resultado.resumo.total_reclamada, 0),
+    };
+  }
+
+  return { vinculos: resultados, consolidado };
 }
