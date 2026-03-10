@@ -1124,10 +1124,12 @@ export class PjeCalcEngine {
 
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
 
-        // Calculate interest segment-by-segment
+        // Calculate interest segment-by-segment (skip if juros disabled)
         let jurosTotal = new Decimal(0);
 
-        for (let i = 0; i < datas.length - 1; i++) {
+        if (!jurosDisabled) {
+        // Use jurosStartDate to limit interest calculation
+        const jurosEffectiveStart = jurosStartDate || compDateJuros;
           const segInicio = datas[i];
           const segFim = datas[i + 1];
           const regimeIndice = this.getRegimeParaData(combinacoes_indice, segInicio);
