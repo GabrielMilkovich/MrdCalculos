@@ -61,55 +61,52 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
 
 /**
  * When PJC historicos have no occurrences, extract base values from
- * Calculada verba occurrences to build a synthetic salary history.
- * This ensures the engine can resolve base values per competência.
+ * each Calculada verba's occurrences to build per-verba synthetic historicos.
+ * This ensures each verba gets its own salary base per competência.
  */
 function synthesizeHistoricosFromVerbas(
   analysis: PJCAnalysis, 
   existingHistoricos: PjeHistoricoSalarial[]
 ): PjeHistoricoSalarial[] {
-  // Collect base values per competência from all Calculada verbas with base_tabelada = HISTORICO_SALARIAL
-  const baseByComp = new Map<string, number>();
+  const syntheticHistoricos: PjeHistoricoSalarial[] = [];
   
   for (const v of analysis.verbas) {
     if (v.tipo !== 'Calculada' || !v.ativo) continue;
     if (v.formula.base_tabelada !== 'HISTORICO_SALARIAL') continue;
+    if (v.ocorrencias_all.length === 0) continue;
     
+    const comps: { comp: string; valor: number }[] = [];
     for (const oc of v.ocorrencias_all) {
       if (oc.base > 0) {
-        const comp = oc.competencia.slice(0, 7); // YYYY-MM
-        // Use the FIRST verba's base for each competência (usually the main salary)
-        if (!baseByComp.has(comp)) {
-          baseByComp.set(comp, oc.base);
-        }
+        comps.push({ comp: oc.competencia.slice(0, 7), valor: oc.base });
       }
     }
+    
+    if (comps.length === 0) continue;
+    comps.sort((a, b) => a.comp.localeCompare(b.comp));
+    
+    const histId = `hist-synth-${v.id}`;
+    syntheticHistoricos.push({
+      id: histId,
+      nome: `Salário para ${v.nome}`,
+      periodo_inicio: comps[0].comp + '-01',
+      periodo_fim: comps[comps.length - 1].comp + '-28',
+      tipo_valor: 'informado',
+      incidencia_fgts: v.incidencias.fgts,
+      incidencia_cs: v.incidencias.inss,
+      fgts_recolhido: false,
+      cs_recolhida: false,
+      ocorrencias: comps.map((c, idx) => ({
+        id: `${histId}-oc-${idx}`,
+        historico_id: histId,
+        competencia: c.comp,
+        valor: c.valor,
+        tipo: 'informado' as const,
+      })),
+    });
   }
   
-  if (baseByComp.size === 0) return existingHistoricos;
-  
-  // Create a synthetic historico
-  const comps = Array.from(baseByComp.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  const syntheticHist: PjeHistoricoSalarial = {
-    id: 'hist-synthetic-salary',
-    nome: 'Remuneração (extraída do PJC)',
-    periodo_inicio: comps[0][0] + '-01',
-    periodo_fim: comps[comps.length - 1][0] + '-28',
-    tipo_valor: 'informado',
-    incidencia_fgts: true,
-    incidencia_cs: true,
-    fgts_recolhido: false,
-    cs_recolhida: false,
-    ocorrencias: comps.map(([comp, valor], idx) => ({
-      id: `hist-synth-oc-${idx}`,
-      historico_id: 'hist-synthetic-salary',
-      competencia: comp,
-      valor,
-      tipo: 'informado' as const,
-    })),
-  };
-  
-  return [...existingHistoricos, syntheticHist];
+  return [...existingHistoricos, ...syntheticHistoricos];
 }
 
 // =====================================================
