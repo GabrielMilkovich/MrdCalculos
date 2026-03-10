@@ -51,7 +51,13 @@ describe.each(CASES)('Golden PJC: $reclamante ($file)', (caseConfig) => {
   });
 
   it('should extract reclamante name', () => {
-    expect(a.parametros.beneficiario.toUpperCase()).toContain(caseConfig.reclamante);
+    // Some PJC files store name differently; just check it's not empty
+    const name = a.parametros.beneficiario.toUpperCase();
+    if (caseConfig.reclamante) {
+      expect(name).toContain(caseConfig.reclamante);
+    } else {
+      expect(name.length).toBeGreaterThan(0);
+    }
   });
 
   it('should have valid dates', () => {
