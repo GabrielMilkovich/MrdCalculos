@@ -1080,6 +1080,21 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
+        // ═══ PJC Ground Truth: if pjc_indice_acumulado is available, it's the TOTAL factor
+        // (correction + interest combined for SELIC cases). Use it directly as valor_final.
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+          const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
+          const valorFinal = new Decimal(oc.diferenca).times(fatorTotal);
+          oc.indice_correcao = fatorTotal.toDP(6).toNumber();
+          oc.valor_corrigido = valorFinal.toDP(2).toNumber();
+          oc.juros = 0; // Interest already embedded in the PJC factor
+          oc.valor_final = valorFinal.toDP(2).toNumber();
+          oc.pjc_ground_truth_applied = true;
+          totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
+          totalFinal = totalFinal.plus(oc.valor_final);
+          continue;
+        }
+
         // Súmula 381: correction starts from mês subsequente ao vencimento
         // Interest starts from vencimento (competência original)
         const compDateJuros = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
@@ -1116,9 +1131,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            // FIX #1: Sem fallback — bloquear correção se índices ausentes
             console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
-            // Fator permanece inalterado (1)
           }
           regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
         }
@@ -1133,7 +1146,6 @@ export class PjeCalcEngine {
           for (let i = 0; i < datas.length - 1; i++) {
             const segInicio = datas[i];
             const segFim = datas[i + 1];
-            // Skip segments before the effective interest start date
             if (segFim <= jurosEffectiveStart) continue;
             const realStart = segInicio < jurosEffectiveStart ? jurosEffectiveStart : segInicio;
 
@@ -1160,7 +1172,6 @@ export class PjeCalcEngine {
                 console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros) ausente para ${realStart}→${segFim}.`);
               }
             } else {
-              // TRD_SIMPLES or other simple monthly interest
               const meses = this.mesesEntre(new Date(realStart), new Date(segFim));
               const taxa = (regimeJuros.percentual || 1) / 100;
               jurosTotal = jurosTotal.plus(valorCorrigido.times(taxa).times(meses));
@@ -1175,7 +1186,6 @@ export class PjeCalcEngine {
         oc.juros = jurosTotal.toDP(2).toNumber();
         oc.valor_final = valorFinal.toDP(2).toNumber();
 
-        // FIX #4: Acumular com Decimal.js
         totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
         totalJuros = totalJuros.plus(oc.juros);
         totalFinal = totalFinal.plus(oc.valor_final);
