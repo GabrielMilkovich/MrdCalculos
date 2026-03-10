@@ -584,6 +584,7 @@ export class PjeCalcEngine {
       base_integral: baseIntegral,
       quantidade_integral: qtdIntegral,
       devido_integral: devidoIntegral,
+      pago_breakdown: pagoBreakdown,
     };
   }
 
