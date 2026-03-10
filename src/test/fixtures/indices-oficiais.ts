@@ -102,6 +102,12 @@ function buildSeries(indice: string, rates: Record<number, number[]>): PjeIndice
 /** Complete IPCA-E series 2015-2025 */
 export const IPCA_E_SERIES = buildSeries('IPCA-E', ipcaeRates);
 
+/** IPCAE alias (used by correction-by-date.ts) */
+export const IPCAE_SERIES = IPCA_E_SERIES.map(r => ({ ...r, indice: 'IPCAE' }));
+
+/** IPCA alias (same rates for test purposes) */
+export const IPCA_SERIES = IPCA_E_SERIES.map(r => ({ ...r, indice: 'IPCA' }));
+
 /** Complete SELIC series 2015-2025 */
 export const SELIC_SERIES = buildSeries('SELIC', selicRates);
 
@@ -114,6 +120,8 @@ export const TAXA_LEGAL_SERIES = SELIC_SERIES.map(r => ({ ...r, indice: 'TAXA_LE
 /** All indices combined - ready to pass as indicesDB to PjeCalcEngine */
 export const ALL_TEST_INDICES: PjeIndiceRow[] = [
   ...IPCA_E_SERIES,
+  ...IPCAE_SERIES,
+  ...IPCA_SERIES,
   ...SELIC_SERIES,
   ...TR_SERIES,
   ...TAXA_LEGAL_SERIES,
