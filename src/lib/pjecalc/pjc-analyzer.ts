@@ -189,6 +189,13 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     const reclamanteEl = root.getElementsByTagName('Reclamante')[0];
     cpf = reclamanteEl ? getTextContent(reclamanteEl, 'numeroDocumentoFiscal') : '';
   }
+  // Extract the real liquidation date (dataDeLiquidacao is the actual date used for correction)
+  const dataLiquidacao = tsToDate(
+    getTextContent(root, 'dataDeLiquidacao')
+    || getTextContent(root, 'dataLiquidacao')
+    || getTextContent(root, 'dataCalculo')
+  );
+
   const parametros = {
     beneficiario,
     cpf,
@@ -199,6 +206,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     ajuizamento: tsToDate(getTextContent(root, 'dataAjuizamento')),
     inicio_calculo: tsToDate(getTextContent(root, 'dataInicioCalculo')),
     termino_calculo: tsToDate(getTextContent(root, 'dataTerminoCalculo')),
+    data_liquidacao: dataLiquidacao,
     carga_horaria: parseNum(getTextContent(root, 'valorCargaHorariaPadrao')),
     sabado_dia_util: getTextContent(root, 'sabadoDiaUtil') === 'true',
     projeta_aviso: getTextContent(root, 'projetaAvisoIndenizado') === 'true',
