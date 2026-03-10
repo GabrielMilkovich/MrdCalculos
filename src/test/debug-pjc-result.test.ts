@@ -20,9 +20,9 @@ describe('Debug PJC correction data', () => {
     if (firstVerba) {
       console.log(`\n=== VERBA: ${firstVerba.nome} ===`);
       console.log(`total_diferenca: ${firstVerba.total_diferenca}`);
-      const ocs = firstVerba.ocorrencias.slice(0, 5);
+      const ocs = firstVerba.ocorrencias_all.slice(0, 5);
       for (const oc of ocs) {
-        console.log(`  ${oc.competencia}: devido=${oc.devido} pago=${oc.pago} dif=${oc.diferenca} indice_acumulado=${oc.indice_acumulado} taxa_juros=${oc.taxa_juros}`);
+        console.log(`  ${oc.competencia}: devido=${oc.devido} pago=${oc.pago} dif=${oc.diferenca} indice_acumulado=${oc.indice_acumulado}`);
       }
     }
     
