@@ -247,15 +247,17 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     const baseTabelaIds: string[] = [];
     if (v.formula.base_tabelada) {
       if (v.formula.base_tabelada === 'HISTORICO_SALARIAL') {
-        // Leave baseHistIds empty — engine fallback will search all historicos by competência
+        // Link to per-verba synthetic historico if it exists
+        if (v.tipo === 'Calculada' && v.ocorrencias_all.length > 0) {
+          baseHistIds.push(`hist-synth-${v.id}`);
+        }
+        // Else: leave empty — engine fallback will search all historicos by competência
       } else if (v.formula.base_tabelada === 'SALARIO_MINIMO') {
         baseTabelaIds.push('salario_minimo');
       } else if (v.formula.base_tabelada === 'MAIOR_REMUNERACAO') {
         baseTabelaIds.push('maior_remuneracao');
       } else if (v.formula.base_tabelada === 'ULTIMA_REMUNERACAO') {
         baseTabelaIds.push('ultima_remuneracao');
-      } else {
-        // Unknown type — leave empty for fallback
       }
     }
     
