@@ -108,7 +108,7 @@ function makeEngine(
     { ...defaultCorrecao, ...overrides?.correcao },
     { ...defaultHonorarios, ...overrides?.honorarios },
     { ...defaultCustas, ...overrides?.custas },
-    defaultSeguro, [], [], [], [], [], defaultPrevPrivada, defaultPensao, defaultSF,
+    defaultSeguro, ALL_TEST_INDICES, [], [], [], [], defaultPrevPrivada, defaultPensao, defaultSF,
   );
   return engine.liquidar();
 }
