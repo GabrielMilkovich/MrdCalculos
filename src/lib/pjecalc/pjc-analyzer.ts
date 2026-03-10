@@ -142,8 +142,10 @@ export interface FeriasAnalysis {
 }
 
 export interface AtualizacaoAnalysis {
+  indice_base: string; // e.g. 'IPCAE', 'IPCA', 'SELIC'
   combinacoes_indice: { a_partir_de: string; indice: string }[];
   combinacoes_juros: { a_partir_de: string; tipo: string; taxa?: number }[];
+  juros_apos_deducao_cs: boolean;
 }
 
 // =====================================================
