@@ -280,6 +280,22 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     const comportamentoReflexo = mapComportamentoReflexo(v.comportamento_reflexo);
     const periodoMedia = mapPeriodoMedia(v.periodo_media);
 
+    // Build pre-computed occurrences from PJC ground truth
+    // This injects exact base/div/mult/qtd/pago values so the engine doesn't need
+    // cartão ponto or complex historico resolution — achieving PJC parity
+    const ocorrenciasPrecomputadas = (!isReflexo && v.ocorrencias_all.length > 0)
+      ? v.ocorrencias_all.map(oc => ({
+          competencia: oc.competencia.slice(0, 7),
+          base: oc.base,
+          divisor: oc.divisor,
+          multiplicador: oc.multiplicador,
+          quantidade: oc.quantidade,
+          dobra: oc.dobra,
+          devido: oc.devido,
+          pago: oc.pago,
+        }))
+      : undefined;
+
     return {
       id: v.id,
       nome: v.nome,
@@ -328,6 +344,8 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
       valor_pago_tipo: pagoConfig?.tipo === 'CALCULADO' ? 'calculado' as const : 'informado' as const,
       valor_informado_pago: pagoConfig?.tipo === 'INFORMADO' ? pagoConfig.valor : undefined,
       pago_base: pagoConfig?.tipo === 'CALCULADO' ? pagoConfig.valor : undefined,
+      // PJC ground truth occurrences
+      ocorrencias_precomputadas: ocorrenciasPrecomputadas,
     } satisfies PjeVerba;
   });
 }
