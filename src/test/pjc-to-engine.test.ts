@@ -68,6 +68,7 @@ describe('PJC → Engine Bridge', () => {
       inputs.honorariosConfig,
       inputs.custasConfig,
       inputs.seguroConfig,
+      ALL_TEST_INDICES,
     );
     expect(engine).toBeDefined();
     const result = engine.liquidar();
