@@ -620,7 +620,8 @@ function parseOcorrencias(verbaEl: Element): {
 // XML HELPERS (direct child text only)
 // =====================================================
 
-function getTextContent(parent: Element, tagName: string): string {
+function getTextContent(parent: Element | undefined | null, tagName: string): string {
+  if (!parent) return '';
   // Get first matching element
   const els = parent.getElementsByTagName(tagName);
   if (els.length === 0) return '';
