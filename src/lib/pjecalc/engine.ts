@@ -873,15 +873,12 @@ export class PjeCalcEngine {
       const qtd = new Decimal(pre.quantidade || 1);
       const dobra = new Decimal(pre.dobra ? 2 : 1);
 
-      // Replicate PJe-Calc truncation per step
-      const valorHora = base.div(div).toDP(2);
-      const valorHoraComMult = valorHora.times(mult).toDP(2);
-      const subtotal = valorHoraComMult.times(qtd).toDP(2);
-      const devido = subtotal.times(dobra).toDP(2);
+      // Use PJC ground-truth devido/pago directly (avoids re-truncation drift)
+      const devido = new Decimal(pre.devido);
       const pago = new Decimal(pre.pago || 0);
       const diferenca = devido.minus(pago);
 
-      const formula = `(${base.toFixed(2)} ÷ ${div.toFixed(2)} = ${valorHora.toFixed(2)}) × ${mult.toFixed(4)} = ${valorHoraComMult.toFixed(2)} × ${qtd.toFixed(4)} × ${dobra.toFixed(0)} = ${devido.toFixed(2)}`;
+      const formula = `(${base.toFixed(2)} ÷ ${div.toFixed(2)}) × ${mult.toFixed(4)} × ${qtd.toFixed(4)} × ${dobra.toFixed(0)} = ${devido.toFixed(2)} [PJC]`;
 
       ocorrencias.push({
         competencia: pre.competencia,
