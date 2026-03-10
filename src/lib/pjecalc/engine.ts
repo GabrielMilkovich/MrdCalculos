@@ -2204,8 +2204,33 @@ export class PjeCalcEngine {
             }
           }
           oc.juros = jurosAcc.toDP(2).toNumber();
+        } else if (!jurosDisabled && combinacoes_indice.length > 0) {
+          // No juros combinations, but index combinations exist — respect index regime
+          // Skip interest during SELIC/SEM_CORRECAO periods (they include interest or suspend it)
+          const compDate = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
+          const jurosEffectiveStart = jurosStartDate || compDate;
+          const breakpoints = new Set<string>();
+          breakpoints.add(jurosEffectiveStart);
+          breakpoints.add(dataLiq);
+          for (const ci of combinacoes_indice) {
+            if (ci.de && ci.de > jurosEffectiveStart && ci.de <= dataLiq) breakpoints.add(ci.de);
+          }
+          const datas = Array.from(breakpoints).sort();
+          let jurosAcc = new Decimal(0);
+          for (let i = 0; i < datas.length - 1; i++) {
+            const segInicio = datas[i];
+            const segFim = datas[i + 1];
+            const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
+            const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
+            // Skip interest during SELIC (includes interest) and SEM_CORRECAO (suspended)
+            if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
+            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
+            const taxa = (this.correcaoConfig.juros_percentual || 1) / 100;
+            jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
+          }
+          oc.juros = jurosAcc.toDP(2).toNumber();
         } else if (!jurosDisabled) {
-          // Legacy single interest
+          // Legacy single interest — no combinations at all
           const [ano, mes] = oc.competencia.split('-').map(Number);
           const dataComp = new Date(ano, mes - 1, 1);
           const jurosStart = jurosStartDate ? new Date(jurosStartDate) : dataComp;
