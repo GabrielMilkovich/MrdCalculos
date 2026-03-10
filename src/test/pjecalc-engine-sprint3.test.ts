@@ -375,7 +375,7 @@ describe('Cenário 3 — Complexo', () => {
       params, [], [], [], [verba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
-      [], [], [], [], [],
+      ALL_TEST_INDICES, [], [], [], [],
       { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false },
       { apurar: false, percentual: 0, base: 'liquido' },
       sfConfig,
