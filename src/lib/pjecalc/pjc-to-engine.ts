@@ -33,9 +33,18 @@ export interface PjcEngineInputs {
 }
 
 export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string): PjcEngineInputs {
+  let historicos = convertHistoricos(analysis.historicos_salariais);
+  
+  // If historicos have no occurrences, synthesize them from verba occurrences
+  // PJe-Calc stores salary values inside OcorrenciaDeVerba.base, not always in OcorrenciaHistorico
+  const totalOcorrencias = historicos.reduce((s, h) => s + h.ocorrencias.length, 0);
+  if (totalOcorrencias === 0) {
+    historicos = synthesizeHistoricosFromVerbas(analysis, historicos);
+  }
+  
   return {
     params: convertParametros(analysis, caseId),
-    historicos: convertHistoricos(analysis.historicos_salariais),
+    historicos,
     faltas: convertFaltas(analysis.faltas),
     ferias: convertFerias(analysis.ferias),
     verbas: convertVerbas(analysis.verbas, analysis.dag),
@@ -48,6 +57,59 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     custasConfig: buildDefaultCustasConfig(),
     seguroConfig: { apurar: false, parcelas: 0, recebeu: false },
   };
+}
+
+/**
+ * When PJC historicos have no occurrences, extract base values from
+ * Calculada verba occurrences to build a synthetic salary history.
+ * This ensures the engine can resolve base values per competência.
+ */
+function synthesizeHistoricosFromVerbas(
+  analysis: PJCAnalysis, 
+  existingHistoricos: PjeHistoricoSalarial[]
+): PjeHistoricoSalarial[] {
+  // Collect base values per competência from all Calculada verbas with base_tabelada = HISTORICO_SALARIAL
+  const baseByComp = new Map<string, number>();
+  
+  for (const v of analysis.verbas) {
+    if (v.tipo !== 'Calculada' || !v.ativo) continue;
+    if (v.formula.base_tabelada !== 'HISTORICO_SALARIAL') continue;
+    
+    for (const oc of v.ocorrencias_all) {
+      if (oc.base > 0) {
+        const comp = oc.competencia.slice(0, 7); // YYYY-MM
+        // Use the FIRST verba's base for each competência (usually the main salary)
+        if (!baseByComp.has(comp)) {
+          baseByComp.set(comp, oc.base);
+        }
+      }
+    }
+  }
+  
+  if (baseByComp.size === 0) return existingHistoricos;
+  
+  // Create a synthetic historico
+  const comps = Array.from(baseByComp.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const syntheticHist: PjeHistoricoSalarial = {
+    id: 'hist-synthetic-salary',
+    nome: 'Remuneração (extraída do PJC)',
+    periodo_inicio: comps[0][0] + '-01',
+    periodo_fim: comps[comps.length - 1][0] + '-28',
+    tipo_valor: 'informado',
+    incidencia_fgts: true,
+    incidencia_cs: true,
+    fgts_recolhido: false,
+    cs_recolhida: false,
+    ocorrencias: comps.map(([comp, valor], idx) => ({
+      id: `hist-synth-oc-${idx}`,
+      historico_id: 'hist-synthetic-salary',
+      competencia: comp,
+      valor,
+      tipo: 'informado' as const,
+    })),
+  };
+  
+  return [...existingHistoricos, syntheticHist];
 }
 
 // =====================================================
