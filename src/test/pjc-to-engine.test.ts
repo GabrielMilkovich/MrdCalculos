@@ -8,6 +8,7 @@ import { resolve } from 'path';
 import { analyzePJC } from '../lib/pjecalc/pjc-analyzer';
 import { convertPjcToEngineInputs } from '../lib/pjecalc/pjc-to-engine';
 import { PjeCalcEngine } from '../lib/pjecalc/engine';
+import { ALL_TEST_INDICES } from './fixtures/indices-oficiais';
 
 let inputs: ReturnType<typeof convertPjcToEngineInputs>;
 
