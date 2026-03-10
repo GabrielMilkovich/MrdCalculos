@@ -91,24 +91,33 @@ function convertHistoricos(historicos: HistoricoAnalysis[]): PjeHistoricoSalaria
     const periodoInicio = comps[0]?.comp ? comps[0].comp + '-01' : '2020-01-01';
     const periodoFim = comps[comps.length - 1]?.comp ? comps[comps.length - 1].comp + '-01' : '2025-12-31';
     
+    // For FIXO type with no monthly occurrences, generate a single occurrence with the fixed value
+    let ocorrencias = comps.map((c, oi) => ({
+      id: `hist-oc-${idx}-${oi}`,
+      historico_id: `hist-pjc-${idx}`,
+      competencia: c.comp,
+      valor: c.valor,
+      tipo: 'informado' as const,
+    }));
+    
+    // If no occurrences but has a fixed value, create a placeholder
+    const fixedVal = comps[0]?.valor;
+    if (ocorrencias.length === 0 && h.tipo_variacao === 'FIXO' && fixedVal) {
+      ocorrencias = [{ id: `hist-oc-${idx}-0`, historico_id: `hist-pjc-${idx}`, competencia: periodoInicio.slice(0, 7), valor: fixedVal, tipo: 'informado' as const }];
+    }
+    
     return {
       id: `hist-pjc-${idx}`,
       nome: h.nome,
       periodo_inicio: periodoInicio,
       periodo_fim: periodoFim,
-      tipo_valor: h.tipo_variacao === 'FIXO' ? 'informado' as const : 'informado' as const,
-      valor_informado: h.tipo_variacao === 'FIXO' ? comps[0]?.valor : undefined,
+      tipo_valor: 'informado' as const,
+      valor_informado: h.tipo_variacao === 'FIXO' ? fixedVal : undefined,
       incidencia_fgts: h.incide_fgts,
       incidencia_cs: h.incide_inss,
       fgts_recolhido: false,
       cs_recolhida: false,
-      ocorrencias: comps.map((c, oi) => ({
-        id: `hist-oc-${idx}-${oi}`,
-        historico_id: `hist-pjc-${idx}`,
-        competencia: c.comp,
-        valor: c.valor,
-        tipo: 'informado' as const,
-      })),
+      ocorrencias,
     };
   });
 }
