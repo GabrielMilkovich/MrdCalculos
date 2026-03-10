@@ -323,10 +323,10 @@ describe('Cenário 3 — Complexo', () => {
     expect(trezeResult).toBeDefined();
     expect(trezeResult!.total_diferenca).toBeGreaterThan(0);
 
-    // Without real indices, correction = bruto (fator=1)
+    // With index data, correction should increase the principal
     expect(result.resumo.principal_corrigido).toBeGreaterThanOrEqual(result.resumo.principal_bruto);
 
-    // Without real indices, juros = 0 (no fallback rates)
+    // With index data, juros should be >= 0
     expect(result.resumo.juros_mora).toBeGreaterThanOrEqual(0);
 
     // Multa 523 applied
