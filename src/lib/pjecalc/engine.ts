@@ -483,6 +483,7 @@ export class PjeCalcEngine {
     // Valor Pago: informado ou calculado (Fase 2)
     // FIX #3: Truncamento por etapa no cálculo do Pago (paridade PJe-Calc)
     let pago: Decimal;
+    let pagoBreakdown: PjeOcorrenciaResult['pago_breakdown'] | undefined;
     if (verba.valor_pago_tipo === 'calculado' && verba.pago_base !== undefined) {
       const pagoBase = new Decimal(verba.pago_base || 0);
       const pagoDiv = new Decimal(verba.pago_divisor || 30);
@@ -494,6 +495,13 @@ export class PjeCalcEngine {
       const pagoComMult = pagoValorHora.times(pagoMult).toDP(2);
       // Etapa 3: × Quantidade (truncado)
       pago = pagoComMult.times(pagoQtd).toDP(2);
+      pagoBreakdown = {
+        base: pagoBase.toNumber(),
+        divisor: pagoDiv.toNumber(),
+        multiplicador: pagoMult.toNumber(),
+        quantidade: pagoQtd.toNumber(),
+        formula: `(${pagoBase.toFixed(2)} ÷ ${pagoDiv.toFixed(2)}) × ${pagoMult.toFixed(4)} × ${pagoQtd.toFixed(4)} = ${pago.toFixed(2)}`,
+      };
     } else {
       pago = new Decimal(verba.valor_informado_pago || 0);
     }
