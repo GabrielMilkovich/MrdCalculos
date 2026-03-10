@@ -16,6 +16,7 @@ import {
   type PjeCustasConfig,
   type PjeSeguroConfig,
 } from "@/lib/pjecalc/engine";
+import { ALL_TEST_INDICES } from "./fixtures/indices-oficiais";
 
 // =====================================================
 // HELPERS
