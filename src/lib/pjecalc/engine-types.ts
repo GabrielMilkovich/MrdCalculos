@@ -204,6 +204,8 @@ export interface PjeVerba {
     dobra: boolean;
     devido: number;
     pago: number;
+    /** PJC ground truth correction factor (indiceAcumulado from XML) */
+    indice_acumulado?: number;
   }[];
 }
 
