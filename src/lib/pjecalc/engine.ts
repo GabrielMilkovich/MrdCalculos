@@ -1080,12 +1080,25 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
+        // ═══ PJC Ground Truth: if pjc_indice_acumulado is available, it's the TOTAL factor
+        // (correction + interest combined, since SELIC includes both). Use directly as valor_final.
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+          const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
+          const valorFinal = new Decimal(oc.diferenca).times(fatorTotal);
+          oc.indice_correcao = fatorTotal.toDP(6).toNumber();
+          oc.valor_corrigido = valorFinal.toDP(2).toNumber();
+          oc.juros = 0;
+          oc.valor_final = valorFinal.toDP(2).toNumber();
+          oc.pjc_ground_truth_applied = true;
+          totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
+          totalFinal = totalFinal.plus(oc.valor_final);
+          continue;
+        }
+
         // Súmula 381: correction starts from mês subsequente ao vencimento
-        // Interest starts from vencimento (competência original)
         const compDateJuros = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
         const compDateCorrecao = this.mesSubsequente(oc.competencia) + '-01';
         
-        // Build breakpoints using correction start date
         const breakpoints = new Set<string>();
         breakpoints.add(compDateCorrecao);
         breakpoints.add(dataLiq);
@@ -1097,7 +1110,6 @@ export class PjeCalcEngine {
         }
         const datas = Array.from(breakpoints).sort();
 
-        // Calculate correction factor segment-by-segment
         let fatorTotal = new Decimal(1);
         const regimesUsados: string[] = [];
 
@@ -1116,9 +1128,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            // FIX #1: Sem fallback — bloquear correção se índices ausentes
             console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
-            // Fator permanece inalterado (1)
           }
           regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
         }
@@ -1133,7 +1143,6 @@ export class PjeCalcEngine {
           for (let i = 0; i < datas.length - 1; i++) {
             const segInicio = datas[i];
             const segFim = datas[i + 1];
-            // Skip segments before the effective interest start date
             if (segFim <= jurosEffectiveStart) continue;
             const realStart = segInicio < jurosEffectiveStart ? jurosEffectiveStart : segInicio;
 
@@ -1141,7 +1150,6 @@ export class PjeCalcEngine {
             const indiceNorm = normalizeIndice(regimeIndice?.indice || 'SEM_CORRECAO');
             const regimeJuros = this.getRegimeParaData(combinacoes_juros, realStart);
 
-            // SELIC as correction index already includes interest
             if (indiceNorm === 'SELIC') continue;
             if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
 
@@ -1149,18 +1157,13 @@ export class PjeCalcEngine {
               const fatorSelic = this.getIndiceCorrecaoDB('SELIC', realStart.slice(0, 7), segFim.slice(0, 7));
               if (fatorSelic !== null) {
                 jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
-              } else {
-                console.warn(`[PjeCalcEngine] BLOQUEIO: SELIC (juros) ausente para ${realStart}→${segFim}.`);
               }
             } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', realStart.slice(0, 7), segFim.slice(0, 7));
               if (fatorTL !== null) {
                 jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
-              } else {
-                console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros) ausente para ${realStart}→${segFim}.`);
               }
             } else {
-              // TRD_SIMPLES or other simple monthly interest
               const meses = this.mesesEntre(new Date(realStart), new Date(segFim));
               const taxa = (regimeJuros.percentual || 1) / 100;
               jurosTotal = jurosTotal.plus(valorCorrigido.times(taxa).times(meses));
@@ -1175,7 +1178,6 @@ export class PjeCalcEngine {
         oc.juros = jurosTotal.toDP(2).toNumber();
         oc.valor_final = valorFinal.toDP(2).toNumber();
 
-        // FIX #4: Acumular com Decimal.js
         totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
         totalJuros = totalJuros.plus(oc.juros);
         totalFinal = totalFinal.plus(oc.valor_final);
@@ -1544,6 +1546,7 @@ export class PjeCalcEngine {
     let baseFerias = 0;
     
     // Art. 12-A: Separar rendimentos por ano para tributação correta
+    // PJe-Calc: IR base is on CORRECTED values (valor_corrigido), not nominal
     const anoLiq = parseInt(this.correcaoConfig.data_liquidacao.slice(0, 4));
     let baseAnosAnteriores = 0;
     let baseAnoLiquidacao = 0;
@@ -1557,23 +1560,25 @@ export class PjeCalcEngine {
       if (!verba?.incidencias.irpf) continue;
       if (verba.caracteristica === 'ferias') {
         if (this.irConfig.tributacao_separada_ferias) {
-          baseFerias += vr.total_diferenca;
+          baseFerias += vr.total_final; // Use corrected+interest value
         }
         continue;
       }
       if (verba.caracteristica === '13_salario' && this.irConfig.tributacao_exclusiva_13) {
-        base13 += vr.total_diferenca;
+        base13 += vr.total_final; // Use corrected+interest value
       } else {
-        baseBruta += vr.total_diferenca;
+        baseBruta += vr.total_final; // Use corrected+interest value
         // Classificar por ano para Art. 12-A
         for (const oc of vr.ocorrencias) {
           if (oc.diferenca <= 0) continue;
           const anoComp = parseInt(oc.competencia.slice(0, 4));
+          // Use valor_final (corrected + interest) as IR base
+          const valorIR = oc.valor_final || oc.diferenca;
           if (anoComp < anoLiq) {
-            baseAnosAnteriores += oc.diferenca;
+            baseAnosAnteriores += valorIR;
             competenciasAnosAnteriores.add(oc.competencia);
           } else {
-            baseAnoLiquidacao += oc.diferenca;
+            baseAnoLiquidacao += valorIR;
             competenciasAnoLiquidacao.add(oc.competencia);
           }
         }
@@ -2010,9 +2015,10 @@ export class PjeCalcEngine {
         
         let indiceCorrecao = 1;
         
-        // Use PJC ground truth correction factor when available
+        // Use PJC ground truth correction factor when available (includes interest)
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
+          oc.pjc_ground_truth_applied = true;
         } else {
           const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, oc.competencia, compLiq);
           if (fatorDB !== null) {
@@ -2049,7 +2055,7 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
         
-        // Use PJC ground truth correction factor when available
+        // Use PJC ground truth correction factor when available (includes interest)
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
           const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
@@ -2057,6 +2063,7 @@ export class PjeCalcEngine {
           oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
           oc.juros = 0;
           oc.valor_final = valorCorrigido.toDP(2).toNumber();
+          oc.pjc_ground_truth_applied = true;
           totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
           continue;
         }
@@ -2131,6 +2138,13 @@ export class PjeCalcEngine {
 
       for (const oc of vr.ocorrencias) {
         if (oc.valor_corrigido === 0) { totalFinal += oc.valor_final; continue; }
+
+        // Skip interest for occurrences where PJC ground truth already includes interest
+        if (oc.pjc_ground_truth_applied) {
+          totalJuros += oc.juros;
+          totalFinal += oc.valor_final;
+          continue;
+        }
 
         // Pro-rata CS share for this occurrence
         const csShare = totalCorrigido > 0
