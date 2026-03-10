@@ -248,6 +248,7 @@ describe('Cenário 2 — Médio', () => {
       params, [], [], [], [verba], [],
       defaultFgts, defaultCS, defaultIR, defaultCorrecao,
       defaultHonorarios, defaultCustas, defaultSeguro,
+      ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
     expect(result.fgts.multa_valor).toBeGreaterThan(0);
