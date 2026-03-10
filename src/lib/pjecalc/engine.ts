@@ -895,6 +895,7 @@ export class PjeCalcEngine {
         juros: 0,
         valor_final: diferenca.toDP(2).toNumber(),
         formula,
+        pjc_indice_acumulado: pre.indice_acumulado,
       });
 
       totalDevido = totalDevido.plus(devido);
@@ -2006,14 +2007,21 @@ export class PjeCalcEngine {
       let totalCorrigido = new Decimal(0);
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
-        const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, oc.competencia, compLiq);
+        
         let indiceCorrecao = 1;
-        if (fatorDB !== null) {
-          indiceCorrecao = fatorDB;
+        
+        // Use PJC ground truth correction factor when available
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+          indiceCorrecao = oc.pjc_indice_acumulado;
         } else {
-          console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
-          indiceCorrecao = 1;
+          const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, oc.competencia, compLiq);
+          if (fatorDB !== null) {
+            indiceCorrecao = fatorDB;
+          } else {
+            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+          }
         }
+        
         const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
         oc.indice_correcao = Number(new Decimal(indiceCorrecao).toDP(6));
         oc.valor_corrigido = valorCorrigido;
@@ -2040,6 +2048,19 @@ export class PjeCalcEngine {
       let totalCorrigido = new Decimal(0);
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
+        
+        // Use PJC ground truth correction factor when available
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+          const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
+          const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
+          oc.indice_correcao = fatorTotal.toDP(6).toNumber();
+          oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
+          oc.juros = 0;
+          oc.valor_final = valorCorrigido.toDP(2).toNumber();
+          totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
+          continue;
+        }
+        
         // Súmula 381: correction starts from mês subsequente ao vencimento
         const compDate = this.mesSubsequente(oc.competencia) + '-01';
         const breakpoints = new Set<string>();
@@ -2056,7 +2077,6 @@ export class PjeCalcEngine {
           const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
           const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
           if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
-          // For SELIC as correction index, still apply the correction factor (SELIC includes interest but in correction-only mode we apply the full factor)
           const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
