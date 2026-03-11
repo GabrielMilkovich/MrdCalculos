@@ -1643,10 +1643,9 @@ export class PjeCalcEngine {
             imposto = this.calcularINSSProgressivo(comp, totalBase);
           }
 
-          // CORRECTION 1-4: Apply correction-only factor from verbas (inflation scaling)
-          // PJe-Calc: correcaoTrabalhistaDosSalariosDevidosDoINSS = same inflation as verbas
+          // Apply monetary correction to CS amount (correcaoTrabalhistaDosSalariosDevidosDoINSS)
           const cf = correctionFactorByComp[comp];
-          if (cf && cf > 1) {
+          if (cf && cf !== 1) {
             imposto = Number(new Decimal(imposto).times(cf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
           }
 
