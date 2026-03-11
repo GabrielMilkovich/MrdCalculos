@@ -24,7 +24,7 @@ import {
   resolved,
   absent,
   type ResolverSources,
-} from '../pjecalc/canonical';
+} from '../lib/pjecalc/canonical';
 
 // =====================================================
 // FIXTURES
