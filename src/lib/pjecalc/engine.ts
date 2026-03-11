@@ -2571,7 +2571,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
+            this.trackWarning('W050', 'correcao_monetaria', `Índice ${indice} ausente para ${segInicio}→${segFim} (correção-only combinação). Usando fator=1.`, segInicio.slice(0, 7));
           }
         }
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
