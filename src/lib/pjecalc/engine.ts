@@ -1599,6 +1599,32 @@ export class PjeCalcEngine {
       
       // Check if GT provides pre-computed CS amounts (contribuicaoSocialNormal > 0)
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
+
+      // ═══ PJe-Calc CS Monetary Update ═══
+      // PJe-Calc's "correcaoTrabalhistaDosSalariosDevidosDoINSS" applies the same monetary
+      // correction to CS amounts that it applies to verbas. The contribuicaoSocialNormal
+      // in ApuracaoDeJuros is the NOMINAL CS; inssReclamante is the CORRECTED CS.
+      // We compute correction factors per competência from verbaResults.
+      const correctionFactorByComp: Record<string, number> = {};
+      {
+        const nominalByComp: Record<string, number> = {};
+        const corrigidoByComp: Record<string, number> = {};
+        for (const vr of verbaResults) {
+          const verba = this.verbas.find(v => v.id === vr.verba_id);
+          if (!verba?.incidencias.contribuicao_social) continue;
+          for (const oc of vr.ocorrencias) {
+            if (oc.diferenca === 0) continue;
+            const c = oc.competencia.slice(0, 7);
+            nominalByComp[c] = (nominalByComp[c] || 0) + Math.abs(oc.diferenca);
+            corrigidoByComp[c] = (corrigidoByComp[c] || 0) + Math.abs(oc.valor_corrigido);
+          }
+        }
+        for (const c of Object.keys(nominalByComp)) {
+          if (nominalByComp[c] > 0 && corrigidoByComp[c] > 0) {
+            correctionFactorByComp[c] = corrigidoByComp[c] / nominalByComp[c];
+          }
+        }
+      }
       
       if (this.csConfig.apurar_segurado) {
         for (const comp of allComps) {
@@ -1614,6 +1640,13 @@ export class PjeCalcEngine {
           } else {
             imposto = this.calcularINSSProgressivo(comp, totalBase);
           }
+
+          // Apply monetary correction to CS amount (correcaoTrabalhistaDosSalariosDevidosDoINSS)
+          const cf = correctionFactorByComp[comp];
+          if (cf && cf > 1) {
+            imposto = Number(new Decimal(imposto).times(cf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
+          }
+
           segurado_devidos.push({
             competencia: comp, base: totalBase,
             aliquota: totalBase > 0 ? imposto / totalBase : 0,
@@ -1624,7 +1657,7 @@ export class PjeCalcEngine {
         }
       }
 
-      // Empregador with GT bases
+      // Empregador with GT bases (also apply monetary correction)
       if (this.csConfig.apurar_empresa || this.csConfig.apurar_sat || this.csConfig.apurar_terceiros) {
         for (const comp of allComps) {
           const baseNormal = gtBasesByComp[comp] || 0;
@@ -1644,11 +1677,14 @@ export class PjeCalcEngine {
             const aliqEmp = (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
             const aliqSat = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
             const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
+            // Apply correction factor to empregador CS too
+            const cf = correctionFactorByComp[comp] ?? 1;
+            const correctedBase = cf > 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
             empregador.push({
               competencia: comp,
-              empresa: this.csConfig.apurar_empresa ? Number(new Decimal(totalBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
-              sat: this.csConfig.apurar_sat ? Number(new Decimal(totalBase).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
-              terceiros: this.csConfig.apurar_terceiros ? Number(new Decimal(totalBase).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+              empresa: this.csConfig.apurar_empresa ? Number(new Decimal(correctedBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+              sat: this.csConfig.apurar_sat ? Number(new Decimal(correctedBase).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+              terceiros: this.csConfig.apurar_terceiros ? Number(new Decimal(correctedBase).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
             });
           }
         }
