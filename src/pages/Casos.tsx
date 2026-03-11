@@ -274,6 +274,15 @@ export default function Casos() {
           <div className="flex gap-2 flex-wrap">
             <Button 
               variant="outline" size="sm" 
+              onClick={handleSeedRoque}
+              disabled={seedingRoque}
+              className="gap-1.5 h-9 text-sm border-primary/30 text-primary"
+            >
+              <FlaskConical className="h-4 w-4" />
+              {seedingRoque ? "Criando..." : "Caso Roque (Via Varejo PR)"}
+            </Button>
+            <Button 
+              variant="outline" size="sm" 
               onClick={handleSeedRosicleia}
               disabled={seedingRosicleia}
               className="gap-1.5 h-9 text-sm border-primary/30 text-primary"
