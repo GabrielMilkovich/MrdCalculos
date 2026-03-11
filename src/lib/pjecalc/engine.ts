@@ -731,7 +731,7 @@ export class PjeCalcEngine {
 
     if (faixas.length === 0) {
       // AUDIT: Track fallback for specific competência
-      this.trackWarning('E032', 'inss', `INSS: Sem faixas para ${competencia} — usando padrão 2025`);
+      this.trackWarning('W032', 'cs', `INSS: Sem faixas para ${competencia} — usando padrão 2025`);
       return DEFAULT_FAIXAS_INSS;
     }
     return faixas;
