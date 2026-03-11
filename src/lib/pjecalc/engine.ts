@@ -2678,7 +2678,7 @@ export class PjeCalcEngine {
 
     // ── 0. Validação pré-liquidação ──
     const validacao = this.validarPreLiquidacao();
-    audit('validacao', `Pré-validação: ${validacao.valid ? 'OK' : validacao.items.length + ' issues'}`);
+    audit('validacao', `Pré-validação: ${validacao.valido ? 'OK' : validacao.itens.length + ' issues'}`);
 
     // ── 1. Topological sort: principals first, then reflexas in dependency order ──
     // This supports reflex-on-reflex (e.g., HE → DSR → 13º s/ DSR)
