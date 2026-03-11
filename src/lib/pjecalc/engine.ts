@@ -2755,42 +2755,45 @@ export class PjeCalcEngine {
 
     let csPreComputed: PjeCSResult | null = null;
     if (this.correcaoConfig.juros_apos_deducao_cs) {
-      // Step A: Correction only
       this.aplicarCorrecaoSomente(verbaResults);
+      audit('correcao', 'Correção monetária aplicada (sem juros)');
       
-      // Step A.1: GT Calibration — correct the correction values to match PJC ground truth
       if (hasGT) {
         this.calibrarCorrecaoComGT(verbaResults, false);
+        audit('gt_calibracao', 'Calibração GT (correção only)');
       }
       
-      // Step B: CS on corrected values (BEFORE interest — this is the FINAL CS)
-      // PJe-Calc computes CS only once on corrected values, before interest is applied
       csPreComputed = this.calcularCS(verbaResults, true);
       const csDescontadoPreJuros = this.csConfig.cobrar_reclamante ? csPreComputed.total_segurado : 0;
+      audit('cs', `CS pré-juros: segurado=${csPreComputed.total_segurado.toFixed(2)}, empregador=${csPreComputed.total_empregador.toFixed(2)}`);
       
-      // Step C+D: Apply interest
       if (hasGT) {
         this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
+        audit('gt_juros', 'Calibração GT (juros + CS deduzida)');
       } else {
         this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
+        audit('juros', 'Juros aplicados após dedução CS');
       }
     } else {
       this.aplicarCorrecaoJuros(verbaResults);
+      audit('correcao_juros', 'Correção + juros aplicados');
       if (hasGT) {
         this.calibrarCorrecaoComGT(verbaResults, true);
+        audit('gt_calibracao', 'Calibração GT (full)');
       }
     }
 
     // ── 5. FGTS ──
     const fgts = this.calcularFGTS(verbaResults);
+    audit('fgts', `FGTS: depósitos=${fgts.total_depositos.toFixed(2)}, multa=${fgts.multa_valor.toFixed(2)}`);
 
     // ── 6. Contribuição Social ──
-    // For juros_apos_deducao_cs: reuse CS computed BEFORE interest (step B)
-    // Otherwise: compute CS on final corrected+interest values
     const cs = csPreComputed || this.calcularCS(verbaResults, true);
+    audit('cs_final', `CS final: segurado=${cs.total_segurado.toFixed(2)}, empregador=${cs.total_empregador.toFixed(2)}`);
 
     // ── 7. IR ──
     const ir = this.calcularIR(verbaResults, cs);
+    audit('ir', `IR: base=${ir.base_calculo.toFixed(2)}, imposto=${ir.imposto_devido.toFixed(2)}`);
 
     // ── 8. Seguro-Desemprego ──
     const seguro = this.calcularSeguroDesemprego();
