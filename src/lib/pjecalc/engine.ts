@@ -1059,7 +1059,7 @@ export class PjeCalcEngine {
             const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiq);
             let fator2: number;
             if (fatorSELIC !== null) { fator2 = fatorSELIC; } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para ${compCitacao}→${compLiq}. Usando fator=1.`);
+              this.trackWarning('W042', 'correcao_monetaria', `Índice SELIC ausente para ${compCitacao}→${compLiq}. Usando fator=1 (PERDA DE PRECISÃO).`, oc.competencia);
               fator2 = 1;
             }
             indiceCorrecao = fator1 * fator2;
