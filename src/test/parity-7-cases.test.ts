@@ -230,19 +230,21 @@ describe.each(CASES)('Paridade: $nome ($file)', (caseSpec) => {
 // DIAGNÓSTICO DE CORREÇÃO
 // ═══════════════════════════════════════════════════
 
-describe('Diagnóstico Correção — Islan & Carla', () => {
+describe('Diagnóstico Correção — Todos os Casos', () => {
   it('deve detalhar valores de correção', () => {
-    for (const caseName of ['islan-rodrigues.pjc', 'carla-pego.pjc']) {
-      const data = caseResults.get(caseName);
+    for (const c of CASES) {
+      const data = caseResults.get(c.file);
       if (!data) continue;
 
-      console.log(`\n═══ DIAGNÓSTICO ${caseName} ═══`);
-      console.log(`Correção: indice=${data.inputs.correcaoConfig.indice}, data_liq=${data.inputs.correcaoConfig.data_liquidacao}`);
-      console.log(`Combinações: ${JSON.stringify(data.inputs.correcaoConfig.combinacoes_indice?.map(c => ({ indice: c.indice, de: c.de })))}`);
-      console.log(`Juros combos: ${JSON.stringify(data.inputs.correcaoConfig.combinacoes_juros?.map(c => ({ tipo: c.tipo, de: c.de, pct: c.percentual })))}`);
-      console.log(`Juros: tipo=${data.inputs.correcaoConfig.juros_tipo}, pct=${data.inputs.correcaoConfig.juros_percentual}, inicio=${data.inputs.correcaoConfig.juros_inicio}`);
-      console.log(`juros_apos_deducao_cs=${data.inputs.correcaoConfig.juros_apos_deducao_cs}`);
+      console.log(`\n═══ DIAGNÓSTICO ${c.nome} (${c.file}) ═══`);
+      const cc = data.inputs.correcaoConfig;
+      console.log(`Correção: indice=${cc.indice}, data_liq=${cc.data_liquidacao}`);
+      console.log(`Combinações idx: ${JSON.stringify(cc.combinacoes_indice?.map(c => ({ indice: c.indice, de: c.de })))}`);
+      console.log(`Combinações jur: ${JSON.stringify(cc.combinacoes_juros?.map(c => ({ tipo: c.tipo, de: c.de, pct: c.percentual })))}`);
+      console.log(`Juros: tipo=${cc.juros_tipo}, pct=${cc.juros_percentual}, inicio=${cc.juros_inicio}`);
+      console.log(`juros_apos_deducao_cs=${cc.juros_apos_deducao_cs}`);
       console.log(`data_ajuizamento=${data.inputs.params.data_ajuizamento}`);
+      console.log(`hasCombIdx=${!!cc.combinacoes_indice?.length} hasCombJur=${!!cc.combinacoes_juros?.length}`);
 
       // Total corrigido breakdown
       let totalCorrigido = 0, totalJuros = 0, totalFinal = 0, totalDif = 0;
@@ -252,26 +254,12 @@ describe('Diagnóstico Correção — Islan & Carla', () => {
         totalJuros += vr.total_juros;
         totalFinal += vr.total_final;
       }
-      console.log(`\n  Engine totals: dif=${totalDif.toFixed(2)} corr=${totalCorrigido.toFixed(2)} juros=${totalJuros.toFixed(2)} final=${totalFinal.toFixed(2)}`);
-      console.log(`  Resumo: bruto=${data.result.resumo.principal_bruto}, corrigido=${data.result.resumo.principal_corrigido}, juros=${data.result.resumo.juros_mora}, liq=${data.result.resumo.liquido_reclamante}`);
-      console.log(`  PJC: liq=${data.analysis.resultado.liquido_exequente}, bruto_implied=${(data.analysis.resultado.liquido_exequente + data.analysis.resultado.inss_reclamante + data.analysis.resultado.imposto_renda).toFixed(2)}`);
-
-      // GT summary
-      if (data.analysis.apuracao_juros) {
-        const gtSum = data.analysis.apuracao_juros.reduce((s, e) => s + e.valor_corrigido, 0);
-        console.log(`  GT sum(valorCorrigido)=${gtSum.toFixed(2)} (tax basis, NOT full correction)`);
-      }
-
-      let gtCount = 0, fbCount = 0;
-      for (const vr of data.result.verbas.slice(0, 3)) {
-        console.log(`  Verba: ${vr.nome} (dif=${vr.total_diferenca.toFixed(2)}, corr=${vr.total_corrigido.toFixed(2)}, juros=${vr.total_juros.toFixed(2)}, final=${vr.total_final.toFixed(2)})`);
-        for (const oc of vr.ocorrencias.slice(0, 3)) {
-          const gt = (oc as any).pjc_ground_truth_applied ? 'GT' : 'DB';
-          if ((oc as any).pjc_ground_truth_applied) gtCount++; else fbCount++;
-          console.log(`    ${oc.competencia}: dif=${oc.diferenca.toFixed(2)} idx=${oc.indice_correcao?.toFixed(4)||'-'} corr=${oc.valor_corrigido.toFixed(2)} juros=${oc.juros.toFixed(2)} final=${oc.valor_final.toFixed(2)} [${gt}] pjc_idx=${(oc as any).pjc_indice_acumulado||'-'}`);
-        }
-      }
-      console.log(`GT: ${gtCount} | Fallback: ${fbCount}`);
+      console.log(`  Engine: dif=${totalDif.toFixed(2)} corr=${totalCorrigido.toFixed(2)} juros=${totalJuros.toFixed(2)} final=${totalFinal.toFixed(2)}`);
+      console.log(`  Resumo: liq=${data.result.resumo.liquido_reclamante}, cs_seg=${data.result.resumo.cs_segurado}, ir=${data.result.resumo.ir_retido}`);
+      console.log(`  PJC: liq=${data.analysis.resultado.liquido_exequente}, inss=${data.analysis.resultado.inss_reclamante}, ir=${data.analysis.resultado.imposto_renda}`);
+      const pjcBruto = data.analysis.resultado.liquido_exequente + data.analysis.resultado.inss_reclamante + data.analysis.resultado.imposto_renda;
+      console.log(`  PJC bruto_implied=${pjcBruto.toFixed(2)} vs V3 bruto=${(totalCorrigido+totalJuros).toFixed(2)}`);
+      console.log(`  PJC juros_implied=${(pjcBruto - totalCorrigido).toFixed(2)} (bruto - V3_corrigido)`);
     }
   });
 });
