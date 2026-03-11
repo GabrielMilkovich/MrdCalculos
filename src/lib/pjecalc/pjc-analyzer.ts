@@ -297,6 +297,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     prescricao_quinquenal: getTextContent(root, 'prescricaoQuinquenal') === 'true',
     prescricao_fgts: getTextContent(root, 'prescricaoFgts') === 'true',
     limitar_avos: getTextContent(root, 'limitarAvosAoPeriodoDoCalculo') === 'true',
+    data_citacao: tsToDate(getTextContent(root, 'dataCitacao') || getTextContent(root, 'dataDaCitacao')) || undefined,
   };
 
   // --- Resultado ---
