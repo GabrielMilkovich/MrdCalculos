@@ -154,6 +154,7 @@ function convertParametros(a: PJCAnalysis, caseId: string): PjeParametros {
     data_admissao: a.parametros.admissao,
     data_demissao: a.parametros.demissao || undefined,
     data_ajuizamento: a.parametros.ajuizamento,
+    data_citacao: a.parametros.data_citacao || undefined,
     data_inicial: a.parametros.inicio_calculo || undefined,
     data_final: a.parametros.termino_calculo || undefined,
     estado: '',
