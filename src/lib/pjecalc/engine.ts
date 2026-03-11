@@ -268,6 +268,26 @@ export class PjeCalcEngine {
   }
 
   // =====================================================
+  // SÁBADO DIA ÚTIL — with per-date exceptions
+  // =====================================================
+
+  /**
+   * Check if Saturday is a working day for a specific date.
+   * Respects excecoesSabado ranges first, then falls back to global param.
+   */
+  private isSabadoDiaUtilParaData(date: Date): boolean {
+    if (this.excecoesSabado.length > 0) {
+      const dateStr = date.toISOString().slice(0, 10);
+      for (const exc of this.excecoesSabado) {
+        if (dateStr >= exc.data_inicial && dateStr <= exc.data_final) {
+          return exc.sabado_dia_util;
+        }
+      }
+    }
+    return this.params.sabado_dia_util;
+  }
+
+  // =====================================================
   // QUANTIDADE CALENDÁRIO (Dias Úteis / Repousos / Feriados)
   // =====================================================
 
