@@ -4,7 +4,7 @@
  * enabling automated calculation from imported .PJC files.
  */
 
-import type { PJCAnalysis, VerbaAnalysis, HistoricoAnalysis, FaltaAnalysis, FeriasAnalysis } from './pjc-analyzer';
+import type { PJCAnalysis, VerbaAnalysis, HistoricoAnalysis, FaltaAnalysis, FeriasAnalysis, ApuracaoJurosEntry } from './pjc-analyzer';
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias, PjeVerba,
   PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig, PjeIRConfig,
