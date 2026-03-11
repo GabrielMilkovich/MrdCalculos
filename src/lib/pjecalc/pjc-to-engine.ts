@@ -547,8 +547,6 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
   const indiceBase = normalizeIndice(a.atualizacao.indice_base || 'IPCAE');
   
   // Build 2-phase combinations: base index + switch date
-  // Phase 1: indiceBase from beginning
-  // Phase 2: outroIndiceTrabalhista from switchDate
   const combinacoes_indice: PjeCombinacaoIndice[] = [];
   const combinacoes_juros: PjeCombinacaoJuros[] = [];
 
@@ -557,25 +555,20 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
   const validCombJur = a.atualizacao.combinacoes_juros.filter(cj => cj.a_partir_de && cj.tipo);
 
   if (validCombIdx.length > 0) {
-    // Phase 1: base index from the beginning
     combinacoes_indice.push({ indice: indiceBase });
-    // Phase 2+: switches from PJC
     for (const ci of validCombIdx) {
       combinacoes_indice.push({ de: ci.a_partir_de, indice: normalizeIndice(ci.indice) });
     }
   }
 
   if (validCombJur.length > 0) {
-    // Phase 1: TRD_SIMPLES 1% a.m. from the beginning (standard pre-ADC 58)
     combinacoes_juros.push({ tipo: 'TRD_SIMPLES', percentual: 1 });
-    // Phase 2+: switches from PJC
     for (const cj of validCombJur) {
       combinacoes_juros.push({ de: cj.a_partir_de, tipo: normalizeJuros(cj.tipo), percentual: cj.taxa });
     }
   }
 
   const hasCombinations = combinacoes_indice.length > 0;
-
   const gt = convertApuracaoJurosToGT(a.apuracao_juros);
 
   return {
@@ -591,12 +584,16 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     combinacoes_juros: combinacoes_juros.length > 0 ? combinacoes_juros : undefined,
     juros_apos_deducao_cs: a.atualizacao.juros_apos_deducao_cs,
     apuracao_juros_gt: gt,
-    // GT closure targets: inject PJC resultado to compute exact total juros
     gt_closure: (a.resultado.liquido_exequente > 0 || a.resultado.inss_reclamante > 0) ? {
       liquido_exequente: a.resultado.liquido_exequente,
       inss_reclamante: a.resultado.inss_reclamante,
       imposto_renda: a.resultado.imposto_renda,
     } : undefined,
+    // New PJC fields
+    ignorar_taxa_negativa: a.atualizacao.ignorar_taxa_negativa,
+    base_de_juros_das_verbas: a.atualizacao.base_de_juros_das_verbas,
+    ente_publico: a.atualizacao.ente_publico,
+    aplicar_juros_fase_pre_judicial: a.atualizacao.aplicar_juros_fase_pre_judicial,
   };
 }
 

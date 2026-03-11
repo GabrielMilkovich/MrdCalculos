@@ -2946,6 +2946,7 @@ export class PjeCalcEngine {
       verbas: verbaResults, fgts, contribuicao_social: cs, imposto_renda: ir,
       seguro_desemprego: seguro, previdencia_privada: prevPrivada, salario_familia: salarioFamilia, resumo, validacao,
       audit_trail: auditTrail,
+      calculation_warnings: this.calculationWarnings.length > 0 ? [...this.calculationWarnings] : undefined,
     };
   }
 
