@@ -1834,6 +1834,92 @@ export class PjeCalcEngine {
     };
   }
 
+  // ═══ IR from ApuracaoDeJuros Ground Truth ═══
+  private calcularIRFromGT(gt: import('./engine-types').PjeApuracaoJurosGT[], csResult: PjeCSResult): PjeIRResult {
+    const R = PjeCalcEngine.ROUND_CS_IR;
+    const anoLiq = parseInt(this.correcaoConfig.data_liquidacao.slice(0, 4));
+    const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
+    const tabelaIR = this.getFaixasIRParaCompetencia(compLiq);
+
+    let baseDemais = 0, base13 = 0, baseFerias = 0;
+    let baseAnosAnteriores = 0, baseAnoLiquidacao = 0;
+    const compsAnteriores = new Set<string>();
+    const compsLiquidacao = new Set<string>();
+
+    for (const entry of gt) {
+      const comp = entry.competencia.slice(0, 7);
+      const anoComp = parseInt(comp.slice(0, 4));
+      baseDemais += entry.ir_base_demais;
+      base13 += entry.ir_base_13;
+      baseFerias += entry.ir_base_ferias;
+      if (entry.ir_base_demais > 0) {
+        if (anoComp < anoLiq) { baseAnosAnteriores += entry.ir_base_demais; compsAnteriores.add(comp); }
+        else { baseAnoLiquidacao += entry.ir_base_demais; compsLiquidacao.add(comp); }
+      }
+    }
+
+    const mesesAnosAnteriores = compsAnteriores.size;
+    const mesesAnoLiquidacao = compsLiquidacao.size;
+    let deducoes = 0;
+    if (this.irConfig.deduzir_cs && this.csConfig.cobrar_reclamante) deducoes += csResult.total_segurado;
+    const periodo = this.getPeriodoCalculo();
+    const meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
+
+    let irAnosAnteriores = new Decimal(0), irAnoLiquidacao = new Decimal(0);
+    let ir13Exclusivo = new Decimal(0), irFeriasSeparado = new Decimal(0);
+
+    if (mesesAnosAnteriores > 0 && baseAnosAnteriores > 0) {
+      const propDed = new Decimal(deducoes).times(baseAnosAnteriores).div(Math.max(baseDemais, 1)).toDP(2, R).toNumber();
+      const dedDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(mesesAnosAnteriores).toDP(2, R).toNumber();
+      const bt = Math.max(0, baseAnosAnteriores - propDed - dedDep);
+      for (const f of tabelaIR.faixas) { if (bt <= f.ate * mesesAnosAnteriores) { irAnosAnteriores = new Decimal(bt).times(f.aliquota).minus(new Decimal(f.deducao).times(mesesAnosAnteriores)).toDP(2, R); break; } }
+      if (irAnosAnteriores.lt(0)) irAnosAnteriores = new Decimal(0);
+    }
+
+    if (mesesAnoLiquidacao > 0 && baseAnoLiquidacao > 0) {
+      const propDed = new Decimal(deducoes).times(baseAnoLiquidacao).div(Math.max(baseDemais, 1)).toDP(2, R).toNumber();
+      const dedDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(mesesAnoLiquidacao).toDP(2, R).toNumber();
+      const bt = Math.max(0, baseAnoLiquidacao - propDed - dedDep);
+      for (const f of tabelaIR.faixas) { if (bt <= f.ate * mesesAnoLiquidacao) { irAnoLiquidacao = new Decimal(bt).times(f.aliquota).minus(new Decimal(f.deducao).times(mesesAnoLiquidacao)).toDP(2, R); break; } }
+      if (irAnoLiquidacao.lt(0)) irAnoLiquidacao = new Decimal(0);
+    }
+
+    if (mesesAnosAnteriores === 0 && mesesAnoLiquidacao === 0 && baseDemais > 0) {
+      const dedDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
+      const bt = Math.max(0, baseDemais - deducoes - dedDep);
+      for (const f of tabelaIR.faixas) { if (bt <= f.ate * meses) { irAnoLiquidacao = new Decimal(bt).times(f.aliquota).minus(new Decimal(f.deducao).times(meses)).toDP(2, R); break; } }
+      if (irAnoLiquidacao.lt(0)) irAnoLiquidacao = new Decimal(0);
+    }
+
+    if (this.irConfig.tributacao_exclusiva_13 && base13 > 0) {
+      for (const f of tabelaIR.faixas) { if (base13 <= f.ate) { ir13Exclusivo = new Decimal(base13).times(f.aliquota).minus(f.deducao).toDP(2, R); break; } }
+      if (ir13Exclusivo.lt(0)) ir13Exclusivo = new Decimal(0);
+    }
+
+    if (this.irConfig.tributacao_separada_ferias && baseFerias > 0) {
+      for (const f of tabelaIR.faixas) { if (baseFerias <= f.ate * meses) { irFeriasSeparado = new Decimal(baseFerias).times(f.aliquota).minus(new Decimal(f.deducao).times(meses)).toDP(2, R); break; } }
+      if (irFeriasSeparado.lt(0)) irFeriasSeparado = new Decimal(0);
+    }
+
+    const imposto = irAnosAnteriores.plus(irAnoLiquidacao).plus(ir13Exclusivo).plus(irFeriasSeparado);
+    const dedDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
+    const baseTributavel = Math.max(0, baseDemais - deducoes - dedDep);
+
+    return {
+      base_calculo: Number(new Decimal(baseDemais + base13 + baseFerias).toDP(2, R)),
+      deducoes: Number(new Decimal(deducoes + dedDep).toDP(2, R)),
+      base_tributavel: Number(new Decimal(baseTributavel + base13 + baseFerias).toDP(2, R)),
+      imposto_devido: imposto.toDP(2, R).toNumber(),
+      meses_rra: meses, metodo: meses > 1 ? 'art_12a_rra' : 'tabela_mensal',
+      ir_anos_anteriores: irAnosAnteriores.toDP(2, R).toNumber(),
+      ir_ano_liquidacao: irAnoLiquidacao.toDP(2, R).toNumber(),
+      ir_13_exclusivo: ir13Exclusivo.toDP(2, R).toNumber(),
+      ir_ferias_separado: irFeriasSeparado.toDP(2, R).toNumber(),
+      meses_anos_anteriores: mesesAnosAnteriores,
+      meses_ano_liquidacao: mesesAnoLiquidacao || meses,
+    };
+  }
+
   // =====================================================
   // CALCULAR SEGURO-DESEMPREGO
   // =====================================================
