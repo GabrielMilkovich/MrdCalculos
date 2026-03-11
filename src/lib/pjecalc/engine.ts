@@ -2906,10 +2906,13 @@ export class PjeCalcEngine {
       },
     };
 
+    audit('resumo', `Bruto=${resumo.principal_corrigido.toFixed(2)}, Juros=${resumo.juros_mora.toFixed(2)}, Líquido=${resumo.liquido_reclamante.toFixed(2)}, Total_Reclamada=${resumo.total_reclamada.toFixed(2)}`);
+
     return {
       data_liquidacao: this.correcaoConfig.data_liquidacao,
       verbas: verbaResults, fgts, contribuicao_social: cs, imposto_renda: ir,
       seguro_desemprego: seguro, previdencia_privada: prevPrivada, salario_familia: salarioFamilia, resumo, validacao,
+      audit_trail: auditTrail,
     };
   }
 
