@@ -997,23 +997,18 @@ Total da reclamada: ${fmt(res.resumo.total_reclamada)}`;
             </Card>
           )}
 
-          {/* Comparador de Paridade */}
+          {/* Auditoria em modo puro */}
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Scale className="h-4 w-4 text-primary" />
-                  Comparador de Paridade
-                </CardTitle>
-                {parityData && (
-                  <Badge variant="outline" className="text-[10px]">
-                    {parityData.verbas.filter(v => v.status === 'ok').length}/{parityData.verbas.length} OK
-                  </Badge>
-                )}
-              </div>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Gavel className="h-4 w-4 text-primary" />
+                Auditoria do Sistema (Modo Puro)
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <ComparadorParidade parityData={parityData} />
+              <p className="text-xs text-muted-foreground">
+                O cálculo está sendo executado apenas com insumos internos do sistema (sem baseline externo de PJe-Calc).
+              </p>
             </CardContent>
           </Card>
 
