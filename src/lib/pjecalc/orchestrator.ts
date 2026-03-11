@@ -736,7 +736,7 @@ export async function executarLiquidacao(
     indicesDB,           // 14: correction indices  
     faixasINSSDB,        // 15: INSS progressive brackets
     faixasIRDB,          // 16: IR brackets
-    caseData.excecoesCargas || [],  // 17: exceções de carga horária
+    [],                  // 17: excecoesCargas (TODO: load from pjecalc_excecoes_carga when available)
     feriadosDB,          // 18: holidays
     prevPrivadaConfig,   // 19: previdência privada
     pensaoConfig,        // 20: pensão alimentícia
