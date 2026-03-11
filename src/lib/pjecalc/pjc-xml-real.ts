@@ -735,6 +735,8 @@ export function exportPJCXml(data: PJCReal): string {
       lines.push(`      <prazo>${f.prazo_dias}</prazo>`);
       lines.push(`      <situacao>${f.situacao}</situacao>`);
       lines.push(`      <dobra>${f.dobra}</dobra>`);
+      lines.push(`      <abono>${f.abono}</abono>`);
+      if (f.dias_abono > 0) lines.push(`      <diasAbono>${f.dias_abono}</diasAbono>`);
       for (const g of f.gozos) {
         lines.push(`      <PeriodoGozo inicio="${g.inicio}" fim="${g.fim}" dias="${g.dias}" />`);
       }
