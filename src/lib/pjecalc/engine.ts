@@ -1772,7 +1772,12 @@ export class PjeCalcEngine {
             const aliqSat = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
             const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
             const cf = correctionFactorByComp[comp] ?? 1;
-            const correctedBase = cf !== 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
+            const jf = interestFactorByComp[comp] ?? 0;
+            // Apply correction + interest to base for employer CS
+            let correctedBase = cf !== 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
+            if (jf > 0) {
+              correctedBase = Number(new Decimal(correctedBase).plus(new Decimal(correctedBase).times(jf)).toDP(2));
+            }
             const empresa = this.csConfig.apurar_empresa ? Number(new Decimal(correctedBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
             const sat = this.csConfig.apurar_sat ? Number(new Decimal(correctedBase).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
             const terceiros = this.csConfig.apurar_terceiros ? Number(new Decimal(correctedBase).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
