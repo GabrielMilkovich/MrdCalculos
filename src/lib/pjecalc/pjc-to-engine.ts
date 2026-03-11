@@ -13,7 +13,8 @@ import type {
   PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig, PjeIRConfig,
   PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
   PjeCombinacaoIndice, PjeCombinacaoJuros, PjeApuracaoJurosGT,
-  PjeExcecaoCargaHoraria,
+  PjeExcecaoCargaHoraria, PjeExcecaoSabado,
+  PjePrevidenciaPrivadaConfig, PjePensaoConfig, PjeSalarioFamiliaConfig,
 } from './engine-types';
 import {
   type FidelityReport,
@@ -41,6 +42,14 @@ export interface PjcEngineInputs {
   seguroConfig: PjeSeguroConfig;
   /** Exceções de carga horária extraídas do PJC */
   excecoesCargas?: PjeExcecaoCargaHoraria[];
+  /** Exceções de sábado extraídas do PJC */
+  excecoesSabado?: PjeExcecaoSabado[];
+  /** Previdência privada config from PJC */
+  prevPrivadaConfig?: PjePrevidenciaPrivadaConfig;
+  /** Pensão alimentícia config from PJC */
+  pensaoConfig?: PjePensaoConfig;
+  /** Salário-família config from PJC */
+  salarioFamiliaConfig?: PjeSalarioFamiliaConfig;
   /** Fidelity report tracking all data losses and synthetic fallbacks */
   fidelityReport: FidelityReport;
 }
@@ -72,6 +81,9 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
   // Convert exceções de carga horária
   const excecoesCargas = convertExcecoesCargaHoraria(analysis);
   
+  // Convert exceções de sábado
+  const excecoesSabado = convertExcecoesSabado(analysis);
+  
   // Track unmapped modules
   trackUnmappedModules(analysis, report);
   
@@ -90,6 +102,10 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     custasConfig: buildDefaultCustasConfig(),
     seguroConfig: buildSeguroConfig(analysis),
     excecoesCargas,
+    excecoesSabado,
+    prevPrivadaConfig: buildPrevPrivadaConfig(analysis),
+    pensaoConfig: buildPensaoConfig(analysis),
+    salarioFamiliaConfig: buildSalarioFamiliaConfig(analysis),
     fidelityReport: report,
   };
 }
@@ -709,6 +725,68 @@ function convertExcecoesCargaHoraria(analysis: PJCAnalysis): PjeExcecaoCargaHora
 }
 
 // =====================================================
+// EXCEÇÕES DE SÁBADO
+// =====================================================
+
+function convertExcecoesSabado(analysis: PJCAnalysis): PjeExcecaoSabado[] {
+  if (!analysis.excecoes_sabado) return [];
+  return analysis.excecoes_sabado.map(e => ({
+    data_inicial: e.data_inicial,
+    data_final: e.data_final,
+    sabado_dia_util: e.sabado_dia_util,
+    observacao: e.observacao,
+  }));
+}
+
+// =====================================================
+// PREVIDÊNCIA PRIVADA CONFIG
+// =====================================================
+
+function buildPrevPrivadaConfig(a: PJCAnalysis): PjePrevidenciaPrivadaConfig {
+  if (a.previdencia_privada?.apurar) {
+    return {
+      apurar: true,
+      percentual: a.previdencia_privada.percentual || 0,
+      base_calculo: 'diferenca',
+      deduzir_ir: true,
+    };
+  }
+  return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false };
+}
+
+// =====================================================
+// PENSÃO ALIMENTÍCIA CONFIG
+// =====================================================
+
+function buildPensaoConfig(a: PJCAnalysis): PjePensaoConfig {
+  if (a.pensao_alimenticia?.apurar) {
+    const baseMap: Record<string, 'liquido' | 'bruto' | 'bruto_menos_inss'> = {
+      'LIQUIDO': 'liquido', 'BRUTO': 'bruto', 'BRUTO_MENOS_INSS': 'bruto_menos_inss',
+    };
+    return {
+      apurar: true,
+      percentual: a.pensao_alimenticia.percentual || 0,
+      base: baseMap[(a.pensao_alimenticia.base || '').toUpperCase()] || 'liquido',
+    };
+  }
+  return { apurar: false, percentual: 0, base: 'liquido' };
+}
+
+// =====================================================
+// SALÁRIO-FAMÍLIA CONFIG
+// =====================================================
+
+function buildSalarioFamiliaConfig(a: PJCAnalysis): PjeSalarioFamiliaConfig {
+  if (a.salario_familia?.apurar) {
+    return {
+      apurar: true,
+      numero_filhos: a.salario_familia.numero_filhos || 0,
+    };
+  }
+  return { apurar: false, numero_filhos: 0 };
+}
+
+// =====================================================
 // SEGURO-DESEMPREGO CONFIG
 // =====================================================
 
@@ -728,42 +806,14 @@ function buildSeguroConfig(a: PJCAnalysis): PjeSeguroConfig {
 // =====================================================
 
 function trackUnmappedModules(analysis: PJCAnalysis, report: FidelityReport): void {
-  // Pensão alimentícia
-  if (analysis.pensao_alimenticia?.apurar) {
-    addFidelityEntry(report, {
-      code: 'W003',
-      category: 'module_unsupported',
-      severity: 'warning',
-      message: 'Pensão alimentícia detectada no PJC mas módulo de cálculo não implementado no bridge.',
-      message_friendly: 'Pensão alimentícia: cálculo parcial. Verifique manualmente.',
-      module: 'pensao_alimenticia',
-      field: 'PensaoAlimenticia',
-      impact_estimated: undefined,
-      action: 'Verificar valor de pensão no resultado final.',
-    });
-  }
-
-  // Previdência privada
-  if (analysis.previdencia_privada?.apurar) {
-    addFidelityEntry(report, {
-      code: 'W003',
-      category: 'module_unsupported',
-      severity: 'warning',
-      message: 'Previdência privada detectada no PJC mas módulo não implementado no bridge.',
-      message_friendly: 'Previdência privada: cálculo parcial.',
-      module: 'previdencia_privada',
-      field: 'PrevidenciaPrivada',
-    });
-  }
-
-  // Exceções de sábado
+  // Exceções de sábado — now mapped but note in fidelity report
   if (analysis.excecoes_sabado && analysis.excecoes_sabado.length > 0) {
     addFidelityEntry(report, {
-      code: 'W007',
+      code: 'I004',
       category: 'bridge_data_loss',
-      severity: 'warning',
-      message: `${analysis.excecoes_sabado.length} exceções de sábado no PJC não mapeadas para o engine.`,
-      message_friendly: 'Exceções de sábado encontradas mas não aplicadas no cálculo.',
+      severity: 'info',
+      message: `${analysis.excecoes_sabado.length} exceções de sábado mapeadas para o engine.`,
+      message_friendly: 'Exceções de sábado importadas.',
       module: 'excecoes_sabado',
       field: 'ExcecaoSabado',
     });

@@ -105,8 +105,16 @@
 | ~~Round-trip export `<Calculo>`~~ | ~~Médio~~ | ✅ Resolvido |
 | ~~Seed de tabelas históricas~~ | ~~Alto~~ | ✅ Resolvido |
 | ~~FidelidadePanel na página~~ | ~~Baixo~~ | ✅ Resolvido |
-| Exceções de sábado | Baixo | W007 registrado |
+| ~~Exceções de sábado~~ | ~~Baixo~~ | ✅ Resolvido — `PjeExcecaoSabado` type + `isSabadoDiaUtilParaData()` |
+| ~~Pensão alimentícia bridge~~ | ~~Médio~~ | ✅ Resolvido — `buildPensaoConfig()` from PJC |
+| ~~Previdência privada bridge~~ | ~~Médio~~ | ✅ Resolvido — `buildPrevPrivadaConfig()` from PJC |
+| ~~Salário-família bridge~~ | ~~Baixo~~ | ✅ Resolvido — `buildSalarioFamiliaConfig()` from PJC |
+| ~~INPC/IGP-M normalization~~ | ~~Médio~~ | ✅ Resolvido — normalized in bridge + `Isento` in zero set |
+| ~~TAXA_LEGAL engine support~~ | ~~Alto~~ | ✅ Código pronto — série `TAXA_LEGAL` no `calcularFatorCorrecao()` |
+| TAXA_LEGAL série histórica seed | Médio | ⬚ Pendente — requer dados oficiais do BACEN |
+| INPC/IGP-M séries históricas | Médio | ⬚ Pendente — requer seed via edge function |
 | IR Art. 12-A RRA contagem meses fracionários | Baixo | Divergência < 1% |
+| Persistência de exceções de sábado em DB | Baixo | ⬚ Pendente — sem tabela dedicada |
 | Legacy engine referenciado por 2 componentes admin | Baixo | Deprecated, funcional |
 
 ---

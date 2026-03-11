@@ -15,6 +15,7 @@ export { CNAE_ALIQUOTAS_COMUNS } from './engine-constants';
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias,
   PjeVerba, PjeCartaoPonto, PjeFeriadoDB, PjeExcecaoCargaHoraria,
+  PjeExcecaoSabado,
   PjeFGTSConfig, PjeCSConfig, PjeIRConfig, PjeCorrecaoConfig,
   PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
   PjePrevidenciaPrivadaConfig, PjePensaoConfig, PjeSalarioFamiliaConfig,
@@ -54,6 +55,7 @@ export class PjeCalcEngine {
   private faixasINSSDB: PjeINSSFaixaRow[];
   private faixasIRDB: PjeIRFaixaRow[];
   private excecoesCargas: PjeExcecaoCargaHoraria[];
+  private excecoesSabado: PjeExcecaoSabado[];
   private feriadosDB: PjeFeriadoDB[];
   private prevPrivadaConfig: PjePrevidenciaPrivadaConfig;
   private pensaoConfig: PjePensaoConfig;
@@ -103,6 +105,7 @@ export class PjeCalcEngine {
     salarioFamiliaConfig: PjeSalarioFamiliaConfig = { apurar: false, numero_filhos: 0 },
     seguroDesempregoDB: PjeSeguroDesempregoDB[] = [],
     salarioFamiliaDB: PjeSalarioFamiliaDB[] = [],
+    excecoesSabado: PjeExcecaoSabado[] = [],
   ) {
     this.params = params;
     this.historicos = historicos;
@@ -132,6 +135,7 @@ export class PjeCalcEngine {
     this.faixasINSSDB = faixasINSSDB;
     this.faixasIRDB = faixasIRDB;
     this.excecoesCargas = excecoesCargas;
+    this.excecoesSabado = excecoesSabado;
     this.feriadosDB = feriadosDB;
     this.prevPrivadaConfig = prevPrivadaConfig;
     this.pensaoConfig = pensaoConfig;
@@ -264,6 +268,26 @@ export class PjeCalcEngine {
   }
 
   // =====================================================
+  // SÁBADO DIA ÚTIL — with per-date exceptions
+  // =====================================================
+
+  /**
+   * Check if Saturday is a working day for a specific date.
+   * Respects excecoesSabado ranges first, then falls back to global param.
+   */
+  private isSabadoDiaUtilParaData(date: Date): boolean {
+    if (this.excecoesSabado.length > 0) {
+      const dateStr = date.toISOString().slice(0, 10);
+      for (const exc of this.excecoesSabado) {
+        if (dateStr >= exc.data_inicial && dateStr <= exc.data_final) {
+          return exc.sabado_dia_util;
+        }
+      }
+    }
+    return this.params.sabado_dia_util;
+  }
+
+  // =====================================================
   // QUANTIDADE CALENDÁRIO (Dias Úteis / Repousos / Feriados)
   // =====================================================
 
@@ -292,9 +316,12 @@ export class PjeCalcEngine {
       const isSaturday = dow === 6;
       const isFeriado = feriadosNoMes.some(f => new Date(f.data).getDate() === d);
       
+      // Saturday exception: check if sabado_dia_util is overridden for this specific date
+      const sabadoDiaUtil = this.isSabadoDiaUtilParaData(date);
+      
       if (isSunday || isFeriado) {
         repousos++;
-      } else if (isSaturday && !this.params.sabado_dia_util) {
+      } else if (isSaturday && !sabadoDiaUtil) {
         repousos++;
       } else {
         diasUteis++;

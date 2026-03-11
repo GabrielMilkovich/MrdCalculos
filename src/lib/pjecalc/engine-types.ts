@@ -119,6 +119,14 @@ export interface PjeExcecaoCargaHoraria {
   observacao?: string;
 }
 
+/** Saturday exception: override sabado_dia_util for a specific date range */
+export interface PjeExcecaoSabado {
+  data_inicial: string;
+  data_final: string;
+  sabado_dia_util: boolean;
+  observacao?: string;
+}
+
 export interface PjeVerba {
   id: string;
   nome: string;

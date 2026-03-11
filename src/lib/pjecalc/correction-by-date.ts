@@ -111,7 +111,7 @@ function getRegimeParaData<T extends { de?: string; ate?: string }>(combinacoes:
 // =====================================================
 
 const ZERO_CORRECTION_INDICES = new Set([
-  'SEM_CORRECAO', 'NENHUM', 'Sem Correção', 'Sem Correcao',
+  'SEM_CORRECAO', 'NENHUM', 'Sem Correção', 'Sem Correcao', 'Isento',
 ]);
 
 /**

@@ -743,6 +743,7 @@ export async function executarLiquidacao(
     salarioFamiliaConfig,// 21: salário família
     seguroDesempregoDB,  // 22: seguro-desemprego DB rows
     salarioFamiliaDB,    // 23: salário-família DB rows
+    [],                  // 24: excecoesSabado (TODO: load from DB when available)
   );
 
   const result = engine.liquidar();
