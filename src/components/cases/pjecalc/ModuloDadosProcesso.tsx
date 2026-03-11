@@ -36,6 +36,7 @@ export function ModuloDadosProcesso({ caseId }: Props) {
     },
   });
 
+  const [citacaoEnabled, setCitacaoEnabled] = useState(true);
   const [form, setForm] = useState({
     numero_processo: '', vara: '', comarca: '', uf: 'SP', tipo_acao: 'trabalhista',
     rito: 'ordinario', fase: 'conhecimento', data_distribuicao: '', data_citacao: '',
