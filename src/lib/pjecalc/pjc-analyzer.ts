@@ -29,6 +29,8 @@ export interface PJCAnalysis {
     prescricao_quinquenal: boolean;
     prescricao_fgts: boolean;
     limitar_avos: boolean;
+    /** Data de citação extraída do PJC */
+    data_citacao?: string;
   };
   resultado: {
     liquido_exequente: number;
@@ -48,13 +50,28 @@ export interface PJCAnalysis {
   };
   verbas: VerbaAnalysis[];
   historicos_salariais: HistoricoAnalysis[];
+  /** @deprecated Use apuracao_diaria instead */
   apuracao_diaria_count: number;
+  /** Full parsed daily apuracao data from ApuracaoDiariaCartao */
+  apuracao_diaria: ApuracaoDiariaAnalysis[];
   faltas: FaltaAnalysis[];
   ferias: FeriasAnalysis[];
   atualizacao: AtualizacaoAnalysis;
   dag: { id: string; nome: string; depende_de: string[]; dependentes: string[] }[];
   /** Ground truth from PJe-Calc's <ApuracaoDeJuros> consolidation section */
   apuracao_juros?: ApuracaoJurosEntry[];
+  /** Exceções de carga horária */
+  excecoes_carga_horaria?: ExcecaoCargaHorariaAnalysis[];
+  /** Exceções de sábado */
+  excecoes_sabado?: ExcecaoSabadoAnalysis[];
+  /** Pensão alimentícia config */
+  pensao_alimenticia?: { apurar: boolean; percentual: number; base?: string };
+  /** Previdência privada config */
+  previdencia_privada?: { apurar: boolean; percentual: number };
+  /** Salário-família config */
+  salario_familia?: { apurar: boolean; numero_filhos: number };
+  /** Seguro-desemprego config */
+  seguro_desemprego?: { apurar: boolean; parcelas: number; recebeu: boolean };
 }
 
 /** Entry from PJe-Calc's <ApuracaoDeJuros> — consolidated corrected values per competência */
