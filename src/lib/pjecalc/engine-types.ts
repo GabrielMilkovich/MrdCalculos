@@ -412,6 +412,7 @@ export interface PjeCorrecaoConfig {
   gt_closure?: {
     liquido_exequente: number;
     inss_reclamante: number;
+    inss_reclamado: number;
     imposto_renda: number;
   };
   /** PJC: ignorarTaxaNegativa — when true, negative correction factors are clamped to 1 */
