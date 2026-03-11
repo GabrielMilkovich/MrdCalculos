@@ -31,6 +31,7 @@ import { resolved, absent } from './types';
 import { findCanonicalRubric } from './rubric-taxonomy';
 import type {
   PjecalcParametrosRow,
+  PjecalcDadosProcessoRow,
   PjecalcVerbaRow,
   PjecalcHistoricoSalarialRow,
   PjecalcFaltaRow,
