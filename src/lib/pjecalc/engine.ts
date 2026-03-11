@@ -55,6 +55,7 @@ export class PjeCalcEngine {
   private faixasINSSDB: PjeINSSFaixaRow[];
   private faixasIRDB: PjeIRFaixaRow[];
   private excecoesCargas: PjeExcecaoCargaHoraria[];
+  private excecoesSabado: PjeExcecaoSabado[];
   private feriadosDB: PjeFeriadoDB[];
   private prevPrivadaConfig: PjePrevidenciaPrivadaConfig;
   private pensaoConfig: PjePensaoConfig;
