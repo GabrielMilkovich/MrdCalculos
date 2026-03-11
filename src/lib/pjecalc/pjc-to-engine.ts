@@ -433,8 +433,25 @@ function buildDefaultFGTSConfig(): PjeFGTSConfig {
   };
 }
 
+function convertApuracaoJurosToGT(entries?: ApuracaoJurosEntry[]): PjeApuracaoJurosGT[] | undefined {
+  if (!entries || entries.length === 0) return undefined;
+  return entries.map(e => ({
+    competencia: e.competencia,
+    valor_corrigido: e.valor_corrigido,
+    cs_base_normal: e.cs_base_normal,
+    cs_base_13: e.cs_base_13,
+    cs_normal: e.cs_normal,
+    cs_13: e.cs_13,
+    ir_base_demais: e.ir_base_demais,
+    ir_base_13: e.ir_base_13,
+    ir_base_ferias: e.ir_base_ferias,
+    taxa_juros: e.taxa_juros,
+  }));
+}
+
 function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
   const csConf = a.cs_config;
+  const gt = convertApuracaoJurosToGT(a.apuracao_juros);
   return {
     apurar_segurado: csConf?.apurar_segurado ?? (a.resultado.inss_reclamante > 0),
     cobrar_reclamante: csConf?.apurar_segurado ?? (a.resultado.inss_reclamante > 0),
@@ -449,6 +466,7 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
     aliquota_sat_fixa: csConf?.aliquota_sat ?? 0,
     aliquota_terceiros_fixa: csConf?.aliquota_terceiros ?? 0,
     periodos_simples: [],
+    apuracao_juros_gt: gt,
   };
 }
 
