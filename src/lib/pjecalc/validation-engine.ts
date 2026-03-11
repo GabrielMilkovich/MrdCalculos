@@ -313,15 +313,22 @@ export function podeFechar(validations: ValidationResult[]): { pode: boolean; bl
 }
 
 /**
- * Validates engine readiness before liquidation
+ * Validates engine readiness before liquidation.
+ * Includes SELIC anti-cumulation and base-de-juros consistency checks.
  */
 export function validarProntoParaLiquidacao(input: {
   data_admissao?: string;
   data_ajuizamento?: string;
   data_liquidacao?: string;
+  data_demissao?: string;
   verbas_count: number;
   indices_count: number;
   correcao_indice: string;
+  combinacoes_indice?: { de?: string; ate?: string; indice: string }[];
+  combinacoes_juros?: { de?: string; ate?: string; tipo: string }[];
+  base_de_juros?: string;
+  ignorar_taxa_negativa?: boolean;
+  aplicar_juros_pre_judicial?: boolean;
 }): ValidationResult[] {
   const results: ValidationResult[] = [];
 
@@ -349,6 +356,20 @@ export function validarProntoParaLiquidacao(input: {
     });
   }
 
+  // E027: Data de liquidação no futuro distante
+  if (input.data_liquidacao) {
+    const liqYear = parseInt(input.data_liquidacao.slice(0, 4));
+    const currentYear = new Date().getFullYear();
+    if (liqYear > currentYear + 2) {
+      results.push({
+        tipo: 'LIQUIDACAO_FUTURO_DISTANTE', code: 'E027',
+        mensagem: `Data de liquidação (${input.data_liquidacao}) está ${liqYear - currentYear} anos no futuro`,
+        severidade: 'error', bloqueante: true, modulo: 'params',
+        sugestao: 'Verificar se a data de liquidação está correta.',
+      });
+    }
+  }
+
   if (input.verbas_count === 0) {
     results.push({
       tipo: 'VERBAS_VAZIAS', code: 'E007',
@@ -362,6 +383,49 @@ export function validarProntoParaLiquidacao(input: {
       tipo: 'INDICES_MISSING', code: 'E003',
       mensagem: `Nenhum índice de correção disponível (configurado: ${input.correcao_indice})`,
       severidade: 'error', bloqueante: true, modulo: 'correcao',
+    });
+  }
+
+  // ═══ SELIC ANTI-CUMULATION CHECKS ═══
+  if (input.combinacoes_indice && input.combinacoes_juros) {
+    for (const ci of input.combinacoes_indice) {
+      if (ci.indice !== 'SELIC') continue;
+      // Check if any juros regime overlaps with this SELIC correction period
+      for (const cj of input.combinacoes_juros) {
+        if (cj.tipo === 'NENHUM' || !cj.tipo) continue;
+        // Check date overlap
+        const ciDe = ci.de || '0000-01-01';
+        const ciAte = ci.ate || '9999-12-31';
+        const cjDe = cj.de || '0000-01-01';
+        const cjAte = cj.ate || '9999-12-31';
+        const overlap = ciDe <= cjAte && cjDe <= ciAte;
+        if (overlap) {
+          results.push({
+            tipo: 'SELIC_JUROS_CUMULACAO', code: 'W044',
+            mensagem: `SELIC como correção sobrepõe-se com juros ${cj.tipo} — juros serão suprimidos automaticamente nesse segmento (anti bis in idem)`,
+            severidade: 'warning', bloqueante: false, modulo: 'juros',
+            sugestao: 'Comportamento correto conforme ADC 58/59 STF.',
+          });
+        }
+      }
+    }
+  }
+
+  // ═══ BASE DE JUROS DIVERGENCE ═══
+  if (input.base_de_juros && input.base_de_juros !== 'DIFERENCA') {
+    results.push({
+      tipo: 'BASE_JUROS_NAO_PADRAO', code: 'W042',
+      mensagem: `Base de juros configurada como '${input.base_de_juros}' (padrão é DIFERENCA)`,
+      severidade: 'warning', bloqueante: false, modulo: 'juros',
+    });
+  }
+
+  // ═══ PRE-JUDICIAL INTEREST CHECK ═══
+  if (input.aplicar_juros_pre_judicial === false) {
+    results.push({
+      tipo: 'JUROS_PRE_JUDICIAL_DESABILITADO', code: 'W035',
+      mensagem: 'Juros pré-judiciais desabilitados conforme configuração do PJC',
+      severidade: 'warning', bloqueante: false, modulo: 'juros',
     });
   }
 
