@@ -119,8 +119,8 @@ export function FidelidadePanel({ fidelityReport, parityReport }: Props) {
               <BarChart3 className="h-4 w-4" />
               Paridade com PJe-Calc
               <Badge variant="outline" className={
-                parityReport.score >= 95 ? 'bg-green-500/10 text-green-600 border-green-500/30' :
-                parityReport.score >= 80 ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' :
+                parityReport.score >= 95 ? 'bg-primary/10 text-primary border-primary/30' :
+                parityReport.score >= 80 ? 'bg-accent text-accent-foreground border-border' :
                 'bg-destructive/10 text-destructive border-destructive/30'
               }>
                 Score: {parityReport.score}%
