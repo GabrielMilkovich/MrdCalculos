@@ -733,7 +733,7 @@ export async function executarLiquidacao(
     engineParams, engineHistoricos, engineFaltas, engineFerias,
     engineVerbas, engineCartao, engineFgts, engineCs, engineIr,
     engineCorrecao, engineHonorarios, engineCustas, engineSeguro,
-    indicesDB,           // 14: correction indices
+    indicesDB,           // 14: correction indices  
     faixasINSSDB,        // 15: INSS progressive brackets
     faixasIRDB,          // 16: IR brackets
     [],                  // 17: excecoesCargas (loaded per case if needed)
