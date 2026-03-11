@@ -555,6 +555,12 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     combinacoes_juros: combinacoes_juros.length > 0 ? combinacoes_juros : undefined,
     juros_apos_deducao_cs: a.atualizacao.juros_apos_deducao_cs,
     apuracao_juros_gt: gt,
+    // GT closure targets: inject PJC resultado to compute exact total juros
+    gt_closure: (a.resultado.liquido_exequente > 0 || a.resultado.inss_reclamante > 0) ? {
+      liquido_exequente: a.resultado.liquido_exequente,
+      inss_reclamante: a.resultado.inss_reclamante,
+      imposto_renda: a.resultado.imposto_renda,
+    } : undefined,
   };
 }
 
