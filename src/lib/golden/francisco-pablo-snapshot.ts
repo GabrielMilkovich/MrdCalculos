@@ -41,7 +41,7 @@ export const FRANCISCO_PABLO_SNAPSHOT = {
     { codigo: 'DIF_COMISSAO', descricao: '01) DIFERENÇA COMISSÃO', valor_corrigido: 0, juros: 0, total: 6796.05, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
     { codigo: 'DIF_PREMIO', descricao: '02) DIFERENÇA PRÊMIO', valor_corrigido: 0, juros: 0, total: 5436.88, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
     { codigo: 'VENDAS_PARCELADAS_TST', descricao: 'VENDAS PARCELADAS (TST)', valor_corrigido: 0, juros: 0, total: 15658.19, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
-    { codigo: 'HE_8_44', descricao: '03) HORAS EXTRAS 8ª / 44ª', valor_corrigido: 0, juros: 0, total: 15658.19, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
+    { codigo: 'HE_8_44', descricao: '03) HORAS EXTRAS 8ª / 44ª', valor_corrigido: 0, juros: 0, total: 36633.73, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
     { codigo: 'HE_DOM_FER', descricao: '04) HORAS EXTRAS DOMINGOS E FERIADOS', valor_corrigido: 0, juros: 0, total: 12352.54, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
     { codigo: 'INTRAJORNADA', descricao: '05) INTERVALO INTRAJORNADA', valor_corrigido: 0, juros: 0, total: 7834.29, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
     { codigo: 'INTERJORNADAS', descricao: '06) INTERVALO INTERJORNADAS', valor_corrigido: 0, juros: 0, total: 692.41, tipo: 'PRINCIPAL' as const, source: { page: 1, line: 'PJC-devido' } },
