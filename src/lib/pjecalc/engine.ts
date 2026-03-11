@@ -1272,13 +1272,11 @@ export class PjeCalcEngine {
   // =====================================================
 
   private isSELICCorrection(): boolean {
-    // Single SELIC index
     if (this.correcaoConfig.indice === 'SELIC' || this.correcaoConfig.indice === 'selic') return true;
-    // Combination where ALL non-SEM_CORRECAO entries use SELIC
+    // Combination that includes SELIC as any active correction index
     const combIdx = this.correcaoConfig.combinacoes_indice;
     if (combIdx && combIdx.length > 0) {
-      const activeIndices = combIdx.filter(c => c.indice !== 'SEM_CORRECAO' && c.indice !== 'Sem Correção' && c.indice !== 'NENHUM');
-      return activeIndices.length > 0 && activeIndices.every(c => c.indice === 'SELIC');
+      return combIdx.some(c => c.indice === 'SELIC');
     }
     return false;
   }
@@ -1287,11 +1285,10 @@ export class PjeCalcEngine {
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
 
-    // For SELIC correction: GT valorCorrigido is TAX BASIS (inflation-only portion of SELIC)
-    // → DON'T scale correction (SELIC factor is already correct)
-    // → DON'T add separate interest (already embedded in SELIC factor)
-    const selicCorrection = this.isSELICCorrection();
-    if (selicCorrection) return;
+    // For any case with SELIC in its correction regime:
+    // GT valorCorrigido is the TAX BASIS (inflation-only), NOT the full SELIC-corrected amount.
+    // Skip calibration entirely — the per-occurrence SELIC factor is already correct.
+    if (this.isSELICCorrection()) return;
 
     // Build GT list per competência (YYYY-MM), preserving per-entry taxaDeJuros
     // Multiple entries per month (e.g. regular + 13th in Dec) are kept separate for accurate weighting
