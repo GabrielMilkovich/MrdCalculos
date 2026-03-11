@@ -457,8 +457,6 @@ export function ModuloResumo({ caseId }: Props) {
   const res = (resultado?.resultado as unknown as PjeLiquidacaoResult) || null;
   const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-  // Modo puro do sistema: sem baseline externo do PJe-Calc
-  const parityData = null;
   const isFechado = resultado?.status === 'fechado';
   const reportMeta = {
     cliente: caseData?.cliente,
