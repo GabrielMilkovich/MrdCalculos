@@ -2050,10 +2050,11 @@ export class PjeCalcEngine {
         
         let indiceCorrecao = 1;
         
-        // Use PJC ground truth correction factor when available (includes interest)
+        // Use PJC ground truth correction factor when available
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
+          oc.pjc_ground_truth_regime = this.correcaoConfig.indice || 'SELIC';
         } else {
           const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, oc.competencia, compLiq);
           if (fatorDB !== null) {
