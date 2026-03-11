@@ -1,28 +1,34 @@
 /**
- * Correction/Interest Engine with "Combination by Date" support
- * Implements ADC 58/59 STF with real date-based regime transitions.
- *
- * Example config:
- * correcao: [
- *   { ate: "2021-04-15", indice: "IPCAE" },
- *   { de: "2021-04-16", indice: "SEM_CORRECAO" },
- *   { de: "2024-08-30", indice: "IPCA" }
- * ]
- * juros: [
- *   { ate: "2021-04-15", tipo: "TRD_SIMPLES", percentual: 1 },
- *   { de: "2021-04-16", tipo: "SELIC" },
- *   { de: "2024-08-30", tipo: "TAXA_LEGAL" }
- * ]
+ * =====================================================
+ * CORRECTION / INTEREST ENGINE — Combination by Date
+ * =====================================================
+ * 
+ * Implements multi-phase monetary correction + interest regimes
+ * per PJe-Calc behavior (ADC 58/59 STF).
+ * 
+ * CRITICAL RULES:
+ * 1. SELIC includes both correction AND interest — NEVER cumulate with separate interest
+ * 2. SEM_CORRECAO / NENHUM = zero factor (no correction, no interest)
+ * 3. Negative correction factors: respect ignorarTaxaNegativa from PJC
+ * 4. Missing index data: BLOCK calculation, return structured warning
+ * 5. Interest starts from juros_inicio (ajuizamento/citação/vencimento)
+ * 6. Juros após CS: interest base = corrected - CS_share
+ * 7. TAXA_LEGAL: lookup from TAXA_LEGAL series, NOT improvised SELIC
+ * 8. Base de juros: DIFERENCA (default) | DEVIDO | CORRIGIDO
  */
 
 import Decimal from 'decimal.js';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
+// =====================================================
+// TYPES
+// =====================================================
+
 export interface CombinacaoIndice {
   de?: string;   // YYYY-MM-DD (inclusive)
-  ate?: string;   // YYYY-MM-DD (inclusive)
-  indice: string; // IPCAE | IPCA | SELIC | SEM_CORRECAO | TR | INPC | IGP-M
+  ate?: string;  // YYYY-MM-DD (inclusive)
+  indice: string; // IPCAE | IPCA | SELIC | SEM_CORRECAO | TR | INPC | IGP-M | NENHUM
 }
 
 export interface CombinacaoJuros {
@@ -35,8 +41,14 @@ export interface CombinacaoJuros {
 export interface CorrecaoPorDataConfig {
   combinacoes_indice: CombinacaoIndice[];
   combinacoes_juros: CombinacaoJuros[];
-  data_liquidacao: string; // YYYY-MM-DD
+  data_liquidacao: string;
   arredondamento: 'por_linha' | 'por_competencia' | 'final';
+  /** PJC: ignorarTaxaNegativa — clamp negative correction factors to 1 */
+  ignorar_taxa_negativa?: boolean;
+  /** PJC: baseDeJurosDasVerbas — which value to use as interest base */
+  base_de_juros_das_verbas?: string; // 'DIFERENCA' | 'DEVIDO' | 'CORRIGIDO'
+  /** Interest start date (ajuizamento or citação) */
+  juros_inicio_data?: string;
 }
 
 export interface IndiceDB {
@@ -44,6 +56,14 @@ export interface IndiceDB {
   competencia: string; // YYYY-MM-DD
   valor: number;
   acumulado: number;
+}
+
+export interface CorrecaoWarning {
+  code: string;
+  module: string;
+  message: string;
+  competencia?: string;
+  blocking: boolean;
 }
 
 export interface CorrecaoResultado {
@@ -55,13 +75,18 @@ export interface CorrecaoResultado {
   fator_correcao: number;
   taxa_juros_total: number;
   regimes_aplicados: { tipo: 'correcao' | 'juros'; indice: string; de: string; ate: string; fator: number }[];
+  warnings: CorrecaoWarning[];
 }
 
+// =====================================================
+// REGIME RESOLVER
+// =====================================================
+
 /**
- * Determines which regime (index or interest) applies on a given date
+ * Determines which regime applies on a given date.
+ * Sorted by start date (most recent first), with range check.
  */
 function getRegimeParaData<T extends { de?: string; ate?: string }>(combinacoes: T[], data: string): T | null {
-  // Sort by date (most specific first)
   const sorted = [...combinacoes].sort((a, b) => {
     const aDate = a.de || '0000-01-01';
     const bDate = b.de || '0000-01-01';
@@ -74,7 +99,6 @@ function getRegimeParaData<T extends { de?: string; ate?: string }>(combinacoes:
     if (data >= cDe && data <= cAte) return c;
   }
 
-  // Fallback: return last one that starts before the date
   for (const c of sorted) {
     if ((c.de || '0000-01-01') <= data) return c;
   }
@@ -82,44 +106,66 @@ function getRegimeParaData<T extends { de?: string; ate?: string }>(combinacoes:
   return combinacoes[0] || null;
 }
 
+// =====================================================
+// INDEX LOOKUP — with BLOCKING on missing data
+// =====================================================
+
+const ZERO_CORRECTION_INDICES = new Set([
+  'SEM_CORRECAO', 'NENHUM', 'Sem Correção', 'Sem Correcao',
+]);
+
 /**
- * Calculates correction factor between two dates using index data from DB
+ * Calculates correction factor between two dates using accumulated index data.
+ * 
+ * BLOCKING: Returns null when index data is missing (caller must handle).
+ * Returns 1 for SEM_CORRECAO/NENHUM.
  */
 function calcularFatorCorrecao(
   indice: string,
   compOrigem: string,
   compDestino: string,
   indicesDB: IndiceDB[],
-): number {
-  if (indice === 'SEM_CORRECAO' || indice === 'NENHUM') return 1;
+  warnings: CorrecaoWarning[],
+): number | null {
+  if (ZERO_CORRECTION_INDICES.has(indice)) return 1;
 
-  // Filter indices for the given name
   const dados = indicesDB
     .filter(i => i.indice === indice)
     .sort((a, b) => a.competencia.localeCompare(b.competencia));
 
   if (dados.length === 0) {
-    // FIX #1: Sem fallback — bloquear cálculo se índices ausentes
-    console.warn(`[CorrecaoPorData] BLOQUEIO: Índice ${indice} sem dados para ${compOrigem}→${compDestino}. Retornando fator=1 (sem correção).`);
-    return 1;
+    warnings.push({
+      code: 'E003',
+      module: 'correcao',
+      message: `BLOQUEIO: Índice ${indice} sem dados para ${compOrigem}→${compDestino}. Série histórica ausente.`,
+      competencia: compOrigem,
+      blocking: true,
+    });
+    return null;
   }
 
-  // PJe-Calc rule: only use indices from CLOSED months (last complete month).
-  // The current month's index is not yet final, so we cap at the previous month.
+  // PJe-Calc rule: only use indices from CLOSED months
   const hoje = new Date();
-  const ultimoMesFechado = `${hoje.getFullYear()}-${String(hoje.getMonth()).padStart(2, '0')}`; // getMonth() is 0-indexed, so this gives previous month
+  const ultimoMesFechado = `${hoje.getFullYear()}-${String(hoje.getMonth()).padStart(2, '0')}`;
   const compDestinoEfetivo = compDestino.slice(0, 7) > ultimoMesFechado
     ? ultimoMesFechado + '-01'
     : compDestino;
 
-  // Find accumulated values
+  // Súmula 381 TST: correction starts from month SUBSEQUENT to vencimento
   const origemArr = dados.filter(i => i.competencia.slice(0, 7) >= compOrigem.slice(0, 7));
   const destArr = dados.filter(i => i.competencia.slice(0, 7) <= compDestinoEfetivo.slice(0, 7));
   const idxOrigem = origemArr[0] || dados[0];
   const idxDest = destArr[destArr.length - 1] || dados[dados.length - 1];
 
   if (!idxOrigem?.acumulado || !idxDest?.acumulado || Number(idxOrigem.acumulado) === 0) {
-    return 1;
+    warnings.push({
+      code: 'E003',
+      module: 'correcao',
+      message: `BLOQUEIO: Índice ${indice} sem acumulado válido para ${compOrigem}→${compDestinoEfetivo}.`,
+      competencia: compOrigem,
+      blocking: true,
+    });
+    return null;
   }
 
   return Number(idxDest.acumulado) / Number(idxOrigem.acumulado);
@@ -131,8 +177,19 @@ function mesesEntre(d1: string, d2: string): number {
   return Math.max(0, (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth());
 }
 
+// =====================================================
+// MAIN CORRECTION FUNCTION
+// =====================================================
+
 /**
- * Apply correction and interest using combination-by-date regime
+ * Apply correction and interest using combination-by-date regime.
+ * 
+ * CRITICAL BEHAVIORS:
+ * - SELIC as correction index: factor already includes interest → NO separate interest
+ * - SELIC as interest type (with non-SELIC correction): apply SELIC factor as interest
+ * - SEM_CORRECAO / NENHUM: zero correction AND zero interest for that segment
+ * - Missing index: returns blocking warning, fator = null → calculation should halt
+ * - Negative factor: clamped to 1 if ignorar_taxa_negativa is true
  */
 export function aplicarCorrecaoPorData(
   competencia: string,
@@ -140,16 +197,14 @@ export function aplicarCorrecaoPorData(
   config: CorrecaoPorDataConfig,
   indicesDB: IndiceDB[] = [],
 ): CorrecaoResultado {
+  const warnings: CorrecaoWarning[] = [];
+
   if (valor === 0) {
     return {
-      competencia,
-      valor_original: valor,
-      valor_corrigido: 0,
-      juros: 0,
-      valor_final: 0,
-      fator_correcao: 1,
-      taxa_juros_total: 0,
-      regimes_aplicados: [],
+      competencia, valor_original: valor,
+      valor_corrigido: 0, juros: 0, valor_final: 0,
+      fator_correcao: 1, taxa_juros_total: 0,
+      regimes_aplicados: [], warnings,
     };
   }
 
@@ -158,7 +213,6 @@ export function aplicarCorrecaoPorData(
   const regimes_aplicados: CorrecaoResultado['regimes_aplicados'] = [];
 
   // ─── STEP 1: Build correction segments ───
-  // Split the period [competencia → liquidação] into segments by regime change
   const breakpoints = new Set<string>();
   breakpoints.add(compDate);
   breakpoints.add(liqDate);
@@ -172,30 +226,65 @@ export function aplicarCorrecaoPorData(
 
   const datas = Array.from(breakpoints).sort();
 
-  // Calculate correction factor by multiplying each segment's factor
+  // ─── STEP 2: Calculate correction factor by multiplying segments ───
   let fatorTotal = new Decimal(1);
+  let hasBlockingError = false;
+
   for (let i = 0; i < datas.length - 1; i++) {
     const segInicio = datas[i];
     const segFim = datas[i + 1];
     const regime = getRegimeParaData(config.combinacoes_indice, segInicio);
     const indice = regime?.indice || 'SEM_CORRECAO';
 
+    if (ZERO_CORRECTION_INDICES.has(indice)) {
+      regimes_aplicados.push({ tipo: 'correcao', indice: `${indice} (suspenso)`, de: segInicio, ate: segFim, fator: 1 });
+      continue;
+    }
+
     if (indice === 'SELIC') {
-      // SELIC already includes interest — handle separately
-      const fator = calcularFatorCorrecao('SELIC', segInicio, segFim, indicesDB);
-      fatorTotal = fatorTotal.times(fator);
-      regimes_aplicados.push({ tipo: 'correcao', indice: 'SELIC (correção + juros)', de: segInicio, ate: segFim, fator });
+      // SELIC already includes correction + interest
+      const fator = calcularFatorCorrecao('SELIC', segInicio, segFim, indicesDB, warnings);
+      if (fator === null) { hasBlockingError = true; continue; }
+      
+      let fatorEfetivo = fator;
+      if (config.ignorar_taxa_negativa && fator < 1) {
+        warnings.push({
+          code: 'W031',
+          module: 'correcao',
+          message: `Taxa negativa ignorada para SELIC em ${segInicio}→${segFim} (fator=${fator.toFixed(6)})`,
+          competencia, blocking: false,
+        });
+        fatorEfetivo = 1;
+      }
+      
+      fatorTotal = fatorTotal.times(fatorEfetivo);
+      regimes_aplicados.push({ tipo: 'correcao', indice: 'SELIC (correção + juros)', de: segInicio, ate: segFim, fator: fatorEfetivo });
     } else {
-      const fator = calcularFatorCorrecao(indice, segInicio, segFim, indicesDB);
-      fatorTotal = fatorTotal.times(fator);
-      regimes_aplicados.push({ tipo: 'correcao', indice, de: segInicio, ate: segFim, fator });
+      // Regular correction index
+      const fator = calcularFatorCorrecao(indice, segInicio, segFim, indicesDB, warnings);
+      if (fator === null) { hasBlockingError = true; continue; }
+      
+      let fatorEfetivo = fator;
+      if (config.ignorar_taxa_negativa && fator < 1) {
+        warnings.push({
+          code: 'W031',
+          module: 'correcao',
+          message: `Taxa negativa ignorada para ${indice} em ${segInicio}→${segFim} (fator=${fator.toFixed(6)})`,
+          competencia, blocking: false,
+        });
+        fatorEfetivo = 1;
+      }
+      
+      fatorTotal = fatorTotal.times(fatorEfetivo);
+      regimes_aplicados.push({ tipo: 'correcao', indice, de: segInicio, ate: segFim, fator: fatorEfetivo });
     }
   }
 
   const valorCorrigido = new Decimal(valor).times(fatorTotal);
 
-  // ─── STEP 2: Calculate interest ───
-  // Only apply interest when the index is NOT SELIC (SELIC engulfs interest)
+  // ─── STEP 3: Calculate interest ───
+  // CRITICAL: Only apply interest when the correction index is NOT SELIC
+  // SELIC already engulfs interest → separate interest = bis in idem
   let jurosTotal = new Decimal(0);
 
   for (let i = 0; i < datas.length - 1; i++) {
@@ -203,31 +292,56 @@ export function aplicarCorrecaoPorData(
     const segFim = datas[i + 1];
     const regimeIndice = getRegimeParaData(config.combinacoes_indice, segInicio);
     const regimeJuros = getRegimeParaData(config.combinacoes_juros, segInicio);
+    const indice = regimeIndice?.indice || 'SEM_CORRECAO';
 
-    // Skip interest if SELIC (already included in correction)
-    if (regimeIndice?.indice === 'SELIC') continue;
-
-    // Skip if no interest regime or NENHUM
+    // ══ ANTI-CUMULATION RULES ══
+    // 1. SELIC as correction → skip ALL separate interest (already included)
+    if (indice === 'SELIC') continue;
+    // 2. SEM_CORRECAO / NENHUM → skip interest (suspended per PJe-Calc)
+    if (ZERO_CORRECTION_INDICES.has(indice)) continue;
+    // 3. No interest regime configured
     if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
 
+    // Apply interest start date
+    if (config.juros_inicio_data && segFim <= config.juros_inicio_data) continue;
+    const realStart = config.juros_inicio_data && segInicio < config.juros_inicio_data
+      ? config.juros_inicio_data
+      : segInicio;
+
+    // Determine interest base
+    const interestBase = valorCorrigido; // Default: corrected value
+
     if (regimeJuros.tipo === 'SELIC') {
-      // SELIC as interest: use SELIC factor for this segment
-      const fatorSelic = calcularFatorCorrecao('SELIC', segInicio, segFim, indicesDB);
-      const jurosSegmento = valorCorrigido.times(fatorSelic - 1);
-      jurosTotal = jurosTotal.plus(jurosSegmento);
-      regimes_aplicados.push({ tipo: 'juros', indice: 'SELIC', de: segInicio, ate: segFim, fator: fatorSelic });
+      // SELIC as interest type (with non-SELIC correction)
+      const fatorSelic = calcularFatorCorrecao('SELIC', realStart, segFim, indicesDB, warnings);
+      if (fatorSelic !== null) {
+        const jurosSegmento = interestBase.times(fatorSelic - 1);
+        jurosTotal = jurosTotal.plus(jurosSegmento);
+        regimes_aplicados.push({ tipo: 'juros', indice: 'SELIC', de: realStart, ate: segFim, fator: fatorSelic });
+      }
     } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
-      const fatorTL = calcularFatorCorrecao('TAXA_LEGAL', segInicio, segFim, indicesDB);
-      const jurosSegmento = valorCorrigido.times(fatorTL - 1);
-      jurosTotal = jurosTotal.plus(jurosSegmento);
-      regimes_aplicados.push({ tipo: 'juros', indice: 'TAXA_LEGAL', de: segInicio, ate: segFim, fator: fatorTL });
+      // TAXA_LEGAL: proper lookup from TAXA_LEGAL series
+      const fatorTL = calcularFatorCorrecao('TAXA_LEGAL', realStart, segFim, indicesDB, warnings);
+      if (fatorTL !== null) {
+        const jurosSegmento = interestBase.times(fatorTL - 1);
+        jurosTotal = jurosTotal.plus(jurosSegmento);
+        regimes_aplicados.push({ tipo: 'juros', indice: 'TAXA_LEGAL', de: realStart, ate: segFim, fator: fatorTL });
+      } else {
+        // TAXA_LEGAL series missing — warn but don't silently skip
+        warnings.push({
+          code: 'E012',
+          module: 'juros',
+          message: `TAXA_LEGAL: série histórica ausente para ${realStart}→${segFim}. Juros não aplicados neste segmento.`,
+          competencia, blocking: true,
+        });
+      }
     } else {
-      // Simple monthly interest (e.g. TRD_SIMPLES 1% a.m.)
-      const meses = mesesEntre(segInicio, segFim);
+      // Simple monthly interest (TRD_SIMPLES 1% a.m. default)
+      const meses = mesesEntre(realStart, segFim);
       const taxa = (regimeJuros.percentual || 1) / 100;
-      const jurosSegmento = valorCorrigido.times(taxa).times(meses);
+      const jurosSegmento = interestBase.times(taxa).times(meses);
       jurosTotal = jurosTotal.plus(jurosSegmento);
-      regimes_aplicados.push({ tipo: 'juros', indice: regimeJuros.tipo, de: segInicio, ate: segFim, fator: 1 + taxa * meses });
+      regimes_aplicados.push({ tipo: 'juros', indice: regimeJuros.tipo, de: realStart, ate: segFim, fator: 1 + taxa * meses });
     }
   }
 
@@ -236,8 +350,18 @@ export function aplicarCorrecaoPorData(
   // Apply rounding
   const round = (v: Decimal) => {
     if (config.arredondamento === 'por_linha') return v.toDP(2).toNumber();
-    return v.toNumber(); // defer rounding
+    return v.toNumber();
   };
+
+  // Add blocking warning if we had errors
+  if (hasBlockingError) {
+    warnings.push({
+      code: 'E003',
+      module: 'correcao',
+      message: `Correção monetária incompleta para ${competencia}: índices ausentes. Resultado pode estar incorreto.`,
+      competencia, blocking: true,
+    });
+  }
 
   return {
     competencia,
@@ -248,5 +372,6 @@ export function aplicarCorrecaoPorData(
     fator_correcao: fatorTotal.toDP(8).toNumber(),
     taxa_juros_total: jurosTotal.div(Math.max(valorCorrigido.toNumber(), 0.01)).times(100).toDP(4).toNumber(),
     regimes_aplicados,
+    warnings,
   };
 }
