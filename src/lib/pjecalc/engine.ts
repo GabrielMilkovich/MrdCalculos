@@ -1615,30 +1615,21 @@ export class PjeCalcEngine {
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
       // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
-      // PJe-Calc applies the same monetary correction to CS amounts from competência to liquidation.
-      const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) || '';
+      // Derive correction factor from GT: valorCorrigido / cs_base_normal per competência
+      // This captures multi-phase correction accurately without needing index lookups
       const correctionFactorByComp: Record<string, number> = {};
-      if (compLiq) {
-        for (const comp of allComps) {
-          const primaryIndex = this.correcaoConfig.indice === 'COMBINACAO'
-            ? (this.correcaoConfig.combinacoes_indice?.[0]?.indice || 'IPCA-E')
-            : (this.correcaoConfig.indice || 'IPCA-E');
-          let activeIndex = primaryIndex;
-          if (this.correcaoConfig.combinacoes_indice && this.correcaoConfig.combinacoes_indice.length > 0) {
-            const sorted = [...this.correcaoConfig.combinacoes_indice].sort((a, b) => 
-              (b.de || '0000').localeCompare(a.de || '0000'));
-            for (const ci of sorted) {
-              if ((ci.de || '0000') <= comp + '-01') { activeIndex = ci.indice; break; }
-            }
-            if (!activeIndex || activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') {
-              activeIndex = primaryIndex;
-            }
-          }
-          if (activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') continue;
-          const factor = this.getIndiceCorrecaoDB(activeIndex, comp, compLiq);
-          if (factor !== null && factor > 0 && factor !== 1) {
-            correctionFactorByComp[comp] = factor;
-          }
+      const gtNominalByComp: Record<string, number> = {};
+      const gtCorrigidoByComp: Record<string, number> = {};
+      for (const entry of gt) {
+        const comp = entry.competencia.slice(0, 7);
+        gtNominalByComp[comp] = (gtNominalByComp[comp] || 0) + entry.cs_base_normal + entry.cs_base_13;
+        gtCorrigidoByComp[comp] = (gtCorrigidoByComp[comp] || 0) + entry.valor_corrigido;
+      }
+      for (const comp of allComps) {
+        const nominal = gtNominalByComp[comp];
+        const corrigido = gtCorrigidoByComp[comp];
+        if (nominal && nominal > 0 && corrigido && corrigido > nominal) {
+          correctionFactorByComp[comp] = corrigido / nominal;
         }
       }
       
