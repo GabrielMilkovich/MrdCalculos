@@ -1607,34 +1607,24 @@ export class PjeCalcEngine {
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
       // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
-      // PJe-Calc derives the correction factor from the actual verba correction:
-      //   factor(comp) = sum(valor_corrigido) / sum(diferenca) for that competência
-      // This ensures CS correction mirrors what happened to the verbas themselves.
-      // Additionally, interest is derived similarly: factor_total = sum(valor_final) / sum(diferenca)
+      // Derive correction factor per competência from GT data:
+      //   factor(comp) = sum(valor_corrigido) / sum(diferenca) from ApuracaoDeJuros
+      // This replicates PJe-Calc which uses the same inflation applied to verbas.
       const correctionFactorByComp: Record<string, number> = {};
-      const totalFactorByComp: Record<string, number> = {};
       
-      // Derive correction+interest factors from verbaResults (already corrected at this point)
-      const difByComp: Record<string, number> = {};
-      const corrByComp: Record<string, number> = {};
-      const finalByComp: Record<string, number> = {};
-      for (const vr of verbaResults) {
-        const verba = this.verbas.find(v => v.id === vr.verba_id);
-        if (!verba?.incidencias.contribuicao_social) continue;
-        for (const oc of vr.ocorrencias) {
-          if (oc.diferenca <= 0) continue;
-          const comp = oc.competencia.slice(0, 7);
-          difByComp[comp] = (difByComp[comp] || 0) + oc.diferenca;
-          corrByComp[comp] = (corrByComp[comp] || 0) + (oc.valor_corrigido || oc.diferenca);
-          finalByComp[comp] = (finalByComp[comp] || 0) + (oc.valor_final || oc.diferenca);
-        }
+      // Derive factor from GT: ratio of corrected value to original diferença
+      const gtDifByComp: Record<string, number> = {};
+      const gtCorrByComp: Record<string, number> = {};
+      for (const entry of gt) {
+        const comp = entry.competencia.slice(0, 7);
+        gtDifByComp[comp] = (gtDifByComp[comp] || 0) + (entry.diferenca || 0);
+        gtCorrByComp[comp] = (gtCorrByComp[comp] || 0) + (entry.valor_corrigido || 0);
       }
-      for (const comp of Object.keys(difByComp)) {
-        if (difByComp[comp] > 0) {
-          const cf = corrByComp[comp] / difByComp[comp];
-          if (cf > 1) correctionFactorByComp[comp] = cf;
-          const tf = finalByComp[comp] / difByComp[comp];
-          if (tf > 1) totalFactorByComp[comp] = tf;
+      for (const comp of Object.keys(gtDifByComp)) {
+        const dif = gtDifByComp[comp];
+        const corr = gtCorrByComp[comp];
+        if (dif > 0 && corr > 0 && corr !== dif) {
+          correctionFactorByComp[comp] = corr / dif;
         }
       }
       
