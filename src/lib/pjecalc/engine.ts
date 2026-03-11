@@ -1679,6 +1679,12 @@ export class PjeCalcEngine {
         ir_anos_anteriores: 0, ir_ano_liquidacao: 0, ir_13_exclusivo: 0, ir_ferias_separado: 0, meses_anos_anteriores: 0, meses_ano_liquidacao: 0 };
     }
 
+    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact IR bases ═══
+    const gt = this.irConfig.apuracao_juros_gt;
+    if (gt && gt.length > 0) {
+      return this.calcularIRFromGT(gt, csResult);
+    }
+
     let baseBruta = 0;
     let base13 = 0;
     let baseFerias = 0;
