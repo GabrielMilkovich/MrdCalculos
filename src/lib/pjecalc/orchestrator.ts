@@ -321,6 +321,11 @@ function toEngineCorrecaoConfig(
     console.error('[ORCHESTRATOR] CRITICAL: data_liquidacao not set in correcaoConfig — calculation will NOT be deterministic');
   }
 
+  // FIX AUDIT-001: Read juros_apos_deducao_cs from DB config instead of hardcoding true.
+  // This was masking cases where the PJC file configured it as false.
+  // Fallback: true (PJe-Calc default / Critério 8) when not explicitly set.
+  const jurosAposCS = cfg?.juros_apos_deducao_cs ?? true;
+
   return {
     indice: cfg?.indice || 'IPCA-E',
     epoca: (cfg?.epoca as 'mensal' | 'fixo') || 'mensal',
@@ -329,10 +334,10 @@ function toEngineCorrecaoConfig(
     juros_inicio: (cfg?.juros_inicio as 'ajuizamento' | 'citacao' | 'vencimento') || 'ajuizamento',
     multa_523: cfg?.multa_523 ?? false,
     multa_523_percentual: cfg?.multa_523_percentual ?? 10,
-    data_liquidacao: dataLiq || new Date().toISOString().slice(0, 10), // fallback only for safety
+    data_liquidacao: dataLiq || new Date().toISOString().slice(0, 10), // fallback only for safety — tracked as W034
     combinacoes_indice,
     combinacoes_juros,
-    juros_apos_deducao_cs: true,
+    juros_apos_deducao_cs: jurosAposCS,
   };
 }
 

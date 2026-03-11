@@ -94,7 +94,7 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     ferias: convertFerias(analysis.ferias),
     verbas: convertVerbas(analysis.verbas, analysis.dag),
     cartaoPonto,
-    fgtsConfig: buildDefaultFGTSConfig(),
+    fgtsConfig: buildFGTSConfigFromPJC(analysis),
     csConfig: buildDefaultCSConfig(analysis),
     irConfig: buildDefaultIRConfig(analysis),
     correcaoConfig: buildCorrecaoConfig(analysis),
