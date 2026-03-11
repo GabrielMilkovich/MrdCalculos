@@ -1674,7 +1674,7 @@ export class PjeCalcEngine {
             const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
             // Apply correction factor to empregador CS too
             const cf = correctionFactorByComp[comp] ?? 1;
-            const correctedBase = cf > 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
+            const correctedBase = cf !== 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
             empregador.push({
               competencia: comp,
               empresa: this.csConfig.apurar_empresa ? Number(new Decimal(correctedBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
