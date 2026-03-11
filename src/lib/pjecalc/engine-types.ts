@@ -363,6 +363,8 @@ export interface PjeIRConfig {
   deduzir_honorarios: boolean;
   aposentado_65: boolean;
   dependentes: number;
+  /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, use these exact IR bases */
+  apuracao_juros_gt?: PjeApuracaoJurosGT[];
 }
 
 export interface PjeCombinacaoIndice {
