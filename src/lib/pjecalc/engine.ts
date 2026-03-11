@@ -1607,24 +1607,29 @@ export class PjeCalcEngine {
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
       // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
-      // PJe-Calc applies monetary correction to CS amounts using the same index as verbas.
-      // For multi-phase combinations, we use the correction factor derived from verbaResults
-      // (which have already been GT-calibrated at this point in the liquidar flow).
+      // PJe-Calc applies the same monetary correction to CS amounts from competência to liquidation.
       const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) || '';
       const correctionFactorByComp: Record<string, number> = {};
-      
-      // Derive correction factor from actual verba results (post GT-calibration)
-      // This mirrors PJe-Calc which uses the ratio valor_corrigido/diferenca per competência
-      for (const vr of verbaResults) {
-        for (const oc of vr.ocorrencias) {
-          if (oc.diferenca <= 0 || !oc.valor_corrigido) continue;
-          const comp = oc.competencia.slice(0, 7);
-          if (!correctionFactorByComp[comp]) {
-            // Use first non-trivial factor found for this competência
-            const factor = oc.valor_corrigido / oc.diferenca;
-            if (factor > 0 && factor !== 1) {
-              correctionFactorByComp[comp] = factor;
+      if (compLiq) {
+        for (const comp of allComps) {
+          const primaryIndex = this.correcaoConfig.indice === 'COMBINACAO'
+            ? (this.correcaoConfig.combinacoes_indice?.[0]?.indice || 'IPCA-E')
+            : (this.correcaoConfig.indice || 'IPCA-E');
+          let activeIndex = primaryIndex;
+          if (this.correcaoConfig.combinacoes_indice && this.correcaoConfig.combinacoes_indice.length > 0) {
+            const sorted = [...this.correcaoConfig.combinacoes_indice].sort((a, b) => 
+              (b.de || '0000').localeCompare(a.de || '0000'));
+            for (const ci of sorted) {
+              if ((ci.de || '0000') <= comp + '-01') { activeIndex = ci.indice; break; }
             }
+            if (!activeIndex || activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') {
+              activeIndex = primaryIndex;
+            }
+          }
+          if (activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') continue;
+          const factor = this.getIndiceCorrecaoDB(activeIndex, comp, compLiq);
+          if (factor !== null && factor > 0 && factor !== 1) {
+            correctionFactorByComp[comp] = factor;
           }
         }
       }
