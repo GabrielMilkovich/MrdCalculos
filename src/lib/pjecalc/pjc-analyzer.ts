@@ -389,13 +389,37 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     const nome = getTextContent(el, 'nome');
     if (!nome) continue;
     const ocEls = el.getElementsByTagName('OcorrenciaHistorico');
+    const ocDetalhadoEls = el.getElementsByTagName('OcorrenciaDoHistoricoSalarial');
     const comps: { comp: string; valor: number }[] = [];
-    for (const oc of Array.from(ocEls)) {
-      comps.push({
-        comp: tsToDate(getTextContent(oc, 'dataInicial')).slice(0, 7),
-        valor: parseNum(getTextContent(oc, 'valor')),
-      });
+    const ocorrencias_detalhadas: HistoricoAnalysis['ocorrencias_detalhadas'] = [];
+
+    // Try OcorrenciaDoHistoricoSalarial first (more detailed real PJC format)
+    if (ocDetalhadoEls.length > 0) {
+      for (const oc of Array.from(ocDetalhadoEls)) {
+        const dataOc = tsToDate(getTextContent(oc, 'dataOcorrencia') || getTextContent(oc, 'dataInicial'));
+        const valor = parseNum(getTextContent(oc, 'valor'));
+        const comp = dataOc.slice(0, 7);
+        if (comp) {
+          comps.push({ comp, valor });
+          ocorrencias_detalhadas.push({
+            data_ocorrencia: dataOc,
+            competencia: comp,
+            valor,
+            tipo: getTextContent(oc, 'tipo') || undefined,
+          });
+        }
+      }
     }
+    // Fallback to OcorrenciaHistorico
+    if (comps.length === 0) {
+      for (const oc of Array.from(ocEls)) {
+        comps.push({
+          comp: tsToDate(getTextContent(oc, 'dataInicial')).slice(0, 7),
+          valor: parseNum(getTextContent(oc, 'valor')),
+        });
+      }
+    }
+
     historicos_salariais.push({
       nome,
       tipo_variacao: getTextContent(el, 'tipoVariacaoParcela'),
@@ -403,12 +427,34 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       incide_fgts: getTextContent(el, 'incidenciaFGTS') === 'true',
       ocorrencias_count: comps.length,
       competencias: comps,
+      ocorrencias_detalhadas: ocorrencias_detalhadas.length > 0 ? ocorrencias_detalhadas : undefined,
     });
   }
 
-  // --- Apuração Diária ---
+  // --- Apuração Diária (FULL PARSE) ---
   const apuracaoEls = root.getElementsByTagName('ApuracaoDiariaCartao');
   const apuracao_diaria_count = apuracaoEls.length;
+  const apuracao_diaria: ApuracaoDiariaAnalysis[] = [];
+  for (const el of Array.from(apuracaoEls)) {
+    apuracao_diaria.push({
+      data: tsToDate(getTextContent(el, 'dataOcorrencia') || getTextContent(el, 'data')),
+      frequencia_diaria: getTextContent(el, 'frequenciaDiaria') || getTextContent(el, 'frequencia') || '',
+      horas_trabalhadas: parseNum(getTextContent(el, 'horasTrabalhadas')),
+      horas_extras_diaria: parseNum(getTextContent(el, 'horasExtrasDiaria') || getTextContent(el, 'horasExtrasDiarias')),
+      horas_extras_semanal: parseNum(getTextContent(el, 'horasExtrasSemanal') || getTextContent(el, 'horasExtrasSemanalDSR')),
+      horas_extras_mensal: parseNum(getTextContent(el, 'horasExtrasMensal')),
+      horas_noturnas: parseNum(getTextContent(el, 'horasNoturnas')),
+      horas_intra_jornada: parseNum(getTextContent(el, 'horasIntraJornada') || getTextContent(el, 'supressaoDeIntervaloIntrajornada')),
+      horas_inter_jornadas: parseNum(getTextContent(el, 'horasInterJornadas') || getTextContent(el, 'supressaoDeIntervaloInterjornadas')),
+      horas_art384: parseNum(getTextContent(el, 'horasArt384') || getTextContent(el, 'art384')),
+      horas_art253: parseNum(getTextContent(el, 'horasArt253') || getTextContent(el, 'art253')),
+      repousos_trabalhados: parseNum(getTextContent(el, 'repousosTrabalhados')),
+      feriados_trabalhados: parseNum(getTextContent(el, 'feriadosTrabalhados')),
+      tipo_dia: getTextContent(el, 'tipoDia') || getTextContent(el, 'tipo') || 'UTIL',
+      falta: getTextContent(el, 'falta') === 'true' || getTextContent(el, 'tipoDia') === 'FALTA',
+      compensacao: getTextContent(el, 'compensacao') === 'true' || getTextContent(el, 'tipoDia') === 'COMPENSADO',
+    });
+  }
 
   // --- Faltas ---
   const faltas: FaltaAnalysis[] = [];
