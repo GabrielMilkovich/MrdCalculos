@@ -62,8 +62,8 @@ export const FRANCISCO_PABLO_SNAPSHOT = {
   ] as GoldenRubrica[],
   resumo: {
     liquido_exequente: 166619.02,
-    inss_reclamante: 9033.14,
-    inss_reclamado: 33777.82,
+    inss_reclamante: 13606.49,
+    inss_reclamado: 29204.47,
     imposto_renda: 1452.13,
     fgts_deposito: 0,
     honorarios_nome: 'MARCOS ROBERTO DIAS',
