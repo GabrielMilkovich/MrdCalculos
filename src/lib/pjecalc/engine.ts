@@ -1268,26 +1268,44 @@ export class PjeCalcEngine {
   // Phase 2 (includeInterest=true): Apply interest using GT taxaDeJuros percentage
   //   - taxaDeJuros in PJC XML is a PERCENTAGE (e.g. 33.14 = 33.14%)
   //   - For juros_apos_deducao_cs: interest base = corrected - CS_share
+  //   - SELIC correction cases: GT valorCorrigido is TAX BASIS only — skip correction scaling
   // =====================================================
+
+  private isSELICCorrection(): boolean {
+    // Single SELIC index
+    if (this.correcaoConfig.indice === 'SELIC' || this.correcaoConfig.indice === 'selic') return true;
+    // Combination where ALL non-SEM_CORRECAO entries use SELIC
+    const combIdx = this.correcaoConfig.combinacoes_indice;
+    if (combIdx && combIdx.length > 0) {
+      const activeIndices = combIdx.filter(c => c.indice !== 'SEM_CORRECAO' && c.indice !== 'Sem Correção' && c.indice !== 'NENHUM');
+      return activeIndices.length > 0 && activeIndices.every(c => c.indice === 'SELIC');
+    }
+    return false;
+  }
 
   private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, totalCSDescontado: number = 0): void {
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
 
-    // Build GT map by competência (YYYY-MM)
-    // Handle duplicate competências (e.g. regular + 13th salary in Dec)
-    const gtMap = new Map<string, { valor_corrigido: number; taxa_juros: number }>();
+    // For SELIC correction: GT valorCorrigido is TAX BASIS (inflation-only portion of SELIC)
+    // → DON'T scale correction (SELIC factor is already correct)
+    // → DON'T add separate interest (already embedded in SELIC factor)
+    const selicCorrection = this.isSELICCorrection();
+    if (selicCorrection) return;
+
+    // Build GT list per competência (YYYY-MM), preserving per-entry taxaDeJuros
+    // Multiple entries per month (e.g. regular + 13th in Dec) are kept separate for accurate weighting
+    const gtByComp = new Map<string, { valor_corrigido: number; weighted_juros_sum: number }>();
     for (const g of correcaoGT) {
       const comp = g.competencia.slice(0, 7);
-      const existing = gtMap.get(comp);
+      const existing = gtByComp.get(comp);
+      // Accumulate: valor_corrigido sums, and weighted juros = sum(valor_corrigido_i × taxa_juros_i / 100)
+      const jurosContrib = g.valor_corrigido > 0 ? g.valor_corrigido * g.taxa_juros / 100 : 0;
       if (existing) {
         existing.valor_corrigido += g.valor_corrigido;
-        // Use weighted average taxa_juros when merging (e.g. regular Dec + 13th Dec)
-        if (g.valor_corrigido > 0) {
-          existing.taxa_juros = Math.max(existing.taxa_juros, g.taxa_juros);
-        }
+        existing.weighted_juros_sum += jurosContrib;
       } else {
-        gtMap.set(comp, { valor_corrigido: g.valor_corrigido, taxa_juros: g.taxa_juros });
+        gtByComp.set(comp, { valor_corrigido: g.valor_corrigido, weighted_juros_sum: jurosContrib });
       }
     }
 
@@ -1311,22 +1329,21 @@ export class PjeCalcEngine {
     const totalCorrigidoEngine = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
 
     // Apply proportional calibration per competência
-    for (const [comp, gt] of gtMap) {
+    for (const [comp, gt] of gtByComp) {
       const eng = engineByComp.get(comp);
       if (!eng || eng.total_corrigido === 0) continue;
       if (gt.valor_corrigido === 0) continue;
 
       const ratio = new Decimal(gt.valor_corrigido).div(eng.total_corrigido);
+      // Effective interest rate for this month = weighted_juros_sum / valor_corrigido
+      const effectiveRate = gt.valor_corrigido > 0 ? gt.weighted_juros_sum / gt.valor_corrigido : 0;
       
       for (const { oc } of eng.ocorrencias) {
         // Scale correction to match GT
         const newCorrigido = new Decimal(oc.valor_corrigido).times(ratio).toDP(2);
         oc.valor_corrigido = newCorrigido.toNumber();
 
-        if (includeInterest && gt.taxa_juros > 0) {
-          // taxaDeJuros in PJC is a PERCENTAGE (e.g. 33.14 means 33.14%)
-          const taxaDecimal = new Decimal(gt.taxa_juros).div(100);
-          
+        if (includeInterest && effectiveRate > 0) {
           // For juros_apos_deducao_cs: base = corrected - CS_share (pro-rata)
           let baseJuros = newCorrigido;
           if (totalCSDescontado > 0 && totalCorrigidoEngine > 0) {
@@ -1334,7 +1351,7 @@ export class PjeCalcEngine {
             baseJuros = newCorrigido.minus(csShare);
           }
           
-          oc.juros = baseJuros.times(taxaDecimal).toDP(2).toNumber();
+          oc.juros = baseJuros.times(effectiveRate).toDP(2).toNumber();
         } else if (includeInterest) {
           oc.juros = 0;
         }
