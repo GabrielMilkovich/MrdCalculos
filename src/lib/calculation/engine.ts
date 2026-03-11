@@ -6,6 +6,13 @@
 // NÃO ADICIONE NOVAS FUNCIONALIDADES AQUI.
 // =====================================================
 
+const LEGACY_ENGINE_DEPRECATION_WARNING = '[DEPRECATED] Motor V1 (src/lib/calculation/engine.ts) foi acionado. Use PjeCalcEngine em src/lib/pjecalc/engine.ts. Este motor será removido em breve.';
+
+// Runtime guard: warn loudly when this module is used
+if (typeof console !== 'undefined') {
+  console.warn(LEGACY_ENGINE_DEPRECATION_WARNING);
+}
+
 import {
   CalcContext,
   CalcResult,

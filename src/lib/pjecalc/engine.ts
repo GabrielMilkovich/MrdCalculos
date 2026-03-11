@@ -1045,7 +1045,7 @@ export class PjeCalcEngine {
             if (fatorDB !== null) {
               indiceCorrecao = fatorDB;
             } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+              this.trackWarning('W040', 'correcao_monetaria', `Índice SELIC ausente para ${oc.competencia}→${compLiq}. Usando fator=1 (PERDA DE PRECISÃO).`, oc.competencia);
               indiceCorrecao = 1;
             }
           } else {
@@ -1053,13 +1053,13 @@ export class PjeCalcEngine {
             const fatorIPCA = this.getIndiceCorrecaoDB('IPCA-E', oc.competencia, compCitacao);
             let fator1: number;
             if (fatorIPCA !== null) { fator1 = fatorIPCA; } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice IPCA-E ausente para ${oc.competencia}→${compCitacao}. Usando fator=1.`);
+              this.trackWarning('W041', 'correcao_monetaria', `Índice IPCA-E ausente para ${oc.competencia}→${compCitacao}. Usando fator=1 (PERDA DE PRECISÃO).`, oc.competencia);
               fator1 = 1;
             }
             const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiq);
             let fator2: number;
             if (fatorSELIC !== null) { fator2 = fatorSELIC; } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para ${compCitacao}→${compLiq}. Usando fator=1.`);
+              this.trackWarning('W042', 'correcao_monetaria', `Índice SELIC ausente para ${compCitacao}→${compLiq}. Usando fator=1 (PERDA DE PRECISÃO).`, oc.competencia);
               fator2 = 1;
             }
             indiceCorrecao = fator1 * fator2;
@@ -1076,7 +1076,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null) {
             indiceCorrecao = fatorDB;
           } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+            this.trackWarning('W043', 'correcao_monetaria', `Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1 (PERDA DE PRECISÃO).`, oc.competencia);
             indiceCorrecao = 1;
           }
 
@@ -1260,7 +1260,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
+            this.trackWarning('W044', 'correcao_monetaria', `Índice ${indice} ausente para ${segInicio}→${segFim} (combinação). Usando fator=1 (PERDA DE PRECISÃO).`, segInicio.slice(0, 7));
           }
         }
 
@@ -1566,7 +1566,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indiceNorm} ausente para FGTS ${segInicio}→${segFim}. Usando fator=1.`);
+            this.trackWarning('W045', 'fgts', `Índice ${indiceNorm} ausente para FGTS ${segInicio}→${segFim}. Usando fator=1 (PERDA DE PRECISÃO).`, segInicio.slice(0, 7));
           }
         }
         fatorCorrecao = fatorTotal.toDP(6).toNumber();
@@ -1587,11 +1587,11 @@ export class PjeCalcEngine {
             if (regimeJ.tipo === 'SELIC') {
               const fatorS = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
               if (fatorS !== null) jurosAcc = jurosAcc.plus(valorCorrigido.times(fatorS - 1));
-              else { console.warn(`[PjeCalcEngine] BLOQUEIO: SELIC (juros FGTS) ausente para ${segInicio}→${segFim}.`); }
+              else { this.trackWarning('W046', 'fgts', `SELIC (juros FGTS) ausente para ${segInicio}→${segFim}.`, segInicio.slice(0, 7)); }
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
               if (fatorTL !== null) jurosAcc = jurosAcc.plus(valorCorrigido.times(fatorTL - 1));
-              else { console.warn(`[PjeCalcEngine] BLOQUEIO: TAXA_LEGAL (juros FGTS) ausente para ${segInicio}→${segFim}.`); }
+              else { this.trackWarning('W047', 'fgts', `TAXA_LEGAL (juros FGTS) ausente para ${segInicio}→${segFim}.`, segInicio.slice(0, 7)); }
             } else {
               const taxa = ((regimeJ as any).percentual || 1) / 100;
               jurosAcc = jurosAcc.plus(valorCorrigido.times(taxa).times(meses));
@@ -1604,7 +1604,7 @@ export class PjeCalcEngine {
         const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, compClean, compLiq);
         if (fatorDB !== null) fatorCorrecao = fatorDB;
         else {
-          console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para FGTS ${compClean}→${compLiq}. Usando fator=1.`);
+          this.trackWarning('W048', 'fgts', `Índice ${this.correcaoConfig.indice} ausente para FGTS ${compClean}→${compLiq}. Usando fator=1 (PERDA DE PRECISÃO).`, compClean);
           fatorCorrecao = 1;
         }
       }
@@ -2501,7 +2501,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null) {
             indiceCorrecao = fatorDB;
           } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+            this.trackWarning('W049', 'correcao_monetaria', `Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq} (correção-only). Usando fator=1.`, oc.competencia);
           }
         }
         
@@ -2571,7 +2571,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
+            this.trackWarning('W050', 'correcao_monetaria', `Índice ${indice} ausente para ${segInicio}→${segFim} (correção-only combinação). Usando fator=1.`, segInicio.slice(0, 7));
           }
         }
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);

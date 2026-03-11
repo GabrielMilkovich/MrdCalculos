@@ -64,6 +64,15 @@ export interface PJCAnalysis {
   excecoes_carga_horaria?: ExcecaoCargaHorariaAnalysis[];
   /** Exceções de sábado */
   excecoes_sabado?: ExcecaoSabadoAnalysis[];
+  /** FGTS config from PJC XML */
+  fgts_config?: {
+    apurar: boolean;
+    multa_percentual: number;
+    multa_base: string;
+    lc110_10: boolean;
+    lc110_05: boolean;
+    destino: string;
+  };
   /** Pensão alimentícia config */
   pensao_alimenticia?: { apurar: boolean; percentual: number; base?: string };
   /** Previdência privada config */
@@ -638,6 +647,25 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     });
   }
 
+  // --- FGTS Config ---
+  const fgtsEl = root.getElementsByTagName('FGTS')[0] || root.getElementsByTagName('fgts')[0]
+    || root.getElementsByTagName('ModuloFGTS')[0] || root.getElementsByTagName('moduloFgts')[0];
+  let fgts_config: PJCAnalysis['fgts_config'] = undefined;
+  if (fgtsEl) {
+    const multa_pct_raw = getTextContent(fgtsEl, 'percentualMulta') || getTextContent(fgtsEl, 'multaPercentual');
+    fgts_config = {
+      apurar: getTextContent(fgtsEl, 'apurar') !== 'false',
+      multa_percentual: parseNum(multa_pct_raw) || 40,
+      multa_base: getTextContent(fgtsEl, 'baseMulta') || getTextContent(fgtsEl, 'multaBase') || 'devido',
+      lc110_10: getTextContent(fgtsEl, 'lc110_10') === 'true' || getTextContent(fgtsEl, 'contribuicaoSocial10') === 'true',
+      lc110_05: getTextContent(fgtsEl, 'lc110_05') === 'true' || getTextContent(fgtsEl, 'contribuicaoSocial05') === 'true',
+      destino: getTextContent(fgtsEl, 'destino') || getTextContent(fgtsEl, 'destinoFGTS') || 'pagar_reclamante',
+    };
+  }
+  // If resultado shows FGTS deposit > 0 but no config element, create default
+  if (!fgts_config && resultado.fgts_deposito > 0) {
+    fgts_config = { apurar: true, multa_percentual: 40, multa_base: 'devido', lc110_10: false, lc110_05: false, destino: 'pagar_reclamante' };
+  }
 
   // --- Pensão, Previdência, Salário-Família, Seguro-Desemprego ---
   const pensaoEl = root.getElementsByTagName('PensaoAlimenticia')[0] || root.getElementsByTagName('pensaoAlimenticia')[0];
@@ -660,6 +688,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     apuracao_juros: apuracao_juros.length > 0 ? apuracao_juros : undefined,
     excecoes_carga_horaria: excecoes_carga_horaria.length > 0 ? excecoes_carga_horaria : undefined,
     excecoes_sabado: excecoes_sabado.length > 0 ? excecoes_sabado : undefined,
+    fgts_config,
     pensao_alimenticia: pensaoEl ? {
       apurar: getTextContent(pensaoEl, 'apurar') !== 'false',
       percentual: parseNum(getTextContent(pensaoEl, 'percentual')),
