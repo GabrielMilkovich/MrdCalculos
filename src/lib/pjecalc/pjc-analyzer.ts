@@ -450,6 +450,24 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     cs_config = { apurar_segurado: false, apurar_empresa: false, aliquota_empresa: 0, aliquota_sat: 0, aliquota_terceiros: 0 };
   }
 
+  // --- ApuracaoDeJuros (Ground Truth consolidation) ---
+  const apuracao_juros: ApuracaoJurosEntry[] = [];
+  const apuracaoJurosEls = root.getElementsByTagName('ApuracaoDeJuros');
+  for (const ap of Array.from(apuracaoJurosEls)) {
+    apuracao_juros.push({
+      competencia: tsToDate(getTextContent(ap, 'competencia')),
+      valor_corrigido: parseNum(getTextContent(ap, 'valorCorrigido')),
+      cs_base_normal: parseNum(getTextContent(ap, 'valorVerbaParaContribuicaoSocial')),
+      cs_base_13: parseNum(getTextContent(ap, 'valorVerbaParaContribuicaoSocialDecimoTerceiro')),
+      cs_normal: parseNum(getTextContent(ap, 'contribuicaoSocialNormal')),
+      cs_13: parseNum(getTextContent(ap, 'contribuicaoSocialDecimoTerceiro')),
+      ir_base_demais: parseNum(getTextContent(ap, 'valorCorrigidoParaIrpfDemaisVerbas')),
+      ir_base_13: parseNum(getTextContent(ap, 'valorCorrigidoParaIrpfDecimoTerceiro')),
+      ir_base_ferias: parseNum(getTextContent(ap, 'valorCorrigidoParaIrpfFerias')),
+      taxa_juros: parseNum(getTextContent(ap, 'taxaDeJuros')),
+    });
+  }
+
   return {
     parametros,
     resultado,
@@ -461,6 +479,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     ferias,
     atualizacao,
     dag,
+    apuracao_juros: apuracao_juros.length > 0 ? apuracao_juros : undefined,
   };
 }
 
