@@ -351,6 +351,46 @@ export function parsePJCXml(xmlString: string): PJCParseResult {
     // --- Atualização ---
     const atualizacao = parseAtualizacao(root);
 
+    // --- FGTS Config ---
+    let fgts: PJCFGTSConfig | undefined;
+    const fgtsEl = getEl(root, 'ConfigFGTS') || getEl(root, 'configFGTS');
+    if (fgtsEl) {
+      const saldosSaques: { data: string; valor: number }[] = [];
+      const ssEls = fgtsEl.getElementsByTagName('SaldoSaque');
+      for (const ss of Array.from(ssEls)) {
+        saldosSaques.push({ data: getAttr(ss, 'data'), valor: parseFloat(getAttr(ss, 'valor')) || 0 });
+      }
+      fgts = {
+        apurar: getBool(fgtsEl, 'apurar'),
+        multa_percentual: getNum(fgtsEl, 'multaPercentual') || 40,
+        saldos_saques: saldosSaques,
+      };
+    }
+
+    // --- CS Config ---
+    let contribuicao_social: PJCCSConfig | undefined;
+    const csEl = getEl(root, 'ConfigCS') || getEl(root, 'configCS');
+    if (csEl) {
+      contribuicao_social = {
+        apurar_segurado: getBool(csEl, 'apurarSegurado'),
+        apurar_empresa: getBool(csEl, 'apurarEmpresa'),
+        aliquota_empresa: getNum(csEl, 'aliquotaEmpresa') || 20,
+        aliquota_sat: getNum(csEl, 'aliquotaSAT') || 2,
+        aliquota_terceiros: getNum(csEl, 'aliquotaTerceiros') || 5.8,
+      };
+    }
+
+    // --- IR Config ---
+    let imposto_renda: PJCIRConfig | undefined;
+    const irEl = getEl(root, 'ConfigIR') || getEl(root, 'configIR');
+    if (irEl) {
+      imposto_renda = {
+        apurar: getBool(irEl, 'apurar'),
+        dependentes: getNum(irEl, 'dependentes') || 0,
+        tributacao_exclusiva_13: getBool(irEl, 'tributacaoExclusiva13'),
+      };
+    }
+
     const data: PJCReal = {
       processo,
       parametros,
@@ -361,6 +401,9 @@ export function parsePJCXml(xmlString: string): PJCParseResult {
       faltas_afastamentos,
       ferias,
       atualizacao,
+      fgts,
+      contribuicao_social,
+      imposto_renda,
     };
 
     if (apuracao_diaria.length === 0) warnings.push('Nenhuma apuração diária encontrada');
@@ -603,12 +646,16 @@ export function exportPJCXml(data: PJCReal): string {
   lines.push(`    <dataAdmissao>${p.data_admissao}</dataAdmissao>`);
   if (p.data_demissao) lines.push(`    <dataDemissao>${p.data_demissao}</dataDemissao>`);
   if (p.data_ajuizamento) lines.push(`    <dataAjuizamento>${p.data_ajuizamento}</dataAjuizamento>`);
+  if (p.data_citacao) lines.push(`    <dataCitacao>${p.data_citacao}</dataCitacao>`);
   if (p.inicio_calculo) lines.push(`    <periodoInicial>${p.inicio_calculo}</periodoInicial>`);
   if (p.fim_calculo) lines.push(`    <periodoFinal>${p.fim_calculo}</periodoFinal>`);
   if (p.data_liquidacao) lines.push(`    <dataLiquidacao>${p.data_liquidacao}</dataLiquidacao>`);
   lines.push(`    <cargaHoraria>${p.carga_horaria}</cargaHoraria>`);
   lines.push(`    <sabadoDiaUtil>${p.sabado_dia_util}</sabadoDiaUtil>`);
   lines.push(`    <prescricaoQuinquenal>${p.prescricao_quinquenal}</prescricaoQuinquenal>`);
+  lines.push(`    <projetarAviso>${p.projetar_aviso}</projetarAviso>`);
+  lines.push(`    <limitarAvos>${p.limitar_avos}</limitarAvos>`);
+  lines.push(`    <zerarNegativos>${p.zerar_negativos}</zerarNegativos>`);
   lines.push('  </ParametrosCalculo>');
 
   // Apuração Diária
@@ -621,6 +668,7 @@ export function exportPJCXml(data: PJCReal): string {
       lines.push(`      <horasTrabalhadas>${fmtN(ad.horas_trabalhadas)}</horasTrabalhadas>`);
       lines.push(`      <horasExtrasDiaria>${fmtN(ad.horas_extras_diaria)}</horasExtrasDiaria>`);
       lines.push(`      <horasExtrasSemanal>${fmtN(ad.horas_extras_semanal)}</horasExtrasSemanal>`);
+      lines.push(`      <horasExtrasMensal>${fmtN(ad.horas_extras_mensal)}</horasExtrasMensal>`);
       lines.push(`      <horasNoturnas>${fmtN(ad.horas_noturnas)}</horasNoturnas>`);
       lines.push(`      <horasIntraJornada>${fmtN(ad.horas_intra_jornada)}</horasIntraJornada>`);
       lines.push(`      <horasInterJornadas>${fmtN(ad.horas_inter_jornadas)}</horasInterJornadas>`);
@@ -665,6 +713,9 @@ export function exportPJCXml(data: PJCReal): string {
       lines.push(`      <periodoFinal>${c.periodo_fim}</periodoFinal>`);
       lines.push(`      <multiplicador>${fmtN(c.multiplicador)}</multiplicador>`);
       lines.push(`      <divisor>${fmtN(c.divisor, 2)}</divisor>`);
+      lines.push(`      <tipoDivisor>${escXml(c.tipo_divisor)}</tipoDivisor>`);
+      lines.push(`      <tipoQuantidade>${escXml(c.tipo_quantidade)}</tipoQuantidade>`);
+      lines.push(`      <quantidade>${fmtN(c.quantidade, 2)}</quantidade>`);
       lines.push('    </Calculada>');
     }
     lines.push('  </VerbasPrincipais>');
@@ -682,8 +733,12 @@ export function exportPJCXml(data: PJCReal): string {
       lines.push(`      <incidenciaINSS>${r.incide_inss}</incidenciaINSS>`);
       lines.push(`      <incidenciaIRPF>${r.incide_ir}</incidenciaIRPF>`);
       lines.push(`      <incidenciaFGTS>${r.incide_fgts}</incidenciaFGTS>`);
+      lines.push(`      <gerarVerbasNaPrincipal>${r.gerar_principal}</gerarVerbasNaPrincipal>`);
+      lines.push(`      <gerarVerbasNaReflexa>${r.gerar_reflexo}</gerarVerbasNaReflexa>`);
       lines.push(`      <periodoInicial>${r.periodo_inicio}</periodoInicial>`);
       lines.push(`      <periodoFinal>${r.periodo_fim}</periodoFinal>`);
+      lines.push(`      <multiplicador>${fmtN(r.multiplicador)}</multiplicador>`);
+      lines.push(`      <divisor>${fmtN(r.divisor, 2)}</divisor>`);
       if (r.bases_verba.length > 0) {
         lines.push('      <formula><FormulaReflexo><baseVerba>');
         for (const bv of r.bases_verba) {
@@ -723,6 +778,8 @@ export function exportPJCXml(data: PJCReal): string {
       lines.push(`      <prazo>${f.prazo_dias}</prazo>`);
       lines.push(`      <situacao>${f.situacao}</situacao>`);
       lines.push(`      <dobra>${f.dobra}</dobra>`);
+      lines.push(`      <abono>${f.abono}</abono>`);
+      if (f.dias_abono > 0) lines.push(`      <diasAbono>${f.dias_abono}</diasAbono>`);
       for (const g of f.gozos) {
         lines.push(`      <PeriodoGozo inicio="${g.inicio}" fim="${g.fim}" dias="${g.dias}" />`);
       }
@@ -744,6 +801,39 @@ export function exportPJCXml(data: PJCReal): string {
     lines.push(`    <CombinacaoDeJuros><aPartirDe>${cj.a_partir_de}</aPartirDe><juros>${cj.indice_ou_juros}</juros></CombinacaoDeJuros>`);
   }
   lines.push('  </ParametrosDeAtualizacao>');
+
+  // FGTS Config
+  if (data.fgts) {
+    lines.push('  <ConfigFGTS>');
+    lines.push(`    <apurar>${data.fgts.apurar}</apurar>`);
+    lines.push(`    <multaPercentual>${data.fgts.multa_percentual}</multaPercentual>`);
+    if (data.fgts.saldos_saques.length > 0) {
+      for (const ss of data.fgts.saldos_saques) {
+        lines.push(`    <SaldoSaque data="${ss.data}" valor="${fmtN(ss.valor, 2)}" />`);
+      }
+    }
+    lines.push('  </ConfigFGTS>');
+  }
+
+  // CS Config
+  if (data.contribuicao_social) {
+    lines.push('  <ConfigCS>');
+    lines.push(`    <apurarSegurado>${data.contribuicao_social.apurar_segurado}</apurarSegurado>`);
+    lines.push(`    <apurarEmpresa>${data.contribuicao_social.apurar_empresa}</apurarEmpresa>`);
+    lines.push(`    <aliquotaEmpresa>${data.contribuicao_social.aliquota_empresa}</aliquotaEmpresa>`);
+    lines.push(`    <aliquotaSAT>${data.contribuicao_social.aliquota_sat}</aliquotaSAT>`);
+    lines.push(`    <aliquotaTerceiros>${data.contribuicao_social.aliquota_terceiros}</aliquotaTerceiros>`);
+    lines.push('  </ConfigCS>');
+  }
+
+  // IR Config
+  if (data.imposto_renda) {
+    lines.push('  <ConfigIR>');
+    lines.push(`    <apurar>${data.imposto_renda.apurar}</apurar>`);
+    lines.push(`    <dependentes>${data.imposto_renda.dependentes}</dependentes>`);
+    lines.push(`    <tributacaoExclusiva13>${data.imposto_renda.tributacao_exclusiva_13}</tributacaoExclusiva13>`);
+    lines.push('  </ConfigIR>');
+  }
 
   lines.push('</CalculoTrabalhista>');
   return lines.join('\n');

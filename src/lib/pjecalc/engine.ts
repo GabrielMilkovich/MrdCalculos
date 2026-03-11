@@ -2670,8 +2670,15 @@ export class PjeCalcEngine {
   // =====================================================
 
   liquidar(): PjeLiquidacaoResult {
+    const auditTrail: Array<{ step: number; module: string; description: string; competencia?: string; resultado?: number; rubrica?: string }> = [];
+    let stepCounter = 0;
+    const audit = (module: string, description: string, extra?: { competencia?: string; resultado?: number; rubrica?: string }) => {
+      auditTrail.push({ step: ++stepCounter, module, description, ...extra });
+    };
+
     // ── 0. Validação pré-liquidação ──
     const validacao = this.validarPreLiquidacao();
+    audit('validacao', `Pré-validação: ${validacao.valido ? 'OK' : validacao.itens.length + ' issues'}`);
 
     // ── 1. Topological sort: principals first, then reflexas in dependency order ──
     // This supports reflex-on-reflex (e.g., HE → DSR → 13º s/ DSR)
@@ -2697,9 +2704,10 @@ export class PjeCalcEngine {
       
       // Calculate — precomputed occurrences take priority (PJC ground truth)
       if (verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
-        const result = this.calcularVerba(verba); // calcularVerba handles precomputed
+        const result = this.calcularVerba(verba);
         verbaResults.push(result);
         this.verbaResultsMap.set(verba.id, result);
+        audit('verba', `Verba "${verba.nome}" (precomputada): ${result.ocorrencias.length} oc, total=${result.total_diferenca.toFixed(2)}`, { rubrica: verba.nome, resultado: result.total_diferenca });
         return;
       }
       if (verba.tipo === 'reflexa' && verba.verba_principal_id) {
@@ -2708,12 +2716,14 @@ export class PjeCalcEngine {
           const refResult = this.calcularVerbaReflexa(verba, principalResult);
           verbaResults.push(refResult);
           this.verbaResultsMap.set(verba.id, refResult);
+          audit('verba_reflexa', `Reflexo "${verba.nome}" sobre "${principalResult.nome}": total=${refResult.total_diferenca.toFixed(2)}`, { rubrica: verba.nome, resultado: refResult.total_diferenca });
           return;
         }
       }
       const result = this.calcularVerba(verba);
       verbaResults.push(result);
       this.verbaResultsMap.set(verba.id, result);
+      audit('verba', `Verba "${verba.nome}": ${result.ocorrencias.length} oc, total=${result.total_diferenca.toFixed(2)}`, { rubrica: verba.nome, resultado: result.total_diferenca });
     };
 
     // Process all verbas in dependency order
@@ -2745,42 +2755,45 @@ export class PjeCalcEngine {
 
     let csPreComputed: PjeCSResult | null = null;
     if (this.correcaoConfig.juros_apos_deducao_cs) {
-      // Step A: Correction only
       this.aplicarCorrecaoSomente(verbaResults);
+      audit('correcao', 'Correção monetária aplicada (sem juros)');
       
-      // Step A.1: GT Calibration — correct the correction values to match PJC ground truth
       if (hasGT) {
         this.calibrarCorrecaoComGT(verbaResults, false);
+        audit('gt_calibracao', 'Calibração GT (correção only)');
       }
       
-      // Step B: CS on corrected values (BEFORE interest — this is the FINAL CS)
-      // PJe-Calc computes CS only once on corrected values, before interest is applied
       csPreComputed = this.calcularCS(verbaResults, true);
       const csDescontadoPreJuros = this.csConfig.cobrar_reclamante ? csPreComputed.total_segurado : 0;
+      audit('cs', `CS pré-juros: segurado=${csPreComputed.total_segurado.toFixed(2)}, empregador=${csPreComputed.total_empregador.toFixed(2)}`);
       
-      // Step C+D: Apply interest
       if (hasGT) {
         this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
+        audit('gt_juros', 'Calibração GT (juros + CS deduzida)');
       } else {
         this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
+        audit('juros', 'Juros aplicados após dedução CS');
       }
     } else {
       this.aplicarCorrecaoJuros(verbaResults);
+      audit('correcao_juros', 'Correção + juros aplicados');
       if (hasGT) {
         this.calibrarCorrecaoComGT(verbaResults, true);
+        audit('gt_calibracao', 'Calibração GT (full)');
       }
     }
 
     // ── 5. FGTS ──
     const fgts = this.calcularFGTS(verbaResults);
+    audit('fgts', `FGTS: depósitos=${fgts.total_depositos.toFixed(2)}, multa=${fgts.multa_valor.toFixed(2)}`);
 
     // ── 6. Contribuição Social ──
-    // For juros_apos_deducao_cs: reuse CS computed BEFORE interest (step B)
-    // Otherwise: compute CS on final corrected+interest values
     const cs = csPreComputed || this.calcularCS(verbaResults, true);
+    audit('cs_final', `CS final: segurado=${cs.total_segurado.toFixed(2)}, empregador=${cs.total_empregador.toFixed(2)}`);
 
     // ── 7. IR ──
     const ir = this.calcularIR(verbaResults, cs);
+    audit('ir', `IR: base=${ir.base_calculo.toFixed(2)}, imposto=${ir.imposto_devido.toFixed(2)}`);
 
     // ── 8. Seguro-Desemprego ──
     const seguro = this.calcularSeguroDesemprego();
@@ -2893,10 +2906,13 @@ export class PjeCalcEngine {
       },
     };
 
+    audit('resumo', `Bruto=${resumo.principal_corrigido.toFixed(2)}, Juros=${resumo.juros_mora.toFixed(2)}, Líquido=${resumo.liquido_reclamante.toFixed(2)}, Total_Reclamada=${resumo.total_reclamada.toFixed(2)}`);
+
     return {
       data_liquidacao: this.correcaoConfig.data_liquidacao,
       verbas: verbaResults, fgts, contribuicao_social: cs, imposto_renda: ir,
       seguro_desemprego: seguro, previdencia_privada: prevPrivada, salario_familia: salarioFamilia, resumo, validacao,
+      audit_trail: auditTrail,
     };
   }
 
