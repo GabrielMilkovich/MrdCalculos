@@ -56,9 +56,9 @@ export function FidelidadePanel({ fidelityReport, parityReport }: Props) {
               {fidelityReport.calculation_blocked ? (
                 <Badge variant="destructive">BLOQUEADO</Badge>
               ) : fidelityReport.synthetic_fallbacks_used ? (
-                <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">FALLBACK</Badge>
+                <Badge variant="outline" className="bg-accent text-accent-foreground border-border">FALLBACK</Badge>
               ) : (
-                <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">OK</Badge>
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">OK</Badge>
               )}
             </CardTitle>
           </CardHeader>
