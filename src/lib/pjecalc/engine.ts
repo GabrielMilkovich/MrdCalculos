@@ -1080,9 +1080,14 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
-        // ═══ PJC Ground Truth: if pjc_indice_acumulado is available, it's the TOTAL factor
-        // (correction + interest combined, since SELIC includes both). Use directly as valor_final.
+        // ═══ PJC Ground Truth: pjc_indice_acumulado is the TOTAL factor PJe-Calc applied
+        // (includes correction AND interest combined). Use directly as valor_final.
+        // The regime is tracked for downstream CS base decisions.
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+          const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
+          const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
+          const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
+
           const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
           const valorFinal = new Decimal(oc.diferenca).times(fatorTotal);
           oc.indice_correcao = fatorTotal.toDP(6).toNumber();
@@ -1090,6 +1095,7 @@ export class PjeCalcEngine {
           oc.juros = 0;
           oc.valor_final = valorFinal.toDP(2).toNumber();
           oc.pjc_ground_truth_applied = true;
+          oc.pjc_ground_truth_regime = regimeIndice;
           totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
           totalFinal = totalFinal.plus(oc.valor_final);
           continue;
@@ -1111,26 +1117,19 @@ export class PjeCalcEngine {
         const datas = Array.from(breakpoints).sort();
 
         let fatorTotal = new Decimal(1);
-        const regimesUsados: string[] = [];
 
         for (let i = 0; i < datas.length - 1; i++) {
           const segInicio = datas[i];
           const segFim = datas[i + 1];
           const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
           const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
-
-          if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') {
-            regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
-            continue;
-          }
-
+          if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
           const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
             console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
           }
-          regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
         }
 
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
@@ -1405,13 +1404,11 @@ export class PjeCalcEngine {
       if (!verba?.incidencias.contribuicao_social) continue;
       if (verba.caracteristica === 'ferias') continue;
       for (const oc of vr.ocorrencias) {
-        // ═══ CS Base Rule: When PJC ground truth is applied (SELIC factor includes interest),
-        // use nominal diferenca as CS base — SELIC's interest component must NOT inflate CS.
-        // PJe-Calc calculates CS on inflation-only corrected values; since we can't separate
-        // inflation from interest in the combined SELIC factor, nominal is the correct base.
+        // ═══ CS Base Rule: When PJC ground truth is applied, the factor includes
+        // both correction AND interest combined. Using valor_corrigido would inflate CS
+        // with the interest component. Use nominal diferenca as CS base instead.
         let val: number;
         if (useCorrigido && oc.pjc_ground_truth_applied) {
-          // Ground truth SELIC: fall back to nominal to avoid interest inflating CS
           val = Math.abs(oc.diferenca);
         } else if (useCorrigido) {
           val = oc.valor_corrigido;
@@ -2027,10 +2024,11 @@ export class PjeCalcEngine {
         
         let indiceCorrecao = 1;
         
-        // Use PJC ground truth correction factor when available (includes interest)
+        // Use PJC ground truth correction factor when available
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
+          oc.pjc_ground_truth_regime = this.correcaoConfig.indice || 'SELIC';
         } else {
           const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, oc.competencia, compLiq);
           if (fatorDB !== null) {
@@ -2067,8 +2065,13 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
         
-        // Use PJC ground truth correction factor when available (includes interest)
+        // Use PJC ground truth correction factor when available
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+          // Determine regime for this occurrence
+          const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
+          const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
+          const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
+
           const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
           const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
           oc.indice_correcao = fatorTotal.toDP(6).toNumber();
@@ -2076,6 +2079,7 @@ export class PjeCalcEngine {
           oc.juros = 0;
           oc.valor_final = valorCorrigido.toDP(2).toNumber();
           oc.pjc_ground_truth_applied = true;
+          oc.pjc_ground_truth_regime = regimeIndice;
           totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
           continue;
         }
@@ -2151,7 +2155,8 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.valor_corrigido === 0) { totalFinal += oc.valor_final; continue; }
 
-        // Skip interest for occurrences where PJC ground truth already includes interest
+        // Skip interest for ground truth occurrences — pjc_indice_acumulado is the TOTAL factor
+        // (includes correction + interest combined) regardless of regime type
         if (oc.pjc_ground_truth_applied) {
           totalJuros += oc.juros;
           totalFinal += oc.valor_final;
