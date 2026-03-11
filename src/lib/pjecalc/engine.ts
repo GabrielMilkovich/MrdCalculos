@@ -957,14 +957,35 @@ export class PjeCalcEngine {
         let indiceCorrecao = 1;
         let juros = 0;
 
-        if (usarADC5859 && dataCitacao) {
+        // ═══ PJC Ground Truth: use precomputed correction factor when available ═══
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+          indiceCorrecao = oc.pjc_indice_acumulado;
+          oc.pjc_ground_truth_applied = true;
+          
+          // Determine if SELIC regime (already includes interest)
+          const isSelic = this.correcaoConfig.indice === 'SELIC';
+          oc.pjc_ground_truth_regime = isSelic ? 'SELIC' : this.correcaoConfig.indice;
+          
+          if (!isSelic) {
+            // Calculate interest separately for non-SELIC regimes
+            const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
+            if (this.correcaoConfig.juros_tipo === 'simples_mensal' && dataAjuiz) {
+              let dataInicioJuros: Date;
+              if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
+              else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao;
+              else dataInicioJuros = dataAjuiz;
+              const mesesJuros = this.mesesEntre(dataInicioJuros, dataLiq);
+              const taxaMensal = (this.correcaoConfig.juros_percentual || 1) / 100;
+              juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2));
+            }
+          }
+        } else if (usarADC5859 && dataCitacao) {
           if (dataComp >= dataCitacao) {
             const fatorDB = this.getIndiceCorrecaoDB('SELIC', oc.competencia, compLiq);
             if (fatorDB !== null) {
               indiceCorrecao = fatorDB;
             } else {
-              // FIX #1: Sem fallback — bloquear cálculo se índices ausentes
-              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para ${oc.competencia}→${compLiq}. Usando fator=1 (sem correção).`);
+              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
               indiceCorrecao = 1;
             }
           } else {
@@ -991,12 +1012,10 @@ export class PjeCalcEngine {
             }
           }
         } else {
-          const mesesCorrecao = this.mesesEntre(dataComp, dataLiq);
           const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, oc.competencia, compLiq);
           if (fatorDB !== null) {
             indiceCorrecao = fatorDB;
           } else {
-            // FIX #1: Sem fallback — bloquear cálculo se índices ausentes
             console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
             indiceCorrecao = 1;
           }
@@ -1006,7 +1025,7 @@ export class PjeCalcEngine {
             if (this.correcaoConfig.juros_tipo === 'simples_mensal') {
               let dataInicioJuros: Date;
               if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
-              else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao;
+              else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao!;
               else if (dataAjuiz) dataInicioJuros = dataAjuiz;
               else dataInicioJuros = dataComp;
               const mesesJuros = this.mesesEntre(dataInicioJuros, dataLiq);
@@ -1015,7 +1034,7 @@ export class PjeCalcEngine {
             } else if ((this.correcaoConfig.juros_tipo as string) === 'composto') {
               let dataInicioJuros: Date;
               if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
-              else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao;
+              else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao!;
               else if (dataAjuiz) dataInicioJuros = dataAjuiz;
               else dataInicioJuros = dataComp;
               const mesesJuros = this.mesesEntre(dataInicioJuros, dataLiq);
@@ -1023,8 +1042,6 @@ export class PjeCalcEngine {
               const fatorComposto = Math.pow(1 + taxaMensal, mesesJuros);
               juros = Number(new Decimal(valorCorrigido).times(fatorComposto - 1).toDP(2));
             } else if (this.correcaoConfig.juros_tipo === 'selic') {
-              // FIX #2: SELIC como índice de correção já inclui juros — não aplicar juros separados
-              // Juros SELIC separados só se aplica quando o índice de correção NÃO é SELIC
               juros = 0;
             }
           }
