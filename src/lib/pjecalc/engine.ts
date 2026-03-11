@@ -15,6 +15,7 @@ export { CNAE_ALIQUOTAS_COMUNS } from './engine-constants';
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias,
   PjeVerba, PjeCartaoPonto, PjeFeriadoDB, PjeExcecaoCargaHoraria,
+  PjeExcecaoSabado,
   PjeFGTSConfig, PjeCSConfig, PjeIRConfig, PjeCorrecaoConfig,
   PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
   PjePrevidenciaPrivadaConfig, PjePensaoConfig, PjeSalarioFamiliaConfig,
