@@ -400,6 +400,12 @@ export interface PjeCorrecaoConfig {
   juros_apos_deducao_cs?: boolean;
   /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, calibrate corrected values */
   apuracao_juros_gt?: PjeApuracaoJurosGT[];
+  /** Ground truth closure targets from PJC resultado — used to compute exact total juros */
+  gt_closure?: {
+    liquido_exequente: number;
+    inss_reclamante: number;
+    imposto_renda: number;
+  };
 }
 
 export interface PjeHonorariosConfig {
