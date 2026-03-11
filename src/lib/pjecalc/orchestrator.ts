@@ -736,7 +736,7 @@ export async function executarLiquidacao(
     indicesDB,           // 14: correction indices  
     faixasINSSDB,        // 15: INSS progressive brackets
     faixasIRDB,          // 16: IR brackets
-    [],                  // 17: excecoesCargas (loaded per case if needed)
+    caseData.excecoesCargas || [],  // 17: exceções de carga horária
     feriadosDB,          // 18: holidays
     prevPrivadaConfig,   // 19: previdência privada
     pensaoConfig,        // 20: pensão alimentícia

@@ -308,8 +308,19 @@ export function aplicarCorrecaoPorData(
       ? config.juros_inicio_data
       : segInicio;
 
-    // Determine interest base
-    const interestBase = valorCorrigido; // Default: corrected value
+    // Determine interest base per config.base_de_juros_das_verbas
+    let interestBase: Decimal;
+    const baseConfig = (config.base_de_juros_das_verbas || 'DIFERENCA').toUpperCase();
+    if (baseConfig === 'DEVIDO') {
+      // Interest on full due amount (before deducting paid)
+      interestBase = new Decimal(valor).times(fatorTotal);
+    } else if (baseConfig === 'CORRIGIDO') {
+      // Interest on corrected value
+      interestBase = valorCorrigido;
+    } else {
+      // DIFERENCA (default): interest on corrected difference
+      interestBase = valorCorrigido;
+    }
 
     if (regimeJuros.tipo === 'SELIC') {
       // SELIC as interest type (with non-SELIC correction)

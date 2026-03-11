@@ -221,6 +221,18 @@ export const ERROR_CATALOG: Record<string, StructuredError> = {
     message: 'Custo/honorário/multa gerado pelo engine mas ausente no PJe-Calc',
     friendly: 'O engine calculou um módulo que o PJe-Calc não gerou.',
     action: 'Verificar configuração de honorários/custas.' },
+  W041: { code: 'W041', severity: 'warning', module: 'correcao', blocking: false,
+    message: 'Índice INPC/IGP-M configurado mas sem série histórica carregada',
+    friendly: 'Índice alternativo sem dados. Verifique se a série foi importada.',
+    action: 'Importar série histórica do índice configurado.' },
+  W042: { code: 'W042', severity: 'warning', module: 'juros', blocking: false,
+    message: 'Base de juros configurada como DEVIDO mas engine usa DIFERENCA por padrão',
+    friendly: 'A base para cálculo de juros difere do padrão.',
+    action: 'Verificar configuração de base de juros.' },
+  W043: { code: 'W043', severity: 'warning', module: 'correcao', blocking: false,
+    message: 'Fator de correção = 1.0 (sem efeito) — pode indicar série ausente para o período',
+    friendly: 'Correção monetária não foi aplicada para alguma competência.',
+    action: 'Verificar se os índices cobrem o período do cálculo.' },
 
   // =====================================================
   // INFORMATIONAL (I001 - I020)
