@@ -1404,13 +1404,13 @@ export class PjeCalcEngine {
       if (!verba?.incidencias.contribuicao_social) continue;
       if (verba.caracteristica === 'ferias') continue;
       for (const oc of vr.ocorrencias) {
-        // ═══ CS Base Rule: When PJC ground truth is applied, the factor includes
-        // both correction AND interest combined. Using valor_corrigido would inflate CS
-        // with the interest component. Use nominal diferenca as CS base instead.
+        // ═══ CS Base Rule (PJe-Calc):
+        // indiceAcumulado is ALWAYS the CORRECTION-ONLY factor (inflation/monetary correction).
+        // Interest is ALWAYS calculated separately.
+        // CS base = valor_corrigido (corrected value, pre-interest).
+        // This is true for ALL regimes including SELIC ground truth.
         let val: number;
-        if (useCorrigido && oc.pjc_ground_truth_applied) {
-          val = Math.abs(oc.diferenca);
-        } else if (useCorrigido) {
+        if (useCorrigido) {
           val = oc.valor_corrigido;
         } else {
           val = usarBruto ? oc.devido : oc.diferenca;
