@@ -1648,7 +1648,7 @@ export class PjeCalcEngine {
             imposto = this.calcularINSSProgressivo(comp, totalBase);
           }
 
-          // Apply monetary correction factor from GT (valor_corrigido / nominal_base)
+          // Apply monetary correction: derive factor from GT valorCorrigido / cs_base
           const cf = correctionFactorByComp[comp];
           if (cf && cf > 1) {
             imposto = Number(new Decimal(imposto).times(cf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
