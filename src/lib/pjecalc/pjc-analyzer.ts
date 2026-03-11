@@ -575,6 +575,42 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     });
   }
 
+  // --- Exceções de Carga Horária ---
+  const excecoes_carga_horaria: ExcecaoCargaHorariaAnalysis[] = [];
+  const excCargaEls = root.getElementsByTagName('ExcecaoCargaHoraria');
+  for (const el of Array.from(excCargaEls)) {
+    excecoes_carga_horaria.push({
+      data_inicial: tsToDate(getTextContent(el, 'dataInicial')),
+      data_final: tsToDate(getTextContent(el, 'dataFinal')),
+      carga_horaria: parseNum(getTextContent(el, 'cargaHoraria') || getTextContent(el, 'valorCargaHoraria')),
+      observacao: getTextContent(el, 'observacao') || undefined,
+    });
+  }
+
+  // --- Exceções de Sábado ---
+  const excecoes_sabado: ExcecaoSabadoAnalysis[] = [];
+  const excSabEls = root.getElementsByTagName('ExcecaoSabado');
+  for (const el of Array.from(excSabEls)) {
+    excecoes_sabado.push({
+      data_inicial: tsToDate(getTextContent(el, 'dataInicial')),
+      data_final: tsToDate(getTextContent(el, 'dataFinal')),
+      sabado_dia_util: getTextContent(el, 'sabadoDiaUtil') === 'true',
+      observacao: getTextContent(el, 'observacao') || undefined,
+    });
+  }
+
+  // --- Data de Citação ---
+  const dataCitacao = tsToDate(getTextContent(root, 'dataCitacao') || getTextContent(root, 'dataDaCitacao'));
+  if (dataCitacao) {
+    parametros.data_citacao = dataCitacao;
+  }
+
+  // --- Pensão, Previdência, Salário-Família, Seguro-Desemprego ---
+  const pensaoEl = root.getElementsByTagName('PensaoAlimenticia')[0] || root.getElementsByTagName('pensaoAlimenticia')[0];
+  const prevEl = root.getElementsByTagName('PrevidenciaPrivada')[0] || root.getElementsByTagName('previdenciaPrivada')[0];
+  const sfEl = root.getElementsByTagName('SalarioFamilia')[0] || root.getElementsByTagName('salarioFamilia')[0];
+  const segEl = root.getElementsByTagName('SeguroDesemprego')[0] || root.getElementsByTagName('seguroDesemprego')[0];
+
   return {
     parametros,
     resultado,
@@ -582,11 +618,32 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     verbas,
     historicos_salariais,
     apuracao_diaria_count,
+    apuracao_diaria,
     faltas,
     ferias,
     atualizacao,
     dag,
     apuracao_juros: apuracao_juros.length > 0 ? apuracao_juros : undefined,
+    excecoes_carga_horaria: excecoes_carga_horaria.length > 0 ? excecoes_carga_horaria : undefined,
+    excecoes_sabado: excecoes_sabado.length > 0 ? excecoes_sabado : undefined,
+    pensao_alimenticia: pensaoEl ? {
+      apurar: getTextContent(pensaoEl, 'apurar') !== 'false',
+      percentual: parseNum(getTextContent(pensaoEl, 'percentual')),
+      base: getTextContent(pensaoEl, 'base') || undefined,
+    } : undefined,
+    previdencia_privada: prevEl ? {
+      apurar: getTextContent(prevEl, 'apurar') !== 'false',
+      percentual: parseNum(getTextContent(prevEl, 'percentualEmpregado') || getTextContent(prevEl, 'percentual')),
+    } : undefined,
+    salario_familia: sfEl ? {
+      apurar: getTextContent(sfEl, 'apurar') !== 'false',
+      numero_filhos: parseInt(getTextContent(sfEl, 'numeroFilhos') || getTextContent(sfEl, 'filhos')) || 0,
+    } : undefined,
+    seguro_desemprego: segEl ? {
+      apurar: getTextContent(segEl, 'apurar') !== 'false',
+      parcelas: parseInt(getTextContent(segEl, 'parcelas')) || 0,
+      recebeu: getTextContent(segEl, 'recebeu') === 'true',
+    } : undefined,
   };
 }
 
