@@ -64,6 +64,15 @@ export interface PJCAnalysis {
   excecoes_carga_horaria?: ExcecaoCargaHorariaAnalysis[];
   /** Exceções de sábado */
   excecoes_sabado?: ExcecaoSabadoAnalysis[];
+  /** FGTS config from PJC XML */
+  fgts_config?: {
+    apurar: boolean;
+    multa_percentual: number;
+    multa_base: string;
+    lc110_10: boolean;
+    lc110_05: boolean;
+    destino: string;
+  };
   /** Pensão alimentícia config */
   pensao_alimenticia?: { apurar: boolean; percentual: number; base?: string };
   /** Previdência privada config */
