@@ -51,6 +51,7 @@ export default function Casos() {
 
   const [seedingMarcelo, setSeedingMarcelo] = useState(false);
   const [seedingMaria, setSeedingMaria] = useState(false);
+  const [seedingRosicleia, setSeedingRosicleia] = useState(false);
 
   const handleSeedTestCase = async () => {
     setSeedingTest(true);
