@@ -540,6 +540,8 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
 
   const hasCombinations = combinacoes_indice.length > 0;
 
+  const gt = convertApuracaoJurosToGT(a.apuracao_juros);
+
   return {
     indice: hasCombinations ? 'COMBINACAO' : indiceBase,
     epoca: 'mensal',
@@ -552,6 +554,7 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     combinacoes_indice: hasCombinations ? combinacoes_indice : undefined,
     combinacoes_juros: combinacoes_juros.length > 0 ? combinacoes_juros : undefined,
     juros_apos_deducao_cs: a.atualizacao.juros_apos_deducao_cs,
+    apuracao_juros_gt: gt,
   };
 }
 

@@ -398,6 +398,8 @@ export interface PjeCorrecaoConfig {
   combinacoes_juros?: PjeCombinacaoJuros[];
   /** Apply interest after deducting CS from reclamante */
   juros_apos_deducao_cs?: boolean;
+  /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, calibrate corrected values */
+  apuracao_juros_gt?: PjeApuracaoJurosGT[];
 }
 
 export interface PjeHonorariosConfig {
