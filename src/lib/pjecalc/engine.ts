@@ -1604,7 +1604,7 @@ export class PjeCalcEngine {
         const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, compClean, compLiq);
         if (fatorDB !== null) fatorCorrecao = fatorDB;
         else {
-          console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para FGTS ${compClean}→${compLiq}. Usando fator=1.`);
+          this.trackWarning('W048', 'fgts', `Índice ${this.correcaoConfig.indice} ausente para FGTS ${compClean}→${compLiq}. Usando fator=1 (PERDA DE PRECISÃO).`, compClean);
           fatorCorrecao = 1;
         }
       }
