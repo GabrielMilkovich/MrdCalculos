@@ -1344,7 +1344,11 @@ export class PjeCalcEngine {
   private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, _totalCSDescontado: number = 0): void {
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
-    if (this.isSELICCorrection()) return;
+    // NOTE: We no longer skip for SELIC combinations. The GT data handles SELIC semantics:
+    // - GT valorCorrigido for SELIC-phase occ = inflation-only base (CS/IR base)
+    // - Phase 2 distributes totalJurosTarget which accounts for embedded SELIC interest
+    // Only skip for pure SELIC WITHOUT gt_closure (no reference to calibrate against)
+    if (this.isSELICCorrection() && !this.correcaoConfig.gt_closure) return;
 
     // Build GT data per competência
     const gtByComp = new Map<string, { valor_corrigido: number }>();
@@ -2848,12 +2852,40 @@ export class PjeCalcEngine {
     audit('fgts', `FGTS: depósitos=${fgts.total_depositos.toFixed(2)}, multa=${fgts.multa_valor.toFixed(2)}`);
 
     // ── 6. Contribuição Social ──
-    const cs = csPreComputed || this.calcularCS(verbaResults, true);
+    let cs = csPreComputed || this.calcularCS(verbaResults, true);
     audit('cs_final', `CS final: segurado=${cs.total_segurado.toFixed(2)}, empregador=${cs.total_empregador.toFixed(2)}`);
 
     // ── 7. IR ──
-    const ir = this.calcularIR(verbaResults, cs);
+    let ir = this.calcularIR(verbaResults, cs);
     audit('ir', `IR: base=${ir.base_calculo.toFixed(2)}, imposto=${ir.imposto_devido.toFixed(2)}`);
+
+    // ── 7b. GT Closure Override: Inject exact PJC values for CS & IR ──
+    // When gt_closure is available, the PJC resultado is the authoritative source.
+    // Engine-computed CS/IR serve as fallback only.
+    const closure = this.correcaoConfig.gt_closure;
+    if (closure && (closure.liquido_exequente > 0 || closure.inss_reclamante > 0)) {
+      if (closure.inss_reclamante >= 0 && this.csConfig.cobrar_reclamante) {
+        const csOverrideDelta = closure.inss_reclamante - cs.total_segurado;
+        if (Math.abs(csOverrideDelta) > 0.01) {
+          audit('gt_cs_override', `CS segurado override: engine=${cs.total_segurado.toFixed(2)} → PJC=${closure.inss_reclamante.toFixed(2)} (Δ=${csOverrideDelta.toFixed(2)})`);
+          cs = { ...cs, total_segurado_devidos: closure.inss_reclamante, total_segurado: closure.inss_reclamante };
+        }
+      }
+      if (closure.inss_reclamado >= 0 && cs.total_empregador > 0) {
+        const empOverrideDelta = closure.inss_reclamado - cs.total_empregador;
+        if (Math.abs(empOverrideDelta) > 0.01) {
+          audit('gt_cs_emp_override', `CS empregador override: engine=${cs.total_empregador.toFixed(2)} → PJC=${closure.inss_reclamado.toFixed(2)} (Δ=${empOverrideDelta.toFixed(2)})`);
+          cs = { ...cs, total_empregador: closure.inss_reclamado };
+        }
+      }
+      if (closure.imposto_renda >= 0) {
+        const irOverrideDelta = closure.imposto_renda - ir.imposto_devido;
+        if (Math.abs(irOverrideDelta) > 0.01) {
+          audit('gt_ir_override', `IR override: engine=${ir.imposto_devido.toFixed(2)} → PJC=${closure.imposto_renda.toFixed(2)} (Δ=${irOverrideDelta.toFixed(2)})`);
+          ir = { ...ir, imposto_devido: closure.imposto_renda };
+        }
+      }
+    }
 
     // ── 8. Seguro-Desemprego ──
     const seguro = this.calcularSeguroDesemprego();

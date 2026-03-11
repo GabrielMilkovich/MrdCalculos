@@ -603,6 +603,7 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     gt_closure: (a.resultado.liquido_exequente > 0 || a.resultado.inss_reclamante > 0) ? {
       liquido_exequente: a.resultado.liquido_exequente,
       inss_reclamante: a.resultado.inss_reclamante,
+      inss_reclamado: a.resultado.inss_reclamado,
       imposto_renda: a.resultado.imposto_renda,
     } : undefined,
     // New PJC fields
