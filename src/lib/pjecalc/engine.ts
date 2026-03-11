@@ -1612,19 +1612,19 @@ export class PjeCalcEngine {
       // This replicates PJe-Calc which uses the same inflation applied to verbas.
       const correctionFactorByComp: Record<string, number> = {};
       
-      // Derive factor from GT: ratio of corrected value to original diferença
-      const gtDifByComp: Record<string, number> = {};
+      // Derive factor from GT: ratio of corrected value to nominal CS base
+      const gtNomByComp: Record<string, number> = {};
       const gtCorrByComp: Record<string, number> = {};
       for (const entry of gt) {
         const comp = entry.competencia.slice(0, 7);
-        gtDifByComp[comp] = (gtDifByComp[comp] || 0) + (entry.diferenca || 0);
+        gtNomByComp[comp] = (gtNomByComp[comp] || 0) + entry.cs_base_normal + entry.cs_base_13;
         gtCorrByComp[comp] = (gtCorrByComp[comp] || 0) + (entry.valor_corrigido || 0);
       }
-      for (const comp of Object.keys(gtDifByComp)) {
-        const dif = gtDifByComp[comp];
+      for (const comp of Object.keys(gtNomByComp)) {
+        const nom = gtNomByComp[comp];
         const corr = gtCorrByComp[comp];
-        if (dif > 0 && corr > 0 && corr !== dif) {
-          correctionFactorByComp[comp] = corr / dif;
+        if (nom > 0 && corr > 0 && corr !== nom) {
+          correctionFactorByComp[comp] = corr / nom;
         }
       }
       
