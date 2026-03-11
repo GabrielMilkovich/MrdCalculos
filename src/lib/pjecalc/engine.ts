@@ -1242,9 +1242,6 @@ export class PjeCalcEngine {
       vr.total_juros = totalJuros.toDP(2).toNumber();
       vr.total_final = totalFinal.toDP(2).toNumber();
     }
-
-    // Apply GT calibration for correction + interest values
-    this.calibrarCorrecaoComGT(verbaResults, true);
   }
 
   // =====================================================
