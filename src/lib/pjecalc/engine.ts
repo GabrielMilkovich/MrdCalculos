@@ -1607,29 +1607,110 @@ export class PjeCalcEngine {
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
       // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
-      // PJe-Calc applies the same monetary correction to CS amounts from competência to liquidation.
+      // Multi-phase correction: replicate the exact same segmented approach as verbas correction.
+      // CS amounts are corrected from competência to data_liquidacao using all index phases.
       const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) || '';
+      const dataLiqCS = this.correcaoConfig.data_liquidacao;
+      const combinacoesIdx = this.correcaoConfig.combinacoes_indice || [];
+      const combinacoesJur = this.correcaoConfig.combinacoes_juros || [];
       const correctionFactorByComp: Record<string, number> = {};
-      if (compLiq) {
+      const interestFactorByComp: Record<string, number> = {};
+      
+      const normalizeIdx = (ind: string): string => {
+        const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR' };
+        return map[ind] || ind;
+      };
+
+      if (compLiq && dataLiqCS) {
+        // Determine interest start date for CS interest
+        let csJurosStartDate: string | null = null;
+        if (this.correcaoConfig.juros_inicio === 'ajuizamento' && this.params.data_ajuizamento) {
+          csJurosStartDate = this.params.data_ajuizamento;
+        } else if (this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao) {
+          csJurosStartDate = this.params.data_citacao;
+        }
+
         for (const comp of allComps) {
-          const primaryIndex = this.correcaoConfig.indice === 'COMBINACAO'
-            ? (this.correcaoConfig.combinacoes_indice?.[0]?.indice || 'IPCA-E')
-            : (this.correcaoConfig.indice || 'IPCA-E');
-          let activeIndex = primaryIndex;
-          if (this.correcaoConfig.combinacoes_indice && this.correcaoConfig.combinacoes_indice.length > 0) {
-            const sorted = [...this.correcaoConfig.combinacoes_indice].sort((a, b) => 
-              (b.de || '0000').localeCompare(a.de || '0000'));
-            for (const ci of sorted) {
-              if ((ci.de || '0000') <= comp + '-01') { activeIndex = ci.indice; break; }
+          if (combinacoesIdx.length > 0) {
+            // Multi-phase: segment the period from comp to dataLiq by index switching dates
+            const compDateCS = this.mesSubsequente(comp) + '-01';
+            const breakpoints = new Set<string>();
+            breakpoints.add(compDateCS);
+            breakpoints.add(dataLiqCS);
+            for (const ci of combinacoesIdx) {
+              if (ci.de && ci.de > compDateCS && ci.de <= dataLiqCS) breakpoints.add(ci.de);
             }
-            if (!activeIndex || activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') {
-              activeIndex = primaryIndex;
+            const datas = Array.from(breakpoints).sort();
+            let fatorTotal = new Decimal(1);
+            for (let i = 0; i < datas.length - 1; i++) {
+              const segInicio = datas[i];
+              const segFim = datas[i + 1];
+              const regime = this.getRegimeParaData(combinacoesIdx, segInicio);
+              const indice = normalizeIdx(regime?.indice || 'SEM_CORRECAO');
+              if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
+              const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
+              if (fatorDB !== null && fatorDB > 0) {
+                fatorTotal = fatorTotal.times(fatorDB);
+              }
             }
-          }
-          if (activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') continue;
-          const factor = this.getIndiceCorrecaoDB(activeIndex, comp, compLiq);
-          if (factor !== null && factor > 0 && factor !== 1) {
-            correctionFactorByComp[comp] = factor;
+            if (fatorTotal.gt(1)) {
+              correctionFactorByComp[comp] = fatorTotal.toDP(6).toNumber();
+            }
+
+            // ═══ Interest on CS (Correction 3): PJe-Calc also applies juros on CS amounts ═══
+            if (csJurosStartDate && csJurosStartDate <= dataLiqCS) {
+              const jurosBreakpoints = new Set<string>();
+              jurosBreakpoints.add(csJurosStartDate);
+              jurosBreakpoints.add(dataLiqCS);
+              for (const ci of combinacoesIdx) {
+                if (ci.de && ci.de > csJurosStartDate && ci.de <= dataLiqCS) jurosBreakpoints.add(ci.de);
+              }
+              for (const cj of combinacoesJur) {
+                if (cj.de && cj.de > csJurosStartDate && cj.de <= dataLiqCS) jurosBreakpoints.add(cj.de);
+              }
+              const jDatas = Array.from(jurosBreakpoints).sort();
+              let jurosAcc = new Decimal(0);
+              for (let i = 0; i < jDatas.length - 1; i++) {
+                const segInicio = jDatas[i];
+                const segFim = jDatas[i + 1];
+                const regimeI = this.getRegimeParaData(combinacoesIdx, segInicio);
+                const indiceNorm = normalizeIdx(regimeI?.indice || 'SEM_CORRECAO');
+                // Skip interest during SELIC (already includes) or SEM_CORRECAO (suspended)
+                if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
+                
+                if (combinacoesJur.length > 0) {
+                  const regimeJ = this.getRegimeParaData(combinacoesJur, segInicio);
+                  if (!regimeJ || regimeJ.tipo === 'NENHUM') continue;
+                  const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
+                  if (regimeJ.tipo === 'SELIC') {
+                    const fatorS = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
+                    if (fatorS !== null) jurosAcc = jurosAcc.plus(fatorS - 1);
+                  } else if (regimeJ.tipo === 'TAXA_LEGAL') {
+                    const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
+                    if (fatorTL !== null) jurosAcc = jurosAcc.plus(fatorTL - 1);
+                  } else {
+                    const taxa = ((regimeJ as any).percentual || 1) / 100;
+                    jurosAcc = jurosAcc.plus(new Decimal(taxa).times(meses));
+                  }
+                } else {
+                  // Single interest rate
+                  const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
+                  const taxa = (this.correcaoConfig.juros_percentual || 1) / 100;
+                  jurosAcc = jurosAcc.plus(new Decimal(taxa).times(meses));
+                }
+              }
+              if (jurosAcc.gt(0)) {
+                interestFactorByComp[comp] = jurosAcc.toDP(6).toNumber();
+              }
+            }
+          } else {
+            // Legacy single-index correction for CS
+            const primaryIndex = this.correcaoConfig.indice || 'IPCA-E';
+            if (primaryIndex === 'SEM_CORRECAO' || primaryIndex === 'NENHUM') continue;
+            const factor = this.getIndiceCorrecaoDB(primaryIndex, comp, compLiq);
+            if (factor !== null && factor > 0 && factor !== 1) {
+              correctionFactorByComp[comp] = factor;
+            }
           }
         }
       }
