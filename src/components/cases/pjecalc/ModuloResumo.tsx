@@ -99,21 +99,6 @@ export function ModuloResumo({ caseId }: Props) {
     queryFn: () => svc.getHistoricoSalarial(caseId),
   });
 
-  // Load PJC ground truth for parity comparator
-  const { data: pjcGroundTruth } = useQuery({
-    queryKey: ["pjc_ground_truth", caseId],
-    queryFn: async () => {
-      // Try to load from pjecalc_resultado the ground truth (resumo_verbas stores full result)
-      const { data: calculoRow } = await supabase.from("pjecalc_calculos").select("id").eq("case_id", caseId).maybeSingle();
-      if (!calculoRow) return null;
-      // Check if there's a PJC import with ground truth data
-      const { data: pjcData } = await supabase.from("pjecalc_resultado" as any)
-        .select("resumo_verbas")
-        .eq("calculo_id", (calculoRow as any).id)
-        .maybeSingle();
-      return (pjcData as any)?.resumo_verbas || null;
-    },
-  });
 
   // parityData is computed below after `res` is derived
 
