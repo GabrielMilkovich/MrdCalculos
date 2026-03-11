@@ -1404,17 +1404,13 @@ export class PjeCalcEngine {
       if (!verba?.incidencias.contribuicao_social) continue;
       if (verba.caracteristica === 'ferias') continue;
       for (const oc of vr.ocorrencias) {
-        // ═══ CS Base Rule: Determine the correct base depending on correction regime ═══
-        // PJe-Calc calculates CS on the inflation-corrected value (IPCA-E/INPC part),
-        // NOT on the interest component. For SELIC (which combines both), we must use
-        // nominal diferenca since we can't separate inflation from interest.
-        // For IPCA-E/other non-SELIC: valor_corrigido IS the inflation-only value → use it.
+        // ═══ CS Base Rule: When PJC ground truth is applied, the factor includes
+        // both correction AND interest combined. Using valor_corrigido would inflate CS
+        // with the interest component. Use nominal diferenca as CS base instead.
         let val: number;
-        if (useCorrigido && oc.pjc_ground_truth_applied && oc.pjc_ground_truth_regime === 'SELIC') {
-          // SELIC ground truth: factor includes interest → use nominal to avoid interest inflating CS
+        if (useCorrigido && oc.pjc_ground_truth_applied) {
           val = Math.abs(oc.diferenca);
         } else if (useCorrigido) {
-          // Non-SELIC ground truth or DB-calculated: valor_corrigido is correction-only → correct CS base
           val = oc.valor_corrigido;
         } else {
           val = usarBruto ? oc.devido : oc.diferenca;
