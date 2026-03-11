@@ -1284,32 +1284,17 @@ export class PjeCalcEngine {
   private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, _totalCSDescontado: number = 0): void {
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
-
-    // For any case with SELIC in its correction regime:
-    // GT valorCorrigido is the TAX BASIS (inflation-only), NOT the full SELIC-corrected amount.
-    // Skip calibration entirely — the per-occurrence SELIC factor is already correct.
     if (this.isSELICCorrection()) return;
 
-    const jurosAposCS = !!this.correcaoConfig.juros_apos_deducao_cs;
-
-    // Build GT data per competência (YYYY-MM)
-    // Compute juros directly from GT's per-entry CS amounts (cs_normal, cs_13)
-    // instead of global pro-rata distribution — this matches PJe-Calc's methodology exactly
+    // Build GT data per competência — juros = valorCorrigido × taxaDeJuros / 100
     const gtByComp = new Map<string, { valor_corrigido: number; total_juros_gt: number }>();
+    let gtTotalCorrigido = 0, gtTotalJuros = 0;
     for (const g of correcaoGT) {
       const comp = g.competencia.slice(0, 7);
-      // Compute juros for this GT entry using PJe-Calc's exact CS amounts
-      let jurosEntry = 0;
-      if (g.valor_corrigido > 0 && g.taxa_juros > 0) {
-        if (jurosAposCS) {
-          // PJe-Calc: juros = (valorCorrigido - contribuicaoSocialNormal - contribuicaoSocialDecimoTerceiro) × taxaDeJuros / 100
-          const csEntry = (g.cs_normal || 0) + (g.cs_13 || 0);
-          const baseJuros = Math.max(0, g.valor_corrigido - csEntry);
-          jurosEntry = baseJuros * g.taxa_juros / 100;
-        } else {
-          jurosEntry = g.valor_corrigido * g.taxa_juros / 100;
-        }
-      }
+      const jurosEntry = g.valor_corrigido > 0 && g.taxa_juros > 0
+        ? g.valor_corrigido * g.taxa_juros / 100 : 0;
+      gtTotalCorrigido += g.valor_corrigido;
+      gtTotalJuros += jurosEntry;
       const existing = gtByComp.get(comp);
       if (existing) {
         existing.valor_corrigido += g.valor_corrigido;
@@ -1319,8 +1304,8 @@ export class PjeCalcEngine {
       }
     }
 
-    // Aggregate engine's corrected values per competência across ALL verbas
-    const engineByComp = new Map<string, { total_corrigido: number; ocorrencias: { oc: PjeOcorrenciaResult; vr: PjeVerbaResult }[] }>();
+    // Aggregate engine per competência
+    const engineByComp = new Map<string, { total_corrigido: number; ocorrencias: PjeOcorrenciaResult[] }>();
     for (const vr of verbaResults) {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
@@ -1328,43 +1313,56 @@ export class PjeCalcEngine {
         const entry = engineByComp.get(comp);
         if (entry) {
           entry.total_corrigido += oc.valor_corrigido;
-          entry.ocorrencias.push({ oc, vr });
+          entry.ocorrencias.push(oc);
         } else {
-          engineByComp.set(comp, { total_corrigido: oc.valor_corrigido, ocorrencias: [{ oc, vr }] });
+          engineByComp.set(comp, { total_corrigido: oc.valor_corrigido, ocorrencias: [oc] });
         }
       }
     }
 
-    // Apply proportional calibration per competência
+    // Calibrate correction + distribute interest per competência
+    const allOcs: PjeOcorrenciaResult[] = [];
+    let matchedGTJuros = 0;
+
     for (const [comp, gt] of gtByComp) {
       const eng = engineByComp.get(comp);
-      if (!eng || eng.total_corrigido === 0) continue;
-      if (gt.valor_corrigido === 0) continue;
+      if (!eng || eng.total_corrigido === 0 || gt.valor_corrigido === 0) continue;
 
       const ratio = new Decimal(gt.valor_corrigido).div(eng.total_corrigido);
       
-      for (const { oc } of eng.ocorrencias) {
-        // Scale correction to match GT
+      for (const oc of eng.ocorrencias) {
         const newCorrigido = new Decimal(oc.valor_corrigido).times(ratio).toDP(2);
         oc.valor_corrigido = newCorrigido.toNumber();
 
-        if (includeInterest && gt.total_juros_gt > 0) {
-          // Distribute GT juros proportionally by corrected value share
-          // The GT juros already accounts for CS deduction per entry — no further deduction needed
-          const share = eng.total_corrigido > 0
-            ? newCorrigido.div(new Decimal(gt.valor_corrigido))
-            : new Decimal(0);
+        if (includeInterest) {
+          const share = newCorrigido.div(new Decimal(gt.valor_corrigido));
           oc.juros = share.times(gt.total_juros_gt).toDP(2).toNumber();
-        } else if (includeInterest) {
-          oc.juros = 0;
+          matchedGTJuros += oc.juros;
         }
 
         oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
         oc.pjc_ground_truth_applied = true;
+        allOcs.push(oc);
       }
     }
 
-    // Recalculate verba totals after calibration
+    // Distribute residual GT juros (from unmatched competencies) proportionally
+    if (includeInterest && allOcs.length > 0) {
+      const residualJuros = gtTotalJuros - matchedGTJuros;
+      if (Math.abs(residualJuros) > 0.01) {
+        const totalCorr = allOcs.reduce((s, oc) => s + oc.valor_corrigido, 0);
+        if (totalCorr > 0) {
+          for (const oc of allOcs) {
+            const share = oc.valor_corrigido / totalCorr;
+            const extra = new Decimal(residualJuros).times(share).toDP(2).toNumber();
+            oc.juros = new Decimal(oc.juros).plus(extra).toDP(2).toNumber();
+            oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
+          }
+        }
+      }
+    }
+
+    // Recalculate verba totals
     for (const vr of verbaResults) {
       let tc = new Decimal(0), tj = new Decimal(0), tf = new Decimal(0);
       for (const oc of vr.ocorrencias) {
