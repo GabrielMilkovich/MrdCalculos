@@ -218,7 +218,7 @@ export function resolveCanonicalInput(sources: ResolverSources): CanonicalCaseIn
       id: v.id,
       nome: resolved(v.nome, src),
       codigo_canonico: canonical ? resolved(canonical.code, 'database') : absent(false, false, 'W_RUBRIC_UNMAPPED'),
-      tipo: resolved((v.tipo === 'reflexa' ? 'reflexa' : 'principal') as const, src),
+      tipo: resolved<'principal' | 'reflexa'>(v.tipo === 'reflexa' ? 'reflexa' : 'principal', src),
       caracteristica: resolved(v.caracteristica || 'COMUM', src),
       periodo_inicio: resolved(v.periodo_inicio || '', src, { isRequired: true }),
       periodo_fim: resolved(v.periodo_fim || '', src, { isRequired: true }),
