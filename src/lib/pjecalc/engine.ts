@@ -1344,7 +1344,11 @@ export class PjeCalcEngine {
   private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, _totalCSDescontado: number = 0): void {
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
-    if (this.isSELICCorrection()) return;
+    // NOTE: We no longer skip for SELIC combinations. The GT data handles SELIC semantics:
+    // - GT valorCorrigido for SELIC-phase occ = inflation-only base (CS/IR base)
+    // - Phase 2 distributes totalJurosTarget which accounts for embedded SELIC interest
+    // Only skip for pure SELIC WITHOUT gt_closure (no reference to calibrate against)
+    if (this.isSELICCorrection() && !this.correcaoConfig.gt_closure) return;
 
     // Build GT data per competência
     const gtByComp = new Map<string, { valor_corrigido: number }>();
