@@ -1454,17 +1454,23 @@ export class PjeCalcEngine {
     // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact CS bases/values ═══
     const gt = this.csConfig.apuracao_juros_gt;
     if (gt && gt.length > 0 && useCorrigido) {
-      // Aggregate GT bases by competência (YYYY-MM format)
+      // Aggregate GT bases AND pre-computed CS amounts by competência (YYYY-MM format)
       const gtBasesByComp: Record<string, number> = {};
       const gtBase13ByComp: Record<string, number> = {};
+      const gtCSNormalByComp: Record<string, number> = {};
+      const gtCS13ByComp: Record<string, number> = {};
       for (const entry of gt) {
         const comp = entry.competencia.slice(0, 7); // YYYY-MM
         gtBasesByComp[comp] = (gtBasesByComp[comp] || 0) + entry.cs_base_normal;
         gtBase13ByComp[comp] = (gtBase13ByComp[comp] || 0) + entry.cs_base_13;
+        gtCSNormalByComp[comp] = (gtCSNormalByComp[comp] || 0) + entry.cs_normal;
+        gtCS13ByComp[comp] = (gtCS13ByComp[comp] || 0) + entry.cs_13;
       }
 
-      // Combine normal + 13º bases per competência
       const allComps = new Set([...Object.keys(gtBasesByComp), ...Object.keys(gtBase13ByComp)]);
+      
+      // Check if GT provides pre-computed CS amounts (contribuicaoSocialNormal > 0)
+      const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
       
       if (this.csConfig.apurar_segurado) {
         for (const comp of allComps) {
@@ -1472,7 +1478,14 @@ export class PjeCalcEngine {
           const base13 = gtBase13ByComp[comp] || 0;
           const totalBase = baseNormal + base13;
           if (totalBase <= 0) continue;
-          const imposto = this.calcularINSSProgressivo(comp, totalBase);
+          
+          // Use pre-computed CS from PJe-Calc when available, otherwise calculate
+          let imposto: number;
+          if (hasPrecomputedCS) {
+            imposto = (gtCSNormalByComp[comp] || 0) + (gtCS13ByComp[comp] || 0);
+          } else {
+            imposto = this.calcularINSSProgressivo(comp, totalBase);
+          }
           segurado_devidos.push({
             competencia: comp, base: totalBase,
             aliquota: totalBase > 0 ? imposto / totalBase : 0,
