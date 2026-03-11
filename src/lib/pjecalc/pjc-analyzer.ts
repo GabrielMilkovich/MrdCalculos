@@ -53,6 +53,22 @@ export interface PJCAnalysis {
   ferias: FeriasAnalysis[];
   atualizacao: AtualizacaoAnalysis;
   dag: { id: string; nome: string; depende_de: string[]; dependentes: string[] }[];
+  /** Ground truth from PJe-Calc's <ApuracaoDeJuros> consolidation section */
+  apuracao_juros?: ApuracaoJurosEntry[];
+}
+
+/** Entry from PJe-Calc's <ApuracaoDeJuros> — consolidated corrected values per competência */
+export interface ApuracaoJurosEntry {
+  competencia: string;
+  valor_corrigido: number;
+  cs_base_normal: number;
+  cs_base_13: number;
+  cs_normal: number;
+  cs_13: number;
+  ir_base_demais: number;
+  ir_base_13: number;
+  ir_base_ferias: number;
+  taxa_juros: number;
 }
 
 export interface VerbaAnalysis {
