@@ -1654,11 +1654,11 @@ export class PjeCalcEngine {
             imposto = this.calcularINSSProgressivo(comp, totalBase);
           }
 
-          // CORRECTION 1-4: Apply the SAME total factor (correction + interest) as verbas
-          // This ensures CS matches PJe-Calc's correcaoTrabalhistaDosSalariosDevidosDoINSS
-          const tf = totalFactorByComp[comp];
-          if (tf && tf > 1) {
-            imposto = Number(new Decimal(imposto).times(tf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
+          // CORRECTION 1-4: Apply correction-only factor from verbas (inflation scaling)
+          // PJe-Calc: correcaoTrabalhistaDosSalariosDevidosDoINSS = same inflation as verbas
+          const cf = correctionFactorByComp[comp];
+          if (cf && cf > 1) {
+            imposto = Number(new Decimal(imposto).times(cf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
           }
 
           segurado_devidos.push({
