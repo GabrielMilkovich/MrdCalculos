@@ -2682,21 +2682,39 @@ export class PjeCalcEngine {
     // da contribuição social devida pelo reclamante"
     // When juros_apos_deducao_cs=true:
     //   Step A: Apply correction ONLY (no interest)
-    //   Step B: Calculate CS on corrected nominal values
+    //   Step A.1: GT Calibration — scale correction to match ApuracaoDeJuros ground truth
+    //   Step B: Calculate CS on GT-calibrated corrected values
     //   Step C: Deduct CS share per occurrence
-    //   Step D: Apply interest on (corrected - CS_share)
+    //   Step D: Apply interest (from GT taxaDeJuros or engine calculation)
+    const hasGT = (this.correcaoConfig.apuracao_juros_gt?.length ?? 0) > 0;
+
     if (this.correcaoConfig.juros_apos_deducao_cs) {
       // Step A: Correction only
       this.aplicarCorrecaoSomente(verbaResults);
       
-      // Step B: CS on corrected values (uses valor_corrigido which is now set)
+      // Step A.1: GT Calibration — correct the correction values to match PJC ground truth
+      if (hasGT) {
+        this.calibrarCorrecaoComGT(verbaResults, false);
+      }
+      
+      // Step B: CS on corrected values (now GT-calibrated if available)
       const csPreJuros = this.calcularCS(verbaResults, true);
       const csDescontadoPreJuros = this.csConfig.cobrar_reclamante ? csPreJuros.total_segurado : 0;
       
-      // Step C+D: Apply interest on (corrected - CS_share_pro_rata)
-      this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
+      // Step C+D: Apply interest
+      if (hasGT) {
+        // Use GT taxaDeJuros to compute interest on (corrected - CS_share)
+        this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
+      } else {
+        // Legacy: calculate interest from engine's own indices
+        this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
+      }
     } else {
       this.aplicarCorrecaoJuros(verbaResults);
+      // GT Calibration for non-juros_apos_deducao_cs path
+      if (hasGT) {
+        this.calibrarCorrecaoComGT(verbaResults, true);
+      }
     }
 
     // ── 5. FGTS ──
