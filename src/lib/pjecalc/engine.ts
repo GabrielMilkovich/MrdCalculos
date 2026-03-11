@@ -740,7 +740,7 @@ export class PjeCalcEngine {
   private getFaixasIRParaCompetencia(competencia: string): { faixas: { ate: number; aliquota: number; deducao: number }[]; deducao_dependente: number } {
     if (this.faixasIRDB.length === 0) {
       // AUDIT: Track fallback to DEFAULT_FAIXAS_IR
-      this.trackWarning('E033', 'ir', `IR: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      this.trackWarning('W033', 'ir', `IR: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
       return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
     }
 
