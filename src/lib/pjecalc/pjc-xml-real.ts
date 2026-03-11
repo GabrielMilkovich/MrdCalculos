@@ -625,6 +625,7 @@ export function exportPJCXml(data: PJCReal): string {
       lines.push(`      <horasTrabalhadas>${fmtN(ad.horas_trabalhadas)}</horasTrabalhadas>`);
       lines.push(`      <horasExtrasDiaria>${fmtN(ad.horas_extras_diaria)}</horasExtrasDiaria>`);
       lines.push(`      <horasExtrasSemanal>${fmtN(ad.horas_extras_semanal)}</horasExtrasSemanal>`);
+      lines.push(`      <horasExtrasMensal>${fmtN(ad.horas_extras_mensal)}</horasExtrasMensal>`);
       lines.push(`      <horasNoturnas>${fmtN(ad.horas_noturnas)}</horasNoturnas>`);
       lines.push(`      <horasIntraJornada>${fmtN(ad.horas_intra_jornada)}</horasIntraJornada>`);
       lines.push(`      <horasInterJornadas>${fmtN(ad.horas_inter_jornadas)}</horasInterJornadas>`);
