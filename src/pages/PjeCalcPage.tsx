@@ -56,6 +56,7 @@ import { MemoriaCalculoExpandida } from "@/components/cases/pjecalc/MemoriaCalcu
 import { ModuloAjusteSentenca } from "@/components/cases/pjecalc/ModuloAjusteSentenca";
 import { ModuloESocial } from "@/components/cases/pjecalc/ModuloESocial";
 import { ComparacaoCenarios } from "@/components/cases/pjecalc/ComparacaoCenarios";
+import { FidelidadePanel } from "@/components/cases/pjecalc/FidelidadePanel";
 import { getRastreabilidadeGeral, type ModuleStatus } from "@/lib/pjecalc/completude";
 
 import type { PjecalcFaltaRow, PjecalcFeriasRow, PjecalcVerbaRow } from "@/lib/pjecalc/types";
