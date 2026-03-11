@@ -714,7 +714,7 @@ export class PjeCalcEngine {
   private getFaixasINSSParaCompetencia(competencia: string): { ate: number; aliquota: number }[] {
     if (this.faixasINSSDB.length === 0) {
       // AUDIT: Track fallback to DEFAULT_FAIXAS_INSS
-      this.trackWarning('E032', 'inss', `INSS: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      this.trackWarning('W032', 'cs', `INSS: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
       return DEFAULT_FAIXAS_INSS;
     }
 
@@ -731,7 +731,7 @@ export class PjeCalcEngine {
 
     if (faixas.length === 0) {
       // AUDIT: Track fallback for specific competência
-      this.trackWarning('E032', 'inss', `INSS: Sem faixas para ${competencia} — usando padrão 2025`);
+      this.trackWarning('W032', 'cs', `INSS: Sem faixas para ${competencia} — usando padrão 2025`);
       return DEFAULT_FAIXAS_INSS;
     }
     return faixas;
@@ -740,7 +740,7 @@ export class PjeCalcEngine {
   private getFaixasIRParaCompetencia(competencia: string): { faixas: { ate: number; aliquota: number; deducao: number }[]; deducao_dependente: number } {
     if (this.faixasIRDB.length === 0) {
       // AUDIT: Track fallback to DEFAULT_FAIXAS_IR
-      this.trackWarning('E033', 'ir', `IR: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      this.trackWarning('W033', 'ir', `IR: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
       return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
     }
 
@@ -756,7 +756,7 @@ export class PjeCalcEngine {
 
     if (faixas.length === 0) {
       // AUDIT: Track fallback for specific competência
-      this.trackWarning('E033', 'ir', `IR: Sem faixas para ${competencia} — usando padrão 2025`);
+      this.trackWarning('W033', 'ir', `IR: Sem faixas para ${competencia} — usando padrão 2025`);
       return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
     }
 
