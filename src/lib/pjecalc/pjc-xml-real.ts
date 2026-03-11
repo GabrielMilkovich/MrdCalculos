@@ -351,6 +351,46 @@ export function parsePJCXml(xmlString: string): PJCParseResult {
     // --- Atualização ---
     const atualizacao = parseAtualizacao(root);
 
+    // --- FGTS Config ---
+    let fgts: PJCFGTSConfig | undefined;
+    const fgtsEl = getEl(root, 'ConfigFGTS') || getEl(root, 'configFGTS');
+    if (fgtsEl) {
+      const saldosSaques: { data: string; valor: number }[] = [];
+      const ssEls = fgtsEl.getElementsByTagName('SaldoSaque');
+      for (const ss of Array.from(ssEls)) {
+        saldosSaques.push({ data: getAttr(ss, 'data'), valor: parseFloat(getAttr(ss, 'valor')) || 0 });
+      }
+      fgts = {
+        apurar: getBool(fgtsEl, 'apurar'),
+        multa_percentual: getNum(fgtsEl, 'multaPercentual') || 40,
+        saldos_saques: saldosSaques,
+      };
+    }
+
+    // --- CS Config ---
+    let contribuicao_social: PJCCSConfig | undefined;
+    const csEl = getEl(root, 'ConfigCS') || getEl(root, 'configCS');
+    if (csEl) {
+      contribuicao_social = {
+        apurar_segurado: getBool(csEl, 'apurarSegurado'),
+        apurar_empresa: getBool(csEl, 'apurarEmpresa'),
+        aliquota_empresa: getNum(csEl, 'aliquotaEmpresa') || 20,
+        aliquota_sat: getNum(csEl, 'aliquotaSAT') || 2,
+        aliquota_terceiros: getNum(csEl, 'aliquotaTerceiros') || 5.8,
+      };
+    }
+
+    // --- IR Config ---
+    let imposto_renda: PJCIRConfig | undefined;
+    const irEl = getEl(root, 'ConfigIR') || getEl(root, 'configIR');
+    if (irEl) {
+      imposto_renda = {
+        apurar: getBool(irEl, 'apurar'),
+        dependentes: getNum(irEl, 'dependentes') || 0,
+        tributacao_exclusiva_13: getBool(irEl, 'tributacaoExclusiva13'),
+      };
+    }
+
     const data: PJCReal = {
       processo,
       parametros,
@@ -361,6 +401,9 @@ export function parsePJCXml(xmlString: string): PJCParseResult {
       faltas_afastamentos,
       ferias,
       atualizacao,
+      fgts,
+      contribuicao_social,
+      imposto_renda,
     };
 
     if (apuracao_diaria.length === 0) warnings.push('Nenhuma apuração diária encontrada');
