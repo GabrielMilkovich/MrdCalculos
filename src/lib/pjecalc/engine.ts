@@ -2514,8 +2514,8 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended per PJe-Calc)
-            if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
+            // Skip interest during SELIC (already includes interest) — SEM_CORRECAO does NOT suspend interest
+            if (indiceNorm === 'SELIC') continue;
             
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
             if (!regimeJ || regimeJ.tipo === 'NENHUM') continue;
