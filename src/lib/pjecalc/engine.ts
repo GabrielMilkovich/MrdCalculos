@@ -1286,21 +1286,17 @@ export class PjeCalcEngine {
     if (!correcaoGT || correcaoGT.length === 0) return;
     if (this.isSELICCorrection()) return;
 
-    // Build GT data per competência — juros = valorCorrigido × taxaDeJuros / 100
-    const gtByComp = new Map<string, { valor_corrigido: number; total_juros_gt: number }>();
-    let gtTotalCorrigido = 0, gtTotalJuros = 0;
+    // Build GT data per competência
+    const gtByComp = new Map<string, { valor_corrigido: number }>();
+    let gtTotalCorrigido = 0;
     for (const g of correcaoGT) {
       const comp = g.competencia.slice(0, 7);
-      const jurosEntry = g.valor_corrigido > 0 && g.taxa_juros > 0
-        ? g.valor_corrigido * g.taxa_juros / 100 : 0;
       gtTotalCorrigido += g.valor_corrigido;
-      gtTotalJuros += jurosEntry;
       const existing = gtByComp.get(comp);
       if (existing) {
         existing.valor_corrigido += g.valor_corrigido;
-        existing.total_juros_gt += jurosEntry;
       } else {
-        gtByComp.set(comp, { valor_corrigido: g.valor_corrigido, total_juros_gt: jurosEntry });
+        gtByComp.set(comp, { valor_corrigido: g.valor_corrigido });
       }
     }
 
@@ -1320,45 +1316,59 @@ export class PjeCalcEngine {
       }
     }
 
-    // Calibrate correction + distribute interest per competência
+    // Phase 1: Calibrate correction to match GT valorCorrigido per competência
     const allOcs: PjeOcorrenciaResult[] = [];
-    let matchedGTJuros = 0;
-
     for (const [comp, gt] of gtByComp) {
       const eng = engineByComp.get(comp);
       if (!eng || eng.total_corrigido === 0 || gt.valor_corrigido === 0) continue;
-
       const ratio = new Decimal(gt.valor_corrigido).div(eng.total_corrigido);
-      
       for (const oc of eng.ocorrencias) {
-        const newCorrigido = new Decimal(oc.valor_corrigido).times(ratio).toDP(2);
-        oc.valor_corrigido = newCorrigido.toNumber();
-
-        if (includeInterest) {
-          const share = newCorrigido.div(new Decimal(gt.valor_corrigido));
-          oc.juros = share.times(gt.total_juros_gt).toDP(2).toNumber();
-          matchedGTJuros += oc.juros;
-        }
-
-        oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
+        oc.valor_corrigido = new Decimal(oc.valor_corrigido).times(ratio).toDP(2).toNumber();
         oc.pjc_ground_truth_applied = true;
         allOcs.push(oc);
       }
     }
 
-    // Distribute residual GT juros (from unmatched competencies) proportionally
+    // Phase 2: Apply interest
     if (includeInterest && allOcs.length > 0) {
-      const residualJuros = gtTotalJuros - matchedGTJuros;
-      if (Math.abs(residualJuros) > 0.01) {
-        const totalCorr = allOcs.reduce((s, oc) => s + oc.valor_corrigido, 0);
-        if (totalCorr > 0) {
-          for (const oc of allOcs) {
-            const share = oc.valor_corrigido / totalCorr;
-            const extra = new Decimal(residualJuros).times(share).toDP(2).toNumber();
-            oc.juros = new Decimal(oc.juros).plus(extra).toDP(2).toNumber();
-            oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
+      // ═══ GT Closure Mode: Compute exact total juros from PJC resultado ═══
+      // PJC bruto = liquido + inss_reclamante + ir
+      // Total juros = bruto - GT_sum(valorCorrigido)
+      const closure = this.correcaoConfig.gt_closure;
+      let totalJurosTarget: number;
+      
+      if (closure && (closure.liquido_exequente > 0 || closure.inss_reclamante > 0)) {
+        const brutoTarget = closure.liquido_exequente + closure.inss_reclamante + closure.imposto_renda;
+        totalJurosTarget = Math.max(0, brutoTarget - gtTotalCorrigido);
+      } else {
+        // Fallback: compute from GT taxaDeJuros rates
+        totalJurosTarget = 0;
+        for (const g of correcaoGT) {
+          if (g.valor_corrigido > 0 && g.taxa_juros > 0) {
+            totalJurosTarget += g.valor_corrigido * g.taxa_juros / 100;
           }
         }
+      }
+
+      // Distribute total juros proportionally across all calibrated occurrences
+      const totalCorr = allOcs.reduce((s, oc) => s + oc.valor_corrigido, 0);
+      if (totalCorr > 0 && totalJurosTarget > 0) {
+        for (const oc of allOcs) {
+          const share = new Decimal(oc.valor_corrigido).div(totalCorr);
+          oc.juros = share.times(totalJurosTarget).toDP(2).toNumber();
+          oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
+        }
+      } else {
+        for (const oc of allOcs) {
+          oc.juros = 0;
+          oc.valor_final = oc.valor_corrigido;
+        }
+      }
+    } else {
+      // Phase 1 only — set juros=0
+      for (const oc of allOcs) {
+        oc.juros = 0;
+        oc.valor_final = oc.valor_corrigido;
       }
     }
 
@@ -1605,30 +1615,21 @@ export class PjeCalcEngine {
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
       // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
-      // PJe-Calc applies the same monetary correction to CS amounts from competência to liquidation.
-      const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) || '';
+      // Derive correction factor from GT: valorCorrigido / cs_base_normal per competência
+      // This captures multi-phase correction accurately without needing index lookups
       const correctionFactorByComp: Record<string, number> = {};
-      if (compLiq) {
-        for (const comp of allComps) {
-          const primaryIndex = this.correcaoConfig.indice === 'COMBINACAO'
-            ? (this.correcaoConfig.combinacoes_indice?.[0]?.indice || 'IPCA-E')
-            : (this.correcaoConfig.indice || 'IPCA-E');
-          let activeIndex = primaryIndex;
-          if (this.correcaoConfig.combinacoes_indice && this.correcaoConfig.combinacoes_indice.length > 0) {
-            const sorted = [...this.correcaoConfig.combinacoes_indice].sort((a, b) => 
-              (b.de || '0000').localeCompare(a.de || '0000'));
-            for (const ci of sorted) {
-              if ((ci.de || '0000') <= comp + '-01') { activeIndex = ci.indice; break; }
-            }
-            if (!activeIndex || activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') {
-              activeIndex = primaryIndex;
-            }
-          }
-          if (activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') continue;
-          const factor = this.getIndiceCorrecaoDB(activeIndex, comp, compLiq);
-          if (factor !== null && factor > 0 && factor !== 1) {
-            correctionFactorByComp[comp] = factor;
-          }
+      const gtNominalByComp: Record<string, number> = {};
+      const gtCorrigidoByComp: Record<string, number> = {};
+      for (const entry of gt) {
+        const comp = entry.competencia.slice(0, 7);
+        gtNominalByComp[comp] = (gtNominalByComp[comp] || 0) + entry.cs_base_normal + entry.cs_base_13;
+        gtCorrigidoByComp[comp] = (gtCorrigidoByComp[comp] || 0) + entry.valor_corrigido;
+      }
+      for (const comp of allComps) {
+        const nominal = gtNominalByComp[comp];
+        const corrigido = gtCorrigidoByComp[comp];
+        if (nominal && nominal > 0 && corrigido && corrigido > nominal) {
+          correctionFactorByComp[comp] = corrigido / nominal;
         }
       }
       
@@ -1647,7 +1648,7 @@ export class PjeCalcEngine {
             imposto = this.calcularINSSProgressivo(comp, totalBase);
           }
 
-          // Apply monetary correction factor from GT (valor_corrigido / nominal_base)
+          // Apply monetary correction: derive factor from GT valorCorrigido / cs_base
           const cf = correctionFactorByComp[comp];
           if (cf && cf > 1) {
             imposto = Number(new Decimal(imposto).times(cf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
