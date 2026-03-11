@@ -1461,12 +1461,14 @@ export class PjeCalcEngine {
       if (verba.caracteristica === 'ferias') continue;
       for (const oc of vr.ocorrencias) {
         // ═══ CS Base Rule (PJe-Calc):
-        // indiceAcumulado is ALWAYS the CORRECTION-ONLY factor (inflation/monetary correction).
-        // Interest is ALWAYS calculated separately.
-        // CS base = valor_corrigido (corrected value, pre-interest).
-        // This is true for ALL regimes including SELIC ground truth.
+        // For SELIC regime: indiceAcumulado includes correction+interest combined.
+        //   CS base = nominal diferenca (to exclude interest component).
+        // For IPCA-E/other: indiceAcumulado is correction-only.
+        //   CS base = valor_corrigido (corrected value, pre-interest).
         let val: number;
-        if (useCorrigido) {
+        if (useCorrigido && oc.pjc_ground_truth_applied && oc.pjc_ground_truth_regime === 'SELIC') {
+          val = Math.abs(oc.diferenca);
+        } else if (useCorrigido) {
           val = oc.valor_corrigido;
         } else {
           val = usarBruto ? oc.devido : oc.diferenca;
