@@ -1601,17 +1601,14 @@ export class PjeCalcEngine {
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
       // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
-      // After calculating CS on nominal bases, PJe-Calc applies the same monetary
-      // correction index to the CS AMOUNTS from each competência to liquidation date.
+      // PJe-Calc applies the same monetary correction to CS amounts from competência to liquidation.
       const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) || '';
       const correctionFactorByComp: Record<string, number> = {};
       if (compLiq) {
         for (const comp of allComps) {
-          // Use the primary correction index to compute inflation from comp to liquidation
           const primaryIndex = this.correcaoConfig.indice === 'COMBINACAO'
             ? (this.correcaoConfig.combinacoes_indice?.[0]?.indice || 'IPCA-E')
             : (this.correcaoConfig.indice || 'IPCA-E');
-          // For combination regimes, find which index applies at this comp
           let activeIndex = primaryIndex;
           if (this.correcaoConfig.combinacoes_indice && this.correcaoConfig.combinacoes_indice.length > 0) {
             const sorted = [...this.correcaoConfig.combinacoes_indice].sort((a, b) => 
@@ -1682,15 +1679,12 @@ export class PjeCalcEngine {
             const aliqEmp = (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
             const aliqSat = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
             const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
-            // Apply correction factor to empregador CS too
             const cf = correctionFactorByComp[comp] ?? 1;
             const correctedBase = cf !== 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
-            empregador.push({
-              competencia: comp,
-              empresa: this.csConfig.apurar_empresa ? Number(new Decimal(correctedBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
-              sat: this.csConfig.apurar_sat ? Number(new Decimal(correctedBase).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
-              terceiros: this.csConfig.apurar_terceiros ? Number(new Decimal(correctedBase).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
-            });
+            const empresa = this.csConfig.apurar_empresa ? Number(new Decimal(correctedBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
+            const sat = this.csConfig.apurar_sat ? Number(new Decimal(correctedBase).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
+            const terceiros = this.csConfig.apurar_terceiros ? Number(new Decimal(correctedBase).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
+            empregador.push({ competencia: comp, empresa, sat, terceiros });
           }
         }
       }
@@ -2743,6 +2737,7 @@ export class PjeCalcEngine {
     //   Step D: Apply interest (from GT taxaDeJuros or engine calculation)
     const hasGT = (this.correcaoConfig.apuracao_juros_gt?.length ?? 0) > 0;
 
+    let csPreComputed: PjeCSResult | null = null;
     if (this.correcaoConfig.juros_apos_deducao_cs) {
       // Step A: Correction only
       this.aplicarCorrecaoSomente(verbaResults);
@@ -2752,21 +2747,19 @@ export class PjeCalcEngine {
         this.calibrarCorrecaoComGT(verbaResults, false);
       }
       
-      // Step B: CS on corrected values (now GT-calibrated if available)
-      const csPreJuros = this.calcularCS(verbaResults, true);
-      const csDescontadoPreJuros = this.csConfig.cobrar_reclamante ? csPreJuros.total_segurado : 0;
+      // Step B: CS on corrected values (BEFORE interest — this is the FINAL CS)
+      // PJe-Calc computes CS only once on corrected values, before interest is applied
+      csPreComputed = this.calcularCS(verbaResults, true);
+      const csDescontadoPreJuros = this.csConfig.cobrar_reclamante ? csPreComputed.total_segurado : 0;
       
       // Step C+D: Apply interest
       if (hasGT) {
-        // Use GT taxaDeJuros to compute interest on (corrected - CS_share)
         this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
       } else {
-        // Legacy: calculate interest from engine's own indices
         this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
       }
     } else {
       this.aplicarCorrecaoJuros(verbaResults);
-      // GT Calibration for non-juros_apos_deducao_cs path
       if (hasGT) {
         this.calibrarCorrecaoComGT(verbaResults, true);
       }
@@ -2776,8 +2769,9 @@ export class PjeCalcEngine {
     const fgts = this.calcularFGTS(verbaResults);
 
     // ── 6. Contribuição Social ──
-    // PJe-Calc calculates CS on corrected values (valor_corrigido), not nominal
-    const cs = this.calcularCS(verbaResults, true);
+    // For juros_apos_deducao_cs: reuse CS computed BEFORE interest (step B)
+    // Otherwise: compute CS on final corrected+interest values
+    const cs = csPreComputed || this.calcularCS(verbaResults, true);
 
     // ── 7. IR ──
     const ir = this.calcularIR(verbaResults, cs);
