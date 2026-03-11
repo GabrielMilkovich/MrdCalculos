@@ -696,7 +696,11 @@ export class PjeCalcEngine {
   // =====================================================
 
   private getFaixasINSSParaCompetencia(competencia: string): { ate: number; aliquota: number }[] {
-    if (this.faixasINSSDB.length === 0) return DEFAULT_FAIXAS_INSS;
+    if (this.faixasINSSDB.length === 0) {
+      // AUDIT: Track fallback to DEFAULT_FAIXAS_INSS
+      this.trackWarning('E032', 'inss', `INSS: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      return DEFAULT_FAIXAS_INSS;
+    }
 
     const compDate = new Date(competencia + '-01');
     // Buscar faixas cuja vigência cobre a competência
@@ -709,7 +713,12 @@ export class PjeCalcEngine {
       .sort((a, b) => a.faixa - b.faixa)
       .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota) }));
 
-    return faixas.length > 0 ? faixas : DEFAULT_FAIXAS_INSS;
+    if (faixas.length === 0) {
+      // AUDIT: Track fallback for specific competência
+      this.trackWarning('E032', 'inss', `INSS: Sem faixas para ${competencia} — usando padrão 2025`);
+      return DEFAULT_FAIXAS_INSS;
+    }
+    return faixas;
   }
 
   private getFaixasIRParaCompetencia(competencia: string): { faixas: { ate: number; aliquota: number; deducao: number }[]; deducao_dependente: number } {
