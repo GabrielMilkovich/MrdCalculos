@@ -111,6 +111,19 @@ export default function Casos() {
       setSeedingRosicleia(false);
     }
   };
+  const handleSeedRoque = async () => {
+    setSeedingRoque(true);
+    try {
+      const caseId = await seedCasoRoque();
+      toast.success("Caso Roque Guerreiro Teixeira criado com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["cases-with-metrics"] });
+      navigate(`/casos/${caseId}`);
+    } catch (err: any) {
+      toast.error("Erro ao criar caso: " + err.message);
+    } finally {
+      setSeedingRoque(false);
+    }
+  };
 
 
   // Fetch cases with counts
