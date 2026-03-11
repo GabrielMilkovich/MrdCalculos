@@ -2180,8 +2180,9 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.valor_corrigido === 0) { totalFinal += oc.valor_final; continue; }
 
-        // Skip interest for occurrences where PJC ground truth already includes interest
-        if (oc.pjc_ground_truth_applied) {
+        // Skip interest only for SELIC ground truth (factor already includes interest)
+        // Non-SELIC ground truth (IPCA-E, etc.) needs separate interest calculation
+        if (oc.pjc_ground_truth_applied && oc.pjc_ground_truth_regime === 'SELIC') {
           totalJuros += oc.juros;
           totalFinal += oc.valor_final;
           continue;
