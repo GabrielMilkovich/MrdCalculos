@@ -1080,19 +1080,40 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
-        // ═══ PJC Ground Truth: if pjc_indice_acumulado is available, it's the TOTAL factor
-        // (correction + interest combined, since SELIC includes both). Use directly as valor_final.
+        // ═══ PJC Ground Truth: pjc_indice_acumulado is the CORRECTION factor only.
+        // Whether it includes interest depends on the regime:
+        //   SELIC → factor includes interest → skip separate interest
+        //   IPCA-E/other → factor is correction-only → interest calculated separately
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+          // Determine which correction regime applies at this occurrence's date
+          const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
+          const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
+          const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
+          const isSelic = regimeIndice === 'SELIC';
+
           const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
-          const valorFinal = new Decimal(oc.diferenca).times(fatorTotal);
+          const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
           oc.indice_correcao = fatorTotal.toDP(6).toNumber();
-          oc.valor_corrigido = valorFinal.toDP(2).toNumber();
-          oc.juros = 0;
-          oc.valor_final = valorFinal.toDP(2).toNumber();
+          oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
           oc.pjc_ground_truth_applied = true;
+          oc.pjc_ground_truth_regime = regimeIndice;
+
+          if (isSelic) {
+            // SELIC already includes interest — no separate interest
+            oc.juros = 0;
+            oc.valor_final = valorCorrigido.toDP(2).toNumber();
+          } else {
+            // Non-SELIC: factor is correction-only, calculate interest separately below
+            // Interest will be calculated in the normal interest loop
+            oc.juros = 0; // placeholder, will be filled below
+            oc.valor_final = valorCorrigido.toDP(2).toNumber(); // will be updated after interest
+          }
           totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
-          totalFinal = totalFinal.plus(oc.valor_final);
-          continue;
+          if (isSelic) {
+            totalFinal = totalFinal.plus(oc.valor_final);
+            continue; // SELIC: done, no separate interest needed
+          }
+          // Non-SELIC: fall through to interest calculation below
         }
 
         // Súmula 381: correction starts from mês subsequente ao vencimento
