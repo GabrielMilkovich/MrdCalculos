@@ -456,6 +456,15 @@ export interface PjePrevidenciaPrivadaResult {
   valor: number;
 }
 
+export interface PjeAuditTrailEntry {
+  step: number;
+  module: string;
+  description: string;
+  competencia?: string;
+  resultado?: number;
+  rubrica?: string;
+}
+
 export interface PjeLiquidacaoResult {
   data_liquidacao: string;
   verbas: PjeVerbaResult[];
@@ -467,6 +476,7 @@ export interface PjeLiquidacaoResult {
   salario_familia: PjeSalarioFamiliaResult;
   resumo: PjeResumo;
   validacao?: PjeValidationResult;
+  audit_trail?: PjeAuditTrailEntry[];
 }
 
 export interface PjeVerbaResult {
