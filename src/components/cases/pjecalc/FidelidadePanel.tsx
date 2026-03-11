@@ -22,7 +22,7 @@ interface Props {
 
 const severityIcon = {
   info: <Info className="h-4 w-4 text-muted-foreground" />,
-  warning: <AlertTriangle className="h-4 w-4 text-yellow-500" />,
+  warning: <AlertTriangle className="h-4 w-4 text-accent-foreground" />,
   error: <XCircle className="h-4 w-4 text-destructive" />,
   critical: <XCircle className="h-4 w-4 text-destructive" />,
 };
@@ -30,7 +30,7 @@ const severityIcon = {
 const severityBadge = (s: FidelitySeverity) => {
   const variants: Record<FidelitySeverity, string> = {
     info: 'bg-muted text-muted-foreground',
-    warning: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30',
+    warning: 'bg-accent text-accent-foreground border-border',
     error: 'bg-destructive/10 text-destructive border-destructive/30',
     critical: 'bg-destructive/20 text-destructive border-destructive/50',
   };
