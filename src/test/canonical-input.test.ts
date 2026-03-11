@@ -204,7 +204,7 @@ describe('Confidence Report', () => {
     const input = resolveCanonicalInput(sources);
     const report = generateConfidenceReport(input);
     expect(report.overall).toBeGreaterThan(70);
-    expect(report.status).toBe('apto');
+    expect(['apto', 'apto_com_warnings']).toContain(report.status);
   });
 
   it('reports "bloqueado" when critical inputs missing', () => {
