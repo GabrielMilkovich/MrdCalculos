@@ -2704,9 +2704,10 @@ export class PjeCalcEngine {
       
       // Calculate — precomputed occurrences take priority (PJC ground truth)
       if (verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
-        const result = this.calcularVerba(verba); // calcularVerba handles precomputed
+        const result = this.calcularVerba(verba);
         verbaResults.push(result);
         this.verbaResultsMap.set(verba.id, result);
+        audit('verba', `Verba "${verba.nome}" (precomputada): ${result.ocorrencias.length} oc, total=${result.total_diferenca.toFixed(2)}`, { rubrica: verba.nome, resultado: result.total_diferenca });
         return;
       }
       if (verba.tipo === 'reflexa' && verba.verba_principal_id) {
@@ -2715,12 +2716,14 @@ export class PjeCalcEngine {
           const refResult = this.calcularVerbaReflexa(verba, principalResult);
           verbaResults.push(refResult);
           this.verbaResultsMap.set(verba.id, refResult);
+          audit('verba_reflexa', `Reflexo "${verba.nome}" sobre "${principalResult.nome}": total=${refResult.total_diferenca.toFixed(2)}`, { rubrica: verba.nome, resultado: refResult.total_diferenca });
           return;
         }
       }
       const result = this.calcularVerba(verba);
       verbaResults.push(result);
       this.verbaResultsMap.set(verba.id, result);
+      audit('verba', `Verba "${verba.nome}": ${result.ocorrencias.length} oc, total=${result.total_diferenca.toFixed(2)}`, { rubrica: verba.nome, resultado: result.total_diferenca });
     };
 
     // Process all verbas in dependency order
