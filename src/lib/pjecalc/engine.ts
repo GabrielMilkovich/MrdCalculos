@@ -296,9 +296,12 @@ export class PjeCalcEngine {
       const isSaturday = dow === 6;
       const isFeriado = feriadosNoMes.some(f => new Date(f.data).getDate() === d);
       
+      // Saturday exception: check if sabado_dia_util is overridden for this specific date
+      const sabadoDiaUtil = this.isSabadoDiaUtilParaData(date);
+      
       if (isSunday || isFeriado) {
         repousos++;
-      } else if (isSaturday && !this.params.sabado_dia_util) {
+      } else if (isSaturday && !sabadoDiaUtil) {
         repousos++;
       } else {
         diasUteis++;
