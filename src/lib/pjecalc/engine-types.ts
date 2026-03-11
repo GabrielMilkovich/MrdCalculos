@@ -406,6 +406,14 @@ export interface PjeCorrecaoConfig {
     inss_reclamante: number;
     imposto_renda: number;
   };
+  /** PJC: ignorarTaxaNegativa — when true, negative correction factors are clamped to 1 */
+  ignorar_taxa_negativa?: boolean;
+  /** PJC: baseDeJurosDasVerbas — 'DIFERENCA' | 'DEVIDO' | 'CORRIGIDO' */
+  base_de_juros_das_verbas?: string;
+  /** PJC: entePublico — affects interest calculation rules */
+  ente_publico?: boolean;
+  /** PJC: aplicarJurosFasePreJudicial */
+  aplicar_juros_fase_pre_judicial?: boolean;
 }
 
 export interface PjeHonorariosConfig {
@@ -477,6 +485,8 @@ export interface PjeLiquidacaoResult {
   resumo: PjeResumo;
   validacao?: PjeValidationResult;
   audit_trail?: PjeAuditTrailEntry[];
+  /** Structured warnings collected during calculation (fallbacks, missing tables, etc.) */
+  calculation_warnings?: { code: string; module: string; message: string; competencia?: string }[];
 }
 
 export interface PjeVerbaResult {

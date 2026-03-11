@@ -62,6 +62,22 @@ export class PjeCalcEngine {
   private salarioFamiliaDB: PjeSalarioFamiliaDB[];
   // Map of verba results by verba_id for reflexa resolution
   private verbaResultsMap: Map<string, PjeVerbaResult> = new Map();
+  // Structured warnings collected during calculation
+  private calculationWarnings: { code: string; module: string; message: string; competencia?: string }[] = [];
+  // Set of already-emitted warning keys to prevent duplicates
+  private emittedWarningKeys = new Set<string>();
+
+  /**
+   * Track a warning during calculation (deduplicated by code+module+competencia).
+   * These warnings are included in the liquidação result.
+   */
+  private trackWarning(code: string, module: string, message: string, competencia?: string): void {
+    const key = `${code}:${module}:${competencia || ''}`;
+    if (this.emittedWarningKeys.has(key)) return;
+    this.emittedWarningKeys.add(key);
+    this.calculationWarnings.push({ code, module, message, competencia });
+    console.warn(`[PjeCalcEngine] ${code}: ${message}`);
+  }
 
   constructor(
     params: PjeParametros,
@@ -696,7 +712,11 @@ export class PjeCalcEngine {
   // =====================================================
 
   private getFaixasINSSParaCompetencia(competencia: string): { ate: number; aliquota: number }[] {
-    if (this.faixasINSSDB.length === 0) return DEFAULT_FAIXAS_INSS;
+    if (this.faixasINSSDB.length === 0) {
+      // AUDIT: Track fallback to DEFAULT_FAIXAS_INSS
+      this.trackWarning('E032', 'inss', `INSS: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      return DEFAULT_FAIXAS_INSS;
+    }
 
     const compDate = new Date(competencia + '-01');
     // Buscar faixas cuja vigência cobre a competência
@@ -709,11 +729,20 @@ export class PjeCalcEngine {
       .sort((a, b) => a.faixa - b.faixa)
       .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota) }));
 
-    return faixas.length > 0 ? faixas : DEFAULT_FAIXAS_INSS;
+    if (faixas.length === 0) {
+      // AUDIT: Track fallback for specific competência
+      this.trackWarning('E032', 'inss', `INSS: Sem faixas para ${competencia} — usando padrão 2025`);
+      return DEFAULT_FAIXAS_INSS;
+    }
+    return faixas;
   }
 
   private getFaixasIRParaCompetencia(competencia: string): { faixas: { ate: number; aliquota: number; deducao: number }[]; deducao_dependente: number } {
-    if (this.faixasIRDB.length === 0) return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
+    if (this.faixasIRDB.length === 0) {
+      // AUDIT: Track fallback to DEFAULT_FAIXAS_IR
+      this.trackWarning('E033', 'ir', `IR: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
+    }
 
     const compDate = new Date(competencia + '-01');
     const faixas = this.faixasIRDB
@@ -725,7 +754,11 @@ export class PjeCalcEngine {
       .sort((a, b) => a.faixa - b.faixa)
       .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota), deducao: Number(f.deducao) }));
 
-    if (faixas.length === 0) return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
+    if (faixas.length === 0) {
+      // AUDIT: Track fallback for specific competência
+      this.trackWarning('E033', 'ir', `IR: Sem faixas para ${competencia} — usando padrão 2025`);
+      return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
+    }
 
     // Usar deducao_dependente da primeira faixa encontrada
     const matchedRow = this.faixasIRDB.find(f => {
@@ -2913,6 +2946,7 @@ export class PjeCalcEngine {
       verbas: verbaResults, fgts, contribuicao_social: cs, imposto_renda: ir,
       seguro_desemprego: seguro, previdencia_privada: prevPrivada, salario_familia: salarioFamilia, resumo, validacao,
       audit_trail: auditTrail,
+      calculation_warnings: this.calculationWarnings.length > 0 ? [...this.calculationWarnings] : undefined,
     };
   }
 

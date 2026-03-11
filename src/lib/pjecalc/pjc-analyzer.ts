@@ -225,6 +225,20 @@ export interface AtualizacaoAnalysis {
   combinacoes_indice: { a_partir_de: string; indice: string }[];
   combinacoes_juros: { a_partir_de: string; tipo: string; taxa?: number }[];
   juros_apos_deducao_cs: boolean;
+  /** PJC: ignorarTaxaNegativa — when true, negative correction factors are clamped to 1 */
+  ignorar_taxa_negativa?: boolean;
+  /** PJC: baseDeJurosDasVerbas — which value to use as interest base */
+  base_de_juros_das_verbas?: string;
+  /** PJC: entePublico — affects interest calculation */
+  ente_publico?: boolean;
+  /** PJC: aplicarJurosFasePreJudicial */
+  aplicar_juros_fase_pre_judicial?: boolean;
+  /** PJC: jurosPadrao — default interest type */
+  juros_padrao?: string;
+  /** PJC: dataInicialDoJurosPadrao */
+  data_inicial_juros_padrao?: string;
+  /** PJC: dataFinalDoJurosPadrao */
+  data_final_juros_padrao?: string;
 }
 
 // =====================================================
@@ -494,16 +508,40 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   const indiceBase = getTextContent(root, 'indiceTrabalhista') || 'IPCAE';
   
   // Check if "juros após dedução CS" is enabled (Critério 8 PJe-Calc)
-  const jurosAposCS = getTextContent(root, 'jurosAposDeducaoCS') === 'true'
-    || getTextContent(root, 'jurosAposDeducaoCsReclamante') === 'true'
-    // Default to true for ADC 58/59 cases (standard PJe-Calc behavior)
-    || true;
+  // FIX: Removed "|| true" that was forcing ALL cases to use juros_apos_deducao_cs=true
+  // regardless of actual PJC setting. Now respects the actual XML configuration.
+  const jurosAposCsRaw = getTextContent(root, 'jurosAposDeducaoCS')
+    || getTextContent(root, 'jurosAposDeducaoCsReclamante')
+    || getTextContent(root, 'jurosAposDeducaoDaContribuicaoSocial');
+  // Only default to true when the tag IS present but has no value, or when tag is explicitly 'true'
+  // When tag is absent entirely, default to false (conservative — let user configure)
+  const jurosAposCS = jurosAposCsRaw === 'true' || jurosAposCsRaw === '';
+
+  // Additional PJC fields for correction/interest
+  const ignorarTaxaNegativa = getTextContent(root, 'ignorarTaxaNegativa') === 'true'
+    || getTextContent(root, 'ignorarTaxasNegativas') === 'true';
+  const baseDeJurosDasVerbas = getTextContent(root, 'baseDeJurosDasVerbas')
+    || getTextContent(root, 'baseJurosVerbas')
+    || '';
+  const entePublico = getTextContent(root, 'entePublico') === 'true'
+    || getTextContent(root, 'reclamadoEntePublico') === 'true';
+  const aplicarJurosFasePreJudicial = getTextContent(root, 'aplicarJurosFasePreJudicial');
+  const jurosPadrao = getTextContent(root, 'jurosPadrao') || getTextContent(root, 'juros');
+  const dataInicialDoJurosPadrao = tsToDate(getTextContent(root, 'dataInicialDoJurosPadrao') || getTextContent(root, 'dataInicialJuros'));
+  const dataFinalDoJurosPadrao = tsToDate(getTextContent(root, 'dataFinalDoJurosPadrao') || getTextContent(root, 'dataFinalJuros'));
 
   const atualizacao: AtualizacaoAnalysis = {
     indice_base: indiceBase,
     combinacoes_indice: [],
     combinacoes_juros: [],
     juros_apos_deducao_cs: jurosAposCS,
+    ignorar_taxa_negativa: ignorarTaxaNegativa,
+    base_de_juros_das_verbas: baseDeJurosDasVerbas,
+    ente_publico: entePublico,
+    aplicar_juros_fase_pre_judicial: aplicarJurosFasePreJudicial !== 'false',
+    juros_padrao: jurosPadrao,
+    data_inicial_juros_padrao: dataInicialDoJurosPadrao,
+    data_final_juros_padrao: dataFinalDoJurosPadrao,
   };
   
   const combIndEls = root.getElementsByTagName('CombinacaoDeIndice');
