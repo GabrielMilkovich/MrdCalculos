@@ -2,15 +2,24 @@
  * PJC → Engine Bridge
  * Converts PJCAnalysis (from pjc-analyzer) into PjeCalcEngine constructor inputs,
  * enabling automated calculation from imported .PJC files.
+ * 
+ * LOSS-AWARE: Tracks all unmapped blocks, synthetic fallbacks, and data losses
+ * in a FidelityReport for auditing.
  */
 
-import type { PJCAnalysis, VerbaAnalysis, HistoricoAnalysis, FaltaAnalysis, FeriasAnalysis, ApuracaoJurosEntry } from './pjc-analyzer';
+import type { PJCAnalysis, VerbaAnalysis, HistoricoAnalysis, FaltaAnalysis, FeriasAnalysis, ApuracaoJurosEntry, ApuracaoDiariaAnalysis } from './pjc-analyzer';
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias, PjeVerba,
   PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig, PjeIRConfig,
   PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
   PjeCombinacaoIndice, PjeCombinacaoJuros, PjeApuracaoJurosGT,
+  PjeExcecaoCargaHoraria,
 } from './engine-types';
+import {
+  type FidelityReport,
+  createFidelityReport,
+  addFidelityEntry,
+} from './domain/fidelity-report';
 
 // =====================================================
 // MAIN CONVERTER
@@ -30,17 +39,41 @@ export interface PjcEngineInputs {
   honorariosConfig: PjeHonorariosConfig;
   custasConfig: PjeCustasConfig;
   seguroConfig: PjeSeguroConfig;
+  /** Exceções de carga horária extraídas do PJC */
+  excecoesCargas?: PjeExcecaoCargaHoraria[];
+  /** Fidelity report tracking all data losses and synthetic fallbacks */
+  fidelityReport: FidelityReport;
 }
 
 export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string): PjcEngineInputs {
+  const report = createFidelityReport();
+  
   let historicos = convertHistoricos(analysis.historicos_salariais);
   
   // If historicos have no occurrences, synthesize them from verba occurrences
   // PJe-Calc stores salary values inside OcorrenciaDeVerba.base, not always in OcorrenciaHistorico
   const totalOcorrencias = historicos.reduce((s, h) => s + h.ocorrencias.length, 0);
   if (totalOcorrencias === 0) {
+    addFidelityEntry(report, {
+      code: 'W001',
+      category: 'bridge_fallback',
+      severity: 'warning',
+      message: `Históricos salariais sem ocorrências reais (${analysis.historicos_salariais.length} históricos encontrados, 0 ocorrências). Gerando históricos sintéticos a partir das verbas.`,
+      message_friendly: 'O arquivo PJC não contém histórico salarial detalhado. Foi gerado um histórico aproximado.',
+      module: 'historico_salarial',
+      action: 'Verificar se os valores salariais estão corretos.',
+    });
     historicos = synthesizeHistoricosFromVerbas(analysis, historicos);
   }
+  
+  // Convert real cartão ponto from apuração diária
+  const cartaoPonto = convertCartaoPonto(analysis.apuracao_diaria || [], report);
+  
+  // Convert exceções de carga horária
+  const excecoesCargas = convertExcecoesCargaHoraria(analysis);
+  
+  // Track unmapped modules
+  trackUnmappedModules(analysis, report);
   
   return {
     params: convertParametros(analysis, caseId),
@@ -48,14 +81,16 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     faltas: convertFaltas(analysis.faltas),
     ferias: convertFerias(analysis.ferias),
     verbas: convertVerbas(analysis.verbas, analysis.dag),
-    cartaoPonto: [],
+    cartaoPonto,
     fgtsConfig: buildDefaultFGTSConfig(),
     csConfig: buildDefaultCSConfig(analysis),
     irConfig: buildDefaultIRConfig(analysis),
     correcaoConfig: buildCorrecaoConfig(analysis),
     honorariosConfig: buildHonorariosConfig(analysis),
     custasConfig: buildDefaultCustasConfig(),
-    seguroConfig: { apurar: false, parcelas: 0, recebeu: false },
+    seguroConfig: buildSeguroConfig(analysis),
+    excecoesCargas,
+    fidelityReport: report,
   };
 }
 
@@ -119,6 +154,7 @@ function convertParametros(a: PJCAnalysis, caseId: string): PjeParametros {
     data_admissao: a.parametros.admissao,
     data_demissao: a.parametros.demissao || undefined,
     data_ajuizamento: a.parametros.ajuizamento,
+    data_citacao: a.parametros.data_citacao || undefined,
     data_inicial: a.parametros.inicio_calculo || undefined,
     data_final: a.parametros.termino_calculo || undefined,
     estado: '',
@@ -584,4 +620,155 @@ function buildDefaultCustasConfig(): PjeCustasConfig {
     assistencia_judiciaria: false,
     itens: [],
   };
+}
+
+// =====================================================
+// CARTÃO PONTO — Aggregate daily apuracao into monthly
+// =====================================================
+
+function convertCartaoPonto(
+  apuracaoDiaria: ApuracaoDiariaAnalysis[],
+  report: FidelityReport,
+): PjeCartaoPonto[] {
+  if (!apuracaoDiaria || apuracaoDiaria.length === 0) {
+    addFidelityEntry(report, {
+      code: 'W002',
+      category: 'bridge_data_loss',
+      severity: 'warning',
+      message: 'Nenhuma apuração diária encontrada no PJC. CartaoPonto ficará vazio — engine usará ocorrências precomputadas.',
+      message_friendly: 'Sem dados de jornada diária no arquivo. O cálculo usará os valores pré-calculados.',
+      module: 'cartao_ponto',
+    });
+    return [];
+  }
+
+  // Group daily entries by YYYY-MM competência
+  const byMonth = new Map<string, ApuracaoDiariaAnalysis[]>();
+  for (const dia of apuracaoDiaria) {
+    if (!dia.data) continue;
+    const comp = dia.data.slice(0, 7);
+    if (!byMonth.has(comp)) byMonth.set(comp, []);
+    byMonth.get(comp)!.push(dia);
+  }
+
+  const cartaoPonto: PjeCartaoPonto[] = [];
+  for (const [comp, dias] of byMonth) {
+    const diasUteis = dias.filter(d => d.tipo_dia === 'UTIL' || d.tipo_dia === 'DIA_UTIL').length;
+    const diasTrabalhados = dias.filter(d => d.horas_trabalhadas > 0).length;
+    const he50 = dias.reduce((s, d) => s + d.horas_extras_diaria, 0);
+    const he100 = dias.reduce((s, d) => s + d.horas_extras_semanal, 0);
+    const horasNoturnas = dias.reduce((s, d) => s + d.horas_noturnas, 0);
+    const intervaloSuprimido = dias.reduce((s, d) => s + d.horas_intra_jornada, 0);
+    const dsrHoras = dias.filter(d => d.tipo_dia === 'DSR' || d.tipo_dia === 'REPOUSO').reduce((s, d) => s + d.horas_trabalhadas, 0);
+    
+    cartaoPonto.push({
+      competencia: comp,
+      dias_uteis: diasUteis,
+      dias_trabalhados: diasTrabalhados,
+      horas_extras_50: he50,
+      horas_extras_100: he100,
+      horas_noturnas: horasNoturnas,
+      intervalo_suprimido: intervaloSuprimido,
+      dsr_horas: dsrHoras,
+      sobreaviso: 0,
+      dados_extras: {
+        horas_inter_jornadas: dias.reduce((s, d) => s + d.horas_inter_jornadas, 0),
+        horas_art384: dias.reduce((s, d) => s + d.horas_art384, 0),
+        horas_art253: dias.reduce((s, d) => s + d.horas_art253, 0),
+        repousos_trabalhados: dias.reduce((s, d) => s + d.repousos_trabalhados, 0),
+        feriados_trabalhados: dias.reduce((s, d) => s + d.feriados_trabalhados, 0),
+        faltas: dias.filter(d => d.falta).length,
+        compensacoes: dias.filter(d => d.compensacao).length,
+      },
+    });
+  }
+
+  cartaoPonto.sort((a, b) => a.competencia.localeCompare(b.competencia));
+  
+  addFidelityEntry(report, {
+    code: 'I001',
+    category: 'bridge_data_loss',
+    severity: 'info',
+    message: `CartaoPonto gerado com ${cartaoPonto.length} meses a partir de ${apuracaoDiaria.length} registros diários.`,
+    message_friendly: `Dados de jornada importados: ${cartaoPonto.length} meses, ${apuracaoDiaria.length} dias.`,
+    module: 'cartao_ponto',
+  });
+
+  return cartaoPonto;
+}
+
+// =====================================================
+// EXCEÇÕES DE CARGA HORÁRIA
+// =====================================================
+
+function convertExcecoesCargaHoraria(analysis: PJCAnalysis): PjeExcecaoCargaHoraria[] {
+  if (!analysis.excecoes_carga_horaria) return [];
+  return analysis.excecoes_carga_horaria.map(e => ({
+    data_inicial: e.data_inicial,
+    data_final: e.data_final,
+    carga_horaria: e.carga_horaria,
+    observacao: e.observacao,
+  }));
+}
+
+// =====================================================
+// SEGURO-DESEMPREGO CONFIG
+// =====================================================
+
+function buildSeguroConfig(a: PJCAnalysis): PjeSeguroConfig {
+  if (a.seguro_desemprego?.apurar) {
+    return {
+      apurar: true,
+      parcelas: a.seguro_desemprego.parcelas,
+      recebeu: a.seguro_desemprego.recebeu,
+    };
+  }
+  return { apurar: false, parcelas: 0, recebeu: false };
+}
+
+// =====================================================
+// TRACK UNMAPPED MODULES (loss-awareness)
+// =====================================================
+
+function trackUnmappedModules(analysis: PJCAnalysis, report: FidelityReport): void {
+  // Pensão alimentícia
+  if (analysis.pensao_alimenticia?.apurar) {
+    addFidelityEntry(report, {
+      code: 'W003',
+      category: 'module_unsupported',
+      severity: 'warning',
+      message: 'Pensão alimentícia detectada no PJC mas módulo de cálculo não implementado no bridge.',
+      message_friendly: 'Pensão alimentícia: cálculo parcial. Verifique manualmente.',
+      module: 'pensao_alimenticia',
+      field: 'PensaoAlimenticia',
+      impact_estimated: undefined,
+      action: 'Verificar valor de pensão no resultado final.',
+    });
+  }
+
+  // Previdência privada
+  if (analysis.previdencia_privada?.apurar) {
+    addFidelityEntry(report, {
+      code: 'W003',
+      category: 'module_unsupported',
+      severity: 'warning',
+      message: 'Previdência privada detectada no PJC mas módulo não implementado no bridge.',
+      message_friendly: 'Previdência privada: cálculo parcial.',
+      module: 'previdencia_privada',
+      field: 'PrevidenciaPrivada',
+    });
+  }
+
+  // Exceções de sábado
+  if (analysis.excecoes_sabado && analysis.excecoes_sabado.length > 0) {
+    addFidelityEntry(report, {
+      code: 'W007',
+      category: 'bridge_data_loss',
+      severity: 'warning',
+      message: `${analysis.excecoes_sabado.length} exceções de sábado no PJC não mapeadas para o engine.`,
+      message_friendly: 'Exceções de sábado encontradas mas não aplicadas no cálculo.',
+      module: 'excecoes_sabado',
+      field: 'ExcecaoSabado',
+    });
+  }
 }
