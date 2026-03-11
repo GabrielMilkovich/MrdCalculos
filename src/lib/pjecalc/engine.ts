@@ -1260,7 +1260,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
+            this.trackWarning('W044', 'correcao_monetaria', `Índice ${indice} ausente para ${segInicio}→${segFim} (combinação). Usando fator=1 (PERDA DE PRECISÃO).`, segInicio.slice(0, 7));
           }
         }
 
