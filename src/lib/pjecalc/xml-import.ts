@@ -1,9 +1,14 @@
 /**
- * PJe-Calc XML Import
- * Parses XML exported by PJe-Calc and reconstructs calculation data.
+ * ⚠️ DEPRECATED — Use pjc-analyzer.ts (analyzePJC) as the canonical PJC parser.
+ * This file is kept for backward compatibility only.
+ * The canonical format is the real PJe-Calc .PJC XML with <Calculo> root.
+ * 
+ * @deprecated Use analyzePJC() from pjc-analyzer.ts + convertPjcToEngineInputs() from pjc-to-engine.ts
  */
+
 import { supabase } from "@/integrations/supabase/client";
 
+/** @deprecated Use analyzePJC from pjc-analyzer.ts */
 interface XmlParseResult {
   success: boolean;
   errors: string[];
@@ -24,7 +29,9 @@ function getNumAttr(el: Element, attr: string): number {
   return parseFloat(el.getAttribute(attr) || '0') || 0;
 }
 
+/** @deprecated Use analyzePJC from pjc-analyzer.ts */
 export function parseXML(xmlString: string): XmlParseResult {
+  console.warn('[DEPRECATED] parseXML() is deprecated. Use analyzePJC() from pjc-analyzer.ts for real PJC parsing.');
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -39,17 +46,15 @@ export function parseXML(xmlString: string): XmlParseResult {
 
     const root = doc.documentElement;
     if (root.tagName !== 'pjecalc') {
-      warnings.push(`Elemento raiz "${root.tagName}" — esperado "pjecalc"`);
+      warnings.push(`Elemento raiz "${root.tagName}" — esperado "pjecalc". Use analyzePJC() para formato real <Calculo>.`);
     }
 
-    // Dados do processo
     const processoEl = root.getElementsByTagName('processo')[0];
     const dados_processo = processoEl ? {
       numero: processoEl.getAttribute('numero') || undefined,
       reclamante: processoEl.getAttribute('reclamante') || undefined,
     } : undefined;
 
-    // Resumo
     const resumoEl = root.getElementsByTagName('resumo')[0];
     const resumo: Record<string, number> = {};
     if (resumoEl) {
@@ -58,7 +63,6 @@ export function parseXML(xmlString: string): XmlParseResult {
       }
     }
 
-    // Verbas
     const verbasEl = root.getElementsByTagName('verbas')[0];
     const verbas: XmlParseResult['verbas'] = [];
     if (verbasEl) {
@@ -83,7 +87,6 @@ export function parseXML(xmlString: string): XmlParseResult {
       }
     }
 
-    // FGTS
     const fgtsEl = root.getElementsByTagName('fgts')[0];
     const fgts = fgtsEl ? {
       total_depositos: parseFloat(getTextContent(fgtsEl, 'total_depositos')) || 0,
@@ -91,7 +94,6 @@ export function parseXML(xmlString: string): XmlParseResult {
       total_fgts: parseFloat(getTextContent(fgtsEl, 'total_fgts')) || 0,
     } : undefined;
 
-    // IR
     const irEl = root.getElementsByTagName('imposto_renda')[0];
     const ir = irEl ? {
       base_calculo: parseFloat(getTextContent(irEl, 'base_calculo')) || 0,
@@ -108,16 +110,16 @@ export function parseXML(xmlString: string): XmlParseResult {
   }
 }
 
+/** @deprecated Use convertPjcToEngineInputs from pjc-to-engine.ts */
 export async function importarXMLParaCalculo(caseId: string, xmlString: string): Promise<{ success: boolean; message: string; warnings: string[] }> {
+  console.warn('[DEPRECATED] importarXMLParaCalculo() is deprecated. Use analyzePJC() + convertPjcToEngineInputs().');
   const parsed = parseXML(xmlString);
   if (!parsed.success) {
     return { success: false, message: parsed.errors.join('; '), warnings: parsed.warnings };
   }
 
   try {
-    // Import verbas
     if (parsed.verbas && parsed.verbas.length > 0) {
-      // Delete existing verbas
       await supabase.from("pjecalc_verbas" as any).delete().eq("case_id", caseId);
 
       for (let i = 0; i < parsed.verbas.length; i++) {
@@ -139,7 +141,6 @@ export async function importarXMLParaCalculo(caseId: string, xmlString: string):
       }
     }
 
-    // Update process data if available
     if (parsed.dados_processo) {
       const payload: any = { case_id: caseId };
       if (parsed.dados_processo.numero) payload.numero_processo = parsed.dados_processo.numero;

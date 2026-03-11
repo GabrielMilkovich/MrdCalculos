@@ -1,6 +1,9 @@
 /**
- * PJe-Calc XML Export
- * Generates XML in a format compatible with PJe-Calc CSJT import structure.
+ * ⚠️ DEPRECATED — Use exportPJCXml() from pjc-xml-real.ts for canonical PJC export.
+ * This simplified XML format (<pjecalc> root) is NOT compatible with real PJe-Calc.
+ * Kept for backward compatibility with existing download features.
+ * 
+ * @deprecated Use exportPJCXml() from pjc-xml-real.ts for real PJC format.
  */
 import type { PjeLiquidacaoResult } from "./engine";
 
@@ -12,6 +15,7 @@ function fmtNum(v: number): string {
   return (v || 0).toFixed(2);
 }
 
+/** @deprecated Use exportPJCXml from pjc-xml-real.ts */
 export function exportarXML(
   result: PjeLiquidacaoResult,
   meta: {
@@ -21,6 +25,7 @@ export function exportarXML(
     engineVersion?: string;
   }
 ): string {
+  console.warn('[DEPRECATED] exportarXML() generates simplified XML. Use exportPJCXml() for real PJC format.');
   const now = new Date().toISOString();
 
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -76,10 +81,12 @@ ${v.ocorrencias.map(o => `          <ocorrencia competencia="${o.competencia}" d
   return xml;
 }
 
+/** @deprecated Use downloadPJC from pjc-export.ts or export from pjc-xml-real.ts */
 export function downloadXML(
   result: PjeLiquidacaoResult,
   meta: { processo?: string; cliente?: string; dataLiquidacao?: string; engineVersion?: string }
 ) {
+  console.warn('[DEPRECATED] downloadXML() generates simplified XML. Use exportPJCXml() from pjc-xml-real.ts.');
   const xml = exportarXML(result, meta);
   const blob = new Blob([xml], { type: "application/xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
