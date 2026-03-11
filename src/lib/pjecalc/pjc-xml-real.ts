@@ -690,8 +690,12 @@ export function exportPJCXml(data: PJCReal): string {
       lines.push(`      <incidenciaINSS>${r.incide_inss}</incidenciaINSS>`);
       lines.push(`      <incidenciaIRPF>${r.incide_ir}</incidenciaIRPF>`);
       lines.push(`      <incidenciaFGTS>${r.incide_fgts}</incidenciaFGTS>`);
+      lines.push(`      <gerarVerbasNaPrincipal>${r.gerar_principal}</gerarVerbasNaPrincipal>`);
+      lines.push(`      <gerarVerbasNaReflexa>${r.gerar_reflexo}</gerarVerbasNaReflexa>`);
       lines.push(`      <periodoInicial>${r.periodo_inicio}</periodoInicial>`);
       lines.push(`      <periodoFinal>${r.periodo_fim}</periodoFinal>`);
+      lines.push(`      <multiplicador>${fmtN(r.multiplicador)}</multiplicador>`);
+      lines.push(`      <divisor>${fmtN(r.divisor, 2)}</divisor>`);
       if (r.bases_verba.length > 0) {
         lines.push('      <formula><FormulaReflexo><baseVerba>');
         for (const bv of r.bases_verba) {
