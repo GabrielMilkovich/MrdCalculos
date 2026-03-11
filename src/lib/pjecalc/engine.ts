@@ -714,7 +714,7 @@ export class PjeCalcEngine {
   private getFaixasINSSParaCompetencia(competencia: string): { ate: number; aliquota: number }[] {
     if (this.faixasINSSDB.length === 0) {
       // AUDIT: Track fallback to DEFAULT_FAIXAS_INSS
-      this.trackWarning('E032', 'inss', `INSS: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      this.trackWarning('W032', 'cs', `INSS: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
       return DEFAULT_FAIXAS_INSS;
     }
 
