@@ -81,6 +81,9 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
   // Convert exceções de carga horária
   const excecoesCargas = convertExcecoesCargaHoraria(analysis);
   
+  // Convert exceções de sábado
+  const excecoesSabado = convertExcecoesSabado(analysis);
+  
   // Track unmapped modules
   trackUnmappedModules(analysis, report);
   
@@ -99,6 +102,10 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     custasConfig: buildDefaultCustasConfig(),
     seguroConfig: buildSeguroConfig(analysis),
     excecoesCargas,
+    excecoesSabado,
+    prevPrivadaConfig: buildPrevPrivadaConfig(analysis),
+    pensaoConfig: buildPensaoConfig(analysis),
+    salarioFamiliaConfig: buildSalarioFamiliaConfig(analysis),
     fidelityReport: report,
   };
 }
