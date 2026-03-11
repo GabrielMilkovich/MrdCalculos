@@ -1729,10 +1729,16 @@ export class PjeCalcEngine {
             imposto = this.calcularINSSProgressivo(comp, totalBase);
           }
 
-          // Apply monetary correction to CS amount (correcaoTrabalhistaDosSalariosDevidosDoINSS)
+          // CORRECTION 1: Apply multi-phase monetary correction to CS amount
           const cf = correctionFactorByComp[comp];
           if (cf && cf !== 1) {
             imposto = Number(new Decimal(imposto).times(cf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
+          }
+
+          // CORRECTION 3: Apply interest on corrected CS amount
+          const jf = interestFactorByComp[comp];
+          if (jf && jf > 0) {
+            imposto = Number(new Decimal(imposto).plus(new Decimal(imposto).times(jf)).toDP(2, PjeCalcEngine.ROUND_CS_IR));
           }
 
           segurado_devidos.push({
