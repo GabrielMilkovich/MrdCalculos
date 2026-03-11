@@ -1570,7 +1570,7 @@ export class PjeCalcEngine {
   // CALCULAR CONTRIBUIÇÃO SOCIAL (Tabelas Versionadas por Competência)
   // =====================================================
 
-  calcularCS(verbaResults: PjeVerbaResult[], useCorrigido: boolean = false, verbaResultsForCorrectionRatio?: PjeVerbaResult[]): PjeCSResult {
+  calcularCS(verbaResults: PjeVerbaResult[], useCorrigido: boolean = false): PjeCSResult {
     const segurado_devidos: PjeCSResult['segurado_devidos'] = [];
     const segurado_pagos: PjeCSResult['segurado_pagos'] = [];
     const empregador: PjeCSResult['empregador'] = [];
