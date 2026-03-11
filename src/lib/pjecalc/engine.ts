@@ -1451,6 +1451,79 @@ export class PjeCalcEngine {
       return { segurado_devidos: [], segurado_pagos: [], empregador, total_segurado_devidos: 0, total_segurado_pagos: 0, total_segurado: 0, total_empregador: 0 };
     }
 
+    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact CS bases/values ═══
+    const gt = this.csConfig.apuracao_juros_gt;
+    if (gt && gt.length > 0 && useCorrigido) {
+      // Aggregate GT bases by competência (YYYY-MM format)
+      const gtBasesByComp: Record<string, number> = {};
+      const gtBase13ByComp: Record<string, number> = {};
+      for (const entry of gt) {
+        const comp = entry.competencia.slice(0, 7); // YYYY-MM
+        gtBasesByComp[comp] = (gtBasesByComp[comp] || 0) + entry.cs_base_normal;
+        gtBase13ByComp[comp] = (gtBase13ByComp[comp] || 0) + entry.cs_base_13;
+      }
+
+      // Combine normal + 13º bases per competência
+      const allComps = new Set([...Object.keys(gtBasesByComp), ...Object.keys(gtBase13ByComp)]);
+      
+      if (this.csConfig.apurar_segurado) {
+        for (const comp of allComps) {
+          const baseNormal = gtBasesByComp[comp] || 0;
+          const base13 = gtBase13ByComp[comp] || 0;
+          const totalBase = baseNormal + base13;
+          if (totalBase <= 0) continue;
+          const imposto = this.calcularINSSProgressivo(comp, totalBase);
+          segurado_devidos.push({
+            competencia: comp, base: totalBase,
+            aliquota: totalBase > 0 ? imposto / totalBase : 0,
+            valor: Number(new Decimal(imposto).toDP(2)),
+            recolhido: 0,
+            diferenca: Number(new Decimal(imposto).toDP(2)),
+          });
+        }
+      }
+
+      // Empregador with GT bases
+      if (this.csConfig.apurar_empresa || this.csConfig.apurar_sat || this.csConfig.apurar_terceiros) {
+        for (const comp of allComps) {
+          const baseNormal = gtBasesByComp[comp] || 0;
+          const base13 = gtBase13ByComp[comp] || 0;
+          const totalBase = baseNormal + base13;
+          if (totalBase <= 0) continue;
+          const compDate = new Date(comp + '-01');
+          const isSimples = this.csConfig.periodos_simples?.some(p => {
+            const pInicio = new Date(p.inicio);
+            const pFim = new Date(p.fim);
+            return compDate >= pInicio && compDate <= pFim;
+          }) || false;
+          
+          if (isSimples) {
+            empregador.push({ competencia: comp, empresa: 0, sat: 0, terceiros: 0 });
+          } else {
+            const aliqEmp = (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
+            const aliqSat = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
+            const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
+            empregador.push({
+              competencia: comp,
+              empresa: this.csConfig.apurar_empresa ? Number(new Decimal(totalBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+              sat: this.csConfig.apurar_sat ? Number(new Decimal(totalBase).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+              terceiros: this.csConfig.apurar_terceiros ? Number(new Decimal(totalBase).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+            });
+          }
+        }
+      }
+
+      const totalDevidos = segurado_devidos.reduce((s, x) => new Decimal(s).plus(x.diferenca), new Decimal(0)).toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+      return {
+        segurado_devidos, segurado_pagos: [], empregador,
+        total_segurado_devidos: totalDevidos,
+        total_segurado_pagos: 0,
+        total_segurado: totalDevidos,
+        total_empregador: empregador.reduce((s, x) => s + x.empresa + x.sat + x.terceiros, 0),
+      };
+    }
+
+    // ═══ Standard Mode: Compute CS from verba results ═══
     // ═══ Track 1: CS sobre salários DEVIDOS ═══
     // base_cs_segurado: 'bruto' usa oc.devido, 'liquido' (default) usa oc.diferenca
     const usarBruto = this.csConfig.base_cs_segurado === 'bruto';
