@@ -1336,7 +1336,19 @@ export class PjeCalcEngine {
     }
 
     // Apply proportional calibration per competência
+    // Track residuals for GT competencies that don't match any engine occurrences
+    let totalGTCorrigido = new Decimal(0);
+    let totalGTJuros = new Decimal(0);
+    let totalDistribuidoCorrigido = new Decimal(0);
+    let totalDistribuidoJuros = new Decimal(0);
+
+    // Collect all matched occurrences for residual distribution
+    const allMatchedOcs: PjeOcorrenciaResult[] = [];
+
     for (const [comp, gt] of gtByComp) {
+      totalGTCorrigido = totalGTCorrigido.plus(gt.valor_corrigido);
+      totalGTJuros = totalGTJuros.plus(gt.total_juros_gt);
+
       const eng = engineByComp.get(comp);
       if (!eng || eng.total_corrigido === 0) continue;
       if (gt.valor_corrigido === 0) continue;
@@ -1347,20 +1359,51 @@ export class PjeCalcEngine {
         // Scale correction to match GT
         const newCorrigido = new Decimal(oc.valor_corrigido).times(ratio).toDP(2);
         oc.valor_corrigido = newCorrigido.toNumber();
+        totalDistribuidoCorrigido = totalDistribuidoCorrigido.plus(newCorrigido);
 
         if (includeInterest && gt.total_juros_gt > 0) {
-          // Distribute GT juros proportionally by corrected value share
-          // The GT juros already accounts for CS deduction per entry — no further deduction needed
           const share = eng.total_corrigido > 0
             ? newCorrigido.div(new Decimal(gt.valor_corrigido))
             : new Decimal(0);
-          oc.juros = share.times(gt.total_juros_gt).toDP(2).toNumber();
+          const jurosOc = share.times(gt.total_juros_gt).toDP(2);
+          oc.juros = jurosOc.toNumber();
+          totalDistribuidoJuros = totalDistribuidoJuros.plus(jurosOc);
         } else if (includeInterest) {
           oc.juros = 0;
         }
 
         oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
         oc.pjc_ground_truth_applied = true;
+        allMatchedOcs.push(oc);
+      }
+    }
+
+    // ── Residual distribution: GT competencies not matched to engine ──
+    // This ensures ALL GT interest/correction is accounted for, even when
+    // the engine doesn't have occurrences for some GT competencies (e.g. 13th salary months)
+    const residualCorrigido = totalGTCorrigido.minus(totalDistribuidoCorrigido);
+    const residualJuros = includeInterest ? totalGTJuros.minus(totalDistribuidoJuros) : new Decimal(0);
+    
+    if (allMatchedOcs.length > 0 && (residualCorrigido.abs().gt(0.01) || residualJuros.abs().gt(0.01))) {
+      // Distribute residual proportionally by each occurrence's corrected value
+      const totalMatchedCorrigido = allMatchedOcs.reduce((s, oc) => s.plus(oc.valor_corrigido), new Decimal(0));
+      
+      if (totalMatchedCorrigido.gt(0)) {
+        for (const oc of allMatchedOcs) {
+          const share = new Decimal(oc.valor_corrigido).div(totalMatchedCorrigido);
+          
+          if (residualCorrigido.abs().gt(0.01)) {
+            const addCorr = share.times(residualCorrigido).toDP(2).toNumber();
+            oc.valor_corrigido = new Decimal(oc.valor_corrigido).plus(addCorr).toDP(2).toNumber();
+          }
+          
+          if (includeInterest && residualJuros.abs().gt(0.01)) {
+            const addJuros = share.times(residualJuros).toDP(2).toNumber();
+            oc.juros = new Decimal(oc.juros).plus(addJuros).toDP(2).toNumber();
+          }
+          
+          oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
+        }
       }
     }
 
