@@ -105,6 +105,7 @@ export class PjeCalcEngine {
     salarioFamiliaConfig: PjeSalarioFamiliaConfig = { apurar: false, numero_filhos: 0 },
     seguroDesempregoDB: PjeSeguroDesempregoDB[] = [],
     salarioFamiliaDB: PjeSalarioFamiliaDB[] = [],
+    excecoesSabado: PjeExcecaoSabado[] = [],
   ) {
     this.params = params;
     this.historicos = historicos;
@@ -134,6 +135,7 @@ export class PjeCalcEngine {
     this.faixasINSSDB = faixasINSSDB;
     this.faixasIRDB = faixasIRDB;
     this.excecoesCargas = excecoesCargas;
+    this.excecoesSabado = excecoesSabado;
     this.feriadosDB = feriadosDB;
     this.prevPrivadaConfig = prevPrivadaConfig;
     this.pensaoConfig = pensaoConfig;
