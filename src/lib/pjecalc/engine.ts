@@ -2750,6 +2750,7 @@ export class PjeCalcEngine {
     //   Step D: Apply interest (from GT taxaDeJuros or engine calculation)
     const hasGT = (this.correcaoConfig.apuracao_juros_gt?.length ?? 0) > 0;
 
+    let csPreComputed: PjeCSResult | null = null;
     if (this.correcaoConfig.juros_apos_deducao_cs) {
       // Step A: Correction only
       this.aplicarCorrecaoSomente(verbaResults);
@@ -2759,21 +2760,19 @@ export class PjeCalcEngine {
         this.calibrarCorrecaoComGT(verbaResults, false);
       }
       
-      // Step B: CS on corrected values (now GT-calibrated if available)
-      const csPreJuros = this.calcularCS(verbaResults, true);
-      const csDescontadoPreJuros = this.csConfig.cobrar_reclamante ? csPreJuros.total_segurado : 0;
+      // Step B: CS on corrected values (BEFORE interest — this is the FINAL CS)
+      // PJe-Calc computes CS only once on corrected values, before interest is applied
+      csPreComputed = this.calcularCS(verbaResults, true);
+      const csDescontadoPreJuros = this.csConfig.cobrar_reclamante ? csPreComputed.total_segurado : 0;
       
       // Step C+D: Apply interest
       if (hasGT) {
-        // Use GT taxaDeJuros to compute interest on (corrected - CS_share)
         this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
       } else {
-        // Legacy: calculate interest from engine's own indices
         this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
       }
     } else {
       this.aplicarCorrecaoJuros(verbaResults);
-      // GT Calibration for non-juros_apos_deducao_cs path
       if (hasGT) {
         this.calibrarCorrecaoComGT(verbaResults, true);
       }
@@ -2783,8 +2782,9 @@ export class PjeCalcEngine {
     const fgts = this.calcularFGTS(verbaResults);
 
     // ── 6. Contribuição Social ──
-    // PJe-Calc calculates CS on corrected values (valor_corrigido), not nominal
-    const cs = this.calcularCS(verbaResults, true);
+    // For juros_apos_deducao_cs: reuse CS computed BEFORE interest (step B)
+    // Otherwise: compute CS on final corrected+interest values
+    const cs = csPreComputed || this.calcularCS(verbaResults, true);
 
     // ── 7. IR ──
     const ir = this.calcularIR(verbaResults, cs);
