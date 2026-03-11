@@ -321,10 +321,14 @@ function toEngineCorrecaoConfig(
     console.error('[ORCHESTRATOR] CRITICAL: data_liquidacao not set in correcaoConfig — calculation will NOT be deterministic');
   }
 
-  // FIX AUDIT-001: Read juros_apos_deducao_cs from DB config instead of hardcoding true.
+  // FIX AUDIT-001: Read juros_apos_deducao_cs from atualizacaoConfig (DB) instead of hardcoding true.
   // This was masking cases where the PJC file configured it as false.
-  // Fallback: true (PJe-Calc default / Critério 8) when not explicitly set.
-  const jurosAposCS = cfg?.juros_apos_deducao_cs ?? true;
+  // Fallback: true (PJe-Calc default / Critério 8) when not explicitly set in DB.
+  let jurosAposCS = true; // default PJe-Calc behavior
+  const correcaoRow = atualizacaoConfig.find(a => a.tipo === 'correcao');
+  if (correcaoRow && correcaoRow.juros_apos_deducao_cs !== undefined && correcaoRow.juros_apos_deducao_cs !== null) {
+    jurosAposCS = !!correcaoRow.juros_apos_deducao_cs;
+  }
 
   return {
     indice: cfg?.indice || 'IPCA-E',
