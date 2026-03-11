@@ -1600,28 +1600,33 @@ export class PjeCalcEngine {
       // Check if GT provides pre-computed CS amounts (contribuicaoSocialNormal > 0)
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
-      // ═══ PJe-Calc CS Monetary Update ═══
-      // PJe-Calc's "correcaoTrabalhistaDosSalariosDevidosDoINSS" applies the same monetary
-      // correction to CS amounts that it applies to verbas. The contribuicaoSocialNormal
-      // in ApuracaoDeJuros is the NOMINAL CS; inssReclamante is the CORRECTED CS.
-      // We compute correction factors per competência from verbaResults.
+      // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
+      // After calculating CS on nominal bases, PJe-Calc applies the same monetary
+      // correction index to the CS AMOUNTS from each competência to liquidation date.
+      const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) || '';
       const correctionFactorByComp: Record<string, number> = {};
-      {
-        const nominalByComp: Record<string, number> = {};
-        const corrigidoByComp: Record<string, number> = {};
-        for (const vr of verbaResults) {
-          const verba = this.verbas.find(v => v.id === vr.verba_id);
-          if (!verba?.incidencias.contribuicao_social) continue;
-          for (const oc of vr.ocorrencias) {
-            if (oc.diferenca === 0) continue;
-            const c = oc.competencia.slice(0, 7);
-            nominalByComp[c] = (nominalByComp[c] || 0) + Math.abs(oc.diferenca);
-            corrigidoByComp[c] = (corrigidoByComp[c] || 0) + Math.abs(oc.valor_corrigido);
+      if (compLiq) {
+        for (const comp of allComps) {
+          // Use the primary correction index to compute inflation from comp to liquidation
+          const primaryIndex = this.correcaoConfig.indice === 'COMBINACAO'
+            ? (this.correcaoConfig.combinacoes_indice?.[0]?.indice || 'IPCA-E')
+            : (this.correcaoConfig.indice || 'IPCA-E');
+          // For combination regimes, find which index applies at this comp
+          let activeIndex = primaryIndex;
+          if (this.correcaoConfig.combinacoes_indice && this.correcaoConfig.combinacoes_indice.length > 0) {
+            const sorted = [...this.correcaoConfig.combinacoes_indice].sort((a, b) => 
+              (b.de || '0000').localeCompare(a.de || '0000'));
+            for (const ci of sorted) {
+              if ((ci.de || '0000') <= comp + '-01') { activeIndex = ci.indice; break; }
+            }
+            if (!activeIndex || activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') {
+              activeIndex = primaryIndex;
+            }
           }
-        }
-        for (const c of Object.keys(nominalByComp)) {
-          if (nominalByComp[c] > 0 && corrigidoByComp[c] > 0) {
-            correctionFactorByComp[c] = corrigidoByComp[c] / nominalByComp[c];
+          if (activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') continue;
+          const factor = this.getIndiceCorrecaoDB(activeIndex, comp, compLiq);
+          if (factor !== null && factor > 0 && factor !== 1) {
+            correctionFactorByComp[comp] = factor;
           }
         }
       }
@@ -1643,7 +1648,7 @@ export class PjeCalcEngine {
 
           // Apply monetary correction to CS amount (correcaoTrabalhistaDosSalariosDevidosDoINSS)
           const cf = correctionFactorByComp[comp];
-          if (cf && cf > 1) {
+          if (cf && cf !== 1) {
             imposto = Number(new Decimal(imposto).times(cf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
           }
 
@@ -1679,7 +1684,7 @@ export class PjeCalcEngine {
             const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
             // Apply correction factor to empregador CS too
             const cf = correctionFactorByComp[comp] ?? 1;
-            const correctedBase = cf > 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
+            const correctedBase = cf !== 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
             empregador.push({
               competencia: comp,
               empresa: this.csConfig.apurar_empresa ? Number(new Decimal(correctedBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
