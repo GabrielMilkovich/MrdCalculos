@@ -321,6 +321,16 @@ function toEngineCorrecaoConfig(
     console.error('[ORCHESTRATOR] CRITICAL: data_liquidacao not set in correcaoConfig — calculation will NOT be deterministic');
   }
 
+  // FIX AUDIT-001: Read juros_apos_deducao_cs from atualizacaoConfig instead of hardcoding true.
+  let jurosAposCS = true; // default PJe-Calc behavior (Critério 8)
+  const correcaoRowForJuros = atualizacaoConfig.find(a => a.tipo === 'correcao');
+  if (correcaoRowForJuros?.regimes && typeof correcaoRowForJuros.regimes === 'object') {
+    const regimes = correcaoRowForJuros.regimes as Record<string, unknown>;
+    if (regimes.juros_apos_deducao_cs !== undefined) {
+      jurosAposCS = !!regimes.juros_apos_deducao_cs;
+    }
+  }
+
   return {
     indice: cfg?.indice || 'IPCA-E',
     epoca: (cfg?.epoca as 'mensal' | 'fixo') || 'mensal',
@@ -329,10 +339,10 @@ function toEngineCorrecaoConfig(
     juros_inicio: (cfg?.juros_inicio as 'ajuizamento' | 'citacao' | 'vencimento') || 'ajuizamento',
     multa_523: cfg?.multa_523 ?? false,
     multa_523_percentual: cfg?.multa_523_percentual ?? 10,
-    data_liquidacao: dataLiq || new Date().toISOString().slice(0, 10), // fallback only for safety
+    data_liquidacao: dataLiq || new Date().toISOString().slice(0, 10),
     combinacoes_indice,
     combinacoes_juros,
-    juros_apos_deducao_cs: true,
+    juros_apos_deducao_cs: jurosAposCS,
   };
 }
 

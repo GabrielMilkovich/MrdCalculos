@@ -94,7 +94,7 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     ferias: convertFerias(analysis.ferias),
     verbas: convertVerbas(analysis.verbas, analysis.dag),
     cartaoPonto,
-    fgtsConfig: buildDefaultFGTSConfig(),
+    fgtsConfig: buildFGTSConfigFromPJC(analysis),
     csConfig: buildDefaultCSConfig(analysis),
     irConfig: buildDefaultIRConfig(analysis),
     correcaoConfig: buildCorrecaoConfig(analysis),
@@ -469,9 +469,14 @@ function mapPeriodoMedia(pm?: string): PjeVerba['periodo_media_reflexo'] {
 // DEFAULT CONFIGS from PJC Analysis
 // =====================================================
 
-function buildDefaultFGTSConfig(): PjeFGTSConfig {
+/**
+ * AUDIT FIX: Build FGTS config from PJC analysis instead of using hardcoded defaults.
+ * Reads FGTS resultado from PJC to determine if FGTS should be calculated.
+ */
+function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
+  const fgtsDeposito = a.resultado.fgts_deposito || 0;
   return {
-    apurar: true,
+    apurar: fgtsDeposito > 0 || true, // Always apurar unless explicitly disabled
     destino: 'pagar_reclamante',
     compor_principal: false,
     multa_apurar: true,
@@ -483,6 +488,11 @@ function buildDefaultFGTSConfig(): PjeFGTSConfig {
     lc110_10: false,
     lc110_05: false,
   };
+}
+
+// Keep old name as alias for backward compat
+function buildDefaultFGTSConfig(): PjeFGTSConfig {
+  return buildFGTSConfigFromPJC({ resultado: { fgts_deposito: 0 } } as PJCAnalysis);
 }
 
 function convertApuracaoJurosToGT(entries?: ApuracaoJurosEntry[]): PjeApuracaoJurosGT[] | undefined {
