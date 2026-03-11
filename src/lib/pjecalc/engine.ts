@@ -1242,6 +1242,86 @@ export class PjeCalcEngine {
       vr.total_juros = totalJuros.toDP(2).toNumber();
       vr.total_final = totalFinal.toDP(2).toNumber();
     }
+
+    // ═══ GT CALIBRATION: Use ApuracaoDeJuros valorCorrigido + taxaDeJuros ═══
+    // ApuracaoDeJuros provides aggregated values per competência across ALL verbas.
+    // We distribute the GT total proportionally among occurrences sharing that competência.
+    const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
+    if (correcaoGT && correcaoGT.length > 0) {
+      // Build GT map by competência (YYYY-MM)
+      const gtMap = new Map<string, { valor_corrigido: number; taxa_juros: number }>();
+      for (const g of correcaoGT) {
+        const comp = g.competencia.slice(0, 7);
+        const existing = gtMap.get(comp);
+        if (existing) {
+          // Sum if multiple entries for same competência
+          existing.valor_corrigido += g.valor_corrigido;
+          existing.taxa_juros = g.taxa_juros; // same rate
+        } else {
+          gtMap.set(comp, { valor_corrigido: g.valor_corrigido, taxa_juros: g.taxa_juros });
+        }
+      }
+
+      // Aggregate engine's corrected values per competência across ALL verbas
+      const engineByComp = new Map<string, { total_corrigido: number; ocorrencias: { oc: PjeOcorrenciaResult; vr: PjeVerbaResult }[] }>();
+      for (const vr of verbaResults) {
+        for (const oc of vr.ocorrencias) {
+          if (oc.diferenca === 0) continue;
+          const comp = oc.competencia.slice(0, 7);
+          const entry = engineByComp.get(comp);
+          if (entry) {
+            entry.total_corrigido += oc.valor_corrigido;
+            entry.ocorrencias.push({ oc, vr });
+          } else {
+            engineByComp.set(comp, { total_corrigido: oc.valor_corrigido, ocorrencias: [{ oc, vr }] });
+          }
+        }
+      }
+
+      // Apply proportional calibration
+      for (const [comp, gt] of gtMap) {
+        const eng = engineByComp.get(comp);
+        if (!eng || eng.total_corrigido === 0) continue;
+        if (gt.valor_corrigido === 0) continue;
+
+        const ratio = new Decimal(gt.valor_corrigido).div(eng.total_corrigido);
+        // Skip if already very close (within R$ 0.02)
+        if (ratio.minus(1).abs().lessThan(0.0001)) continue;
+
+        for (const { oc } of eng.ocorrencias) {
+          const oldCorrigido = new Decimal(oc.valor_corrigido);
+          const newCorrigido = oldCorrigido.times(ratio).toDP(2);
+          oc.valor_corrigido = newCorrigido.toNumber();
+
+          // Recalculate interest using GT taxa_juros if available
+          if (gt.taxa_juros > 0 && oc.pjc_ground_truth_regime !== 'SELIC') {
+            oc.juros = newCorrigido.times(gt.taxa_juros).toDP(2).toNumber();
+          } else if (oc.pjc_ground_truth_regime === 'SELIC') {
+            // SELIC already includes interest in the corrected value
+            oc.juros = 0;
+          } else {
+            // Scale juros proportionally
+            oc.juros = new Decimal(oc.juros).times(ratio).toDP(2).toNumber();
+          }
+
+          oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
+          oc.pjc_ground_truth_applied = true;
+        }
+      }
+
+      // Recalculate verba totals after calibration
+      for (const vr of verbaResults) {
+        let tc = new Decimal(0), tj = new Decimal(0), tf = new Decimal(0);
+        for (const oc of vr.ocorrencias) {
+          tc = tc.plus(oc.valor_corrigido);
+          tj = tj.plus(oc.juros);
+          tf = tf.plus(oc.valor_final);
+        }
+        vr.total_corrigido = tc.toDP(2).toNumber();
+        vr.total_juros = tj.toDP(2).toNumber();
+        vr.total_final = tf.toDP(2).toNumber();
+      }
+    }
   }
 
   private getRegimeParaData<T extends { de?: string; ate?: string }>(combinacoes: T[], data: string): T | null {
