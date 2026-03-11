@@ -1643,11 +1643,10 @@ export class PjeCalcEngine {
             imposto = this.calcularINSSProgressivo(comp, totalBase);
           }
 
-          // Apply total factor (correction + interest) to CS amount
-          // PJe-Calc: correcaoTrabalhistaDosSalariosDevidosDoINSS uses same update as verbas
-          const tf = totalFactorByComp[comp];
-          if (tf && tf > 1) {
-            imposto = Number(new Decimal(imposto).times(tf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
+          // Apply monetary correction factor from GT (valor_corrigido / nominal_base)
+          const cf = correctionFactorByComp[comp];
+          if (cf && cf > 1) {
+            imposto = Number(new Decimal(imposto).times(cf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
           }
 
           segurado_devidos.push({
