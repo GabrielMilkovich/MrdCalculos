@@ -598,6 +598,52 @@ export async function executarLiquidacao(
     loadSalarioFamiliaDBRows(),
   ]);
 
+  // 2.5. CANONICAL INPUT LAYER — Resolve, Validate, Score
+  const canonicalInput = resolveCanonicalInput({
+    params: caseData.params,
+    dadosProcesso: (caseData as any).dadosProcesso || null,
+    historicos: caseData.historicos,
+    histOcorrencias,
+    verbas: caseData.verbas,
+    faltas: caseData.faltas,
+    ferias: caseData.ferias,
+    cartaoPonto: caseData.cartaoPonto,
+    fgtsConfig: caseData.fgtsConfig,
+    csConfig: caseData.csConfig,
+    irConfig: caseData.irConfig,
+    correcaoConfig: caseData.correcaoConfig,
+    atualizacaoConfig: caseData.atualizacaoConfig || [],
+    honorarios: caseData.honorarios,
+    custasConfig: caseData.custasConfig,
+    indicesDB,
+    faixasINSSDB,
+    faixasIRDB,
+    feriadosDB,
+    seguroDesempregoDB,
+    salarioFamiliaDB,
+    isPjcImport: false,
+  });
+
+  const inputValidation = validateCanonicalInput(canonicalInput);
+  const confidenceReport = generateConfidenceReport(canonicalInput);
+
+  console.log(`[ORCHESTRATOR] Canonical Input: completeness=${inputValidation.completenessScore}%, canProceed=${inputValidation.canProceed}, blockers=${inputValidation.blockers.length}, warnings=${inputValidation.warnings.length}`);
+  console.log(`[ORCHESTRATOR] Confidence: overall=${confidenceReport.overall}%, status=${confidenceReport.status}`);
+  
+  for (const b of inputValidation.blockers) {
+    console.error(`[ORCHESTRATOR] BLOCKER [${b.code}]: ${b.message}`);
+  }
+  for (const w of inputValidation.warnings) {
+    console.warn(`[ORCHESTRATOR] WARNING [${w.code}]: ${w.message}`);
+  }
+
+  if (!inputValidation.canProceed && mode !== 'seed') {
+    const blockReasons = inputValidation.blockers
+      .map(b => `[${b.code}] ${b.message_friendly}`)
+      .join('; ');
+    throw new Error(`Cálculo bloqueado por insumos incompletos: ${blockReasons}`);
+  }
+
   // 3. Convert to engine types
   const engineParams = toEngineParams(caseData.params);
   const engineFaltas = toEngineFaltas(caseData.faltas);
