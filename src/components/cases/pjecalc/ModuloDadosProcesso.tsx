@@ -200,7 +200,31 @@ export function ModuloDadosProcesso({ caseId }: Props) {
         <CardHeader className="pb-3"><CardTitle className="text-sm">Datas Processuais</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-3 gap-4">
           {f("data_distribuicao", "Distribuição", "date")}
-          {f("data_citacao", "Citação (ADC 58)", "date", true)}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <Label className="text-xs">
+                Citação (ADC 58)
+                {citacaoEnabled && <span className="text-destructive ml-0.5">*</span>}
+              </Label>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-muted-foreground">{citacaoEnabled ? "Ativo" : "Inativo"}</span>
+                <Switch checked={citacaoEnabled} onCheckedChange={setCitacaoEnabled} className="scale-75" />
+              </div>
+            </div>
+            <Input
+              type="date"
+              disabled={!citacaoEnabled}
+              value={form.data_citacao || ''}
+              onChange={e => setForm(p => ({ ...p, data_citacao: e.target.value }))}
+              className={cn("h-8 text-xs", !citacaoEnabled && "opacity-50", citacaoEnabled && !form.data_citacao && "border-destructive/50")}
+            />
+            {citacaoEnabled && !form.data_citacao && (
+              <p className="text-[10px] text-destructive mt-0.5">Obrigatório para liquidação</p>
+            )}
+            {!citacaoEnabled && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">Citação desabilitada para este cálculo</p>
+            )}
+          </div>
           {f("data_transito", "Trânsito em Julgado", "date")}
         </CardContent>
       </Card>
