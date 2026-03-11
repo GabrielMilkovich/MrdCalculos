@@ -2,15 +2,24 @@
  * PJC → Engine Bridge
  * Converts PJCAnalysis (from pjc-analyzer) into PjeCalcEngine constructor inputs,
  * enabling automated calculation from imported .PJC files.
+ * 
+ * LOSS-AWARE: Tracks all unmapped blocks, synthetic fallbacks, and data losses
+ * in a FidelityReport for auditing.
  */
 
-import type { PJCAnalysis, VerbaAnalysis, HistoricoAnalysis, FaltaAnalysis, FeriasAnalysis, ApuracaoJurosEntry } from './pjc-analyzer';
+import type { PJCAnalysis, VerbaAnalysis, HistoricoAnalysis, FaltaAnalysis, FeriasAnalysis, ApuracaoJurosEntry, ApuracaoDiariaAnalysis } from './pjc-analyzer';
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias, PjeVerba,
   PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig, PjeIRConfig,
   PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
   PjeCombinacaoIndice, PjeCombinacaoJuros, PjeApuracaoJurosGT,
+  PjeExcecaoCargaHoraria,
 } from './engine-types';
+import {
+  type FidelityReport,
+  createFidelityReport,
+  addFidelityEntry,
+} from './domain/fidelity-report';
 
 // =====================================================
 // MAIN CONVERTER
@@ -30,17 +39,41 @@ export interface PjcEngineInputs {
   honorariosConfig: PjeHonorariosConfig;
   custasConfig: PjeCustasConfig;
   seguroConfig: PjeSeguroConfig;
+  /** Exceções de carga horária extraídas do PJC */
+  excecoesCargas?: PjeExcecaoCargaHoraria[];
+  /** Fidelity report tracking all data losses and synthetic fallbacks */
+  fidelityReport: FidelityReport;
 }
 
 export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string): PjcEngineInputs {
+  const report = createFidelityReport();
+  
   let historicos = convertHistoricos(analysis.historicos_salariais);
   
   // If historicos have no occurrences, synthesize them from verba occurrences
   // PJe-Calc stores salary values inside OcorrenciaDeVerba.base, not always in OcorrenciaHistorico
   const totalOcorrencias = historicos.reduce((s, h) => s + h.ocorrencias.length, 0);
   if (totalOcorrencias === 0) {
+    addFidelityEntry(report, {
+      code: 'W001',
+      category: 'bridge_fallback',
+      severity: 'warning',
+      message: `Históricos salariais sem ocorrências reais (${analysis.historicos_salariais.length} históricos encontrados, 0 ocorrências). Gerando históricos sintéticos a partir das verbas.`,
+      message_friendly: 'O arquivo PJC não contém histórico salarial detalhado. Foi gerado um histórico aproximado.',
+      module: 'historico_salarial',
+      action: 'Verificar se os valores salariais estão corretos.',
+    });
     historicos = synthesizeHistoricosFromVerbas(analysis, historicos);
   }
+  
+  // Convert real cartão ponto from apuração diária
+  const cartaoPonto = convertCartaoPonto(analysis.apuracao_diaria || [], report);
+  
+  // Convert exceções de carga horária
+  const excecoesCargas = convertExcecoesCargaHoraria(analysis);
+  
+  // Track unmapped modules
+  trackUnmappedModules(analysis, report);
   
   return {
     params: convertParametros(analysis, caseId),
@@ -48,14 +81,16 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     faltas: convertFaltas(analysis.faltas),
     ferias: convertFerias(analysis.ferias),
     verbas: convertVerbas(analysis.verbas, analysis.dag),
-    cartaoPonto: [],
+    cartaoPonto,
     fgtsConfig: buildDefaultFGTSConfig(),
     csConfig: buildDefaultCSConfig(analysis),
     irConfig: buildDefaultIRConfig(analysis),
     correcaoConfig: buildCorrecaoConfig(analysis),
     honorariosConfig: buildHonorariosConfig(analysis),
     custasConfig: buildDefaultCustasConfig(),
-    seguroConfig: { apurar: false, parcelas: 0, recebeu: false },
+    seguroConfig: buildSeguroConfig(analysis),
+    excecoesCargas,
+    fidelityReport: report,
   };
 }
 
