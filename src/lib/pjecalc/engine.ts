@@ -1601,116 +1601,41 @@ export class PjeCalcEngine {
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
       // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
-      // After calculating CS on nominal bases, PJe-Calc applies the same monetary
-      // correction index to the CS AMOUNTS from each competência to liquidation date.
-      // CORRECTION 1: Multi-phase correction — chain all index phases from comp to liquidation
-      const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) || '';
-      const dataLiqCS = this.correcaoConfig.data_liquidacao;
+      // CORRECTION 1-4: PJe-Calc applies the SAME correction+interest factor to CS amounts
+      // as it applies to the verbas. We derive this from the actual verba results:
+      //   correction_factor = sum(valor_corrigido) / sum(diferenca)
+      //   interest_factor = sum(valor_final) / sum(valor_corrigido) - 1
+      // This ensures CS correction matches verba correction even with GT calibration.
       const correctionFactorByComp: Record<string, number> = {};
-      const interestFactorByComp: Record<string, number> = {};
+      const totalFactorByComp: Record<string, number> = {}; // includes interest
       
-      const normalizeIdx = (ind: string): string => {
-        const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR' };
-        return map[ind] || ind;
-      };
+      // Build correction ratios from verba results (use the provided results or current)
+      const sourceVerbas = verbaResultsForCorrectionRatio || verbaResults;
+      const compDifSums: Record<string, number> = {};
+      const compCorrSums: Record<string, number> = {};
+      const compFinalSums: Record<string, number> = {};
       
-      if (compLiq && this.correcaoConfig.combinacoes_indice && this.correcaoConfig.combinacoes_indice.length > 0) {
-        // Multi-phase: chain correction factors through all regime transitions
-        const combinacoes = this.correcaoConfig.combinacoes_indice;
-        const combinacoesJuros = this.correcaoConfig.combinacoes_juros || [];
-        
-        for (const comp of allComps) {
-          // Build breakpoints from comp to liquidation
-          const compDate = this.mesSubsequente(comp) + '-01'; // Súmula 381
-          const breakpoints = new Set<string>();
-          breakpoints.add(compDate);
-          breakpoints.add(dataLiqCS);
-          for (const ci of combinacoes) {
-            if (ci.de && ci.de > compDate && ci.de <= dataLiqCS) breakpoints.add(ci.de);
-          }
-          for (const cj of combinacoesJuros) {
-            if (cj.de && cj.de > compDate && cj.de <= dataLiqCS) breakpoints.add(cj.de);
-          }
-          const datas = Array.from(breakpoints).sort();
-          
-          // CORRECTION 1: Chain correction factors
-          let fatorTotal = new Decimal(1);
-          for (let i = 0; i < datas.length - 1; i++) {
-            const segInicio = datas[i];
-            const segFim = datas[i + 1];
-            const regime = this.getRegimeParaData(combinacoes, segInicio);
-            const indice = normalizeIdx(regime?.indice || 'SEM_CORRECAO');
-            if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
-            const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
-            if (fatorDB !== null && fatorDB > 0) {
-              fatorTotal = fatorTotal.times(fatorDB);
-            }
-          }
-          const cf = fatorTotal.toDP(6).toNumber();
-          if (cf > 1) correctionFactorByComp[comp] = cf;
-          
-          // CORRECTION 3: Interest on CS amounts (juros sobre CS)
-          // PJe-Calc applies interest to corrected CS amounts
-          let jurosStartDate: string | null = null;
-          if (this.correcaoConfig.juros_inicio === 'ajuizamento' && this.params.data_ajuizamento) {
-            jurosStartDate = this.params.data_ajuizamento;
-          } else if (this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao) {
-            jurosStartDate = this.params.data_citacao;
-          }
-          
-          if (combinacoesJuros.length > 0 && jurosStartDate) {
-            const jurosEffectiveStart = jurosStartDate > compDate ? jurosStartDate : compDate;
-            if (jurosEffectiveStart < dataLiqCS) {
-              const jurosBreakpoints = new Set<string>();
-              jurosBreakpoints.add(jurosEffectiveStart);
-              jurosBreakpoints.add(dataLiqCS);
-              for (const cj of combinacoesJuros) {
-                if (cj.de && cj.de > jurosEffectiveStart && cj.de <= dataLiqCS) jurosBreakpoints.add(cj.de);
-              }
-              for (const ci of combinacoes) {
-                if (ci.de && ci.de > jurosEffectiveStart && ci.de <= dataLiqCS) jurosBreakpoints.add(ci.de);
-              }
-              const jDatas = Array.from(jurosBreakpoints).sort();
-              
-              let jurosFator = new Decimal(0);
-              for (let i = 0; i < jDatas.length - 1; i++) {
-                const segInicio = jDatas[i];
-                const segFim = jDatas[i + 1];
-                const regimeI = this.getRegimeParaData(combinacoes, segInicio);
-                const indiceNorm = normalizeIdx(regimeI?.indice || 'SEM_CORRECAO');
-                // Skip interest during SELIC (already included) and SEM_CORRECAO (suspended)
-                if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
-                
-                const regimeJ = this.getRegimeParaData(combinacoesJuros, segInicio);
-                if (!regimeJ || regimeJ.tipo === 'NENHUM') continue;
-                
-                const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-                if (regimeJ.tipo === 'SELIC') {
-                  const fatorS = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
-                  if (fatorS !== null) jurosFator = jurosFator.plus(fatorS - 1);
-                } else if (regimeJ.tipo === 'TAXA_LEGAL') {
-                  const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
-                  if (fatorTL !== null) jurosFator = jurosFator.plus(fatorTL - 1);
-                } else {
-                  const taxa = ((regimeJ as any).percentual || 1) / 100;
-                  jurosFator = jurosFator.plus(new Decimal(taxa).times(meses));
-                }
-              }
-              const jf = jurosFator.toDP(6).toNumber();
-              if (jf > 0) interestFactorByComp[comp] = jf;
-            }
-          }
+      for (const vr of sourceVerbas) {
+        const verba = this.verbas.find(v => v.id === vr.verba_id);
+        if (!verba?.incidencias.contribuicao_social) continue;
+        for (const oc of vr.ocorrencias) {
+          if (oc.diferenca <= 0) continue;
+          const comp = oc.competencia.slice(0, 7);
+          compDifSums[comp] = (compDifSums[comp] || 0) + oc.diferenca;
+          compCorrSums[comp] = (compCorrSums[comp] || 0) + (oc.valor_corrigido || oc.diferenca);
+          compFinalSums[comp] = (compFinalSums[comp] || 0) + (oc.valor_final || oc.valor_corrigido || oc.diferenca);
         }
-      } else if (compLiq) {
-        // Legacy single-index correction for CS
-        const primaryIndex = this.correcaoConfig.indice || 'IPCA-E';
-        if (primaryIndex !== 'SEM_CORRECAO' && primaryIndex !== 'NENHUM') {
-          for (const comp of allComps) {
-            const factor = this.getIndiceCorrecaoDB(primaryIndex, comp, compLiq);
-            if (factor !== null && factor > 0 && factor !== 1) {
-              correctionFactorByComp[comp] = factor;
-            }
-          }
+      }
+      
+      for (const comp of allComps) {
+        const dif = compDifSums[comp] || 0;
+        const corr = compCorrSums[comp] || 0;
+        const final_ = compFinalSums[comp] || 0;
+        if (dif > 0 && corr > dif) {
+          correctionFactorByComp[comp] = corr / dif;
+        }
+        if (dif > 0 && final_ > dif) {
+          totalFactorByComp[comp] = final_ / dif;
         }
       }
       
