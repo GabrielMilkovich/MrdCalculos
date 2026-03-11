@@ -725,6 +725,68 @@ function convertExcecoesCargaHoraria(analysis: PJCAnalysis): PjeExcecaoCargaHora
 }
 
 // =====================================================
+// EXCEÇÕES DE SÁBADO
+// =====================================================
+
+function convertExcecoesSabado(analysis: PJCAnalysis): PjeExcecaoSabado[] {
+  if (!analysis.excecoes_sabado) return [];
+  return analysis.excecoes_sabado.map(e => ({
+    data_inicial: e.data_inicial,
+    data_final: e.data_final,
+    sabado_dia_util: e.sabado_dia_util,
+    observacao: e.observacao,
+  }));
+}
+
+// =====================================================
+// PREVIDÊNCIA PRIVADA CONFIG
+// =====================================================
+
+function buildPrevPrivadaConfig(a: PJCAnalysis): PjePrevidenciaPrivadaConfig {
+  if (a.previdencia_privada?.apurar) {
+    return {
+      apurar: true,
+      percentual: a.previdencia_privada.percentual || 0,
+      base_calculo: 'diferenca',
+      deduzir_ir: true,
+    };
+  }
+  return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false };
+}
+
+// =====================================================
+// PENSÃO ALIMENTÍCIA CONFIG
+// =====================================================
+
+function buildPensaoConfig(a: PJCAnalysis): PjePensaoConfig {
+  if (a.pensao_alimenticia?.apurar) {
+    const baseMap: Record<string, 'liquido' | 'bruto' | 'bruto_menos_inss'> = {
+      'LIQUIDO': 'liquido', 'BRUTO': 'bruto', 'BRUTO_MENOS_INSS': 'bruto_menos_inss',
+    };
+    return {
+      apurar: true,
+      percentual: a.pensao_alimenticia.percentual || 0,
+      base: baseMap[(a.pensao_alimenticia.base || '').toUpperCase()] || 'liquido',
+    };
+  }
+  return { apurar: false, percentual: 0, base: 'liquido' };
+}
+
+// =====================================================
+// SALÁRIO-FAMÍLIA CONFIG
+// =====================================================
+
+function buildSalarioFamiliaConfig(a: PJCAnalysis): PjeSalarioFamiliaConfig {
+  if (a.salario_familia?.apurar) {
+    return {
+      apurar: true,
+      numero_filhos: a.salario_familia.numero_filhos || 0,
+    };
+  }
+  return { apurar: false, numero_filhos: 0 };
+}
+
+// =====================================================
 // SEGURO-DESEMPREGO CONFIG
 // =====================================================
 
