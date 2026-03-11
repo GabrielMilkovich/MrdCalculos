@@ -474,19 +474,29 @@ function mapPeriodoMedia(pm?: string): PjeVerba['periodo_media_reflexo'] {
  * Reads FGTS resultado from PJC to determine if FGTS should be calculated.
  */
 function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
+  const fgtsConf = a.fgts_config;
   const fgtsDeposito = a.resultado.fgts_deposito || 0;
+  
+  // Destination mapping from PJC XML
+  const destMap: Record<string, PjeFGTSConfig['destino']> = {
+    'pagar_reclamante': 'pagar_reclamante',
+    'depositar_conta_vinculada': 'depositar_conta_vinculada',
+    'PAGAR_RECLAMANTE': 'pagar_reclamante',
+    'DEPOSITAR_CONTA_VINCULADA': 'depositar_conta_vinculada',
+  };
+
   return {
-    apurar: fgtsDeposito > 0 || true, // Always apurar unless explicitly disabled
-    destino: 'pagar_reclamante',
+    apurar: fgtsConf?.apurar ?? (fgtsDeposito > 0),
+    destino: destMap[fgtsConf?.destino || ''] || 'pagar_reclamante',
     compor_principal: false,
     multa_apurar: true,
     multa_tipo: 'calculada',
-    multa_percentual: 40,
-    multa_base: 'devido',
+    multa_percentual: fgtsConf?.multa_percentual ?? 40,
+    multa_base: (fgtsConf?.multa_base as PjeFGTSConfig['multa_base']) || 'devido',
     saldos_saques: [],
     deduzir_saldo: false,
-    lc110_10: false,
-    lc110_05: false,
+    lc110_10: fgtsConf?.lc110_10 ?? false,
+    lc110_05: fgtsConf?.lc110_05 ?? false,
   };
 }
 

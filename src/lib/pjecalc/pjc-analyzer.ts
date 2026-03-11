@@ -688,6 +688,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     apuracao_juros: apuracao_juros.length > 0 ? apuracao_juros : undefined,
     excecoes_carga_horaria: excecoes_carga_horaria.length > 0 ? excecoes_carga_horaria : undefined,
     excecoes_sabado: excecoes_sabado.length > 0 ? excecoes_sabado : undefined,
+    fgts_config,
     pensao_alimenticia: pensaoEl ? {
       apurar: getTextContent(pensaoEl, 'apurar') !== 'false',
       percentual: parseNum(getTextContent(pensaoEl, 'percentual')),
