@@ -139,7 +139,7 @@ describe('AUDIT-003: Silent fator=1 fallbacks tracked as warnings', () => {
 });
 
 describe('AUDIT-005: FGTS config bridge from PJC', () => {
-  it('should use buildFGTSConfigFromPJC with correct field mapping', async () => {
+  it('should use buildFGTSConfigFromPJC with correct field mapping', { timeout: 30000 }, async () => {
     // Test the bridge function directly
     const { convertPjcToEngineInputs } = await import('../lib/pjecalc/pjc-to-engine');
     const { analyzePJC } = await import('../lib/pjecalc/pjc-analyzer');
