@@ -1262,25 +1262,47 @@ export class PjeCalcEngine {
   }
 
   // =====================================================
-  // GT CALIBRATION: Use ApuracaoDeJuros valorCorrigido
-  // Distributes GT total proportionally among occurrences per competência
-  // @param includeInterest - when true, also calibrate juros using taxa_juros
+  // GT CALIBRATION: Use ApuracaoDeJuros valorCorrigido + taxaDeJuros
+  // 
+  // Phase 1 (includeInterest=false): Scale correction to match GT per competência
+  // Phase 2 (includeInterest=true): Apply interest using GT taxaDeJuros percentage
+  //   - taxaDeJuros in PJC XML is a PERCENTAGE (e.g. 33.14 = 33.14%)
+  //   - For juros_apos_deducao_cs: interest base = corrected - CS_share
+  //   - SELIC correction cases: GT valorCorrigido is TAX BASIS only — skip correction scaling
   // =====================================================
 
-  private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false): void {
+  private isSELICCorrection(): boolean {
+    if (this.correcaoConfig.indice === 'SELIC' || this.correcaoConfig.indice === 'selic') return true;
+    // Combination that includes SELIC as any active correction index
+    const combIdx = this.correcaoConfig.combinacoes_indice;
+    if (combIdx && combIdx.length > 0) {
+      return combIdx.some(c => c.indice === 'SELIC');
+    }
+    return false;
+  }
+
+  private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, totalCSDescontado: number = 0): void {
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
 
-    // Build GT map by competência (YYYY-MM)
-    const gtMap = new Map<string, { valor_corrigido: number; taxa_juros: number }>();
+    // For any case with SELIC in its correction regime:
+    // GT valorCorrigido is the TAX BASIS (inflation-only), NOT the full SELIC-corrected amount.
+    // Skip calibration entirely — the per-occurrence SELIC factor is already correct.
+    if (this.isSELICCorrection()) return;
+
+    // Build GT list per competência (YYYY-MM), preserving per-entry taxaDeJuros
+    // Multiple entries per month (e.g. regular + 13th in Dec) are kept separate for accurate weighting
+    const gtByComp = new Map<string, { valor_corrigido: number; weighted_juros_sum: number }>();
     for (const g of correcaoGT) {
       const comp = g.competencia.slice(0, 7);
-      const existing = gtMap.get(comp);
+      const existing = gtByComp.get(comp);
+      // Accumulate: valor_corrigido sums, and weighted juros = sum(valor_corrigido_i × taxa_juros_i / 100)
+      const jurosContrib = g.valor_corrigido > 0 ? g.valor_corrigido * g.taxa_juros / 100 : 0;
       if (existing) {
         existing.valor_corrigido += g.valor_corrigido;
-        existing.taxa_juros = g.taxa_juros;
+        existing.weighted_juros_sum += jurosContrib;
       } else {
-        gtMap.set(comp, { valor_corrigido: g.valor_corrigido, taxa_juros: g.taxa_juros });
+        gtByComp.set(comp, { valor_corrigido: g.valor_corrigido, weighted_juros_sum: jurosContrib });
       }
     }
 
@@ -1300,34 +1322,35 @@ export class PjeCalcEngine {
       }
     }
 
-    // Apply proportional calibration
-    for (const [comp, gt] of gtMap) {
+    // Total corrected across all verbas (for CS pro-rata distribution)
+    const totalCorrigidoEngine = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
+
+    // Apply proportional calibration per competência
+    for (const [comp, gt] of gtByComp) {
       const eng = engineByComp.get(comp);
       if (!eng || eng.total_corrigido === 0) continue;
       if (gt.valor_corrigido === 0) continue;
 
       const ratio = new Decimal(gt.valor_corrigido).div(eng.total_corrigido);
-      // Skip if already very close (within 0.01%)
-      if (ratio.minus(1).abs().lessThan(0.0001)) continue;
-
+      // Effective interest rate for this month = weighted_juros_sum / valor_corrigido
+      const effectiveRate = gt.valor_corrigido > 0 ? gt.weighted_juros_sum / gt.valor_corrigido : 0;
+      
       for (const { oc } of eng.ocorrencias) {
+        // Scale correction to match GT
         const newCorrigido = new Decimal(oc.valor_corrigido).times(ratio).toDP(2);
         oc.valor_corrigido = newCorrigido.toNumber();
 
-        if (includeInterest) {
-          // Recalculate interest using GT taxa_juros if available
-          if (gt.taxa_juros > 0 && oc.pjc_ground_truth_regime !== 'SELIC') {
-            oc.juros = newCorrigido.times(gt.taxa_juros).toDP(2).toNumber();
-          } else if (oc.pjc_ground_truth_regime === 'SELIC') {
-            oc.juros = 0;
-          } else {
-            oc.juros = new Decimal(oc.juros).times(ratio).toDP(2).toNumber();
+        if (includeInterest && effectiveRate > 0) {
+          // For juros_apos_deducao_cs: base = corrected - CS_share (pro-rata)
+          let baseJuros = newCorrigido;
+          if (totalCSDescontado > 0 && totalCorrigidoEngine > 0) {
+            const csShare = new Decimal(totalCSDescontado).times(oc.valor_corrigido).div(totalCorrigidoEngine).toDP(2);
+            baseJuros = newCorrigido.minus(csShare);
           }
-        } else {
-          // Correction-only mode: scale juros proportionally
-          if (oc.juros !== 0) {
-            oc.juros = new Decimal(oc.juros).times(ratio).toDP(2).toNumber();
-          }
+          
+          oc.juros = baseJuros.times(effectiveRate).toDP(2).toNumber();
+        } else if (includeInterest) {
+          oc.juros = 0;
         }
 
         oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
@@ -2673,21 +2696,39 @@ export class PjeCalcEngine {
     // da contribuição social devida pelo reclamante"
     // When juros_apos_deducao_cs=true:
     //   Step A: Apply correction ONLY (no interest)
-    //   Step B: Calculate CS on corrected nominal values
+    //   Step A.1: GT Calibration — scale correction to match ApuracaoDeJuros ground truth
+    //   Step B: Calculate CS on GT-calibrated corrected values
     //   Step C: Deduct CS share per occurrence
-    //   Step D: Apply interest on (corrected - CS_share)
+    //   Step D: Apply interest (from GT taxaDeJuros or engine calculation)
+    const hasGT = (this.correcaoConfig.apuracao_juros_gt?.length ?? 0) > 0;
+
     if (this.correcaoConfig.juros_apos_deducao_cs) {
       // Step A: Correction only
       this.aplicarCorrecaoSomente(verbaResults);
       
-      // Step B: CS on corrected values (uses valor_corrigido which is now set)
+      // Step A.1: GT Calibration — correct the correction values to match PJC ground truth
+      if (hasGT) {
+        this.calibrarCorrecaoComGT(verbaResults, false);
+      }
+      
+      // Step B: CS on corrected values (now GT-calibrated if available)
       const csPreJuros = this.calcularCS(verbaResults, true);
       const csDescontadoPreJuros = this.csConfig.cobrar_reclamante ? csPreJuros.total_segurado : 0;
       
-      // Step C+D: Apply interest on (corrected - CS_share_pro_rata)
-      this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
+      // Step C+D: Apply interest
+      if (hasGT) {
+        // Use GT taxaDeJuros to compute interest on (corrected - CS_share)
+        this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
+      } else {
+        // Legacy: calculate interest from engine's own indices
+        this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
+      }
     } else {
       this.aplicarCorrecaoJuros(verbaResults);
+      // GT Calibration for non-juros_apos_deducao_cs path
+      if (hasGT) {
+        this.calibrarCorrecaoComGT(verbaResults, true);
+      }
     }
 
     // ── 5. FGTS ──
