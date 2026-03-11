@@ -52,6 +52,7 @@ import type { PjeIndiceRow, PjeINSSFaixaRow, PjeIRFaixaRow, PjeFeriadoDB } from 
 
 export interface ResolverSources {
   params: PjecalcParametrosRow | null;
+  dadosProcesso?: PjecalcDadosProcessoRow | null;
   historicos: PjecalcHistoricoSalarialRow[];
   histOcorrencias: { id: string; historico_id: string; competencia: string; valor: number; tipo: string }[];
   verbas: PjecalcVerbaRow[];
