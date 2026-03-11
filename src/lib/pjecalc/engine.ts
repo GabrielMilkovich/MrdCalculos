@@ -2155,9 +2155,10 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.valor_corrigido === 0) { totalFinal += oc.valor_final; continue; }
 
-        // Skip interest for ground truth occurrences — pjc_indice_acumulado is the TOTAL factor
-        // (includes correction + interest combined) regardless of regime type
-        if (oc.pjc_ground_truth_applied) {
+        // ═══ PJC Ground Truth: indiceAcumulado is CORRECTION-ONLY.
+        // For SELIC regime: skip separate interest (already baked into SELIC factor).
+        // For IPCA-E/other regimes: apply interest normally on corrected value.
+        if (oc.pjc_ground_truth_applied && oc.pjc_ground_truth_regime === 'SELIC') {
           totalJuros += oc.juros;
           totalFinal += oc.valor_final;
           continue;
