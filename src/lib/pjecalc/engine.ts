@@ -1131,7 +1131,7 @@ export class PjeCalcEngine {
               const rS = sI < jurosEffectiveStartGT ? jurosEffectiveStartGT : sI;
               const regI = this.getRegimeParaData(combinacoes_indice, rS);
               const iN = normalizeIndice(regI?.indice || 'SEM_CORRECAO');
-              // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended)
+              // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended per PJe-Calc)
               if (iN === 'SELIC' || iN === 'SEM_CORRECAO' || iN === 'Sem Correção' || iN === 'NENHUM') continue;
               const regJ = this.getRegimeParaData(combinacoes_juros, rS);
               if (!regJ || regJ.tipo === 'NENHUM') continue;
@@ -1204,7 +1204,7 @@ export class PjeCalcEngine {
             const indiceNorm = normalizeIndice(regimeIndice?.indice || 'SEM_CORRECAO');
             const regimeJuros = this.getRegimeParaData(combinacoes_juros, realStart);
 
-            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended)
+            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended per PJe-Calc)
             if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
             if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
 
@@ -1461,15 +1461,13 @@ export class PjeCalcEngine {
       if (verba.caracteristica === 'ferias') continue;
       for (const oc of vr.ocorrencias) {
         // ═══ CS Base Rule (PJe-Calc):
-        // For SELIC regime: indiceAcumulado includes correction+interest combined.
-        //   CS base = nominal diferenca (to exclude interest component).
-        // For IPCA-E/other: indiceAcumulado is correction-only.
-        //   CS base = valor_corrigido (corrected value, pre-interest).
+        // PJe-Calc calculates CS on NOMINAL diferença, not corrected values.
+        // This applies to ALL regimes (SELIC, IPCA-E, etc.)
+        // Interest and correction are separate from the CS base.
         let val: number;
-        if (useCorrigido && oc.pjc_ground_truth_applied && oc.pjc_ground_truth_regime === 'SELIC') {
+        if (useCorrigido) {
+          // PJe-Calc: CS base = nominal diferença (not corrected)
           val = Math.abs(oc.diferenca);
-        } else if (useCorrigido) {
-          val = oc.valor_corrigido;
         } else {
           val = usarBruto ? oc.devido : oc.diferenca;
         }
@@ -2250,7 +2248,7 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended)
+            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended per PJe-Calc)
             if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
             
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
@@ -2287,7 +2285,7 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            // Skip interest during SELIC (includes interest) and SEM_CORRECAO (suspended)
+            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended per PJe-Calc)
             if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
             const taxa = (this.correcaoConfig.juros_percentual || 1) / 100;
