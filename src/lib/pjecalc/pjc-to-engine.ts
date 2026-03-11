@@ -471,6 +471,7 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
 }
 
 function buildDefaultIRConfig(a: PJCAnalysis): PjeIRConfig {
+  const gt = convertApuracaoJurosToGT(a.apuracao_juros);
   return {
     apurar: a.resultado.imposto_renda > 0,
     incidir_sobre_juros: false,
@@ -483,6 +484,7 @@ function buildDefaultIRConfig(a: PJCAnalysis): PjeIRConfig {
     deduzir_honorarios: false,
     aposentado_65: false,
     dependentes: 0,
+    apuracao_juros_gt: gt,
   };
 }
 
