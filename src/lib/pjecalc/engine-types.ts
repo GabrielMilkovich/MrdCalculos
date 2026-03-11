@@ -309,6 +309,23 @@ export interface PjeCNAEAliquotas {
   fap?: number;
 }
 
+/**
+ * Ground truth entry from PJe-Calc's <ApuracaoDeJuros> section.
+ * Contains consolidated corrected values, CS/IR bases, and interest rates per competência.
+ */
+export interface PjeApuracaoJurosGT {
+  competencia: string; // YYYY-MM-DD
+  valor_corrigido: number;
+  cs_base_normal: number;
+  cs_base_13: number;
+  cs_normal: number;
+  cs_13: number;
+  ir_base_demais: number;
+  ir_base_13: number;
+  ir_base_ferias: number;
+  taxa_juros: number;
+}
+
 export interface PjeCSConfig {
   apurar_segurado: boolean;
   cobrar_reclamante: boolean;
@@ -330,6 +347,8 @@ export interface PjeCSConfig {
   base_cs_segurado?: 'bruto' | 'liquido';
   /** Separar CS do reclamante (inssReclamante) vs beneficiário (inssBeneficiario) */
   separar_reclamante_beneficiario?: boolean;
+  /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, use these exact CS bases */
+  apuracao_juros_gt?: PjeApuracaoJurosGT[];
 }
 
 export interface PjeIRConfig {
@@ -344,6 +363,8 @@ export interface PjeIRConfig {
   deduzir_honorarios: boolean;
   aposentado_65: boolean;
   dependentes: number;
+  /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, use these exact IR bases */
+  apuracao_juros_gt?: PjeApuracaoJurosGT[];
 }
 
 export interface PjeCombinacaoIndice {

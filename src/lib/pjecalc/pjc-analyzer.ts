@@ -53,6 +53,22 @@ export interface PJCAnalysis {
   ferias: FeriasAnalysis[];
   atualizacao: AtualizacaoAnalysis;
   dag: { id: string; nome: string; depende_de: string[]; dependentes: string[] }[];
+  /** Ground truth from PJe-Calc's <ApuracaoDeJuros> consolidation section */
+  apuracao_juros?: ApuracaoJurosEntry[];
+}
+
+/** Entry from PJe-Calc's <ApuracaoDeJuros> — consolidated corrected values per competência */
+export interface ApuracaoJurosEntry {
+  competencia: string;
+  valor_corrigido: number;
+  cs_base_normal: number;
+  cs_base_13: number;
+  cs_normal: number;
+  cs_13: number;
+  ir_base_demais: number;
+  ir_base_13: number;
+  ir_base_ferias: number;
+  taxa_juros: number;
 }
 
 export interface VerbaAnalysis {
@@ -434,6 +450,24 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     cs_config = { apurar_segurado: false, apurar_empresa: false, aliquota_empresa: 0, aliquota_sat: 0, aliquota_terceiros: 0 };
   }
 
+  // --- ApuracaoDeJuros (Ground Truth consolidation) ---
+  const apuracao_juros: ApuracaoJurosEntry[] = [];
+  const apuracaoJurosEls = root.getElementsByTagName('ApuracaoDeJuros');
+  for (const ap of Array.from(apuracaoJurosEls)) {
+    apuracao_juros.push({
+      competencia: tsToDate(getTextContent(ap, 'competencia')),
+      valor_corrigido: parseNum(getTextContent(ap, 'valorCorrigido')),
+      cs_base_normal: parseNum(getTextContent(ap, 'valorVerbaParaContribuicaoSocial')),
+      cs_base_13: parseNum(getTextContent(ap, 'valorVerbaParaContribuicaoSocialDecimoTerceiro')),
+      cs_normal: parseNum(getTextContent(ap, 'contribuicaoSocialNormal')),
+      cs_13: parseNum(getTextContent(ap, 'contribuicaoSocialDecimoTerceiro')),
+      ir_base_demais: parseNum(getTextContent(ap, 'valorCorrigidoParaIrpfDemaisVerbas')),
+      ir_base_13: parseNum(getTextContent(ap, 'valorCorrigidoParaIrpfDecimoTerceiro')),
+      ir_base_ferias: parseNum(getTextContent(ap, 'valorCorrigidoParaIrpfFerias')),
+      taxa_juros: parseNum(getTextContent(ap, 'taxaDeJuros')),
+    });
+  }
+
   return {
     parametros,
     resultado,
@@ -445,6 +479,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     ferias,
     atualizacao,
     dag,
+    apuracao_juros: apuracao_juros.length > 0 ? apuracao_juros : undefined,
   };
 }
 
