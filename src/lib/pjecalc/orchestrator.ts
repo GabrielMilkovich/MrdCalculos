@@ -539,6 +539,9 @@ export async function executarLiquidacao(
   caseId: string,
   mode: 'manual' | 'auto' | 'seed' = 'manual'
 ): Promise<OrchestratorResult> {
+  // 0. Import table validator
+  const { validarTabelasHistoricas } = await import('./domain/table-validator');
+
   // 1. Load all case data in parallel
   const caseData = await svc.loadCaseData(caseId);
 
