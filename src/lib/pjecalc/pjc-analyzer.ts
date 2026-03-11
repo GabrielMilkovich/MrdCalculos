@@ -600,11 +600,6 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     });
   }
 
-  // --- Data de Citação ---
-  const dataCitacao = tsToDate(getTextContent(root, 'dataCitacao') || getTextContent(root, 'dataDaCitacao'));
-  if (dataCitacao) {
-    parametros.data_citacao = dataCitacao;
-  }
 
   // --- Pensão, Previdência, Salário-Família, Seguro-Desemprego ---
   const pensaoEl = root.getElementsByTagName('PensaoAlimenticia')[0] || root.getElementsByTagName('pensaoAlimenticia')[0];
