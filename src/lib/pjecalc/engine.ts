@@ -1603,15 +1603,29 @@ export class PjeCalcEngine {
       // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
       // After calculating CS on nominal bases, PJe-Calc applies the same monetary
       // correction index to the CS AMOUNTS from each competência to liquidation date.
-      // We compute this factor per comp using the engine's index tables.
-      const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) 
-        || this.params.data_liquidacao?.slice(0, 7) || '';
+      const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) || '';
       const correctionFactorByComp: Record<string, number> = {};
       if (compLiq) {
         for (const comp of allComps) {
-          // Use the same correction index combination as the main calculation
-          const factor = this.computeCSCorrectionFactor(comp, compLiq);
-          if (factor > 0 && factor !== 1) {
+          // Use the primary correction index to compute inflation from comp to liquidation
+          const primaryIndex = this.correcaoConfig.indice === 'COMBINACAO'
+            ? (this.correcaoConfig.combinacoes_indice?.[0]?.indice || 'IPCA-E')
+            : (this.correcaoConfig.indice || 'IPCA-E');
+          // For combination regimes, find which index applies at this comp
+          let activeIndex = primaryIndex;
+          if (this.correcaoConfig.combinacoes_indice && this.correcaoConfig.combinacoes_indice.length > 0) {
+            const sorted = [...this.correcaoConfig.combinacoes_indice].sort((a, b) => 
+              (b.de || '0000').localeCompare(a.de || '0000'));
+            for (const ci of sorted) {
+              if ((ci.de || '0000') <= comp + '-01') { activeIndex = ci.indice; break; }
+            }
+            if (!activeIndex || activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') {
+              activeIndex = primaryIndex;
+            }
+          }
+          if (activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') continue;
+          const factor = this.getIndiceCorrecaoDB(activeIndex, comp, compLiq);
+          if (factor !== null && factor > 0 && factor !== 1) {
             correctionFactorByComp[comp] = factor;
           }
         }
