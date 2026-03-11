@@ -1679,9 +1679,9 @@ export class PjeCalcEngine {
             const aliqEmp = (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
             const aliqSat = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
             const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
-            // Apply total factor (correction + interest) to base for employer CS
-            const tf = totalFactorByComp[comp] ?? 1;
-            const correctedBase = tf > 1 ? Number(new Decimal(totalBase).times(tf).toDP(2)) : totalBase;
+            // Apply correction factor from GT for employer CS
+            const cf = correctionFactorByComp[comp] ?? 1;
+            const correctedBase = cf > 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
             const empresa = this.csConfig.apurar_empresa ? Number(new Decimal(correctedBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
             const sat = this.csConfig.apurar_sat ? Number(new Decimal(correctedBase).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
             const terceiros = this.csConfig.apurar_terceiros ? Number(new Decimal(correctedBase).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
