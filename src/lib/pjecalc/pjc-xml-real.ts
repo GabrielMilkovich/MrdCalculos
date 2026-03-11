@@ -670,6 +670,9 @@ export function exportPJCXml(data: PJCReal): string {
       lines.push(`      <periodoFinal>${c.periodo_fim}</periodoFinal>`);
       lines.push(`      <multiplicador>${fmtN(c.multiplicador)}</multiplicador>`);
       lines.push(`      <divisor>${fmtN(c.divisor, 2)}</divisor>`);
+      lines.push(`      <tipoDivisor>${escXml(c.tipo_divisor)}</tipoDivisor>`);
+      lines.push(`      <tipoQuantidade>${escXml(c.tipo_quantidade)}</tipoQuantidade>`);
+      lines.push(`      <quantidade>${fmtN(c.quantidade, 2)}</quantidade>`);
       lines.push('    </Calculada>');
     }
     lines.push('  </VerbasPrincipais>');
