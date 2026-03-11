@@ -1600,24 +1600,20 @@ export class PjeCalcEngine {
       // Check if GT provides pre-computed CS amounts (contribuicaoSocialNormal > 0)
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
-      // ═══ PJe-Calc CS Monetary Update ═══
-      // PJe-Calc's "correcaoTrabalhistaDosSalariosDevidosDoINSS" applies monetary
-      // correction to CS amounts. The contribuicaoSocialNormal in ApuracaoDeJuros
-      // is the NOMINAL CS; inssReclamante is the CORRECTED CS.
-      // Correction factor per comp = GT valorCorrigido / GT cs_base (inflation ratio).
-      const gtCorrigidoByComp: Record<string, number> = {};
-      const gtCsBaseTotalByComp: Record<string, number> = {};
-      for (const entry of gt) {
-        const comp = entry.competencia.slice(0, 7);
-        gtCorrigidoByComp[comp] = (gtCorrigidoByComp[comp] || 0) + entry.valor_corrigido;
-        gtCsBaseTotalByComp[comp] = (gtCsBaseTotalByComp[comp] || 0) + entry.cs_base_normal + entry.cs_base_13;
-      }
+      // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
+      // After calculating CS on nominal bases, PJe-Calc applies the same monetary
+      // correction index to the CS AMOUNTS from each competência to liquidation date.
+      // We compute this factor per comp using the engine's index tables.
+      const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) 
+        || this.params.data_liquidacao?.slice(0, 7) || '';
       const correctionFactorByComp: Record<string, number> = {};
-      for (const comp of Object.keys(gtCsBaseTotalByComp)) {
-        const csBase = gtCsBaseTotalByComp[comp] || 0;
-        const corrigido = gtCorrigidoByComp[comp] || 0;
-        if (csBase > 0 && corrigido > 0) {
-          correctionFactorByComp[comp] = corrigido / csBase;
+      if (compLiq) {
+        for (const comp of allComps) {
+          // Use the same correction index combination as the main calculation
+          const factor = this.computeCSCorrectionFactor(comp, compLiq);
+          if (factor > 0 && factor !== 1) {
+            correctionFactorByComp[comp] = factor;
+          }
         }
       }
       
