@@ -806,42 +806,14 @@ function buildSeguroConfig(a: PJCAnalysis): PjeSeguroConfig {
 // =====================================================
 
 function trackUnmappedModules(analysis: PJCAnalysis, report: FidelityReport): void {
-  // Pensão alimentícia
-  if (analysis.pensao_alimenticia?.apurar) {
-    addFidelityEntry(report, {
-      code: 'W003',
-      category: 'module_unsupported',
-      severity: 'warning',
-      message: 'Pensão alimentícia detectada no PJC mas módulo de cálculo não implementado no bridge.',
-      message_friendly: 'Pensão alimentícia: cálculo parcial. Verifique manualmente.',
-      module: 'pensao_alimenticia',
-      field: 'PensaoAlimenticia',
-      impact_estimated: undefined,
-      action: 'Verificar valor de pensão no resultado final.',
-    });
-  }
-
-  // Previdência privada
-  if (analysis.previdencia_privada?.apurar) {
-    addFidelityEntry(report, {
-      code: 'W003',
-      category: 'module_unsupported',
-      severity: 'warning',
-      message: 'Previdência privada detectada no PJC mas módulo não implementado no bridge.',
-      message_friendly: 'Previdência privada: cálculo parcial.',
-      module: 'previdencia_privada',
-      field: 'PrevidenciaPrivada',
-    });
-  }
-
-  // Exceções de sábado
+  // Exceções de sábado — now mapped but note in fidelity report
   if (analysis.excecoes_sabado && analysis.excecoes_sabado.length > 0) {
     addFidelityEntry(report, {
-      code: 'W007',
+      code: 'I004',
       category: 'bridge_data_loss',
-      severity: 'warning',
-      message: `${analysis.excecoes_sabado.length} exceções de sábado no PJC não mapeadas para o engine.`,
-      message_friendly: 'Exceções de sábado encontradas mas não aplicadas no cálculo.',
+      severity: 'info',
+      message: `${analysis.excecoes_sabado.length} exceções de sábado mapeadas para o engine.`,
+      message_friendly: 'Exceções de sábado importadas.',
       module: 'excecoes_sabado',
       field: 'ExcecaoSabado',
     });
