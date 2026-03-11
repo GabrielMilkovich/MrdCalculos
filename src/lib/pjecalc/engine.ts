@@ -62,6 +62,22 @@ export class PjeCalcEngine {
   private salarioFamiliaDB: PjeSalarioFamiliaDB[];
   // Map of verba results by verba_id for reflexa resolution
   private verbaResultsMap: Map<string, PjeVerbaResult> = new Map();
+  // Structured warnings collected during calculation
+  private calculationWarnings: { code: string; module: string; message: string; competencia?: string }[] = [];
+  // Set of already-emitted warning keys to prevent duplicates
+  private emittedWarningKeys = new Set<string>();
+
+  /**
+   * Track a warning during calculation (deduplicated by code+module+competencia).
+   * These warnings are included in the liquidação result.
+   */
+  private trackWarning(code: string, module: string, message: string, competencia?: string): void {
+    const key = `${code}:${module}:${competencia || ''}`;
+    if (this.emittedWarningKeys.has(key)) return;
+    this.emittedWarningKeys.add(key);
+    this.calculationWarnings.push({ code, module, message, competencia });
+    console.warn(`[PjeCalcEngine] ${code}: ${message}`);
+  }
 
   constructor(
     params: PjeParametros,
