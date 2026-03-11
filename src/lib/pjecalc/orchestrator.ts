@@ -17,6 +17,14 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import {
+  resolveCanonicalInput,
+  validateCanonicalInput,
+  generateConfidenceReport,
+  type CanonicalCaseInput,
+  type InputValidationResult,
+  type ConfidenceReport,
+} from './canonical';
+import {
   PjeCalcEngine,
   type PjeParametros,
   type PjeHistoricoSalarial,
