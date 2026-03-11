@@ -1045,7 +1045,7 @@ export class PjeCalcEngine {
             if (fatorDB !== null) {
               indiceCorrecao = fatorDB;
             } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice SELIC ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+              this.trackWarning('W040', 'correcao_monetaria', `Índice SELIC ausente para ${oc.competencia}→${compLiq}. Usando fator=1 (PERDA DE PRECISÃO).`, oc.competencia);
               indiceCorrecao = 1;
             }
           } else {
