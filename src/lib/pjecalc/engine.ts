@@ -638,88 +638,51 @@ export class PjeCalcEngine {
   getBaseParaCompetencia(verba: PjeVerba, competencia: string): number {
     let base = 0;
 
-    // ═══ REFLEXAS: Resolver base a partir da verba principal ═══
-    // Para verbas reflexas, a base vem da diferença da verba principal, NÃO do histórico salarial.
-    // Isso deve ser avaliado PRIMEIRO para evitar que reflexos usem o fallback genérico.
-    if (verba.base_calculo.verbas.length > 0) {
-      for (const verbaBaseId of verba.base_calculo.verbas) {
-        const vbResult = this.verbaResultsMap.get(verbaBaseId);
-        if (vbResult) {
-          const oc = vbResult.ocorrencias.find(o => o.competencia === competencia);
-          if (oc) base += oc.diferenca;
-        }
-      }
-      // Se a verba reflexa tem base_calculo.verbas definidos, retornar imediatamente.
-      // Não cair no fallback de históricos que inflaria a base somando TODOS os históricos.
-      if (base !== 0) return base;
-      // Se base === 0 e é reflexa, a verba principal pode não ter ocorrência nesta competência.
-      // Emitir warning e retornar 0 — NÃO cair no fallback de históricos.
-      if (verba.tipo === 'reflexa') {
-        this.trackWarning('W040', 'base', 
-          `Reflexo '${verba.nome}' sem base na competência ${competencia} — verba principal não tem ocorrência nesta competência`, 
-          competencia);
-        return 0;
-      }
-    }
-
-    // ═══ PRINCIPAIS: Resolver base a partir do histórico salarial específico ═══
+    // Bases do histórico salarial
     if (verba.base_calculo.historicos.length > 0) {
       for (const histId of verba.base_calculo.historicos) {
         const hist = this.historicos.find(h => h.id === histId);
-        if (!hist) {
-          this.trackWarning('W041', 'base', 
-            `Histórico '${histId}' referenciado pela verba '${verba.nome}' não encontrado`, 
-            competencia);
-          continue;
-        }
+        if (!hist) continue;
         const oc = hist.ocorrencias.find(o => o.competencia === competencia);
         if (oc) base += oc.valor;
       }
-      // Se tem históricos específicos definidos, NÃO cair no fallback genérico.
-      // Retornar o que foi encontrado (pode ser 0 se nenhuma ocorrência nessa competência).
-      return base;
     }
 
-    // ═══ FALLBACK CONTROLADO: Sem histórico específico vinculado ═══
-    // CORREÇÃO CRÍTICA: Quando não há histórico vinculado, buscar o PRIMEIRO histórico
-    // compatível (não TODOS), para evitar somar bases de rubricas diferentes.
-    // Isso previne a inflação de base que causa R$ 195.006,44 em todas as verbas.
-    if (verba.base_calculo.historicos.length === 0 && verba.base_calculo.verbas.length === 0) {
-      const compDate = new Date(competencia + '-01');
-      let found = false;
+    // Se não tem histórico específico, buscar qualquer histórico que cubra a competência
+    if (base === 0 && verba.base_calculo.historicos.length === 0) {
       for (const hist of this.historicos) {
+        const compDate = new Date(competencia + '-01');
         const hInicio = new Date(hist.periodo_inicio);
         const hFim = new Date(hist.periodo_fim);
         if (compDate >= hInicio && compDate <= hFim) {
           const oc = hist.ocorrencias.find(o => o.competencia === competencia);
           if (oc) {
-            base = oc.valor; // Usar APENAS o primeiro match, não somar todos
-            found = true;
-            this.trackWarning('W042', 'base', 
-              `Verba '${verba.nome}' sem histórico vinculado — usando fallback '${hist.nome}' para ${competencia}. Vincule o histórico correto para evitar erros.`, 
-              competencia);
-            break; // ← CRÍTICO: parar no primeiro match
-          } else if (hist.valor_informado && !found) {
-            base = hist.valor_informado;
-            found = true;
-            this.trackWarning('W042', 'base', 
-              `Verba '${verba.nome}' sem histórico vinculado — usando valor fixo '${hist.nome}' para ${competencia}`, 
-              competencia);
-            break;
+            base += oc.valor;
+          } else if (hist.valor_informado) {
+            base += hist.valor_informado;
           }
         }
       }
     }
 
-    // ═══ FALLBACK TABELAS: maior/última remuneração ═══
+    // Fallback: usar maior/última remuneração
     if (base === 0) {
       if (verba.base_calculo.tabelas.includes('maior_remuneracao') && this.params.maior_remuneracao) {
         base = this.params.maior_remuneracao;
       } else if (verba.base_calculo.tabelas.includes('ultima_remuneracao') && this.params.ultima_remuneracao) {
         base = this.params.ultima_remuneracao;
+      } else if (this.params.ultima_remuneracao) {
+        base = this.params.ultima_remuneracao;
       }
-      // REMOVIDO: fallback silencioso para ultima_remuneracao sem tabela configurada
-      // Isso evita que o engine use um valor genérico sem auditoria
+    }
+
+    // Somar bases de verbas principais já calculadas (para reflexas)
+    for (const verbaBaseId of verba.base_calculo.verbas) {
+      const vbResult = this.verbaResultsMap.get(verbaBaseId);
+      if (vbResult) {
+        const oc = vbResult.ocorrencias.find(o => o.competencia === competencia);
+        if (oc) base += oc.diferenca;
+      }
     }
 
     return base;
