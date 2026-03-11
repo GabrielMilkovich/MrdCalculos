@@ -1076,7 +1076,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null) {
             indiceCorrecao = fatorDB;
           } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1.`);
+            this.trackWarning('W043', 'correcao_monetaria', `Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq}. Usando fator=1 (PERDA DE PRECISÃO).`, oc.competencia);
             indiceCorrecao = 1;
           }
 
