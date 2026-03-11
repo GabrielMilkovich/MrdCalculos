@@ -239,8 +239,28 @@ describe('Diagnóstico Correção — Islan & Carla', () => {
       console.log(`\n═══ DIAGNÓSTICO ${caseName} ═══`);
       console.log(`Correção: indice=${data.inputs.correcaoConfig.indice}, data_liq=${data.inputs.correcaoConfig.data_liquidacao}`);
       console.log(`Combinações: ${JSON.stringify(data.inputs.correcaoConfig.combinacoes_indice?.map(c => ({ indice: c.indice, de: c.de })))}`);
+      console.log(`Juros combos: ${JSON.stringify(data.inputs.correcaoConfig.combinacoes_juros?.map(c => ({ tipo: c.tipo, de: c.de, pct: c.percentual })))}`);
       console.log(`Juros: tipo=${data.inputs.correcaoConfig.juros_tipo}, pct=${data.inputs.correcaoConfig.juros_percentual}, inicio=${data.inputs.correcaoConfig.juros_inicio}`);
       console.log(`juros_apos_deducao_cs=${data.inputs.correcaoConfig.juros_apos_deducao_cs}`);
+      console.log(`data_ajuizamento=${data.inputs.params.data_ajuizamento}`);
+
+      // Total corrigido breakdown
+      let totalCorrigido = 0, totalJuros = 0, totalFinal = 0, totalDif = 0;
+      for (const vr of data.result.verbas) {
+        totalDif += vr.total_diferenca;
+        totalCorrigido += vr.total_corrigido;
+        totalJuros += vr.total_juros;
+        totalFinal += vr.total_final;
+      }
+      console.log(`\n  Engine totals: dif=${totalDif.toFixed(2)} corr=${totalCorrigido.toFixed(2)} juros=${totalJuros.toFixed(2)} final=${totalFinal.toFixed(2)}`);
+      console.log(`  Resumo: bruto=${data.result.resumo.principal_bruto}, corrigido=${data.result.resumo.principal_corrigido}, juros=${data.result.resumo.juros_mora}, liq=${data.result.resumo.liquido_reclamante}`);
+      console.log(`  PJC: liq=${data.analysis.resultado.liquido_exequente}, bruto_implied=${(data.analysis.resultado.liquido_exequente + data.analysis.resultado.inss_reclamante + data.analysis.resultado.imposto_renda).toFixed(2)}`);
+
+      // GT summary
+      if (data.analysis.apuracao_juros) {
+        const gtSum = data.analysis.apuracao_juros.reduce((s, e) => s + e.valor_corrigido, 0);
+        console.log(`  GT sum(valorCorrigido)=${gtSum.toFixed(2)} (tax basis, NOT full correction)`);
+      }
 
       let gtCount = 0, fbCount = 0;
       for (const vr of data.result.verbas.slice(0, 3)) {
@@ -252,7 +272,6 @@ describe('Diagnóstico Correção — Islan & Carla', () => {
         }
       }
       console.log(`GT: ${gtCount} | Fallback: ${fbCount}`);
-      console.log(`Resumo: bruto=${data.result.resumo.principal_bruto}, corrigido=${data.result.resumo.principal_corrigido}, juros=${data.result.resumo.juros_mora}, liq=${data.result.resumo.liquido_reclamante}`);
     }
   });
 });
