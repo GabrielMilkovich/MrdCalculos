@@ -2440,9 +2440,6 @@ export class PjeCalcEngine {
       vr.total_juros = 0;
       vr.total_final = totalCorrigido.toDP(2).toNumber();
     }
-
-    // Apply GT calibration for correction values
-    this.calibrarCorrecaoComGT(verbaResults);
   }
 
   // =====================================================
