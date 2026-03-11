@@ -2670,8 +2670,15 @@ export class PjeCalcEngine {
   // =====================================================
 
   liquidar(): PjeLiquidacaoResult {
+    const auditTrail: Array<{ step: number; module: string; description: string; competencia?: string; resultado?: number; rubrica?: string }> = [];
+    let stepCounter = 0;
+    const audit = (module: string, description: string, extra?: { competencia?: string; resultado?: number; rubrica?: string }) => {
+      auditTrail.push({ step: ++stepCounter, module, description, ...extra });
+    };
+
     // ── 0. Validação pré-liquidação ──
     const validacao = this.validarPreLiquidacao();
+    audit('validacao', `Pré-validação: ${validacao.valid ? 'OK' : validacao.items.length + ' issues'}`);
 
     // ── 1. Topological sort: principals first, then reflexas in dependency order ──
     // This supports reflex-on-reflex (e.g., HE → DSR → 13º s/ DSR)
