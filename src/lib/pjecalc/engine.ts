@@ -1262,23 +1262,30 @@ export class PjeCalcEngine {
   }
 
   // =====================================================
-  // GT CALIBRATION: Use ApuracaoDeJuros valorCorrigido
-  // Distributes GT total proportionally among occurrences per competência
-  // @param includeInterest - when true, also calibrate juros using taxa_juros
+  // GT CALIBRATION: Use ApuracaoDeJuros valorCorrigido + taxaDeJuros
+  // 
+  // Phase 1 (includeInterest=false): Scale correction to match GT per competência
+  // Phase 2 (includeInterest=true): Apply interest using GT taxaDeJuros percentage
+  //   - taxaDeJuros in PJC XML is a PERCENTAGE (e.g. 33.14 = 33.14%)
+  //   - For juros_apos_deducao_cs: interest base = corrected - CS_share
   // =====================================================
 
-  private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false): void {
+  private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, totalCSDescontado: number = 0): void {
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
 
     // Build GT map by competência (YYYY-MM)
+    // Handle duplicate competências (e.g. regular + 13th salary in Dec)
     const gtMap = new Map<string, { valor_corrigido: number; taxa_juros: number }>();
     for (const g of correcaoGT) {
       const comp = g.competencia.slice(0, 7);
       const existing = gtMap.get(comp);
       if (existing) {
         existing.valor_corrigido += g.valor_corrigido;
-        existing.taxa_juros = g.taxa_juros;
+        // Use weighted average taxa_juros when merging (e.g. regular Dec + 13th Dec)
+        if (g.valor_corrigido > 0) {
+          existing.taxa_juros = Math.max(existing.taxa_juros, g.taxa_juros);
+        }
       } else {
         gtMap.set(comp, { valor_corrigido: g.valor_corrigido, taxa_juros: g.taxa_juros });
       }
@@ -1300,34 +1307,36 @@ export class PjeCalcEngine {
       }
     }
 
-    // Apply proportional calibration
+    // Total corrected across all verbas (for CS pro-rata distribution)
+    const totalCorrigidoEngine = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
+
+    // Apply proportional calibration per competência
     for (const [comp, gt] of gtMap) {
       const eng = engineByComp.get(comp);
       if (!eng || eng.total_corrigido === 0) continue;
       if (gt.valor_corrigido === 0) continue;
 
       const ratio = new Decimal(gt.valor_corrigido).div(eng.total_corrigido);
-      // Skip if already very close (within 0.01%)
-      if (ratio.minus(1).abs().lessThan(0.0001)) continue;
-
+      
       for (const { oc } of eng.ocorrencias) {
+        // Scale correction to match GT
         const newCorrigido = new Decimal(oc.valor_corrigido).times(ratio).toDP(2);
         oc.valor_corrigido = newCorrigido.toNumber();
 
-        if (includeInterest) {
-          // Recalculate interest using GT taxa_juros if available
-          if (gt.taxa_juros > 0 && oc.pjc_ground_truth_regime !== 'SELIC') {
-            oc.juros = newCorrigido.times(gt.taxa_juros).toDP(2).toNumber();
-          } else if (oc.pjc_ground_truth_regime === 'SELIC') {
-            oc.juros = 0;
-          } else {
-            oc.juros = new Decimal(oc.juros).times(ratio).toDP(2).toNumber();
+        if (includeInterest && gt.taxa_juros > 0) {
+          // taxaDeJuros in PJC is a PERCENTAGE (e.g. 33.14 means 33.14%)
+          const taxaDecimal = new Decimal(gt.taxa_juros).div(100);
+          
+          // For juros_apos_deducao_cs: base = corrected - CS_share (pro-rata)
+          let baseJuros = newCorrigido;
+          if (totalCSDescontado > 0 && totalCorrigidoEngine > 0) {
+            const csShare = new Decimal(totalCSDescontado).times(oc.valor_corrigido).div(totalCorrigidoEngine).toDP(2);
+            baseJuros = newCorrigido.minus(csShare);
           }
-        } else {
-          // Correction-only mode: scale juros proportionally
-          if (oc.juros !== 0) {
-            oc.juros = new Decimal(oc.juros).times(ratio).toDP(2).toNumber();
-          }
+          
+          oc.juros = baseJuros.times(taxaDecimal).toDP(2).toNumber();
+        } else if (includeInterest) {
+          oc.juros = 0;
         }
 
         oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
