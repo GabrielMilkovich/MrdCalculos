@@ -1607,24 +1607,25 @@ export class PjeCalcEngine {
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
       // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
-      // Derive correction factor per competência from GT data:
-      //   factor(comp) = sum(valor_corrigido) / sum(diferenca) from ApuracaoDeJuros
-      // This replicates PJe-Calc which uses the same inflation applied to verbas.
+      // PJe-Calc applies monetary correction to CS amounts using the same index as verbas.
+      // For multi-phase combinations, we use the correction factor derived from verbaResults
+      // (which have already been GT-calibrated at this point in the liquidar flow).
+      const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) || '';
       const correctionFactorByComp: Record<string, number> = {};
       
-      // Derive factor from GT: ratio of corrected value to nominal CS base
-      const gtNomByComp: Record<string, number> = {};
-      const gtCorrByComp: Record<string, number> = {};
-      for (const entry of gt) {
-        const comp = entry.competencia.slice(0, 7);
-        gtNomByComp[comp] = (gtNomByComp[comp] || 0) + entry.cs_base_normal + entry.cs_base_13;
-        gtCorrByComp[comp] = (gtCorrByComp[comp] || 0) + (entry.valor_corrigido || 0);
-      }
-      for (const comp of Object.keys(gtNomByComp)) {
-        const nom = gtNomByComp[comp];
-        const corr = gtCorrByComp[comp];
-        if (nom > 0 && corr > 0 && corr !== nom) {
-          correctionFactorByComp[comp] = corr / nom;
+      // Derive correction factor from actual verba results (post GT-calibration)
+      // This mirrors PJe-Calc which uses the ratio valor_corrigido/diferenca per competência
+      for (const vr of verbaResults) {
+        for (const oc of vr.ocorrencias) {
+          if (oc.diferenca <= 0 || !oc.valor_corrigido) continue;
+          const comp = oc.competencia.slice(0, 7);
+          if (!correctionFactorByComp[comp]) {
+            // Use first non-trivial factor found for this competência
+            const factor = oc.valor_corrigido / oc.diferenca;
+            if (factor > 0 && factor !== 1) {
+              correctionFactorByComp[comp] = factor;
+            }
+          }
         }
       }
       
