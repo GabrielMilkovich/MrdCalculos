@@ -383,6 +383,12 @@ export interface OrchestratorResult {
   result: PjeLiquidacaoResult;
   fingerprint: EngineExecutionFingerprint;
   persistedAt: string;
+  /** Canonical input validation result — shows completeness and blockers */
+  inputValidation?: InputValidationResult;
+  /** Confidence report — per-module scoring */
+  confidenceReport?: ConfidenceReport;
+  /** Resolved canonical input (for audit/comparison) */
+  canonicalInput?: CanonicalCaseInput;
 }
 
 // =====================================================
