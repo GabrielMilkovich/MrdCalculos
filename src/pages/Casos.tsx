@@ -18,6 +18,7 @@ import { seedAdvancedTestCase } from "@/lib/test-case-seed";
 import { seedCasoMarcelo } from "@/lib/test-case-seed-marcelo";
 import { seedCasoMaria } from "@/lib/test-case-seed-maria";
 import { seedCasoRosicleia } from "@/lib/test-case-seed-rosicleia";
+import { seedCasoRoque } from "@/lib/test-case-seed-roque";
 import { toast } from "sonner";
 
 interface CaseWithMetrics {
