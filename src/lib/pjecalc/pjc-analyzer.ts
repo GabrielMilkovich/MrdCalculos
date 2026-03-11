@@ -151,8 +151,52 @@ export interface HistoricoAnalysis {
   tipo_variacao: string;
   incide_inss: boolean;
   incide_fgts: boolean;
+  /** @deprecated Use competencias.length */
   ocorrencias_count: number;
   competencias: { comp: string; valor: number }[];
+  /** Additional fields extracted from OcorrenciaDoHistoricoSalarial */
+  ocorrencias_detalhadas?: {
+    data_ocorrencia: string;
+    competencia: string;
+    valor: number;
+    tipo?: string;
+  }[];
+}
+
+/** Full daily apuracao data extracted from ApuracaoDiariaCartao */
+export interface ApuracaoDiariaAnalysis {
+  data: string;
+  frequencia_diaria: string;
+  horas_trabalhadas: number;
+  horas_extras_diaria: number;
+  horas_extras_semanal: number;
+  horas_extras_mensal: number;
+  horas_noturnas: number;
+  horas_intra_jornada: number;
+  horas_inter_jornadas: number;
+  horas_art384: number;
+  horas_art253: number;
+  repousos_trabalhados: number;
+  feriados_trabalhados: number;
+  tipo_dia: string;
+  /** Whether the worker was absent */
+  falta: boolean;
+  /** Whether compensation was applied */
+  compensacao: boolean;
+}
+
+export interface ExcecaoCargaHorariaAnalysis {
+  data_inicial: string;
+  data_final: string;
+  carga_horaria: number;
+  observacao?: string;
+}
+
+export interface ExcecaoSabadoAnalysis {
+  data_inicial: string;
+  data_final: string;
+  sabado_dia_util: boolean;
+  observacao?: string;
 }
 
 export interface FaltaAnalysis {
