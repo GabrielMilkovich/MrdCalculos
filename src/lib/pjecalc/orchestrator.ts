@@ -688,6 +688,43 @@ export async function executarLiquidacao(
 
   const engineSeguro: PjeSeguroConfig = { apurar: false, parcelas: 0, recebeu: false };
 
+  // 3.5. PRE-CALCULATION TABLE VALIDATION — Block if essential tables missing
+  const hasPrecomputed = engineVerbas.some(v => v.ocorrencias_precomputadas && v.ocorrencias_precomputadas.length > 0);
+  const compInicio = engineParams.data_inicial || engineParams.data_admissao || '';
+  const compFim = engineParams.data_final || engineParams.data_demissao || '';
+  
+  const tableValidation = validarTabelasHistoricas({
+    competencia_inicio: compInicio.slice(0, 7),
+    competencia_fim: compFim.slice(0, 7),
+    indice_correcao: engineCorrecao.indice,
+    indicesDB,
+    faixasINSSDB,
+    faixasIRDB,
+    apurar_cs: engineCs.apurar_segurado,
+    apurar_ir: engineIr.apurar,
+    apurar_fgts: engineFgts.apurar,
+    data_liquidacao: engineCorrecao.data_liquidacao,
+    modo_precomputado: hasPrecomputed,
+  });
+
+  // Log validation results
+  for (const err of tableValidation.errors) {
+    console.error(`[ORCHESTRATOR] TABLE VALIDATION ${err.severity.toUpperCase()}: [${err.code}] ${err.message}`);
+  }
+  for (const warn of tableValidation.warnings) {
+    console.warn(`[ORCHESTRATOR] TABLE VALIDATION ${warn.severity.toUpperCase()}: [${warn.code}] ${warn.message}`);
+  }
+
+  if (!tableValidation.can_proceed) {
+    const blockReasons = tableValidation.errors
+      .filter(e => e.severity === 'critical')
+      .map(e => `[${e.code}] ${e.message_friendly}`)
+      .join('; ');
+    throw new Error(`Cálculo bloqueado por falta de dados essenciais: ${blockReasons}`);
+  }
+
+  console.log(`[ORCHESTRATOR] Table coverage: indices=${tableValidation.coverage.indices_coverage}%, INSS=${tableValidation.coverage.inss_coverage}%, IR=${tableValidation.coverage.ir_coverage}%`);
+
   // 4. Execute engine — ALL 21 constructor params populated
   console.log(`[ORCHESTRATOR] Engine inputs: ${indicesDB.length} indices, ${faixasINSSDB.length} INSS faixas, ${faixasIRDB.length} IR faixas, ${feriadosDB.length} feriados`);
   console.log(`[ORCHESTRATOR] CS config: apurar_segurado=${engineCs.apurar_segurado}, FGTS: apurar=${engineFgts.apurar}, data_liquidacao=${engineCorrecao.data_liquidacao}`);
