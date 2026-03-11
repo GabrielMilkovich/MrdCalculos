@@ -9,7 +9,7 @@ import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias, PjeVerba,
   PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig, PjeIRConfig,
   PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
-  PjeCombinacaoIndice, PjeCombinacaoJuros,
+  PjeCombinacaoIndice, PjeCombinacaoJuros, PjeApuracaoJurosGT,
 } from './engine-types';
 
 // =====================================================
