@@ -99,9 +99,6 @@ export function ModuloResumo({ caseId }: Props) {
     queryFn: () => svc.getHistoricoSalarial(caseId),
   });
 
-
-  // parityData is computed below after `res` is derived
-
   const executarLiquidacao = async () => {
     setLiquidando(true);
     setValidacao(null);
