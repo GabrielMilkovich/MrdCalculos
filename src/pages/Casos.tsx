@@ -18,6 +18,7 @@ import { seedAdvancedTestCase } from "@/lib/test-case-seed";
 import { seedCasoMarcelo } from "@/lib/test-case-seed-marcelo";
 import { seedCasoMaria } from "@/lib/test-case-seed-maria";
 import { seedCasoRosicleia } from "@/lib/test-case-seed-rosicleia";
+import { seedCasoRoque } from "@/lib/test-case-seed-roque";
 import { toast } from "sonner";
 
 interface CaseWithMetrics {
@@ -52,7 +53,7 @@ export default function Casos() {
   const [seedingMarcelo, setSeedingMarcelo] = useState(false);
   const [seedingMaria, setSeedingMaria] = useState(false);
   const [seedingRosicleia, setSeedingRosicleia] = useState(false);
-
+  const [seedingRoque, setSeedingRoque] = useState(false);
   const handleSeedTestCase = async () => {
     setSeedingTest(true);
     try {
@@ -108,6 +109,19 @@ export default function Casos() {
       toast.error("Erro ao criar caso: " + err.message);
     } finally {
       setSeedingRosicleia(false);
+    }
+  };
+  const handleSeedRoque = async () => {
+    setSeedingRoque(true);
+    try {
+      const caseId = await seedCasoRoque();
+      toast.success("Caso Roque Guerreiro Teixeira criado com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["cases-with-metrics"] });
+      navigate(`/casos/${caseId}`);
+    } catch (err: any) {
+      toast.error("Erro ao criar caso: " + err.message);
+    } finally {
+      setSeedingRoque(false);
     }
   };
 
@@ -258,6 +272,15 @@ export default function Casos() {
             />
           </div>
           <div className="flex gap-2 flex-wrap">
+            <Button 
+              variant="outline" size="sm" 
+              onClick={handleSeedRoque}
+              disabled={seedingRoque}
+              className="gap-1.5 h-9 text-sm border-primary/30 text-primary"
+            >
+              <FlaskConical className="h-4 w-4" />
+              {seedingRoque ? "Criando..." : "Caso Roque (Via Varejo PR)"}
+            </Button>
             <Button 
               variant="outline" size="sm" 
               onClick={handleSeedRosicleia}
