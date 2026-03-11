@@ -97,6 +97,21 @@ export default function Casos() {
     }
   };
 
+  const handleSeedRosicleia = async () => {
+    setSeedingRosicleia(true);
+    try {
+      const caseId = await seedCasoRosicleia();
+      toast.success("Caso Rosicleia Pereira Chaves criado com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["cases-with-metrics"] });
+      navigate(`/casos/${caseId}`);
+    } catch (err: any) {
+      toast.error("Erro ao criar caso: " + err.message);
+    } finally {
+      setSeedingRosicleia(false);
+    }
+  };
+
+
   // Fetch cases with counts
   const { data: cases = [], isLoading } = useQuery({
     queryKey: ["cases-with-metrics"],
