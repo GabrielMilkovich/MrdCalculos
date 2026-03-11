@@ -233,6 +233,10 @@ export const ERROR_CATALOG: Record<string, StructuredError> = {
     message: 'Fator de correção = 1.0 (sem efeito) — pode indicar série ausente para o período',
     friendly: 'Correção monetária não foi aplicada para alguma competência.',
     action: 'Verificar se os índices cobrem o período do cálculo.' },
+  W044: { code: 'W044', severity: 'warning', module: 'juros', blocking: false,
+    message: 'SELIC como correção sobrepõe-se com juros configurados — juros suprimidos nesse segmento',
+    friendly: 'SELIC já inclui juros. Juros adicionais foram automaticamente suprimidos.',
+    action: 'Comportamento correto conforme ADC 58/59 STF.' },
 
   // =====================================================
   // INFORMATIONAL (I001 - I020)
