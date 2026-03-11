@@ -151,7 +151,7 @@ export function FidelidadePanel({ fidelityReport, parityReport }: Props) {
                       <TableCell className="text-right text-sm font-mono">{fmtR$(vals.delta)}</TableCell>
                       <TableCell className="text-right text-sm font-mono">{vals.delta_pct.toFixed(2)}%</TableCell>
                       <TableCell className="text-center">
-                        {ok ? <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" /> : <AlertTriangle className="h-4 w-4 text-yellow-500 mx-auto" />}
+                        {ok ? <CheckCircle2 className="h-4 w-4 text-primary mx-auto" /> : <AlertTriangle className="h-4 w-4 text-accent-foreground mx-auto" />}
                       </TableCell>
                     </TableRow>
                   );
