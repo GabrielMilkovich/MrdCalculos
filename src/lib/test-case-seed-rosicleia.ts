@@ -438,7 +438,7 @@ export async function seedCasoRosicleia(): Promise<string> {
       await supabase.from("pjecalc_dados_processo" as any).insert({ case_id: caseId, ...dadosPayload });
     }
 
-    // 16. Upload documents metadata (reference to files in public/reports/rosicleia/)
+    // 16. Upload documents to storage + insert metadata
     const documentos = [
       { file_name: "CTPS_ate_2021.pdf", tipo: "ctps" },
       { file_name: "CTPS_nova.pdf", tipo: "ctps" },
@@ -452,11 +452,38 @@ export async function seedCasoRosicleia(): Promise<string> {
     ];
 
     for (const doc of documentos) {
+      const storagePath = `${caseId}/${doc.file_name}`;
+      let uploadSuccess = false;
+
+      try {
+        // Fetch the PDF from public folder
+        const resp = await fetch(`/reports/rosicleia/${doc.file_name}`);
+        if (resp.ok) {
+          const blob = await resp.blob();
+          const file = new File([blob], doc.file_name, { type: "application/pdf" });
+
+          const { error: uploadErr } = await supabase.storage
+            .from("case-documents")
+            .upload(storagePath, file, { upsert: true, contentType: "application/pdf" });
+
+          if (!uploadErr) {
+            uploadSuccess = true;
+          } else {
+            console.warn(`[SEED] Upload failed for ${doc.file_name}:`, uploadErr.message);
+          }
+        } else {
+          console.warn(`[SEED] Could not fetch /reports/rosicleia/${doc.file_name}: ${resp.status}`);
+        }
+      } catch (fetchErr) {
+        console.warn(`[SEED] Error uploading ${doc.file_name}:`, fetchErr);
+      }
+
       await supabase.from("documents").insert({
         case_id: caseId,
         file_name: doc.file_name,
         tipo: doc.tipo as any,
         status: "uploaded",
+        storage_path: uploadSuccess ? storagePath : null,
         metadata: { source: "seed", path: `/reports/rosicleia/${doc.file_name}` },
         owner_user_id: user.id,
       });
