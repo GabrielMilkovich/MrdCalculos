@@ -13,7 +13,8 @@ import type {
   PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig, PjeIRConfig,
   PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
   PjeCombinacaoIndice, PjeCombinacaoJuros, PjeApuracaoJurosGT,
-  PjeExcecaoCargaHoraria,
+  PjeExcecaoCargaHoraria, PjeExcecaoSabado,
+  PjePrevidenciaPrivadaConfig, PjePensaoConfig, PjeSalarioFamiliaConfig,
 } from './engine-types';
 import {
   type FidelityReport,
