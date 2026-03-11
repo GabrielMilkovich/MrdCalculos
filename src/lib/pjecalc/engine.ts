@@ -1053,7 +1053,7 @@ export class PjeCalcEngine {
             const fatorIPCA = this.getIndiceCorrecaoDB('IPCA-E', oc.competencia, compCitacao);
             let fator1: number;
             if (fatorIPCA !== null) { fator1 = fatorIPCA; } else {
-              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice IPCA-E ausente para ${oc.competencia}→${compCitacao}. Usando fator=1.`);
+              this.trackWarning('W041', 'correcao_monetaria', `Índice IPCA-E ausente para ${oc.competencia}→${compCitacao}. Usando fator=1 (PERDA DE PRECISÃO).`, oc.competencia);
               fator1 = 1;
             }
             const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiq);
