@@ -1735,6 +1735,11 @@ export class PjeCalcEngine {
           if (cf && cf !== 1) {
             imposto = Number(new Decimal(imposto).times(cf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
           }
+          // Apply interest on CS amount (PJe-Calc: juros de mora sobre CS corrigida)
+          const jf = interestFactorByComp[comp];
+          if (jf && jf > 0) {
+            imposto = Number(new Decimal(imposto).plus(new Decimal(imposto).times(jf)).toDP(2, PjeCalcEngine.ROUND_CS_IR));
+          }
 
           segurado_devidos.push({
             competencia: comp, base: totalBase,
