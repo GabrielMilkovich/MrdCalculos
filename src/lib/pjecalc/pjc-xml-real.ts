@@ -603,12 +603,16 @@ export function exportPJCXml(data: PJCReal): string {
   lines.push(`    <dataAdmissao>${p.data_admissao}</dataAdmissao>`);
   if (p.data_demissao) lines.push(`    <dataDemissao>${p.data_demissao}</dataDemissao>`);
   if (p.data_ajuizamento) lines.push(`    <dataAjuizamento>${p.data_ajuizamento}</dataAjuizamento>`);
+  if (p.data_citacao) lines.push(`    <dataCitacao>${p.data_citacao}</dataCitacao>`);
   if (p.inicio_calculo) lines.push(`    <periodoInicial>${p.inicio_calculo}</periodoInicial>`);
   if (p.fim_calculo) lines.push(`    <periodoFinal>${p.fim_calculo}</periodoFinal>`);
   if (p.data_liquidacao) lines.push(`    <dataLiquidacao>${p.data_liquidacao}</dataLiquidacao>`);
   lines.push(`    <cargaHoraria>${p.carga_horaria}</cargaHoraria>`);
   lines.push(`    <sabadoDiaUtil>${p.sabado_dia_util}</sabadoDiaUtil>`);
   lines.push(`    <prescricaoQuinquenal>${p.prescricao_quinquenal}</prescricaoQuinquenal>`);
+  lines.push(`    <projetarAviso>${p.projetar_aviso}</projetarAviso>`);
+  lines.push(`    <limitarAvos>${p.limitar_avos}</limitarAvos>`);
+  lines.push(`    <zerarNegativos>${p.zerar_negativos}</zerarNegativos>`);
   lines.push('  </ParametrosCalculo>');
 
   // Apuração Diária
