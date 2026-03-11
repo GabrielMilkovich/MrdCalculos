@@ -2088,8 +2088,13 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
         
-        // Use PJC ground truth correction factor when available (includes interest)
+        // Use PJC ground truth correction factor when available
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+          // Determine regime for this occurrence
+          const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
+          const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
+          const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
+
           const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
           const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
           oc.indice_correcao = fatorTotal.toDP(6).toNumber();
@@ -2097,6 +2102,7 @@ export class PjeCalcEngine {
           oc.juros = 0;
           oc.valor_final = valorCorrigido.toDP(2).toNumber();
           oc.pjc_ground_truth_applied = true;
+          oc.pjc_ground_truth_regime = regimeIndice;
           totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
           continue;
         }
