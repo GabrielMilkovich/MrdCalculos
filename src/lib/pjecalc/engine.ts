@@ -1131,8 +1131,9 @@ export class PjeCalcEngine {
               const rS = sI < jurosEffectiveStartGT ? jurosEffectiveStartGT : sI;
               const regI = this.getRegimeParaData(combinacoes_indice, rS);
               const iN = normalizeIndice(regI?.indice || 'SEM_CORRECAO');
-              // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended)
-              if (iN === 'SELIC' || iN === 'SEM_CORRECAO' || iN === 'Sem Correção' || iN === 'NENHUM') continue;
+              // Skip interest only during SELIC (already includes interest)
+              // SEM_CORRECAO suspends CORRECTION only, not interest (juros de mora)
+              if (iN === 'SELIC') continue;
               const regJ = this.getRegimeParaData(combinacoes_juros, rS);
               if (!regJ || regJ.tipo === 'NENHUM') continue;
               if (regJ.tipo === 'SELIC') {
