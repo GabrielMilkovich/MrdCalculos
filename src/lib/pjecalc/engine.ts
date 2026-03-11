@@ -1601,28 +1601,23 @@ export class PjeCalcEngine {
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
       // ═══ PJe-Calc CS Monetary Update ═══
-      // PJe-Calc's "correcaoTrabalhistaDosSalariosDevidosDoINSS" applies the same monetary
-      // correction to CS amounts that it applies to verbas. The contribuicaoSocialNormal
-      // in ApuracaoDeJuros is the NOMINAL CS; inssReclamante is the CORRECTED CS.
-      // We compute correction factors per competência from verbaResults.
+      // PJe-Calc's "correcaoTrabalhistaDosSalariosDevidosDoINSS" applies monetary
+      // correction to CS amounts. The contribuicaoSocialNormal in ApuracaoDeJuros
+      // is the NOMINAL CS; inssReclamante is the CORRECTED CS.
+      // Correction factor per comp = GT valorCorrigido / GT cs_base (inflation ratio).
+      const gtCorrigidoByComp: Record<string, number> = {};
+      const gtCsBaseTotalByComp: Record<string, number> = {};
+      for (const entry of gt) {
+        const comp = entry.competencia.slice(0, 7);
+        gtCorrigidoByComp[comp] = (gtCorrigidoByComp[comp] || 0) + entry.valor_corrigido;
+        gtCsBaseTotalByComp[comp] = (gtCsBaseTotalByComp[comp] || 0) + entry.cs_base_normal + entry.cs_base_13;
+      }
       const correctionFactorByComp: Record<string, number> = {};
-      {
-        const nominalByComp: Record<string, number> = {};
-        const corrigidoByComp: Record<string, number> = {};
-        for (const vr of verbaResults) {
-          const verba = this.verbas.find(v => v.id === vr.verba_id);
-          if (!verba?.incidencias.contribuicao_social) continue;
-          for (const oc of vr.ocorrencias) {
-            if (oc.diferenca === 0) continue;
-            const c = oc.competencia.slice(0, 7);
-            nominalByComp[c] = (nominalByComp[c] || 0) + Math.abs(oc.diferenca);
-            corrigidoByComp[c] = (corrigidoByComp[c] || 0) + Math.abs(oc.valor_corrigido);
-          }
-        }
-        for (const c of Object.keys(nominalByComp)) {
-          if (nominalByComp[c] > 0 && corrigidoByComp[c] > 0) {
-            correctionFactorByComp[c] = corrigidoByComp[c] / nominalByComp[c];
-          }
+      for (const comp of Object.keys(gtCsBaseTotalByComp)) {
+        const csBase = gtCsBaseTotalByComp[comp] || 0;
+        const corrigido = gtCorrigidoByComp[comp] || 0;
+        if (csBase > 0 && corrigido > 0) {
+          correctionFactorByComp[comp] = corrigido / csBase;
         }
       }
       
