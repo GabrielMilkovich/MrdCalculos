@@ -485,6 +485,8 @@ export interface PjeLiquidacaoResult {
   resumo: PjeResumo;
   validacao?: PjeValidationResult;
   audit_trail?: PjeAuditTrailEntry[];
+  /** Structured warnings collected during calculation (fallbacks, missing tables, etc.) */
+  calculation_warnings?: { code: string; module: string; message: string; competencia?: string }[];
 }
 
 export interface PjeVerbaResult {
