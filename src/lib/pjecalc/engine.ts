@@ -1566,7 +1566,7 @@ export class PjeCalcEngine {
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indiceNorm} ausente para FGTS ${segInicio}→${segFim}. Usando fator=1.`);
+            this.trackWarning('W045', 'fgts', `Índice ${indiceNorm} ausente para FGTS ${segInicio}→${segFim}. Usando fator=1 (PERDA DE PRECISÃO).`, segInicio.slice(0, 7));
           }
         }
         fatorCorrecao = fatorTotal.toDP(6).toNumber();
