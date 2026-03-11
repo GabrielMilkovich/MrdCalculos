@@ -2333,7 +2333,12 @@ export class PjeCalcEngine {
       itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'Data de ajuizamento não informada — campo obrigatório para aplicação da ADC 58' });
     }
     if (!this.params.data_citacao) {
-      itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — campo obrigatório para cálculo de juros (ADC 58/STF)', detalhe: 'Preencha em Dados do Processo → Datas Processuais → Citação' });
+      // If ajuizamento exists, downgrade to warning (engine can estimate citação = ajuizamento + 60 days)
+      if (this.params.data_ajuizamento) {
+        itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — será estimada a partir do ajuizamento + 60 dias (ADC 58/STF)', detalhe: 'Para maior precisão, preencha em Dados do Processo → Datas Processuais → Citação' });
+      } else {
+        itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — cálculo de juros ADC 58/STF pode ficar impreciso', detalhe: 'Preencha em Dados do Processo → Datas Processuais → Citação' });
+      }
     }
     if (!this.params.estado || !this.params.municipio) {
       itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Estado ou município não informado' });
