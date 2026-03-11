@@ -8,11 +8,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Play, Loader2, FileBarChart, Printer, FileCode, AlertTriangle, CheckCircle2, Info, XCircle, Lock, Unlock, Copy, MoreVertical, FileText, FileSpreadsheet, ClipboardCheck, GitCompareArrows, Download, Scale, Gavel } from "lucide-react";
+import { Play, Loader2, FileBarChart, Printer, FileCode, AlertTriangle, CheckCircle2, Info, XCircle, Lock, Unlock, Copy, MoreVertical, FileText, FileSpreadsheet, ClipboardCheck, GitCompareArrows, Download, Gavel } from "lucide-react";
 import { PainelRevisao } from "./PainelRevisao";
 import { MemoriaCalculoExpandida } from "./MemoriaCalculoExpandida";
 import { ComparacaoCenarios } from "./ComparacaoCenarios";
-import { ComparadorParidade, buildParityData, buildParityDataFromGolden } from "./ComparadorParidade";
 import { calcularCompletude } from "@/lib/pjecalc/completude";
 import * as svc from "@/lib/pjecalc/service";
 import {
@@ -99,24 +98,6 @@ export function ModuloResumo({ caseId }: Props) {
     queryKey: ["pjecalc_hist_report", caseId],
     queryFn: () => svc.getHistoricoSalarial(caseId),
   });
-
-  // Load PJC ground truth for parity comparator
-  const { data: pjcGroundTruth } = useQuery({
-    queryKey: ["pjc_ground_truth", caseId],
-    queryFn: async () => {
-      // Try to load from pjecalc_resultado the ground truth (resumo_verbas stores full result)
-      const { data: calculoRow } = await supabase.from("pjecalc_calculos").select("id").eq("case_id", caseId).maybeSingle();
-      if (!calculoRow) return null;
-      // Check if there's a PJC import with ground truth data
-      const { data: pjcData } = await supabase.from("pjecalc_resultado" as any)
-        .select("resumo_verbas")
-        .eq("calculo_id", (calculoRow as any).id)
-        .maybeSingle();
-      return (pjcData as any)?.resumo_verbas || null;
-    },
-  });
-
-  // parityData is computed below after `res` is derived
 
   const executarLiquidacao = async () => {
     setLiquidando(true);
@@ -473,10 +454,6 @@ export function ModuloResumo({ caseId }: Props) {
   const res = (resultado?.resultado as unknown as PjeLiquidacaoResult) || null;
   const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
-  // Build parity data using Golden Snapshot as ground truth
-  const parityData = useMemo(() => {
-    return buildParityDataFromGolden(res);
-  }, [res]);
   const isFechado = resultado?.status === 'fechado';
   const reportMeta = {
     cliente: caseData?.cliente,
@@ -1000,23 +977,18 @@ Total da reclamada: ${fmt(res.resumo.total_reclamada)}`;
             </Card>
           )}
 
-          {/* Comparador de Paridade */}
+          {/* Auditoria em modo puro */}
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Scale className="h-4 w-4 text-primary" />
-                  Comparador de Paridade
-                </CardTitle>
-                {parityData && (
-                  <Badge variant="outline" className="text-[10px]">
-                    {parityData.verbas.filter(v => v.status === 'ok').length}/{parityData.verbas.length} OK
-                  </Badge>
-                )}
-              </div>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Gavel className="h-4 w-4 text-primary" />
+                Auditoria do Sistema (Modo Puro)
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <ComparadorParidade parityData={parityData} />
+              <p className="text-xs text-muted-foreground">
+                O cálculo está sendo executado apenas com insumos internos do sistema (sem baseline externo de PJe-Calc).
+              </p>
             </CardContent>
           </Card>
 
