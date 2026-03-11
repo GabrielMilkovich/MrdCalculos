@@ -647,6 +647,25 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     });
   }
 
+  // --- FGTS Config ---
+  const fgtsEl = root.getElementsByTagName('FGTS')[0] || root.getElementsByTagName('fgts')[0]
+    || root.getElementsByTagName('ModuloFGTS')[0] || root.getElementsByTagName('moduloFgts')[0];
+  let fgts_config: PJCAnalysis['fgts_config'] = undefined;
+  if (fgtsEl) {
+    const multa_pct_raw = getTextContent(fgtsEl, 'percentualMulta') || getTextContent(fgtsEl, 'multaPercentual');
+    fgts_config = {
+      apurar: getTextContent(fgtsEl, 'apurar') !== 'false',
+      multa_percentual: parseNum(multa_pct_raw) || 40,
+      multa_base: getTextContent(fgtsEl, 'baseMulta') || getTextContent(fgtsEl, 'multaBase') || 'devido',
+      lc110_10: getTextContent(fgtsEl, 'lc110_10') === 'true' || getTextContent(fgtsEl, 'contribuicaoSocial10') === 'true',
+      lc110_05: getTextContent(fgtsEl, 'lc110_05') === 'true' || getTextContent(fgtsEl, 'contribuicaoSocial05') === 'true',
+      destino: getTextContent(fgtsEl, 'destino') || getTextContent(fgtsEl, 'destinoFGTS') || 'pagar_reclamante',
+    };
+  }
+  // If resultado shows FGTS deposit > 0 but no config element, create default
+  if (!fgts_config && resultado.fgts_deposito > 0) {
+    fgts_config = { apurar: true, multa_percentual: 40, multa_base: 'devido', lc110_10: false, lc110_05: false, destino: 'pagar_reclamante' };
+  }
 
   // --- Pensão, Previdência, Salário-Família, Seguro-Desemprego ---
   const pensaoEl = root.getElementsByTagName('PensaoAlimenticia')[0] || root.getElementsByTagName('pensaoAlimenticia')[0];
