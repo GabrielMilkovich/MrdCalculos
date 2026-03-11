@@ -722,7 +722,11 @@ export class PjeCalcEngine {
   }
 
   private getFaixasIRParaCompetencia(competencia: string): { faixas: { ate: number; aliquota: number; deducao: number }[]; deducao_dependente: number } {
-    if (this.faixasIRDB.length === 0) return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
+    if (this.faixasIRDB.length === 0) {
+      // AUDIT: Track fallback to DEFAULT_FAIXAS_IR
+      this.trackWarning('E033', 'ir', `IR: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
+    }
 
     const compDate = new Date(competencia + '-01');
     const faixas = this.faixasIRDB
@@ -734,7 +738,11 @@ export class PjeCalcEngine {
       .sort((a, b) => a.faixa - b.faixa)
       .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota), deducao: Number(f.deducao) }));
 
-    if (faixas.length === 0) return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
+    if (faixas.length === 0) {
+      // AUDIT: Track fallback for specific competência
+      this.trackWarning('E033', 'ir', `IR: Sem faixas para ${competencia} — usando padrão 2025`);
+      return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
+    }
 
     // Usar deducao_dependente da primeira faixa encontrada
     const matchedRow = this.faixasIRDB.find(f => {
