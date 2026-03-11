@@ -1601,41 +1601,30 @@ export class PjeCalcEngine {
       const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
 
       // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
-      // CORRECTION 1-4: PJe-Calc applies the SAME correction+interest factor to CS amounts
-      // as it applies to the verbas. We derive this from the actual verba results:
-      //   correction_factor = sum(valor_corrigido) / sum(diferenca)
-      //   interest_factor = sum(valor_final) / sum(valor_corrigido) - 1
-      // This ensures CS correction matches verba correction even with GT calibration.
+      // PJe-Calc applies the same monetary correction to CS amounts from competência to liquidation.
+      const compLiq = this.correcaoConfig.data_liquidacao?.slice(0, 7) || '';
       const correctionFactorByComp: Record<string, number> = {};
-      const totalFactorByComp: Record<string, number> = {}; // includes interest
-      
-      // Build correction ratios from verba results (use the provided results or current)
-      const sourceVerbas = verbaResultsForCorrectionRatio || verbaResults;
-      const compDifSums: Record<string, number> = {};
-      const compCorrSums: Record<string, number> = {};
-      const compFinalSums: Record<string, number> = {};
-      
-      for (const vr of sourceVerbas) {
-        const verba = this.verbas.find(v => v.id === vr.verba_id);
-        if (!verba?.incidencias.contribuicao_social) continue;
-        for (const oc of vr.ocorrencias) {
-          if (oc.diferenca <= 0) continue;
-          const comp = oc.competencia.slice(0, 7);
-          compDifSums[comp] = (compDifSums[comp] || 0) + oc.diferenca;
-          compCorrSums[comp] = (compCorrSums[comp] || 0) + (oc.valor_corrigido || oc.diferenca);
-          compFinalSums[comp] = (compFinalSums[comp] || 0) + (oc.valor_final || oc.valor_corrigido || oc.diferenca);
-        }
-      }
-      
-      for (const comp of allComps) {
-        const dif = compDifSums[comp] || 0;
-        const corr = compCorrSums[comp] || 0;
-        const final_ = compFinalSums[comp] || 0;
-        if (dif > 0 && corr > dif) {
-          correctionFactorByComp[comp] = corr / dif;
-        }
-        if (dif > 0 && final_ > dif) {
-          totalFactorByComp[comp] = final_ / dif;
+      if (compLiq) {
+        for (const comp of allComps) {
+          const primaryIndex = this.correcaoConfig.indice === 'COMBINACAO'
+            ? (this.correcaoConfig.combinacoes_indice?.[0]?.indice || 'IPCA-E')
+            : (this.correcaoConfig.indice || 'IPCA-E');
+          let activeIndex = primaryIndex;
+          if (this.correcaoConfig.combinacoes_indice && this.correcaoConfig.combinacoes_indice.length > 0) {
+            const sorted = [...this.correcaoConfig.combinacoes_indice].sort((a, b) => 
+              (b.de || '0000').localeCompare(a.de || '0000'));
+            for (const ci of sorted) {
+              if ((ci.de || '0000') <= comp + '-01') { activeIndex = ci.indice; break; }
+            }
+            if (!activeIndex || activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') {
+              activeIndex = primaryIndex;
+            }
+          }
+          if (activeIndex === 'SEM_CORRECAO' || activeIndex === 'NENHUM') continue;
+          const factor = this.getIndiceCorrecaoDB(activeIndex, comp, compLiq);
+          if (factor !== null && factor > 0 && factor !== 1) {
+            correctionFactorByComp[comp] = factor;
+          }
         }
       }
       
