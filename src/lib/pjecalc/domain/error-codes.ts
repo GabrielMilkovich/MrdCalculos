@@ -254,6 +254,18 @@ export const ERROR_CATALOG: Record<string, StructuredError> = {
     message: 'Ground truth do PJe-Calc utilizado para calibração',
     friendly: 'Valores do PJe-Calc usados como referência.',
     action: 'Resultado calibrado para máxima paridade.' },
+  I004: { code: 'I004', severity: 'info', module: 'bridge', blocking: false,
+    message: 'Exceções de sábado mapeadas para o engine',
+    friendly: 'Exceções de sábado importadas e aplicadas.',
+    action: 'Nenhuma ação necessária.' },
+  I005: { code: 'I005', severity: 'info', module: 'bridge', blocking: false,
+    message: 'Pensão alimentícia configurada a partir do PJC',
+    friendly: 'Configuração de pensão alimentícia importada.',
+    action: 'Nenhuma ação necessária.' },
+  I006: { code: 'I006', severity: 'info', module: 'bridge', blocking: false,
+    message: 'Previdência privada configurada a partir do PJC',
+    friendly: 'Configuração de previdência privada importada.',
+    action: 'Nenhuma ação necessária.' },
 };
 
 export type ErrorCode = keyof typeof ERROR_CATALOG;
