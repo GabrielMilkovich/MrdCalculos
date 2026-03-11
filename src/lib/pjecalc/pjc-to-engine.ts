@@ -480,9 +480,10 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
   // Destination mapping from PJC XML
   const destMap: Record<string, PjeFGTSConfig['destino']> = {
     'pagar_reclamante': 'pagar_reclamante',
-    'depositar_conta_vinculada': 'depositar_conta_vinculada',
+    'depositar_conta_vinculada': 'recolher_conta',
     'PAGAR_RECLAMANTE': 'pagar_reclamante',
-    'DEPOSITAR_CONTA_VINCULADA': 'depositar_conta_vinculada',
+    'DEPOSITAR_CONTA_VINCULADA': 'recolher_conta',
+    'recolher_conta': 'recolher_conta',
   };
 
   return {
