@@ -42,6 +42,14 @@ export interface PjcEngineInputs {
   seguroConfig: PjeSeguroConfig;
   /** Exceções de carga horária extraídas do PJC */
   excecoesCargas?: PjeExcecaoCargaHoraria[];
+  /** Exceções de sábado extraídas do PJC */
+  excecoesSabado?: PjeExcecaoSabado[];
+  /** Previdência privada config from PJC */
+  prevPrivadaConfig?: PjePrevidenciaPrivadaConfig;
+  /** Pensão alimentícia config from PJC */
+  pensaoConfig?: PjePensaoConfig;
+  /** Salário-família config from PJC */
+  salarioFamiliaConfig?: PjeSalarioFamiliaConfig;
   /** Fidelity report tracking all data losses and synthetic fallbacks */
   fidelityReport: FidelityReport;
 }
