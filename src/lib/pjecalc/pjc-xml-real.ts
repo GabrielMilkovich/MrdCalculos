@@ -759,6 +759,39 @@ export function exportPJCXml(data: PJCReal): string {
   }
   lines.push('  </ParametrosDeAtualizacao>');
 
+  // FGTS Config
+  if (data.fgts) {
+    lines.push('  <ConfigFGTS>');
+    lines.push(`    <apurar>${data.fgts.apurar}</apurar>`);
+    lines.push(`    <multaPercentual>${data.fgts.multa_percentual}</multaPercentual>`);
+    if (data.fgts.saldos_saques.length > 0) {
+      for (const ss of data.fgts.saldos_saques) {
+        lines.push(`    <SaldoSaque data="${ss.data}" valor="${fmtN(ss.valor, 2)}" />`);
+      }
+    }
+    lines.push('  </ConfigFGTS>');
+  }
+
+  // CS Config
+  if (data.contribuicao_social) {
+    lines.push('  <ConfigCS>');
+    lines.push(`    <apurarSegurado>${data.contribuicao_social.apurar_segurado}</apurarSegurado>`);
+    lines.push(`    <apurarEmpresa>${data.contribuicao_social.apurar_empresa}</apurarEmpresa>`);
+    lines.push(`    <aliquotaEmpresa>${data.contribuicao_social.aliquota_empresa}</aliquotaEmpresa>`);
+    lines.push(`    <aliquotaSAT>${data.contribuicao_social.aliquota_sat}</aliquotaSAT>`);
+    lines.push(`    <aliquotaTerceiros>${data.contribuicao_social.aliquota_terceiros}</aliquotaTerceiros>`);
+    lines.push('  </ConfigCS>');
+  }
+
+  // IR Config
+  if (data.imposto_renda) {
+    lines.push('  <ConfigIR>');
+    lines.push(`    <apurar>${data.imposto_renda.apurar}</apurar>`);
+    lines.push(`    <dependentes>${data.imposto_renda.dependentes}</dependentes>`);
+    lines.push(`    <tributacaoExclusiva13>${data.imposto_renda.tributacao_exclusiva_13}</tributacaoExclusiva13>`);
+    lines.push('  </ConfigIR>');
+  }
+
   lines.push('</CalculoTrabalhista>');
   return lines.join('\n');
 }
