@@ -901,5 +901,8 @@ export async function executarLiquidacao(
     result,
     fingerprint,
     persistedAt: new Date().toISOString(),
+    inputValidation,
+    confidenceReport,
+    canonicalInput,
   };
 }
