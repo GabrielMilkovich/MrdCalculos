@@ -1080,23 +1080,78 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
-        // ═══ PJC Ground Truth: pjc_indice_acumulado is the TOTAL factor PJe-Calc applied
-        // (includes correction AND interest combined). Use directly as valor_final.
-        // The regime is tracked for downstream CS base decisions.
+        // ═══ PJC Ground Truth: indiceAcumulado is the CORRECTION-ONLY factor.
+        // It represents monetary correction (inflation) but NOT interest.
+        // Interest is always calculated separately by PJe-Calc.
+        // For SELIC regime: the correction factor already includes interest → skip separate interest.
+        // For IPCA-E/other: apply interest separately after correction.
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
           const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
           const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
 
-          const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
-          const valorFinal = new Decimal(oc.diferenca).times(fatorTotal);
-          oc.indice_correcao = fatorTotal.toDP(6).toNumber();
-          oc.valor_corrigido = valorFinal.toDP(2).toNumber();
-          oc.juros = 0;
-          oc.valor_final = valorFinal.toDP(2).toNumber();
+          const fatorCorrecao = new Decimal(oc.pjc_indice_acumulado);
+          const valorCorrigido = new Decimal(oc.diferenca).times(fatorCorrecao);
+          oc.indice_correcao = fatorCorrecao.toDP(6).toNumber();
+          oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
           oc.pjc_ground_truth_applied = true;
           oc.pjc_ground_truth_regime = regimeIndice;
+
+          // For SELIC: factor already includes interest, valor_final = valor_corrigido
+          if (regimeIndice === 'SELIC') {
+            oc.juros = 0;
+            oc.valor_final = valorCorrigido.toDP(2).toNumber();
+            totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
+            totalFinal = totalFinal.plus(oc.valor_final);
+            continue;
+          }
+
+          // For non-SELIC: calculate interest separately (below in the interest section)
+          // Set juros=0 for now, will be computed in the interest block
           totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
+
+          // Calculate interest for this GT occurrence using the same logic as non-GT
+          let jurosOc = new Decimal(0);
+          const jurosEffectiveStartGT = jurosStartDate || compDateGT;
+          if (!jurosDisabled) {
+            const bpGT = new Set<string>();
+            bpGT.add(compDateGT);
+            bpGT.add(dataLiq);
+            for (const ci of combinacoes_indice) {
+              if (ci.de && ci.de > compDateGT && ci.de <= dataLiq) bpGT.add(ci.de);
+            }
+            for (const cj of combinacoes_juros) {
+              if (cj.de && cj.de > compDateGT && cj.de <= dataLiq) bpGT.add(cj.de);
+            }
+            const datasGT = Array.from(bpGT).sort();
+            for (let j = 0; j < datasGT.length - 1; j++) {
+              const sI = datasGT[j];
+              const sF = datasGT[j + 1];
+              if (sF <= jurosEffectiveStartGT) continue;
+              const rS = sI < jurosEffectiveStartGT ? jurosEffectiveStartGT : sI;
+              const regI = this.getRegimeParaData(combinacoes_indice, rS);
+              const iN = normalizeIndice(regI?.indice || 'SEM_CORRECAO');
+              // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended)
+              if (iN === 'SELIC' || iN === 'SEM_CORRECAO' || iN === 'Sem Correção' || iN === 'NENHUM') continue;
+              const regJ = this.getRegimeParaData(combinacoes_juros, rS);
+              if (!regJ || regJ.tipo === 'NENHUM') continue;
+              if (regJ.tipo === 'SELIC') {
+                const fS = this.getIndiceCorrecaoDB('SELIC', rS.slice(0, 7), sF.slice(0, 7));
+                if (fS !== null) jurosOc = jurosOc.plus(valorCorrigido.times(fS - 1));
+              } else if (regJ.tipo === 'TAXA_LEGAL') {
+                const fTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', rS.slice(0, 7), sF.slice(0, 7));
+                if (fTL !== null) jurosOc = jurosOc.plus(valorCorrigido.times(fTL - 1));
+              } else {
+                const m = this.mesesEntre(new Date(rS), new Date(sF));
+                const t = (regJ.percentual || 1) / 100;
+                jurosOc = jurosOc.plus(valorCorrigido.times(t).times(m));
+              }
+            }
+          }
+
+          oc.juros = jurosOc.toDP(2).toNumber();
+          oc.valor_final = valorCorrigido.plus(jurosOc).toDP(2).toNumber();
+          totalJuros = totalJuros.plus(oc.juros);
           totalFinal = totalFinal.plus(oc.valor_final);
           continue;
         }
@@ -1149,7 +1204,8 @@ export class PjeCalcEngine {
             const indiceNorm = normalizeIndice(regimeIndice?.indice || 'SEM_CORRECAO');
             const regimeJuros = this.getRegimeParaData(combinacoes_juros, realStart);
 
-            if (indiceNorm === 'SELIC') continue;
+            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended)
+            if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
             if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
 
             if (regimeJuros.tipo === 'SELIC') {
@@ -1404,11 +1460,13 @@ export class PjeCalcEngine {
       if (!verba?.incidencias.contribuicao_social) continue;
       if (verba.caracteristica === 'ferias') continue;
       for (const oc of vr.ocorrencias) {
-        // ═══ CS Base Rule: When PJC ground truth is applied, the factor includes
-        // both correction AND interest combined. Using valor_corrigido would inflate CS
-        // with the interest component. Use nominal diferenca as CS base instead.
+        // ═══ CS Base Rule (PJe-Calc):
+        // For SELIC regime: indiceAcumulado includes correction+interest combined.
+        //   CS base = nominal diferenca (to exclude interest component).
+        // For IPCA-E/other: indiceAcumulado is correction-only.
+        //   CS base = valor_corrigido (corrected value, pre-interest).
         let val: number;
-        if (useCorrigido && oc.pjc_ground_truth_applied) {
+        if (useCorrigido && oc.pjc_ground_truth_applied && oc.pjc_ground_truth_regime === 'SELIC') {
           val = Math.abs(oc.diferenca);
         } else if (useCorrigido) {
           val = oc.valor_corrigido;
@@ -2155,9 +2213,10 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.valor_corrigido === 0) { totalFinal += oc.valor_final; continue; }
 
-        // Skip interest for ground truth occurrences — pjc_indice_acumulado is the TOTAL factor
-        // (includes correction + interest combined) regardless of regime type
-        if (oc.pjc_ground_truth_applied) {
+        // ═══ PJC Ground Truth: indiceAcumulado is CORRECTION-ONLY.
+        // For SELIC regime: skip separate interest (already baked into SELIC factor).
+        // For IPCA-E/other regimes: apply interest normally on corrected value.
+        if (oc.pjc_ground_truth_applied && oc.pjc_ground_truth_regime === 'SELIC') {
           totalJuros += oc.juros;
           totalFinal += oc.valor_final;
           continue;
@@ -2191,7 +2250,8 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            if (indiceNorm === 'SELIC') continue;
+            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended)
+            if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
             
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
             if (!regimeJ || regimeJ.tipo === 'NENHUM') continue;
