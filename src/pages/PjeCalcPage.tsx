@@ -252,6 +252,7 @@ export default function PjeCalcPage() {
         case 'prev_privada': return <ModuloPrevidenciaPrivada caseId={caseId!} />;
         case 'custas': return <ModuloCustas caseId={caseId!} />;
         case 'resumo': return <ModuloResumo caseId={caseId!} />;
+        case 'fidelidade': return <FidelidadePanel fidelityReport={null} parityReport={null} />;
         case 'esocial': return <ModuloESocial caseId={caseId!} resultado={(calc.rawResultado?.resultado || null) as any} params={formParams} />;
         case 'tabelas_regionais': return <ModuloTabelasRegionais caseId={caseId!} estado={formParams.estado} municipio={formParams.municipio} />;
         case 'memoria': return calc.rawResultado?.resultado ? <MemoriaCalculoExpandida resultado={calc.rawResultado.resultado as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
