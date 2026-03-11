@@ -225,6 +225,20 @@ export interface AtualizacaoAnalysis {
   combinacoes_indice: { a_partir_de: string; indice: string }[];
   combinacoes_juros: { a_partir_de: string; tipo: string; taxa?: number }[];
   juros_apos_deducao_cs: boolean;
+  /** PJC: ignorarTaxaNegativa — when true, negative correction factors are clamped to 1 */
+  ignorar_taxa_negativa?: boolean;
+  /** PJC: baseDeJurosDasVerbas — which value to use as interest base */
+  base_de_juros_das_verbas?: string;
+  /** PJC: entePublico — affects interest calculation */
+  ente_publico?: boolean;
+  /** PJC: aplicarJurosFasePreJudicial */
+  aplicar_juros_fase_pre_judicial?: boolean;
+  /** PJC: jurosPadrao — default interest type */
+  juros_padrao?: string;
+  /** PJC: dataInicialDoJurosPadrao */
+  data_inicial_juros_padrao?: string;
+  /** PJC: dataFinalDoJurosPadrao */
+  data_final_juros_padrao?: string;
 }
 
 // =====================================================
