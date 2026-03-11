@@ -1293,22 +1293,17 @@ export class PjeCalcEngine {
     const jurosAposCS = !!this.correcaoConfig.juros_apos_deducao_cs;
 
     // Build GT data per competência (YYYY-MM)
-    // Compute juros directly from GT's per-entry CS amounts (cs_normal, cs_13)
-    // instead of global pro-rata distribution — this matches PJe-Calc's methodology exactly
+    // Compute juros directly from GT values.
+    // IMPORTANT: Even with juros_apos_deducao_cs=true, the GT taxaDeJuros is the 
+    // rate applied to valorCorrigido DIRECTLY. The CS deduction for Critério 8 is
+    // handled at the closure/summary level, NOT in the per-competência interest calc.
+    // PJe-Calc formula: juros = valorCorrigido × taxaDeJuros / 100
     const gtByComp = new Map<string, { valor_corrigido: number; total_juros_gt: number }>();
     for (const g of correcaoGT) {
       const comp = g.competencia.slice(0, 7);
-      // Compute juros for this GT entry using PJe-Calc's exact CS amounts
       let jurosEntry = 0;
       if (g.valor_corrigido > 0 && g.taxa_juros > 0) {
-        if (jurosAposCS) {
-          // PJe-Calc: juros = (valorCorrigido - contribuicaoSocialNormal - contribuicaoSocialDecimoTerceiro) × taxaDeJuros / 100
-          const csEntry = (g.cs_normal || 0) + (g.cs_13 || 0);
-          const baseJuros = Math.max(0, g.valor_corrigido - csEntry);
-          jurosEntry = baseJuros * g.taxa_juros / 100;
-        } else {
-          jurosEntry = g.valor_corrigido * g.taxa_juros / 100;
-        }
+        jurosEntry = g.valor_corrigido * g.taxa_juros / 100;
       }
       const existing = gtByComp.get(comp);
       if (existing) {
