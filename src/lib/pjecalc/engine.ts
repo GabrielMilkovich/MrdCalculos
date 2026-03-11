@@ -1080,87 +1080,75 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
-        // ═══ PJC Ground Truth: pjc_indice_acumulado is the CORRECTION factor only.
-        // Whether it includes interest depends on the regime:
-        //   SELIC → factor includes interest → skip separate interest
-        //   IPCA-E/other → factor is correction-only → interest calculated separately
+        let valorCorrigido: Decimal;
+        let skipInterest = false;
+
+        // ═══ PJC Ground Truth: pjc_indice_acumulado is the CORRECTION factor.
+        // SELIC factor includes interest → skip separate interest.
+        // IPCA-E/other factor is correction-only → calculate interest separately.
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
-          // Determine which correction regime applies at this occurrence's date
           const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
           const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
           const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
-          const isSelic = regimeIndice === 'SELIC';
 
           const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
-          const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
+          valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
           oc.indice_correcao = fatorTotal.toDP(6).toNumber();
           oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
           oc.pjc_ground_truth_applied = true;
           oc.pjc_ground_truth_regime = regimeIndice;
+          skipInterest = regimeIndice === 'SELIC';
+        } else {
+          // ═══ DB-calculated correction ═══
+          const compDateCorrecao = this.mesSubsequente(oc.competencia) + '-01';
 
-          if (isSelic) {
-            // SELIC already includes interest — no separate interest
-            oc.juros = 0;
-            oc.valor_final = valorCorrigido.toDP(2).toNumber();
-          } else {
-            // Non-SELIC: factor is correction-only, calculate interest separately below
-            // Interest will be calculated in the normal interest loop
-            oc.juros = 0; // placeholder, will be filled below
-            oc.valor_final = valorCorrigido.toDP(2).toNumber(); // will be updated after interest
+          const breakpoints = new Set<string>();
+          breakpoints.add(compDateCorrecao);
+          breakpoints.add(dataLiq);
+          for (const ci of combinacoes_indice) {
+            if (ci.de && ci.de > compDateCorrecao && ci.de <= dataLiq) breakpoints.add(ci.de);
           }
-          totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
-          if (isSelic) {
-            totalFinal = totalFinal.plus(oc.valor_final);
-            continue; // SELIC: done, no separate interest needed
-          }
-          // Non-SELIC: fall through to interest calculation below
-        }
+          const datas = Array.from(breakpoints).sort();
 
-        // Súmula 381: correction starts from mês subsequente ao vencimento
-        const compDateJuros = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
-        const compDateCorrecao = this.mesSubsequente(oc.competencia) + '-01';
-        
-        const breakpoints = new Set<string>();
-        breakpoints.add(compDateCorrecao);
-        breakpoints.add(dataLiq);
-        for (const ci of combinacoes_indice) {
-          if (ci.de && ci.de > compDateCorrecao && ci.de <= dataLiq) breakpoints.add(ci.de);
-        }
-        for (const cj of combinacoes_juros) {
-          if (cj.de && cj.de > compDateCorrecao && cj.de <= dataLiq) breakpoints.add(cj.de);
-        }
-        const datas = Array.from(breakpoints).sort();
-
-        let fatorTotal = new Decimal(1);
-        const regimesUsados: string[] = [];
-
-        for (let i = 0; i < datas.length - 1; i++) {
-          const segInicio = datas[i];
-          const segFim = datas[i + 1];
-          const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
-          const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
-
-          if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') {
-            regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
-            continue;
+          let fatorTotal = new Decimal(1);
+          for (let i = 0; i < datas.length - 1; i++) {
+            const segInicio = datas[i];
+            const segFim = datas[i + 1];
+            const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
+            const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
+            if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
+            const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
+            if (fatorDB !== null && fatorDB > 0) {
+              fatorTotal = fatorTotal.times(fatorDB);
+            } else {
+              console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
+            }
           }
 
-          const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
-          if (fatorDB !== null && fatorDB > 0) {
-            fatorTotal = fatorTotal.times(fatorDB);
-          } else {
-            console.warn(`[PjeCalcEngine] BLOQUEIO: Índice ${indice} ausente para ${segInicio}→${segFim}. Usando fator=1.`);
-          }
-          regimesUsados.push(`${indice}(${segInicio}→${segFim})`);
+          valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
+          oc.indice_correcao = fatorTotal.toDP(6).toNumber();
+          oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
         }
 
-        const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
-
-        // Calculate interest segment-by-segment
+        // ═══ Interest calculation (segment-by-segment) ═══
         let jurosTotal = new Decimal(0);
-        const jurosEffectiveStart = jurosStartDate || compDateJuros;
 
-        if (!jurosDisabled) {
+        if (!skipInterest && !jurosDisabled) {
+          const compDateJuros = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
+          const compDateCorrecao = this.mesSubsequente(oc.competencia) + '-01';
+          const jurosEffectiveStart = jurosStartDate || compDateJuros;
+
+          const breakpoints = new Set<string>();
+          breakpoints.add(compDateCorrecao);
+          breakpoints.add(dataLiq);
+          for (const ci of combinacoes_indice) {
+            if (ci.de && ci.de > compDateCorrecao && ci.de <= dataLiq) breakpoints.add(ci.de);
+          }
+          for (const cj of combinacoes_juros) {
+            if (cj.de && cj.de > compDateCorrecao && cj.de <= dataLiq) breakpoints.add(cj.de);
+          }
+          const datas = Array.from(breakpoints).sort();
+
           for (let i = 0; i < datas.length - 1; i++) {
             const segInicio = datas[i];
             const segFim = datas[i + 1];
@@ -1193,9 +1181,6 @@ export class PjeCalcEngine {
         }
 
         const valorFinal = valorCorrigido.plus(jurosTotal);
-
-        oc.indice_correcao = fatorTotal.toDP(6).toNumber();
-        oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
         oc.juros = jurosTotal.toDP(2).toNumber();
         oc.valor_final = valorFinal.toDP(2).toNumber();
 
