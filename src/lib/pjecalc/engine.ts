@@ -1281,7 +1281,7 @@ export class PjeCalcEngine {
     return false;
   }
 
-  private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, totalCSDescontado: number = 0): void {
+  private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, _totalCSDescontado: number = 0): void {
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
 
@@ -1290,19 +1290,32 @@ export class PjeCalcEngine {
     // Skip calibration entirely — the per-occurrence SELIC factor is already correct.
     if (this.isSELICCorrection()) return;
 
-    // Build GT list per competência (YYYY-MM), preserving per-entry taxaDeJuros
-    // Multiple entries per month (e.g. regular + 13th in Dec) are kept separate for accurate weighting
-    const gtByComp = new Map<string, { valor_corrigido: number; weighted_juros_sum: number }>();
+    const jurosAposCS = !!this.correcaoConfig.juros_apos_deducao_cs;
+
+    // Build GT data per competência (YYYY-MM)
+    // Compute juros directly from GT's per-entry CS amounts (cs_normal, cs_13)
+    // instead of global pro-rata distribution — this matches PJe-Calc's methodology exactly
+    const gtByComp = new Map<string, { valor_corrigido: number; total_juros_gt: number }>();
     for (const g of correcaoGT) {
       const comp = g.competencia.slice(0, 7);
+      // Compute juros for this GT entry using PJe-Calc's exact CS amounts
+      let jurosEntry = 0;
+      if (g.valor_corrigido > 0 && g.taxa_juros > 0) {
+        if (jurosAposCS) {
+          // PJe-Calc: juros = (valorCorrigido - contribuicaoSocialNormal - contribuicaoSocialDecimoTerceiro) × taxaDeJuros / 100
+          const csEntry = (g.cs_normal || 0) + (g.cs_13 || 0);
+          const baseJuros = Math.max(0, g.valor_corrigido - csEntry);
+          jurosEntry = baseJuros * g.taxa_juros / 100;
+        } else {
+          jurosEntry = g.valor_corrigido * g.taxa_juros / 100;
+        }
+      }
       const existing = gtByComp.get(comp);
-      // Accumulate: valor_corrigido sums, and weighted juros = sum(valor_corrigido_i × taxa_juros_i / 100)
-      const jurosContrib = g.valor_corrigido > 0 ? g.valor_corrigido * g.taxa_juros / 100 : 0;
       if (existing) {
         existing.valor_corrigido += g.valor_corrigido;
-        existing.weighted_juros_sum += jurosContrib;
+        existing.total_juros_gt += jurosEntry;
       } else {
-        gtByComp.set(comp, { valor_corrigido: g.valor_corrigido, weighted_juros_sum: jurosContrib });
+        gtByComp.set(comp, { valor_corrigido: g.valor_corrigido, total_juros_gt: jurosEntry });
       }
     }
 
@@ -1322,9 +1335,6 @@ export class PjeCalcEngine {
       }
     }
 
-    // Total corrected across all verbas (for CS pro-rata distribution)
-    const totalCorrigidoEngine = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
-
     // Apply proportional calibration per competência
     for (const [comp, gt] of gtByComp) {
       const eng = engineByComp.get(comp);
@@ -1332,23 +1342,19 @@ export class PjeCalcEngine {
       if (gt.valor_corrigido === 0) continue;
 
       const ratio = new Decimal(gt.valor_corrigido).div(eng.total_corrigido);
-      // Effective interest rate for this month = weighted_juros_sum / valor_corrigido
-      const effectiveRate = gt.valor_corrigido > 0 ? gt.weighted_juros_sum / gt.valor_corrigido : 0;
       
       for (const { oc } of eng.ocorrencias) {
         // Scale correction to match GT
         const newCorrigido = new Decimal(oc.valor_corrigido).times(ratio).toDP(2);
         oc.valor_corrigido = newCorrigido.toNumber();
 
-        if (includeInterest && effectiveRate > 0) {
-          // For juros_apos_deducao_cs: base = corrected - CS_share (pro-rata)
-          let baseJuros = newCorrigido;
-          if (totalCSDescontado > 0 && totalCorrigidoEngine > 0) {
-            const csShare = new Decimal(totalCSDescontado).times(oc.valor_corrigido).div(totalCorrigidoEngine).toDP(2);
-            baseJuros = newCorrigido.minus(csShare);
-          }
-          
-          oc.juros = baseJuros.times(effectiveRate).toDP(2).toNumber();
+        if (includeInterest && gt.total_juros_gt > 0) {
+          // Distribute GT juros proportionally by corrected value share
+          // The GT juros already accounts for CS deduction per entry — no further deduction needed
+          const share = eng.total_corrigido > 0
+            ? newCorrigido.div(new Decimal(gt.valor_corrigido))
+            : new Decimal(0);
+          oc.juros = share.times(gt.total_juros_gt).toDP(2).toNumber();
         } else if (includeInterest) {
           oc.juros = 0;
         }
