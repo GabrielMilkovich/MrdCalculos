@@ -756,7 +756,7 @@ export class PjeCalcEngine {
 
     if (faixas.length === 0) {
       // AUDIT: Track fallback for specific competência
-      this.trackWarning('E033', 'ir', `IR: Sem faixas para ${competencia} — usando padrão 2025`);
+      this.trackWarning('W033', 'ir', `IR: Sem faixas para ${competencia} — usando padrão 2025`);
       return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
     }
 
