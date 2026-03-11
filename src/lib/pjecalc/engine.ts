@@ -2290,8 +2290,9 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            // Skip interest during SELIC (includes interest) and SEM_CORRECAO (suspended)
-            if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
+            // Skip interest only during SELIC (already includes interest)
+            // SEM_CORRECAO suspends CORRECTION only, not interest
+            if (indiceNorm === 'SELIC') continue;
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
             const taxa = (this.correcaoConfig.juros_percentual || 1) / 100;
             jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
