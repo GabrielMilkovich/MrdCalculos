@@ -131,16 +131,17 @@ function simpleHash(obj: unknown): string {
 
 export function resolveCanonicalInput(sources: ResolverSources): CanonicalCaseInput {
   const p = sources.params;
+  const dp = sources.dadosProcesso;
   const src: InputSource = sources.isPjcImport ? 'pjc_import' : 'database';
 
   // ── IDENTIFICATION ──
   const identification: CaseIdentification = {
     case_id: resolved(p?.case_id || '', src, { isRequired: true }),
-    processo_cnj: resolveString(p?.numero_processo, false, false, src),
-    reclamante_nome: resolveString(p?.reclamante_nome, false, false, src),
-    reclamante_cpf: resolveString(p?.reclamante_cpf, false, false, src),
-    reclamado_nome: resolveString(p?.reclamada_nome, false, false, src),
-    reclamado_cnpj: resolveString(p?.reclamada_cnpj, false, false, src),
+    processo_cnj: resolveString(dp?.numero_processo, false, false, src),
+    reclamante_nome: resolveString(dp?.reclamante_nome, false, false, src),
+    reclamante_cpf: resolveString(dp?.reclamante_cpf, false, false, src),
+    reclamado_nome: resolveString(dp?.reclamada_nome, false, false, src),
+    reclamado_cnpj: resolveString(dp?.reclamada_cnpj, false, false, src),
     tipo_liquidacao: resolved('sentenca' as const, 'default_audited', { isRequired: false }),
     fonte_caso: resolved(sources.isPjcImport ? 'pjc' as const : 'manual' as const, src, { isRequired: false }),
     versao_input: resolved(1, 'database', { isRequired: false }),
@@ -152,12 +153,12 @@ export function resolveCanonicalInput(sources: ResolverSources): CanonicalCaseIn
     data_admissao: resolveStringRequired(p?.data_admissao, src, 'E001_ADMISSAO'),
     data_demissao: resolveString(p?.data_demissao, false, false, src),
     data_ajuizamento: resolveStringRequired(p?.data_ajuizamento, src, 'E002_AJUIZAMENTO'),
-    data_citacao: resolveString(p?.data_citacao, false, false, src, 'W001_CITACAO'),
+    data_citacao: resolveString(dp?.data_citacao, false, false, src, 'W001_CITACAO'),
     data_liquidacao: resolveStringRequired(correcaoCfg?.data_liquidacao, src, 'E003_LIQUIDACAO'),
     data_inicial_calculo: resolveString(p?.data_inicial, false, false, src),
     data_final_calculo: resolveString(p?.data_final, false, false, src),
     data_exigibilidade: resolveString(null, false, false),
-    data_prescricao_calculada: resolveString(p?.data_prescricao, false, false, src),
+    data_prescricao_calculada: resolveString(null, false, false),
   };
 
   // ── JURIDICAL ──
