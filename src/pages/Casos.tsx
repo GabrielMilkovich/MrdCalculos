@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { seedAdvancedTestCase } from "@/lib/test-case-seed";
 import { seedCasoMarcelo } from "@/lib/test-case-seed-marcelo";
 import { seedCasoMaria } from "@/lib/test-case-seed-maria";
+import { seedCasoRosicleia } from "@/lib/test-case-seed-rosicleia";
 import { toast } from "sonner";
 
 interface CaseWithMetrics {
@@ -50,6 +51,7 @@ export default function Casos() {
 
   const [seedingMarcelo, setSeedingMarcelo] = useState(false);
   const [seedingMaria, setSeedingMaria] = useState(false);
+  const [seedingRosicleia, setSeedingRosicleia] = useState(false);
 
   const handleSeedTestCase = async () => {
     setSeedingTest(true);
@@ -94,6 +96,21 @@ export default function Casos() {
       setSeedingMaria(false);
     }
   };
+
+  const handleSeedRosicleia = async () => {
+    setSeedingRosicleia(true);
+    try {
+      const caseId = await seedCasoRosicleia();
+      toast.success("Caso Rosicleia Pereira Chaves criado com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["cases-with-metrics"] });
+      navigate(`/casos/${caseId}`);
+    } catch (err: any) {
+      toast.error("Erro ao criar caso: " + err.message);
+    } finally {
+      setSeedingRosicleia(false);
+    }
+  };
+
 
   // Fetch cases with counts
   const { data: cases = [], isLoading } = useQuery({
@@ -240,7 +257,16 @@ export default function Casos() {
               className="pl-10 h-9 text-sm"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button 
+              variant="outline" size="sm" 
+              onClick={handleSeedRosicleia}
+              disabled={seedingRosicleia}
+              className="gap-1.5 h-9 text-sm border-primary/30 text-primary"
+            >
+              <FlaskConical className="h-4 w-4" />
+              {seedingRosicleia ? "Criando..." : "Caso Rosicleia (Comissionista)"}
+            </Button>
             <Button 
               variant="outline" size="sm" 
               onClick={handleSeedMaria}
