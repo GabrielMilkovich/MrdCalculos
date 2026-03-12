@@ -263,6 +263,7 @@ export default function PjeCalcPage() {
         case 'rastreabilidade': return renderRastreabilidade();
         case 'auditoria': return <AuditLog caseId={caseId!} />;
         case 'dashboard': return <DashboardProdutividade />;
+        case 'ai_audit': return <AuditAgentPanel caseId={caseId!} calculoId={(calc as any).calculoId} />;
         default: return null;
       }
     })();
