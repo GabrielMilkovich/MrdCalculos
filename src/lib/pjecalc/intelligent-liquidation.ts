@@ -491,7 +491,7 @@ export async function executarLiquidacaoInteligente(
     // ========== STEP 7: ENGINE CALCULATE ==========
     steps = startStep(steps, 'engine_calculate', onProgress);
     try {
-      calcResult = await executarLiquidacao(caseId, 'pipeline');
+      calcResult = await executarLiquidacao(caseId, 'auto');
       recalcCount++;
       steps = completeStep(steps, 'engine_calculate', {
         totalBruto: calcResult.result.resumo.principal_bruto,
