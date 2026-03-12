@@ -22,7 +22,7 @@ import {
   ChevronRight, ChevronLeft, Check, AlertTriangle,
   Briefcase, Calendar, Clock, DollarSign, FileText,
   ClipboardCheck, Calculator, Upload, Loader2,
-  CheckCircle2, XCircle, Info
+  CheckCircle2, XCircle, Info, Sparkles
 } from "lucide-react";
 
 // Import existing modules
@@ -35,7 +35,9 @@ import { CTPSUploader } from "./CTPSUploader";
 import { DocumentPipelineStatus } from "./DocumentPipelineStatus";
 import { GeradorReflexos } from "./GeradorReflexos";
 import { MRDStatePanel } from "./MRDStatePanel";
+import { LiquidationPipelineDialog } from "./LiquidationPipelineDialog";
 import { calcularCompletude, type ModuleStatus } from "@/lib/pjecalc/completude";
+import { useIntelligentLiquidation } from "@/hooks/useIntelligentLiquidation";
 import type { ValidationInput } from "@/lib/pjecalc/validation-engine";
 
 interface WizardProps {
@@ -73,6 +75,7 @@ const STATUS_ICON: Record<string, { icon: any; color: string }> = {
 export function WizardCalculo({ caseId, onComplete, onExit }: WizardProps) {
   const qc = useQueryClient();
   const [currentStep, setCurrentStep] = useState(0);
+  const liquidation = useIntelligentLiquidation(caseId);
 
   // Load data for completude check
   const { data: params } = useQuery({
@@ -247,29 +250,87 @@ export function WizardCalculo({ caseId, onComplete, onExit }: WizardProps) {
         return (
           <div className="space-y-4">
             <Card>
-              <CardHeader><CardTitle className="text-sm">Calcular e Exportar</CardTitle></CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Execute a liquidação completa e gere os relatórios para conferência.
+              <CardHeader><CardTitle className="text-sm">Liquidação Inteligente</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  O pipeline inteligente lê todos os documentos, audita os insumos com IA,
+                  corrige inconsistências automaticamente, calcula e verifica o resultado final.
                 </p>
-                {resultado ? (
+                
+                <Button
+                  onClick={() => liquidation.execute()}
+                  disabled={liquidation.isRunning}
+                  className="w-full gap-2"
+                  size="lg"
+                >
+                  {liquidation.isRunning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {liquidation.currentStepLabel}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      Liquidar com IA
+                    </>
+                  )}
+                </Button>
+
+                {liquidation.result && (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm text-[hsl(var(--success))]">
+                    <div className={`flex items-center gap-2 text-sm ${
+                      liquidation.result.status === 'completed' ? 'text-emerald-600' :
+                      liquidation.result.status === 'blocked' ? 'text-destructive' :
+                      'text-amber-600'
+                    }`}>
+                      {liquidation.result.status === 'completed' ? <CheckCircle2 className="h-4 w-4" /> :
+                       liquidation.result.status === 'blocked' ? <XCircle className="h-4 w-4" /> :
+                       <AlertTriangle className="h-4 w-4" />}
+                      {liquidation.result.status === 'completed' ? 'Liquidação concluída com sucesso' :
+                       liquidation.result.status === 'blocked' ? `Bloqueado: ${liquidation.result.blockers.length} problema(s)` :
+                       'Requer revisão humana'}
+                    </div>
+                    
+                    {liquidation.result.calculationResult && (
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="p-2 rounded bg-muted/30">
+                          <div className="text-muted-foreground">Líquido</div>
+                          <div className="font-bold text-primary">
+                            R$ {liquidation.result.calculationResult.result.resumo.liquido_reclamante.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                        <div className="p-2 rounded bg-muted/30">
+                          <div className="text-muted-foreground">Confiança</div>
+                          <div className="font-bold">{liquidation.result.confidenceScore}%</div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="text-[10px] text-muted-foreground">
+                      {liquidation.result.documentsRead} docs · {liquidation.result.correctionsApplied} correções · {liquidation.result.recalculationCount}x cálculo · {Math.round(liquidation.result.executionTimeMs / 1000)}s
+                    </div>
+                  </div>
+                )}
+
+                {resultado && !liquidation.result && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm text-emerald-600">
                       <CheckCircle2 className="h-4 w-4" />
-                      Liquidação calculada com sucesso
+                      Liquidação anterior encontrada
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Use o módulo "Resumo" na sidebar para ver os resultados detalhados.
                     </p>
                   </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Use o botão "Calcular" no módulo Resumo da sidebar principal para executar a liquidação.
-                  </p>
                 )}
               </CardContent>
             </Card>
             <MRDStatePanel caseId={caseId} />
+            
+            <LiquidationPipelineDialog
+              state={liquidation}
+              onClose={liquidation.closeDialog}
+            />
           </div>
         );
       default:
