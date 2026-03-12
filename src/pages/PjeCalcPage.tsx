@@ -96,6 +96,7 @@ const MODULOS = [
   { id: 'rastreabilidade', label: 'Rastreabilidade', icon: Scale, desc: 'Fundamentos jurídicos' },
   { id: 'auditoria', label: 'Auditoria', icon: History, desc: 'Trilha de alterações' },
   { id: 'dashboard', label: 'Produtividade', icon: BarChart3, desc: 'Métricas e indicadores' },
+  { id: 'ai_audit', label: 'Auditoria IA', icon: Lightbulb, desc: 'Agente de auditoria inteligente' },
 ];
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
