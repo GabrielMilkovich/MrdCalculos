@@ -57,6 +57,7 @@ import { ModuloAjusteSentenca } from "@/components/cases/pjecalc/ModuloAjusteSen
 import { ModuloESocial } from "@/components/cases/pjecalc/ModuloESocial";
 import { ComparacaoCenarios } from "@/components/cases/pjecalc/ComparacaoCenarios";
 import { FidelidadePanel } from "@/components/cases/pjecalc/FidelidadePanel";
+import { AuditAgentPanel } from "@/components/cases/pjecalc/AuditAgentPanel";
 import { getRastreabilidadeGeral, type ModuleStatus } from "@/lib/pjecalc/completude";
 
 import type { PjecalcFaltaRow, PjecalcFeriasRow, PjecalcVerbaRow } from "@/lib/pjecalc/types";
@@ -95,6 +96,7 @@ const MODULOS = [
   { id: 'rastreabilidade', label: 'Rastreabilidade', icon: Scale, desc: 'Fundamentos jurídicos' },
   { id: 'auditoria', label: 'Auditoria', icon: History, desc: 'Trilha de alterações' },
   { id: 'dashboard', label: 'Produtividade', icon: BarChart3, desc: 'Métricas e indicadores' },
+  { id: 'ai_audit', label: 'Auditoria IA', icon: Lightbulb, desc: 'Agente de auditoria inteligente' },
 ];
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
@@ -261,11 +263,12 @@ export default function PjeCalcPage() {
         case 'rastreabilidade': return renderRastreabilidade();
         case 'auditoria': return <AuditLog caseId={caseId!} />;
         case 'dashboard': return <DashboardProdutividade />;
+        case 'ai_audit': return <AuditAgentPanel caseId={caseId!} calculoId={(calc as any).calculoId} />;
         default: return null;
       }
     })();
 
-    const showAssistant = !['memoria', 'comparacao', 'revisao', 'rastreabilidade', 'auditoria', 'dashboard'].includes(activeModule);
+    const showAssistant = !['memoria', 'comparacao', 'revisao', 'rastreabilidade', 'auditoria', 'dashboard', 'ai_audit'].includes(activeModule);
 
     return (
       <div>
