@@ -2695,6 +2695,213 @@ export type Database = {
         }
         Relationships: []
       }
+      liquidation_ai_runs: {
+        Row: {
+          ai_model_used: string | null
+          blockers: Json | null
+          calculo_id: string | null
+          canonical_input_snapshot: Json | null
+          case_id: string
+          completed_at: string | null
+          confidence_score: number | null
+          confidence_status: string | null
+          conflicts_detected: number | null
+          corrections_applied: number | null
+          corrections_log: Json | null
+          created_at: string | null
+          created_by: string | null
+          current_step: string | null
+          documents_analyzed: Json | null
+          documents_read: number | null
+          engine_version: string | null
+          execution_time_ms: number | null
+          final_result_snapshot: Json | null
+          id: string
+          max_recalculations: number | null
+          module_scores: Json | null
+          pipeline_mode: string
+          pje_comparison_available: boolean | null
+          post_calc_audit_id: string | null
+          pre_calc_audit_id: string | null
+          recalculation_count: number | null
+          reconciliation_result: Json | null
+          started_at: string | null
+          status: string
+          steps_completed: Json | null
+          total_steps: number | null
+          warnings: Json | null
+        }
+        Insert: {
+          ai_model_used?: string | null
+          blockers?: Json | null
+          calculo_id?: string | null
+          canonical_input_snapshot?: Json | null
+          case_id: string
+          completed_at?: string | null
+          confidence_score?: number | null
+          confidence_status?: string | null
+          conflicts_detected?: number | null
+          corrections_applied?: number | null
+          corrections_log?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          current_step?: string | null
+          documents_analyzed?: Json | null
+          documents_read?: number | null
+          engine_version?: string | null
+          execution_time_ms?: number | null
+          final_result_snapshot?: Json | null
+          id?: string
+          max_recalculations?: number | null
+          module_scores?: Json | null
+          pipeline_mode?: string
+          pje_comparison_available?: boolean | null
+          post_calc_audit_id?: string | null
+          pre_calc_audit_id?: string | null
+          recalculation_count?: number | null
+          reconciliation_result?: Json | null
+          started_at?: string | null
+          status?: string
+          steps_completed?: Json | null
+          total_steps?: number | null
+          warnings?: Json | null
+        }
+        Update: {
+          ai_model_used?: string | null
+          blockers?: Json | null
+          calculo_id?: string | null
+          canonical_input_snapshot?: Json | null
+          case_id?: string
+          completed_at?: string | null
+          confidence_score?: number | null
+          confidence_status?: string | null
+          conflicts_detected?: number | null
+          corrections_applied?: number | null
+          corrections_log?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          current_step?: string | null
+          documents_analyzed?: Json | null
+          documents_read?: number | null
+          engine_version?: string | null
+          execution_time_ms?: number | null
+          final_result_snapshot?: Json | null
+          id?: string
+          max_recalculations?: number | null
+          module_scores?: Json | null
+          pipeline_mode?: string
+          pje_comparison_available?: boolean | null
+          post_calc_audit_id?: string | null
+          pre_calc_audit_id?: string | null
+          recalculation_count?: number | null
+          reconciliation_result?: Json | null
+          started_at?: string | null
+          status?: string
+          steps_completed?: Json | null
+          total_steps?: number | null
+          warnings?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_correcao_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_cs_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_custas_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_fgts_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_honorarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_ir_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_multas_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_parametros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "case_processing_stats"
+            referencedColumns: ["case_id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_post_calc_audit_id_fkey"
+            columns: ["post_calc_audit_id"]
+            isOneToOne: false
+            referencedRelation: "ai_audit_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liquidation_ai_runs_pre_calc_audit_id_fkey"
+            columns: ["pre_calc_audit_id"]
+            isOneToOne: false
+            referencedRelation: "ai_audit_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parties: {
         Row: {
           case_id: string
