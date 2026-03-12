@@ -57,6 +57,7 @@ import { ModuloAjusteSentenca } from "@/components/cases/pjecalc/ModuloAjusteSen
 import { ModuloESocial } from "@/components/cases/pjecalc/ModuloESocial";
 import { ComparacaoCenarios } from "@/components/cases/pjecalc/ComparacaoCenarios";
 import { FidelidadePanel } from "@/components/cases/pjecalc/FidelidadePanel";
+import { AuditAgentPanel } from "@/components/cases/pjecalc/AuditAgentPanel";
 import { getRastreabilidadeGeral, type ModuleStatus } from "@/lib/pjecalc/completude";
 
 import type { PjecalcFaltaRow, PjecalcFeriasRow, PjecalcVerbaRow } from "@/lib/pjecalc/types";
