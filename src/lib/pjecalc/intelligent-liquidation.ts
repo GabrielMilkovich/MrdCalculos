@@ -596,7 +596,7 @@ export async function executarLiquidacaoInteligente(
     if (needsRecalc && recalcCount < MAX_RECALC) {
       steps = startStep(steps, 'recalculate', onProgress);
       try {
-        calcResult = await executarLiquidacao(caseId, 'pipeline_recalc');
+        calcResult = await executarLiquidacao(caseId, 'auto');
         recalcCount++;
         steps = completeStep(steps, 'recalculate', {
           pass: recalcCount,
