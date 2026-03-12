@@ -723,8 +723,8 @@ async function persistPipelineResult(
       confidence_status: confidence.status,
       module_scores: confidence.moduleScores,
       corrections_applied: corrections.length,
-      corrections_log: corrections as unknown as Record<string, unknown>[],
-      blockers: blockers as unknown as Record<string, unknown>[],
+      corrections_log: JSON.parse(JSON.stringify(corrections)),
+      blockers: JSON.parse(JSON.stringify(blockers)),
       warnings: warnings,
       documents_read: documentsRead,
       final_result_snapshot: calcResult ? {
