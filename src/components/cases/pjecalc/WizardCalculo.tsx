@@ -22,7 +22,7 @@ import {
   ChevronRight, ChevronLeft, Check, AlertTriangle,
   Briefcase, Calendar, Clock, DollarSign, FileText,
   ClipboardCheck, Calculator, Upload, Loader2,
-  CheckCircle2, XCircle, Info
+  CheckCircle2, XCircle, Info, Sparkles
 } from "lucide-react";
 
 // Import existing modules
@@ -35,7 +35,9 @@ import { CTPSUploader } from "./CTPSUploader";
 import { DocumentPipelineStatus } from "./DocumentPipelineStatus";
 import { GeradorReflexos } from "./GeradorReflexos";
 import { MRDStatePanel } from "./MRDStatePanel";
+import { LiquidationPipelineDialog } from "./LiquidationPipelineDialog";
 import { calcularCompletude, type ModuleStatus } from "@/lib/pjecalc/completude";
+import { useIntelligentLiquidation } from "@/hooks/useIntelligentLiquidation";
 import type { ValidationInput } from "@/lib/pjecalc/validation-engine";
 
 interface WizardProps {
