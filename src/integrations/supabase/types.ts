@@ -14,6 +14,456 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_agent_logs: {
+        Row: {
+          agent_name: string
+          created_at: string
+          duration_ms: number | null
+          error: string | null
+          id: string
+          input_summary: Json | null
+          output_summary: Json | null
+          run_id: string
+          step: string | null
+          tokens_used: number | null
+        }
+        Insert: {
+          agent_name: string
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          input_summary?: Json | null
+          output_summary?: Json | null
+          run_id: string
+          step?: string | null
+          tokens_used?: number | null
+        }
+        Update: {
+          agent_name?: string
+          created_at?: string
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          input_summary?: Json | null
+          output_summary?: Json | null
+          run_id?: string
+          step?: string | null
+          tokens_used?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_logs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_audit_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_audit_findings: {
+        Row: {
+          agent_name: string
+          code: string
+          confidence: number | null
+          created_at: string
+          field: string | null
+          finding_type: string
+          id: string
+          metadata: Json | null
+          module: string
+          recommended_action: string | null
+          requires_human_confirmation: boolean | null
+          resolution_note: string | null
+          resolved: boolean | null
+          resolved_at: string | null
+          resolved_by: string | null
+          run_id: string
+          severity: string
+          source_basis: string | null
+          technical_message: string
+          title: string
+          user_message: string
+        }
+        Insert: {
+          agent_name: string
+          code: string
+          confidence?: number | null
+          created_at?: string
+          field?: string | null
+          finding_type: string
+          id?: string
+          metadata?: Json | null
+          module: string
+          recommended_action?: string | null
+          requires_human_confirmation?: boolean | null
+          resolution_note?: string | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          run_id: string
+          severity: string
+          source_basis?: string | null
+          technical_message: string
+          title: string
+          user_message: string
+        }
+        Update: {
+          agent_name?: string
+          code?: string
+          confidence?: number | null
+          created_at?: string
+          field?: string | null
+          finding_type?: string
+          id?: string
+          metadata?: Json | null
+          module?: string
+          recommended_action?: string | null
+          requires_human_confirmation?: boolean | null
+          resolution_note?: string | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          run_id?: string
+          severity?: string
+          source_basis?: string | null
+          technical_message?: string
+          title?: string
+          user_message?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_audit_findings_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_audit_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_audit_runs: {
+        Row: {
+          calculo_id: string | null
+          case_id: string
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          execution_time_ms: number | null
+          id: string
+          input_hash: string | null
+          model_used: string | null
+          overall_confidence: number | null
+          overall_status: string | null
+          prompt_version: string | null
+          run_type: string
+          status: string
+        }
+        Insert: {
+          calculo_id?: string | null
+          case_id: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          input_hash?: string | null
+          model_used?: string | null
+          overall_confidence?: number | null
+          overall_status?: string | null
+          prompt_version?: string | null
+          run_type: string
+          status?: string
+        }
+        Update: {
+          calculo_id?: string | null
+          case_id?: string
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          input_hash?: string | null
+          model_used?: string | null
+          overall_confidence?: number | null
+          overall_status?: string | null
+          prompt_version?: string | null
+          run_type?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_correcao_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_cs_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_custas_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_fgts_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_honorarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_ir_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_multas_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_parametros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "case_processing_stats"
+            referencedColumns: ["case_id"]
+          },
+          {
+            foreignKeyName: "ai_audit_runs_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_canonical_inputs: {
+        Row: {
+          case_id: string
+          created_at: string
+          id: string
+          input_hash: string | null
+          input_snapshot: Json
+          run_id: string
+          source_summary: Json | null
+          version: number | null
+        }
+        Insert: {
+          case_id: string
+          created_at?: string
+          id?: string
+          input_hash?: string | null
+          input_snapshot?: Json
+          run_id: string
+          source_summary?: Json | null
+          version?: number | null
+        }
+        Update: {
+          case_id?: string
+          created_at?: string
+          id?: string
+          input_hash?: string | null
+          input_snapshot?: Json
+          run_id?: string
+          source_summary?: Json | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_canonical_inputs_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "case_processing_stats"
+            referencedColumns: ["case_id"]
+          },
+          {
+            foreignKeyName: "ai_canonical_inputs_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_canonical_inputs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_audit_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_confidence_scores: {
+        Row: {
+          absent_count: number | null
+          blocker_count: number | null
+          created_at: string
+          details: Json | null
+          field_count: number | null
+          id: string
+          inferred_count: number | null
+          label: string
+          module: string
+          resolved_count: number | null
+          run_id: string
+          score: number
+        }
+        Insert: {
+          absent_count?: number | null
+          blocker_count?: number | null
+          created_at?: string
+          details?: Json | null
+          field_count?: number | null
+          id?: string
+          inferred_count?: number | null
+          label: string
+          module: string
+          resolved_count?: number | null
+          run_id: string
+          score?: number
+        }
+        Update: {
+          absent_count?: number | null
+          blocker_count?: number | null
+          created_at?: string
+          details?: Json | null
+          field_count?: number | null
+          id?: string
+          inferred_count?: number | null
+          label?: string
+          module?: string
+          resolved_count?: number | null
+          run_id?: string
+          score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_confidence_scores_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_audit_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_reconciliation_reports: {
+        Row: {
+          case_id: string
+          closure_divergences: Json | null
+          created_at: string
+          delta_bruto: number | null
+          delta_liquido: number | null
+          delta_percentual: number | null
+          id: string
+          mrd_total_bruto: number | null
+          mrd_total_liquido: number | null
+          overall_assessment: string | null
+          parameter_divergences: Json | null
+          pje_total_bruto: number | null
+          pje_total_liquido: number | null
+          root_causes: Json | null
+          rubric_divergences: Json | null
+          run_id: string
+        }
+        Insert: {
+          case_id: string
+          closure_divergences?: Json | null
+          created_at?: string
+          delta_bruto?: number | null
+          delta_liquido?: number | null
+          delta_percentual?: number | null
+          id?: string
+          mrd_total_bruto?: number | null
+          mrd_total_liquido?: number | null
+          overall_assessment?: string | null
+          parameter_divergences?: Json | null
+          pje_total_bruto?: number | null
+          pje_total_liquido?: number | null
+          root_causes?: Json | null
+          rubric_divergences?: Json | null
+          run_id: string
+        }
+        Update: {
+          case_id?: string
+          closure_divergences?: Json | null
+          created_at?: string
+          delta_bruto?: number | null
+          delta_liquido?: number | null
+          delta_percentual?: number | null
+          id?: string
+          mrd_total_bruto?: number | null
+          mrd_total_liquido?: number | null
+          overall_assessment?: string | null
+          parameter_divergences?: Json | null
+          pje_total_bruto?: number | null
+          pje_total_liquido?: number | null
+          root_causes?: Json | null
+          rubric_divergences?: Json | null
+          run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_reconciliation_reports_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "case_processing_stats"
+            referencedColumns: ["case_id"]
+          },
+          {
+            foreignKeyName: "ai_reconciliation_reports_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_reconciliation_reports_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "ai_audit_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_lines: {
         Row: {
           calculadora: string
