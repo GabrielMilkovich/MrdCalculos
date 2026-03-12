@@ -75,6 +75,7 @@ const STATUS_ICON: Record<string, { icon: any; color: string }> = {
 export function WizardCalculo({ caseId, onComplete, onExit }: WizardProps) {
   const qc = useQueryClient();
   const [currentStep, setCurrentStep] = useState(0);
+  const liquidation = useIntelligentLiquidation(caseId);
 
   // Load data for completude check
   const { data: params } = useQuery({
