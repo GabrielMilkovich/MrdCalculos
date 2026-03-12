@@ -268,7 +268,7 @@ export default function PjeCalcPage() {
       }
     })();
 
-    const showAssistant = !['memoria', 'comparacao', 'revisao', 'rastreabilidade', 'auditoria', 'dashboard'].includes(activeModule);
+    const showAssistant = !['memoria', 'comparacao', 'revisao', 'rastreabilidade', 'auditoria', 'dashboard', 'ai_audit'].includes(activeModule);
 
     return (
       <div>
