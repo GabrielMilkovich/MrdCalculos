@@ -46,6 +46,10 @@ import { PetitionGenerator } from "@/components/cases/PetitionGenerator";
 import { PremissasEditor } from "@/components/cases/PremissasEditor";
 import { CaseBriefing } from "@/components/cases/CaseBriefing";
 import { RiskAnalysisPanel } from "@/components/cases/pericial/RiskAnalysisPanel";
+import { TimelineView } from "@/components/cases/audit/TimelineView";
+import { TitleConsolidationView } from "@/components/cases/audit/TitleConsolidationView";
+import { InconsistencyPanel } from "@/components/cases/audit/InconsistencyPanel";
+import { ComparisonView } from "@/components/cases/audit/ComparisonView";
 import { ControversyManager } from "@/components/cases/pericial/ControversyManager";
 import { ScenarioManager } from "@/components/cases/pericial/ScenarioManager";
 import { PjeCalcSummaryWidget } from "@/components/cases/PjeCalcSummaryWidget";
@@ -321,6 +325,12 @@ export default function CasoDetalhe() {
       completed: false,
       active: activeTab === "roteiro",
       tooltip: "Diagnóstico completo do caso gerado por IA",
+    },
+    {
+      id: "auditoria", label: "Auditoria", icon: Search,
+      completed: false,
+      active: activeTab === "auditoria",
+      tooltip: "Timeline, título executivo, inconsistências e comparação",
     },
   ];
 
@@ -882,6 +892,16 @@ export default function CasoDetalhe() {
               status: caseData.status,
             }}
           />
+        );
+
+      case "auditoria":
+        return (
+          <div className="space-y-5">
+            <TimelineView timeline={[]} />
+            <TitleConsolidationView title={{ global_rules: [], rules_by_rubric: new Map(), denied_rubrics: new Set(), granted_rubrics: new Set(), conflicts: [], latest_version: null }} />
+            <InconsistencyPanel flags={[]} />
+            <ComparisonView rows={[]} totalMRD={0} totalPJC={0} />
+          </div>
         );
 
       default:
