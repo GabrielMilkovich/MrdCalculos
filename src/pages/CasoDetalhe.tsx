@@ -629,14 +629,31 @@ export default function CasoDetalhe() {
         })));
       }
 
+      let domainAuditMessage = "";
+      try {
+        const domainConfig = await buildDomainExecutionConfig(id!, true);
+        const domainResult = orchestrateCalculation(domainConfig);
+        await persistDomainAuditSnapshot(
+          id!,
+          domainConfig.scenario.id,
+          domainResult.items,
+          domainResult.inconsistencies,
+        );
+        domainAuditMessage = ` • auditoria atualizada (${domainResult.items.length} itens)`;
+      } catch (domainError) {
+        console.error("Domain audit persistence error:", domainError);
+        toast.warning("Cálculo salvo, mas a auditoria técnica não pôde ser atualizada.");
+      }
+
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["facts", id] }),
         queryClient.invalidateQueries({ queryKey: ["calculation_runs", id] }),
         queryClient.invalidateQueries({ queryKey: ["calc_snapshots", id] }),
         queryClient.invalidateQueries({ queryKey: ["latest_calc_run", id] }),
         queryClient.invalidateQueries({ queryKey: ["audit_lines_detail"] }),
+        queryClient.invalidateQueries({ queryKey: ["domain_audit", id] }),
       ]);
-      toast.success(`Cálculo executado! Snapshot v${nextVersion} gerado.`);
+      toast.success(`Cálculo executado! Snapshot v${nextVersion} gerado${domainAuditMessage}.`);
       updateStatusMutation.mutate("calculado");
       setActiveTab("calculo");
     } catch (e) {
