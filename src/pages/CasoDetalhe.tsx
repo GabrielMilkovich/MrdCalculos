@@ -925,6 +925,7 @@ export default function CasoDetalhe() {
                 <TimelineView timeline={domainAuditData?.timeline || []} />
                 <TitleConsolidationView title={domainAuditData?.title || { global_rules: [], rules_by_rubric: new Map(), denied_rubrics: new Set(), granted_rubrics: new Set(), conflicts: [], latest_version: null }} />
                 <InconsistencyPanel flags={domainAuditData?.flags || []} />
+                <AuditDrillDown result={(pjecalcLiquidacao?.resultado as any) || null} />
                 <ComparisonView rows={domainAuditData?.rows || []} totalMRD={domainAuditData?.totalMRD || 0} totalPJC={domainAuditData?.totalPJC || 0} />
               </>
             )}
