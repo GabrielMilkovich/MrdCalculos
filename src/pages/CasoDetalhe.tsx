@@ -898,7 +898,7 @@ export default function CasoDetalhe() {
         return (
           <div className="space-y-5">
             <TimelineView timeline={[]} />
-            <TitleConsolidationView title={{ global_rules: [], rules_by_rubric: new Map(), conflicts: [], effective_date: new Date().toISOString() }} />
+            <TitleConsolidationView title={{ global_rules: [], rules_by_rubric: new Map(), denied_rubrics: new Set(), granted_rubrics: new Set(), conflicts: [], latest_version: null }} />
             <InconsistencyPanel flags={[]} />
             <ComparisonView rows={[]} totalMRD={0} totalPJC={0} />
           </div>
