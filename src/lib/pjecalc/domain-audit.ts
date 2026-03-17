@@ -13,6 +13,7 @@ import type {
   LaborCase,
 } from "@/domain/types";
 import type { OrchestratorConfig } from "./domain-orchestrator";
+import type { PjeFerias, PjeHistoricoSalarial, PjeHistoricoOcorrencia, PjeVerba } from "./engine-types";
 import * as svc from "./service";
 
 export interface DomainComparisonRow {
@@ -45,6 +46,10 @@ type ContractRow = Database["public"]["Tables"]["employment_contracts"]["Row"];
 type SnapshotRow = Pick<Database["public"]["Tables"]["calc_snapshots"]["Row"], "id" | "total_bruto">;
 type CalcResultItemRow = Pick<Database["public"]["Tables"]["calc_result_items"]["Row"], "rubrica_codigo" | "competencia" | "valor_bruto">;
 
+function toSerializableJson<T>(value: T) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 function mapDocumentStatus(status: string | null): EvidenceSource["status"] {
   switch (status) {
     case "processing":
@@ -68,63 +73,70 @@ function toEvidenceSources(caseId: string, documents: DocumentRow[]): EvidenceSo
     periodo_referencia_inicio: doc.periodo_referencia_inicio ?? doc.periodo_inicio ?? undefined,
     periodo_referencia_fim: doc.periodo_referencia_fim ?? doc.periodo_fim ?? undefined,
     status: mapDocumentStatus(doc.status),
-    confidence: Math.max(0, Math.min(1, (doc.ocr_confidence ?? doc.ocr_confianca ?? 0.75))),
+    confidence: Math.max(0, Math.min(1, doc.ocr_confidence ?? doc.ocr_confianca ?? 0.75)),
     metadata: typeof doc.metadata === "object" && doc.metadata ? (doc.metadata as Record<string, unknown>) : undefined,
   }));
 }
 
-function toScenarioParams(params: Awaited<ReturnType<typeof svc.getParametros>>): GlobalCalculationParams {
+function toScenarioParams(
+  params: Awaited<ReturnType<typeof svc.getParametros>>,
+  dadosProcesso: Awaited<ReturnType<typeof svc.getDadosProcesso>>,
+): GlobalCalculationParams {
   const today = new Date().toISOString().slice(0, 10);
   return {
     data_liquidacao: params?.data_final || today,
     data_ajuizamento: params?.data_ajuizamento || today,
-    data_citacao: params?.data_citacao || undefined,
+    data_citacao: dadosProcesso?.data_citacao || undefined,
     prescricao_quinquenal: params?.prescricao_quinquenal ?? true,
-    data_prescricao: params?.data_prescricao_quinquenal || undefined,
+    data_prescricao: undefined,
     sabado_dia_util: params?.sabado_dia_util ?? true,
     considerar_feriado_estadual: params?.considerar_feriado_estadual ?? true,
     considerar_feriado_municipal: params?.considerar_feriado_municipal ?? true,
     projetar_aviso_indenizado: params?.projetar_aviso_indenizado ?? false,
     zerar_valor_negativo: params?.zerar_valor_negativo ?? true,
-    tipo_mes: params?.tipo_mes === "civil" ? "civil" : "comercial",
+    tipo_mes: "comercial",
     carga_horaria_padrao: params?.carga_horaria_padrao || 220,
     estado: params?.estado || "SP",
     municipio: params?.municipio || "São Paulo",
     indice_correcao: "IPCA-E",
     taxa_juros: 1,
-    juros_inicio: params?.data_citacao ? "citacao" : "ajuizamento",
+    juros_inicio: dadosProcesso?.data_citacao ? "citacao" : "ajuizamento",
   };
 }
 
-function toEmploymentContract(caseId: string, params: Awaited<ReturnType<typeof svc.getParametros>>, contract: ContractRow | null): EmploymentContract {
+function toEmploymentContract(
+  caseId: string,
+  params: Awaited<ReturnType<typeof svc.getParametros>>,
+  contract: ContractRow | null,
+): EmploymentContract {
   const admissao = contract?.data_admissao || params?.data_admissao;
   if (!admissao) {
     throw new Error("Contrato de trabalho não encontrado para o cálculo de domínio.");
   }
 
   const demissao = contract?.data_demissao || params?.data_demissao || undefined;
-  const jornadaDescricao = typeof contract?.jornada_contratual === "object" && contract?.jornada_contratual
-    ? JSON.stringify(contract.jornada_contratual)
-    : undefined;
   const cargaHoraria = params?.carga_horaria_padrao || 220;
   const salarioBase = contract?.salario_inicial || params?.ultima_remuneracao || params?.maior_remuneracao || 0;
+  const contractId = contract?.id || `contract-${caseId}`;
 
   return {
-    id: contract?.id || `contract-${caseId}`,
+    id: contractId,
     case_id: caseId,
     admissao,
     demissao,
     funcao: contract?.funcao || "Função não informada",
     regime: "clt",
     tipo_salario: "misto",
-    carga_horaria_semanal: Math.round((cargaHoraria / 5) * 1.0),
-    jornada_descricao: jornadaDescricao,
+    carga_horaria_semanal: 44,
+    jornada_descricao: typeof contract?.jornada_contratual === "object" && contract?.jornada_contratual
+      ? JSON.stringify(contract.jornada_contratual)
+      : undefined,
     periods: [
       {
-        id: `${contract?.id || `contract-${caseId}`}-period-1`,
-        contract_id: contract?.id || `contract-${caseId}`,
+        id: `${contractId}-period-1`,
+        contract_id: contractId,
         inicio: admissao,
-        fim: demissao || params?.data_final || new Date().toISOString().slice(0, 10),
+        fim: demissao || params?.data_final || todayString(),
         funcao: contract?.funcao || "Função não informada",
         salario_base: salarioBase,
         carga_horaria: cargaHoraria,
@@ -135,6 +147,10 @@ function toEmploymentContract(caseId: string, params: Awaited<ReturnType<typeof 
     salary_histories: [],
     events: [],
   };
+}
+
+function todayString() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function toLaborCase(caseRow: CaseRow, documents: DocumentRow[], contract: EmploymentContract, scenario: OrchestratorConfig["scenario"]): LaborCase {
@@ -169,14 +185,14 @@ function toJudicialTitleVersions(
       id: rule.id,
       title_version_id: rule.title_version_id,
       rubric_code: rule.rubric_code || undefined,
-      tipo: rule.tipo as JudicialRuleRow["tipo"] & any,
+      tipo: rule.tipo as JudicialTitleVersion["rules"][number]["tipo"],
       descricao: rule.descricao,
       parametros: typeof rule.parametros === "object" && rule.parametros ? (rule.parametros as Record<string, unknown>) : {},
       periodo_inicio: rule.periodo_inicio || undefined,
       periodo_fim: rule.periodo_fim || undefined,
       prioridade: rule.prioridade,
       substitui_rule_id: rule.substitui_rule_id || undefined,
-      fonte: rule.fonte as any,
+      fonte: rule.fonte as JudicialTitleVersion["rules"][number]["fonte"],
       observacoes: rule.observacoes || undefined,
     })),
   }));
@@ -211,21 +227,143 @@ async function getScenarioRow(caseId: string, ensureExists: boolean): Promise<Sc
   return created;
 }
 
-function toScenario(caseId: string, scenarioRow: ScenarioRow | null, params: Awaited<ReturnType<typeof svc.getParametros>>): OrchestratorConfig["scenario"] {
-  const globalParams = toScenarioParams(params);
-
+function toScenario(
+  caseId: string,
+  scenarioRow: ScenarioRow | null,
+  params: Awaited<ReturnType<typeof svc.getParametros>>,
+  dadosProcesso: Awaited<ReturnType<typeof svc.getDadosProcesso>>,
+): OrchestratorConfig["scenario"] {
   return {
     id: scenarioRow?.id || `preview-${caseId}`,
     case_id: caseId,
     nome: scenarioRow?.nome || "Cenário de auditoria",
     descricao: scenarioRow?.descricao || "Preview do cálculo de domínio",
-    tipo: (scenarioRow?.tipo as OrchestratorConfig["scenario"]["tipo"]) || "principal",
+    tipo: ((scenarioRow?.tipo as OrchestratorConfig["scenario"]["tipo"]) || "principal"),
     ativo: scenarioRow?.ativo ?? true,
-    params: globalParams,
-    status: (scenarioRow?.tipo ? "calculado" : "rascunho") as OrchestratorConfig["scenario"]["status"],
+    params: toScenarioParams(params, dadosProcesso),
+    status: "rascunho",
     created_at: (scenarioRow?.created_at || new Date().toISOString()).slice(0, 10),
     updated_at: (scenarioRow?.updated_at || new Date().toISOString()).slice(0, 10),
   };
+}
+
+function mapCaracteristica(value: string | null): PjeVerba["caracteristica"] {
+  switch (value) {
+    case "13_salario":
+    case "aviso_previo":
+    case "ferias":
+      return value;
+    default:
+      return "comum";
+  }
+}
+
+function mapOcorrenciaPagamento(value: string | null): PjeVerba["ocorrencia_pagamento"] {
+  switch (value) {
+    case "dezembro":
+    case "periodo_aquisitivo":
+    case "desligamento":
+      return value;
+    default:
+      return "mensal";
+  }
+}
+
+function toEngineVerbas(rows: Awaited<ReturnType<typeof svc.getVerbas>>, params: Awaited<ReturnType<typeof svc.getParametros>>): PjeVerba[] {
+  const periodoInicioDefault = params?.data_admissao || todayString();
+  const periodoFimDefault = params?.data_final || params?.data_demissao || todayString();
+
+  return rows.map((row) => ({
+    id: row.id,
+    nome: row.nome,
+    tipo: row.tipo === "reflexa" ? "reflexa" : "principal",
+    valor: row.valor === "informado" ? "informado" : "calculado",
+    caracteristica: mapCaracteristica(row.caracteristica),
+    ocorrencia_pagamento: mapOcorrenciaPagamento(row.ocorrencia_pagamento),
+    compor_principal: true,
+    zerar_valor_negativo: true,
+    dobrar_valor_devido: false,
+    periodo_inicio: row.periodo_inicio || periodoInicioDefault,
+    periodo_fim: row.periodo_fim || periodoFimDefault,
+    base_calculo: {
+      historicos: row.hist_salarial_nome ? [row.hist_salarial_nome] : [],
+      verbas: [],
+      tabelas: [],
+      proporcionalizar: false,
+      integralizar: false,
+    },
+    tipo_divisor: "informado",
+    divisor_informado: row.divisor_informado || params?.carga_horaria_padrao || 220,
+    multiplicador: row.multiplicador || 1,
+    tipo_quantidade: "informada",
+    quantidade_informada: 1,
+    quantidade_proporcionalizar: false,
+    exclusoes: {
+      faltas_justificadas: false,
+      faltas_nao_justificadas: false,
+      ferias_gozadas: false,
+    },
+    valor_informado_devido: row.valor_informado_devido || undefined,
+    valor_informado_pago: row.valor_informado_pago || undefined,
+    incidencias: {
+      fgts: row.incide_fgts ?? true,
+      irpf: row.incide_ir ?? false,
+      contribuicao_social: row.incide_inss ?? true,
+      previdencia_privada: false,
+      pensao_alimenticia: false,
+    },
+    juros_ajuizamento: "ocorrencias_vencidas",
+    verba_principal_id: row.verba_principal_id || undefined,
+    comportamento_reflexo: "valor_mensal",
+    periodo_media_reflexo: "global",
+    gerar_verba_reflexa: "diferenca",
+    gerar_verba_principal: "devido",
+    ordem: row.ordem || 0,
+  }));
+}
+
+function toEngineFerias(rows: Awaited<ReturnType<typeof svc.getFerias>>): PjeFerias[] {
+  return rows.map((row) => ({
+    id: row.id,
+    relativas: row.periodo_aquisitivo_inicio || row.id,
+    periodo_aquisitivo_inicio: row.periodo_aquisitivo_inicio || todayString(),
+    periodo_aquisitivo_fim: row.periodo_aquisitivo_fim || todayString(),
+    periodo_concessivo_inicio: row.periodo_concessivo_inicio || row.periodo_aquisitivo_fim || todayString(),
+    periodo_concessivo_fim: row.periodo_concessivo_fim || row.gozo_fim || todayString(),
+    prazo_dias: row.dias || 30,
+    situacao: (row.situacao as PjeFerias["situacao"]) || "gozadas",
+    dobra: row.dobra,
+    abono: row.abono,
+    periodos_gozo: row.gozo_inicio
+      ? [
+          {
+            inicio: row.gozo_inicio,
+            fim: row.gozo_fim || row.gozo_inicio,
+            dias: row.dias || 30,
+          },
+        ]
+      : undefined,
+    abono_dias: row.dias_abono || undefined,
+  }));
+}
+
+function toEngineHistoricos(
+  rows: Awaited<ReturnType<typeof svc.getHistoricoSalarial>>,
+  ocorrencias: PjeHistoricoOcorrencia[],
+): PjeHistoricoSalarial[] {
+  return rows.map((row) => ({
+    id: row.id,
+    nome: row.nome,
+    periodo_inicio: row.periodo_inicio || todayString(),
+    periodo_fim: row.periodo_fim || todayString(),
+    tipo_valor: row.tipo_valor === "calculado" ? "calculado" : "informado",
+    valor_informado: row.valor_informado || undefined,
+    incidencia_fgts: row.incidencia_fgts,
+    incidencia_cs: row.incidencia_cs,
+    fgts_recolhido: false,
+    cs_recolhida: false,
+    ocorrencias: ocorrencias.filter((entry) => entry.historico_id === row.id),
+  }));
 }
 
 export async function buildDomainExecutionConfig(caseId: string, ensureScenario = false): Promise<OrchestratorConfig> {
@@ -235,11 +373,7 @@ export async function buildDomainExecutionConfig(caseId: string, ensureScenario 
     supabase.from("documents").select("*").eq("case_id", caseId).order("uploaded_em", { ascending: false }),
     supabase.from("employment_contracts").select("*").eq("case_id", caseId).maybeSingle(),
     getScenarioRow(caseId, ensureScenario),
-    supabase
-      .from("judicial_title_versions")
-      .select("*, judicial_rules(*)")
-      .eq("case_id", caseId)
-      .order("versao", { ascending: true }),
+    supabase.from("judicial_title_versions").select("*, judicial_rules(*)").eq("case_id", caseId).order("versao", { ascending: true }),
   ]);
 
   if (caseRes.error) throw caseRes.error;
@@ -248,7 +382,9 @@ export async function buildDomainExecutionConfig(caseId: string, ensureScenario 
   if (titleRes.error) throw titleRes.error;
   if (!pjeData.params) throw new Error("Parâmetros do cálculo não preenchidos.");
 
-  const scenario = toScenario(caseId, scenarioRow, pjeData.params);
+  const historicoIds = pjeData.historicos.map((item) => item.id);
+  const historicoOcorrencias = (await svc.getHistoricoOcorrenciasByIds(historicoIds)) as unknown as PjeHistoricoOcorrencia[];
+  const scenario = toScenario(caseId, scenarioRow, pjeData.params, pjeData.dadosProcesso);
   const contract = toEmploymentContract(caseId, pjeData.params, contractRes.data);
   const laborCase = toLaborCase(caseRes.data, docsRes.data || [], contract, scenario);
   const titleVersions = toJudicialTitleVersions((titleRes.data || []) as (TitleVersionRow & { judicial_rules?: JudicialRuleRow[] | null })[]);
@@ -258,11 +394,11 @@ export async function buildDomainExecutionConfig(caseId: string, ensureScenario 
     contract,
     scenario,
     titleVersions,
-    verbas: pjeData.verbas,
-    historicos: pjeData.historicos,
+    verbas: toEngineVerbas(pjeData.verbas, pjeData.params),
+    historicos: toEngineHistoricos(pjeData.historicos, historicoOcorrencias),
     cartaoPonto: pjeData.cartaoPonto,
     faltas: pjeData.faltas,
-    ferias: pjeData.ferias,
+    ferias: toEngineFerias(pjeData.ferias),
   };
 }
 
@@ -290,21 +426,15 @@ function serializeItem(item: CalculationItem): Database["public"]["Tables"]["dom
     formula_aplicada: item.formula_aplicada,
     judicial_rule_id: item.judicial_rule_id || null,
     ativo: item.ativo,
-    reflections: item.reflections.map((reflection) => ({
-      ...reflection,
-      valor: reflection.valor.toNumber(),
-    })),
-    incidences: item.incidences.map((incidence) => ({
+    reflections: toSerializableJson(item.reflections.map((reflection) => ({ ...reflection, valor: reflection.valor.toNumber() }))),
+    incidences: toSerializableJson(item.incidences.map((incidence) => ({
       ...incidence,
       base: incidence.base.toNumber(),
       aliquota: incidence.aliquota.toNumber(),
       valor: incidence.valor.toNumber(),
-    })),
-    offsets: item.offsets.map((offset) => ({
-      ...offset,
-      valor_abatido: offset.valor_abatido.toNumber(),
-    })),
-    audit_trail: item.audit_trail,
+    }))),
+    offsets: toSerializableJson(item.offsets.map((offset) => ({ ...offset, valor_abatido: offset.valor_abatido.toNumber() }))),
+    audit_trail: toSerializableJson(item.audit_trail),
   };
 }
 
@@ -369,15 +499,8 @@ function aggregateDomainItems(items: DomainItemRow[]): Map<string, { verba: stri
   for (const item of items) {
     const key = `${item.rubric_code}::${item.competencia}`;
     const current = map.get(key);
-    if (current) {
-      current.valor += item.total;
-    } else {
-      map.set(key, {
-        verba: item.rubric_name || item.rubric_code,
-        competencia: item.competencia,
-        valor: item.total,
-      });
-    }
+    if (current) current.valor += item.total;
+    else map.set(key, { verba: item.rubric_name || item.rubric_code, competencia: item.competencia, valor: item.total });
   }
   return map;
 }
@@ -402,7 +525,6 @@ export async function loadDomainAuditData(caseId: string): Promise<DomainAuditDa
   const config = await buildDomainExecutionConfig(caseId, false);
   const title = resolveJudicialTitle(config.titleVersions);
   const timeline = buildTimelineFromConfig(config);
-
   const actualScenarioId = config.scenario.id.startsWith("preview-") ? null : config.scenario.id;
 
   const [flagsRes, itemsRes, snapshotRes] = await Promise.all([
@@ -439,10 +561,7 @@ export async function loadDomainAuditData(caseId: string): Promise<DomainAuditDa
   let referenceItems: CalcResultItemRow[] = [];
   const latestSnapshot = snapshotRes.data as SnapshotRow | null;
   if (latestSnapshot?.id) {
-    const { data, error } = await supabase
-      .from("calc_result_items")
-      .select("rubrica_codigo, competencia, valor_bruto")
-      .eq("snapshot_id", latestSnapshot.id);
+    const { data, error } = await supabase.from("calc_result_items").select("rubrica_codigo, competencia, valor_bruto").eq("snapshot_id", latestSnapshot.id);
     if (error) throw error;
     referenceItems = (data || []) as CalcResultItemRow[];
   }
@@ -453,9 +572,8 @@ export async function loadDomainAuditData(caseId: string): Promise<DomainAuditDa
 
   const rows: DomainComparisonRow[] = Array.from(keys).map((key) => {
     const domain = domainMap.get(key);
-    const reference = referenceMap.get(key) || 0;
+    const valorPJC = referenceMap.get(key) || 0;
     const valorMRD = domain?.valor || 0;
-    const valorPJC = reference;
     const diferencaAbsoluta = valorMRD - valorPJC;
     const diferencaPercentual = valorPJC !== 0 ? (diferencaAbsoluta / valorPJC) * 100 : valorMRD === 0 ? 0 : 100;
     const [rubricaCodigo, competencia] = key.split("::");
