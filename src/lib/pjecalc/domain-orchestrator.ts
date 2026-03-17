@@ -6,15 +6,6 @@
  * Connects the domain layer (timeline, title resolver, incidence engine,
  * rubric classifier) to the verba module system and produces a fully
  * auditable CalculationItem[] per competência.
- * 
- * Pipeline:
- *   1. Resolve Judicial Title → consolidated rules per rubric
- *   2. Build Timeline → monthly competências with contract state
- *   3. For each competência, run applicable VerbaModules
- *   4. Apply reflections → generate dependent items
- *   5. Apply incidences (FGTS, INSS, IRRF)
- *   6. Apply offsets
- *   7. Produce audit trail
  */
 
 import Decimal from 'decimal.js';
@@ -22,13 +13,13 @@ import type {
   LaborCase, EmploymentContract, CalculationScenario, CalculationItem,
   CalculationCompetency, JudicialTitleVersion, JudicialRule,
   InconsistencyFlag, UUID, Competencia, AuditTrailEntry,
-  CalculationItemReflection, CalculationItemIncidence, CalculationItemOffset,
+  GlobalCalculationParams,
 } from '../../domain/types';
 import { buildTimeline } from '../../domain/timeline-builder';
-import { resolveJudicialTitle, type ConsolidatedTitle } from '../../domain/judicial-title-resolver';
-import { calcularFGTS, calcularINSS, calcularIRRF, type FGTSConfig, type INSSTabela, type IRRFTabela } from '../../domain/incidence-engine';
-import { getModulesInOrder, type VerbaModuleContext, type VerbaModule } from '../verba-modules';
-import type { PjeVerba, PjeHistoricoSalarial, PjeCartaoPonto, PjeFalta, PjeFerias, PjeOcorrenciaResult } from '../engine-types';
+import { resolveJudicialTitle, type ResolvedTitleState } from '../../domain/judicial-title-resolver';
+import type { VerbaModuleContext } from './verba-modules/types';
+import { getModulesInOrder } from './verba-modules/types';
+import type { PjeVerba, PjeHistoricoSalarial, PjeCartaoPonto, PjeFalta, PjeFerias, PjeOcorrenciaResult } from './engine-types';
 
 // =====================================================
 // ORCHESTRATOR CONFIG
@@ -39,16 +30,11 @@ export interface OrchestratorConfig {
   contract: EmploymentContract;
   scenario: CalculationScenario;
   titleVersions: JudicialTitleVersion[];
-  /** Engine-level verba definitions */
   verbas: PjeVerba[];
   historicos: PjeHistoricoSalarial[];
   cartaoPonto: PjeCartaoPonto[];
   faltas: PjeFalta[];
   ferias: PjeFerias[];
-  /** Tax tables for incidence calculation */
-  inssTabelas?: INSSTabela[];
-  irrfTabelas?: IRRFTabela[];
-  fgtsConfig?: FGTSConfig;
 }
 
 // =====================================================
@@ -58,7 +44,7 @@ export interface OrchestratorConfig {
 export interface OrchestratorResult {
   items: CalculationItem[];
   inconsistencies: InconsistencyFlag[];
-  consolidatedTitle: ConsolidatedTitle;
+  consolidatedTitle: ResolvedTitleState;
   timeline: CalculationCompetency[];
   totalBruto: Decimal;
   totalLiquido: Decimal;
@@ -78,16 +64,12 @@ export function orchestrateCalculation(config: OrchestratorConfig): Orchestrator
   const consolidatedTitle = resolveJudicialTitle(config.titleVersions);
   auditSummary.push({
     campo: 'titulo_executivo',
-    valor: `${consolidatedTitle.rules.length} regras consolidadas`,
+    valor: `${consolidatedTitle.global_rules.length + Array.from(consolidatedTitle.rules_by_rubric.values()).flat().length} regras consolidadas`,
     fonte: 'judicial_title_resolver',
   });
 
   // Step 2: Build timeline
-  const timeline = buildTimeline(
-    config.contract,
-    config.scenario.params,
-    config.laborCase.documents,
-  );
+  const timeline = buildTimeline(config.contract);
   auditSummary.push({
     campo: 'timeline',
     valor: `${timeline.length} competências`,
@@ -104,37 +86,54 @@ export function orchestrateCalculation(config: OrchestratorConfig): Orchestrator
     const moduleContext = buildModuleContext(config, comp, globalResults);
 
     for (const mod of modules) {
-      // Check if module has applicable verbas
       const applicableVerbas = config.verbas.filter(v => {
         const isInPeriod = isVerbaInCompetencia(v, comp.competencia);
         return isInPeriod && mod.canApply(moduleContext, v);
       });
 
-      // Check if module should be skipped by judicial title
+      // Check title denials
       const titleRule = findTitleRule(consolidatedTitle, mod.id, comp.competencia);
-      if (titleRule?.tipo === 'indeferimento') continue;
 
       for (const verba of applicableVerbas) {
         try {
           const inputs = mod.resolveInputs(moduleContext, verba);
           const resultado = mod.applyFormula(inputs, verba);
-          const reflections = mod.getReflections(verba);
-          const incidences = mod.getIncidences(verba);
           const audit = mod.buildAuditTrail(moduleContext, inputs, resultado);
 
-          const item = buildCalculationItem(
-            config.scenario.id,
-            mod, verba, comp.competencia,
-            inputs, resultado, reflections, incidences, audit,
-            titleRule,
-          );
+          const item: CalculationItem = {
+            id: crypto.randomUUID(),
+            scenario_id: config.scenario.id,
+            rubric_code: mod.id,
+            rubric_name: verba.nome,
+            competencia: comp.competencia,
+            base: new Decimal(inputs.base),
+            base_source: inputs.baseSource,
+            divisor: new Decimal(inputs.divisor),
+            divisor_source: inputs.divisorSource,
+            multiplicador: new Decimal(inputs.multiplicador),
+            quantidade: new Decimal(inputs.quantidade),
+            quantidade_source: inputs.quantidadeSource,
+            dobra: new Decimal(1),
+            valor_devido: new Decimal(resultado),
+            valor_pago: new Decimal(0),
+            diferenca: new Decimal(resultado),
+            correcao: new Decimal(0),
+            juros: new Decimal(0),
+            total: new Decimal(resultado),
+            formula_aplicada: `${mod.nome}: base=${inputs.base}/div=${inputs.divisor}×mult=${inputs.multiplicador}×qtd=${inputs.quantidade}`,
+            judicial_rule_id: titleRule?.rule.id,
+            ativo: true,
+            reflections: [],
+            incidences: [],
+            offsets: [],
+            audit_trail: audit,
+          };
 
           allItems.push(item);
 
-          // Store results for dependent modules
-          const key = mod.id;
-          if (!globalResults.has(key)) globalResults.set(key, []);
-          globalResults.get(key)!.push({
+          // Store for dependent modules
+          if (!globalResults.has(mod.id)) globalResults.set(mod.id, []);
+          globalResults.get(mod.id)!.push({
             verba_id: verba.id,
             verba_nome: verba.nome,
             competencia: comp.competencia,
@@ -232,62 +231,12 @@ function isVerbaInCompetencia(verba: PjeVerba, competencia: Competencia): boolea
 }
 
 function findTitleRule(
-  title: ConsolidatedTitle,
+  title: ResolvedTitleState,
   moduleId: string,
-  competencia: Competencia,
-): JudicialRule | undefined {
-  return title.rules.find(r => {
-    if (r.rubric_code && r.rubric_code !== moduleId) return false;
-    if (r.periodo_inicio && competencia < r.periodo_inicio.slice(0, 7)) return false;
-    if (r.periodo_fim && competencia > r.periodo_fim.slice(0, 7)) return false;
-    return true;
-  });
-}
-
-function buildCalculationItem(
-  scenarioId: UUID,
-  mod: VerbaModule,
-  verba: PjeVerba,
-  competencia: Competencia,
-  inputs: { base: number; baseSource: string; divisor: number; divisorSource: string; multiplicador: number; quantidade: number; quantidadeSource: string },
-  resultado: number,
-  _reflections: unknown[],
-  _incidences: unknown,
-  audit: { campo: string; valor: string | number; fonte: string; regra?: string; observacao?: string }[],
-  titleRule?: JudicialRule,
-): CalculationItem {
-  return {
-    id: crypto.randomUUID(),
-    scenario_id: scenarioId,
-    rubric_code: mod.id,
-    rubric_name: verba.nome,
-    competencia,
-    base: new Decimal(inputs.base),
-    base_source: inputs.baseSource,
-    divisor: new Decimal(inputs.divisor),
-    divisor_source: inputs.divisorSource,
-    multiplicador: new Decimal(inputs.multiplicador),
-    quantidade: new Decimal(inputs.quantidade),
-    quantidade_source: inputs.quantidadeSource,
-    dobra: new Decimal(1),
-    valor_devido: new Decimal(resultado),
-    valor_pago: new Decimal(0),
-    diferenca: new Decimal(resultado),
-    correcao: new Decimal(0),
-    juros: new Decimal(0),
-    total: new Decimal(resultado),
-    formula_aplicada: `${mod.nome}: base=${inputs.base}/div=${inputs.divisor}×mult=${inputs.multiplicador}×qtd=${inputs.quantidade}`,
-    judicial_rule_id: titleRule?.id,
-    ativo: true,
-    reflections: [],
-    incidences: [],
-    offsets: [],
-    audit_trail: audit.map(a => ({
-      campo: a.campo,
-      valor: a.valor,
-      fonte: a.fonte,
-      regra: a.regra,
-      observacao: a.observacao,
-    })),
-  };
+  _competencia: Competencia,
+) {
+  const rubricRules = title.rules_by_rubric.get(moduleId);
+  if (rubricRules && rubricRules.length > 0) return rubricRules[0];
+  if (title.global_rules.length > 0) return title.global_rules[0];
+  return undefined;
 }
