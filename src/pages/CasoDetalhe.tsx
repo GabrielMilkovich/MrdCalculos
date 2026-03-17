@@ -219,6 +219,12 @@ export default function CasoDetalhe() {
     enabled: !!id,
   });
 
+  const { data: domainAuditData, isLoading: domainAuditLoading } = useQuery({
+    queryKey: ["domain_audit", id],
+    queryFn: async () => loadDomainAuditData(id!),
+    enabled: !!id && activeTab === "auditoria",
+  });
+
   // =====================================================
   // MUTATIONS
   // =====================================================
