@@ -266,7 +266,6 @@ async function generateMonthlySalaryHistory(
     const comp = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-01`;
     try {
       await svc.insertHistoricoOcorrencia({
-        case_id: caseId,
         historico_id: histId,
         competencia: comp,
         valor,
