@@ -383,7 +383,11 @@ export async function buildDomainExecutionConfig(caseId: string, ensureScenario 
   if (!pjeData.params) throw new Error("Parâmetros do cálculo não preenchidos.");
 
   const historicoIds = pjeData.historicos.map((item) => item.id);
-  const historicoOcorrencias = (await svc.getHistoricoOcorrenciasByIds(historicoIds)) as unknown as PjeHistoricoOcorrencia[];
+  const [historicoOcorrencias, ocorrencias] = await Promise.all([
+    svc.getHistoricoOcorrenciasByIds(historicoIds) as unknown as Promise<PjeHistoricoOcorrencia[]>,
+    svc.getOcorrencias(caseId),
+  ]);
+
   const scenario = toScenario(caseId, scenarioRow, pjeData.params, pjeData.dadosProcesso);
   const contract = toEmploymentContract(caseId, pjeData.params, contractRes.data);
   const laborCase = toLaborCase(caseRes.data, docsRes.data || [], contract, scenario);
@@ -399,6 +403,8 @@ export async function buildDomainExecutionConfig(caseId: string, ensureScenario 
     cartaoPonto: pjeData.cartaoPonto,
     faltas: pjeData.faltas,
     ferias: toEngineFerias(pjeData.ferias),
+    ocorrencias,
+    resultadoFinanceiro: pjeData.resultado,
   };
 }
 
@@ -514,6 +520,26 @@ function aggregateReferenceItems(items: CalcResultItemRow[]): Map<string, number
   return map;
 }
 
+function addClosingReferenceRows(
+  map: Map<string, number>,
+  resultado: Awaited<ReturnType<typeof svc.getResultado>>,
+) {
+  if (!resultado) return map;
+
+  const add = (code: string, value: number) => {
+    if (Math.abs(value) < 0.005) return;
+    map.set(`${code}::fechamento`, value);
+  };
+
+  add("FECHAMENTO_IRRF", -(resultado.irrf || 0));
+  add("FECHAMENTO_CS_EMPREGADOR", resultado.inss_patronal || 0);
+  add("FECHAMENTO_HONORARIOS", resultado.honorarios || 0);
+  add("FECHAMENTO_CUSTAS", resultado.custas || 0);
+  add("FECHAMENTO_FGTS", (resultado.fgts_depositar || 0) + (resultado.fgts_multa_40 || 0));
+
+  return map;
+}
+
 function explainDifference(deltaPercent: number): string {
   const abs = Math.abs(deltaPercent);
   if (abs < 0.5) return "Paridade muito próxima entre os motores.";
@@ -567,7 +593,7 @@ export async function loadDomainAuditData(caseId: string): Promise<DomainAuditDa
   }
 
   const domainMap = aggregateDomainItems(domainItems);
-  const referenceMap = aggregateReferenceItems(referenceItems);
+  const referenceMap = addClosingReferenceRows(aggregateReferenceItems(referenceItems), config.resultadoFinanceiro);
   const keys = new Set([...domainMap.keys(), ...referenceMap.keys()]);
 
   const rows: DomainComparisonRow[] = Array.from(keys).map((key) => {
@@ -595,6 +621,6 @@ export async function loadDomainAuditData(caseId: string): Promise<DomainAuditDa
     flags,
     rows,
     totalMRD: domainItems.reduce((acc, item) => acc + item.total, 0),
-    totalPJC: latestSnapshot?.total_bruto || referenceItems.reduce((acc, item) => acc + item.valor_bruto, 0),
+    totalPJC: config.resultadoFinanceiro?.total_reclamado || latestSnapshot?.total_bruto || referenceItems.reduce((acc, item) => acc + item.valor_bruto, 0),
   };
 }

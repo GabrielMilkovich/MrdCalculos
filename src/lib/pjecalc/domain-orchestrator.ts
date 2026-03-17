@@ -11,15 +11,15 @@
 import Decimal from 'decimal.js';
 import type {
   LaborCase, EmploymentContract, CalculationScenario, CalculationItem,
-  CalculationCompetency, JudicialTitleVersion, JudicialRule,
-  InconsistencyFlag, UUID, Competencia, AuditTrailEntry,
-  GlobalCalculationParams,
+  CalculationCompetency, JudicialTitleVersion,
+  InconsistencyFlag, Competencia, AuditTrailEntry,
 } from '../../domain/types';
 import { buildTimeline } from '../../domain/timeline-builder';
 import { resolveJudicialTitle, type ResolvedTitleState } from '../../domain/judicial-title-resolver';
 import type { VerbaModuleContext } from './verba-modules/types';
 import { getModulesInOrder } from './verba-modules/types';
 import type { PjeVerba, PjeHistoricoSalarial, PjeCartaoPonto, PjeFalta, PjeFerias, PjeOcorrenciaResult } from './engine-types';
+import type { PjecalcLiquidacaoResultadoRow, PjecalcOcorrenciaRow } from './types';
 
 // =====================================================
 // ORCHESTRATOR CONFIG
@@ -35,6 +35,8 @@ export interface OrchestratorConfig {
   cartaoPonto: PjeCartaoPonto[];
   faltas: PjeFalta[];
   ferias: PjeFerias[];
+  ocorrencias?: PjecalcOcorrenciaRow[];
+  resultadoFinanceiro?: PjecalcLiquidacaoResultadoRow | null;
 }
 
 // =====================================================
@@ -50,6 +52,13 @@ export interface OrchestratorResult {
   totalLiquido: Decimal;
   auditSummary: AuditTrailEntry[];
 }
+
+type AggregatedOccurrence = Pick<
+  CalculationItem,
+  'valor_devido' | 'valor_pago' | 'diferenca' | 'correcao' | 'juros' | 'total'
+>;
+
+const CLOSING_COMPETENCIA = 'fechamento';
 
 // =====================================================
 // MAIN ORCHESTRATION
@@ -99,7 +108,6 @@ export function orchestrateCalculation(config: OrchestratorConfig): Orchestrator
         return isInPeriod && mod.canApply(moduleContext, v);
       });
 
-      // Check title denials
       const titleRule = findTitleRule(consolidatedTitle, mod.id, comp.competencia);
 
       for (const verba of applicableVerbas) {
@@ -139,7 +147,6 @@ export function orchestrateCalculation(config: OrchestratorConfig): Orchestrator
 
           allItems.push(item);
 
-          // Store for dependent modules
           if (!globalResults.has(mod.id)) globalResults.set(mod.id, []);
           globalResults.get(mod.id)!.push({
             competencia: comp.competencia,
@@ -176,16 +183,34 @@ export function orchestrateCalculation(config: OrchestratorConfig): Orchestrator
     }
   }
 
+  let items = allItems;
+
+  if (config.ocorrencias?.length) {
+    items = mergePersistedOccurrenceClosure(items, config.ocorrencias, auditSummary);
+  }
+
+  if (config.resultadoFinanceiro) {
+    const closingItems = buildFinancialClosingItems(config.scenario.id, config.resultadoFinanceiro);
+    if (closingItems.length > 0) {
+      items = [...items, ...closingItems];
+      auditSummary.push({
+        campo: 'fechamento_financeiro',
+        valor: `${closingItems.length} lançamentos sintéticos de fechamento`,
+        fonte: 'domain_financial_bridge',
+      });
+    }
+  }
+
   // Step 4: Calculate totals
   let totalBruto = new Decimal(0);
   let totalLiquido = new Decimal(0);
-  for (const item of allItems) {
+  for (const item of items) {
     totalBruto = totalBruto.plus(item.diferenca);
     totalLiquido = totalLiquido.plus(item.total);
   }
 
   return {
-    items: allItems,
+    items,
     inconsistencies,
     consolidatedTitle,
     timeline,
@@ -247,4 +272,165 @@ function findTitleRule(
   if (rubricRules && rubricRules.length > 0) return rubricRules[0];
   if (title.global_rules.length > 0) return title.global_rules[0];
   return undefined;
+}
+
+function normalizeCompetencia(value?: string | null): string {
+  if (!value) return '';
+  return value.length >= 7 ? value.slice(0, 7) : value;
+}
+
+function buildOccurrenceAggregation(rows: PjecalcOcorrenciaRow[]): Map<string, AggregatedOccurrence> {
+  const map = new Map<string, AggregatedOccurrence>();
+
+  for (const row of rows) {
+    const rubricName = row.verba_nome || row.verba_id;
+    const key = `${rubricName}::${normalizeCompetencia(row.competencia)}`;
+    const current = map.get(key) || {
+      valor_devido: new Decimal(0),
+      valor_pago: new Decimal(0),
+      diferenca: new Decimal(0),
+      correcao: new Decimal(0),
+      juros: new Decimal(0),
+      total: new Decimal(0),
+    };
+
+    current.valor_devido = current.valor_devido.plus(row.devido || 0);
+    current.valor_pago = current.valor_pago.plus(row.pago || 0);
+    current.diferenca = current.diferenca.plus(row.diferenca || 0);
+    current.correcao = current.correcao.plus(row.correcao || 0);
+    current.juros = current.juros.plus(row.juros || 0);
+    current.total = current.total.plus(row.total || 0);
+
+    map.set(key, current);
+  }
+
+  return map;
+}
+
+function mergePersistedOccurrenceClosure(
+  items: CalculationItem[],
+  ocorrencias: PjecalcOcorrenciaRow[],
+  auditSummary: AuditTrailEntry[],
+): CalculationItem[] {
+  const occurrenceMap = buildOccurrenceAggregation(ocorrencias);
+  let matched = 0;
+
+  const merged = items.map((item) => {
+    const key = `${item.rubric_name}::${normalizeCompetencia(item.competencia)}`;
+    const occurrence = occurrenceMap.get(key);
+
+    if (!occurrence) return item;
+
+    matched += 1;
+    return {
+      ...item,
+      valor_devido: occurrence.valor_devido,
+      valor_pago: occurrence.valor_pago,
+      diferenca: occurrence.diferenca,
+      correcao: occurrence.correcao,
+      juros: occurrence.juros,
+      total: occurrence.total,
+      audit_trail: [
+        ...item.audit_trail,
+        {
+          campo: 'fechamento_financeiro',
+          valor: occurrence.total.toNumber(),
+          fonte: 'pjecalc_ocorrencias',
+          observacao: 'Valor consolidado com correção monetária e juros do fechamento financeiro.',
+        },
+      ],
+    };
+  });
+
+  auditSummary.push({
+    campo: 'ocorrencias_financeiras',
+    valor: `${matched}/${items.length} itens reconciliados com fechamento persistido`,
+    fonte: 'pjecalc_ocorrencias',
+  });
+
+  return merged;
+}
+
+function buildFinancialClosingItems(
+  scenarioId: string,
+  resultado: PjecalcLiquidacaoResultadoRow,
+): CalculationItem[] {
+  const items: CalculationItem[] = [];
+
+  const pushSynthetic = (rubricCode: string, rubricName: string, amount: number, observation: string) => {
+    if (Math.abs(amount) < 0.005) return;
+
+    const decimalAmount = new Decimal(amount);
+    items.push({
+      id: crypto.randomUUID(),
+      scenario_id: scenarioId,
+      rubric_code: rubricCode,
+      rubric_name: rubricName,
+      competencia: CLOSING_COMPETENCIA,
+      base: new Decimal(0),
+      base_source: 'fechamento_financeiro',
+      divisor: new Decimal(1),
+      divisor_source: 'fechamento_financeiro',
+      multiplicador: new Decimal(1),
+      quantidade: new Decimal(1),
+      quantidade_source: 'fechamento_financeiro',
+      dobra: new Decimal(1),
+      valor_devido: decimalAmount,
+      valor_pago: new Decimal(0),
+      diferenca: decimalAmount,
+      correcao: new Decimal(0),
+      juros: new Decimal(0),
+      total: decimalAmount,
+      formula_aplicada: observation,
+      ativo: true,
+      reflections: [],
+      incidences: [],
+      offsets: [],
+      audit_trail: [
+        {
+          campo: rubricCode,
+          valor: decimalAmount.toNumber(),
+          fonte: 'pjecalc_liquidacao_resultado',
+          observacao: observation,
+        },
+      ],
+    });
+  };
+
+  pushSynthetic(
+    'FECHAMENTO_IRRF',
+    'IRRF (dedução)',
+    -(resultado.irrf || 0),
+    'Dedução fiscal do fechamento final.',
+  );
+
+  pushSynthetic(
+    'FECHAMENTO_CS_EMPREGADOR',
+    'CS Empregador',
+    resultado.inss_patronal || 0,
+    'Encargo patronal agregado ao total devido pela reclamada.',
+  );
+
+  pushSynthetic(
+    'FECHAMENTO_HONORARIOS',
+    'Honorários',
+    resultado.honorarios || 0,
+    'Honorários incluídos no fechamento final.',
+  );
+
+  pushSynthetic(
+    'FECHAMENTO_CUSTAS',
+    'Custas',
+    resultado.custas || 0,
+    'Custas processuais incluídas no fechamento final.',
+  );
+
+  pushSynthetic(
+    'FECHAMENTO_FGTS',
+    'FGTS + Multa',
+    (resultado.fgts_depositar || 0) + (resultado.fgts_multa_40 || 0),
+    'Encargos de FGTS consolidados no fechamento final.',
+  );
+
+  return items;
 }
