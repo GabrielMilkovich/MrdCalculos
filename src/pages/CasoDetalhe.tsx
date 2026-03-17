@@ -62,6 +62,8 @@ import {
   type TaxTable,
 } from "@/lib/calculation";
 import { runCrossValidation, applyCorrections, type CrossValidationResult } from "@/lib/calculation/cross-validation";
+import { orchestrateCalculation } from "@/lib/pjecalc/domain-orchestrator";
+import { buildDomainExecutionConfig, loadDomainAuditData, persistDomainAuditSnapshot } from "@/lib/pjecalc/domain-audit";
 
 // =====================================================
 // TYPES
@@ -215,6 +217,12 @@ export default function CasoDetalhe() {
       return count || 0;
     },
     enabled: !!id,
+  });
+
+  const { data: domainAuditData, isLoading: domainAuditLoading } = useQuery({
+    queryKey: ["domain_audit", id],
+    queryFn: async () => loadDomainAuditData(id!),
+    enabled: !!id && activeTab === "auditoria",
   });
 
   // =====================================================
@@ -897,10 +905,20 @@ export default function CasoDetalhe() {
       case "auditoria":
         return (
           <div className="space-y-5">
-            <TimelineView timeline={[]} />
-            <TitleConsolidationView title={{ global_rules: [], rules_by_rubric: new Map(), denied_rubrics: new Set(), granted_rubrics: new Set(), conflicts: [], latest_version: null }} />
-            <InconsistencyPanel flags={[]} />
-            <ComparisonView rows={[]} totalMRD={0} totalPJC={0} />
+            {domainAuditLoading ? (
+              <Card className="bg-card/80">
+                <CardContent className="p-6 flex items-center gap-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" /> Carregando auditoria técnica...
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <TimelineView timeline={domainAuditData?.timeline || []} />
+                <TitleConsolidationView title={domainAuditData?.title || { global_rules: [], rules_by_rubric: new Map(), denied_rubrics: new Set(), granted_rubrics: new Set(), conflicts: [], latest_version: null }} />
+                <InconsistencyPanel flags={domainAuditData?.flags || []} />
+                <ComparisonView rows={domainAuditData?.rows || []} totalMRD={domainAuditData?.totalMRD || 0} totalPJC={domainAuditData?.totalPJC || 0} />
+              </>
+            )}
           </div>
         );
 
