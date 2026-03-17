@@ -614,13 +614,13 @@ export default function CasoDetalhe() {
           fator: item.multiplicador.toNumber(),
           valor_bruto: item.diferenca.toNumber(),
           valor_liquido: item.total.toNumber(),
-          memoria_detalhada: {
+          memoria_detalhada: JSON.parse(JSON.stringify({
             formula_aplicada: item.formula_aplicada,
             audit_trail: item.audit_trail,
             reflections: item.reflections,
             incidences: item.incidences,
             offsets: item.offsets,
-          },
+          })),
         }));
 
         for (let index = 0; index < resultItems.length; index += 200) {
