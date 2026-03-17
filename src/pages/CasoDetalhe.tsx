@@ -338,21 +338,6 @@ export default function CasoDetalhe() {
   // =====================================================
   // HELPER FUNCTIONS
   // =====================================================
-  const mapFactsToEngine = (allFacts: Fact[]): FactMap => {
-    const out: FactMap = {};
-    for (const f of allFacts) {
-      const tipo = ((): FactMap[string]["tipo"] => {
-        if (f.tipo === "boolean") return "booleano";
-        if (f.tipo === "numero") return "numero";
-        if (f.tipo === "data") return "data";
-        if (f.tipo === "moeda") return "moeda";
-        return "texto";
-      })();
-      out[f.chave] = { valor: f.valor, tipo, confianca: f.confianca ?? undefined, confirmado: !!f.confirmado };
-    }
-    return out;
-  };
-
   const runFactExtraction = async () => {
     if (!id) return;
     setIsExtractingFacts(true);
@@ -386,6 +371,134 @@ export default function CasoDetalhe() {
     }
   };
 
+  const getSeverityTone = (severity: string) => {
+    switch (severity) {
+      case "bloqueante":
+        return "critica";
+      case "alerta":
+        return "media";
+      default:
+        return "baixa";
+    }
+  };
+
+  const buildDomainWarnings = (messagePrefix: string, inconsistencies: Awaited<ReturnType<typeof orchestrateCalculation>>["inconsistencies"]) => {
+    return inconsistencies.map((flag) => ({
+      tipo: flag.severidade === "bloqueante" ? "erro" : flag.severidade === "alerta" ? "atencao" : "info",
+      codigo: flag.categoria,
+      mensagem: `${messagePrefix}${flag.descricao}`,
+      sugestao: flag.sugestao,
+    }));
+  };
+
+  const aggregateDomainValues = (
+    items: Awaited<ReturnType<typeof orchestrateCalculation>>["items"],
+    key: "diferenca" | "total",
+  ) => {
+    const porVerba: Record<string, { descricao: string; valor: number }> = {};
+    const porCompetencia: Record<string, number> = {};
+
+    for (const item of items) {
+      const code = item.rubric_code;
+      const competencia = item.competencia || "sem_competencia";
+      const value = item[key].toNumber();
+
+      porVerba[code] = {
+        descricao: item.rubric_name,
+        valor: (porVerba[code]?.valor || 0) + value,
+      };
+      porCompetencia[competencia] = (porCompetencia[competencia] || 0) + value;
+    }
+
+    return { porVerba, porCompetencia };
+  };
+
+  const buildAuditLinesFromDomain = (items: Awaited<ReturnType<typeof orchestrateCalculation>>["items"]) => {
+    return items.map((item, index) => ({
+      linha: index + 1,
+      calculadora: item.rubric_code.toLowerCase(),
+      competencia: item.competencia === "fechamento" ? null : item.competencia,
+      descricao: item.rubric_name,
+      formula: item.formula_aplicada,
+      valor_bruto: item.diferenca.toNumber(),
+      valor_liquido: item.total.toNumber(),
+      metadata: {
+        rubric_code: item.rubric_code,
+        base: item.base.toNumber(),
+        divisor: item.divisor.toNumber(),
+        multiplicador: item.multiplicador.toNumber(),
+        quantidade: item.quantidade.toNumber(),
+        valor_devido: item.valor_devido.toNumber(),
+        valor_pago: item.valor_pago.toNumber(),
+        correcao: item.correcao.toNumber(),
+        juros: item.juros.toNumber(),
+        audit_trail: item.audit_trail,
+      },
+    }));
+  };
+
+  const buildReviewFromDomain = (domainResult: Awaited<ReturnType<typeof orchestrateCalculation>>) => {
+    const inconsistencies = domainResult.inconsistencies;
+    const blockers = inconsistencies.filter((flag) => flag.severidade === "bloqueante");
+    const score = Math.max(0, Math.min(100, 100 - blockers.length * 25 - (inconsistencies.length - blockers.length) * 8));
+    const topRubricas = Array.from(
+      domainResult.items.reduce((map, item) => {
+        map.set(item.rubric_code, {
+          verba: item.rubric_name,
+          confianca: inconsistencies.some((flag) => flag.rubric_code === item.rubric_code && flag.severidade === "bloqueante")
+            ? "baixa"
+            : inconsistencies.some((flag) => flag.rubric_code === item.rubric_code)
+              ? "media"
+              : "alta",
+          base_documental: item.formula_aplicada,
+        });
+        return map;
+      }, new Map<string, { verba: string; confianca: string; base_documental: string }>()).values(),
+    ).slice(0, 12);
+
+    return {
+      review: {
+        aprovado: blockers.length === 0,
+        score_confianca: score,
+        resumo_documental: blockers.length === 0
+          ? `Prévia do motor de domínio concluída com ${domainResult.items.length} itens e ${inconsistencies.length} inconsistência(s).`
+          : `Foram encontrados ${blockers.length} bloqueio(s) no domínio antes da liquidação.` ,
+        divergencias: inconsistencies.map((flag) => ({
+          campo: flag.rubric_code || flag.categoria,
+          severidade: getSeverityTone(flag.severidade),
+          valor_fato: flag.competencia || "escopo geral",
+          valor_documento: flag.descricao,
+          documento_fonte: "orquestrador_de_dominio",
+          recomendacao: flag.sugestao || "Revisar insumo ou premissa correspondente.",
+          impacto_financeiro: flag.severidade === "bloqueante" ? "Impacto alto no cálculo final." : undefined,
+        })),
+        dados_extraidos_nao_cadastrados: [],
+        correcoes_sugeridas: inconsistencies
+          .filter((flag) => !!flag.sugestao)
+          .map((flag) => ({
+            campo: flag.rubric_code || flag.categoria,
+            valor_atual: flag.descricao,
+            valor_correto: flag.sugestao,
+            motivo: flag.descricao,
+            fonte: "motor_de_dominio",
+          })),
+        alertas_calculo: inconsistencies.map((flag) => ({
+          tipo: flag.severidade,
+          descricao: flag.descricao,
+          impacto: flag.rubric_code ? `Rubrica afetada: ${flag.rubric_code}` : "Impacto transversal no cálculo.",
+          acao_necessaria: flag.sugestao,
+        })),
+        verbas_identificadas: topRubricas,
+      },
+      metadata: {
+        chunks_analisados: chunksCount,
+        fatos_verificados: confirmedFacts.length,
+        documentos_analisados: documents.length,
+        competencias: domainResult.timeline.length,
+      },
+    };
+  };
+
   // =====================================================
   // PRE-CALC REVIEW (runs before calculation)
   // =====================================================
@@ -399,21 +512,12 @@ export default function CasoDetalhe() {
     setIsReviewing(true);
     setReviewElapsed(0);
     try {
-      const { data, error } = await supabase.functions.invoke("pre-calc-review", {
-        body: { case_id: id },
-      });
-
-      if (error) throw error;
-
-      if (data?.review) {
-        setReviewResult(data);
-        setShowReviewDialog(true);
-      } else {
-        toast.warning("Revisão não retornou resultados. Prosseguindo com cálculo...");
-        await executeCalculation();
-      }
+      const domainConfig = await buildDomainExecutionConfig(id, true);
+      const domainResult = orchestrateCalculation(domainConfig);
+      setReviewResult(buildReviewFromDomain(domainResult));
+      setShowReviewDialog(true);
     } catch (e) {
-      console.error("Pre-calc review error:", e);
+      console.error("Domain pre-calc review error:", e);
       toast.error("Erro na revisão: " + (e as Error).message);
     } finally {
       setIsReviewing(false);
@@ -422,220 +526,126 @@ export default function CasoDetalhe() {
 
   const executeCalculation = async () => {
     setShowReviewDialog(false);
-    if (!id || !selectedProfile || !canCalculate) {
-      return;
-    }
+    if (!id || !selectedProfile || !canCalculate) return;
 
     setIsCalculating(true);
     try {
-      // Sempre recarregar fatos do banco antes de cada cálculo (evita estado stale)
-      const { data: currentFacts, error: factsError } = await supabase
-        .from("facts")
-        .select("*")
-        .eq("case_id", id)
-        .order("criado_em", { ascending: false });
-      if (factsError) throw factsError;
-      const factsForRun = (currentFacts || []) as Fact[];
-
-      // Load profile + calculators + indices + tables
-      const { data: profile } = await supabase.from("calculation_profiles").select("*").eq("id", selectedProfile).single();
-      if (!profile) throw new Error("Perfil não encontrado");
-
-      const { data: profileCalcs } = await supabase
-        .from("profile_calculators")
-        .select(`calculator_version_id, calculator_versions:calculator_version_id (id, versao, vigencia_inicio, vigencia_fim, regras, calculators:calculator_id ( id, nome ))`)
-        .eq("profile_id", selectedProfile);
-
-      const calculatorsWithRules = (profileCalcs || [])
-        .map((row: Record<string, unknown>) => {
-          const cv = row.calculator_versions as Record<string, unknown> | null;
-          const calc = cv?.calculators as Record<string, unknown> | null;
-          if (!cv || !calc?.nome) return null;
-          const regrasObj = cv.regras as Record<string, unknown> | null;
-          return {
-            nome: String(calc.nome),
-            rules: { versao: cv.versao, vigencia_inicio: cv.vigencia_inicio, vigencia_fim: cv.vigencia_fim ?? undefined, regras: (regrasObj?.regras ?? regrasObj ?? {}) as Record<string, unknown>, formula: regrasObj?.formula ?? undefined } as CalculatorRules,
-          };
-        })
-        .filter(Boolean) as { nome: string; rules: CalculatorRules }[];
-
-      const adm = factsForRun.find(f => f.chave === "data_admissao")?.valor;
-      const dem = factsForRun.find(f => f.chave === "data_demissao")?.valor;
-
-      // Fix definitivo: garante cálculo de verbas rescisórias quando há vínculo encerrado,
-      // mesmo que o perfil ainda não tenha essa calculadora vinculada no admin.
-      const hasRescisoriasCalculator = calculatorsWithRules.some(c => c.nome === "verbas_rescisorias");
-      if (adm && dem && !hasRescisoriasCalculator) {
-        calculatorsWithRules.push({
-          nome: "verbas_rescisorias",
-          rules: {
-            versao: "1.0.0",
-            vigencia_inicio: new Date().toISOString().slice(0, 10),
-            regras: {},
-          } as CalculatorRules,
-        });
-      }
-
-      const start = adm ? new Date(adm) : null;
-      const end = dem ? new Date(dem) : null;
-
-      const [indexRes, taxRes] = await Promise.all([
-        supabase.from("index_series").select("nome, competencia, valor, fonte").order("competencia")
-          .gte("competencia", start?.toISOString().slice(0, 10) || "1900-01-01")
-          .lte("competencia", end?.toISOString().slice(0, 10) || "2100-01-01"),
-        supabase.from("tax_tables").select("id, tipo, vigencia_inicio, vigencia_fim, faixas").order("vigencia_inicio"),
+      const [{ data: currentFacts, error: factsError }, { data: profile, error: profileError }, { data: session }] = await Promise.all([
+        supabase.from("facts").select("*").eq("case_id", id).order("criado_em", { ascending: false }),
+        supabase.from("calculation_profiles").select("id, nome").eq("id", selectedProfile).single(),
+        supabase.auth.getSession(),
       ]);
 
-      const indices: IndexSeries[] = (indexRes.data || []).map((r: Record<string, unknown>) => ({ nome: r.nome as string, competencia: new Date(r.competencia as string), valor: Number(r.valor), fonte: (r.fonte as string) ?? undefined }));
-      const taxTables: TaxTable[] = (taxRes.data || []).map((t: Record<string, unknown>) => ({ id: t.id as string, tipo: t.tipo as "inss" | "irrf", vigencia_inicio: new Date(t.vigencia_inicio as string), vigencia_fim: t.vigencia_fim ? new Date(t.vigencia_fim as string) : undefined, faixas: Array.isArray(t.faixas) ? t.faixas : [] }));
+      if (factsError) throw factsError;
+      if (profileError) throw profileError;
+      if (!profile) throw new Error("Perfil não encontrado");
 
-      // ═══ VALIDAÇÃO CRUZADA DE FATOS ═══
-      // Detecta inconsistências entre documentos (ex: código FGTS vs tipo_demissao do OCR)
-      const rawFactMap = mapFactsToEngine(factsForRun);
-      const crossValidation = runCrossValidation(rawFactMap);
+      const userId = session?.session?.user?.id;
+      if (!userId) throw new Error("Faça login para executar o cálculo.");
 
-      // Mostrar alertas ao advogado
-      if (crossValidation.alerts.length > 0) {
-        for (const alert of crossValidation.alerts) {
-          toast.warning(alert.titulo, {
-            description: alert.recomendacao,
-            duration: 10000,
-          });
-        }
-      }
+      const domainConfig = await buildDomainExecutionConfig(id, true);
+      const domainResult = orchestrateCalculation(domainConfig);
+      await persistDomainAuditSnapshot(id, domainConfig.scenario.id, domainResult.items, domainResult.inconsistencies);
 
-      // Aplicar correções automáticas (ex: código FGTS prevalece)
-      const correctedFactMap = crossValidation.corrections.length > 0
-        ? applyCorrections(rawFactMap, crossValidation.corrections)
-        : rawFactMap;
+      const bruto = aggregateDomainValues(domainResult.items, "diferenca");
+      const liquido = aggregateDomainValues(domainResult.items, "total");
+      const warnings = buildDomainWarnings("[domínio] ", domainResult.inconsistencies);
+      const auditLines = buildAuditLinesFromDomain(domainResult.items);
+      const calculatorsUsed = Array.from(new Set(domainResult.items.map((item) => item.rubric_code.toLowerCase()))).map((nome) => ({
+        nome,
+        versao: "domain-v3",
+      }));
+      const factsSnapshot = JSON.parse(JSON.stringify(currentFacts || []));
 
-      // Persistir correções no banco se houver
-      if (crossValidation.corrections.length > 0) {
-        await Promise.all(crossValidation.corrections.map(async (correction) => {
-          const aliasKeys = correction.campo === "tipo_demissao"
-            ? ["tipo_demissao", "motivo_demissao"]
-            : [correction.campo];
+      const resultadoBruto = {
+        total: domainResult.totalBruto.toNumber(),
+        por_verba: bruto.porVerba,
+        por_competencia: bruto.porCompetencia,
+      };
+      const resultadoLiquido = {
+        total: domainResult.totalLiquido.toNumber(),
+        por_verba: liquido.porVerba,
+        por_competencia: liquido.porCompetencia,
+      };
 
-          const factToUpdate = factsForRun.find(f => aliasKeys.includes(f.chave));
-
-          if (factToUpdate) {
-            const { error: updateError } = await supabase
-              .from("facts")
-              .update({
-                valor: correction.valor_corrigido,
-                confianca: correction.confianca,
-              })
-              .eq("id", factToUpdate.id);
-            if (updateError) throw updateError;
-            return;
-          }
-
-          const { error: insertError } = await supabase.from("facts").insert({
-            case_id: id,
-            chave: correction.campo,
-            valor: correction.valor_corrigido,
-            tipo: "texto" as const,
-            origem: "ia_extracao" as const,
-            confianca: correction.confianca,
-            confirmado: false,
-          });
-          if (insertError) throw insertError;
-        }));
-        // Criar controvérsia para registro
-        for (const alert of crossValidation.alerts) {
-          await supabase.from("case_controversies").insert({
-            case_id: id,
-            campo: alert.campo_afetado,
-            descricao: alert.descricao,
-            status: 'resolvido',
-            valor_escolhido: crossValidation.corrections.find(c => c.campo === alert.campo_afetado)?.valor_corrigido || null,
-            justificativa: alert.recomendacao,
-            fundamentacao_legal: `Código FGTS/eSocial — Manual CEF`,
-            prioridade: alert.severidade === 'critica' ? 'alta' : 'media',
-          });
-        }
-        await queryClient.invalidateQueries({ queryKey: ["facts", id] });
-        toast.info(`${crossValidation.corrections.length} fato(s) corrigido(s) pela validação cruzada documental.`);
-      }
-
-      // Execute engine with corrected facts
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const engine = new CalculationEngine({ id: profile.id, nome: profile.nome, config: (profile.config ?? {}), calculadoras_incluidas: profile.calculadoras_incluidas ?? [] } as any, indices, taxTables, correctedFactMap);
-      engine.loadCalculators(calculatorsWithRules);
-      const result = engine.executeAll();
-
-      // Inject cross-validation warnings into result
-      result.warnings.push(...crossValidation.warnings);
-
-      // Persist
-      const { data: session } = await supabase.auth.getSession();
-      const userId = session?.session?.user?.id ?? null;
-
-      const { data: insertedRun } = await supabase.from("calculation_runs").insert({
-        case_id: id!, profile_id: selectedProfile, executado_por: userId,
-        facts_snapshot: JSON.parse(JSON.stringify(result.facts_snapshot)),
-        calculators_used: JSON.parse(JSON.stringify(result.calculators_used)),
-        resultado_bruto: JSON.parse(JSON.stringify(result.resultado_bruto)),
-        resultado_liquido: JSON.parse(JSON.stringify(result.resultado_liquido)),
-        warnings: JSON.parse(JSON.stringify(result.warnings)),
+      const { data: insertedRun, error: runError } = await supabase.from("calculation_runs").insert({
+        case_id: id,
+        profile_id: selectedProfile,
+        executado_por: userId,
+        facts_snapshot: factsSnapshot,
+        calculators_used: calculatorsUsed,
+        resultado_bruto: resultadoBruto,
+        resultado_liquido: resultadoLiquido,
+        warnings,
       }).select("id").single();
+      if (runError) throw runError;
+      if (!insertedRun?.id) throw new Error("Falha ao salvar cálculo derivado do domínio.");
 
-      if (!insertedRun?.id) throw new Error("Falha ao salvar cálculo");
-
-      const totalBrutoRaw = Number(result.resultado_bruto?.total ?? 0);
-      const totalLiquidoRaw = Number(result.resultado_liquido?.total ?? totalBrutoRaw);
-      const totalBruto = Number.isFinite(totalBrutoRaw) ? totalBrutoRaw : 0;
-      const totalLiquido = Number.isFinite(totalLiquidoRaw) ? totalLiquidoRaw : totalBruto;
-
-      const { count: existingSnaps } = await supabase.from("calc_snapshots").select("id", { count: "exact" }).eq("case_id", id);
+      const { count: existingSnaps, error: countError } = await supabase.from("calc_snapshots").select("id", { count: "exact", head: true }).eq("case_id", id);
+      if (countError) throw countError;
       const nextVersion = (existingSnaps || 0) + 1;
 
-      const { data: insertedSnapshot } = await supabase.from("calc_snapshots").insert({
-        case_id: id!, profile_id: selectedProfile, created_by: userId!, engine_version: "2.0.0",
-        versao: nextVersion, status: "gerado" as const,
-        inputs_snapshot: JSON.parse(JSON.stringify(result.facts_snapshot)),
-        resultado_bruto: JSON.parse(JSON.stringify(result.resultado_bruto)),
-        resultado_liquido: JSON.parse(JSON.stringify(result.resultado_liquido)),
-        total_bruto: totalBruto, total_liquido: totalLiquido,
-        total_descontos: totalBruto - totalLiquido,
-        warnings: JSON.parse(JSON.stringify(result.warnings)),
+      const { data: insertedSnapshot, error: snapshotError } = await supabase.from("calc_snapshots").insert({
+        case_id: id,
+        profile_id: selectedProfile,
+        created_by: userId,
+        engine_version: "domain-v3",
+        versao: nextVersion,
+        status: "gerado" as const,
+        inputs_snapshot: factsSnapshot,
+        resultado_bruto: resultadoBruto,
+        resultado_liquido: resultadoLiquido,
+        total_bruto: resultadoBruto.total,
+        total_liquido: resultadoLiquido.total,
+        total_descontos: resultadoBruto.total - resultadoLiquido.total,
+        warnings,
       }).select("id").single();
+      if (snapshotError) throw snapshotError;
 
-      // Persist result items
-      if (insertedSnapshot?.id && Array.isArray(result.auditLines) && result.auditLines.length > 0) {
-        const items = result.auditLines.filter(l => l.valor_bruto != null).map((l, idx) => ({
-          snapshot_id: insertedSnapshot.id, rubrica_codigo: l.calculadora || "GERAL",
-          rubrica_nome: l.descricao, competencia: l.competencia || null, ordem: idx + 1,
-          valor_bruto: l.valor_bruto || 0, valor_liquido: l.valor_liquido || l.valor_bruto || 0,
-          memoria_detalhada: l.metadata ? JSON.parse(JSON.stringify(l.metadata)) : null,
+      if (insertedSnapshot?.id) {
+        const resultItems = domainResult.items.map((item, idx) => ({
+          snapshot_id: insertedSnapshot.id,
+          rubrica_codigo: item.rubric_code,
+          rubrica_nome: item.rubric_name,
+          competencia: item.competencia === "fechamento" ? null : item.competencia,
+          ordem: idx + 1,
+          base_calculo: item.base.toNumber(),
+          quantidade: item.quantidade.toNumber(),
+          fator: item.multiplicador.toNumber(),
+          valor_bruto: item.diferenca.toNumber(),
+          valor_liquido: item.total.toNumber(),
+          memoria_detalhada: {
+            formula_aplicada: item.formula_aplicada,
+            audit_trail: item.audit_trail,
+            reflections: item.reflections,
+            incidences: item.incidences,
+            offsets: item.offsets,
+          },
         }));
-        if (items.length > 0) await supabase.from("calc_result_items").insert(items);
+
+        for (let index = 0; index < resultItems.length; index += 200) {
+          const chunk = resultItems.slice(index, index + 200);
+          const { error } = await supabase.from("calc_result_items").insert(chunk);
+          if (error) throw error;
+        }
       }
 
-      // Persist audit lines
-      if (Array.isArray(result.auditLines) && result.auditLines.length > 0) {
-        await supabase.from("audit_lines").insert(result.auditLines.map((l) => ({
-          run_id: insertedRun.id, linha: l.linha, calculadora: l.calculadora,
-          competencia: l.competencia ?? null, descricao: l.descricao, formula: l.formula ?? null,
-          valor_bruto: l.valor_bruto ?? null, valor_liquido: l.valor_liquido ?? null,
-          metadata: l.metadata ? JSON.parse(JSON.stringify(l.metadata)) : null,
-        })));
-      }
-
-      let domainAuditMessage = "";
-      try {
-        const domainConfig = await buildDomainExecutionConfig(id!, true);
-        const domainResult = orchestrateCalculation(domainConfig);
-        await persistDomainAuditSnapshot(
-          id!,
-          domainConfig.scenario.id,
-          domainResult.items,
-          domainResult.inconsistencies,
-        );
-        domainAuditMessage = ` • auditoria atualizada (${domainResult.items.length} itens)`;
-      } catch (domainError) {
-        console.error("Domain audit persistence error:", domainError);
-        toast.warning("Cálculo salvo, mas a auditoria técnica não pôde ser atualizada.");
+      if (auditLines.length > 0) {
+        for (let index = 0; index < auditLines.length; index += 200) {
+          const chunk = auditLines.slice(index, index + 200).map((line) => ({
+            run_id: insertedRun.id,
+            linha: line.linha,
+            calculadora: line.calculadora,
+            competencia: line.competencia,
+            descricao: line.descricao,
+            formula: line.formula,
+            valor_bruto: line.valor_bruto,
+            valor_liquido: line.valor_liquido,
+            metadata: line.metadata,
+          }));
+          const { error } = await supabase.from("audit_lines").insert(chunk);
+          if (error) throw error;
+        }
       }
 
       await Promise.all([
@@ -646,7 +656,8 @@ export default function CasoDetalhe() {
         queryClient.invalidateQueries({ queryKey: ["audit_lines_detail"] }),
         queryClient.invalidateQueries({ queryKey: ["domain_audit", id] }),
       ]);
-      toast.success(`Cálculo executado! Snapshot v${nextVersion} gerado${domainAuditMessage}.`);
+
+      toast.success(`Cálculo executado no domínio! Snapshot v${nextVersion} gerado.`);
       updateStatusMutation.mutate("calculado");
       setActiveTab("calculo");
     } catch (e) {
