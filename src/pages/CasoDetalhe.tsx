@@ -422,7 +422,7 @@ export default function CasoDetalhe() {
       formula: item.formula_aplicada,
       valor_bruto: item.diferenca.toNumber(),
       valor_liquido: item.total.toNumber(),
-      metadata: {
+      metadata: JSON.parse(JSON.stringify({
         rubric_code: item.rubric_code,
         base: item.base.toNumber(),
         divisor: item.divisor.toNumber(),
@@ -433,7 +433,7 @@ export default function CasoDetalhe() {
         correcao: item.correcao.toNumber(),
         juros: item.juros.toNumber(),
         audit_trail: item.audit_trail,
-      },
+      })),
     }));
   };
 
