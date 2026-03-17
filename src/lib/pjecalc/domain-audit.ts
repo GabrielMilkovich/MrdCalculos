@@ -384,7 +384,7 @@ export async function buildDomainExecutionConfig(caseId: string, ensureScenario 
 
   const historicoIds = pjeData.historicos.map((item) => item.id);
   const [historicoOcorrencias, ocorrencias] = await Promise.all([
-    svc.getHistoricoOcorrenciasByIds(historicoIds) as Promise<PjeHistoricoOcorrencia[]>,
+    svc.getHistoricoOcorrenciasByIds(historicoIds) as unknown as Promise<PjeHistoricoOcorrencia[]>,
     svc.getOcorrencias(caseId),
   ]);
 
