@@ -278,13 +278,13 @@ function ResumoCard({ result, fmt }: { result: PjeLiquidacaoResult; fmt: (n: num
         </Table>
 
         {/* Warnings */}
-        {result.warnings && result.warnings.length > 0 && (
+        {(result as any).warnings && (result as any).warnings.length > 0 && (
           <div className="mt-4 space-y-1">
             <h4 className="text-xs font-medium flex items-center gap-1">
               <AlertTriangle className="h-3 w-3 text-amber-500" />
-              Alertas ({result.warnings.length})
+              Alertas ({(result as any).warnings.length})
             </h4>
-            {result.warnings.map((w: any, i: number) => (
+            {(result as any).warnings.map((w: any, i: number) => (
               <div key={i} className="text-xs text-muted-foreground p-1 bg-amber-50 dark:bg-amber-950/20 rounded">
                 [{w.code}] {w.message}
               </div>
