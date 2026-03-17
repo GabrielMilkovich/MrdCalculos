@@ -13,3 +13,8 @@ import './comissoes';
 import './intervalos';
 import './feriados';
 import './multas-clt';
+import './decimo-terceiro';
+import './ferias';
+import './fgts-rescisorio';
+import './plr';
+import './salario-substituicao';
