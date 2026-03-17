@@ -894,6 +894,16 @@ export default function CasoDetalhe() {
           />
         );
 
+      case "auditoria":
+        return (
+          <div className="space-y-5">
+            <TimelineView timeline={[]} />
+            <TitleConsolidationView rules={[]} versions={[]} />
+            <InconsistencyPanel inconsistencies={[]} />
+            <ComparisonView rows={[]} totalMRD={0} totalPJC={0} />
+          </div>
+        );
+
       default:
         return null;
     }
