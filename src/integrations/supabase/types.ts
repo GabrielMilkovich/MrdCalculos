@@ -1946,6 +1946,111 @@ export type Database = {
           },
         ]
       }
+      domain_calculation_items: {
+        Row: {
+          ativo: boolean
+          audit_trail: Json
+          base: number
+          base_source: string | null
+          competencia: string
+          correcao: number
+          created_at: string
+          diferenca: number
+          divisor: number
+          divisor_source: string | null
+          dobra: number
+          formula_aplicada: string | null
+          id: string
+          incidences: Json
+          judicial_rule_id: string | null
+          juros: number
+          multiplicador: number
+          offsets: Json
+          quantidade: number
+          quantidade_source: string | null
+          reflections: Json
+          rubric_code: string
+          rubric_name: string
+          scenario_id: string
+          total: number
+          valor_devido: number
+          valor_pago: number
+        }
+        Insert: {
+          ativo?: boolean
+          audit_trail?: Json
+          base?: number
+          base_source?: string | null
+          competencia: string
+          correcao?: number
+          created_at?: string
+          diferenca?: number
+          divisor?: number
+          divisor_source?: string | null
+          dobra?: number
+          formula_aplicada?: string | null
+          id?: string
+          incidences?: Json
+          judicial_rule_id?: string | null
+          juros?: number
+          multiplicador?: number
+          offsets?: Json
+          quantidade?: number
+          quantidade_source?: string | null
+          reflections?: Json
+          rubric_code: string
+          rubric_name: string
+          scenario_id: string
+          total?: number
+          valor_devido?: number
+          valor_pago?: number
+        }
+        Update: {
+          ativo?: boolean
+          audit_trail?: Json
+          base?: number
+          base_source?: string | null
+          competencia?: string
+          correcao?: number
+          created_at?: string
+          diferenca?: number
+          divisor?: number
+          divisor_source?: string | null
+          dobra?: number
+          formula_aplicada?: string | null
+          id?: string
+          incidences?: Json
+          judicial_rule_id?: string | null
+          juros?: number
+          multiplicador?: number
+          offsets?: Json
+          quantidade?: number
+          quantidade_source?: string | null
+          reflections?: Json
+          rubric_code?: string
+          rubric_name?: string
+          scenario_id?: string
+          total?: number
+          valor_devido?: number
+          valor_pago?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domain_calculation_items_judicial_rule_id_fkey"
+            columns: ["judicial_rule_id"]
+            isOneToOne: false
+            referencedRelation: "judicial_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domain_calculation_items_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "calc_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employment_contracts: {
         Row: {
           case_id: string
@@ -2510,6 +2615,76 @@ export type Database = {
           },
         ]
       }
+      inconsistency_flags: {
+        Row: {
+          case_id: string
+          categoria: string
+          competencia: string | null
+          created_at: string
+          descricao: string
+          id: string
+          resolvido: boolean
+          resolvido_em: string | null
+          resolvido_por: string | null
+          rubric_code: string | null
+          scenario_id: string | null
+          severidade: string
+          sugestao: string | null
+        }
+        Insert: {
+          case_id: string
+          categoria: string
+          competencia?: string | null
+          created_at?: string
+          descricao: string
+          id?: string
+          resolvido?: boolean
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          rubric_code?: string | null
+          scenario_id?: string | null
+          severidade: string
+          sugestao?: string | null
+        }
+        Update: {
+          case_id?: string
+          categoria?: string
+          competencia?: string | null
+          created_at?: string
+          descricao?: string
+          id?: string
+          resolvido?: boolean
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          rubric_code?: string | null
+          scenario_id?: string | null
+          severidade?: string
+          sugestao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inconsistency_flags_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "case_processing_stats"
+            referencedColumns: ["case_id"]
+          },
+          {
+            foreignKeyName: "inconsistency_flags_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inconsistency_flags_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "calc_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       index_series: {
         Row: {
           competencia: string
@@ -2560,6 +2735,127 @@ export type Database = {
           valor?: number
         }
         Relationships: []
+      }
+      judicial_rules: {
+        Row: {
+          created_at: string
+          descricao: string
+          fonte: string
+          id: string
+          observacoes: string | null
+          parametros: Json
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          prioridade: number
+          rubric_code: string | null
+          substitui_rule_id: string | null
+          tipo: string
+          title_version_id: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string
+          fonte: string
+          id?: string
+          observacoes?: string | null
+          parametros?: Json
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          prioridade?: number
+          rubric_code?: string | null
+          substitui_rule_id?: string | null
+          tipo: string
+          title_version_id: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string
+          fonte?: string
+          id?: string
+          observacoes?: string | null
+          parametros?: Json
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          prioridade?: number
+          rubric_code?: string | null
+          substitui_rule_id?: string | null
+          tipo?: string
+          title_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "judicial_rules_substitui_rule_id_fkey"
+            columns: ["substitui_rule_id"]
+            isOneToOne: false
+            referencedRelation: "judicial_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "judicial_rules_title_version_id_fkey"
+            columns: ["title_version_id"]
+            isOneToOne: false
+            referencedRelation: "judicial_title_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      judicial_title_versions: {
+        Row: {
+          case_id: string
+          created_at: string
+          created_by: string | null
+          data_decisao: string
+          descricao: string
+          fonte_documento_id: string | null
+          id: string
+          tipo: string
+          versao: number
+        }
+        Insert: {
+          case_id: string
+          created_at?: string
+          created_by?: string | null
+          data_decisao: string
+          descricao?: string
+          fonte_documento_id?: string | null
+          id?: string
+          tipo: string
+          versao?: number
+        }
+        Update: {
+          case_id?: string
+          created_at?: string
+          created_by?: string | null
+          data_decisao?: string
+          descricao?: string
+          fonte_documento_id?: string | null
+          id?: string
+          tipo?: string
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "judicial_title_versions_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "case_processing_stats"
+            referencedColumns: ["case_id"]
+          },
+          {
+            foreignKeyName: "judicial_title_versions_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "judicial_title_versions_fonte_documento_id_fkey"
+            columns: ["fonte_documento_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       legal_rules: {
         Row: {
@@ -6360,6 +6656,60 @@ export type Database = {
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "legal_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rubric_classifications: {
+        Row: {
+          canonical_code: string
+          canonical_name: string | null
+          case_id: string
+          confidence: number
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          id: string
+          method: string
+          source_name: string
+        }
+        Insert: {
+          canonical_code: string
+          canonical_name?: string | null
+          case_id: string
+          confidence?: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          id?: string
+          method: string
+          source_name: string
+        }
+        Update: {
+          canonical_code?: string
+          canonical_name?: string | null
+          case_id?: string
+          confidence?: number
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          id?: string
+          method?: string
+          source_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rubric_classifications_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "case_processing_stats"
+            referencedColumns: ["case_id"]
+          },
+          {
+            foreignKeyName: "rubric_classifications_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
             referencedColumns: ["id"]
           },
         ]
