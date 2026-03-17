@@ -62,6 +62,8 @@ import {
   type TaxTable,
 } from "@/lib/calculation";
 import { runCrossValidation, applyCorrections, type CrossValidationResult } from "@/lib/calculation/cross-validation";
+import { orchestrateCalculation } from "@/lib/pjecalc/domain-orchestrator";
+import { buildDomainExecutionConfig, loadDomainAuditData, persistDomainAuditSnapshot } from "@/lib/pjecalc/domain-audit";
 
 // =====================================================
 // TYPES
