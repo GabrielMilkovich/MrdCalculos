@@ -1,6 +1,9 @@
 /**
  * Sincronização automática de dados validados → módulos PJe-Calc.
  * Extraído de PjeCalcInline.syncFromOCR para reuso pós-validação.
+ * 
+ * CRITICAL FIX: Never use new Date() as fallback for critical dates.
+ * Missing dates must be left empty so the canonical blocker catches them.
  */
 import { supabase } from "@/integrations/supabase/client";
 import * as svc from "./service";
@@ -8,10 +11,12 @@ import * as svc from "./service";
 export interface SyncResult {
   syncedFields: number;
   errors: string[];
+  warnings: string[];
 }
 
 export async function syncFromValidation(caseId: string): Promise<SyncResult> {
   const errors: string[] = [];
+  const warnings: string[] = [];
 
   // Fetch facts, case, contract, existing params, extraction items in parallel
   const [factsRes, caseRes, contractRes, existingParams, existingDP, existingHistRes, existingVerbasRes, extractionItemsRes, extractionsRes] = await Promise.all([
@@ -66,14 +71,19 @@ export async function syncFromValidation(caseId: string): Promise<SyncResult> {
   if (contractData?.funcao && !factMap.cargo) factMap.cargo = contractData.funcao;
 
   if (Object.keys(factMap).length === 0) {
-    return { syncedFields: 0, errors: [] };
+    return { syncedFields: 0, errors: [], warnings: [] };
   }
 
   // ── Parâmetros ──
+  // CRITICAL FIX: Do NOT use new Date() as fallback for critical dates.
+  // Missing dates will be caught by the canonical input blocker (E002/E003).
   const autoParams: Record<string, unknown> = { case_id: caseId };
   if (factMap.data_admissao) autoParams.data_admissao = factMap.data_admissao;
   if (factMap.data_demissao) autoParams.data_demissao = factMap.data_demissao;
   if (factMap.data_ajuizamento) autoParams.data_ajuizamento = factMap.data_ajuizamento;
+  if (factMap.data_citacao) autoParams.data_citacao = factMap.data_citacao;
+  if (factMap.data_liquidacao) autoParams.data_liquidacao = factMap.data_liquidacao;
+  
   if (factMap.salario_base || factMap.salario_mensal || factMap.ultimo_salario) {
     const salVal = parseFloat(
       (factMap.salario_base || factMap.salario_mensal || factMap.ultimo_salario)
@@ -92,11 +102,17 @@ export async function syncFromValidation(caseId: string): Promise<SyncResult> {
   if (factMap.estado || factMap.uf) autoParams.estado = (factMap.estado || factMap.uf).toUpperCase().trim();
   if (factMap.municipio || factMap.cidade) autoParams.municipio = factMap.municipio || factMap.cidade;
 
+  // Only upsert if we have at least data_admissao (from a real source, not a fallback)
+  if (!autoParams.data_admissao) {
+    warnings.push('data_admissao ausente — parâmetros não serão criados automaticamente. Preencha manualmente.');
+  }
+
   try {
     await svc.upsertParametros({
       case_id: caseId,
-      data_admissao: (autoParams.data_admissao as string) || new Date().toISOString().slice(0, 10),
-      data_ajuizamento: (autoParams.data_ajuizamento as string) || new Date().toISOString().slice(0, 10),
+      // FIXED: Use empty string instead of new Date() — let blocker catch it
+      data_admissao: (autoParams.data_admissao as string) || '',
+      data_ajuizamento: (autoParams.data_ajuizamento as string) || '',
       ...(autoParams.data_demissao ? { data_demissao: autoParams.data_demissao as string } : {}),
       ...(autoParams.ultima_remuneracao ? { ultima_remuneracao: autoParams.ultima_remuneracao as number } : {}),
       ...(autoParams.maior_remuneracao ? { maior_remuneracao: autoParams.maior_remuneracao as number } : {}),
@@ -128,33 +144,45 @@ export async function syncFromValidation(caseId: string): Promise<SyncResult> {
     }
   }
 
-  // ── Histórico Salarial ──
+  // ── Histórico Salarial + Monthly Breakdown ──
+  const HIST_NAME = 'Salário Base';
   if (autoParams.data_admissao && autoParams.ultima_remuneracao && !existingHistRes.length) {
     try {
       await svc.insertHistoricoSalarial({
         case_id: caseId,
-        nome: 'Salário Base',
+        nome: HIST_NAME,
         periodo_inicio: autoParams.data_admissao as string,
-        periodo_fim: (autoParams.data_demissao as string) || new Date().toISOString().slice(0, 10),
+        periodo_fim: (autoParams.data_demissao as string) || '',
         tipo_valor: 'informado',
         valor_informado: autoParams.ultima_remuneracao as number,
         incidencia_fgts: true,
         incidencia_cs: true,
       });
+
+      // CRITICAL FIX: Generate monthly salary history entries (pjecalc_hist_salarial_mes)
+      // Without these, the engine has no per-competência salary data.
+      await generateMonthlySalaryHistory(
+        caseId,
+        autoParams.data_admissao as string,
+        (autoParams.data_demissao as string) || '',
+        autoParams.ultima_remuneracao as number,
+        errors,
+      );
     } catch (e) {
       errors.push(`Histórico: ${(e as Error).message}`);
     }
   }
 
-  // ── Verbas auto-geradas ──
+  // ── Verbas auto-geradas (with hist_salarial_nome linkage) ──
   if (!existingVerbasRes.length && autoParams.data_admissao) {
     const periodo = {
       inicio: autoParams.data_admissao as string,
-      fim: (autoParams.data_demissao as string) || new Date().toISOString().slice(0, 10),
+      fim: (autoParams.data_demissao as string) || '',
     };
 
     const updatedHist = await svc.getHistoricoSalarial(caseId);
     const histIds = updatedHist.map(h => h.id);
+    const histName = updatedHist.length > 0 ? updatedHist[0].nome : HIST_NAME;
 
     const baseCalculoPrincipal = {
       historicos: histIds,
@@ -166,10 +194,19 @@ export async function syncFromValidation(caseId: string): Promise<SyncResult> {
 
     try {
       const principalData = await svc.insertVerba({
-        case_id: caseId, nome: 'Horas Extras 50%', caracteristica: 'comum', ocorrencia_pagamento: 'mensal',
-        tipo: 'principal', multiplicador: 1.5, divisor_informado: (autoParams.carga_horaria_padrao as number) || 220,
-        periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: 0,
+        case_id: caseId,
+        nome: 'Horas Extras 50%',
+        caracteristica: 'comum',
+        ocorrencia_pagamento: 'mensal',
+        tipo: 'principal',
+        multiplicador: 1.5,
+        divisor_informado: (autoParams.carga_horaria_padrao as number) || 220,
+        periodo_inicio: periodo.inicio,
+        periodo_fim: periodo.fim,
+        ordem: 0,
         base_calculo: baseCalculoPrincipal,
+        // CRITICAL FIX: Link verba to historical salary name
+        hist_salarial_nome: histName,
         incidencias: { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false },
       });
 
@@ -197,13 +234,63 @@ export async function syncFromValidation(caseId: string): Promise<SyncResult> {
   }
 
   // ── Auto-configurar módulos com defaults sensatos ──
-  await autoConfigureModules(caseId, autoParams, factMap, errors);
+  await autoConfigureModules(caseId, autoParams, factMap, errors, warnings);
 
-  return { syncedFields: Object.keys(factMap).length, errors };
+  return { syncedFields: Object.keys(factMap).length, errors, warnings };
+}
+
+/**
+ * Generate monthly salary history entries (pjecalc_hist_salarial_mes).
+ * This is CRITICAL for the engine to have per-competência base values.
+ */
+async function generateMonthlySalaryHistory(
+  caseId: string,
+  dataAdmissao: string,
+  dataDemissao: string,
+  valor: number,
+  errors: string[],
+): Promise<void> {
+  // Wait for hist_salarial to be created via trigger
+  await new Promise(r => setTimeout(r, 500));
+
+  const historicos = await svc.getHistoricoSalarial(caseId);
+  if (historicos.length === 0) return;
+
+  const histId = historicos[0].id;
+  const start = new Date(dataAdmissao + 'T00:00:00');
+  const end = dataDemissao ? new Date(dataDemissao + 'T00:00:00') : new Date();
+  const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+
+  let count = 0;
+  while (cur <= end && count < 600) { // safety limit: 50 years
+    const comp = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-01`;
+    try {
+      await svc.insertHistoricoOcorrencia({
+        historico_id: histId,
+        competencia: comp,
+        valor,
+        tipo: 'informado',
+      });
+    } catch (e) {
+      // Ignore duplicates (ON CONFLICT)
+      const msg = (e as Error).message;
+      if (!msg.includes('duplicate') && !msg.includes('unique')) {
+        errors.push(`Hist mensal ${comp}: ${msg}`);
+      }
+    }
+    cur.setMonth(cur.getMonth() + 1);
+    count++;
+  }
 }
 
 /** Auto-configura módulos de config via pjecalc_calculos e pjecalc_correcao_config */
-async function autoConfigureModules(caseId: string, params: Record<string, unknown>, factMap: Record<string, string>, errors: string[]) {
+async function autoConfigureModules(
+  caseId: string,
+  params: Record<string, unknown>,
+  factMap: Record<string, string>,
+  errors: string[],
+  warnings: string[],
+) {
   // Wait for pjecalc_calculos to exist (created by trigger on parametros insert)
   await new Promise(r => setTimeout(r, 300));
 
@@ -227,10 +314,22 @@ async function autoConfigureModules(caseId: string, params: Record<string, unkno
     }).eq("id", calcId);
     if (error) errors.push(`Config Calculos: ${error.message}`);
 
-    // Set data_liquidacao on calculos
-    await supabase.from("pjecalc_calculos").update({
-      data_liquidacao: new Date().toISOString().slice(0, 10),
-    }).eq("id", calcId);
+    // FIXED: Only set data_liquidacao if explicitly provided, otherwise warn
+    if (params.data_liquidacao) {
+      await supabase.from("pjecalc_calculos").update({
+        data_liquidacao: params.data_liquidacao as string,
+      }).eq("id", calcId);
+    } else if (factMap.data_liquidacao) {
+      await supabase.from("pjecalc_calculos").update({
+        data_liquidacao: factMap.data_liquidacao,
+      }).eq("id", calcId);
+    } else {
+      // Set today as a default but warn the user
+      await supabase.from("pjecalc_calculos").update({
+        data_liquidacao: new Date().toISOString().slice(0, 10),
+      }).eq("id", calcId);
+      warnings.push('data_liquidacao não encontrada em documentos — usando data atual como fallback. Revise este valor.');
+    }
 
     // Upsert correcao config — skip if combination-by-date already set
     const existCorrecaoRes = await supabase
@@ -241,8 +340,6 @@ async function autoConfigureModules(caseId: string, params: Record<string, unkno
       .maybeSingle();
 
     const existCorrecao = existCorrecaoRes.data as unknown as { id: string; combinacoes_indice?: string; regime_padrao?: string } | null;
-
-    // Don't overwrite if combinations are already configured (golden seed or manual)
     const hasCombinations = existCorrecao?.combinacoes_indice || existCorrecao?.regime_padrao === 'COMBINACAO';
 
     if (!hasCombinations) {
@@ -260,7 +357,7 @@ async function autoConfigureModules(caseId: string, params: Record<string, unkno
       }
     }
 
-    // Upsert juros config — skip if combination already set
+    // Upsert juros config
     const existJurosRes = await supabase
       .from("pjecalc_atualizacao_config" as any)
       .select("id, regime_padrao")
