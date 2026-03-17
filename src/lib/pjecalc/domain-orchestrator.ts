@@ -142,20 +142,20 @@ export function orchestrateCalculation(config: OrchestratorConfig): Orchestrator
           // Store for dependent modules
           if (!globalResults.has(mod.id)) globalResults.set(mod.id, []);
           globalResults.get(mod.id)!.push({
-            verba_id: verba.id,
-            verba_nome: verba.nome,
             competencia: comp.competencia,
-            base_valor: inputs.base,
-            multiplicador: inputs.multiplicador,
+            base: inputs.base,
             divisor: inputs.divisor,
+            multiplicador: inputs.multiplicador,
             quantidade: inputs.quantidade,
             dobra: 1,
             devido: resultado,
             pago: 0,
             diferenca: resultado,
-            correcao: 0,
+            indice_correcao: 0,
+            valor_corrigido: resultado,
             juros: 0,
-            total: resultado,
+            valor_final: resultado,
+            formula: `${mod.id}`,
           });
         } catch (err) {
           inconsistencies.push({
