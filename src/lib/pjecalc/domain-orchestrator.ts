@@ -69,7 +69,15 @@ export function orchestrateCalculation(config: OrchestratorConfig): Orchestrator
   });
 
   // Step 2: Build timeline
-  const timeline = buildTimeline(config.contract);
+  const timeline = buildTimeline({
+    contract: config.contract,
+    calendarRules: [],
+    normativeRules: [],
+    evidenceSources: config.laborCase.documents || [],
+    sabadoDiaUtil: config.scenario.params.sabado_dia_util,
+    considerarFeriadoEstadual: config.scenario.params.considerar_feriado_estadual,
+    considerarFeriadoMunicipal: config.scenario.params.considerar_feriado_municipal,
+  });
   auditSummary.push({
     campo: 'timeline',
     valor: `${timeline.length} competências`,
