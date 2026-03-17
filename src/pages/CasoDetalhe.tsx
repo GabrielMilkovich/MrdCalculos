@@ -54,16 +54,8 @@ import { ControversyManager } from "@/components/cases/pericial/ControversyManag
 import { ScenarioManager } from "@/components/cases/pericial/ScenarioManager";
 import { PjeCalcSummaryWidget } from "@/components/cases/PjeCalcSummaryWidget";
 import { PjeCalcInline } from "@/components/cases/PjeCalcInline";
-import {
-  CalculationEngine,
-  type CalculatorRules,
-  type FactMap,
-  type IndexSeries,
-  type TaxTable,
-} from "@/lib/calculation";
-import { runCrossValidation, applyCorrections, type CrossValidationResult } from "@/lib/calculation/cross-validation";
-import { orchestrateCalculation } from "@/lib/pjecalc/domain-orchestrator";
-import { buildDomainExecutionConfig, loadDomainAuditData, persistDomainAuditSnapshot } from "@/lib/pjecalc/domain-audit";
+import { AuditDrillDown } from "@/components/cases/pjecalc/AuditDrillDown";
+import { loadDomainAuditData } from "@/lib/pjecalc/domain-audit";
 
 // =====================================================
 // TYPES
