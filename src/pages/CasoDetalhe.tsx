@@ -54,6 +54,7 @@ import { ControversyManager } from "@/components/cases/pericial/ControversyManag
 import { ScenarioManager } from "@/components/cases/pericial/ScenarioManager";
 import { PjeCalcSummaryWidget } from "@/components/cases/PjeCalcSummaryWidget";
 import { PjeCalcInline } from "@/components/cases/PjeCalcInline";
+import { AuditDrillDown } from "@/components/cases/pjecalc/AuditDrillDown";
 import {
   CalculationEngine,
   type CalculatorRules,
@@ -61,7 +62,7 @@ import {
   type IndexSeries,
   type TaxTable,
 } from "@/lib/calculation";
-import { runCrossValidation, applyCorrections, type CrossValidationResult } from "@/lib/calculation/cross-validation";
+import { runCrossValidation, applyCorrections } from "@/lib/calculation/cross-validation";
 import { orchestrateCalculation } from "@/lib/pjecalc/domain-orchestrator";
 import { buildDomainExecutionConfig, loadDomainAuditData, persistDomainAuditSnapshot } from "@/lib/pjecalc/domain-audit";
 
@@ -933,6 +934,7 @@ export default function CasoDetalhe() {
                 <TimelineView timeline={domainAuditData?.timeline || []} />
                 <TitleConsolidationView title={domainAuditData?.title || { global_rules: [], rules_by_rubric: new Map(), denied_rubrics: new Set(), granted_rubrics: new Set(), conflicts: [], latest_version: null }} />
                 <InconsistencyPanel flags={domainAuditData?.flags || []} />
+                <AuditDrillDown result={(pjecalcLiquidacao?.resultado as any) || null} />
                 <ComparisonView rows={domainAuditData?.rows || []} totalMRD={domainAuditData?.totalMRD || 0} totalPJC={domainAuditData?.totalPJC || 0} />
               </>
             )}
