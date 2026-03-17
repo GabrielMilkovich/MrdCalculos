@@ -326,6 +326,12 @@ export default function CasoDetalhe() {
       active: activeTab === "roteiro",
       tooltip: "Diagnóstico completo do caso gerado por IA",
     },
+    {
+      id: "auditoria", label: "Auditoria", icon: Search,
+      completed: false,
+      active: activeTab === "auditoria",
+      tooltip: "Timeline, título executivo, inconsistências e comparação",
+    },
   ];
 
   // =====================================================
