@@ -21,7 +21,6 @@ import type {
   InconsistencyFlag, AuditTrailEntry,
 } from '@/domain/types';
 import { orchestrateCalculation, type OrchestratorResult } from '@/lib/pjecalc/domain-orchestrator';
-import { generateReflections, reflectionResultToItemReflection, type ReflectionContext } from '@/domain/reflection-engine';
 import { applyDomainOffsets, type DomainPaidItem } from '@/domain/offset-engine';
 import type { PjeVerba, PjeHistoricoSalarial, PjeCartaoPonto, PjeFalta, PjeFerias } from '@/lib/pjecalc/engine-types';
 import Decimal from 'decimal.js';
@@ -60,7 +59,7 @@ export function useDomainOrchestrator() {
     setError(null);
 
     try {
-      // Step 1: Run orchestrator (title + timeline + verba modules)
+      // Step 1: Run orchestrator (title + timeline + verba modules + reflexos materializados)
       const orchResult: OrchestratorResult = orchestrateCalculation({
         laborCase: input.laborCase,
         contract: input.contract,
@@ -75,29 +74,9 @@ export function useDomainOrchestrator() {
 
       let items = orchResult.items;
       const audit = [...orchResult.auditSummary];
+      const reflectionCount = items.filter(item => item.formula_aplicada.startsWith('reflexo:')).length;
 
-      // Step 2: Generate reflections
-      const reflCtx: ReflectionContext = {
-        sourceItems: items,
-        admissao: input.contract.admissao,
-        demissao: input.contract.demissao,
-        vedasReflexo: [],
-        zerarNegativo: input.scenario.params.zerar_valor_negativo,
-      };
-      const reflections = generateReflections(reflCtx);
-
-      // Attach reflections to source items
-      let reflectionCount = 0;
-      for (const refl of reflections) {
-        const sourceItem = items.find(i => i.id === refl.item_id);
-        if (sourceItem) {
-          sourceItem.reflections.push(reflectionResultToItemReflection(refl));
-          reflectionCount++;
-          audit.push(...refl.audit);
-        }
-      }
-
-      // Step 3: Apply offsets
+      // Step 2: Apply offsets
       let offsetCount = 0;
       if (input.paidItems && input.paidItems.length > 0) {
         const offsetResult = applyDomainOffsets({
@@ -110,7 +89,7 @@ export function useDomainOrchestrator() {
         audit.push(...offsetResult.audit);
       }
 
-      // Step 4: Calculate totals
+      // Step 3: Calculate totals
       let totalBruto = new Decimal(0);
       let totalLiquido = new Decimal(0);
       for (const item of items) {

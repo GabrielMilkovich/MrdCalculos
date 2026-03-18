@@ -12,11 +12,12 @@ import Decimal from 'decimal.js';
 import type {
   LaborCase, EmploymentContract, CalculationScenario, CalculationItem,
   CalculationCompetency, JudicialTitleVersion,
-  InconsistencyFlag, Competencia, AuditTrailEntry,
+  InconsistencyFlag, Competencia, AuditTrailEntry, ReflectionRuleConfig,
 } from '../../domain/types';
 import { buildTimeline } from '../../domain/timeline-builder';
 import { resolveJudicialTitle, type ResolvedTitleState } from '../../domain/judicial-title-resolver';
-import type { VerbaModuleContext } from './verba-modules/types';
+import { generateReflections, reflectionResultToItemReflection, type ReflectionContext } from '../../domain/reflection-engine';
+import type { VerbaModuleContext, ReflectionSpec, VerbaModule } from './verba-modules/types';
 import { getModulesInOrder } from './verba-modules/types';
 import type { PjeVerba, PjeHistoricoSalarial, PjeCartaoPonto, PjeFalta, PjeFerias, PjeOcorrenciaResult } from './engine-types';
 import type { PjecalcLiquidacaoResultadoRow, PjecalcOcorrenciaRow } from './types';
@@ -58,6 +59,13 @@ type AggregatedOccurrence = Pick<
   'valor_devido' | 'valor_pago' | 'diferenca' | 'correcao' | 'juros' | 'total'
 >;
 
+type ExecutedItem = {
+  item: CalculationItem;
+  verba: PjeVerba;
+  module: VerbaModule;
+  reflectionRules: ReflectionRuleConfig[];
+};
+
 const CLOSING_COMPETENCIA = 'fechamento';
 
 // =====================================================
@@ -67,6 +75,7 @@ const CLOSING_COMPETENCIA = 'fechamento';
 export function orchestrateCalculation(config: OrchestratorConfig): OrchestratorResult {
   const inconsistencies: InconsistencyFlag[] = [];
   const allItems: CalculationItem[] = [];
+  const executedItems: ExecutedItem[] = [];
   const auditSummary: AuditTrailEntry[] = [];
 
   // Step 1: Resolve judicial title
@@ -103,9 +112,9 @@ export function orchestrateCalculation(config: OrchestratorConfig): Orchestrator
     const moduleContext = buildModuleContext(config, comp, globalResults);
 
     for (const mod of modules) {
-      const applicableVerbas = config.verbas.filter(v => {
-        const isInPeriod = isVerbaInCompetencia(v, comp.competencia);
-        return isInPeriod && mod.canApply(moduleContext, v);
+      const applicableVerbas = config.verbas.filter((verba) => {
+        const isInPeriod = isVerbaInCompetencia(verba, comp.competencia);
+        return isInPeriod && isModuleVerbaMatch(mod.id, verba) && mod.canApply(moduleContext, verba);
       });
 
       const titleRule = findTitleRule(consolidatedTitle, mod.id, comp.competencia);
@@ -146,6 +155,12 @@ export function orchestrateCalculation(config: OrchestratorConfig): Orchestrator
           };
 
           allItems.push(item);
+          executedItems.push({
+            item,
+            verba,
+            module: mod,
+            reflectionRules: buildReflectionRules(mod, verba),
+          });
 
           if (!globalResults.has(mod.id)) globalResults.set(mod.id, []);
           globalResults.get(mod.id)!.push({
@@ -184,6 +199,17 @@ export function orchestrateCalculation(config: OrchestratorConfig): Orchestrator
   }
 
   let items = allItems;
+
+  const materializedReflections = materializeReflectionItems(
+    config.scenario.id,
+    config.contract,
+    executedItems,
+    auditSummary,
+  );
+
+  if (materializedReflections.length > 0) {
+    items = [...items, ...materializedReflections];
+  }
 
   if (config.ocorrencias?.length) {
     items = mergePersistedOccurrenceClosure(items, config.ocorrencias, auditSummary);
@@ -279,6 +305,69 @@ function normalizeCompetencia(value?: string | null): string {
   return value.length >= 7 ? value.slice(0, 7) : value;
 }
 
+function normalizeText(value?: string | null): string {
+  return (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9]+/gi, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+function includesAny(value: string, candidates: string[]): boolean {
+  return candidates.some((candidate) => value.includes(candidate));
+}
+
+function isModuleVerbaMatch(moduleId: string, verba: PjeVerba): boolean {
+  const name = normalizeText(verba.nome);
+  const isOvertime = includesAny(name, ['HORA EXTRA', 'HORAS EXTRAS', 'HE 50', 'HE 100', 'EXTRA 50', 'EXTRA 100']);
+
+  switch (moduleId) {
+    case 'HE_50':
+      return isOvertime && includesAny(name, ['50', 'CINQUENTA']) && !includesAny(name, ['100', 'CEM']);
+    case 'HE_100':
+      return isOvertime && includesAny(name, ['100', 'CEM']);
+    case 'INTRAJORNADA':
+      return name.includes('INTRAJORNADA') || (name.includes('INTERVALO') && name.includes('SUPRIM'));
+    case 'INTERJORNADA':
+      return name.includes('INTERJORNADA');
+    case 'ART384':
+      return name.includes('384') || name.includes('INTERVALO MULHER');
+    case 'DOM_FER':
+      return includesAny(name, ['DOMINGO', 'FERIADO', 'DOM FER']);
+    case 'COMISSAO':
+      return name.includes('COMISS');
+    case 'PREMIO':
+      return includesAny(name, ['PREMIO', 'META', 'BONIF']);
+    case 'DSR':
+      return includesAny(name, ['DSR', 'RSR', 'DESCANSO SEMANAL']);
+    case 'SAL_SUBST':
+      return includesAny(name, ['SUBSTITUI', 'EQUIPARA']);
+    case 'PLR_PROP':
+      return includesAny(name, ['PLR', 'PARTICIPA']);
+    case 'SALDO_SAL':
+      return includesAny(name, ['SALDO SALARIO', 'SALDO DE SALARIO']);
+    case 'AVISO_PREVIO':
+      return includesAny(name, ['AVISO PREVIO', 'AVISO']);
+    case 'FERIAS_VENC':
+      return name.includes('FERIAS') && includesAny(name, ['VENC', 'DOBRA']);
+    case 'FERIAS_PROP':
+      return name.includes('FERIAS') && name.includes('PROP');
+    case 'DECIMO_PROP':
+      return includesAny(name, ['13 SALARIO', '13O SALARIO', 'DECIMO TERCEIRO', 'DECIMO 3']);
+    case 'FGTS_DIF':
+      return name.includes('FGTS') && !includesAny(name, ['MULTA 40', '40 FGTS']);
+    case 'MULTA_40_FGTS':
+      return name.includes('FGTS') && includesAny(name, ['MULTA', '40']);
+    case 'MULTA_467':
+      return name.includes('467');
+    case 'MULTA_477':
+      return name.includes('477');
+    default:
+      return false;
+  }
+}
+
 function buildOccurrenceAggregation(rows: PjecalcOcorrenciaRow[]): Map<string, AggregatedOccurrence> {
   const map = new Map<string, AggregatedOccurrence>();
 
@@ -349,6 +438,154 @@ function mergePersistedOccurrenceClosure(
   });
 
   return merged;
+}
+
+function buildReflectionRules(module: VerbaModule, verba: PjeVerba): ReflectionRuleConfig[] {
+  return module
+    .getReflections(verba)
+    .map(mapReflectionSpecToRule)
+    .filter((rule): rule is ReflectionRuleConfig => Boolean(rule));
+}
+
+function mapReflectionSpecToRule(spec: ReflectionSpec): ReflectionRuleConfig | null {
+  if (spec.tipo === 'dsr' || spec.tipo === 'fgts') {
+    return null;
+  }
+
+  const targetRubricByType: Record<Exclude<ReflectionSpec['tipo'], 'dsr' | 'fgts'>, string> = {
+    '13_salario': '13_SALARIO',
+    ferias: 'FERIAS_1_3',
+    aviso_previo: 'AVISO_PREVIO',
+  };
+
+  return {
+    target_rubric: targetRubricByType[spec.tipo],
+    tipo: spec.tipo === '13_salario' || spec.tipo === 'ferias' ? 'anual' : 'rescisorio',
+    base_multiplier: spec.baseMultiplier,
+    divisor: spec.divisor,
+    periodo_media: spec.periodoMedia,
+    usa_avos: true,
+    fracao_mes: spec.tipo === 'aviso_previo' ? 'integralizar' : 'desprezar_menor_15',
+  };
+}
+
+function materializeReflectionItems(
+  scenarioId: string,
+  contract: EmploymentContract,
+  executedItems: ExecutedItem[],
+  auditSummary: AuditTrailEntry[],
+): CalculationItem[] {
+  const groups = new Map<string, { sourceItems: CalculationItem[]; rules: ReflectionRuleConfig[] }>();
+
+  for (const executed of executedItems) {
+    if (executed.item.diferenca.lte(0) || executed.reflectionRules.length === 0) continue;
+
+    const group = groups.get(executed.module.id) || { sourceItems: [], rules: [] };
+    group.sourceItems.push(executed.item);
+
+    for (const rule of executed.reflectionRules) {
+      const exists = group.rules.some(
+        (existing) =>
+          existing.target_rubric === rule.target_rubric &&
+          existing.tipo === rule.tipo &&
+          existing.base_multiplier === rule.base_multiplier &&
+          existing.divisor === rule.divisor,
+      );
+      if (!exists) group.rules.push(rule);
+    }
+
+    groups.set(executed.module.id, group);
+  }
+
+  const reflectionItems: CalculationItem[] = [];
+
+  for (const [moduleId, group] of groups) {
+    const reflectionContext: ReflectionContext = {
+      sourceItems: group.sourceItems,
+      admissao: contract.admissao,
+      demissao: contract.demissao,
+      vedasReflexo: [],
+      zerarNegativo: true,
+    };
+
+    const results = generateReflections(reflectionContext, group.rules);
+
+    for (const result of results) {
+      const sourceItem = group.sourceItems.find((item) => item.id === result.item_id);
+      if (!sourceItem) continue;
+
+      sourceItem.reflections.push(reflectionResultToItemReflection(result));
+      reflectionItems.push(createReflectionItem(scenarioId, sourceItem, result));
+    }
+
+    if (results.length > 0) {
+      auditSummary.push({
+        campo: `reflexos_${moduleId}`,
+        valor: `${results.length} reflexos materializados`,
+        fonte: 'reflection_engine',
+      });
+    }
+  }
+
+  return reflectionItems;
+}
+
+function createReflectionItem(
+  scenarioId: string,
+  sourceItem: CalculationItem,
+  result: ReturnType<typeof generateReflections>[number],
+): CalculationItem {
+  const targetLabel = getReflectionLabel(result.target_rubric);
+
+  return {
+    id: crypto.randomUUID(),
+    scenario_id: scenarioId,
+    rubric_code: `REFLEXO_${result.target_rubric}`,
+    rubric_name: `${targetLabel} sobre ${sourceItem.rubric_name}`,
+    competencia: result.competencia_destino,
+    base: result.base,
+    base_source: `reflexo:${sourceItem.rubric_name}`,
+    divisor: result.divisor,
+    divisor_source: 'reflection_engine',
+    multiplicador: result.multiplicador,
+    quantidade: new Decimal(1),
+    quantidade_source: `reflection_engine:${result.tipo}`,
+    dobra: new Decimal(1),
+    valor_devido: result.valor,
+    valor_pago: new Decimal(0),
+    diferenca: result.valor,
+    correcao: new Decimal(0),
+    juros: new Decimal(0),
+    total: result.valor,
+    formula_aplicada: `reflexo:${sourceItem.rubric_code}->${result.target_rubric}`,
+    judicial_rule_id: sourceItem.judicial_rule_id,
+    ativo: true,
+    reflections: [],
+    incidences: [],
+    offsets: [],
+    audit_trail: [
+      ...result.audit,
+      {
+        campo: 'verba_origem',
+        valor: sourceItem.rubric_name,
+        fonte: 'reflection_engine',
+        observacao: `Reflexo materializado a partir de ${sourceItem.competencia}`,
+      },
+    ],
+  };
+}
+
+function getReflectionLabel(targetRubric: string): string {
+  switch (targetRubric) {
+    case '13_SALARIO':
+      return 'Reflexo em 13º';
+    case 'FERIAS_1_3':
+      return 'Reflexo em Férias + 1/3';
+    case 'AVISO_PREVIO':
+      return 'Reflexo em Aviso Prévio';
+    default:
+      return `Reflexo ${targetRubric}`;
+  }
 }
 
 function buildFinancialClosingItems(
