@@ -754,7 +754,8 @@ export class PjeCalcEngine {
         return compDate >= inicio && compDate <= fim;
       })
       .sort((a, b) => a.faixa - b.faixa)
-      .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota) }));
+      // DB stores aliquota as percentage (e.g. 7.5), constants use decimal (0.075) — divide by 100
+      .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota) / 100 }));
 
     if (faixas.length === 0) {
       // AUDIT: Track fallback for specific competência
@@ -779,7 +780,9 @@ export class PjeCalcEngine {
         return compDate >= inicio && compDate <= fim;
       })
       .sort((a, b) => a.faixa - b.faixa)
-      .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota), deducao: Number(f.deducao) }));
+      // DB stores aliquota as percentage (e.g. 7.5), constants use decimal (0.075) — divide by 100
+      // deducao is in currency (e.g. 182.16) — NOT divided
+      .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota) / 100, deducao: Number(f.deducao) }));
 
     if (faixas.length === 0) {
       // AUDIT: Track fallback for specific competência
@@ -1975,16 +1978,33 @@ export class PjeCalcEngine {
       }
     }
 
-    mesesAnosAnteriores = competenciasAnosAnteriores.size;
-    mesesAnoLiquidacao = competenciasAnoLiquidacao.size;
+    // PJe-Calc Art. 12-A: meses conta pelo período total (Math.floor), NÃO só meses com diferença > 0.
+    // A legislação exige "quantidade de meses a que se referem os rendimentos" = todos os meses do período,
+    // independentemente de o mês ter diferença positiva ou zero.
+    // O mês de pagamento (liquidação) NÃO entra na contagem de anos anteriores.
+    const periodo = this.getPeriodoCalculo();
+    const meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
+    const todasCompetencias = this.getCompetencias(periodo.inicio, periodo.fim);
+    const mesLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
+    // Meses anteriores ao ano de liquidação
+    mesesAnosAnteriores = competenciasAnosAnteriores.size > 0
+      ? Math.max(
+          competenciasAnosAnteriores.size,
+          todasCompetencias.filter(c => c < mesLiq && parseInt(c.slice(0, 4)) < anoLiq).length
+        )
+      : 0;
+    // Meses no ano de liquidação (não inclui o mês de pagamento — Art. 12-A §3º)
+    mesesAnoLiquidacao = competenciasAnoLiquidacao.size > 0
+      ? Math.max(
+          competenciasAnoLiquidacao.size,
+          todasCompetencias.filter(c => parseInt(c.slice(0, 4)) === anoLiq && c < mesLiq).length
+        )
+      : 0;
 
     let deducoes = 0;
     if (this.irConfig.deduzir_cs && this.csConfig.cobrar_reclamante) {
       deducoes += csResult.total_segurado;
     }
-
-    const periodo = this.getPeriodoCalculo();
-    const meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
     
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const tabelaIR = this.getFaixasIRParaCompetencia(compLiq);

@@ -8,17 +8,17 @@ import type { PjeCNAEAliquotas } from './engine-types';
 export const DEFAULT_FAIXAS_INSS = [
   { ate: 1518.00, aliquota: 0.075 },
   { ate: 2793.88, aliquota: 0.09 },
-  { ate: 5839.45, aliquota: 0.12 },
+  { ate: 4190.83, aliquota: 0.12 },
   { ate: 8157.41, aliquota: 0.14 },
 ];
 
-// IRRF 2025 - Tabela mensal
+// IRRF 2025 - Tabela mensal (Portaria MF / MP vigente em 2025)
 export const DEFAULT_FAIXAS_IR = [
-  { ate: 2259.20, aliquota: 0, deducao: 0 },
-  { ate: 2826.65, aliquota: 0.075, deducao: 169.44 },
-  { ate: 3751.05, aliquota: 0.15, deducao: 381.44 },
-  { ate: 4664.68, aliquota: 0.225, deducao: 662.77 },
-  { ate: Infinity, aliquota: 0.275, deducao: 896.00 },
+  { ate: 2428.80, aliquota: 0, deducao: 0 },
+  { ate: 2826.65, aliquota: 0.075, deducao: 182.16 },
+  { ate: 3751.05, aliquota: 0.15, deducao: 394.16 },
+  { ate: 4664.68, aliquota: 0.225, deducao: 675.49 },
+  { ate: Infinity, aliquota: 0.275, deducao: 908.73 },
 ];
 
 export const DEFAULT_DEDUCAO_DEPENDENTE = 189.59;
