@@ -2507,6 +2507,15 @@ export class PjeCalcEngine {
         itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de ajuizamento anterior à admissão' });
       }
     }
+    // Prescrição bienal: reclamação trabalhista presceve 2 anos após rescisão (art. 7° XXIX CF/88)
+    if (this.params.data_ajuizamento && this.params.data_demissao) {
+      const dem = new Date(this.params.data_demissao);
+      const ajuiz = new Date(this.params.data_ajuizamento);
+      const limite = new Date(dem.getFullYear() + 2, dem.getMonth(), dem.getDate());
+      if (ajuiz > limite) {
+        itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: `Possível prescrição bienal: ajuizamento (${this.params.data_ajuizamento}) ocorre mais de 2 anos após a rescisão (${this.params.data_demissao}) — art. 7° XXIX CF/88` });
+      }
+    }
 
     // ── Verbas ──
     if (this.verbas.length === 0) {
