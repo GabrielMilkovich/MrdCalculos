@@ -317,6 +317,138 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
       { nome: 'RSR sobre Domingos/Feriados', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 26, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
     ],
   },
+  {
+    // Equiparação Salarial — Art. 461 CLT (mesma função, mesmo empregador)
+    id: 'equiparacao_salarial',
+    nome: 'Equiparação Salarial',
+    descricao: 'Diferenças salariais por equiparação (art. 461 CLT, Súmula 6 TST)',
+    categoria: 'misto',
+    icone: 'Scale',
+    verbas: [
+      { nome: 'Diferença Salarial (Equiparação)', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Salário Substituição — Súmula 159-I TST
+    id: 'salario_substituicao',
+    nome: 'Salário Substituição',
+    descricao: 'Diferenças por substituição temporária (Súmula 159-I TST)',
+    categoria: 'misto',
+    icone: 'Users',
+    verbas: [
+      { nome: 'Diferença Salário Substituição', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Adicional de Transferência — Art. 469 §3° CLT (25% sobre salário)
+    id: 'adicional_transferencia',
+    nome: 'Adicional de Transferência',
+    descricao: 'Adicional de 25% por transferência provisória (art. 469 §3° CLT)',
+    categoria: 'adicionais',
+    icone: 'MapPin',
+    verbas: [
+      { nome: 'Adicional de Transferência', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 0.25, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Gratificação de Função — Súmula 372 TST (incorporação após 10 anos)
+    id: 'gratificacao_funcao',
+    nome: 'Gratificação de Função',
+    descricao: 'Gratificação de função incorporada (Súmula 372 TST)',
+    categoria: 'misto',
+    icone: 'Award',
+    verbas: [
+      { nome: 'Gratificação de Função', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Vale-Transporte não concedido — CLT + Lei 7.418/85
+    id: 'vale_transporte',
+    nome: 'Vale-Transporte Não Concedido',
+    descricao: 'Indenização por vale-transporte não fornecido (Lei 7.418/85)',
+    categoria: 'misto',
+    icone: 'Bus',
+    verbas: [
+      { nome: 'Vale-Transporte Não Concedido', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Indenização por dano moral — Art. 223-G CLT (Reforma Trabalhista)
+    id: 'dano_moral',
+    nome: 'Indenização por Dano Moral',
+    descricao: 'Indenização extrapatrimonial (art. 223-A a 223-G CLT)',
+    categoria: 'misto',
+    icone: 'Heart',
+    verbas: [
+      { nome: 'Indenização por Dano Moral', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Estabilidade provisória gestante — Art. 10, II, 'b', ADCT + Súmula 244 TST
+    id: 'estabilidade_gestante',
+    nome: 'Estabilidade Gestante',
+    descricao: 'Salários do período estabilitário (art. 10 ADCT, Súmula 244 TST)',
+    categoria: 'misto',
+    icone: 'Baby',
+    verbas: [
+      { nome: 'Salários Período Estabilitário', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Supressão de Horas Extras — Súmula 291 TST (média habitual suprimida)
+    id: 'supressao_he',
+    nome: 'Supressão de Horas Extras Habituais',
+    descricao: 'Indenização pela supressão de HE habituais (Súmula 291 TST) — 1 mês de remuneração por ano',
+    categoria: 'horas_extras',
+    icone: 'MinusCircle',
+    verbas: [
+      { nome: 'Indenização Supressão HE', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: true, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: true }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Comissões não pagas — Art. 457 §1° CLT
+    id: 'comissoes',
+    nome: 'Comissões Não Pagas',
+    descricao: 'Comissões devidas e não pagas (art. 457 §1° CLT)',
+    categoria: 'misto',
+    icone: 'Coins',
+    verbas: [
+      { nome: 'Comissões', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Adicional de Hora Extra 50% Noturno — combinação Art. 73 + 59 CLT
+    id: 'he_noturna',
+    nome: 'Hora Extra Noturna (50%+20%)',
+    descricao: 'Hora extra 50% com adicional noturno 20% (art. 73 + 59 CLT)',
+    categoria: 'horas_extras',
+    icone: 'Moon',
+    verbas: [
+      { nome: 'Hora Extra Noturna 50%+20%', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1.80, divisor_informado: 220, tipo_divisor: 'carga_horaria', tipo_quantidade: 'cartao_ponto', quantidade_informada: 0, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_FALTAS },
+    ],
+  },
+  {
+    // Multa do Art. 477 §8° CLT — atraso no pagamento das verbas rescisórias
+    id: 'multa_477',
+    nome: 'Multa Art. 477 CLT',
+    descricao: 'Multa por atraso no pagamento de verbas rescisórias (art. 477 §8° CLT)',
+    categoria: 'rescisao',
+    icone: 'AlertTriangle',
+    verbas: [
+      { nome: 'Multa Art. 477 §8° CLT', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Saldo de Salário + Reflexos simples (demissão sem justa causa parcial)
+    id: 'saldo_salario',
+    nome: 'Saldo de Salário',
+    descricao: 'Saldo de salário proporcional aos dias trabalhados',
+    categoria: 'rescisao',
+    icone: 'DollarSign',
+    verbas: [
+      { nome: 'Saldo de Salário', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: { ...EXC_NENHUMA, faltas_nao_justificadas: true } },
+    ],
+  },
 ];
 
 /**

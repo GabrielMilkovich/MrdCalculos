@@ -2637,6 +2637,56 @@ export class PjeCalcEngine {
       itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Usando índice ADC 58/59 sem data de citação — será estimada a partir do ajuizamento + 60 dias' });
     }
 
+    // ── Validações adicionais PJe-Calc ──
+
+    // Verificar se data de liquidação é posterior ao ajuizamento
+    if (this.correcaoConfig.data_liquidacao && this.params.data_ajuizamento) {
+      if (this.correcaoConfig.data_liquidacao < this.params.data_ajuizamento) {
+        itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Data de liquidação é anterior ao ajuizamento — verifique as datas' });
+      }
+    }
+
+    // Verificar verbas com mesma competência duplicada
+    const verbaComps = new Map<string, Set<string>>();
+    for (const v of this.verbas) {
+      if (v.tipo !== 'principal') continue;
+      if (!verbaComps.has(v.nome)) verbaComps.set(v.nome, new Set());
+      const periodo = this.getPeriodoCalculo();
+      const comps = this.getCompetencias(v.periodo_inicio, v.periodo_fim);
+      for (const c of comps) {
+        if (verbaComps.get(v.nome)!.has(c)) {
+          itens.push({ tipo: 'alerta', modulo: 'Verbas', mensagem: `Verba "${v.nome}" com competência duplicada: ${c}` });
+          break;
+        }
+        verbaComps.get(v.nome)!.add(c);
+      }
+    }
+
+    // Verificar se FGTS está ativado para verbas com incidência FGTS
+    const verbasFGTS = this.verbas.filter(v => v.incidencias.fgts);
+    if (verbasFGTS.length > 0 && !this.fgtsConfig.apurar) {
+      itens.push({ tipo: 'observacao', modulo: 'FGTS', mensagem: `${verbasFGTS.length} verba(s) com incidência FGTS, mas módulo FGTS não ativado` });
+    }
+
+    // Verificar 13° salário sem reflexo de férias
+    const tem13 = this.verbas.some(v => v.caracteristica === '13_salario');
+    const temFerias = this.verbas.some(v => v.caracteristica === 'ferias');
+    if (tem13 && !temFerias) {
+      itens.push({ tipo: 'observacao', modulo: 'Verbas', mensagem: '13° salário configurado sem verba de férias + 1/3 — verifique se é intencional' });
+    }
+
+    // Verificar Art. 130 CLT — férias com faltas
+    for (const f of this.ferias) {
+      if (f.prazo_dias < 30 && f.prazo_dias > 0) {
+        itens.push({ tipo: 'observacao', modulo: 'Férias', mensagem: `Férias "${f.relativas}" com prazo reduzido (${f.prazo_dias}d) — Art. 130 CLT`, detalhe: 'Prazo reduzido por faltas injustificadas no período aquisitivo' });
+      }
+    }
+
+    // Verificar Súmula 381 TST — correção a partir do mês subsequente
+    if (this.correcaoConfig.indice !== 'nenhum' && this.correcaoConfig.epoca === 'mensal') {
+      itens.push({ tipo: 'observacao', modulo: 'Correção', mensagem: 'Súmula 381 TST: correção monetária incide a partir do mês subsequente ao da prestação de serviços' });
+    }
+
     const erros = itens.filter(i => i.tipo === 'erro').length;
     const alertas = itens.filter(i => i.tipo === 'alerta').length;
     const observacoes = itens.filter(i => i.tipo === 'observacao').length;
