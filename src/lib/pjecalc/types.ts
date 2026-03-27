@@ -409,52 +409,116 @@ export interface PjecalcCartaoPontoRow {
 export interface PjecalcFgtsConfigRow {
   id: string;
   case_id: string;
-  habilitado: boolean;
-  percentual_deposito: number;
-  percentual_multa: number;
+  // Compat aliases (older column names)
+  habilitado?: boolean;
+  percentual_deposito?: number;
+  percentual_multa?: number;
+  // Full schema (pjecalc_fgts_config actual columns)
+  apurar?: boolean;
+  destino?: string;
+  compor_principal?: boolean;
+  multa_apurar?: boolean;
+  multa_tipo?: string;
+  multa_percentual?: number;
+  multa_base?: string;
+  multa_valor_informado?: number | null;
+  deduzir_saldo?: boolean;
+  lc110_10?: boolean;
+  lc110_05?: boolean;
+  saldos_saques?: { competencia: string; valor: number }[];
   created_at: string;
 }
 
 export interface PjecalcFgtsConfigInsert {
   case_id: string;
-  habilitado?: boolean;
-  percentual_deposito?: number;
-  percentual_multa?: number;
+  apurar?: boolean;
+  destino?: string;
+  compor_principal?: boolean;
+  multa_apurar?: boolean;
+  multa_tipo?: string;
+  multa_percentual?: number;
+  multa_base?: string;
+  multa_valor_informado?: number | null;
+  deduzir_saldo?: boolean;
+  lc110_10?: boolean;
+  lc110_05?: boolean;
+  saldos_saques?: { competencia: string; valor: number }[];
 }
 
 export interface PjecalcCsConfigRow {
   id: string;
   case_id: string;
-  habilitado: boolean;
-  regime: string;
-  aliquota_empresa?: number;
-  aliquota_sat?: number;
-  aliquota_terceiros?: number;
+  // Full schema (pjecalc_cs_config actual columns)
+  habilitado?: boolean;
+  regime?: string;
+  apurar_segurado?: boolean;
   cobrar_reclamante?: boolean;
   cs_sobre_salarios_pagos?: boolean;
+  aliquota_segurado_tipo?: string;
+  aliquota_segurado_fixa?: number | null;
+  limitar_teto?: boolean;
+  apurar_empresa?: boolean;
+  apurar_sat?: boolean;
+  apurar_terceiros?: boolean;
+  aliquota_empresa?: number;
+  aliquota_empresa_fixa?: number;
+  aliquota_sat?: number;
+  aliquota_sat_fixa?: number;
+  aliquota_terceiros?: number;
+  aliquota_terceiros_fixa?: number;
+  periodos_simples?: unknown[];
   created_at: string;
 }
 
 export interface PjecalcCsConfigInsert {
   case_id: string;
-  habilitado?: boolean;
-  regime?: string;
+  apurar_segurado?: boolean;
+  cobrar_reclamante?: boolean;
+  cs_sobre_salarios_pagos?: boolean;
+  aliquota_segurado_tipo?: string;
+  aliquota_segurado_fixa?: number | null;
+  limitar_teto?: boolean;
+  apurar_empresa?: boolean;
+  apurar_sat?: boolean;
+  apurar_terceiros?: boolean;
+  aliquota_empresa_fixa?: number;
+  aliquota_sat_fixa?: number;
+  aliquota_terceiros_fixa?: number;
 }
 
 export interface PjecalcIrConfigRow {
   id: string;
   case_id: string;
-  habilitado: boolean;
-  metodo: string;
+  // Full schema (pjecalc_ir_config actual columns)
+  habilitado?: boolean;
+  apurar?: boolean;
+  metodo?: string;
   dependentes: number;
+  incidir_sobre_juros?: boolean;
+  cobrar_reclamado?: boolean;
+  tributacao_exclusiva_13?: boolean;
+  tributacao_separada_ferias?: boolean;
+  deduzir_cs?: boolean;
+  deduzir_prev_privada?: boolean;
+  deduzir_pensao?: boolean;
+  deduzir_honorarios?: boolean;
+  aposentado_65?: boolean;
   created_at: string;
 }
 
 export interface PjecalcIrConfigInsert {
   case_id: string;
-  habilitado?: boolean;
-  metodo?: string;
+  apurar?: boolean;
   dependentes?: number;
+  incidir_sobre_juros?: boolean;
+  cobrar_reclamado?: boolean;
+  tributacao_exclusiva_13?: boolean;
+  tributacao_separada_ferias?: boolean;
+  deduzir_cs?: boolean;
+  deduzir_prev_privada?: boolean;
+  deduzir_pensao?: boolean;
+  deduzir_honorarios?: boolean;
+  aposentado_65?: boolean;
 }
 
 export interface PjecalcCorrecaoConfigRow {

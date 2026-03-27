@@ -303,51 +303,64 @@ function toEngineCartaoPonto(cp: PjecalcCartaoPontoRow[]): PjeCartaoPonto[] {
 }
 
 function toEngineFgtsConfig(cfg: PjecalcFgtsConfigRow | null): PjeFGTSConfig {
+  // Support both old (habilitado/percentual_multa) and new column names
+  const apurar = cfg?.apurar ?? cfg?.habilitado ?? true;
+  const multaPercentual = cfg?.multa_percentual ?? cfg?.percentual_multa ?? 40;
+  const saldosSaques = Array.isArray(cfg?.saldos_saques) ? cfg!.saldos_saques : [];
   return {
-    apurar: cfg?.habilitado ?? true,
-    destino: 'pagar_reclamante',
-    compor_principal: false,
-    multa_apurar: true,
-    multa_tipo: 'calculada',
-    multa_percentual: cfg?.percentual_multa ?? 40,
-    multa_base: 'diferenca',
-    saldos_saques: [],
-    deduzir_saldo: false,
-    lc110_10: false,
-    lc110_05: false,
+    apurar,
+    destino: (cfg?.destino as PjeFGTSConfig['destino']) ?? 'pagar_reclamante',
+    compor_principal: cfg?.compor_principal ?? false,
+    multa_apurar: cfg?.multa_apurar ?? true,
+    multa_tipo: (cfg?.multa_tipo as PjeFGTSConfig['multa_tipo']) ?? 'calculada',
+    multa_percentual: multaPercentual,
+    multa_base: (cfg?.multa_base as PjeFGTSConfig['multa_base']) ?? 'diferenca',
+    multa_valor_informado: cfg?.multa_valor_informado ?? undefined,
+    saldos_saques: saldosSaques,
+    deduzir_saldo: cfg?.deduzir_saldo ?? false,
+    lc110_10: cfg?.lc110_10 ?? false,
+    lc110_05: cfg?.lc110_05 ?? false,
   };
 }
 
 function toEngineCsConfig(cfg: PjecalcCsConfigRow | null): PjeCSConfig {
+  // Support both old (habilitado/aliquota_empresa) and new column names
+  const apurarSegurado = cfg?.apurar_segurado ?? cfg?.habilitado ?? true;
+  const aliqEmpresa = cfg?.aliquota_empresa_fixa ?? cfg?.aliquota_empresa ?? 20;
+  const aliqSat = cfg?.aliquota_sat_fixa ?? cfg?.aliquota_sat ?? 2;
+  const aliqTerceiros = cfg?.aliquota_terceiros_fixa ?? cfg?.aliquota_terceiros ?? 5.8;
   return {
-    apurar_segurado: cfg?.habilitado ?? true,
+    apurar_segurado: apurarSegurado,
     cobrar_reclamante: cfg?.cobrar_reclamante ?? true,
     cs_sobre_salarios_pagos: cfg?.cs_sobre_salarios_pagos ?? false,
-    aliquota_segurado_tipo: 'empregado',
-    limitar_teto: true,
-    apurar_empresa: true,
-    apurar_sat: true,
-    apurar_terceiros: true,
+    aliquota_segurado_tipo: (cfg?.aliquota_segurado_tipo as PjeCSConfig['aliquota_segurado_tipo']) ?? 'empregado',
+    aliquota_segurado_fixa: cfg?.aliquota_segurado_fixa ?? undefined,
+    limitar_teto: cfg?.limitar_teto ?? true,
+    apurar_empresa: cfg?.apurar_empresa ?? true,
+    apurar_sat: cfg?.apurar_sat ?? true,
+    apurar_terceiros: cfg?.apurar_terceiros ?? true,
     aliquota_empregador_tipo: 'fixa',
-    aliquota_empresa_fixa: cfg?.aliquota_empresa ?? 20,
-    aliquota_sat_fixa: cfg?.aliquota_sat ?? 2,
-    aliquota_terceiros_fixa: cfg?.aliquota_terceiros ?? 5.8,
-    periodos_simples: [],
+    aliquota_empresa_fixa: aliqEmpresa,
+    aliquota_sat_fixa: aliqSat,
+    aliquota_terceiros_fixa: aliqTerceiros,
+    periodos_simples: Array.isArray(cfg?.periodos_simples) ? cfg!.periodos_simples as PjeCSConfig['periodos_simples'] : [],
   };
 }
 
 function toEngineIrConfig(cfg: PjecalcIrConfigRow | null): PjeIRConfig {
+  // Support both old (habilitado) and new column names (apurar)
+  const apurar = cfg?.apurar ?? cfg?.habilitado ?? true;
   return {
-    apurar: cfg?.habilitado ?? true,
-    incidir_sobre_juros: false,
-    cobrar_reclamado: false,
-    tributacao_exclusiva_13: true,
-    tributacao_separada_ferias: true,
-    deduzir_cs: true,
-    deduzir_prev_privada: false,
-    deduzir_pensao: false,
-    deduzir_honorarios: false,
-    aposentado_65: false,
+    apurar,
+    incidir_sobre_juros: cfg?.incidir_sobre_juros ?? false,
+    cobrar_reclamado: cfg?.cobrar_reclamado ?? false,
+    tributacao_exclusiva_13: cfg?.tributacao_exclusiva_13 ?? true,
+    tributacao_separada_ferias: cfg?.tributacao_separada_ferias ?? true,
+    deduzir_cs: cfg?.deduzir_cs ?? true,
+    deduzir_prev_privada: cfg?.deduzir_prev_privada ?? false,
+    deduzir_pensao: cfg?.deduzir_pensao ?? false,
+    deduzir_honorarios: cfg?.deduzir_honorarios ?? false,
+    aposentado_65: cfg?.aposentado_65 ?? false,
     dependentes: cfg?.dependentes ?? 0,
   };
 }

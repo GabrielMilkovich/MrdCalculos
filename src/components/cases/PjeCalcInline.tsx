@@ -15,8 +15,11 @@ import {
   Save, Play, FileText, Calendar, Clock,
   DollarSign, Building2, Receipt, Percent, TrendingUp, FileBarChart,
   Check, Plus, Trash2, Loader2, Briefcase, Calculator,
-  Scale, Shield, Gavel, Users, Landmark, Zap,
+  Scale, Shield, Gavel, Users, Landmark, Zap, Pencil,
 } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 
 // Module components
 import { ModuloDadosProcesso } from "./pjecalc/ModuloDadosProcesso";
@@ -807,6 +810,54 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
 
   // ── VERBAS ──
   const [expandedVerbas, setExpandedVerbas] = useState<Set<string>>(new Set());
+  const [editingVerba, setEditingVerba] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<Record<string, any>>({});
+  const [savingVerba, setSavingVerba] = useState(false);
+
+  const openEditVerba = (verba: any) => {
+    setEditingVerba(verba);
+    setEditForm({
+      nome: verba.nome || '',
+      multiplicador: verba.multiplicador ?? 1,
+      divisor_informado: verba.divisor_informado ?? 30,
+      tipo_divisor: verba.tipo_divisor || 'informado',
+      tipo_quantidade: verba.tipo_quantidade || 'informada',
+      fracao_mes_modo: verba.fracao_mes_modo || 'manter_fracao',
+      comportamento_reflexo: verba.comportamento_reflexo || 'valor_mensal',
+      hora_noturna_ficticia: verba.hora_noturna_ficticia ?? false,
+      incide_fgts: verba.incide_fgts !== false,
+      incide_inss: verba.incide_inss !== false,
+      incide_ir: verba.incide_ir !== false,
+      periodo_inicio: verba.periodo_inicio || '',
+      periodo_fim: verba.periodo_fim || '',
+    });
+  };
+
+  const saveEditVerba = async () => {
+    if (!editingVerba) return;
+    setSavingVerba(true);
+    try {
+      await supabase.from("pjecalc_verbas" as any).update({
+        nome: editForm.nome,
+        multiplicador: Number(editForm.multiplicador),
+        divisor_informado: Number(editForm.divisor_informado),
+        tipo_divisor: editForm.tipo_divisor,
+        tipo_quantidade: editForm.tipo_quantidade,
+        fracao_mes_modo: editForm.fracao_mes_modo,
+        comportamento_reflexo: editingVerba.tipo === 'reflexa' ? editForm.comportamento_reflexo : undefined,
+        hora_noturna_ficticia: editForm.hora_noturna_ficticia,
+        incide_fgts: editForm.incide_fgts,
+        incide_inss: editForm.incide_inss,
+        incide_ir: editForm.incide_ir,
+        periodo_inicio: editForm.periodo_inicio || null,
+        periodo_fim: editForm.periodo_fim || null,
+      }).eq("id", editingVerba.id);
+      queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
+      toast.success("Verba atualizada");
+      setEditingVerba(null);
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setSavingVerba(false); }
+  };
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedVerbas(prev => {
@@ -935,8 +986,8 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                       }}>
                       <FileText className="h-3 w-3" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" title="Editar">
-                      <FileBarChart className="h-3 w-3" />
+                    <Button variant="ghost" size="icon" className="h-6 w-6" title="Editar" onClick={() => openEditVerba(principal)}>
+                      <Pencil className="h-3 w-3" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" title="Excluir"
                       onClick={async () => {
@@ -979,8 +1030,8 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                             <Button variant="ghost" size="icon" className="h-5 w-5" title="Duplicar">
                               <FileText className="h-3 w-3" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-5 w-5" title="Editar">
-                              <FileBarChart className="h-3 w-3" />
+                            <Button variant="ghost" size="icon" className="h-5 w-5" title="Editar" onClick={() => openEditVerba(ref)}>
+                              <Pencil className="h-3 w-3" />
                             </Button>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1102,6 +1153,123 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
           </ScrollArea>
         </main>
       </div>
+
+      {/* ── Modal de Edição de Verba ── */}
+      <Dialog open={!!editingVerba} onOpenChange={open => { if (!open) setEditingVerba(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-4 w-4" />
+              Editar Verba — {editingVerba?.tipo === 'reflexa' ? 'Reflexa' : 'Principal'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs">Nome</Label>
+              <Input className="mt-1 h-8 text-sm" value={editForm.nome || ''} onChange={e => setEditForm(f => ({ ...f, nome: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Multiplicador</Label>
+                <Input type="number" step="0.0001" className="mt-1 h-8 text-sm" value={editForm.multiplicador ?? 1} onChange={e => setEditForm(f => ({ ...f, multiplicador: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Divisor</Label>
+                <Input type="number" step="1" className="mt-1 h-8 text-sm" value={editForm.divisor_informado ?? 30} onChange={e => setEditForm(f => ({ ...f, divisor_informado: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Tipo Divisor</Label>
+                <Select value={editForm.tipo_divisor || 'informado'} onValueChange={v => setEditForm(f => ({ ...f, tipo_divisor: v }))}>
+                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="informado">Valor informado</SelectItem>
+                    <SelectItem value="jornada">Jornada contratual</SelectItem>
+                    <SelectItem value="mensal">Mensal (220h)</SelectItem>
+                    <SelectItem value="diario">Diário (30d)</SelectItem>
+                    <SelectItem value="hora">Hora</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Tipo Quantidade</Label>
+                <Select value={editForm.tipo_quantidade || 'informada'} onValueChange={v => setEditForm(f => ({ ...f, tipo_quantidade: v }))}>
+                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="informada">Informada</SelectItem>
+                    <SelectItem value="avos">Avos (avos/12)</SelectItem>
+                    <SelectItem value="calendario">Calendário (dias)</SelectItem>
+                    <SelectItem value="repousos">Repousos (DSR)</SelectItem>
+                    <SelectItem value="cartao_horas">Cartão — Horas</SelectItem>
+                    <SelectItem value="cartao_dias">Cartão — Dias</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Mês Fracionário</Label>
+                <Select value={editForm.fracao_mes_modo || 'manter_fracao'} onValueChange={v => setEditForm(f => ({ ...f, fracao_mes_modo: v }))}>
+                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="manter_fracao">Manter fração</SelectItem>
+                    <SelectItem value="integralizar">Integralizar</SelectItem>
+                    <SelectItem value="desprezar">Desprezar</SelectItem>
+                    <SelectItem value="desprezar_menor_15">Desprezar &lt;15d</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {editingVerba?.tipo === 'reflexa' && (
+                <div>
+                  <Label className="text-xs">Comportamento Reflexo</Label>
+                  <Select value={editForm.comportamento_reflexo || 'valor_mensal'} onValueChange={v => setEditForm(f => ({ ...f, comportamento_reflexo: v }))}>
+                    <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="valor_mensal">Valor mensal</SelectItem>
+                      <SelectItem value="media_valor_absoluto">Média absoluta</SelectItem>
+                      <SelectItem value="media_pela_quantidade">Média / quantidade</SelectItem>
+                      <SelectItem value="media_valor_corrigido">Média corrigida</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Período Início</Label>
+                <Input type="date" className="mt-1 h-8 text-xs" value={editForm.periodo_inicio || ''} onChange={e => setEditForm(f => ({ ...f, periodo_inicio: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Período Fim</Label>
+                <Input type="date" className="mt-1 h-8 text-xs" value={editForm.periodo_fim || ''} onChange={e => setEditForm(f => ({ ...f, periodo_fim: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs mb-2 block">Incidências</Label>
+              <div className="flex gap-4">
+                {[['incide_fgts','FGTS'],['incide_inss','INSS'],['incide_ir','IR']].map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-1.5 cursor-pointer">
+                    <Checkbox checked={!!editForm[key]} onCheckedChange={v => setEditForm(f => ({ ...f, [key]: !!v }))} />
+                    <span className="text-xs">{label}</span>
+                  </label>
+                ))}
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <Checkbox checked={!!editForm.hora_noturna_ficticia} onCheckedChange={v => setEditForm(f => ({ ...f, hora_noturna_ficticia: !!v }))} />
+                  <span className="text-xs">Hora Noturna Fictícia (52,5min)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setEditingVerba(null)}>Cancelar</Button>
+            <Button size="sm" onClick={saveEditVerba} disabled={savingVerba}>
+              {savingVerba ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
