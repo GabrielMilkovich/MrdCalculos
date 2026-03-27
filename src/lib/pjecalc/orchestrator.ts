@@ -556,6 +556,42 @@ async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalari
   } catch { return []; }
 }
 
+async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types').PjeExcecaoCargaHoraria[]> {
+  try {
+    const { data } = await supabase
+      .from('pjecalc_excecoes_carga' as any)
+      .select('id, periodo_inicio, periodo_fim, carga_horaria_mensal')
+      .eq('case_id', caseId);
+    if (data && data.length > 0) {
+      console.log(`[ORCHESTRATOR] Loaded ${data.length} exceções de carga horária`);
+      return (data as any[]).map(r => ({
+        data_inicial: r.periodo_inicio,
+        data_final: r.periodo_fim,
+        carga_horaria: Number(r.carga_horaria_mensal),
+      }));
+    }
+    return [];
+  } catch { return []; }
+}
+
+async function loadExcecoesSabado(caseId: string): Promise<import('./engine-types').PjeExcecaoSabado[]> {
+  try {
+    const { data } = await supabase
+      .from('pjecalc_excecoes_sabado' as any)
+      .select('id, data_inicio, data_fim, sabado_dia_util')
+      .eq('case_id', caseId);
+    if (data && data.length > 0) {
+      console.log(`[ORCHESTRATOR] Loaded ${data.length} exceções de sábado`);
+      return (data as any[]).map(r => ({
+        data_inicial: r.data_inicio,
+        data_final: r.data_fim,
+        sabado_dia_util: Boolean(r.sabado_dia_util),
+      }));
+    }
+    return [];
+  } catch { return []; }
+}
+
 async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeSalarioFamiliaDB[]> {
   try {
     const { data } = await supabase
@@ -603,6 +639,8 @@ export async function executarLiquidacao(
     seguroDesempregoDB,
     salarioFamiliaDB,
     salarioMinimoDB,
+    excecoesCargaDB,
+    excecoesSabadoDB,
   ] = await Promise.all([
     svc.getHistoricoOcorrencias(caseId),
     loadIndicesDB(),
@@ -615,6 +653,8 @@ export async function executarLiquidacao(
     loadSeguroDesempregoDB(),
     loadSalarioFamiliaDBRows(),
     loadSalarioMinimoDB(),
+    loadExcecoesCarga(caseId),
+    loadExcecoesSabado(caseId),
   ]);
 
   // 2.5. CANONICAL INPUT LAYER — Resolve, Validate, Score
@@ -825,14 +865,14 @@ export async function executarLiquidacao(
     indicesDB,           // 14: correction indices  
     faixasINSSDB,        // 15: INSS progressive brackets
     faixasIRDB,          // 16: IR brackets
-    [],                  // 17: excecoesCargas (TODO: load from pjecalc_excecoes_carga when available)
+    excecoesCargaDB,     // 17: exceções de carga horária (jornadas reduzidas)
     feriadosDB,          // 18: holidays
     prevPrivadaConfig,   // 19: previdência privada
     pensaoConfig,        // 20: pensão alimentícia
     salarioFamiliaConfig,// 21: salário família
     seguroDesempregoDB,  // 22: seguro-desemprego DB rows
     salarioFamiliaDB,    // 23: salário-família DB rows
-    [],                  // 24: excecoesSabado (TODO: load from DB when available)
+    excecoesSabadoDB,    // 24: exceções de sábado (dia útil override)
     salarioMinimoDB,     // 25: salário mínimo DB (for insalubridade base — art. 192 CLT)
   );
 
