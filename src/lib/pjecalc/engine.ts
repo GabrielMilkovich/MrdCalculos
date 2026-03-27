@@ -3121,10 +3121,11 @@ export class PjeCalcEngine {
     // PJe-Calc: Bruto = verbas corrigidas + juros (FGTS is separate in PJe-Calc's "bruto devido ao reclamante")
     const brutoTotal = Number(new Decimal(principalCorrigido).plus(jurosMora).toDP(2));
     
-    // Líquido = Bruto - CS segurado - IR - prev privada - pensão
-    // NOTE: seguro, multas and salário família are NOT added here — they are separate items
-    // This prevents the impossible "líquido > bruto" bug
+    // Líquido = Bruto + salário família - CS segurado - IR - prev privada - pensão - contrib. sindical
+    // Salário família adiciona ao líquido: é crédito do empregado (Art. 65 Lei 8.213/91)
+    // Seguro desemprego é benefício governamental separado (não compõe o líquido judicial)
     const liquido = Number(new Decimal(brutoTotal)
+      .plus(salarioFamilia.total)
       .minus(csDescontado)
       .minus(ir.imposto_devido)
       .minus(prevPrivada.valor)
