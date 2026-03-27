@@ -177,6 +177,7 @@ export function CatalogoVerbas({ caseId, periodoInicio, periodoFim, ordemBase, o
           compor_principal: v.compor_principal,
           incidencias: v.incidencias,
           exclusoes: v.exclusoes,
+          ...(v.base_calculo ? { base_calculo: v.base_calculo } : {}),
           periodo_inicio: periodoInicio,
           periodo_fim: periodoFim,
           ordem: ordem++,

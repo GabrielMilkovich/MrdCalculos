@@ -17,6 +17,8 @@ export interface TemplateVerba {
   compor_principal: boolean;
   incidencias: { fgts: boolean; irpf: boolean; contribuicao_social: boolean; previdencia_privada: boolean; pensao_alimenticia: boolean };
   exclusoes: { faltas_justificadas: boolean; faltas_nao_justificadas: boolean; ferias_gozadas: boolean };
+  /** Override base_calculo para a verba. Se omitido, usa o padrão do histórico salarial. */
+  base_calculo?: { tabelas?: string[]; historicos?: string[]; verbas?: string[] };
 }
 
 export interface TemplateExpresso {
@@ -132,7 +134,7 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
     categoria: 'adicionais',
     icone: 'ShieldAlert',
     verbas: [
-      { nome: 'Adicional de Insalubridade Grau Mínimo', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 0.10, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+      { nome: 'Adicional de Insalubridade Grau Mínimo', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 0.10, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA, base_calculo: { tabelas: ['salario_minimo'] } },
     ],
   },
   {
@@ -143,7 +145,7 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
     categoria: 'adicionais',
     icone: 'ShieldAlert',
     verbas: [
-      { nome: 'Adicional de Insalubridade Grau Médio', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 0.20, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+      { nome: 'Adicional de Insalubridade Grau Médio', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 0.20, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA, base_calculo: { tabelas: ['salario_minimo'] } },
     ],
   },
   {
@@ -154,7 +156,7 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
     categoria: 'adicionais',
     icone: 'ShieldAlert',
     verbas: [
-      { nome: 'Adicional de Insalubridade Grau Máximo', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 0.40, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+      { nome: 'Adicional de Insalubridade Grau Máximo', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 0.40, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA, base_calculo: { tabelas: ['salario_minimo'] } },
     ],
   },
   {
