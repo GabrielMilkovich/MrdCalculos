@@ -202,11 +202,23 @@ export class PjeCalcEngine {
   // CÁLCULO DE AVOS (13º e Férias) — com Limitar Avos
   // =====================================================
   
-  calcularAvos(competencia: string, caracteristica: string): number {
-    const admDate = new Date(this.params.data_admissao);
-    const demDate = this.params.data_demissao 
+  // Retorna data de demissão projetada (com aviso prévio indenizado, se aplicável)
+  private getDataDemissaoEfetiva(): Date {
+    const demDate = this.params.data_demissao
       ? new Date(this.params.data_demissao)
       : new Date();
+    if (this.params.projetar_aviso_indenizado && this.params.data_demissao) {
+      const diasAviso = this.calcularPrazoAviso();
+      const projetada = new Date(demDate);
+      projetada.setDate(projetada.getDate() + diasAviso);
+      return projetada;
+    }
+    return demDate;
+  }
+
+  calcularAvos(competencia: string, caracteristica: string): number {
+    const admDate = new Date(this.params.data_admissao);
+    const demDate = this.getDataDemissaoEfetiva();
     const [ano, mes] = competencia.split('-').map(Number);
     
     if (caracteristica === '13_salario') {

@@ -75,12 +75,38 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
   },
   {
     id: 'horas_extras_completo',
-    nome: 'Horas Extras + Reflexos',
-    descricao: 'HE 50% + RSR + reflexos em 13º, férias e FGTS',
+    nome: 'Horas Extras 50% + Reflexos',
+    descricao: 'HE 50% (dias úteis + sábados) com RSR e reflexos em 13º, férias, FGTS',
     categoria: 'horas_extras',
     icone: 'Clock',
     verbas: [
       { nome: 'Horas Extras 50%', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1.5, divisor_informado: 220, tipo_divisor: 'carga_horaria', tipo_quantidade: 'cartao_ponto', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_FALTAS },
+      { nome: 'RSR sobre Horas Extras', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 26, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // HE 100% — art. 59 §1° CLT: feriados e domingos exigem adicional de 100%
+    // TST OJ 410/SDI-1: HE em feriado paga com adicional de 100% (dobra)
+    id: 'horas_extras_100',
+    nome: 'Horas Extras 100% + Reflexos',
+    descricao: 'HE 100% (domingos, feriados, art. 59 CLT) com RSR e reflexos',
+    categoria: 'horas_extras',
+    icone: 'Clock',
+    verbas: [
+      { nome: 'Horas Extras 100%', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 2, divisor_informado: 220, tipo_divisor: 'carga_horaria', tipo_quantidade: 'cartao_ponto', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_FALTAS },
+      { nome: 'RSR sobre Horas Extras 100%', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 26, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // HE mistas: 50% em dias úteis + 100% em domingos/feriados
+    id: 'horas_extras_mistas',
+    nome: 'Horas Extras Mistas (50% + 100%) + Reflexos',
+    descricao: 'HE 50% em dias úteis e HE 100% em domingos/feriados com RSR',
+    categoria: 'horas_extras',
+    icone: 'Clock',
+    verbas: [
+      { nome: 'Horas Extras 50%', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1.5, divisor_informado: 220, tipo_divisor: 'carga_horaria', tipo_quantidade: 'cartao_ponto', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_FALTAS },
+      { nome: 'Horas Extras 100%', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 2, divisor_informado: 220, tipo_divisor: 'carga_horaria', tipo_quantidade: 'cartao_ponto', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_FALTAS },
       { nome: 'RSR sobre Horas Extras', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 26, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
     ],
   },
