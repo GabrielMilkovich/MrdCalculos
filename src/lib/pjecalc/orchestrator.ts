@@ -147,6 +147,50 @@ function toEngineFerias(ferias: PjecalcFeriasRow[]): PjeFerias[] {
   }));
 }
 
+// Normalise DB enum values to engine enum values (case-insensitive)
+function normalizeDivisorTipo(raw: string | null | undefined): PjeVerba['tipo_divisor'] {
+  const map: Record<string, PjeVerba['tipo_divisor']> = {
+    'INFORMADO': 'informado', 'OUTRO_VALOR': 'informado',
+    'JORNADA': 'jornada', 'MENSAL': 'mensal', 'DIARIO': 'diario',
+    'HORA': 'hora', 'MINUTO': 'minuto',
+  };
+  return map[(raw || '').toUpperCase()] ?? 'informado';
+}
+
+function normalizeQuantidadeTipo(raw: string | null | undefined, caracteristica: string): PjeVerba['tipo_quantidade'] {
+  const map: Record<string, PjeVerba['tipo_quantidade']> = {
+    'INFORMADA': 'informada', 'AVOS': 'avos', 'CALENDARIO': 'calendario',
+    'REPOUSOS': 'repousos', 'CARTAO_HORAS': 'cartao_horas',
+    'CARTAO_DIAS': 'cartao_dias', 'MEDIA_APURADA': 'media_apurada',
+  };
+  const fromDB = map[(raw || '').toUpperCase()];
+  if (fromDB) return fromDB;
+  // Fallback: infer from caracteristica when DB not populated
+  if (caracteristica === '13_salario' || caracteristica === 'ferias') return 'avos';
+  return 'informada';
+}
+
+function normalizeComportamento(raw: string | null | undefined): PjeVerba['comportamento_reflexo'] {
+  const map: Record<string, PjeVerba['comportamento_reflexo']> = {
+    'VALOR_MENSAL': 'valor_mensal', 'MEDIA_VALOR_ABSOLUTO': 'media_valor_absoluto',
+    'MEDIA_VALOR_CORRIGIDO': 'media_valor_corrigido', 'MEDIA_QUANTIDADE': 'media_quantidade',
+    'MEDIA_PELA_QUANTIDADE': 'media_pela_quantidade',
+  };
+  return map[(raw || '').toUpperCase()] ?? 'valor_mensal';
+}
+
+function normalizeGerarVerba(raw: string | null | undefined): 'diferenca' | 'devido' {
+  return (raw || '').toUpperCase() === 'DEVIDO' ? 'devido' : 'diferenca';
+}
+
+function normalizeFracaoMes(raw: string | null | undefined): PjeVerba['fracao_mes_modo'] {
+  const map: Record<string, PjeVerba['fracao_mes_modo']> = {
+    'MANTER_FRACAO': 'manter_fracao', 'INTEGRALIZAR': 'integralizar',
+    'DESPREZAR': 'desprezar', 'DESPREZAR_MENOR_15': 'desprezar_menor_15',
+  };
+  return map[(raw || '').toUpperCase()] ?? 'manter_fracao';
+}
+
 function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
   return verbas.map(v => {
     let bcHistoricos: string[] = [];
@@ -188,6 +232,15 @@ function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
       pensao_alimenticia: false,
     };
 
+    // Read engine-critical fields from DB (now exposed via view after migration 20260327000010)
+    const tipoDivisor = normalizeDivisorTipo(v.divisor_tipo);
+    const tipoQuantidade = normalizeQuantidadeTipo(v.quantidade_tipo, caracteristica);
+    const fracaoMesModo = normalizeFracaoMes(v.fracao_mes_modo);
+    const comportamentoReflexa = v.comportamento_reflexo
+      ? normalizeComportamento(v.comportamento_reflexo)
+      : undefined;
+    const periodoMediaReflexa = v.periodo_media_reflexo as PjeVerba['periodo_media_reflexo'] | undefined;
+
     return {
       id: v.id,
       nome: v.nome,
@@ -195,7 +248,7 @@ function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
       valor: (v.valor as 'calculado' | 'informado') || 'calculado',
       caracteristica,
       ocorrencia_pagamento: ocorrenciaPagamento,
-      compor_principal: true,
+      compor_principal: v.compor_principal !== false,
       zerar_valor_negativo: false,
       dobrar_valor_devido: false,
       periodo_inicio: v.periodo_inicio || '',
@@ -207,20 +260,29 @@ function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
         proporcionalizar: bcProporcionalizar,
         integralizar: bcIntegralizar,
       },
-      tipo_divisor: 'informado' as const,
+      tipo_divisor: tipoDivisor,
       divisor_informado: v.divisor_informado || 1,
       multiplicador: v.multiplicador || 1,
-      tipo_quantidade: caracteristica === '13_salario' || caracteristica === 'ferias' ? 'avos' as const : 'informada' as const,
-      quantidade_informada: 1,
-      quantidade_proporcionalizar: false,
-      exclusoes: { faltas_justificadas: false, faltas_nao_justificadas: false, ferias_gozadas: false },
+      tipo_quantidade: tipoQuantidade,
+      quantidade_informada: v.quantidade_valor ?? 1,
+      quantidade_proporcionalizar: v.quantidade_proporcionalizar === true,
+      fracao_mes_modo: fracaoMesModo,
+      exclusoes: {
+        faltas_justificadas: v.excluir_falta_justificada === true,
+        faltas_nao_justificadas: v.excluir_falta_nao_justificada === true,
+        ferias_gozadas: v.excluir_ferias_gozadas === true,
+      },
       valor_informado_devido: v.valor_informado_devido ?? undefined,
       valor_informado_pago: v.valor_informado_pago ?? undefined,
       incidencias,
       juros_ajuizamento: 'ocorrencias_vencidas' as const,
       verba_principal_id: v.verba_principal_id ?? undefined,
-      gerar_verba_reflexa: 'diferenca' as const,
-      gerar_verba_principal: 'diferenca' as const,
+      gerar_verba_reflexa: normalizeGerarVerba(v.gerar_reflexo),
+      gerar_verba_principal: normalizeGerarVerba(v.gerar_principal),
+      comportamento_reflexo: comportamentoReflexa,
+      periodo_media_reflexo: periodoMediaReflexa,
+      hora_noturna_ficticia: v.hora_noturna_ficticia === true,
+      constante_mensal: v.constante_mensal ?? undefined,
       ordem: v.ordem || 0,
     };
   });

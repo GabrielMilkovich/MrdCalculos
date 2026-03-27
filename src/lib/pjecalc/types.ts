@@ -251,6 +251,22 @@ export interface PjecalcVerbaRow {
   incide_fgts?: boolean;
   incide_inss?: boolean;
   incide_ir?: boolean;
+  // Engine-critical fields (exposed via view after migration 20260327000010)
+  divisor_tipo?: string | null;
+  quantidade_tipo?: string | null;
+  quantidade_valor?: number | null;
+  fracao_mes_modo?: string | null;
+  compor_principal?: boolean | null;
+  gerar_principal?: string | null;
+  gerar_reflexo?: string | null;
+  excluir_falta_justificada?: boolean | null;
+  excluir_falta_nao_justificada?: boolean | null;
+  excluir_ferias_gozadas?: boolean | null;
+  comportamento_reflexo?: string | null;
+  periodo_media_reflexo?: string | null;
+  quantidade_proporcionalizar?: boolean | null;
+  hora_noturna_ficticia?: boolean | null;
+  constante_mensal?: number | null;
   created_at: string;
   updated_at: string;
 }
