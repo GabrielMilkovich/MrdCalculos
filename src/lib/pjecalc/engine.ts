@@ -528,7 +528,21 @@ export class PjeCalcEngine {
     }
 
     // Proporcionalizar DEVIDO separadamente (Fase 6 - PJe-Calc)
-    if (verba.proporcionalizar_devido) {
+    // GUARD: Se quantidade já foi proporcionalizada para este mês, NÃO aplicar dupla redução
+    // (PJe-Calc aplica proporcionalização uma única vez — quantidade OU devido, nunca ambos)
+    let jaProporcionalizouQtd = false;
+    if (verba.quantidade_proporcionalizar) {
+      const [anoQ, mesQ] = competencia.split('-').map(Number);
+      const diasNoMesQ = new Date(anoQ, mesQ, 0).getDate();
+      const admDateQ = new Date(this.params.data_admissao);
+      const demDateQ = this.params.data_demissao ? new Date(this.params.data_demissao) : null;
+      let diaInicioQ = 1, diaFimQ = diasNoMesQ;
+      if (admDateQ.getFullYear() === anoQ && admDateQ.getMonth() + 1 === mesQ) diaInicioQ = admDateQ.getDate();
+      if (demDateQ && demDateQ.getFullYear() === anoQ && demDateQ.getMonth() + 1 === mesQ) diaFimQ = demDateQ.getDate();
+      if ((diaFimQ - diaInicioQ + 1) < diasNoMesQ) jaProporcionalizouQtd = true;
+    }
+
+    if (verba.proporcionalizar_devido && !jaProporcionalizouQtd) {
       const [ano, mes] = competencia.split('-').map(Number);
       const diasNoMes = new Date(ano, mes, 0).getDate();
       const admDate = new Date(this.params.data_admissao);
@@ -608,10 +622,11 @@ export class PjeCalcEngine {
     }
 
     // Compute integral values (full-month) for integralization in reflexos
+    // Applies to BOTH quantidade_proporcionalizar AND proporcionalizar_devido paths
     let baseIntegral: number | undefined;
     let qtdIntegral: number | undefined;
     let devidoIntegral: number | undefined;
-    if (verba.quantidade_proporcionalizar) {
+    if (verba.quantidade_proporcionalizar || (verba.proporcionalizar_devido && !jaProporcionalizouQtd)) {
       const [anoI, mesI] = competencia.split('-').map(Number);
       const diasNoMesI = new Date(anoI, mesI, 0).getDate();
       const admDateI = new Date(this.params.data_admissao);
@@ -625,7 +640,7 @@ export class PjeCalcEngine {
         const frac = new Decimal(diasTrabI).div(diasNoMesI);
         if (frac.greaterThan(0)) {
           baseIntegral = base.toDP(2).toNumber();
-          qtdIntegral = qtd.div(frac).toDP(4).toNumber();
+          qtdIntegral = verba.quantidade_proporcionalizar ? qtd.div(frac).toDP(4).toNumber() : qtd.toDP(4).toNumber();
           devidoIntegral = devido.div(frac).toDP(2).toNumber();
         }
       }
@@ -1693,8 +1708,9 @@ export class PjeCalcEngine {
       }
     }
 
-    const lc110_10 = this.fgtsConfig.lc110_10 ? Number(new Decimal(totalDepositos).times(0.10).toDP(2)) : 0;
-    const lc110_05 = this.fgtsConfig.lc110_05 ? Number(new Decimal(totalDepositos).times(0.005).toDP(2)) : 0;
+    // LC 110/2001: contribuição social incide sobre saldo CORRIGIDO do FGTS (não nominal)
+    const lc110_10 = this.fgtsConfig.lc110_10 ? Number(new Decimal(totalDepositosCorrigido).times(0.10).toDP(2)) : 0;
+    const lc110_05 = this.fgtsConfig.lc110_05 ? Number(new Decimal(totalDepositosCorrigido).times(0.005).toDP(2)) : 0;
 
     const saldoDeduzido = this.fgtsConfig.deduzir_saldo 
       ? this.fgtsConfig.saldos_saques.reduce((s, v) => s + v.valor, 0) : 0;
@@ -2065,9 +2081,8 @@ export class PjeCalcEngine {
         for (const oc of vr.ocorrencias) {
           if (oc.diferenca <= 0) continue;
           const anoComp = parseInt(oc.competencia.slice(0, 4));
-          // Art. 12-A RRA: base IR = valor nominal (diferença), não valor corrigido
-          // PJe-Calc usa oc.diferenca (valor original da verba sem correção)
-          const valorIR = oc.diferenca;
+          // PJe-Calc: IR base = valor corrigido (valor_final), consistente com baseBruta
+          const valorIR = oc.valor_final || oc.diferenca;
           if (anoComp < anoLiq) {
             baseAnosAnteriores += valorIR;
             competenciasAnosAnteriores.add(oc.competencia);
@@ -3447,9 +3462,9 @@ export class PjeCalcEngine {
     let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
 
     // Base Integralization (Fase 6): converter meses fracionários em meses completos
-    // para reflexos em férias e 13º (PJe-Calc integraliza a base antes de aplicar a fórmula)
-    const shouldIntegralizar = reflexa.base_calculo.integralizar && 
-      (reflexa.caracteristica === 'ferias' || reflexa.caracteristica === '13_salario');
+    // PJe-Calc integraliza a base antes de aplicar a fórmula de reflexo quando configurado.
+    // Aplica-se a qualquer reflexa com integralizar=true (férias, 13º, DSR, etc.)
+    const shouldIntegralizar = reflexa.base_calculo.integralizar;
 
     switch (comportamento) {
       case 'valor_mensal': {
@@ -3680,7 +3695,10 @@ export function liquidarMultiVinculo(
   }
 
   // Consolidate: merge all verba results and recalculate totals
-  const consolidado = resultados[0]?.resultado ?? resultados[0]?.resultado;
+  if (resultados.length === 0) {
+    throw new Error('liquidarMultiVinculo: nenhum vínculo fornecido');
+  }
+  const consolidado = { ...resultados[0].resultado };
   if (resultados.length > 1) {
     // Merge verbas from all vinculos
     const allVerbas = resultados.flatMap(r => r.resultado.verbas);
@@ -3700,6 +3718,25 @@ export function liquidarMultiVinculo(
       liquido_reclamante: resultados.reduce((s, r) => s + r.resultado.resumo.liquido_reclamante, 0),
       total_reclamada: resultados.reduce((s, r) => s + r.resultado.resumo.total_reclamada, 0),
     };
+
+    // Merge validações from all vinculos
+    const allItens = resultados.flatMap(r =>
+      (r.resultado.validacao?.itens || []).map(it => ({ ...it, mensagem: `[${r.label}] ${it.mensagem}` }))
+    );
+    if (allItens.length > 0) {
+      consolidado.validacao = {
+        valido: allItens.every(i => i.tipo !== 'erro'),
+        itens: allItens
+      };
+    }
+
+    // Merge calculation_warnings from all vinculos
+    const allWarnings = resultados.flatMap(r =>
+      (r.resultado.calculation_warnings || []).map(w => ({ ...w, module: `[${r.label}] ${w.module}` }))
+    );
+    if (allWarnings.length > 0) {
+      consolidado.calculation_warnings = allWarnings;
+    }
   }
 
   return { vinculos: resultados, consolidado };
