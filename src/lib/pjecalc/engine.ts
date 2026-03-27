@@ -2037,6 +2037,16 @@ export class PjeCalcEngine {
       if (verba.caracteristica === 'ferias') {
         if (this.irConfig.tributacao_separada_ferias) {
           baseFerias += vr.total_final; // Use corrected+interest value
+        } else {
+          // Férias indenizadas sem tributação separada: integram a base geral
+          baseBruta += vr.total_final;
+          for (const oc of vr.ocorrencias) {
+            if (oc.diferenca <= 0) continue;
+            const anoComp = parseInt(oc.competencia.slice(0, 4));
+            const valorIR = oc.valor_final || oc.diferenca;
+            if (anoComp < anoLiq) { baseAnosAnteriores += valorIR; competenciasAnosAnteriores.add(oc.competencia); }
+            else { baseAnoLiquidacao += valorIR; competenciasAnoLiquidacao.add(oc.competencia); }
+          }
         }
         continue;
       }
