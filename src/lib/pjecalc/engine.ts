@@ -430,6 +430,8 @@ export class PjeCalcEngine {
       qtd = new Decimal(this.getCartaoPontoQuantidade(competencia, verba.quantidade_cartao_colunas) || 0);
     } else if (verba.tipo_quantidade === 'avos') {
       qtd = new Decimal(this.calcularAvos(competencia, verba.caracteristica));
+    } else if (verba.tipo_quantidade === 'repousos') {
+      qtd = new Decimal(this.calcularQuantidadeCalendario(competencia, 'repousos'));
     } else if (verba.tipo_quantidade === 'calendario') {
       qtd = new Decimal(this.calcularQuantidadeCalendario(competencia, 'dias_uteis'));
     } else if (verba.tipo_quantidade === 'apurada') {
@@ -1892,10 +1894,31 @@ export class PjeCalcEngine {
   // PJe-Calc usa ROUND_HALF_EVEN (Banker's rounding) para CS e IR
   private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_EVEN;
 
+  // INSS pré-EC 103/2019: alíquota única aplicada sobre o salário total
+  // (o salário cai numa das 3 faixas e toda a base é tributada nessa alíquota)
+  private calcularINSSAliquotaUnica(comp: string, base: number): number {
+    const faixas = this.getFaixasINSSParaCompetencia(comp);
+    for (const faixa of faixas) {
+      if (base <= faixa.ate) {
+        return new Decimal(base).times(faixa.aliquota)
+          .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+      }
+    }
+    // Acima de todas as faixas: usa alíquota da última (teto)
+    const ultima = faixas[faixas.length - 1];
+    return new Decimal(base).times(ultima.aliquota)
+      .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+  }
+
   private calcularINSSProgressivo(comp: string, base: number): number {
     if (this.csConfig.aliquota_segurado_tipo === 'fixa' && this.csConfig.aliquota_segurado_fixa) {
       return new Decimal(base).times(this.csConfig.aliquota_segurado_fixa).div(100)
         .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+    }
+    // EC 103/2019: sistema progressivo a partir de 01/03/2020
+    // Antes disso: alíquota única (flat-rate) conforme Portarias MF anuais
+    if (comp < '2020-03') {
+      return this.calcularINSSAliquotaUnica(comp, base);
     }
     const faixas = this.getFaixasINSSParaCompetencia(comp);
     const teto = faixas[faixas.length - 1].ate;

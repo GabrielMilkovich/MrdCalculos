@@ -152,7 +152,7 @@ export interface PjeVerba {
   divisor_informado: number;
   divisor_cartao_colunas?: string[];
   multiplicador: number;
-  tipo_quantidade: 'informada' | 'avos' | 'apurada' | 'calendario' | 'cartao_ponto';
+  tipo_quantidade: 'informada' | 'avos' | 'apurada' | 'repousos' | 'calendario' | 'cartao_ponto';
   quantidade_informada: number;
   quantidade_cartao_colunas?: string[];
   quantidade_proporcionalizar: boolean;
