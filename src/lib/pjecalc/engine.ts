@@ -1840,7 +1840,8 @@ export class PjeCalcEngine {
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
       if (!verba?.incidencias.contribuicao_social) continue;
-      if (verba.caracteristica === 'ferias') continue;
+      // Férias indenizadas já têm contribuicao_social:false na incidência (INC_FERIAS_INDENIZADAS)
+      // Férias gozadas com contribuicao_social:true devem incidir INSS (Decreto 3.048/99 art. 214)
       for (const oc of vr.ocorrencias) {
         // ═══ CS Base Rule (PJe-Calc):
         // PJe-Calc calculates CS on NOMINAL diferença, not corrected values.
@@ -2534,7 +2535,7 @@ export class PjeCalcEngine {
       }
       // Verificar incidências conflitantes
       if (v.caracteristica === 'ferias' && v.incidencias.contribuicao_social) {
-        itens.push({ tipo: 'observacao', modulo: 'Verbas', mensagem: `Férias "${v.nome}" com incidência CS ativa — férias indenizadas são isentas de CS` });
+        itens.push({ tipo: 'observacao', modulo: 'Verbas', mensagem: `Férias "${v.nome}" com CS ativa — verifique: férias indenizadas são isentas (Decreto 3.048/99 §9°IV); férias gozadas incidem INSS` });
       }
     }
 
