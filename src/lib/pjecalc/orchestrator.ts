@@ -304,7 +304,7 @@ function toEngineCorrecaoConfig(
         ? JSON.parse(correcaoRow.combinacoes_indice)
         : correcaoRow.combinacoes_indice;
       combinacoes_indice = parsed;
-    } catch { /* ignore */ }
+    } catch (e) { console.warn('[ORCHESTRATOR] Falha ao parsear combinacoes_indice JSON:', e); }
   }
   if (correcaoRow?.combinacoes_juros) {
     try {
@@ -312,7 +312,7 @@ function toEngineCorrecaoConfig(
         ? JSON.parse(correcaoRow.combinacoes_juros)
         : correcaoRow.combinacoes_juros;
       combinacoes_juros = parsed;
-    } catch { /* ignore */ }
+    } catch (e) { console.warn('[ORCHESTRATOR] Falha ao parsear combinacoes_juros JSON:', e); }
   }
 
   const jurosRow = atualizacaoConfig.find(a => a.tipo === 'juros');
