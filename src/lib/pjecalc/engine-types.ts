@@ -161,6 +161,9 @@ export interface PjeVerba {
   
   /** Modo de fração de mês: manter_fracao | integralizar | desprezar | desprezar_menor_15 */
   fracao_mes_modo?: 'manter_fracao' | 'integralizar' | 'desprezar' | 'desprezar_menor_15';
+
+  /** Art. 73 §1° CLT: hora noturna fictícia — cada hora real = 52,5 min → fator 8/7 sobre divisor */
+  hora_noturna_ficticia?: boolean;
   
   exclusoes: {
     faltas_justificadas: boolean;
@@ -634,6 +637,8 @@ export interface PjeResumo {
   pensao_sobre_fgts: number;
   pensao_total: number;
   contribuicao_sindical: number;
+  /** Abono pecuniário férias (Art. 143 CLT) — sujeito a IR, não ao INSS */
+  abono_pecuniario: number;
   liquido_reclamante: number;
   total_reclamada: number;
   /** Metadata for transparency */

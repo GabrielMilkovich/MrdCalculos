@@ -439,6 +439,12 @@ export class PjeCalcEngine {
       div = new Decimal(verba.divisor_informado || 30);
     }
 
+    // Art. 73 §1° CLT: hora noturna fictícia — cada hora real = 52,5 min
+    // Reduz o divisor por 7/8 (= 52.5/60), tornando a hora noturna mais valiosa (fator 8/7)
+    if (verba.hora_noturna_ficticia) {
+      div = div.times(new Decimal(7).div(8)).toDP(4);
+    }
+
     // Quantidade resolution (with calendario + apurada support)
     let qtd: Decimal;
     if (verba.tipo_quantidade === 'cartao_ponto') {
@@ -1682,7 +1688,7 @@ export class PjeCalcEngine {
       if (this.fgtsConfig.multa_tipo === 'informada') {
         multaValor = this.fgtsConfig.multa_valor_informado || 0;
       } else {
-        let baseMulita = totalDepositosCorrigido; // Use corrected value as base for fine
+        let baseMulita = totalDepositos; // PJe-Calc: multa incide sobre depósitos nominais (não corrigidos)
         multaValor = Number(new Decimal(baseMulita).times(this.fgtsConfig.multa_percentual / 100).toDP(2));
       }
     }
@@ -2059,8 +2065,9 @@ export class PjeCalcEngine {
         for (const oc of vr.ocorrencias) {
           if (oc.diferenca <= 0) continue;
           const anoComp = parseInt(oc.competencia.slice(0, 4));
-          // Use valor_final (corrected + interest) as IR base
-          const valorIR = oc.valor_final || oc.diferenca;
+          // Art. 12-A RRA: base IR = valor nominal (diferença), não valor corrigido
+          // PJe-Calc usa oc.diferenca (valor original da verba sem correção)
+          const valorIR = oc.diferenca;
           if (anoComp < anoLiq) {
             baseAnosAnteriores += valorIR;
             competenciasAnosAnteriores.add(oc.competencia);
@@ -3082,6 +3089,10 @@ export class PjeCalcEngine {
     // ── 8c. Salário-Família (Art. 65, Lei 8.213/91) ──
     const salarioFamilia = this.calcularSalarioFamilia(verbaResults);
 
+    // ── 8e. Abono Pecuniário (Art. 143 CLT) ──
+    // Sujeito a IR mas não a INSS — adicionado ao bruto antes do cálculo de IR
+    const abonoPecuniario = this.calcularAbonoPecuniario();
+
     // ── 8d. Contribuição Sindical (art. 578-579 CLT) ──
     const contribuicaoSindical = this.calcularContribuicaoSindical(verbaResults);
 
@@ -3126,8 +3137,8 @@ export class PjeCalcEngine {
       }
     }
 
-    // PJe-Calc: Bruto = verbas corrigidas + juros (FGTS is separate in PJe-Calc's "bruto devido ao reclamante")
-    const brutoTotal = Number(new Decimal(principalCorrigido).plus(jurosMora).toDP(2));
+    // PJe-Calc: Bruto = verbas corrigidas + juros + abono pecuniário (FGTS is separate in PJe-Calc's "bruto devido ao reclamante")
+    const brutoTotal = Number(new Decimal(principalCorrigido).plus(jurosMora).plus(abonoPecuniario).toDP(2));
     
     // Líquido = Bruto + salário família - CS segurado - IR - prev privada - pensão - contrib. sindical
     // Salário família adiciona ao líquido: é crédito do empregado (Art. 65 Lei 8.213/91)
@@ -3163,6 +3174,7 @@ export class PjeCalcEngine {
       honorarios_contratuais: honorarios.contratuais, custas: custasResult.total,
       custas_detalhadas: custasResult.detalhadas, pensao_sobre_fgts: pensaoSobreFgts, pensao_total: pensaoTotal,
       contribuicao_sindical: contribuicaoSindical,
+      abono_pecuniario: abonoPecuniario,
       liquido_reclamante: liquido, total_reclamada: totalReclamada,
       meta: {
         arredondamento: 'Arredondamento por competência (item a item, 2 casas decimais) conforme metodologia judiciária. Pequenas diferenças de centavos são esperadas.',
@@ -3294,6 +3306,41 @@ export class PjeCalcEngine {
     }
 
     return { apurado: true, cotas, total: Number(new Decimal(totalSF).toDP(2)) };
+  }
+
+  // =====================================================
+  // ABONO PECUNIÁRIO (Art. 143 CLT)
+  // =====================================================
+
+  /**
+   * Calcula o abono pecuniário das férias (Art. 143 CLT).
+   * O empregado pode converter 1/3 dos dias de férias em valor em dinheiro.
+   * Fórmula: abono = salário × (abono_dias / 30)
+   * Incidências: IR = sim; INSS = não; FGTS = não (idêntico ao PJe-Calc)
+   */
+  calcularAbonoPecuniario(): number {
+    let total = 0;
+    for (const f of this.ferias) {
+      if (!f.abono) continue;
+      const abonoDias = f.abono_dias ?? Math.floor(f.prazo_dias / 3);
+      if (abonoDias <= 0) continue;
+
+      // Determinar competência de referência = fim do período aquisitivo
+      const compRef = f.periodo_aquisitivo_fim.slice(0, 7);
+
+      // Obter salário base na competência de referência
+      let salarioBase = 0;
+      for (const hist of this.historicos) {
+        const oc = hist.ocorrencias.find(o => o.competencia === compRef);
+        if (oc) salarioBase += oc.valor;
+      }
+      if (salarioBase === 0) salarioBase = this.params.ultima_remuneracao || 0;
+
+      // Valor do abono = salário × (abono_dias / 30)
+      const valorAbono = Number(new Decimal(salarioBase).times(abonoDias).div(30).toDP(2));
+      total += valorAbono;
+    }
+    return Number(new Decimal(total).toDP(2));
   }
 
   // =====================================================
@@ -3599,6 +3646,7 @@ export function liquidarMultiVinculo(
       cs_segurado: resultados.reduce((s, r) => s + r.resultado.resumo.cs_segurado, 0),
       cs_empregador: resultados.reduce((s, r) => s + r.resultado.resumo.cs_empregador, 0),
       ir_retido: resultados.reduce((s, r) => s + r.resultado.resumo.ir_retido, 0),
+      abono_pecuniario: resultados.reduce((s, r) => s + (r.resultado.resumo.abono_pecuniario ?? 0), 0),
       liquido_reclamante: resultados.reduce((s, r) => s + r.resultado.resumo.liquido_reclamante, 0),
       total_reclamada: resultados.reduce((s, r) => s + r.resultado.resumo.total_reclamada, 0),
     };
