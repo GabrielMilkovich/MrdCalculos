@@ -539,6 +539,23 @@ async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeg
   } catch { return []; }
 }
 
+async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalarioMinimoRow[]> {
+  try {
+    const { data } = await supabase
+      .from('pjecalc_salario_minimo' as any)
+      .select('competencia, valor')
+      .order('competencia', { ascending: true });
+    if (data && data.length > 0) {
+      console.log(`[ORCHESTRATOR] Loaded ${data.length} salário mínimo registros from DB`);
+      return (data as any[]).map(r => ({
+        competencia: r.competencia,
+        valor: Number(r.valor),
+      }));
+    }
+    return [];
+  } catch { return []; }
+}
+
 async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeSalarioFamiliaDB[]> {
   try {
     const { data } = await supabase
@@ -585,6 +602,7 @@ export async function executarLiquidacao(
     salarioFamiliaConfig,
     seguroDesempregoDB,
     salarioFamiliaDB,
+    salarioMinimoDB,
   ] = await Promise.all([
     svc.getHistoricoOcorrencias(caseId),
     loadIndicesDB(),
@@ -596,6 +614,7 @@ export async function executarLiquidacao(
     loadSalarioFamiliaConfig(caseId),
     loadSeguroDesempregoDB(),
     loadSalarioFamiliaDBRows(),
+    loadSalarioMinimoDB(),
   ]);
 
   // 2.5. CANONICAL INPUT LAYER — Resolve, Validate, Score
@@ -814,6 +833,7 @@ export async function executarLiquidacao(
     seguroDesempregoDB,  // 22: seguro-desemprego DB rows
     salarioFamiliaDB,    // 23: salário-família DB rows
     [],                  // 24: excecoesSabado (TODO: load from DB when available)
+    salarioMinimoDB,     // 25: salário mínimo DB (for insalubridade base — art. 192 CLT)
   );
 
   const result = engine.liquidar();

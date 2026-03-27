@@ -357,6 +357,9 @@ export interface PjeCSConfig {
   separar_reclamante_beneficiario?: boolean;
   /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, use these exact CS bases */
   apuracao_juros_gt?: PjeApuracaoJurosGT[];
+  /** Contribuição Sindical (art. 578 CLT) — 1 dia de salário, descontado em março.
+   *  Pré-reforma (< nov/2017): obrigatória. Pós-reforma: facultativa. */
+  contribuicao_sindical?: boolean;
 }
 
 export interface PjeIRConfig {
@@ -630,6 +633,7 @@ export interface PjeResumo {
   custas_detalhadas: PjeCustaResult[];
   pensao_sobre_fgts: number;
   pensao_total: number;
+  contribuicao_sindical: number;
   liquido_reclamante: number;
   total_reclamada: number;
   /** Metadata for transparency */
@@ -668,6 +672,11 @@ export interface PjeIRFaixaRow {
   aliquota: number;
   deducao: number;
   deducao_dependente: number;
+}
+
+export interface PjeSalarioMinimoRow {
+  competencia: string; // YYYY-MM-DD
+  valor: number;
 }
 
 export interface PjeValidationItem {

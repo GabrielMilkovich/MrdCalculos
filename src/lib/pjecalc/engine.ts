@@ -25,7 +25,7 @@ import type {
   PjeLiquidacaoResult, PjeValidationItem, PjeValidationResult,
   PjePrevidenciaPrivadaResult, PjeSalarioFamiliaResult,
   PjeCombinacaoIndice, PjeCombinacaoJuros,
-  PjeSeguroDesempregoDB, PjeSalarioFamiliaDB,
+  PjeSeguroDesempregoDB, PjeSalarioFamiliaDB, PjeSalarioMinimoRow,
 } from './engine-types';
 
 import {
@@ -62,6 +62,7 @@ export class PjeCalcEngine {
   private salarioFamiliaConfig: PjeSalarioFamiliaConfig;
   private seguroDesempregoDB: PjeSeguroDesempregoDB[];
   private salarioFamiliaDB: PjeSalarioFamiliaDB[];
+  private salarioMinimoDB: PjeSalarioMinimoRow[];
   // Map of verba results by verba_id for reflexa resolution
   private verbaResultsMap: Map<string, PjeVerbaResult> = new Map();
   // Structured warnings collected during calculation
@@ -106,6 +107,7 @@ export class PjeCalcEngine {
     seguroDesempregoDB: PjeSeguroDesempregoDB[] = [],
     salarioFamiliaDB: PjeSalarioFamiliaDB[] = [],
     excecoesSabado: PjeExcecaoSabado[] = [],
+    salarioMinimoDB: PjeSalarioMinimoRow[] = [],
   ) {
     this.params = params;
     this.historicos = historicos;
@@ -142,6 +144,7 @@ export class PjeCalcEngine {
     this.salarioFamiliaConfig = salarioFamiliaConfig;
     this.seguroDesempregoDB = seguroDesempregoDB;
     this.salarioFamiliaDB = salarioFamiliaDB;
+    this.salarioMinimoDB = salarioMinimoDB;
   }
 
   // =====================================================
@@ -667,6 +670,11 @@ export class PjeCalcEngine {
       }
     }
 
+    // Base: salário mínimo (insalubridade — art. 192 CLT)
+    if (verba.base_calculo.tabelas.includes('salario_minimo')) {
+      return this.getSalarioMinimoParaCompetencia(competencia);
+    }
+
     // Fallback: usar maior/última remuneração
     if (base === 0) {
       if (verba.base_calculo.tabelas.includes('maior_remuneracao') && this.params.maior_remuneracao) {
@@ -847,6 +855,24 @@ export class PjeCalcEngine {
     const [ano, mes] = comp.split('-').map(Number);
     if (mes === 1) return `${ano - 1}-12`;
     return `${ano}-${String(mes - 1).padStart(2, '0')}`;
+  }
+
+  // =====================================================
+  // SALÁRIO MÍNIMO POR COMPETÊNCIA
+  // Usado como base para insalubridade (art. 192 CLT)
+  // =====================================================
+
+  getSalarioMinimoParaCompetencia(comp: string): number {
+    if (this.salarioMinimoDB.length > 0) {
+      // Pegar o último SM com competência <= comp
+      const compDate = comp.slice(0, 7);
+      const candidatos = this.salarioMinimoDB
+        .filter(r => r.competencia.slice(0, 7) <= compDate)
+        .sort((a, b) => b.competencia.localeCompare(a.competencia));
+      if (candidatos.length > 0) return Number(candidatos[0].valor);
+    }
+    // Fallback: params.salario_minimo (informado pelo usuário) ou valor fixo 2025
+    return this.params.salario_minimo ?? 1518.00;
   }
 
   // =====================================================
@@ -1616,12 +1642,21 @@ export class PjeCalcEngine {
           jurosValor = jurosAcc.toDP(2).toNumber();
         }
       } else {
-        // Legacy single-index correction for FGTS
-        const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, compClean, compLiq);
-        if (fatorDB !== null) fatorCorrecao = fatorDB;
-        else {
-          this.trackWarning('W048', 'fgts', `Índice ${this.correcaoConfig.indice} ausente para FGTS ${compClean}→${compLiq}. Usando fator=1 (PERDA DE PRECISÃO).`, compClean);
-          fatorCorrecao = 1;
+        // FGTS: corrigido por TR + 3% a.a. (Lei 8.036/90, art. 13)
+        // Usa índice TR_FGTS do banco (TR mensal + 0.2466%/mês compound)
+        // Fallback: 3% a.a. simples (0.25%/mês) se TR_FGTS não disponível
+        const fatorDB = this.getIndiceCorrecaoDB('TR_FGTS', compClean, compLiq);
+        if (fatorDB !== null) {
+          fatorCorrecao = fatorDB;
+        } else {
+          // Fallback: apenas 3% a.a. (sem TR) para manter resultado mínimo correto
+          const [aDepos, mDepos] = compClean.split('-').map(Number);
+          const [aLiq, mLiq] = compLiq.split('-').map(Number);
+          const meses = (aLiq - aDepos) * 12 + (mLiq - mDepos);
+          if (meses > 0) {
+            fatorCorrecao = Math.pow(1.002466, meses); // 3% a.a. compound
+          }
+          this.trackWarning('W048', 'fgts', `TR_FGTS ausente para FGTS ${compClean}→${compLiq}. Usando 3% a.a. compound como fallback.`, compClean);
         }
       }
       
@@ -1918,9 +1953,11 @@ export class PjeCalcEngine {
           .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
       }
     }
-    // Acima de todas as faixas: usa alíquota da última (teto)
+    // Acima de todas as faixas: usa alíquota da última, base limitada ao teto
+    // (pré-2020 flat-rate: não há progressividade acima do teto — contribuição máxima)
     const ultima = faixas[faixas.length - 1];
-    return new Decimal(base).times(ultima.aliquota)
+    const baseCapped = Math.min(base, ultima.ate);
+    return new Decimal(baseCapped).times(ultima.aliquota)
       .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
   }
 
@@ -2201,6 +2238,52 @@ export class PjeCalcEngine {
       meses_anos_anteriores: mesesAnosAnteriores,
       meses_ano_liquidacao: mesesAnoLiquidacao || meses,
     };
+  }
+
+  // =====================================================
+  // CALCULAR CONTRIBUIÇÃO SINDICAL (art. 578-579 CLT)
+  // 1 dia de salário, descontado em março de cada ano.
+  // Pré-Nov/2017 (reforma): obrigatória.
+  // Pós-Nov/2017: facultativa (requer autorização expressa).
+  // =====================================================
+
+  calcularContribuicaoSindical(verbaResults: PjeVerbaResult[]): number {
+    if (!this.csConfig.contribuicao_sindical) return 0;
+
+    const periodoInicio = this.params.data_inicial || this.params.data_admissao;
+    const periodoFim = this.params.data_final || this.params.data_demissao ||
+      this.correcaoConfig.data_liquidacao;
+
+    // Cada ano em que o empregado trabalhou em março gera 1 desconto
+    // Valor = salário do mês de março / 30 (1 dia)
+    let total = 0;
+    const anoInicio = new Date(periodoInicio).getFullYear();
+    const anoFim = new Date(periodoFim).getFullYear();
+
+    for (let ano = anoInicio; ano <= anoFim; ano++) {
+      const compMarco = `${ano}-03`;
+      // Verificar se marco está no período de cálculo
+      if (compMarco < periodoInicio.slice(0, 7) || compMarco > periodoFim.slice(0, 7)) continue;
+
+      // Salário em março: buscar no histórico
+      let salarioMarco = 0;
+      for (const hist of this.historicos) {
+        const oc = hist.ocorrencias.find(o => o.competencia.startsWith(compMarco));
+        if (oc) { salarioMarco += oc.valor; }
+        else if (hist.valor_informado && compMarco >= hist.periodo_inicio.slice(0, 7) && compMarco <= hist.periodo_fim.slice(0, 7)) {
+          salarioMarco += hist.valor_informado;
+        }
+      }
+      if (salarioMarco <= 0 && this.params.ultima_remuneracao) {
+        salarioMarco = this.params.ultima_remuneracao;
+      }
+      if (salarioMarco > 0) {
+        // 1 dia de salário = salário / 30
+        total += Number(new Decimal(salarioMarco).div(30).toDP(2));
+      }
+    }
+
+    return Number(new Decimal(total).toDP(2));
   }
 
   // =====================================================
@@ -2950,6 +3033,9 @@ export class PjeCalcEngine {
     // ── 8c. Salário-Família (Art. 65, Lei 8.213/91) ──
     const salarioFamilia = this.calcularSalarioFamilia(verbaResults);
 
+    // ── 8d. Contribuição Sindical (art. 578-579 CLT) ──
+    const contribuicaoSindical = this.calcularContribuicaoSindical(verbaResults);
+
     // ── 9. Composição do Resumo ──
     const principalBruto = Number(verbaResults
       .filter(v => { const verba = this.verbas.find(vb => vb.id === v.verba_id); return verba?.compor_principal !== false; })
@@ -3002,6 +3088,7 @@ export class PjeCalcEngine {
       .minus(ir.imposto_devido)
       .minus(prevPrivada.valor)
       .minus(pensaoTotal)
+      .minus(contribuicaoSindical)
       .toDP(2));
 
     // Total Reclamada = líquido + CS segurado (recolher) + CS empregador + honorários + custas + IR + FGTS
@@ -3025,6 +3112,7 @@ export class PjeCalcEngine {
       multa_523: multa523, multa_467: multa467, honorarios_sucumbenciais: honorarios.sucumbenciais,
       honorarios_contratuais: honorarios.contratuais, custas: custasResult.total,
       custas_detalhadas: custasResult.detalhadas, pensao_sobre_fgts: pensaoSobreFgts, pensao_total: pensaoTotal,
+      contribuicao_sindical: contribuicaoSindical,
       liquido_reclamante: liquido, total_reclamada: totalReclamada,
       meta: {
         arredondamento: 'Arredondamento por competência (item a item, 2 casas decimais) conforme metodologia judiciária. Pequenas diferenças de centavos são esperadas.',
