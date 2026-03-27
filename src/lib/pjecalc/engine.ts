@@ -2385,13 +2385,21 @@ export class PjeCalcEngine {
     return faixas.length > 0 ? faixas : null;
   }
 
-  private getSalarioFamiliaDB(competencia: string): PjeSalarioFamiliaDB | null {
+  private getSalarioFamiliaDB(competencia: string, remuneracao?: number): PjeSalarioFamiliaDB | null {
     if (this.salarioFamiliaDB.length === 0) return null;
     const compDate = competencia + '-01';
     const competencias = [...new Set(this.salarioFamiliaDB.map(f => f.competencia))].sort().reverse();
     const comp = competencias.find(c => c <= compDate) || competencias[0];
-    const faixa = this.salarioFamiliaDB.find(f => f.competencia === comp && f.faixa === 1);
-    return faixa || null;
+    const faixas = this.salarioFamiliaDB
+      .filter(f => f.competencia === comp)
+      .sort((a, b) => a.faixa - b.faixa);
+    if (faixas.length === 0) return null;
+    if (remuneracao === undefined) return faixas[0]; // fallback: return first faixa
+    // Find the faixa that matches the remuneracao
+    for (const f of faixas) {
+      if (remuneracao >= f.valor_inicial && remuneracao <= f.valor_final) return f;
+    }
+    return null; // salary exceeds all faixas — not eligible
   }
 
   // =====================================================
@@ -3254,11 +3262,13 @@ export class PjeCalcEngine {
       if (remuneracao === 0) remuneracao = this.params.ultima_remuneracao || 0;
 
       // Verificar se remuneração está dentro do limite e obter valor da cota
-      const sfDB = this.getSalarioFamiliaDB(comp);
-      const limiteRemuneracao = sfDB ? sfDB.valor_final : SALARIO_FAMILIA_2025.limite_remuneracao;
+      // getSalarioFamiliaDB(comp, remuneracao) retorna a faixa correta ou null se inelegível
+      const sfDB = this.getSalarioFamiliaDB(comp, remuneracao);
+      if (!sfDB) {
+        // Se sem DB, verificar contra fallback hardcoded (faixa 1 apenas)
+        if (remuneracao > SALARIO_FAMILIA_2025.limite_remuneracao) continue;
+      }
       const valorCotaRef = sfDB ? sfDB.valor_cota : SALARIO_FAMILIA_2025.valor_cota;
-      
-      if (remuneracao > limiteRemuneracao) continue;
 
       // Contar filhos elegíveis na competência
       const [anoComp, mesComp] = comp.split('-').map(Number);
