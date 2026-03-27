@@ -262,6 +262,61 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
       { nome: 'RSR sobre Diferenças', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 26, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
     ],
   },
+  {
+    // Desvio de Função — art. 461 CLT (isonomia salarial por função exercida)
+    // TST Súmula 6: diferenças devidas a partir do desvio; reflexos em todos os títulos
+    id: 'desvio_funcao',
+    nome: 'Desvio de Função + Reflexos',
+    descricao: 'Diferença salarial pelo exercício de função superior à contratada (art. 461 CLT, TST Súmula 6)',
+    categoria: 'misto',
+    icone: 'TrendingUp',
+    verbas: [
+      { nome: 'Desvio de Função', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_FALTAS },
+      { nome: 'RSR sobre Desvio de Função', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 26, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Acúmulo de Função — art. 456 parágrafo único CLT (remuneração proporcional)
+    // TST: quando o empregado desempenha função diversa e complementar sem salário correspondente
+    id: 'acumulo_funcao',
+    nome: 'Acúmulo de Função + Reflexos',
+    descricao: 'Adicional pelo exercício simultâneo de duas funções sem remuneração correspondente (art. 456 §único CLT)',
+    categoria: 'misto',
+    icone: 'Layers',
+    verbas: [
+      { nome: 'Acúmulo de Função', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_FALTAS },
+      { nome: 'RSR sobre Acúmulo', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 26, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Intervalo Interjornada — art. 66 CLT (mínimo 11h entre jornadas)
+    // OJ 355/SDI-1: violação paga 1h extra por ocorrência (não gera nulidade da jornada)
+    // TST: valor = 1 hora × adicional 50% por cada intervalo suprimido
+    id: 'intervalo_interjornada',
+    nome: 'Intervalo Interjornada + Reflexos',
+    descricao: 'Hora extra por violação do intervalo mínimo de 11h entre jornadas (art. 66 CLT, OJ 355/SDI-1)',
+    categoria: 'horas_extras',
+    icone: 'Clock',
+    verbas: [
+      { nome: 'Intervalo Interjornada Violado', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1.5, divisor_informado: 220, tipo_divisor: 'carga_horaria', tipo_quantidade: 'cartao_ponto', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_FALTAS },
+      { nome: 'RSR sobre Intervalo Interjornada', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 26, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Trabalho em Domingos e Feriados sem folga compensatória
+    // Art. 67 CLT + Lei 605/1949: empregado que trabalha no DSR sem compensação
+    // tem direito ao dobro (= 1 dia adicional além do salário pago); TST OJ 410/SDI-1
+    id: 'trabalho_domingos_feriados',
+    nome: 'Trabalho em Domingos e Feriados (sem compensação)',
+    descricao: 'Pagamento em dobro por trabalho no DSR sem folga compensatória (art. 67 CLT + TST OJ 410)',
+    categoria: 'horas_extras',
+    icone: 'Calendar',
+    verbas: [
+      // 1 dia adicional por domingo/feriado trabalhado sem compensação (além do salário normal já pago)
+      { nome: 'Domingos e Feriados Trabalhados', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'cartao_ponto', quantidade_informada: 0, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+      { nome: 'RSR sobre Domingos/Feriados', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 26, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
 ];
 
 /**
