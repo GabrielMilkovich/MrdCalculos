@@ -30,8 +30,14 @@ export interface TemplateExpresso {
 
 // ── Incidências comuns ──
 const INC_PADRAO = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+// Férias gozadas durante o contrato: isenta de tudo
 const INC_FERIAS = { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false };
+// Férias indenizadas (pagas na rescisão — proporcionais ou vencidas): IRPF incide, INSS/FGTS não
+// Lei 7.713/88, art. 6°, V + CLT art. 146 + TST OJ 195/SDI-1
+const INC_FERIAS_INDENIZADAS = { fgts: false, irpf: true, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false };
 const INC_AVISO = { fgts: true, irpf: false, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+// PLR: isento de INSS/FGTS/CS; IRPF exclusivo na fonte (não incide na liquidação trabalhista)
+const INC_PLR = { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false };
 const EXC_NENHUMA = { faltas_justificadas: false, faltas_nao_justificadas: false, ferias_gozadas: false };
 const EXC_FALTAS = { faltas_justificadas: false, faltas_nao_justificadas: true, ferias_gozadas: true };
 
@@ -46,8 +52,8 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
       { nome: 'Saldo de Salário', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: { ...EXC_NENHUMA, faltas_nao_justificadas: true } },
       { nome: 'Aviso Prévio Indenizado', tipo: 'principal', caracteristica: 'aviso_previo', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 30, compor_principal: true, incidencias: INC_AVISO, exclusoes: EXC_NENHUMA },
       { nome: '13º Salário Proporcional', tipo: 'principal', caracteristica: '13_salario', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
-      { nome: 'Férias Proporcionais + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS, exclusoes: EXC_NENHUMA },
-      { nome: 'Férias Vencidas + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS, exclusoes: EXC_NENHUMA },
+      { nome: 'Férias Proporcionais + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS_INDENIZADAS, exclusoes: EXC_NENHUMA },
+      { nome: 'Férias Vencidas + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS_INDENIZADAS, exclusoes: EXC_NENHUMA },
       { nome: 'Multa Art. 477 CLT', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
     ],
   },
@@ -61,8 +67,8 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
       { nome: 'Saldo de Salário', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: { ...EXC_NENHUMA, faltas_nao_justificadas: true } },
       { nome: 'Aviso Prévio Indenizado', tipo: 'principal', caracteristica: 'aviso_previo', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 30, compor_principal: true, incidencias: INC_AVISO, exclusoes: EXC_NENHUMA },
       { nome: '13º Salário Proporcional', tipo: 'principal', caracteristica: '13_salario', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
-      { nome: 'Férias Proporcionais + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS, exclusoes: EXC_NENHUMA },
-      { nome: 'Férias Vencidas + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS, exclusoes: EXC_NENHUMA },
+      { nome: 'Férias Proporcionais + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS_INDENIZADAS, exclusoes: EXC_NENHUMA },
+      { nome: 'Férias Vencidas + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS_INDENIZADAS, exclusoes: EXC_NENHUMA },
       { nome: 'Multa Art. 477 CLT', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
       { nome: 'Multa Art. 467 CLT', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 0.5, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
     ],
@@ -158,7 +164,7 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
       { nome: 'Saldo de Salário', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: { ...EXC_NENHUMA, faltas_nao_justificadas: true } },
       { nome: 'Aviso Prévio Indenizado (50%)', tipo: 'principal', caracteristica: 'aviso_previo', ocorrencia_pagamento: 'desligamento', multiplicador: 0.5, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 30, compor_principal: true, incidencias: INC_AVISO, exclusoes: EXC_NENHUMA },
       { nome: '13º Salário Proporcional', tipo: 'principal', caracteristica: '13_salario', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
-      { nome: 'Férias Proporcionais + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS, exclusoes: EXC_NENHUMA },
+      { nome: 'Férias Proporcionais + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS_INDENIZADAS, exclusoes: EXC_NENHUMA },
     ],
   },
   {
@@ -170,7 +176,35 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
     verbas: [
       { nome: 'Saldo de Salário', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: { ...EXC_NENHUMA, faltas_nao_justificadas: true } },
       { nome: '13º Salário Proporcional', tipo: 'principal', caracteristica: '13_salario', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
-      { nome: 'Férias Proporcionais + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS, exclusoes: EXC_NENHUMA },
+      { nome: 'Férias Proporcionais + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS_INDENIZADAS, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // PLR — Participação nos Lucros e Resultados (Lei 10.101/2000)
+    // Isenta de INSS, FGTS e CS (não integra salário — art. 7° XI CF/88)
+    // IRPF: tributação exclusiva na fonte (tabela progressiva anual) — não incide na liquidação trabalhista
+    // Base de cálculo: valor global acordado na norma coletiva / proporcional ao período trabalhado
+    id: 'plr',
+    nome: 'PLR – Participação nos Lucros (Lei 10.101/2000)',
+    descricao: 'PLR proporcional ao período — isenta de INSS/FGTS/CS, IRPF exclusivo na fonte (art. 7° XI CF/88)',
+    categoria: 'misto',
+    icone: 'TrendingUp',
+    verbas: [
+      { nome: 'PLR Proporcional', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_PLR, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Sobreaviso (art. 244 §2° CLT) — 1/3 do salário por hora em sobreaviso
+    // Tipo: 1/3 da hora normal (não confundir com hora extra)
+    // TST Súmula 428: telefone celular fora do local = sobreaviso; aguarda chamado no local = sobreaviso pleno
+    id: 'sobreaviso',
+    nome: 'Sobreaviso (art. 244 CLT)',
+    descricao: 'Horas em sobreaviso — 1/3 da hora normal; cartão de ponto campo horas_sobreaviso (art. 244 §2° CLT)',
+    categoria: 'horas_extras',
+    icone: 'Phone',
+    verbas: [
+      { nome: 'Sobreaviso', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1 / 3, divisor_informado: 220, tipo_divisor: 'carga_horaria', tipo_quantidade: 'cartao_ponto', quantidade_informada: 0, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_FALTAS },
+      { nome: 'RSR sobre Sobreaviso', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 26, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
     ],
   },
 ];

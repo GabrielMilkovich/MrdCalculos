@@ -2059,9 +2059,15 @@ export class PjeCalcEngine {
 
     const periodo = this.getPeriodoCalculo();
     const meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
-    
+
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const tabelaIR = this.getFaixasIRParaCompetencia(compLiq);
+
+    // Art. 4° §2° Lei 7.713/88: aposentados com 65+ anos têm dedução adicional
+    // igual ao limite de isenção mensal (faixa 0) × número de meses
+    if (this.irConfig.aposentado_65 && tabelaIR.faixas.length > 0) {
+      deducoes += tabelaIR.faixas[0].ate * meses;
+    }
     
     let irAnosAnteriores = new Decimal(0);
     let irAnoLiquidacao = new Decimal(0);
@@ -2184,6 +2190,9 @@ export class PjeCalcEngine {
     if (this.irConfig.deduzir_cs && this.csConfig.cobrar_reclamante) deducoes += csResult.total_segurado;
     const periodo = this.getPeriodoCalculo();
     const meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
+    if (this.irConfig.aposentado_65 && tabelaIR.faixas.length > 0) {
+      deducoes += tabelaIR.faixas[0].ate * meses;
+    }
 
     let irAnosAnteriores = new Decimal(0), irAnoLiquidacao = new Decimal(0);
     let ir13Exclusivo = new Decimal(0), irFeriasSeparado = new Decimal(0);
