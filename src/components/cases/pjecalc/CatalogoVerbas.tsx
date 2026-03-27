@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { BookOpen, Search, Loader2, Zap, UserMinus, Scale, Clock, Timer, ShieldAlert, LogOut, Handshake, PackagePlus } from "lucide-react";
+import { BookOpen, Search, Loader2, Zap, UserMinus, Scale, Clock, Timer, ShieldAlert, LogOut, Handshake, PackagePlus, TrendingUp, Layers, DollarSign, Calendar } from "lucide-react";
 import { TEMPLATES_EXPRESSO, type TemplateExpresso } from "@/lib/pjecalc/templates-expresso";
 
 // =====================================================
@@ -85,6 +85,10 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Zap: <Zap className="h-5 w-5" />,
   LogOut: <LogOut className="h-5 w-5" />,
   Handshake: <Handshake className="h-5 w-5" />,
+  TrendingUp: <TrendingUp className="h-5 w-5" />,
+  Layers: <Layers className="h-5 w-5" />,
+  DollarSign: <DollarSign className="h-5 w-5" />,
+  Calendar: <Calendar className="h-5 w-5" />,
 };
 
 const CAT_COLORS: Record<string, string> = {
