@@ -1114,7 +1114,8 @@ export class PjeCalcEngine {
           if (!isSelic) {
             // Calculate interest separately for non-SELIC regimes
             const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
-            if (this.correcaoConfig.juros_tipo === 'simples_mensal' && dataAjuiz) {
+            // Fazenda Pública (EC 113/2021): juros limitados à SELIC; não aplicar juros simples de 1% a.m.
+            if (this.correcaoConfig.juros_tipo === 'simples_mensal' && dataAjuiz && !this.correcaoConfig.ente_publico) {
               let dataInicioJuros: Date;
               if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
               else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao;
@@ -1610,13 +1611,26 @@ export class PjeCalcEngine {
       }
     }
 
+    // LC 150/2015: Empregado doméstico — 8% FGTS + 3.2% indenização compensatória mensal
+    // (substitui a multa de 40% na rescisão)
+    const isDomestico = this.csConfig.aliquota_segurado_tipo === 'domestico';
+
     for (const [comp, base] of Object.entries(basesPorComp)) {
       const valor = Number(new Decimal(base).times(0.08).toDP(2));
       depositos.push({ competencia: comp, base, aliquota: 0.08, valor });
+      if (isDomestico) {
+        // LC 150/2015, Art. 22: 3.2% indenização compensatória depositada mensalmente
+        const indenComp = Number(new Decimal(base).times(0.032).toDP(2));
+        depositos.push({ competencia: comp + '-inden', base, aliquota: 0.032, valor: indenComp });
+      }
     }
     for (const [comp, base] of Object.entries(bases13PorComp)) {
       const valor = Number(new Decimal(base).times(0.08).toDP(2));
       depositos.push({ competencia: comp + '-13', base, aliquota: 0.08, valor });
+      if (isDomestico) {
+        const indenComp = Number(new Decimal(base).times(0.032).toDP(2));
+        depositos.push({ competencia: comp + '-13-inden', base, aliquota: 0.032, valor: indenComp });
+      }
     }
 
     const totalDepositos = depositos.reduce((s, d) => s + d.valor, 0);
@@ -1855,7 +1869,9 @@ export class PjeCalcEngine {
           if (isSimples) {
             empregador.push({ competencia: comp, empresa: 0, sat: 0, terceiros: 0 });
           } else {
-            const aliqEmp = (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
+            // LC 150/2015: Empregado doméstico — alíquota patronal de 8% (não 20%)
+            const isDomesticoCS = this.csConfig.aliquota_segurado_tipo === 'domestico';
+            const aliqEmp = isDomesticoCS ? 0.08 : (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
             const aliqSat = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
             const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
             // Apply correction factor from GT for employer CS
@@ -1863,7 +1879,8 @@ export class PjeCalcEngine {
             const correctedBase = cf > 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
             const empresa = this.csConfig.apurar_empresa ? Number(new Decimal(correctedBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
             const sat = this.csConfig.apurar_sat ? Number(new Decimal(correctedBase).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
-            const terceiros = this.csConfig.apurar_terceiros ? Number(new Decimal(correctedBase).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
+            // LC 150/2015: doméstico não recolhe terceiros
+            const terceiros = (this.csConfig.apurar_terceiros && !isDomesticoCS) ? Number(new Decimal(correctedBase).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
             empregador.push({ competencia: comp, empresa, sat, terceiros });
           }
         }
@@ -1962,14 +1979,17 @@ export class PjeCalcEngine {
         if (isSimples) {
           empregador.push({ competencia: comp, empresa: 0, sat: 0, terceiros: 0 });
         } else {
-          const aliqEmp = (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
+          // LC 150/2015: Empregado doméstico — alíquota patronal de 8% (não 20%)
+          const isDomesticoCS = this.csConfig.aliquota_segurado_tipo === 'domestico';
+          const aliqEmp = isDomesticoCS ? 0.08 : (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
           const aliqSat = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
           const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
           empregador.push({
             competencia: comp,
             empresa: this.csConfig.apurar_empresa ? Number(new Decimal(base).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
             sat: this.csConfig.apurar_sat ? Number(new Decimal(base).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
-            terceiros: this.csConfig.apurar_terceiros ? Number(new Decimal(base).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
+            // LC 150/2015: doméstico não recolhe terceiros
+            terceiros: (this.csConfig.apurar_terceiros && !isDomesticoCS) ? Number(new Decimal(base).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
           });
         }
       }
@@ -2534,6 +2554,8 @@ export class PjeCalcEngine {
 
   calcularMulta523(valorCondenacao: number): number {
     if (!this.correcaoConfig.multa_523) return 0;
+    // Fazenda Pública: multa Art. 523 CPC não se aplica (execução por precatório/RPV — Art. 100 CF/88)
+    if (this.correcaoConfig.ente_publico) return 0;
     return Number(new Decimal(valorCondenacao).times(this.correcaoConfig.multa_523_percentual / 100).toDP(2));
   }
 
@@ -2774,6 +2796,48 @@ export class PjeCalcEngine {
     // Verificar Súmula 381 TST — correção a partir do mês subsequente
     if (this.correcaoConfig.indice !== 'nenhum' && this.correcaoConfig.epoca === 'mensal') {
       itens.push({ tipo: 'observacao', modulo: 'Correção', mensagem: 'Súmula 381 TST: correção monetária incide a partir do mês subsequente ao da prestação de serviços' });
+    }
+
+    // ── Fazenda Pública ──
+    if (this.correcaoConfig.ente_publico) {
+      // Interest must be SELIC only for public entities
+      if (this.correcaoConfig.juros_tipo === 'simples_mensal' && (this.correcaoConfig.juros_percentual ?? 1) > 0) {
+        itens.push({
+          tipo: 'alerta', modulo: 'Correção',
+          mensagem: 'Fazenda Pública: juros devem ser limitados à taxa SELIC (EC 113/2021, Art. 3°). Juros simples de 1% a.m. não se aplicam contra ente público.',
+          detalhe: 'Recomenda-se utilizar índice SELIC que já engloba correção + juros.',
+        });
+      }
+      // Multa 523 does not apply
+      if (this.correcaoConfig.multa_523) {
+        itens.push({
+          tipo: 'alerta', modulo: 'Execução',
+          mensagem: 'Fazenda Pública: Multa Art. 523 §1° CPC não se aplica — execução contra ente público é por precatório/RPV (Art. 100 CF/88). Multa será zerada automaticamente.',
+        });
+      }
+      itens.push({
+        tipo: 'observacao', modulo: 'Execução',
+        mensagem: 'Fazenda Pública: classificação Precatório vs RPV será apurada com base no valor total da condenação (Art. 100 §3° CF/88).',
+        detalhe: 'RPV: até 60 SM (Federal), 40 SM (Estadual) ou 30 SM (Municipal). Utilize classificarPrecatorioRPV() no resultado.',
+      });
+    }
+
+    // ── Prescrição Intercorrente (Art. 11-A CLT, Lei 13.467/2017) ──
+    // Em fase de execução: se mais de 2 anos se passaram desde o último ato executório,
+    // há risco de prescrição intercorrente.
+    if (this.params.data_ajuizamento && this.correcaoConfig.data_liquidacao) {
+      const ajuiz = new Date(this.params.data_ajuizamento);
+      const liq = new Date(this.correcaoConfig.data_liquidacao);
+      const demissao = this.params.data_demissao ? new Date(this.params.data_demissao) : null;
+      // Heuristic: if liquidação is more than 4 years after ajuizamento, case is likely in execution phase
+      const anosDesdeAjuizamento = (liq.getTime() - ajuiz.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      if (anosDesdeAjuizamento > 4) {
+        itens.push({
+          tipo: 'alerta', modulo: 'Prescrição',
+          mensagem: `Art. 11-A CLT (Reforma Trabalhista): verificar prescrição intercorrente — liquidação ocorre ${anosDesdeAjuizamento.toFixed(1)} anos após o ajuizamento. Se houve inércia superior a 2 anos na fase de execução, o crédito pode estar prescrito.`,
+          detalhe: 'A prescrição intercorrente (Art. 11-A CLT, incluído pela Lei 13.467/2017) se aplica na fase de execução quando o exequente permanece inerte por mais de 2 anos. O prazo é contado a partir da intimação para cumprimento da obrigação.',
+        });
+      }
     }
 
     const erros = itens.filter(i => i.tipo === 'erro').length;

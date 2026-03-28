@@ -484,6 +484,73 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
       { nome: 'Indenização por Danos Morais', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
     ],
   },
+  {
+    // Cesta Básica / Vale-Alimentação não concedido — PAT, Lei 6.321/76
+    id: 'cesta_basica',
+    nome: 'Cesta Básica / Vale-Alimentação',
+    descricao: 'Indenização por cesta básica ou vale-alimentação não concedido (natureza indenizatória)',
+    categoria: 'misto',
+    icone: 'ShoppingBasket',
+    verbas: [
+      { nome: 'Cesta Básica / Vale-Alimentação', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Salário-Maternidade — Art. 392 CLT (120 dias)
+    id: 'salario_maternidade',
+    nome: 'Salário-Maternidade (Art. 392 CLT)',
+    descricao: 'Salário integral durante licença-maternidade (120 dias) — INSS patronal incide, sem FGTS do empregado',
+    categoria: 'misto',
+    icone: 'Baby',
+    verbas: [
+      { nome: 'Salário-Maternidade', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 4, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Indenização Adicional Pré-Database — Lei 7.238/84, Art. 9°
+    id: 'indenizacao_pre_database',
+    nome: 'Indenização Pré-Database (Lei 7.238/84)',
+    descricao: 'Indenização adicional por demissão 30 dias antes da data-base — 1 salário mensal (Súmula 314 TST)',
+    categoria: 'rescisao',
+    icone: 'CalendarX',
+    verbas: [
+      { nome: 'Indenização Adicional Pré-Database', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Multas Normativas — CCT/ACT (convenção/acordo coletivo)
+    id: 'multas_normativas',
+    nome: 'Multas Normativas (CCT/ACT)',
+    descricao: 'Multas de convenção coletiva — valor fixo ou valor diário × dias (natureza indenizatória)',
+    categoria: 'misto',
+    icone: 'FileWarning',
+    verbas: [
+      { nome: 'Multa Normativa (CCT/ACT)', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Gratificação de Função — Art. 468 CLT + Súmula 372 TST
+    // (already exists as template 'gratificacao_funcao' above — this is the module-backed version)
+    id: 'gratificacao_funcao_reflexos',
+    nome: 'Gratificação de Função + Reflexos',
+    descricao: 'Gratificação de função incorporada após 10+ anos (Art. 468 CLT, Súmula 372 TST) com reflexos',
+    categoria: 'misto',
+    icone: 'Award',
+    verbas: [
+      { nome: 'Gratificação de Função', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 0.30, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Reintegração — salários do período entre demissão e reintegração judicial
+    id: 'reintegracao',
+    nome: 'Reintegração Judicial',
+    descricao: 'Salários integrais do período entre demissão ilícita e reintegração judicial + reflexos',
+    categoria: 'misto',
+    icone: 'RotateCcw',
+    verbas: [
+      { nome: 'Salários Período Reintegração', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
 ];
 
 /**

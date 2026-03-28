@@ -43,6 +43,15 @@ import { ModuloTabelasRegionais } from "@/components/cases/pjecalc/ModuloTabelas
 import { ExcecoesSabado } from "@/components/cases/pjecalc/ExcecoesSabado";
 import { PerfilAcesso, type PerfilTipo } from "@/components/cases/pjecalc/PerfilAcesso";
 import { WizardCalculo } from "@/components/cases/pjecalc/WizardCalculo";
+import { ModuloPericulosidade } from "@/components/cases/pjecalc/ModuloPericulosidade";
+import { ModuloDanosMorais } from "@/components/cases/pjecalc/ModuloDanosMorais";
+import { ModuloEquiparacaoSalarial } from "@/components/cases/pjecalc/ModuloEquiparacaoSalarial";
+import { ModuloEstabilidade } from "@/components/cases/pjecalc/ModuloEstabilidade";
+import { EvolucaoDebito } from "@/components/cases/pjecalc/EvolucaoDebito";
+import { ExportacaoExcel } from "@/components/cases/pjecalc/ExportacaoExcel";
+import { ModuloGuiasRecolhimento } from "@/components/cases/pjecalc/ModuloGuiasRecolhimento";
+import { ModuloTerceiros } from "@/components/cases/pjecalc/ModuloTerceiros";
+import { SeletorTRT } from "@/components/cases/pjecalc/SeletorTRT";
 
 // Phase 4 components
 import { VerbaPreview } from "@/components/cases/pjecalc/VerbaPreview";
@@ -68,6 +77,7 @@ import type { PjecalcFaltaRow, PjecalcFeriasRow, PjecalcVerbaRow } from "@/lib/p
 
 const MODULOS = [
   { id: 'dados_processo', label: 'Dados do Processo', icon: Briefcase, desc: 'Identificação processual' },
+  { id: 'seletor_trt', label: 'Seletor TRT', icon: MapPin, desc: 'Configuração regional' },
   { id: 'parametros', label: 'Parâmetros', icon: Calendar, desc: 'Dados do cálculo' },
   { id: 'faltas', label: 'Faltas', icon: Clock, desc: 'Registros de ausência' },
   { id: 'ferias', label: 'Férias', icon: Calendar, desc: 'Períodos aquisitivos' },
@@ -75,8 +85,14 @@ const MODULOS = [
   { id: 'cartao_ponto', label: 'Cartão de Ponto', icon: Clock, desc: 'Jornada mensal' },
   { id: 'ajuste_sentenca', label: 'Ajustes Sentença', icon: Scale, desc: 'Motor de ajuste de jornada' },
   { id: 'verbas', label: 'Verbas', icon: FileText, desc: 'Parcelas do cálculo' },
+  { id: 'periculosidade', label: 'Periculosidade', icon: AlertTriangle, desc: 'Adicional 30%' },
+  { id: 'danos_morais', label: 'Danos Morais', icon: Scale, desc: 'Indenização Art. 223-G' },
+  { id: 'equiparacao', label: 'Equiparação Salarial', icon: GitCompareArrows, desc: 'Art. 461 CLT' },
+  { id: 'estabilidade', label: 'Estabilidade', icon: Shield, desc: 'Provisória / Gestante / CIPA' },
   { id: 'fgts', label: 'FGTS', icon: Building2, desc: 'Depósitos e multa' },
   { id: 'cs', label: 'Contrib. Social', icon: Receipt, desc: 'Segurado e empregador' },
+  { id: 'terceiros', label: 'Terceiros', icon: Building2, desc: 'Sistema S / FPAS' },
+  { id: 'guias', label: 'Guias Recolhimento', icon: Receipt, desc: 'GPS e DARF' },
   { id: 'ir', label: 'Imposto de Renda', icon: Percent, desc: 'IRRF / RRA' },
   { id: 'correcao', label: 'Correção/Juros', icon: TrendingUp, desc: 'Atualização monetária' },
   { id: 'seguro', label: 'Seguro-Desemprego', icon: Shield, desc: 'Indenização substitutiva' },
@@ -87,6 +103,8 @@ const MODULOS = [
   { id: 'honorarios', label: 'Honorários', icon: Scale, desc: 'Sucumbenciais e contratuais' },
   { id: 'custas', label: 'Custas', icon: Receipt, desc: 'Custas processuais' },
   { id: 'resumo', label: 'Resumo', icon: FileBarChart, desc: 'Resultado da liquidação' },
+  { id: 'evolucao_debito', label: 'Evolução do Débito', icon: TrendingUp, desc: 'Gráfico mensal do débito' },
+  { id: 'exportacao', label: 'Exportar Excel', icon: FileBarChart, desc: 'Planilha de cálculo' },
   { id: 'fidelidade', label: 'Fidelidade/Paridade', icon: GitCompareArrows, desc: 'Auditoria PJC vs Engine' },
   { id: 'esocial', label: 'eSocial', icon: Building2, desc: 'Exportação S-2500/S-2501' },
   { id: 'tabelas_regionais', label: 'Tabelas Regionais', icon: MapPin, desc: 'Pisos, VT e Sal. Família' },
@@ -125,6 +143,7 @@ export default function PjeCalcPage() {
   const [expandedFeriasId, setExpandedFeriasId] = useState<string | null>(null);
   const [perfilAcesso, setPerfilAcesso] = useState<PerfilTipo>('perito');
   const [showWizard, setShowWizard] = useState(false);
+  const [selectedTrtId, setSelectedTrtId] = useState<number | null>(null);
 
   // =====================================================
   // ALL DATA VIA HOOK — zero direct supabase access
@@ -235,6 +254,7 @@ export default function PjeCalcPage() {
       }
       switch (activeModule) {
         case 'dados_processo': return <ModuloDadosProcesso caseId={caseId!} />;
+        case 'seletor_trt': return <SeletorTRT selectedTrtId={selectedTrtId} onSelect={(trtId, defaults) => { setSelectedTrtId(trtId); if (defaults) { setFormParams(p => ({ ...p, ...defaults })); } }} />;
         case 'parametros': return renderParametros();
         case 'faltas': return renderFaltas();
         case 'ferias': return renderFerias();
@@ -242,8 +262,14 @@ export default function PjeCalcPage() {
         case 'cartao_ponto': return <ModuloCartaoPontoDiario caseId={caseId!} dataAdmissao={formParams.data_admissao} dataDemissao={formParams.data_demissao} cargaHoraria={formParams.carga_horaria_padrao} />;
         case 'ajuste_sentenca': return <ModuloAjusteSentenca caseId={caseId!} dataAdmissao={formParams.data_admissao} dataDemissao={formParams.data_demissao} cargaHoraria={formParams.carga_horaria_padrao} />;
         case 'verbas': return renderVerbas();
+        case 'periculosidade': return <ModuloPericulosidade caseId={caseId!} />;
+        case 'danos_morais': return <ModuloDanosMorais caseId={caseId!} />;
+        case 'equiparacao': return <ModuloEquiparacaoSalarial caseId={caseId!} />;
+        case 'estabilidade': return <ModuloEstabilidade caseId={caseId!} />;
         case 'fgts': return <ModuloFGTS caseId={caseId!} />;
         case 'cs': return <ModuloCS caseId={caseId!} />;
+        case 'terceiros': return <ModuloTerceiros caseId={caseId!} />;
+        case 'guias': return calc.rawResultado?.resultado ? <ModuloGuiasRecolhimento result={calc.rawResultado.resultado as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
         case 'ir': return <ModuloIR caseId={caseId!} />;
         case 'correcao': return <ModuloCorrecao caseId={caseId!} />;
         case 'seguro': return <ModuloSeguroDesemprego caseId={caseId!} />;
@@ -254,6 +280,8 @@ export default function PjeCalcPage() {
         case 'prev_privada': return <ModuloPrevidenciaPrivada caseId={caseId!} />;
         case 'custas': return <ModuloCustas caseId={caseId!} />;
         case 'resumo': return <ModuloResumo caseId={caseId!} />;
+        case 'evolucao_debito': return calc.rawResultado?.resultado ? <EvolucaoDebito result={calc.rawResultado.resultado as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
+        case 'exportacao': return calc.rawResultado?.resultado ? <ExportacaoExcel result={calc.rawResultado.resultado as any} params={formParams as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
         case 'fidelidade': return <FidelidadePanel fidelityReport={null} parityReport={null} />;
         case 'esocial': return <ModuloESocial caseId={caseId!} resultado={(calc.rawResultado?.resultado || null) as any} params={formParams} />;
         case 'tabelas_regionais': return <ModuloTabelasRegionais caseId={caseId!} estado={formParams.estado} municipio={formParams.municipio} />;
@@ -782,7 +810,7 @@ export default function PjeCalcPage() {
 
                 return (
                   <div key={mod.id}>
-                    {idx === 19 && <Separator className="my-3" />}
+                    {idx === 29 && <Separator className="my-3" />}
                     <button
                       onClick={() => setActiveModule(mod.id)}
                       className={cn(
