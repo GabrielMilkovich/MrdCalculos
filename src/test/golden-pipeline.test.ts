@@ -246,8 +246,8 @@ describe('Golden Test Suite — PJC Pipeline', () => {
         console.log(`  ${file} Líquido: engine=${p.engine.toFixed(2)} pjc=${p.pjc.toFixed(2)} Δ=${p.delta.toFixed(2)} (${p.delta_pct.toFixed(2)}%)`);
         console.log(`  ${file} Principal bruto (diagnóstico): engine=${pb.engine.toFixed(2)} pjc=${pb.pjc.toFixed(2)} Δ=${pb.delta.toFixed(2)} (${pb.delta_pct.toFixed(2)}%)`);
 
-        // Tolerance: 2% on liquido (real parity metric, not principal_bruto sum)
-        expect(Math.abs(p.delta_pct)).toBeLessThan(2);
+        // Tolerance: ≤0.01% on liquido (GT closure ensures near-exact parity)
+        expect(Math.abs(p.delta_pct) < 0.01 || Math.abs(p.delta) <= 0.02).toBe(true);
       });
 
       it(`[${file}] should liquidar without errors`, () => {

@@ -230,26 +230,27 @@ describe.each(files)('%s', (file) => {
     expect(r.result).toBeDefined();
   });
 
-  it('líquido final dentro de 2% vs PJe-Calc', () => {
+  it('líquido final idêntico ao PJe-Calc (≤0.01% ou R$0.02)', () => {
     const r = getResult();
     if (!r || r.error) return;
     const b = r.blocks!;
-    expect(Math.abs(b.liquido.delta_pct)).toBeLessThan(2);
+    // GT closure ensures exact parity — tolerate only R$0.02 floating-point rounding
+    expect(Math.abs(b.liquido.delta_pct) < 0.01 || Math.abs(b.liquido.delta) <= 0.02).toBe(true);
   });
 
-  it('INSS reclamante dentro de 5% ou R$10 vs PJe-Calc', () => {
+  it('INSS reclamante idêntico ao PJe-Calc (≤0.1% ou R$0.02)', () => {
     const r = getResult();
     if (!r || r.error) return;
     const b = r.blocks!;
     if (b.inss_reclamante.pjc === 0 && b.inss_reclamante.engine === 0) return;
-    expect(Math.abs(b.inss_reclamante.delta_pct) < 5 || Math.abs(b.inss_reclamante.delta) < 10).toBe(true);
+    expect(Math.abs(b.inss_reclamante.delta_pct) < 0.1 || Math.abs(b.inss_reclamante.delta) <= 0.02).toBe(true);
   });
 
-  it('IR dentro de 5% ou R$10 vs PJe-Calc', () => {
+  it('IR idêntico ao PJe-Calc (≤0.1% ou R$0.02)', () => {
     const r = getResult();
     if (!r || r.error) return;
     const b = r.blocks!;
     if (b.ir.pjc === 0 && b.ir.engine === 0) return;
-    expect(Math.abs(b.ir.delta_pct) < 5 || Math.abs(b.ir.delta) < 10).toBe(true);
+    expect(Math.abs(b.ir.delta_pct) < 0.1 || Math.abs(b.ir.delta) <= 0.02).toBe(true);
   });
 });

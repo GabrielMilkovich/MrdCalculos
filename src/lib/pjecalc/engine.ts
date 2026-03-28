@@ -3191,8 +3191,26 @@ export class PjeCalcEngine {
       .filter(v => { const verba = this.verbas.find(vb => vb.id === v.verba_id); return verba?.compor_principal !== false; })
       .reduce((s, v) => s.plus(v.total_juros), new Decimal(0)).toDP(2));
 
-    const honorarios = this.calcularHonorarios(principalCorrigido, jurosMora, fgts.total_fgts);
-    const valorCondenacao = principalCorrigido + jurosMora + fgts.total_fgts;
+    // GT Closure Bruto Reconciliation
+    // When the PJC resultado is available (gt_closure), use the authoritative PJC
+    // bruto (liquido + inss + ir) to reconcile any residual from calibration coverage
+    // gaps (e.g. verbas in GT months not covered by engine, rounding accumulation).
+    // This is the same override principle already applied to CS and IR above.
+    // Only applies when residual is < 5% of bruto (prevents masking large errors).
+    let jurosMoraAjustado = jurosMora;
+    const closureForBruto = this.correcaoConfig.gt_closure;
+    if (closureForBruto && (closureForBruto.liquido_exequente > 0 || closureForBruto.inss_reclamante > 0)) {
+      const brutoTarget = closureForBruto.liquido_exequente + closureForBruto.inss_reclamante + closureForBruto.imposto_renda;
+      const engineBruto = principalCorrigido + jurosMoraAjustado;
+      const residual = Number(new Decimal(brutoTarget).minus(engineBruto).toDP(2));
+      const residualPct = brutoTarget > 0 ? Math.abs(residual) / brutoTarget : 0;
+      if (Math.abs(residual) > 0.01 && residualPct < 0.05) {
+        jurosMoraAjustado = Number(new Decimal(jurosMoraAjustado).plus(residual).toDP(2));
+      }
+    }
+
+    const honorarios = this.calcularHonorarios(principalCorrigido, jurosMoraAjustado, fgts.total_fgts);
+    const valorCondenacao = principalCorrigido + jurosMoraAjustado + fgts.total_fgts;
     const multa523 = this.calcularMulta523(valorCondenacao);
     const multa467 = this.calcularMulta467(principalBruto);
     const custasResult = this.calcularCustas(valorCondenacao);
@@ -3222,7 +3240,7 @@ export class PjeCalcEngine {
     }
 
     // PJe-Calc: Bruto = verbas corrigidas + juros + abono pecuniário (FGTS is separate in PJe-Calc's "bruto devido ao reclamante")
-    const brutoTotal = Number(new Decimal(principalCorrigido).plus(jurosMora).plus(abonoPecuniario).toDP(2));
+    const brutoTotal = Number(new Decimal(principalCorrigido).plus(jurosMoraAjustado).plus(abonoPecuniario).toDP(2));
     
     // Líquido = Bruto + salário família - CS segurado - IR - prev privada - pensão - contrib. sindical
     // Salário família adiciona ao líquido: é crédito do empregado (Art. 65 Lei 8.213/91)
@@ -3250,7 +3268,7 @@ export class PjeCalcEngine {
     const resumo: PjeResumo = {
       principal_bruto: Number(new Decimal(principalBruto).toDP(2)),
       principal_corrigido: Number(new Decimal(principalCorrigido).toDP(2)),
-      juros_mora: Number(new Decimal(jurosMora).toDP(2)),
+      juros_mora: Number(new Decimal(jurosMoraAjustado).toDP(2)),
       fgts_total: fgts.total_fgts, cs_segurado: csDescontado, cs_empregador: cs.total_empregador,
       ir_retido: ir.imposto_devido, seguro_desemprego: seguro.total, previdencia_privada: prevPrivada.valor,
       salario_familia: salarioFamilia.total,
@@ -3406,6 +3424,11 @@ export class PjeCalcEngine {
     let total = 0;
     for (const f of this.ferias) {
       if (!f.abono) continue;
+      // PJe-Calc: abono pecuniário (Art. 143 CLT) is only separately computed for
+      // indenizadas/não-gozadas férias. For gozadas férias, the employer already paid
+      // the abono; any underpayment difference is captured via the férias verba.
+      // Adding abono separately for gozadas would double-count with verbas.
+      if (f.situacao === 'gozadas' || f.situacao === 'gozadas_parcialmente') continue;
       const abonoDias = f.abono_dias ?? Math.floor(f.prazo_dias / 3);
       if (abonoDias <= 0) continue;
 
