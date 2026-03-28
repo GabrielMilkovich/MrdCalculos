@@ -1230,7 +1230,7 @@ export class PjeCalcEngine {
 
     // Map IPCA-E → IPCAE for index lookup compatibility
     const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M' };
+      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE' };
       return map[ind] || ind;
     };
 
@@ -2849,7 +2849,7 @@ export class PjeCalcEngine {
     const dataLiq = this.correcaoConfig.data_liquidacao;
 
     const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR' };
+      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE' };
       return map[ind] || ind;
     };
 
@@ -2940,7 +2940,7 @@ export class PjeCalcEngine {
     const jurosDisabled = jurosStartDate != null && jurosStartDate > dataLiq;
 
     const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR' };
+      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE' };
       return map[ind] || ind;
     };
 
