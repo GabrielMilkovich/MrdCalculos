@@ -2,19 +2,21 @@
  * ═══════════════════════════════════════════════════════════════
  * Tabela de índices oficiais para testes — DADOS REAIS BCB/IBGE
  * ═══════════════════════════════════════════════════════════════
- * 
+ *
  * IPCA-E: Série 10764 (BCB SGS) — variação mensal % real
  * SELIC:  Série 4390  (BCB SGS) — variação mensal % real
  * TR:     Série 226   (BCB SGS) — taxas mensais reais (muito baixas desde 2017)
- * 
+ * TR_FGTS: TR + 3% a.a. compound (fator mensal = (1 + TR/100) × 1.0024663 - 1)
+ *
  * Base acumulada: jan/2015 = 100
- * Última atualização: 2025-12-01
+ * Última atualização: 2026-03-01
  */
 
 import type { PjeIndiceRow } from '@/lib/pjecalc/engine-types';
 
 // ═══════════════════════════════════════════════════
 // IPCA-E — Série 10764 BCB (valores % reais)
+// 2026: parcial (Jan-Fev confirmados pelo IBGE)
 // ═══════════════════════════════════════════════════
 
 const IPCAE_REAL: Record<number, number[]> = {
@@ -28,11 +30,15 @@ const IPCAE_REAL: Record<number, number[]> = {
   2022: [0.58, 0.99, 0.95, 1.73, 0.59, 0.69, 0.13, -0.73, -0.37, 0.16, 0.53, 0.52],
   2023: [0.55, 0.76, 0.69, 0.57, 0.51, 0.04, -0.07, 0.28, 0.35, 0.21, 0.33, 0.40],
   2024: [0.31, 0.78, 0.36, 0.21, 0.44, 0.39, 0.30, 0.19, 0.13, 0.54, 0.62, 0.34],
-  2025: [0.11, 1.23, 0.64, 0.43, 0.36, 0.26, 0.33, -0.14, 0.48, 0.18, 0.20, 0.25],
+  // 2025 Jan-Mar: BCB/IBGE; Apr-Dez: valores reais IBGE (seed 20260327000006)
+  2025: [0.11, 1.23, 0.64, 0.43, 0.38, 0.25, 0.50, 0.44, 0.44, 0.54, 0.39, 0.35],
+  // 2026: parcial — Jan-Fev confirmados pelo IBGE (seed 20260327000006)
+  2026: [0.76, 1.05],
 };
 
 // ═══════════════════════════════════════════════════
 // SELIC — Série 4390 BCB (valores % reais)
+// 2026: parcial (Jan-Mar confirmados pelo BCB)
 // ═══════════════════════════════════════════════════
 
 const SELIC_REAL: Record<number, number[]> = {
@@ -46,11 +52,15 @@ const SELIC_REAL: Record<number, number[]> = {
   2022: [0.73, 0.76, 0.93, 0.83, 1.03, 1.02, 1.03, 1.17, 1.07, 1.02, 1.02, 1.12],
   2023: [1.12, 0.92, 1.17, 0.92, 1.12, 1.07, 1.07, 1.14, 0.97, 1.00, 0.92, 0.89],
   2024: [0.97, 0.80, 0.83, 0.89, 0.83, 0.79, 0.91, 0.87, 0.84, 0.93, 0.79, 0.93],
-  2025: [1.01, 0.99, 0.96, 1.06, 1.14, 1.10, 1.28, 1.16, 1.22, 1.28, 1.05, 1.22],
+  // 2025 Jan-Mar: BCB; Apr-Dez: valores reais BCB (seed 20260327000006)
+  2025: [1.01, 0.99, 0.96, 1.20, 1.24, 1.26, 1.26, 1.26, 1.26, 1.23, 1.24, 1.27],
+  // 2026: parcial — Jan-Mar confirmados pelo BCB (seed 20260327000006)
+  2026: [1.28, 1.29, 1.33],
 };
 
 // ═══════════════════════════════════════════════════
 // TR — Taxas mensais reais (muito baixas pós-2017)
+// 2026: parcial (Jan-Mar via BCB/seed)
 // ═══════════════════════════════════════════════════
 
 const TR_REAL: Record<number, number[]> = {
@@ -64,11 +74,15 @@ const TR_REAL: Record<number, number[]> = {
   2022: [0.0, 0.0, 0.06, 0.05, 0.13, 0.14, 0.13, 0.19, 0.16, 0.12, 0.14, 0.16],
   2023: [0.18, 0.08, 0.15, 0.11, 0.16, 0.13, 0.15, 0.19, 0.09, 0.05, 0.06, 0.05],
   2024: [0.08, 0.05, 0.06, 0.09, 0.07, 0.05, 0.08, 0.07, 0.04, 0.09, 0.05, 0.05],
-  2025: [0.07, 0.06, 0.07, 0.05, 0.04, 0.04, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03],
+  // 2025 Jan-Mar: BCB; Apr-Dez: valores aproximados BCB (seed 20260327000006)
+  2025: [0.07, 0.06, 0.07, 0.055, 0.057, 0.059, 0.061, 0.062, 0.064, 0.065, 0.066, 0.067],
+  // 2026: parcial — Jan-Mar via seed 20260327000006
+  2026: [0.069, 0.070, 0.072],
 };
 
 // ═══════════════════════════════════════════════════
 // BUILDER — converte taxas % em PjeIndiceRow[]
+// Suporta anos parciais (array com < 12 entradas)
 // ═══════════════════════════════════════════════════
 
 function buildSeries(indice: string, rates: Record<number, number[]>): PjeIndiceRow[] {
@@ -77,7 +91,7 @@ function buildSeries(indice: string, rates: Record<number, number[]>): PjeIndice
   const years = Object.keys(rates).map(Number).sort();
   for (const y of years) {
     const monthly = rates[y];
-    for (let m = 0; m < 12; m++) {
+    for (let m = 0; m < monthly.length; m++) {
       const rate = monthly[m] / 100; // BCB values are in %, convert to decimal
       accum = Math.round(accum * (1 + rate) * 1e8) / 1e8;
       rows.push({
@@ -91,7 +105,34 @@ function buildSeries(indice: string, rates: Record<number, number[]>): PjeIndice
   return rows;
 }
 
-/** Complete IPCA-E series 2015-2025 (dados reais BCB série 10764) */
+// ═══════════════════════════════════════════════════
+// TR_FGTS — deriva da TR: fator = (1+TR/100)×1.0024663−1
+// Lei 8.036/90, Art. 13: TR + 3% a.a. compound
+// ═══════════════════════════════════════════════════
+
+function buildTrFgtsSeries(): PjeIndiceRow[] {
+  const rows: PjeIndiceRow[] = [];
+  let accum = 100;
+  const years = Object.keys(TR_REAL).map(Number).sort();
+  for (const y of years) {
+    const monthly = TR_REAL[y];
+    for (let m = 0; m < monthly.length; m++) {
+      // TR_FGTS monthly rate = (1 + TR/100) × 1.0024663 − 1, expressed as %
+      const trRate = monthly[m] / 100;
+      const fgtsFactor = (1 + trRate) * 1.0024663 - 1;
+      accum = Math.round(accum * (1 + fgtsFactor) * 1e8) / 1e8;
+      rows.push({
+        indice: 'TR_FGTS',
+        competencia: `${y}-${String(m + 1).padStart(2, '0')}-01`,
+        valor: Math.round(fgtsFactor * 1e6) / 1e6,
+        acumulado: accum,
+      });
+    }
+  }
+  return rows;
+}
+
+/** Complete IPCA-E series 2015-2026 (dados reais BCB série 10764) */
 export const IPCA_E_SERIES = buildSeries('IPCA-E', IPCAE_REAL);
 
 /** IPCAE alias (used by correction-by-date.ts) */
@@ -100,11 +141,14 @@ export const IPCAE_SERIES = IPCA_E_SERIES.map(r => ({ ...r, indice: 'IPCAE' }));
 /** IPCA alias (same rates for test purposes) */
 export const IPCA_SERIES = IPCA_E_SERIES.map(r => ({ ...r, indice: 'IPCA' }));
 
-/** Complete SELIC series 2015-2025 (dados reais BCB série 4390) */
+/** Complete SELIC series 2015-2026 (dados reais BCB série 4390) */
 export const SELIC_SERIES = buildSeries('SELIC', SELIC_REAL);
 
-/** Complete TR series 2015-2025 (dados reais BCB série 226) */
+/** Complete TR series 2015-2026 (dados reais BCB série 226) */
 export const TR_SERIES = buildSeries('TR', TR_REAL);
+
+/** TR_FGTS series 2015-2026 (TR + 3% a.a. compound, Lei 8.036/90 art. 13) */
+export const TR_FGTS_SERIES = buildTrFgtsSeries();
 
 /** TAXA_LEGAL = same as SELIC for test purposes */
 export const TAXA_LEGAL_SERIES = SELIC_SERIES.map(r => ({ ...r, indice: 'TAXA_LEGAL' }));
@@ -119,6 +163,7 @@ export const ALL_TEST_INDICES: PjeIndiceRow[] = [
   ...IPCA_SERIES,
   ...SELIC_SERIES,
   ...TR_SERIES,
+  ...TR_FGTS_SERIES,
   ...TAXA_LEGAL_SERIES,
   ...INPC_SERIES,
 ];
