@@ -117,6 +117,7 @@ function toEngineParams(p: PjecalcParametrosRow): PjeParametros {
     sabado_dia_util: p.sabado_dia_util ?? true,
     considerar_feriado_estadual: p.considerar_feriado_estadual ?? false,
     considerar_feriado_municipal: p.considerar_feriado_municipal ?? false,
+    tipo_mes: (p.tipo_mes as 'civil' | 'comercial' | null | undefined) ?? 'comercial',
   };
 }
 
@@ -344,6 +345,8 @@ function toEngineCsConfig(cfg: PjecalcCsConfigRow | null): PjeCSConfig {
     aliquota_sat_fixa: aliqSat,
     aliquota_terceiros_fixa: aliqTerceiros,
     periodos_simples: Array.isArray(cfg?.periodos_simples) ? cfg!.periodos_simples as PjeCSConfig['periodos_simples'] : [],
+    contribuicao_sindical: cfg?.contribuicao_sindical ?? false,
+    contribuicao_sindical_pos2017: cfg?.contribuicao_sindical_pos2017 ?? false,
   };
 }
 
@@ -592,6 +595,19 @@ async function loadIndicesDB(): Promise<PjeIndiceRow[]> {
     console.warn('[ORCHESTRATOR] Failed to load correction indices:', e);
     return [];
   }
+}
+
+async function loadSeguroConfig(caseId: string): Promise<{ apurar: boolean; parcelas: number; recebeu: boolean; valor_parcela?: number } | null> {
+  try {
+    const data = await svc.getSeguroConfig(caseId);
+    if (!data) return null;
+    return {
+      apurar: (data.apurar as boolean) ?? false,
+      parcelas: (data.parcelas as number) ?? 5,
+      recebeu: (data.recebeu as boolean) ?? false,
+      valor_parcela: data.valor_parcela ? Number(data.valor_parcela) : undefined,
+    };
+  } catch { return null; }
 }
 
 async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeguroDesempregoDB[]> {
@@ -890,7 +906,15 @@ export async function executarLiquidacao(
   const engineHonorarios = toEngineHonorariosConfig(caseData.honorarios);
   const engineCustas = toEngineCustasConfig(caseData.custasConfig);
 
-  const engineSeguro: PjeSeguroConfig = { apurar: false, parcelas: 0, recebeu: false };
+  const rawSeguro = await loadSeguroConfig(caseId);
+  const engineSeguro: PjeSeguroConfig = rawSeguro
+    ? {
+        apurar: rawSeguro.apurar ?? false,
+        parcelas: rawSeguro.parcelas ?? 5,
+        recebeu: rawSeguro.recebeu ?? false,
+        valor_parcela: rawSeguro.valor_parcela ?? undefined,
+      }
+    : { apurar: false, parcelas: 0, recebeu: false };
 
   // 3.5. PRE-CALCULATION TABLE VALIDATION — Block if essential tables missing
   const hasPrecomputed = engineVerbas.some(v => v.ocorrencias_precomputadas && v.ocorrencias_precomputadas.length > 0);

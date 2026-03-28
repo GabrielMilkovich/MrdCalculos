@@ -41,6 +41,9 @@ export function ModuloCorrecao({ caseId }: Props) {
     ignorar_taxa_negativa: true, juros_pre_judicial: true, tabela_juros: 'TRD_SIMPLES',
     combinar_juros: true, combinacoes_juros: [] as CombItem[],
     data_liquidacao: new Date().toISOString().slice(0, 10),
+    juros_inicio: 'ajuizamento' as 'ajuizamento' | 'citacao' | 'distribuicao',
+    multa_523: false,
+    multa_523_percentual: 10,
   });
 
   useEffect(() => {
@@ -62,6 +65,9 @@ export function ModuloCorrecao({ caseId }: Props) {
         combinar_juros: combJuros.length > 0,
         combinacoes_juros: combJuros.length > 0 ? combJuros : [{ indice: 'SELIC_RF', a_partir_de: '' }, { indice: 'TAXA_LEGAL', a_partir_de: '' }],
         data_liquidacao: (d.data_liquidacao as string) || new Date().toISOString().slice(0, 10),
+        juros_inicio: ((d.juros_inicio as string) || 'ajuizamento') as 'ajuizamento' | 'citacao' | 'distribuicao',
+        multa_523: (d.multa_523 as boolean) ?? false,
+        multa_523_percentual: (d.multa_523_percentual as number) ?? 10,
       });
     }
   }, [data]);
@@ -73,8 +79,8 @@ export function ModuloCorrecao({ caseId }: Props) {
         case_id: caseId, indice: form.indice,
         epoca: 'mensal',
         juros_tipo: form.tabela_juros === 'SELIC_RF' ? 'selic' : 'simples_mensal',
-        juros_percentual: 1, juros_inicio: 'ajuizamento',
-        multa_523: false, multa_523_percentual: 10,
+        juros_percentual: 1, juros_inicio: form.juros_inicio,
+        multa_523: form.multa_523, multa_523_percentual: form.multa_523_percentual,
         data_liquidacao: form.data_liquidacao,
       });
       qc.invalidateQueries({ queryKey: ["pjecalc_correcao_config", caseId] });
@@ -127,6 +133,21 @@ export function ModuloCorrecao({ caseId }: Props) {
             </TabsList>
             <TabsContent value="gerais" className="space-y-3">
               <div><Label className="text-xs">Data da Liquidação</Label><Input type="date" value={form.data_liquidacao} onChange={e => setForm(p => ({ ...p, data_liquidacao: e.target.value }))} className="mt-1 h-8 text-xs w-48" /></div>
+              <div>
+                <Label className="text-xs">Início dos Juros de Mora</Label>
+                <Select value={form.juros_inicio} onValueChange={v => setForm(p => ({ ...p, juros_inicio: v as typeof form.juros_inicio }))}>
+                  <SelectTrigger className="mt-1 h-8 text-xs w-64"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ajuizamento">Data do Ajuizamento</SelectItem>
+                    <SelectItem value="citacao">Data da Citação</SelectItem>
+                    <SelectItem value="distribuicao">Data da Distribuição</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2"><Checkbox checked={form.multa_523} onCheckedChange={v => setForm(p => ({ ...p, multa_523: !!v }))} /><Label className="text-xs">Multa Art. 523 CPC</Label></div>
+              {form.multa_523 && (
+                <div><Label className="text-xs">Percentual Multa 523 (%)</Label><Input type="number" step="1" min={0} max={100} value={form.multa_523_percentual} onChange={e => setForm(p => ({ ...p, multa_523_percentual: parseFloat(e.target.value) || 10 }))} className="mt-1 h-8 text-xs w-32" /></div>
+              )}
             </TabsContent>
             <TabsContent value="especificos">
               <div className="flex gap-6">

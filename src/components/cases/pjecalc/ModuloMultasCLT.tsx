@@ -32,6 +32,8 @@ export function ModuloMultasCLT({ caseId }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<MultaIndenizacao>(EMPTY_MULTA);
+  const [apurar467, setApurar467] = useState(false);
+  const [apurar477, setApurar477] = useState(false);
 
   const { data } = useQuery({
     queryKey: ["pjecalc_multas_config", caseId],
@@ -42,6 +44,8 @@ export function ModuloMultasCLT({ caseId }: Props) {
     if (data) {
       const d = data as unknown as Record<string, unknown>;
       if (d.multas_indenizacoes && Array.isArray(d.multas_indenizacoes)) setMultas(d.multas_indenizacoes as MultaIndenizacao[]);
+      setApurar467((d.apurar_467 as boolean) ?? false);
+      setApurar477((d.apurar_477 as boolean) ?? false);
     }
   }, [data]);
 
@@ -58,8 +62,8 @@ export function ModuloMultasCLT({ caseId }: Props) {
     try {
       const d = (data || {}) as Record<string, unknown>;
       await svc.upsertMultasConfig(caseId, {
-        apurar_467: (d.apurar_467 as boolean) ?? false, valor_467: (d.valor_467 as number) ?? 0,
-        apurar_477: (d.apurar_477 as boolean) ?? false, valor_477_tipo: (d.valor_477_tipo as string) || 'salario',
+        apurar_467: apurar467, valor_467: (d.valor_467 as number) ?? 0,
+        apurar_477: apurar477, valor_477_tipo: (d.valor_477_tipo as string) || 'salario',
         valor_477_informado: d.valor_477_informado ?? null, observacoes: (d.observacoes as string) || '',
         multas_indenizacoes: multas,
       });
@@ -77,6 +81,19 @@ export function ModuloMultasCLT({ caseId }: Props) {
           {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />} Salvar
         </Button>
       </div>
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Multas CLT Automáticas</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Checkbox checked={apurar467} onCheckedChange={v => setApurar467(!!v)} />
+            <Label className="text-xs">Apurar Multa Art. 467 CLT (valores incontroversos não pagos na rescisão — 50%)</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox checked={apurar477} onCheckedChange={v => setApurar477(!!v)} />
+            <Label className="text-xs">Apurar Multa Art. 477 CLT (atraso no pagamento das verbas rescisórias — 1 mês de salário)</Label>
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">

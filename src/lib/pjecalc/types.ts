@@ -39,6 +39,8 @@ export interface PjecalcParametrosRow {
   sabado_dia_util: boolean;
   considerar_feriado_estadual: boolean;
   considerar_feriado_municipal: boolean;
+  tipo_mes: 'civil' | 'comercial' | null;
+  jornada_semanal: number | null;
   comentarios: string | null;
   created_at: string;
   updated_at: string;
@@ -467,6 +469,8 @@ export interface PjecalcCsConfigRow {
   aliquota_terceiros?: number;
   aliquota_terceiros_fixa?: number;
   periodos_simples?: unknown[];
+  contribuicao_sindical?: boolean;
+  contribuicao_sindical_pos2017?: boolean;
   created_at: string;
 }
 

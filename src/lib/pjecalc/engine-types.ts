@@ -363,6 +363,9 @@ export interface PjeCSConfig {
   /** Contribuição Sindical (art. 578 CLT) — 1 dia de salário, descontado em março.
    *  Pré-reforma (< nov/2017): obrigatória. Pós-reforma: facultativa. */
   contribuicao_sindical?: boolean;
+  /** Lei 13.467/2017: contribuição sindical pós-nov/2017 é facultativa.
+   *  Quando true, aplica também para anos 2018+. */
+  contribuicao_sindical_pos2017?: boolean;
 }
 
 export interface PjeIRConfig {

@@ -152,6 +152,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
     projetar_aviso_indenizado: false, limitar_avos_periodo: false,
     zerar_valor_negativo: false, sabado_dia_util: true,
     considerar_feriado_estadual: false, considerar_feriado_municipal: false,
+    tipo_mes: 'comercial' as 'comercial' | 'civil',
     comentarios: '',
   });
 
@@ -176,6 +177,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         sabado_dia_util: params.sabado_dia_util ?? true,
         considerar_feriado_estadual: params.considerar_feriado_estadual || false,
         considerar_feriado_municipal: params.considerar_feriado_municipal || false,
+        tipo_mes: ((params as any).tipo_mes as 'comercial' | 'civil') || 'comercial',
         comentarios: params.comentarios || '',
       });
     } else if (contract) {
@@ -284,6 +286,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         sabado_dia_util: formParams.sabado_dia_util,
         considerar_feriado_estadual: formParams.considerar_feriado_estadual,
         considerar_feriado_municipal: formParams.considerar_feriado_municipal,
+        tipo_mes: formParams.tipo_mes,
         comentarios: formParams.comentarios,
       };
       if (params?.id) {
@@ -440,6 +443,16 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
           <div className="flex items-center gap-2"><Checkbox checked={formParams.sabado_dia_util} onCheckedChange={v => setFormParams(p => ({ ...p, sabado_dia_util: !!v }))} /><Label className="text-xs">Sábado como Dia Útil</Label></div>
           <div className="flex items-center gap-2"><Checkbox checked={formParams.considerar_feriado_estadual} onCheckedChange={v => setFormParams(p => ({ ...p, considerar_feriado_estadual: !!v }))} /><Label className="text-xs">Considerar Feriado Estadual</Label></div>
           <div className="flex items-center gap-2"><Checkbox checked={formParams.considerar_feriado_municipal} onCheckedChange={v => setFormParams(p => ({ ...p, considerar_feriado_municipal: !!v }))} /><Label className="text-xs">Considerar Feriado Municipal</Label></div>
+          <div>
+            <Label className="text-xs">Tipo de Mês (Art. 64 CLT)</Label>
+            <Select value={formParams.tipo_mes} onValueChange={v => setFormParams(p => ({ ...p, tipo_mes: v as 'comercial' | 'civil' }))}>
+              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="comercial">Mês Comercial (30 dias fixos)</SelectItem>
+                <SelectItem value="civil">Calendário Civil (dias reais)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
     </div>

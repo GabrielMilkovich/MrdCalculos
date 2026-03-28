@@ -2043,7 +2043,7 @@ export class PjeCalcEngine {
     let baseBruta = 0;
     let base13 = 0;
     let baseFerias = 0;
-    
+
     // Art. 12-A: Separar rendimentos por ano para tributação correta
     // PJe-Calc: IR base is on CORRECTED values (valor_corrigido), not nominal
     const anoLiq = parseInt(this.correcaoConfig.data_liquidacao.slice(0, 4));
@@ -2053,6 +2053,7 @@ export class PjeCalcEngine {
     let mesesAnoLiquidacao = 0;
     const competenciasAnosAnteriores = new Set<string>();
     const competenciasAnoLiquidacao = new Set<string>();
+    const competenciasFerias = new Set<string>(); // For tributação separada de férias
 
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
@@ -2060,6 +2061,9 @@ export class PjeCalcEngine {
       if (verba.caracteristica === 'ferias') {
         if (this.irConfig.tributacao_separada_ferias) {
           baseFerias += vr.total_final; // Use corrected+interest value
+          for (const oc of vr.ocorrencias) {
+            if (oc.diferenca > 0) competenciasFerias.add(oc.competencia);
+          }
         } else {
           // Férias indenizadas sem tributação separada: integram a base geral
           baseBruta += vr.total_final;
@@ -2174,11 +2178,12 @@ export class PjeCalcEngine {
       if (ir13Exclusivo.lt(0)) ir13Exclusivo = new Decimal(0);
     }
 
-    // Tributação separada de férias
+    // Tributação separada de férias (PJe-Calc: usa meses de férias, não global)
     if (this.irConfig.tributacao_separada_ferias && baseFerias > 0) {
+      const mesesFerias = Math.max(1, competenciasFerias.size);
       for (const faixa of tabelaIR.faixas) {
-        if (baseFerias <= faixa.ate * meses) {
-          irFeriasSeparado = new Decimal(baseFerias).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(meses)).toDP(2, R);
+        if (baseFerias <= faixa.ate * mesesFerias) {
+          irFeriasSeparado = new Decimal(baseFerias).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(mesesFerias)).toDP(2, R);
           break;
         }
       }
@@ -2308,6 +2313,12 @@ export class PjeCalcEngine {
     const periodoFim = this.params.data_final || this.params.data_demissao ||
       this.correcaoConfig.data_liquidacao;
 
+    // Lei 13.467/2017 (Reforma Trabalhista): a partir de 11/11/2017, contribuição
+    // sindical é facultativa — só incide se o empregado autorizou expressamente.
+    // Pré-reforma: obrigatória para todos os anos com março no período.
+    // Pós-reforma: somente se csConfig.contribuicao_sindical_pos2017 === true.
+    const REFORMA_DATE = '2017-11'; // A partir de novembro de 2017
+
     // Cada ano em que o empregado trabalhou em março gera 1 desconto
     // Valor = salário do mês de março / 30 (1 dia)
     let total = 0;
@@ -2318,6 +2329,14 @@ export class PjeCalcEngine {
       const compMarco = `${ano}-03`;
       // Verificar se marco está no período de cálculo
       if (compMarco < periodoInicio.slice(0, 7) || compMarco > periodoFim.slice(0, 7)) continue;
+
+      // Pós-reforma (março 2018+): apenas se autorizado expressamente
+      if (compMarco >= '2018-03') {
+        if (!(this.csConfig as Record<string, unknown>).contribuicao_sindical_pos2017) continue;
+      }
+      // Pré-reforma aplicável até março 2017 (Lei vigente antes de nov/2017)
+      // Março 2017 ainda era obrigatória; nov/2017 tornou facultativa
+      void REFORMA_DATE; // suppress unused warning
 
       // Salário em março: buscar no histórico
       let salarioMarco = 0;
