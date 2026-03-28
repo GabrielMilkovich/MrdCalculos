@@ -52,13 +52,7 @@ function deltaCalc(engine: number, pjc: number): { delta: number; delta_pct: num
   return { delta, delta_pct };
 }
 
-function runGoldenCase(file: string): GoldenResult | null {
-  const path = resolve(PJC_DIR, file);
-  if (!existsSync(path)) return null;
-  
-  const content = readPjcXml(path);
-  const analysis = analyzePJC(content);
-  
+function runGoldenCase(file: string, analysis: PJCAnalysis): GoldenResult | null {
   // Skip cases with no resultado (not liquidated)
   if (analysis.resultado.liquido_exequente === 0 && analysis.resultado.inss_reclamante === 0) {
     return null;
@@ -122,7 +116,16 @@ function runGoldenCase(file: string): GoldenResult | null {
 
 describe('Golden Test Suite — PJC Pipeline', () => {
   const files = listPjcFiles();
-  
+
+  // Parse all PJC files once — large files (caso-real-v2: 6.3MB) can take 25s+
+  const analysisCache = new Map<string, PJCAnalysis>();
+  beforeAll(() => {
+    for (const file of files) {
+      const content = readPjcXml(resolve(PJC_DIR, file));
+      analysisCache.set(file, analyzePJC(content));
+    }
+  }, 600000); // 10 min: handles all 14 files including the 6.3MB one
+
   it('should find at least one PJC file', () => {
     expect(files.length).toBeGreaterThan(0);
   });
@@ -133,8 +136,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
   describe('Parser Structural Validation', () => {
     for (const file of files) {
       it(`[${file}] should parse without errors`, () => {
-        const content = readPjcXml(resolve(PJC_DIR, file));
-        const analysis = analyzePJC(content);
+        const analysis = analysisCache.get(file)!;
         
         // Must have parametros
         expect(analysis.parametros.admissao).toBeTruthy();
@@ -147,11 +149,10 @@ describe('Golden Test Suite — PJC Pipeline', () => {
       });
 
       it(`[${file}] should extract historicos salariais`, () => {
-        const content = readPjcXml(resolve(PJC_DIR, file));
-        const analysis = analyzePJC(content);
-        
+        const analysis = analysisCache.get(file)!;
+
         expect(analysis.historicos_salariais.length).toBeGreaterThanOrEqual(0);
-        
+
         // If historicos exist, they should have names
         for (const h of analysis.historicos_salariais) {
           expect(h.nome).toBeTruthy();
@@ -159,12 +160,11 @@ describe('Golden Test Suite — PJC Pipeline', () => {
       });
 
       it(`[${file}] should extract full apuração diária when present`, () => {
-        const content = readPjcXml(resolve(PJC_DIR, file));
-        const analysis = analyzePJC(content);
-        
+        const analysis = analysisCache.get(file)!;
+
         // apuracao_diaria array should match count
         expect(analysis.apuracao_diaria.length).toBe(analysis.apuracao_diaria_count);
-        
+
         // If daily data exists, validate structure
         if (analysis.apuracao_diaria.length > 0) {
           const first = analysis.apuracao_diaria[0];
@@ -174,9 +174,8 @@ describe('Golden Test Suite — PJC Pipeline', () => {
       });
 
       it(`[${file}] should extract férias`, () => {
-        const content = readPjcXml(resolve(PJC_DIR, file));
-        const analysis = analyzePJC(content);
-        
+        const analysis = analysisCache.get(file)!;
+
         if (analysis.ferias.length > 0) {
           for (const f of analysis.ferias) {
             expect(f.aquisitivo_inicio).toBeTruthy();
@@ -193,21 +192,20 @@ describe('Golden Test Suite — PJC Pipeline', () => {
   describe('Bridge Validation (PJC → Engine)', () => {
     for (const file of files) {
       it(`[${file}] should convert to engine inputs without errors`, () => {
-        const content = readPjcXml(resolve(PJC_DIR, file));
-        const analysis = analyzePJC(content);
+        const analysis = analysisCache.get(file)!;
         const inputs = convertPjcToEngineInputs(analysis, `test-${file}`);
-        
+
         // Params must be populated
         expect(inputs.params.case_id).toBe(`test-${file}`);
         expect(inputs.params.data_admissao).toBeTruthy();
-        
+
         // Verbas must be populated
         expect(inputs.verbas.length).toBeGreaterThan(0);
-        
+
         // Fidelity report must exist
         expect(inputs.fidelityReport).toBeDefined();
         expect(inputs.fidelityReport.total_entries).toBeGreaterThanOrEqual(0);
-        
+
         // Log fidelity summary
         const fr = inputs.fidelityReport;
         if (fr.total_entries > 0) {
@@ -219,10 +217,9 @@ describe('Golden Test Suite — PJC Pipeline', () => {
       });
 
       it(`[${file}] should produce non-empty cartaoPonto when daily data exists`, () => {
-        const content = readPjcXml(resolve(PJC_DIR, file));
-        const analysis = analyzePJC(content);
+        const analysis = analysisCache.get(file)!;
         const inputs = convertPjcToEngineInputs(analysis, `test-${file}`);
-        
+
         if (analysis.apuracao_diaria_count > 0) {
           expect(inputs.cartaoPonto.length).toBeGreaterThan(0);
           console.log(`  ${file}: ${inputs.cartaoPonto.length} months of cartão ponto from ${analysis.apuracao_diaria_count} daily records`);
@@ -237,20 +234,22 @@ describe('Golden Test Suite — PJC Pipeline', () => {
   describe('Engine Parity (vs PJC Ground Truth)', () => {
     for (const file of files) {
       it(`[${file}] should achieve principal bruto parity`, () => {
-        const golden = runGoldenCase(file);
+        const analysis = analysisCache.get(file)!;
+        const golden = runGoldenCase(file, analysis);
         if (!golden) return; // Skip non-liquidated cases
-        
+
         const p = golden.parity.principal_bruto;
         console.log(`  ${file} Principal: engine=${p.engine.toFixed(2)} pjc=${p.pjc.toFixed(2)} Δ=${p.delta.toFixed(2)} (${p.delta_pct.toFixed(2)}%)`);
-        
+
         // Tolerance: R$ 1.00 or 0.5%
         expect(Math.abs(p.delta_pct)).toBeLessThan(1);
       });
 
       it(`[${file}] should liquidar without errors`, () => {
-        const golden = runGoldenCase(file);
+        const analysis = analysisCache.get(file)!;
+        const golden = runGoldenCase(file, analysis);
         if (!golden) return;
-        
+
         expect(golden.engineResult).toBeDefined();
         expect(golden.engineResult.verbas.length).toBeGreaterThan(0);
         expect(golden.engineResult.resumo).toBeDefined();
@@ -263,10 +262,9 @@ describe('Golden Test Suite — PJC Pipeline', () => {
   // =====================================================
   describe('Per-competência Parity (ApuracaoDeJuros)', () => {
     for (const file of files) {
-      it(`[${file}] should compare per-competência when GT available`, { timeout: 30000 }, () => {
-        const content = readPjcXml(resolve(PJC_DIR, file));
-        const analysis = analyzePJC(content);
-        
+      it(`[${file}] should compare per-competência when GT available`, () => {
+        const analysis = analysisCache.get(file)!;
+
         if (!analysis.apuracao_juros || analysis.apuracao_juros.length === 0) {
           console.log(`  ${file}: No ApuracaoDeJuros GT available — skipping`);
           return;
@@ -293,12 +291,11 @@ describe('Golden Test Suite — PJC Pipeline', () => {
   // FIDELITY REPORT SUMMARY
   // =====================================================
   describe('Fidelity Report Summary', () => {
-    it('should generate aggregate fidelity report across all cases', { timeout: 60000 }, () => {
+    it('should generate aggregate fidelity report across all cases', () => {
       const summaries: string[] = [];
-      
+
       for (const file of files) {
-        const content = readPjcXml(resolve(PJC_DIR, file));
-        const analysis = analyzePJC(content);
+        const analysis = analysisCache.get(file)!;
         const inputs = convertPjcToEngineInputs(analysis, `fidelity-${file}`);
         const fr = inputs.fidelityReport;
         
