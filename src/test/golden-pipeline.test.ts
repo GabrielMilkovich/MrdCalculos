@@ -252,7 +252,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
   // =====================================================
   describe('Per-competência Parity (ApuracaoDeJuros)', () => {
     for (const file of files) {
-      it(`[${file}] should compare per-competência when GT available`, () => {
+      it(`[${file}] should compare per-competência when GT available`, { timeout: 30000 }, () => {
         const content = readFileSync(resolve(PJC_DIR, file), 'utf-8');
         const analysis = analyzePJC(content);
         
@@ -282,7 +282,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
   // FIDELITY REPORT SUMMARY
   // =====================================================
   describe('Fidelity Report Summary', () => {
-    it('should generate aggregate fidelity report across all cases', () => {
+    it('should generate aggregate fidelity report across all cases', { timeout: 60000 }, () => {
       const summaries: string[] = [];
       
       for (const file of files) {

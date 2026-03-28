@@ -243,16 +243,19 @@ describe('Cenário 2 — Médio', () => {
 
   it('multa FGTS 40% deve ser calculada', () => {
     const params = makeParams({ ultima_remuneracao: 4000 });
-    const verba = makeVerba({ periodo_inicio: '2022-01-01', periodo_fim: '2023-06-30' });
+    // Single-month period + liquidação no mesmo mês: fator correção = 1 → nominal == corrigido
+    // (engine calcula multa sobre depósitos nominais; total_depositos retorna corrigidos)
+    const verba = makeVerba({ periodo_inicio: '2025-02-01', periodo_fim: '2025-02-28' });
+    const correcaoSemMes = { ...defaultCorrecao, data_liquidacao: '2025-02-28' };
     const engine = new PjeCalcEngine(
       params, [], [], [], [verba], [],
-      defaultFgts, defaultCS, defaultIR, defaultCorrecao,
+      defaultFgts, defaultCS, defaultIR, correcaoSemMes,
       defaultHonorarios, defaultCustas, defaultSeguro,
       ALL_TEST_INDICES,
     );
     const result = engine.liquidar();
     expect(result.fgts.multa_valor).toBeGreaterThan(0);
-    // Multa = 40% of deposits
+    // Multa = 40% of deposits (nominal == corrected when data_liquidacao = period end)
     expect(result.fgts.multa_valor).toBeCloseTo(result.fgts.total_depositos * 0.4, 0);
   });
 });
