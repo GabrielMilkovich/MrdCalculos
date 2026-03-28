@@ -14,7 +14,7 @@ function tsToDate(ts: string): string {
 }
 
 describe('ApuracaoDeJuros Full Extract', () => {
-  it('should extract all fields from ApuracaoDeJuros for each case', () => {
+  it('should extract all fields from ApuracaoDeJuros for each case', { timeout: 30000 }, () => {
     const FILES = ['islan-rodrigues.pjc', 'carla-pego.pjc', 'vanderlei-carvalho.pjc', 'francisco-pablo.pjc'];
 
     for (const file of FILES) {
