@@ -32,6 +32,8 @@ export interface TableValidationInput {
   data_liquidacao: string;
   /** Whether using pre-computed (PJC ground truth) mode — relaxes some checks */
   modo_precomputado: boolean;
+  /** Combination indices (for COMBINACAO mode, e.g. ADC 58/59) */
+  combinacoes_indice?: Array<{ indice: string }>;
 }
 
 export interface TableValidationResult {
@@ -199,6 +201,86 @@ export function validarTabelasHistoricas(input: TableValidationInput): TableVali
     });
   }
 
+  if (!input.modo_precomputado) {
+    // 5. P0-3: Check for recent-months gap — indices missing between last available and data_liquidacao
+    const indicesNeeded: string[] = [];
+    if (input.indice_correcao && input.indice_correcao !== 'COMBINACAO') {
+      indicesNeeded.push(input.indice_correcao);
+    }
+    // For COMBINACAO (ADC 58/59) check both IPCA-E and SELIC
+    if (input.indice_correcao === 'COMBINACAO' || input.combinacoes_indice?.length) {
+      const combIndices = input.combinacoes_indice?.map(c => c.indice) ?? ['IPCA-E', 'SELIC'];
+      for (const ci of combIndices) {
+        if (!indicesNeeded.includes(ci)) indicesNeeded.push(ci);
+      }
+    }
+
+    const liqComp = input.data_liquidacao?.slice(0, 7);
+    for (const indiceNecessario of indicesNeeded) {
+      const ultimaComp = input.indicesDB
+        .filter(r => r.indice === indiceNecessario)
+        .map(r => r.competencia.slice(0, 7))
+        .sort()
+        .at(-1);
+
+      if (ultimaComp && liqComp && ultimaComp < liqComp) {
+        const mesesGap = mesesEntre(ultimaComp, liqComp);
+        if (mesesGap > 3) {
+          errors.push({
+            type: 'table_missing',
+            code: 'E003',
+            message: `P0-3: Índice '${indiceNecessario}' só disponível até ${ultimaComp} — faltam ${mesesGap} meses até data de liquidação (${liqComp}). Execute sync-pjecalc-indices para atualizar.`,
+            message_friendly: `Índice de correção '${indiceNecessario}' desatualizado: última competência ${ultimaComp}, liquidação em ${liqComp}.`,
+            severity: 'critical',
+            tabela_ausente: `pjecalc_correcao_monetaria (${indiceNecessario})`,
+            competencias_afetadas: gerarCompetencias(nextComp(ultimaComp), liqComp),
+            acao_recomendada: `Acione a função sync-pjecalc-indices ou adicione manualmente os dados de ${indiceNecessario} de ${nextComp(ultimaComp)} a ${liqComp}.`,
+          });
+        } else if (mesesGap > 0) {
+          warnings.push({
+            type: 'data_approximated',
+            code: 'W015',
+            message: `P0-3: Índice '${indiceNecessario}' só disponível até ${ultimaComp} (${mesesGap} mês(es) desatualizados). Acione sync-pjecalc-indices para buscar dados recentes.`,
+            message_friendly: `Índice '${indiceNecessario}' pode estar desatualizado. Última competência: ${ultimaComp}.`,
+            severity: 'warning',
+            module: 'correcao_monetaria',
+          });
+        }
+      }
+    }
+
+    // 6. P0-3: TR_FGTS coverage check
+    if (input.apurar_fgts) {
+      const trFgtsSet = new Set(
+        input.indicesDB
+          .filter(r => r.indice === 'TR_FGTS' || r.indice === 'TR')
+          .map(r => r.competencia.slice(0, 7))
+      );
+      const compsSemTR = competencias.filter(c => !trFgtsSet.has(c));
+      if (compsSemTR.length > 6) {
+        errors.push({
+          type: 'table_missing',
+          code: 'E004',
+          message: `TR/TR_FGTS ausente para ${compsSemTR.length} competências — FGTS calculado com fallback 3%a.a.`,
+          message_friendly: `Tabela TR_FGTS incompleta. ${compsSemTR.length} meses sem dados de TR para FGTS.`,
+          severity: 'error',
+          tabela_ausente: 'pjecalc_correcao_monetaria (TR_FGTS)',
+          competencias_afetadas: compsSemTR.slice(0, 10),
+          acao_recomendada: 'Acione sync-pjecalc-indices para sincronizar série TR (BCB 226).',
+        });
+      } else if (compsSemTR.length > 0) {
+        warnings.push({
+          type: 'fallback_used',
+          code: 'W016',
+          message: `TR/TR_FGTS ausente para ${compsSemTR.length} competências de FGTS — fallback 3%a.a. será usado.`,
+          message_friendly: `${compsSemTR.length} meses sem TR para FGTS. Resultado pode diferir levemente.`,
+          severity: 'warning',
+          module: 'fgts',
+        });
+      }
+    }
+  }
+
   const can_proceed = errors.filter(e => e.severity === 'critical').length === 0;
 
   return {
@@ -220,6 +302,17 @@ export function validarTabelasHistoricas(input: TableValidationInput): TableVali
 // =====================================================
 // HELPERS
 // =====================================================
+
+function mesesEntre(compA: string, compB: string): number {
+  const [ya, ma] = compA.split('-').map(Number);
+  const [yb, mb] = compB.split('-').map(Number);
+  return (yb - ya) * 12 + (mb - ma);
+}
+
+function nextComp(comp: string): string {
+  const [y, m] = comp.split('-').map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+}
 
 function gerarCompetencias(inicio: string, fim: string): string[] {
   const comps: string[] = [];

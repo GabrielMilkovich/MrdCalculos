@@ -1076,13 +1076,13 @@ export class PjeCalcEngine {
     let dataCitacao: Date | null;
     if (this.params.data_citacao) {
       dataCitacao = new Date(this.params.data_citacao);
-    } else if (modoCalculo === 'independent' && usarADC5859Check) {
-      // In independent mode, missing data_citacao with ADC 58/59 is a fatal error.
-      // The error is reported in validarParametros(); here we set null so downstream code
-      // skips the ADC path (no silent fallback).
+    } else if (modoCalculo === 'independent') {
+      // P0-4: In independent mode data_citacao is NEVER estimated — zero tolerance for heuristics.
+      // The error is reported in validarPreLiquidacao(); here we set null so downstream code
+      // skips the ADC/juros path without silent fallback.
       dataCitacao = null;
     } else {
-      // assisted_from_pjc: legacy estimation — ajuizamento + 60 days
+      // assisted_from_pjc: estimation allowed (W_CITACAO_ESTIMADA warning emitted by validarPreLiquidacao)
       dataCitacao = dataAjuiz ? new Date(dataAjuiz.getTime() + 60 * 24 * 60 * 60 * 1000) : null;
     }
 
@@ -1230,7 +1230,7 @@ export class PjeCalcEngine {
 
     // Map IPCA-E → IPCAE for index lookup compatibility
     const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M' };
+      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE' };
       return map[ind] || ind;
     };
 
@@ -2561,14 +2561,35 @@ export class PjeCalcEngine {
     if (!this.params.data_citacao) {
       const isIndependent = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent';
       const isADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
-      if (isIndependent && isADC) {
-        // Independent mode: missing data_citacao with ADC 58/59 is a FATAL error. No fallback.
-        itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'E_CITACAO_OBRIGATORIA: data_citacao é obrigatória no modo independente com ADC 58/59 (IPCA-E/SELIC). Preencha em Dados do Processo → Datas Processuais → Citação.' });
+      const isCombinacoesADC = (this.correcaoConfig as unknown as { combinacoes_indice?: Array<{ indice: string }> })
+        .combinacoes_indice?.some(c => c.indice === 'SELIC' || c.indice === 'IPCA-E') ?? false;
+      const jurosFromCitacao = this.correcaoConfig.juros_inicio === 'citacao';
+      if (isIndependent) {
+        // P0-4: Independent mode — data_citacao is ALWAYS required, no heuristics allowed.
+        const reason = isADC || isCombinacoesADC
+          ? 'ADC 58/59 (IPCA-E/SELIC) exige data_citacao para o split de correção'
+          : jurosFromCitacao
+            ? 'juros_inicio=citacao exige data_citacao para base correta dos juros'
+            : 'data_citacao é obrigatória no modo independente para garantir determinismo';
+        itens.push({
+          tipo: 'erro', modulo: 'Parâmetros',
+          mensagem: `E_CITACAO_OBRIGATORIA: ${reason}. Preencha em Dados do Processo → Datas Processuais → Citação.`,
+          detalhe: 'No modo independente não há estimativa de data_citacao. Informe a data real do mandado de citação.',
+        });
       } else if (this.params.data_ajuizamento) {
-        // assisted_from_pjc: estimation allowed with a warning
-        itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — será estimada a partir do ajuizamento + 60 dias (ADC 58/STF)', detalhe: 'Para maior precisão, preencha em Dados do Processo → Datas Processuais → Citação' });
+        // P0-2: assisted_from_pjc — show explicit estimated date so user sees what's being assumed
+        const estimada = new Date(new Date(this.params.data_ajuizamento).getTime() + 60 * 24 * 60 * 60 * 1000);
+        itens.push({
+          tipo: 'alerta', modulo: 'Parâmetros',
+          mensagem: `W_CITACAO_ESTIMADA: Data de citação não informada — estimada em ${estimada.toISOString().slice(0, 10)} (ajuizamento + 60 dias). Impacta o split IPCA-E/SELIC (ADC 58/59).`,
+          detalhe: 'Para precisão máxima, preencha a data real do mandado de citação em Dados do Processo → Datas Processuais → Citação.',
+        });
       } else {
-        itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — cálculo de juros ADC 58/STF pode ficar impreciso', detalhe: 'Preencha em Dados do Processo → Datas Processuais → Citação' });
+        itens.push({
+          tipo: 'alerta', modulo: 'Parâmetros',
+          mensagem: 'W_CITACAO_AUSENTE: Data de citação não informada — cálculo de juros ADC 58/STF pode ficar impreciso.',
+          detalhe: 'Preencha em Dados do Processo → Datas Processuais → Citação.',
+        });
       }
     }
     if (!this.params.estado || !this.params.municipio) {
@@ -2774,27 +2795,58 @@ export class PjeCalcEngine {
 
   aplicarCorrecaoSomente(verbaResults: PjeVerbaResult[]): void {
     if (this.correcaoConfig.combinacoes_indice?.length) {
-      // Use combination-by-date but skip interest
       this.aplicarCorrecaoCombinacaoSomente(verbaResults);
       return;
     }
 
     // Legacy single-index correction only
-    const dataLiq = new Date(this.correcaoConfig.data_liquidacao);
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
+    const dataAjuiz = this.params.data_ajuizamento ? new Date(this.params.data_ajuizamento) : null;
+    const modoCalculo = this.params.modo_calculo ?? 'assisted_from_pjc';
+    const usarADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+    let dataCitacaoSomente: Date | null = null;
+    if (this.params.data_citacao) {
+      dataCitacaoSomente = new Date(this.params.data_citacao);
+    } else if (modoCalculo === 'independent') {
+      // P0-4: no fallback in independent mode — ever.
+      dataCitacaoSomente = null;
+    } else {
+      // assisted_from_pjc: estimation ajuizamento+60d
+      dataCitacaoSomente = dataAjuiz ? new Date(dataAjuiz.getTime() + 60 * 24 * 60 * 60 * 1000) : null;
+    }
 
     for (const vr of verbaResults) {
       let totalCorrigido = new Decimal(0);
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
-        
+
         let indiceCorrecao = 1;
-        
+
         // Use PJC ground truth correction factor when available
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
           oc.pjc_ground_truth_regime = this.correcaoConfig.indice || 'SELIC';
+        } else if (usarADC && dataCitacaoSomente) {
+          // ADC 58/59 split: in juros_apos_deducao_cs mode, "correction only" = IPCA-E up to citação.
+          // SELIC (citação → liquidação) is the interest portion → applied later by aplicarJurosAposCS.
+          const [ano, mes] = oc.competencia.split('-').map(Number);
+          const dataComp = new Date(ano, mes - 1, 1);
+          const compCitacao = dataCitacaoSomente.toISOString().slice(0, 7);
+
+          if (dataComp >= dataCitacaoSomente) {
+            // POST-citação: correction base = nominal (SELIC from comp→liq is 100% interest)
+            indiceCorrecao = 1;
+          } else {
+            // PRE-citação: correction = IPCA-E(comp → citação)
+            const fatorIPCA = this.getIndiceCorrecaoDB('IPCA-E', oc.competencia, compCitacao);
+            if (fatorIPCA !== null) {
+              indiceCorrecao = fatorIPCA;
+            } else {
+              this.trackWarning('W049', 'correcao_monetaria', `IPCA-E ausente para ${oc.competencia}→${compCitacao} (ADC correção-only). Usando fator=1.`, oc.competencia);
+              indiceCorrecao = 1;
+            }
+          }
         } else {
           const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, oc.competencia, compLiq);
           if (fatorDB !== null) {
@@ -2803,7 +2855,7 @@ export class PjeCalcEngine {
             this.trackWarning('W049', 'correcao_monetaria', `Índice ${this.correcaoConfig.indice} ausente para ${oc.competencia}→${compLiq} (correção-only). Usando fator=1.`, oc.competencia);
           }
         }
-        
+
         const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
         oc.indice_correcao = Number(new Decimal(indiceCorrecao).toDP(6));
         oc.valor_corrigido = valorCorrigido;
@@ -2822,7 +2874,7 @@ export class PjeCalcEngine {
     const dataLiq = this.correcaoConfig.data_liquidacao;
 
     const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR' };
+      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE' };
       return map[ind] || ind;
     };
 
@@ -2865,7 +2917,10 @@ export class PjeCalcEngine {
           const segFim = datas[i + 1];
           const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
           const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
+          // In juros_apos_deducao_cs mode, SELIC = interest portion — applied later by aplicarJurosAposCS.
+          // Only apply inflation indices (IPCA-E, TR, etc.) as correction base for CS calculation.
           if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
+          if (indice === 'SELIC') continue; // SELIC is interest, not correction — handled in aplicarJurosAposCS
           const fatorDB = this.getIndiceCorrecaoDB(indice, this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
@@ -2910,13 +2965,26 @@ export class PjeCalcEngine {
     const jurosDisabled = jurosStartDate != null && jurosStartDate > dataLiq;
 
     const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR' };
+      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE' };
       return map[ind] || ind;
     };
+
+    const usarADCJuros = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC'
+      || (this.correcaoConfig.combinacoes_indice || []).some(c => c.indice === 'SELIC');
 
     for (const vr of verbaResults) {
       let totalJuros = 0;
       let totalFinal = 0;
+
+      // PJe-Calc excludes FÉRIAS, 13° SALÁRIO and AVISO PRÉVIO from interest in ADC 58/59 regime.
+      const excluirJuros = usarADCJuros &&
+        (vr.caracteristica === 'ferias' || vr.caracteristica === '13_salario' || vr.caracteristica === 'aviso_previo');
+      if (excluirJuros) {
+        for (const oc of vr.ocorrencias) { oc.juros = 0; oc.valor_final = oc.valor_corrigido; }
+        vr.total_juros = 0;
+        vr.total_final = vr.total_corrigido;
+        continue;
+      }
 
       for (const oc of vr.ocorrencias) {
         if (oc.valor_corrigido === 0) { totalFinal += oc.valor_final; continue; }
@@ -2958,9 +3026,12 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended per PJe-Calc)
-            if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
-            
+            // SEM_CORRECAO/NENHUM = suspended period → no interest.
+            // SELIC: when juros_apos_deducao_cs=true, SELIC IS the interest (correction phase already ran via aplicarCorrecaoCombinacaoSomente).
+            //        when juros_apos_deducao_cs=false, SELIC already includes interest in the correction factor → skip to avoid double-counting.
+            if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
+            if (indiceNorm === 'SELIC' && !this.correcaoConfig.juros_apos_deducao_cs) continue;
+
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
             if (!regimeJ || regimeJ.tipo === 'NENHUM') continue;
 
@@ -2995,8 +3066,11 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended per PJe-Calc)
-            if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
+            // SEM_CORRECAO/NENHUM = suspended period → no interest.
+            // SELIC: when juros_apos_deducao_cs=true, SELIC IS the interest (correction phase already ran).
+            //        when juros_apos_deducao_cs=false, SELIC already includes interest → skip.
+            if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
+            if (indiceNorm === 'SELIC' && !this.correcaoConfig.juros_apos_deducao_cs) continue;
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
             const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
             jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
@@ -3009,9 +3083,23 @@ export class PjeCalcEngine {
           const jurosStart = jurosStartDate ? new Date(jurosStartDate) : dataComp;
           const dataLiqD = new Date(dataLiq);
           if (jurosStart < dataLiqD) {
-            const meses = this.mesesEntre(jurosStart, dataLiqD);
-            const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
-            oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2));
+            const usarADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+            if (usarADC && this.correcaoConfig.juros_apos_deducao_cs && this.params.data_citacao) {
+              // ADC 58/59: interest = SELIC(dataCitacao → dataLiquidacao)
+              const compCitacao = this.params.data_citacao.slice(0, 7);
+              const compLiqD = dataLiq.slice(0, 7);
+              const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiqD);
+              if (fatorSELIC !== null) {
+                oc.juros = Number(baseJuros.times(fatorSELIC - 1).toDP(2));
+              } else {
+                this.trackWarning('W049', 'juros', `SELIC ausente para ${compCitacao}→${compLiqD} (juros ADC 58/59 legacy). Usando 0.`, oc.competencia);
+                oc.juros = 0;
+              }
+            } else {
+              const meses = this.mesesEntre(jurosStart, dataLiqD);
+              const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
+              oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2));
+            }
           } else {
             oc.juros = 0;
           }
