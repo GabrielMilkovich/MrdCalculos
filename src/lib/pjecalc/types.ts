@@ -269,6 +269,8 @@ export interface PjecalcVerbaRow {
   quantidade_proporcionalizar?: boolean | null;
   hora_noturna_ficticia?: boolean | null;
   constante_mensal?: number | null;
+  // P0 FIX: dobrar_valor_devido exposed via view after migration 000014
+  dobrar_valor_devido?: boolean | null;
   created_at: string;
   updated_at: string;
 }

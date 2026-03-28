@@ -251,7 +251,7 @@ function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
       ocorrencia_pagamento: ocorrenciaPagamento,
       compor_principal: v.compor_principal !== false,
       zerar_valor_negativo: false,
-      dobrar_valor_devido: false,
+      dobrar_valor_devido: v.dobrar_valor_devido === true,
       periodo_inicio: v.periodo_inicio || '',
       periodo_fim: v.periodo_fim || '',
       base_calculo: {
@@ -404,7 +404,12 @@ function toEngineCorrecaoConfig(
   // CRITICAL: data_liquidacao MUST be deterministic — NEVER use new Date()
   const dataLiq = cfg?.data_liquidacao;
   if (!dataLiq) {
-    console.error('[ORCHESTRATOR] CRITICAL: data_liquidacao not set in correcaoConfig — calculation will NOT be deterministic');
+    throw new Error(
+      'data_liquidacao não definida: preencha o campo "Data de Liquidação" na aba de Correção Monetária ' +
+      'para garantir que o cálculo seja determinístico e reprodutível. ' +
+      'Usar a data atual como fallback produziria resultados diferentes a cada execução, ' +
+      'o que é inaceitável em cálculo judicial.'
+    );
   }
 
   // FIX AUDIT-001: Read juros_apos_deducao_cs from atualizacaoConfig instead of hardcoding true.
@@ -425,7 +430,7 @@ function toEngineCorrecaoConfig(
     juros_inicio: (cfg?.juros_inicio as 'ajuizamento' | 'citacao' | 'vencimento') || 'ajuizamento',
     multa_523: cfg?.multa_523 ?? false,
     multa_523_percentual: cfg?.multa_523_percentual ?? 10,
-    data_liquidacao: dataLiq || new Date().toISOString().slice(0, 10),
+    data_liquidacao: dataLiq,
     combinacoes_indice,
     combinacoes_juros,
     juros_apos_deducao_cs: jurosAposCS,
@@ -796,6 +801,19 @@ export async function executarLiquidacao(
 
   // 3. Convert to engine types
   const engineParams = toEngineParams(caseData.params);
+
+  // P0 FIX: propagate data_citacao from dadosProcesso → engine params
+  // (pjecalc_parametros VIEW does not expose data_citacao; it lives in pjecalc_dados_processo)
+  const dataCitacao = (caseData as any).dadosProcesso?.data_citacao;
+  if (dataCitacao && dataCitacao !== engineParams.data_ajuizamento) {
+    engineParams.data_citacao = dataCitacao;
+    console.log(`[ORCHESTRATOR] data_citacao set: ${dataCitacao}`);
+  } else if (dataCitacao) {
+    // data_citacao was stored but == data_ajuizamento — VIEW bug or not yet entered
+    // Only propagate if it looks like a real citação date (different from ajuizamento)
+    engineParams.data_citacao = dataCitacao;
+  }
+
   const engineFaltas = toEngineFaltas(caseData.faltas);
   const engineFerias = toEngineFerias(caseData.ferias);
   const engineCartao = toEngineCartaoPonto(caseData.cartaoPonto);
