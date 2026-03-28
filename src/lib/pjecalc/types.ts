@@ -89,6 +89,8 @@ export interface PjecalcDadosProcessoRow {
   perito: string | null;
   funcao: string | null;
   data_citacao: string | null;
+  /** P0-1: Coluna real em pjecalc_calculos — 'assisted_from_pjc' | 'independent' */
+  modo_calculo: 'assisted_from_pjc' | 'independent' | null;
   created_at: string;
   updated_at: string;
 }
@@ -101,6 +103,9 @@ export interface PjecalcDadosProcessoInsert {
   reclamada_nome?: string;
   reclamada_cnpj?: string;
   vara?: string;
+  data_citacao?: string | null;
+  /** P0-1: Definir explicitamente o modo do cálculo */
+  modo_calculo?: 'assisted_from_pjc' | 'independent';
 }
 
 // =====================================================
