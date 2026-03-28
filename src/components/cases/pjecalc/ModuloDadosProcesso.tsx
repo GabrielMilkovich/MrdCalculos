@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Save, Loader2, AlertTriangle } from "lucide-react";
+import { Save, Loader2, AlertTriangle, Search } from "lucide-react";
 
 interface Props { caseId: string; }
 
@@ -37,6 +37,7 @@ export function ModuloDadosProcesso({ caseId }: Props) {
   });
 
   const [citacaoEnabled, setCitacaoEnabled] = useState(true);
+  const [buscandoCitacao, setBuscandoCitacao] = useState(false);
   const [form, setForm] = useState({
     numero_processo: '', vara: '', comarca: '', uf: 'SP', tipo_acao: 'trabalhista',
     rito: 'ordinario', fase: 'conhecimento', data_distribuicao: '', data_citacao: '',
@@ -79,6 +80,37 @@ export function ModuloDadosProcesso({ caseId }: Props) {
       toast.info(`Mantido o valor digitado manualmente para ${conflictModal.label}.`);
     }
     setConflictModal(null);
+  };
+
+  const buscarCitacaoDatajud = async () => {
+    const numeroProcesso = form.numero_processo?.trim();
+    if (!numeroProcesso) {
+      toast.error("Informe o número do processo antes de buscar no Datajud.");
+      return;
+    }
+    setBuscandoCitacao(true);
+    try {
+      const { data: fnData, error } = await supabase.functions.invoke("buscar-citacao-datajud", {
+        body: { numero_processo: numeroProcesso },
+      });
+      if (error) throw new Error(error.message);
+      if (fnData?.erro) {
+        toast.warning(`Datajud: ${fnData.erro}`);
+        return;
+      }
+      if (fnData?.data_citacao) {
+        setForm(p => ({ ...p, data_citacao: fnData.data_citacao }));
+        setCitacaoEnabled(true);
+        toast.success(`Data de citação encontrada no Datajud: ${fnData.data_citacao}`);
+        if (fnData.aviso) toast.warning(fnData.aviso);
+      } else {
+        toast.warning(fnData?.aviso ?? "Data de citação não encontrada no Datajud para este processo.");
+      }
+    } catch (e) {
+      toast.error(`Erro ao buscar no Datajud: ${(e as Error).message}`);
+    } finally {
+      setBuscandoCitacao(false);
+    }
   };
 
   const save = async () => {
@@ -211,13 +243,26 @@ export function ModuloDadosProcesso({ caseId }: Props) {
                 <Switch checked={citacaoEnabled} onCheckedChange={setCitacaoEnabled} className="scale-75" />
               </div>
             </div>
-            <Input
-              type="date"
-              disabled={!citacaoEnabled}
-              value={form.data_citacao || ''}
-              onChange={e => setForm(p => ({ ...p, data_citacao: e.target.value }))}
-              className={cn("h-8 text-xs", !citacaoEnabled && "opacity-50", citacaoEnabled && !form.data_citacao && "border-destructive/50")}
-            />
+            <div className="flex gap-1.5">
+              <Input
+                type="date"
+                disabled={!citacaoEnabled}
+                value={form.data_citacao || ''}
+                onChange={e => setForm(p => ({ ...p, data_citacao: e.target.value }))}
+                className={cn("h-8 text-xs flex-1", !citacaoEnabled && "opacity-50", citacaoEnabled && !form.data_citacao && "border-destructive/50")}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 text-[10px] shrink-0"
+                disabled={!form.numero_processo || buscandoCitacao}
+                onClick={buscarCitacaoDatajud}
+                title="Buscar data de citação no Datajud (CNJ)"
+              >
+                {buscandoCitacao ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+              </Button>
+            </div>
             {citacaoEnabled && !form.data_citacao && (
               <p className="text-[10px] text-destructive mt-0.5">Obrigatório para liquidação</p>
             )}
