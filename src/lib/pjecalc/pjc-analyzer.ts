@@ -81,6 +81,12 @@ export interface PJCAnalysis {
   salario_familia?: { apurar: boolean; numero_filhos: number };
   /** Seguro-desemprego config */
   seguro_desemprego?: { apurar: boolean; parcelas: number; recebeu: boolean };
+  /**
+   * Parser-level warnings about missing or inferred data.
+   * W_CITACAO_AUSENTE: data_citacao not found in the PJC XML — must be entered manually
+   *   for independent mode with ADC 58/59 (IPCA-E/SELIC) to work correctly.
+   */
+  avisos?: Array<{ codigo: string; mensagem: string }>;
 }
 
 /** Entry from PJe-Calc's <ApuracaoDeJuros> — consolidated corrected values per competência */
@@ -322,6 +328,16 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     limitar_avos: getTextContent(root, 'limitarAvosAoPeriodoDoCalculo') === 'true',
     data_citacao: tsToDate(getTextContent(root, 'dataCitacao') || getTextContent(root, 'dataDaCitacao')) || undefined,
   };
+
+  // --- Parser-level warnings ---
+  const avisos: Array<{ codigo: string; mensagem: string }> = [];
+  if (!parametros.data_citacao) {
+    avisos.push({
+      codigo: 'W_CITACAO_AUSENTE',
+      mensagem: 'data_citacao não encontrada no arquivo PJC — ausente nos campos dataCitacao e dataDaCitacao. ' +
+        'Para cálculo independente com ADC 58/59 (IPCA-E/SELIC) é obrigatório informar manualmente em Dados do Processo.',
+    });
+  }
 
   // --- Resultado ---
   const gprec = root.getElementsByTagName('gprec')[0];
@@ -709,6 +725,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       parcelas: parseInt(getTextContent(segEl, 'parcelas')) || 0,
       recebeu: getTextContent(segEl, 'recebeu') === 'true',
     } : undefined,
+    avisos: avisos.length > 0 ? avisos : undefined,
   };
 }
 

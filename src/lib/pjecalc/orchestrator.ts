@@ -805,13 +805,28 @@ export async function executarLiquidacao(
   // P0 FIX: propagate data_citacao from dadosProcesso → engine params
   // (pjecalc_parametros VIEW does not expose data_citacao; it lives in pjecalc_dados_processo)
   const dataCitacao = (caseData as any).dadosProcesso?.data_citacao;
-  if (dataCitacao && dataCitacao !== engineParams.data_ajuizamento) {
+  if (dataCitacao) {
     engineParams.data_citacao = dataCitacao;
     console.log(`[ORCHESTRATOR] data_citacao set: ${dataCitacao}`);
-  } else if (dataCitacao) {
-    // data_citacao was stored but == data_ajuizamento — VIEW bug or not yet entered
-    // Only propagate if it looks like a real citação date (different from ajuizamento)
-    engineParams.data_citacao = dataCitacao;
+  }
+
+  // Propagate modo_calculo from dadosProcesso → engine params
+  const modoCalculo = (caseData as any).dadosProcesso?.modo_calculo as string | undefined;
+  if (modoCalculo === 'independent' || modoCalculo === 'assisted_from_pjc') {
+    engineParams.modo_calculo = modoCalculo;
+    console.log(`[ORCHESTRATOR] modo_calculo set: ${modoCalculo}`);
+  }
+
+  // Pre-flight validation: independent mode + ADC 58/59 requires data_citacao
+  if (engineParams.modo_calculo === 'independent') {
+    const correcaoIndice = (caseData as any).correcaoConfig?.indice as string | undefined;
+    const isADC = correcaoIndice === 'IPCA-E' || correcaoIndice === 'SELIC';
+    if (isADC && !engineParams.data_citacao) {
+      throw new Error(
+        'E_CITACAO_OBRIGATORIA: Cálculo independente com ADC 58/59 (IPCA-E/SELIC) exige data_citacao. ' +
+        'Preencha em Dados do Processo → Datas Processuais → Citação antes de calcular.'
+      );
+    }
   }
 
   const engineFaltas = toEngineFaltas(caseData.faltas);

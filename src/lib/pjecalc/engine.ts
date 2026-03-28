@@ -1071,11 +1071,22 @@ export class PjeCalcEngine {
     const dataLiq = new Date(this.correcaoConfig.data_liquidacao);
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const dataAjuiz = this.params.data_ajuizamento ? new Date(this.params.data_ajuizamento) : null;
-    const dataCitacao = this.params.data_citacao 
-      ? new Date(this.params.data_citacao) 
-      : dataAjuiz ? new Date(dataAjuiz.getTime() + 60 * 24 * 60 * 60 * 1000) : null;
+    const modoCalculo = this.params.modo_calculo ?? 'assisted_from_pjc';
+    const usarADC5859Check = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+    let dataCitacao: Date | null;
+    if (this.params.data_citacao) {
+      dataCitacao = new Date(this.params.data_citacao);
+    } else if (modoCalculo === 'independent' && usarADC5859Check) {
+      // In independent mode, missing data_citacao with ADC 58/59 is a fatal error.
+      // The error is reported in validarParametros(); here we set null so downstream code
+      // skips the ADC path (no silent fallback).
+      dataCitacao = null;
+    } else {
+      // assisted_from_pjc: legacy estimation — ajuizamento + 60 days
+      dataCitacao = dataAjuiz ? new Date(dataAjuiz.getTime() + 60 * 24 * 60 * 60 * 1000) : null;
+    }
 
-    const usarADC5859 = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+    const usarADC5859 = usarADC5859Check;
 
     for (const vr of verbaResults) {
       let totalCorrigido = new Decimal(0);
@@ -1419,6 +1430,8 @@ export class PjeCalcEngine {
   }
 
   private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, _totalCSDescontado: number = 0): void {
+    // BLOCKED in independent mode: GT calibration must not run.
+    if ((this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent') return;
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
     // NOTE: We no longer skip for SELIC combinations. The GT data handles SELIC semantics:
@@ -2546,8 +2559,13 @@ export class PjeCalcEngine {
       itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'Data de ajuizamento não informada — campo obrigatório para aplicação da ADC 58' });
     }
     if (!this.params.data_citacao) {
-      // If ajuizamento exists, downgrade to warning (engine can estimate citação = ajuizamento + 60 days)
-      if (this.params.data_ajuizamento) {
+      const isIndependent = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent';
+      const isADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+      if (isIndependent && isADC) {
+        // Independent mode: missing data_citacao with ADC 58/59 is a FATAL error. No fallback.
+        itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'E_CITACAO_OBRIGATORIA: data_citacao é obrigatória no modo independente com ADC 58/59 (IPCA-E/SELIC). Preencha em Dados do Processo → Datas Processuais → Citação.' });
+      } else if (this.params.data_ajuizamento) {
+        // assisted_from_pjc: estimation allowed with a warning
         itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — será estimada a partir do ajuizamento + 60 dias (ADC 58/STF)', detalhe: 'Para maior precisão, preencha em Dados do Processo → Datas Processuais → Citação' });
       } else {
         itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — cálculo de juros ADC 58/STF pode ficar impreciso', detalhe: 'Preencha em Dados do Processo → Datas Processuais → Citação' });
@@ -2679,8 +2697,12 @@ export class PjeCalcEngine {
     }
 
     // ── Correção sem data de citação para ADC 58/59 ──
+    // (independent mode error already emitted above; only add warning here for assisted_from_pjc)
     if ((this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC') && !this.params.data_citacao) {
-      itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Usando índice ADC 58/59 sem data de citação — será estimada a partir do ajuizamento + 60 dias' });
+      if ((this.params.modo_calculo ?? 'assisted_from_pjc') === 'assisted_from_pjc') {
+        itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Usando índice ADC 58/59 sem data de citação — será estimada a partir do ajuizamento + 60 dias' });
+      }
+      // independent mode: error already emitted in Parâmetros section above
     }
 
     // ── Validações adicionais PJe-Calc ──
@@ -3139,7 +3161,10 @@ export class PjeCalcEngine {
     // ── 7b. GT Closure Override: Inject exact PJC values for CS & IR ──
     // When gt_closure is available, the PJC resultado is the authoritative source.
     // Engine-computed CS/IR serve as fallback only.
-    const closure = this.correcaoConfig.gt_closure;
+    // BLOCKED in independent mode: gt_closure must not alter engine output.
+    const closure = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent'
+      ? undefined
+      : this.correcaoConfig.gt_closure;
     if (closure && (closure.liquido_exequente > 0 || closure.inss_reclamante > 0)) {
       if (closure.inss_reclamante >= 0 && this.csConfig.cobrar_reclamante) {
         const csOverrideDelta = closure.inss_reclamante - cs.total_segurado;
@@ -3210,7 +3235,10 @@ export class PjeCalcEngine {
     // This is the same override principle already applied to CS and IR above.
     // Only applies when residual is < 5% of bruto (prevents masking large errors).
     let jurosMoraAjustado = jurosMora;
-    const closureForBruto = this.correcaoConfig.gt_closure;
+    // BLOCKED in independent mode: gt_closure bruto reconciliation must not run.
+    const closureForBruto = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent'
+      ? undefined
+      : this.correcaoConfig.gt_closure;
     if (closureForBruto && (closureForBruto.liquido_exequente > 0 || closureForBruto.inss_reclamante > 0)) {
       const brutoTarget = closureForBruto.liquido_exequente + closureForBruto.inss_reclamante + closureForBruto.imposto_renda;
       const engineBruto = principalCorrigido + jurosMoraAjustado;

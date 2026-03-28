@@ -2,12 +2,27 @@
 // PJe-CALC ENGINE - TIPOS E INTERFACES
 // =====================================================
 
+/**
+ * Calculation mode:
+ * - 'assisted_from_pjc': Uses GT artifacts (gt_closure, calibrators) from an imported .pjc file.
+ *   Falls back to ajuizamento+60d estimate when data_citacao is absent (backward-compatible).
+ * - 'independent': Pure independent calculation. NO gt_closure, NO INSS/IR overrides,
+ *   NO calibration. Requires data_citacao when ADC 58/59 post-citation phase exists;
+ *   throws E_CITACAO_OBRIGATORIA if absent.
+ */
+export type PjeCalcMode = 'assisted_from_pjc' | 'independent';
+
 export interface PjeParametros {
   case_id: string;
   data_admissao: string;
   data_demissao?: string;
   data_ajuizamento: string;
   data_citacao?: string;
+  /**
+   * Calculation mode. Defaults to 'assisted_from_pjc' when omitted (backward-compatible).
+   * Set to 'independent' to enforce strict independent calculation without GT artifacts.
+   */
+  modo_calculo?: PjeCalcMode;
   data_inicial?: string;
   data_final?: string;
   estado: string;
