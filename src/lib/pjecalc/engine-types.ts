@@ -447,6 +447,9 @@ export interface PjeCorrecaoConfig {
   ente_publico?: boolean;
   /** PJC: aplicarJurosFasePreJudicial */
   aplicar_juros_fase_pre_judicial?: boolean;
+  /** OJ 394 SDI-1 TST: juros calculados sobre base após dedução de IR.
+   *  When true, interest should be recalculated on the post-IR base. */
+  oj_394_juros_pos_ir?: boolean;
 }
 
 export interface PjeHonorariosConfig {

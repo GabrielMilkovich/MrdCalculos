@@ -786,7 +786,12 @@ export class PjeCalcEngine {
   private getFaixasINSSParaCompetencia(competencia: string): { ate: number; aliquota: number }[] {
     if (this.faixasINSSDB.length === 0) {
       // AUDIT: Track fallback to DEFAULT_FAIXAS_INSS
-      this.trackWarning('W032', 'cs', `INSS: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      // FIX 5: Emit explicit warning when falling back to 2025 tables for pre-2025 competencias
+      if (competencia < '2025-01') {
+        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
+      } else {
+        this.trackWarning('W032', 'cs', `INSS: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      }
       return DEFAULT_FAIXAS_INSS;
     }
 
@@ -803,7 +808,12 @@ export class PjeCalcEngine {
 
     if (faixas.length === 0) {
       // AUDIT: Track fallback for specific competência
-      this.trackWarning('W032', 'cs', `INSS: Sem faixas para ${competencia} — usando padrão 2025`);
+      // FIX 5: Emit explicit warning when falling back to 2025 tables for pre-2025 competencias
+      if (competencia < '2025-01') {
+        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
+      } else {
+        this.trackWarning('W032', 'cs', `INSS: Sem faixas para ${competencia} — usando padrão 2025`);
+      }
       return DEFAULT_FAIXAS_INSS;
     }
     return faixas;
@@ -812,7 +822,12 @@ export class PjeCalcEngine {
   private getFaixasIRParaCompetencia(competencia: string): { faixas: { ate: number; aliquota: number; deducao: number }[]; deducao_dependente: number } {
     if (this.faixasIRDB.length === 0) {
       // AUDIT: Track fallback to DEFAULT_FAIXAS_IR
-      this.trackWarning('W033', 'ir', `IR: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      // FIX 5: Emit explicit warning when falling back to 2025 tables for pre-2025 competencias
+      if (competencia < '2025-01') {
+        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} não encontradas no banco. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
+      } else {
+        this.trackWarning('W033', 'ir', `IR: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
+      }
       return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
     }
 
@@ -828,7 +843,12 @@ export class PjeCalcEngine {
 
     if (faixas.length === 0) {
       // AUDIT: Track fallback for specific competência
-      this.trackWarning('W033', 'ir', `IR: Sem faixas para ${competencia} — usando padrão 2025`);
+      // FIX 5: Emit explicit warning when falling back to 2025 tables for pre-2025 competencias
+      if (competencia < '2025-01') {
+        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} não encontradas no banco. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
+      } else {
+        this.trackWarning('W033', 'ir', `IR: Sem faixas para ${competencia} — usando padrão 2025`);
+      }
       return { faixas: DEFAULT_FAIXAS_IR, deducao_dependente: DEFAULT_DEDUCAO_DEPENDENTE };
     }
 
@@ -1120,7 +1140,8 @@ export class PjeCalcEngine {
               if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
               else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao;
               else dataInicioJuros = dataAjuiz;
-              const mesesJuros = this.mesesEntre(dataInicioJuros, dataLiq);
+              // FIX 1: PJe-Calc counts interest months inclusive of start month
+              const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2));
             }
@@ -1151,7 +1172,8 @@ export class PjeCalcEngine {
             indiceCorrecao = fator1 * fator2;
 
             if (this.correcaoConfig.indice !== 'SELIC' && dataAjuiz && dataCitacao > dataAjuiz) {
-              const mesesJurosPreCitacao = this.mesesEntre(dataAjuiz, dataCitacao);
+              // FIX 1: PJe-Calc counts interest months inclusive of start month
+              const mesesJurosPreCitacao = this.mesesEntreInclusivo(dataAjuiz, dataCitacao);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               const valorCorrigidoParc = Number(new Decimal(oc.diferenca).times(fator1).toDP(2));
               juros = Number(new Decimal(valorCorrigidoParc).times(taxaMensal).times(mesesJurosPreCitacao).toDP(2));
@@ -1174,7 +1196,8 @@ export class PjeCalcEngine {
               else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao!;
               else if (dataAjuiz) dataInicioJuros = dataAjuiz;
               else dataInicioJuros = dataComp;
-              const mesesJuros = this.mesesEntre(dataInicioJuros, dataLiq);
+              // FIX 1: PJe-Calc counts interest months inclusive of start month
+              const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2));
             } else if ((this.correcaoConfig.juros_tipo as string) === 'composto') {
@@ -1183,10 +1206,12 @@ export class PjeCalcEngine {
               else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao!;
               else if (dataAjuiz) dataInicioJuros = dataAjuiz;
               else dataInicioJuros = dataComp;
-              const mesesJuros = this.mesesEntre(dataInicioJuros, dataLiq);
+              // FIX 1: PJe-Calc counts interest months inclusive of start month
+              const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
-              const fatorComposto = Math.pow(1 + taxaMensal, mesesJuros);
-              juros = Number(new Decimal(valorCorrigido).times(fatorComposto - 1).toDP(2));
+              // FIX 2: Use Decimal.js instead of Math.pow for compound interest precision
+              const fatorComposto = new Decimal(1).plus(taxaMensal).pow(mesesJuros);
+              juros = Number(new Decimal(valorCorrigido).times(fatorComposto.minus(1)).toDP(2));
             } else if (this.correcaoConfig.juros_tipo === 'selic') {
               juros = 0;
             }
@@ -1560,6 +1585,16 @@ export class PjeCalcEngine {
 
   private mesesEntre(d1: Date, d2: Date): number {
     return Math.max(0, (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()));
+  }
+
+  /**
+   * PJe-Calc counts interest months INCLUSIVE of the start month.
+   * Jan→Mar exclusive = 2, inclusive = 3. Use this for interest period counting
+   * where the start month itself accrues interest.
+   */
+  private mesesEntreInclusivo(d1: Date, d2: Date): number {
+    const exclusive = this.mesesEntre(d1, d2);
+    return exclusive > 0 ? exclusive + 1 : 0;
   }
 
   // =====================================================
@@ -2143,8 +2178,24 @@ export class PjeCalcEngine {
       }
     }
 
-    mesesAnosAnteriores = competenciasAnosAnteriores.size;
-    mesesAnoLiquidacao = competenciasAnoLiquidacao.size;
+    // FIX 3: RRA Art. 12-A — PJe-Calc counts TOTAL months in the period,
+    // not just months with positive income. Count from first to last competencia.
+    if (competenciasAnosAnteriores.size > 0) {
+      const sortedComps = [...competenciasAnosAnteriores].sort();
+      const firstComp = sortedComps[0];
+      const lastComp = sortedComps[sortedComps.length - 1];
+      mesesAnosAnteriores = this.getCompetencias(firstComp, lastComp).length;
+    } else {
+      mesesAnosAnteriores = 0;
+    }
+    if (competenciasAnoLiquidacao.size > 0) {
+      const sortedComps = [...competenciasAnoLiquidacao].sort();
+      const firstComp = sortedComps[0];
+      const lastComp = sortedComps[sortedComps.length - 1];
+      mesesAnoLiquidacao = this.getCompetencias(firstComp, lastComp).length;
+    } else {
+      mesesAnoLiquidacao = 0;
+    }
 
     let deducoes = 0;
     if (this.irConfig.deduzir_cs && this.csConfig.cobrar_reclamante) {
@@ -2693,6 +2744,31 @@ export class PjeCalcEngine {
       itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Sem séries históricas de índices no banco — usando taxas aproximadas', detalhe: 'Popule a tabela de índices para resultados precisos' });
     }
 
+    // FIX 4: Validate that required correction indices exist BEFORE running calculation.
+    // Missing indices silently use factor=1 which produces catastrophically wrong results.
+    if (this.indicesDB.length > 0 && this.correcaoConfig.data_liquidacao && this.params.data_admissao) {
+      const requiredIndices: string[] = [];
+      if (this.correcaoConfig.combinacoes_indice?.length) {
+        for (const c of this.correcaoConfig.combinacoes_indice) {
+          if (c.indice && c.indice !== 'SEM_CORRECAO' && c.indice !== 'Sem Correção' && c.indice !== 'NENHUM') {
+            if (!requiredIndices.includes(c.indice)) requiredIndices.push(c.indice);
+          }
+        }
+      } else if (this.correcaoConfig.indice && this.correcaoConfig.indice !== 'nenhum') {
+        requiredIndices.push(this.correcaoConfig.indice);
+      }
+      for (const indice of requiredIndices) {
+        const available = this.indicesDB.filter(i => i.indice === indice);
+        if (available.length === 0) {
+          itens.push({
+            tipo: 'erro', modulo: 'Correção',
+            mensagem: `E_INDICE_AUSENTE: Índice "${indice}" necessário para correção monetária não encontrado no banco de dados. Todos os valores serão tratados como fator=1 (SEM CORREÇÃO), produzindo resultados incorretos.`,
+            detalhe: 'Popule a tabela de índices com a série histórica completa antes de liquidar.',
+          });
+        }
+      }
+    }
+
     // ── Tabelas INSS/IR ──
     if (this.faixasINSSDB.length === 0) {
       itens.push({ tipo: 'observacao', modulo: 'Contrib. Social', mensagem: 'Usando tabela INSS padrão 2025 — sem dados versionados por competência' });
@@ -2796,6 +2872,15 @@ export class PjeCalcEngine {
     // Verificar Súmula 381 TST — correção a partir do mês subsequente
     if (this.correcaoConfig.indice !== 'nenhum' && this.correcaoConfig.epoca === 'mensal') {
       itens.push({ tipo: 'observacao', modulo: 'Correção', mensagem: 'Súmula 381 TST: correção monetária incide a partir do mês subsequente ao da prestação de serviços' });
+    }
+
+    // FIX 6: OJ 394 SDI-1 TST — warn that post-IR interest recalculation is not yet implemented
+    if (this.correcaoConfig.oj_394_juros_pos_ir) {
+      itens.push({
+        tipo: 'alerta', modulo: 'Correção',
+        mensagem: 'OJ 394 SDI-1 TST: flag oj_394_juros_pos_ir está ativada, mas o recálculo de juros sobre a base pós-IR ainda NÃO está implementado. Os juros estão sendo calculados sobre a base bruta (antes do IR). O valor final pode divergir do PJe-Calc quando OJ 394 é aplicada.',
+        detalhe: 'OJ 394 determina que, em certas hipóteses, os juros de mora incidem sobre o valor da condenação já deduzido o IR. Implementação completa requer recálculo do juros após apuração do IR.',
+      });
     }
 
     // ── Fazenda Pública ──
@@ -3160,7 +3245,8 @@ export class PjeCalcEngine {
                 oc.juros = 0;
               }
             } else {
-              const meses = this.mesesEntre(jurosStart, dataLiqD);
+              // FIX 1: PJe-Calc counts interest months inclusive of start month
+              const meses = this.mesesEntreInclusivo(jurosStart, dataLiqD);
               const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2));
             }
@@ -3199,10 +3285,19 @@ export class PjeCalcEngine {
     // This supports reflex-on-reflex (e.g., HE → DSR → 13º s/ DSR)
     const verbaResults: PjeVerbaResult[] = [];
     const processed = new Set<string>();
-    
+    // FIX 7: Track verbas currently being processed to detect circular dependencies
+    const processing = new Set<string>();
+
     const processVerba = (verba: PjeVerba) => {
       if (processed.has(verba.id)) return;
-      
+
+      // FIX 7: Circular dependency detection — if verba is already in the call stack, skip
+      if (processing.has(verba.id)) {
+        this.trackWarning('W070', 'verbas', `Dependência circular detectada na verba "${verba.nome}" (id=${verba.id}). Ignorando para evitar loop infinito.`);
+        return;
+      }
+      processing.add(verba.id);
+
       // Process dependencies first (reflex-on-reflex)
       if (verba.verba_principal_id && !processed.has(verba.verba_principal_id)) {
         const dep = this.verbas.find(v => v.id === verba.verba_principal_id);
@@ -3214,8 +3309,9 @@ export class PjeCalcEngine {
           if (dep) processVerba(dep);
         }
       }
-      
+
       processed.add(verba.id);
+      processing.delete(verba.id);
       
       // Calculate — precomputed occurrences take priority (PJC ground truth)
       if (verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import Decimal from 'decimal.js';
 import { createEngine, makeVerba, makeHistoricoWithOcorrencias, makeIndices } from './helpers';
 
 describe('PjeCalcEngine - Correção Monetária', () => {
@@ -38,9 +39,14 @@ describe('PjeCalcEngine - Correção Monetária', () => {
     const vr = result.verbas[0];
     const oc = vr.ocorrencias[0];
 
-    // Correction factor: acumulado[2025-06] / acumulado[2023-06] = 110.22 / 100.6 ~ 1.0956
-    expect(oc.indice_correcao).toBeGreaterThan(1);
-    expect(oc.valor_corrigido).toBeGreaterThan(oc.diferenca);
+    // Devido: (3000/220).toDP(2) = 13.63, * 1.5 = 20.44, * 10 = 204.40
+    // Correction factor: acumulado[2025-06] / acumulado[2023-06] = 110.22 / 100.6 = 1.095626...
+    const expectedFactor = new Decimal(110.22).div(100.6);
+    expect(oc.indice_correcao).toBeCloseTo(expectedFactor.toNumber(), 5);
+    // valor_corrigido = 204.40 * factor, truncated to 2dp
+    const expectedCorrigido = new Decimal(204.40).times(expectedFactor).toDP(2).toNumber();
+    expect(oc.valor_corrigido).toBeCloseTo(expectedCorrigido, 2);
+    expect(oc.diferenca).toBe(204.40);
   });
 
   it('no correction when data_liquidacao equals competencia', () => {
@@ -106,8 +112,13 @@ describe('PjeCalcEngine - Correção Monetária', () => {
     const oc = result.verbas[0].ocorrencias[0];
 
     // SELIC already includes interest, so oc.juros should be 0
+    // Correction factor: acumulado[2025-06] / acumulado[2023-06] = 131.04 / 101 = 1.297425...
+    const expectedFactor = new Decimal(131.04).div(101);
     expect(oc.juros).toBe(0);
-    expect(oc.indice_correcao).toBeGreaterThan(1);
+    expect(oc.indice_correcao).toBeCloseTo(expectedFactor.toNumber(), 5);
+    // valor_corrigido = 204.40 * 1.297425... truncated to 2dp
+    const expectedCorrigido = new Decimal(204.40).times(expectedFactor).toDP(2).toNumber();
+    expect(oc.valor_corrigido).toBeCloseTo(expectedCorrigido, 2);
     expect(oc.valor_final).toBe(oc.valor_corrigido);
   });
 
@@ -158,9 +169,16 @@ describe('PjeCalcEngine - Correção Monetária', () => {
     const result = engine.liquidar();
     const oc = result.verbas[0].ocorrencias[0];
 
-    // Multi-regime correction should produce a combined factor > 1
+    // Multi-regime correction: IPCA-E 2020-06 to 2021-12, then SELIC 2022-01 to 2025-06
+    // IPCA-E segment: acumulado[2021-12] / acumulado[2020-06] = 220 / 201 = 1.094527...
+    // SELIC segment: acumulado[2025-06] / acumulado[2021-12] = 200 / 150 = 1.333333...
+    // Combined factor: 1.094527 * 1.333333 = 1.459369...
+    // The exact result depends on engine breakpoint logic. Key: it must be > 1 and produce
+    // a corrected value meaningfully above the nominal diferenca.
     expect(oc.indice_correcao).toBeGreaterThan(1);
-    expect(oc.valor_corrigido).toBeGreaterThan(oc.diferenca);
+    // valor_corrigido = diferenca * factor, truncated to 2dp
+    const expectedCorrigido = Number(new Decimal(oc.diferenca).times(oc.indice_correcao).toDP(2));
+    expect(oc.valor_corrigido).toBeCloseTo(expectedCorrigido, 2);
   });
 
   it('skips correction when indice and juros are nenhum', () => {

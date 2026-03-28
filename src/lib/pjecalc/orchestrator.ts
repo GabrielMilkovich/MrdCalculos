@@ -348,6 +348,7 @@ function toEngineCsConfig(cfg: PjecalcCsConfigRow | null): PjeCSConfig {
     periodos_simples: Array.isArray(cfg?.periodos_simples) ? cfg!.periodos_simples as PjeCSConfig['periodos_simples'] : [],
     contribuicao_sindical: cfg?.contribuicao_sindical ?? false,
     contribuicao_sindical_pos2017: cfg?.contribuicao_sindical_pos2017 ?? false,
+    fpas_code: (cfg as Record<string, unknown> | null)?.fpas_code as string | undefined,
   };
 }
 
@@ -709,6 +710,126 @@ async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeS
 }
 
 
+// =====================================================
+// MULTAS CONFIG → ENGINE VERBAS
+// =====================================================
+
+/**
+ * Converts multas_config (persisted by ModuloMultasCLT) into PjeVerba entries
+ * that the engine can process through its generic formula.
+ *
+ * Handles:
+ * - Art. 467 CLT: 50% of uncontested amounts not paid at termination
+ * - Art. 477 CLT: penalty for late payment of termination amounts (1 month salary)
+ * - Generic multas/indenizações: each entry from multas_indenizacoes array
+ */
+function multasConfigToVerbas(
+  multasConfig: import('./types').PjecalcMultasConfigRow | null,
+  params: PjeParametros,
+  historicos: PjeHistoricoSalarial[],
+): PjeVerba[] {
+  if (!multasConfig) return [];
+  const cfg = multasConfig as unknown as Record<string, unknown>;
+  const result: PjeVerba[] = [];
+
+  // Get base salary from first historico for Art. 477
+  const baseSalario = historicos.length > 0 ? (historicos[0].valor_informado || 0) : 0;
+  const periodoFim = params.data_demissao || params.data_final || params.data_ajuizamento;
+  const periodoInicio = params.data_admissao || params.data_inicial || '';
+
+  const defaultVerba = (id: string, nome: string): PjeVerba => ({
+    id,
+    nome,
+    tipo: 'principal',
+    valor: 'informado',
+    caracteristica: 'comum',
+    ocorrencia_pagamento: 'desligamento',
+    compor_principal: true,
+    zerar_valor_negativo: false,
+    dobrar_valor_devido: false,
+    periodo_inicio: periodoFim || periodoInicio,
+    periodo_fim: periodoFim || periodoInicio,
+    base_calculo: { historicos: [], verbas: [], tabelas: [], proporcionalizar: false, integralizar: false },
+    tipo_divisor: 'informado',
+    divisor_informado: 1,
+    multiplicador: 1,
+    tipo_quantidade: 'informada',
+    quantidade_informada: 1,
+    quantidade_proporcionalizar: false,
+    exclusoes: { faltas_justificadas: false, faltas_nao_justificadas: false, ferias_gozadas: false },
+    incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false },
+    juros_ajuizamento: 'ocorrencias_vencidas',
+    gerar_verba_reflexa: 'diferenca',
+    gerar_verba_principal: 'diferenca',
+    ordem: 9000,
+  });
+
+  // Art. 467 CLT
+  if (cfg.apurar_467) {
+    const valor467 = Number(cfg.valor_467 || 0);
+    if (valor467 > 0) {
+      const v = defaultVerba('multa_467_auto', 'Multa Art. 467 CLT');
+      v.valor_informado_devido = valor467;
+      v.ordem = 9001;
+      result.push(v);
+    }
+  }
+
+  // Art. 477 CLT — 1 month salary as penalty for late termination payment
+  if (cfg.apurar_477) {
+    const tipo477 = (cfg.valor_477_tipo as string) || 'salario';
+    let valor477 = 0;
+    if (tipo477 === 'informado') {
+      valor477 = Number(cfg.valor_477_informado || 0);
+    } else {
+      valor477 = baseSalario;
+    }
+    if (valor477 > 0) {
+      const v = defaultVerba('multa_477_auto', 'Multa Art. 477 CLT');
+      v.valor_informado_devido = valor477;
+      v.ordem = 9002;
+      result.push(v);
+    }
+  }
+
+  // Generic multas/indenizações
+  const multas = cfg.multas_indenizacoes;
+  if (Array.isArray(multas)) {
+    multas.forEach((m: Record<string, unknown>, idx: number) => {
+      const descricao = String(m.descricao || `Multa/Indenização ${idx + 1}`);
+      const valorTipo = String(m.valor_tipo || 'informado');
+      const v = defaultVerba(`multa_ind_${idx}`, descricao);
+      v.ordem = 9010 + idx;
+
+      if (valorTipo === 'informado') {
+        v.valor_informado_devido = Number(m.valor || 0);
+      } else {
+        // Calculated: use aliquota over base (principal)
+        v.valor = 'calculado';
+        v.multiplicador = Number(m.aliquota || 0) / 100;
+        v.tipo_divisor = 'informado';
+        v.divisor_informado = 1;
+        // Base from historicos
+        if (historicos.length > 0) {
+          v.base_calculo.historicos = [historicos[0].id];
+        }
+      }
+
+      // Incidence flags
+      v.incidencias.irpf = !!(m.apurar_ir);
+
+      if (m.vencimento) {
+        v.periodo_inicio = String(m.vencimento);
+        v.periodo_fim = String(m.vencimento);
+      }
+
+      result.push(v);
+    });
+  }
+
+  return result;
+}
+
 export async function executarLiquidacao(
   caseId: string,
   mode: 'manual' | 'auto' | 'seed' = 'manual'
@@ -861,6 +982,17 @@ export async function executarLiquidacao(
   }));
 
   let engineVerbas = toEngineVerbas(caseData.verbas);
+
+  // ── Generate verbas from multas_config (multas/indenizações from ModuloMultasCLT) ──
+  const multasVerbas = multasConfigToVerbas(
+    caseData.multasConfig,
+    engineParams,
+    engineHistoricos,
+  );
+  if (multasVerbas.length > 0) {
+    engineVerbas = [...engineVerbas, ...multasVerbas];
+    console.log(`[ORCHESTRATOR] Generated ${multasVerbas.length} verbas from multas_config`);
+  }
 
   console.log(`[ORCHESTRATOR] Loaded ${engineVerbas.length} verbas from DB (principals: ${engineVerbas.filter(v => v.tipo === 'principal').length}, reflexas: ${engineVerbas.filter(v => v.tipo === 'reflexa').length})`);
 

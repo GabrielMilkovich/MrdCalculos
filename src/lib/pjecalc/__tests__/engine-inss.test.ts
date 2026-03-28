@@ -42,14 +42,13 @@ describe('PjeCalcEngine - INSS (Contribuição Social)', () => {
     const result = engine.liquidar();
     const cs = result.contribuicao_social;
 
-    // Progressive calculation on R$ 3000:
-    // Band 1: 1518.00 * 7.5% = 113.85
-    // Band 2: (2793.88 - 1518.00) * 9% = 1275.88 * 9% = 114.82 (banker's rounding)
-    // Band 3: (3000 - 2793.88) * 12% = 206.12 * 12% = 24.73
-    // Total ~= 253.40
-    expect(cs.total_segurado).toBeGreaterThan(0);
-    expect(cs.total_segurado).toBeLessThan(3000 * 0.14); // Must be less than max rate applied to full base
-    expect(cs.segurado_devidos.length).toBeGreaterThanOrEqual(1);
+    // Progressive calculation on R$ 3000 (ROUND_HALF_EVEN per etapa):
+    // Band 1: 1518.00 * 0.075 = 113.85 (exact)
+    // Band 2: (2793.88 - 1518.00) = 1275.88 * 0.09 = 114.8292 → ROUND_HALF_EVEN → 114.83
+    // Band 3: (3000.00 - 2793.88) = 206.12 * 0.12 = 24.7344 → ROUND_HALF_EVEN → 24.73
+    // Total = 113.85 + 114.83 + 24.73 = 253.41
+    expect(cs.total_segurado).toBeCloseTo(253.41, 2);
+    expect(cs.segurado_devidos.length).toBe(1);
   });
 
   it('uses fixed aliquota when configured', () => {
@@ -164,12 +163,13 @@ describe('PjeCalcEngine - INSS (Contribuição Social)', () => {
     const result = engine.liquidar();
     const cs = result.contribuicao_social;
 
-    // With teto=8157.41, INSS max ~= (1518*0.075) + (1275.88*0.09) + (3045.57*0.12) + (2317.96*0.14)
-    // = 113.85 + 114.83 + 365.46 + 324.51 = ~918.65
-    // The actual value for 10000 capped at 8157.41 should be the same as for 8157.41
-    // Key: result should be less than 10000 * 0.14 = 1400
-    expect(cs.total_segurado).toBeLessThan(1000);
-    expect(cs.total_segurado).toBeGreaterThan(800);
+    // With teto=8157.41, progressive INSS (ROUND_HALF_EVEN per etapa):
+    // Band 1: 1518.00 * 0.075 = 113.85
+    // Band 2: (2793.88 - 1518.00) = 1275.88 * 0.09 = 114.8292 → 114.83
+    // Band 3: (5839.45 - 2793.88) = 3045.57 * 0.12 = 365.4684 → 365.47
+    // Band 4: (8157.41 - 5839.45) = 2317.96 * 0.14 = 324.5144 → 324.51
+    // Total = 113.85 + 114.83 + 365.47 + 324.51 = 918.66
+    expect(cs.total_segurado).toBeCloseTo(918.66, 2);
   });
 
   it('handles base exactly at band boundary (1518.00)', () => {
@@ -202,8 +202,8 @@ describe('PjeCalcEngine - INSS (Contribuição Social)', () => {
     });
 
     const result = engine.liquidar();
-    // Exactly at first band: 1518 * 7.5% = 113.85
-    expect(result.contribuicao_social.total_segurado).toBeCloseTo(113.85, 1);
+    // Exactly at first band: 1518.00 * 0.075 = 113.85 (exact, no rounding needed)
+    expect(result.contribuicao_social.total_segurado).toBe(113.85);
   });
 
   it('returns zero when apurar_segurado is false', () => {

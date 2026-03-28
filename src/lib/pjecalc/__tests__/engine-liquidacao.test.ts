@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import Decimal from 'decimal.js';
 import { createEngine, makeVerba, makeHistoricoWithOcorrencias } from './helpers';
 
 describe('PjeCalcEngine - liquidar() integration', () => {
@@ -55,20 +56,28 @@ describe('PjeCalcEngine - liquidar() integration', () => {
     expect(result.audit_trail).toBeDefined();
     expect(result.audit_trail!.length).toBeGreaterThan(0);
 
-    // ── Resumo assertions ──
+    // ── Resumo value assertions ──
     const r = result.resumo;
-    expect(r.principal_bruto).toBeGreaterThan(0);
-    expect(r.principal_corrigido).toBeGreaterThan(0);
-    expect(r.liquido_reclamante).toBeDefined();
-    expect(r.total_reclamada).toBeDefined();
+    // HE 50%: (3000/220).toDP(2) = 13.63, * 1.5 = 20.44, * 10 = 204.40 per month x 3 = 613.20
+    // Multa 477: informado 3000
+    // Total principal bruto = 613.20 + 3000 = 3613.20
+    expect(r.principal_bruto).toBeCloseTo(3613.20, 2);
+    // No correction (indice=nenhum), so corrigido = bruto
+    expect(r.principal_corrigido).toBeCloseTo(3613.20, 2);
+    expect(r.juros_mora).toBe(0);
     expect(typeof r.liquido_reclamante).toBe('number');
     expect(typeof r.total_reclamada).toBe('number');
 
-    // ── Verbas populated ──
-    const vr1 = result.verbas[0];
-    expect(vr1.ocorrencias.length).toBeGreaterThan(0);
-    expect(vr1.total_devido).toBeGreaterThan(0);
-    expect(vr1.total_diferenca).toBeGreaterThanOrEqual(0);
+    // ── Verbas populated with exact values ──
+    const vr1 = result.verbas[0]; // HE 50%
+    expect(vr1.ocorrencias.length).toBe(3);
+    // Each HE occurrence: 204.40
+    expect(vr1.total_devido).toBeCloseTo(613.20, 2);
+    expect(vr1.total_diferenca).toBeCloseTo(613.20, 2);
+
+    const vr2 = result.verbas[1]; // Multa 477
+    expect(vr2.total_devido).toBe(3000);
+    expect(vr2.total_diferenca).toBe(3000);
   });
 
   it('produces valid validation result', () => {
@@ -142,7 +151,7 @@ describe('PjeCalcEngine - liquidar() integration', () => {
     // liquido = bruto corrigido + juros + salario_familia - cs - ir - prev_privada - pensao - contrib_sindical
     const expectedLiquido = r.principal_corrigido + r.juros_mora + r.salario_familia
       - r.cs_segurado - r.ir_retido - r.previdencia_privada - r.pensao_total - r.contribuicao_sindical;
-    expect(r.liquido_reclamante).toBeCloseTo(expectedLiquido, 1);
+    expect(r.liquido_reclamante).toBeCloseTo(expectedLiquido, 2);
   });
 
   it('handles empty verbas gracefully', () => {

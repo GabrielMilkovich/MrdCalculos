@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import Decimal from 'decimal.js';
 import { createEngine, makeVerba, makeHistoricoWithOcorrencias, makeIndices } from './helpers';
 
 describe('PjeCalcEngine - Juros de Mora', () => {
@@ -34,10 +35,12 @@ describe('PjeCalcEngine - Juros de Mora', () => {
     const oc = result.verbas[0].ocorrencias[0];
 
     // diferenca=204.40, corrigido=204.40 (no index in DB => factor=1)
-    // juros from 2024-01 to 2025-01 = 12 months * 1% = 12%
-    // juros = 204.40 * 0.01 * 12 = 24.52 (truncated)
-    expect(oc.juros).toBeCloseTo(24.52, 1);
-    expect(oc.valor_final).toBeCloseTo(204.40 + 24.52, 1);
+    // PJe-Calc uses mesesEntreInclusivo: 2024-01 to 2025-01 = 12 exclusive + 1 = 13 months
+    // juros = 204.40 * 0.01 * 13 = 26.572 → truncated to 26.57
+    expect(oc.diferenca).toBe(204.40);
+    expect(oc.valor_corrigido).toBe(204.40);
+    expect(oc.juros).toBeCloseTo(26.57, 2);
+    expect(oc.valor_final).toBeCloseTo(204.40 + 26.57, 2);
   });
 
   it('calculates interest from citacao date', () => {
@@ -72,9 +75,10 @@ describe('PjeCalcEngine - Juros de Mora', () => {
     const result = engine.liquidar();
     const oc = result.verbas[0].ocorrencias[0];
 
-    // citacao to liquidacao: 2024-06 to 2025-01 = 7 months
-    // juros = 204.40 * 0.01 * 7 = 14.30
-    expect(oc.juros).toBeCloseTo(14.30, 1);
+    // PJe-Calc mesesEntreInclusivo: 2024-06 to 2025-01 = 7 exclusive + 1 = 8 months
+    // juros = 204.40 * 0.01 * 8 = 16.352 → truncated to 16.35
+    expect(oc.diferenca).toBe(204.40);
+    expect(oc.juros).toBeCloseTo(16.35, 2);
   });
 
   it('zero interest when juros_tipo is nenhum and indice is nenhum', () => {
@@ -172,10 +176,14 @@ describe('PjeCalcEngine - Juros de Mora', () => {
     const result = engine.liquidar();
     const oc = result.verbas[0].ocorrencias[0];
 
-    // Compound: 204.40 * ((1.01)^12 - 1) = 204.40 * 0.12682... = ~25.92
-    // This should be slightly more than simple interest (24.52)
-    expect(oc.juros).toBeGreaterThan(24);
-    // Compound > simple for the same rate/period
-    expect(oc.juros).toBeGreaterThan(24.52);
+    // PJe-Calc mesesEntreInclusivo: 2024-01 to 2025-01 = 13 months
+    // Compound: 204.40 * ((1.01)^13 - 1) = 204.40 * 0.138093... = ~28.22
+    const expectedCompound = Number(
+      new Decimal(204.40).times(Math.pow(1.01, 13) - 1).toDP(2)
+    );
+    expect(oc.diferenca).toBe(204.40);
+    expect(oc.juros).toBeCloseTo(expectedCompound, 2);
+    // Compound must be > simple interest (26.57) for same period
+    expect(oc.juros).toBeGreaterThan(26.57);
   });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import Decimal from 'decimal.js';
 import { createEngine, makeVerba, makeHistoricoWithOcorrencias } from './helpers';
 
 describe('PjeCalcEngine - IRRF (Imposto de Renda)', () => {
@@ -72,10 +73,14 @@ describe('PjeCalcEngine - IRRF (Imposto de Renda)', () => {
     });
 
     const result = engine.liquidar();
-    // 5000 with 1 month: falls in band 4664.68 < 5000 -> aliquota 27.5%
-    // IR = 5000 * 27.5% - 896.00 = 1375 - 896 = 479
-    // (with RRA meses=1, faixa ate threshold is multiplied by meses)
-    expect(result.imposto_renda.imposto_devido).toBeGreaterThan(0);
+    // IR with RRA meses=1 (data_admissao=2025-03-01, data_demissao=2025-03-31 = 1 month)
+    // Base = 5000 (valor_final with no correction)
+    // Deducoes = 0 (no CS, no dependentes)
+    // base_tributavel = 5000
+    // With meses=1, thresholds are: faixa.ate * 1
+    // 5000 > 4664.68*1 → band 5 (aliquota=27.5%, deducao=896.00)
+    // IR = 5000 * 0.275 - 896.00 * 1 = 1375.00 - 896.00 = 479.00
+    expect(result.imposto_renda.imposto_devido).toBe(479);
   });
 
   it('deducts dependentes from base', () => {
