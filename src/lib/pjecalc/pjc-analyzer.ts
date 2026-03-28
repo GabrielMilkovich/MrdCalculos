@@ -496,17 +496,19 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   const ferias: FeriasAnalysis[] = [];
   const ferEls = root.getElementsByTagName('Ferias');
   for (const el of Array.from(ferEls)) {
-    // Skip nested refs
-    if (!getTextContent(el, 'situacao') && !getTextContent(el, 'prazoPeriodoConcessivoEmDias')) continue;
+    // Skip nested refs (some PJC versions use 'prazo', others 'prazoPeriodoConcessivoEmDias')
+    const prazoRaw = getTextContent(el, 'prazoPeriodoConcessivoEmDias') || getTextContent(el, 'prazo');
+    if (!getTextContent(el, 'situacao') && !prazoRaw) continue;
     ferias.push({
-      aquisitivo_inicio: tsToDate(getTextContent(el, 'dataInicialPeriodoAquisitivo')),
-      aquisitivo_fim: tsToDate(getTextContent(el, 'dataFinalPeriodoAquisitivo')),
-      concessivo_inicio: tsToDate(getTextContent(el, 'dataInicialPeriodoConcessivo')),
-      concessivo_fim: tsToDate(getTextContent(el, 'dataFinalPeriodoConcessivo')),
-      dias: parseInt(getTextContent(el, 'prazoPeriodoConcessivoEmDias')) || 30,
+      // PJC schema variants: some use 'dataInicialDoPeriodoAquisitivo' (with 'Do'), others without
+      aquisitivo_inicio: tsToDate(getTextContent(el, 'dataInicialDoPeriodoAquisitivo') || getTextContent(el, 'dataInicialPeriodoAquisitivo')),
+      aquisitivo_fim: tsToDate(getTextContent(el, 'dataFinalDoPeriodoAquisitivo') || getTextContent(el, 'dataFinalPeriodoAquisitivo')),
+      concessivo_inicio: tsToDate(getTextContent(el, 'dataInicialDoPeriodoConcessivo') || getTextContent(el, 'dataInicialPeriodoConcessivo')),
+      concessivo_fim: tsToDate(getTextContent(el, 'dataFinalDoPeriodoConcessivo') || getTextContent(el, 'dataFinalPeriodoConcessivo')),
+      dias: parseInt(prazoRaw) || 30,
       abono: getTextContent(el, 'abono') === 'true',
-      dias_abono: parseInt(getTextContent(el, 'diasAbono')) || 0,
-      dobra: getTextContent(el, 'dobra') === 'true',
+      dias_abono: parseInt(getTextContent(el, 'quantidadeDiasAbono') || getTextContent(el, 'diasAbono')) || 0,
+      dobra: getTextContent(el, 'dobraGeral') === 'true' || getTextContent(el, 'dobra') === 'true',
       situacao: getTextContent(el, 'situacao') || 'GOZADAS',
       gozo_inicio: tsToDate(getTextContent(el, 'dataInicialGozo')),
       gozo_fim: tsToDate(getTextContent(el, 'dataFinalGozo')),
