@@ -366,7 +366,13 @@ describe("PjeCalcEngine", () => {
     });
 
     it("calcula multa 40%", () => {
-      const engine = createEngine({ fgts: { apurar: true, multa_apurar: true, multa_percentual: 40 } });
+      // Use same-month period + liquidação so correction factor = 1 (nominal == corrected),
+      // since engine computes multa on nominal deposits per PJe-Calc spec.
+      const engine = createEngine({
+        fgts: { apurar: true, multa_apurar: true, multa_percentual: 40 },
+        verbas: [makeVerbaPrincipal({ periodo_inicio: "2025-02-01", periodo_fim: "2025-02-27" })],
+        correcao: { data_liquidacao: "2025-02-27" },
+      });
       const result = engine.liquidar();
       expect(result.fgts.multa_valor).toBeCloseTo(result.fgts.total_depositos * 0.4, 1);
     });
