@@ -715,6 +715,8 @@ export class PjeCalcEngine {
       } else if (verba.base_calculo.tabelas.includes('ultima_remuneracao') && this.params.ultima_remuneracao) {
         base = this.params.ultima_remuneracao;
       } else if (this.params.ultima_remuneracao) {
+        // Last-resort fallback: log warning so the caller knows the base was guessed
+        this.trackWarning('W060', 'verbas', `Verba "${verba.nome}" (${competencia}): base zero após histórico — usando ultima_remuneracao como fallback (R$ ${this.params.ultima_remuneracao.toFixed(2)}). Verifique histórico salarial.`, competencia);
         base = this.params.ultima_remuneracao;
       }
     }
@@ -1698,22 +1700,32 @@ export class PjeCalcEngine {
       totalDepositosJuros += jurosValor;
     }
 
+    // Compute saldo first — needed for multa_base variants
+    const saldoDeduzido = this.fgtsConfig.deduzir_saldo
+      ? this.fgtsConfig.saldos_saques.reduce((s, v) => s + v.valor, 0) : 0;
+
     let multaValor = 0;
     if (this.fgtsConfig.multa_apurar) {
       if (this.fgtsConfig.multa_tipo === 'informada') {
         multaValor = this.fgtsConfig.multa_valor_informado || 0;
       } else {
-        let baseMulita = totalDepositos; // PJe-Calc: multa incide sobre depósitos nominais (não corrigidos)
-        multaValor = Number(new Decimal(baseMulita).times(this.fgtsConfig.multa_percentual / 100).toDP(2));
+        // PJe-Calc: multa incide sobre depósitos nominais (não corrigidos)
+        let baseMulta = totalDepositos; // 'devido' (default)
+        if (this.fgtsConfig.multa_base === 'saldo_saque') {
+          baseMulta = saldoDeduzido;
+        } else if (this.fgtsConfig.multa_base === 'devido_menos_saldo') {
+          baseMulta = Math.max(0, totalDepositos - saldoDeduzido);
+        } else if (this.fgtsConfig.multa_base === 'devido_mais_saldo') {
+          baseMulta = totalDepositos + saldoDeduzido;
+        }
+        // 'devido' and 'diferenca' both use totalDepositos (o valor apurado já é a diferença devida)
+        multaValor = Number(new Decimal(baseMulta).times(this.fgtsConfig.multa_percentual / 100).toDP(2));
       }
     }
 
     // LC 110/2001: contribuição social incide sobre saldo CORRIGIDO do FGTS (não nominal)
     const lc110_10 = this.fgtsConfig.lc110_10 ? Number(new Decimal(totalDepositosCorrigido).times(0.10).toDP(2)) : 0;
     const lc110_05 = this.fgtsConfig.lc110_05 ? Number(new Decimal(totalDepositosCorrigido).times(0.005).toDP(2)) : 0;
-
-    const saldoDeduzido = this.fgtsConfig.deduzir_saldo 
-      ? this.fgtsConfig.saldos_saques.reduce((s, v) => s + v.valor, 0) : 0;
 
     // Total FGTS = corrected deposits + interest + fine - deductions
     const totalFgts = totalDepositosCorrigido + totalDepositosJuros + multaValor + lc110_10 + lc110_05 - saldoDeduzido;
