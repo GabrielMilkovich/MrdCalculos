@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync, readdirSync } from 'fs';
+import { execSync } from 'child_process';
 import { resolve } from 'path';
 import { analyzePJC, type PJCAnalysis } from '../lib/pjecalc/pjc-analyzer';
 import { convertPjcToEngineInputs, type PjcEngineInputs } from '../lib/pjecalc/pjc-to-engine';
@@ -14,6 +15,16 @@ import { PjeCalcEngine } from '../lib/pjecalc/engine';
 import { ALL_TEST_INDICES } from './fixtures/indices-oficiais';
 
 const PJC_DIR = resolve(__dirname, '../../public/reports');
+
+/** Read a PJC file, handling both plain-XML and ZIP-wrapped formats. */
+function readPjcXml(path: string): string {
+  const buf = readFileSync(path);
+  // ZIP magic: PK\x03\x04
+  if (buf[0] === 0x50 && buf[1] === 0x4b) {
+    return execSync(`unzip -p "${path}"`, { encoding: 'latin1', maxBuffer: 32 * 1024 * 1024 });
+  }
+  return buf.toString('latin1');
+}
 
 // List all available .PJC files
 function listPjcFiles(): string[] {
@@ -45,7 +56,7 @@ function runGoldenCase(file: string): GoldenResult | null {
   const path = resolve(PJC_DIR, file);
   if (!existsSync(path)) return null;
   
-  const content = readFileSync(path, 'utf-8');
+  const content = readPjcXml(path);
   const analysis = analyzePJC(content);
   
   // Skip cases with no resultado (not liquidated)
@@ -122,7 +133,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
   describe('Parser Structural Validation', () => {
     for (const file of files) {
       it(`[${file}] should parse without errors`, () => {
-        const content = readFileSync(resolve(PJC_DIR, file), 'utf-8');
+        const content = readPjcXml(resolve(PJC_DIR, file));
         const analysis = analyzePJC(content);
         
         // Must have parametros
@@ -136,7 +147,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
       });
 
       it(`[${file}] should extract historicos salariais`, () => {
-        const content = readFileSync(resolve(PJC_DIR, file), 'utf-8');
+        const content = readPjcXml(resolve(PJC_DIR, file));
         const analysis = analyzePJC(content);
         
         expect(analysis.historicos_salariais.length).toBeGreaterThanOrEqual(0);
@@ -148,7 +159,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
       });
 
       it(`[${file}] should extract full apuração diária when present`, () => {
-        const content = readFileSync(resolve(PJC_DIR, file), 'utf-8');
+        const content = readPjcXml(resolve(PJC_DIR, file));
         const analysis = analyzePJC(content);
         
         // apuracao_diaria array should match count
@@ -163,7 +174,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
       });
 
       it(`[${file}] should extract férias`, () => {
-        const content = readFileSync(resolve(PJC_DIR, file), 'utf-8');
+        const content = readPjcXml(resolve(PJC_DIR, file));
         const analysis = analyzePJC(content);
         
         if (analysis.ferias.length > 0) {
@@ -182,7 +193,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
   describe('Bridge Validation (PJC → Engine)', () => {
     for (const file of files) {
       it(`[${file}] should convert to engine inputs without errors`, () => {
-        const content = readFileSync(resolve(PJC_DIR, file), 'utf-8');
+        const content = readPjcXml(resolve(PJC_DIR, file));
         const analysis = analyzePJC(content);
         const inputs = convertPjcToEngineInputs(analysis, `test-${file}`);
         
@@ -208,7 +219,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
       });
 
       it(`[${file}] should produce non-empty cartaoPonto when daily data exists`, () => {
-        const content = readFileSync(resolve(PJC_DIR, file), 'utf-8');
+        const content = readPjcXml(resolve(PJC_DIR, file));
         const analysis = analyzePJC(content);
         const inputs = convertPjcToEngineInputs(analysis, `test-${file}`);
         
@@ -253,7 +264,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
   describe('Per-competência Parity (ApuracaoDeJuros)', () => {
     for (const file of files) {
       it(`[${file}] should compare per-competência when GT available`, { timeout: 30000 }, () => {
-        const content = readFileSync(resolve(PJC_DIR, file), 'utf-8');
+        const content = readPjcXml(resolve(PJC_DIR, file));
         const analysis = analyzePJC(content);
         
         if (!analysis.apuracao_juros || analysis.apuracao_juros.length === 0) {
@@ -286,7 +297,7 @@ describe('Golden Test Suite — PJC Pipeline', () => {
       const summaries: string[] = [];
       
       for (const file of files) {
-        const content = readFileSync(resolve(PJC_DIR, file), 'utf-8');
+        const content = readPjcXml(resolve(PJC_DIR, file));
         const analysis = analyzePJC(content);
         const inputs = convertPjcToEngineInputs(analysis, `fidelity-${file}`);
         const fr = inputs.fidelityReport;
