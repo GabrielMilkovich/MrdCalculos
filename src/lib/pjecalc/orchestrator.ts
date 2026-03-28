@@ -64,6 +64,7 @@ import type {
   PjecalcCorrecaoConfigRow,
   PjecalcHonorariosRow,
   PjecalcCustasConfigRow,
+  PjecalcDadosProcessoRow,
 } from './types';
 import { gerarReflexosPadrao, type VerbaBase, type ReflexoGerado } from './reflexo-engine';
 
@@ -756,7 +757,7 @@ export async function executarLiquidacao(
   // 2.5. CANONICAL INPUT LAYER — Resolve, Validate, Score
   const canonicalInput = resolveCanonicalInput({
     params: caseData.params,
-    dadosProcesso: (caseData as any).dadosProcesso || null,
+    dadosProcesso: (caseData.dadosProcesso as PjecalcDadosProcessoRow | null) || null,
     historicos: caseData.historicos,
     histOcorrencias,
     verbas: caseData.verbas,
@@ -802,31 +803,34 @@ export async function executarLiquidacao(
   // 3. Convert to engine types
   const engineParams = toEngineParams(caseData.params);
 
-  // P0 FIX: propagate data_citacao from dadosProcesso → engine params
-  // (pjecalc_parametros VIEW does not expose data_citacao; it lives in pjecalc_dados_processo)
-  const dataCitacao = (caseData as any).dadosProcesso?.data_citacao;
-  if (dataCitacao) {
-    engineParams.data_citacao = dataCitacao;
-    console.log(`[ORCHESTRATOR] data_citacao set: ${dataCitacao}`);
+  // P0-1/P0-4: propagate data_citacao and modo_calculo from dadosProcesso → engine params
+  // (pjecalc_parametros VIEW does not expose these; they live in pjecalc_dados_processo)
+  const dadosProcesso = caseData.dadosProcesso as PjecalcDadosProcessoRow | null;
+  if (dadosProcesso?.data_citacao) {
+    engineParams.data_citacao = dadosProcesso.data_citacao;
+    console.log(`[ORCHESTRATOR] data_citacao set: ${dadosProcesso.data_citacao}`);
   }
+  // P0-1: modo_calculo now has a real column — no more as any
+  const modoCalculo = dadosProcesso?.modo_calculo ?? 'assisted_from_pjc';
+  engineParams.modo_calculo = modoCalculo;
+  console.log(`[ORCHESTRATOR] modo_calculo set: ${modoCalculo}`);
 
-  // Propagate modo_calculo from dadosProcesso → engine params
-  const modoCalculo = (caseData as any).dadosProcesso?.modo_calculo as string | undefined;
-  if (modoCalculo === 'independent' || modoCalculo === 'assisted_from_pjc') {
-    engineParams.modo_calculo = modoCalculo;
-    console.log(`[ORCHESTRATOR] modo_calculo set: ${modoCalculo}`);
-  }
-
-  // Pre-flight validation: independent mode + ADC 58/59 requires data_citacao
-  if (engineParams.modo_calculo === 'independent') {
-    const correcaoIndice = (caseData as any).correcaoConfig?.indice as string | undefined;
-    const isADC = correcaoIndice === 'IPCA-E' || correcaoIndice === 'SELIC';
-    if (isADC && !engineParams.data_citacao) {
-      throw new Error(
-        'E_CITACAO_OBRIGATORIA: Cálculo independente com ADC 58/59 (IPCA-E/SELIC) exige data_citacao. ' +
-        'Preencha em Dados do Processo → Datas Processuais → Citação antes de calcular.'
-      );
-    }
+  // P0-4: Pre-flight — independent mode ALWAYS requires data_citacao (no fallback, no heuristics)
+  if (engineParams.modo_calculo === 'independent' && !engineParams.data_citacao) {
+    const correcaoIndice = (caseData.correcaoConfig as { indice?: string } | null)?.indice ?? '';
+    const jurosInicio = (caseData.correcaoConfig as { juros_inicio?: string } | null)?.juros_inicio ?? '';
+    const combinacoes = (caseData.correcaoConfig as { combinacoes_indice?: Array<{ indice: string }> } | null)?.combinacoes_indice ?? [];
+    const isADC = correcaoIndice === 'IPCA-E' || correcaoIndice === 'SELIC'
+      || combinacoes.some(c => c.indice === 'SELIC' || c.indice === 'IPCA-E');
+    const reason = isADC
+      ? 'ADC 58/59 (IPCA-E/SELIC) exige data_citacao para o split de correção'
+      : jurosInicio === 'citacao'
+        ? 'juros_inicio=citacao exige data_citacao para base correta dos juros'
+        : 'data_citacao é obrigatória no modo independente para garantir determinismo';
+    throw new Error(
+      `E_CITACAO_OBRIGATORIA: ${reason}. ` +
+      'Preencha em Dados do Processo → Datas Processuais → Citação antes de calcular.'
+    );
   }
 
   const engineFaltas = toEngineFaltas(caseData.faltas);
@@ -966,6 +970,8 @@ export async function executarLiquidacao(
     apurar_fgts: engineFgts.apurar,
     data_liquidacao: engineCorrecao.data_liquidacao,
     modo_precomputado: hasPrecomputed,
+    // P0-3: pass combination indices for ADC 58/59 gap check
+    combinacoes_indice: (caseData.correcaoConfig as { combinacoes_indice?: Array<{ indice: string }> } | null)?.combinacoes_indice,
   });
 
   // Log validation results

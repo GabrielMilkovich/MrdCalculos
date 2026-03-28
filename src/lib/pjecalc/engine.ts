@@ -1076,13 +1076,13 @@ export class PjeCalcEngine {
     let dataCitacao: Date | null;
     if (this.params.data_citacao) {
       dataCitacao = new Date(this.params.data_citacao);
-    } else if (modoCalculo === 'independent' && usarADC5859Check) {
-      // In independent mode, missing data_citacao with ADC 58/59 is a fatal error.
-      // The error is reported in validarParametros(); here we set null so downstream code
-      // skips the ADC path (no silent fallback).
+    } else if (modoCalculo === 'independent') {
+      // P0-4: In independent mode data_citacao is NEVER estimated — zero tolerance for heuristics.
+      // The error is reported in validarPreLiquidacao(); here we set null so downstream code
+      // skips the ADC/juros path without silent fallback.
       dataCitacao = null;
     } else {
-      // assisted_from_pjc: legacy estimation — ajuizamento + 60 days
+      // assisted_from_pjc: estimation allowed (W_CITACAO_ESTIMADA warning emitted by validarPreLiquidacao)
       dataCitacao = dataAjuiz ? new Date(dataAjuiz.getTime() + 60 * 24 * 60 * 60 * 1000) : null;
     }
 
@@ -2561,14 +2561,35 @@ export class PjeCalcEngine {
     if (!this.params.data_citacao) {
       const isIndependent = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent';
       const isADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
-      if (isIndependent && isADC) {
-        // Independent mode: missing data_citacao with ADC 58/59 is a FATAL error. No fallback.
-        itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'E_CITACAO_OBRIGATORIA: data_citacao é obrigatória no modo independente com ADC 58/59 (IPCA-E/SELIC). Preencha em Dados do Processo → Datas Processuais → Citação.' });
+      const isCombinacoesADC = (this.correcaoConfig as unknown as { combinacoes_indice?: Array<{ indice: string }> })
+        .combinacoes_indice?.some(c => c.indice === 'SELIC' || c.indice === 'IPCA-E') ?? false;
+      const jurosFromCitacao = this.correcaoConfig.juros_inicio === 'citacao';
+      if (isIndependent) {
+        // P0-4: Independent mode — data_citacao is ALWAYS required, no heuristics allowed.
+        const reason = isADC || isCombinacoesADC
+          ? 'ADC 58/59 (IPCA-E/SELIC) exige data_citacao para o split de correção'
+          : jurosFromCitacao
+            ? 'juros_inicio=citacao exige data_citacao para base correta dos juros'
+            : 'data_citacao é obrigatória no modo independente para garantir determinismo';
+        itens.push({
+          tipo: 'erro', modulo: 'Parâmetros',
+          mensagem: `E_CITACAO_OBRIGATORIA: ${reason}. Preencha em Dados do Processo → Datas Processuais → Citação.`,
+          detalhe: 'No modo independente não há estimativa de data_citacao. Informe a data real do mandado de citação.',
+        });
       } else if (this.params.data_ajuizamento) {
-        // assisted_from_pjc: estimation allowed with a warning
-        itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — será estimada a partir do ajuizamento + 60 dias (ADC 58/STF)', detalhe: 'Para maior precisão, preencha em Dados do Processo → Datas Processuais → Citação' });
+        // P0-2: assisted_from_pjc — show explicit estimated date so user sees what's being assumed
+        const estimada = new Date(new Date(this.params.data_ajuizamento).getTime() + 60 * 24 * 60 * 60 * 1000);
+        itens.push({
+          tipo: 'alerta', modulo: 'Parâmetros',
+          mensagem: `W_CITACAO_ESTIMADA: Data de citação não informada — estimada em ${estimada.toISOString().slice(0, 10)} (ajuizamento + 60 dias). Impacta o split IPCA-E/SELIC (ADC 58/59).`,
+          detalhe: 'Para precisão máxima, preencha a data real do mandado de citação em Dados do Processo → Datas Processuais → Citação.',
+        });
       } else {
-        itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — cálculo de juros ADC 58/STF pode ficar impreciso', detalhe: 'Preencha em Dados do Processo → Datas Processuais → Citação' });
+        itens.push({
+          tipo: 'alerta', modulo: 'Parâmetros',
+          mensagem: 'W_CITACAO_AUSENTE: Data de citação não informada — cálculo de juros ADC 58/STF pode ficar impreciso.',
+          detalhe: 'Preencha em Dados do Processo → Datas Processuais → Citação.',
+        });
       }
     }
     if (!this.params.estado || !this.params.municipio) {
@@ -2786,7 +2807,11 @@ export class PjeCalcEngine {
     let dataCitacaoSomente: Date | null = null;
     if (this.params.data_citacao) {
       dataCitacaoSomente = new Date(this.params.data_citacao);
-    } else if (modoCalculo !== 'independent') {
+    } else if (modoCalculo === 'independent') {
+      // P0-4: no fallback in independent mode — ever.
+      dataCitacaoSomente = null;
+    } else {
+      // assisted_from_pjc: estimation ajuizamento+60d
       dataCitacaoSomente = dataAjuiz ? new Date(dataAjuiz.getTime() + 60 * 24 * 60 * 60 * 1000) : null;
     }
 
