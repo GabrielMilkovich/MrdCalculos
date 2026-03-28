@@ -449,6 +449,41 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
       { nome: 'Saldo de Salário', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: { ...EXC_NENHUMA, faltas_nao_justificadas: true } },
     ],
   },
+  {
+    // Estabilidade Acidentária — Art. 118, Lei 8.213/91 (12 meses após alta previdenciária)
+    id: 'estabilidade_acidentaria',
+    nome: 'Estabilidade Acidentária',
+    descricao: 'Salários do período estabilitário por acidente de trabalho (art. 118, Lei 8.213/91 — 12 meses)',
+    categoria: 'misto',
+    icone: 'HeartPulse',
+    verbas: [
+      { nome: 'Salários Período Estabilitário (Acidente)', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Aviso Prévio Proporcional — Lei 12.506/2011 (30d + 3d por ano de serviço, max 90d)
+    id: 'aviso_previo_proporcional',
+    nome: 'Aviso Prévio Proporcional',
+    descricao: 'Aviso prévio indenizado proporcional ao tempo de serviço (Lei 12.506/2011: 30d + 3d/ano, max 90d)',
+    categoria: 'rescisao',
+    icone: 'CalendarClock',
+    verbas: [
+      { nome: 'Aviso Prévio Proporcional', tipo: 'principal', caracteristica: 'aviso_previo', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'apurada', quantidade_informada: 30, compor_principal: true, incidencias: INC_AVISO, exclusoes: EXC_NENHUMA },
+      { nome: '13º Salário Proporcional (Aviso)', tipo: 'principal', caracteristica: '13_salario', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+      { nome: 'Férias Proporcionais + 1/3 (Aviso)', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS_INDENIZADAS, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Danos Morais — Art. 223-G CLT (valor fixo arbitrado pelo juízo)
+    id: 'danos_morais',
+    nome: 'Danos Morais (Valor Fixo)',
+    descricao: 'Indenização por danos morais — valor fixo com correção monetária (art. 223-G CLT)',
+    categoria: 'misto',
+    icone: 'Heart',
+    verbas: [
+      { nome: 'Indenização por Danos Morais', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
 ];
 
 /**
