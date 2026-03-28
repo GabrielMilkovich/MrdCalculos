@@ -81,6 +81,12 @@ export interface PJCAnalysis {
   salario_familia?: { apurar: boolean; numero_filhos: number };
   /** Seguro-desemprego config */
   seguro_desemprego?: { apurar: boolean; parcelas: number; recebeu: boolean };
+  /**
+   * Parser-level warnings about missing or inferred data.
+   * W_CITACAO_AUSENTE: data_citacao not found in the PJC XML — must be entered manually
+   *   for independent mode with ADC 58/59 (IPCA-E/SELIC) to work correctly.
+   */
+  avisos?: Array<{ codigo: string; mensagem: string }>;
 }
 
 /** Entry from PJe-Calc's <ApuracaoDeJuros> — consolidated corrected values per competência */
@@ -323,6 +329,16 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     data_citacao: tsToDate(getTextContent(root, 'dataCitacao') || getTextContent(root, 'dataDaCitacao')) || undefined,
   };
 
+  // --- Parser-level warnings ---
+  const avisos: Array<{ codigo: string; mensagem: string }> = [];
+  if (!parametros.data_citacao) {
+    avisos.push({
+      codigo: 'W_CITACAO_AUSENTE',
+      mensagem: 'data_citacao não encontrada no arquivo PJC — ausente nos campos dataCitacao e dataDaCitacao. ' +
+        'Para cálculo independente com ADC 58/59 (IPCA-E/SELIC) é obrigatório informar manualmente em Dados do Processo.',
+    });
+  }
+
   // --- Resultado ---
   const gprec = root.getElementsByTagName('gprec')[0];
   const dados = root.getElementsByTagName('dadosEstruturados')[0];
@@ -496,17 +512,19 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   const ferias: FeriasAnalysis[] = [];
   const ferEls = root.getElementsByTagName('Ferias');
   for (const el of Array.from(ferEls)) {
-    // Skip nested refs
-    if (!getTextContent(el, 'situacao') && !getTextContent(el, 'prazoPeriodoConcessivoEmDias')) continue;
+    // Skip nested refs (some PJC versions use 'prazo', others 'prazoPeriodoConcessivoEmDias')
+    const prazoRaw = getTextContent(el, 'prazoPeriodoConcessivoEmDias') || getTextContent(el, 'prazo');
+    if (!getTextContent(el, 'situacao') && !prazoRaw) continue;
     ferias.push({
-      aquisitivo_inicio: tsToDate(getTextContent(el, 'dataInicialPeriodoAquisitivo')),
-      aquisitivo_fim: tsToDate(getTextContent(el, 'dataFinalPeriodoAquisitivo')),
-      concessivo_inicio: tsToDate(getTextContent(el, 'dataInicialPeriodoConcessivo')),
-      concessivo_fim: tsToDate(getTextContent(el, 'dataFinalPeriodoConcessivo')),
-      dias: parseInt(getTextContent(el, 'prazoPeriodoConcessivoEmDias')) || 30,
+      // PJC schema variants: some use 'dataInicialDoPeriodoAquisitivo' (with 'Do'), others without
+      aquisitivo_inicio: tsToDate(getTextContent(el, 'dataInicialDoPeriodoAquisitivo') || getTextContent(el, 'dataInicialPeriodoAquisitivo')),
+      aquisitivo_fim: tsToDate(getTextContent(el, 'dataFinalDoPeriodoAquisitivo') || getTextContent(el, 'dataFinalPeriodoAquisitivo')),
+      concessivo_inicio: tsToDate(getTextContent(el, 'dataInicialDoPeriodoConcessivo') || getTextContent(el, 'dataInicialPeriodoConcessivo')),
+      concessivo_fim: tsToDate(getTextContent(el, 'dataFinalDoPeriodoConcessivo') || getTextContent(el, 'dataFinalPeriodoConcessivo')),
+      dias: parseInt(prazoRaw) || 30,
       abono: getTextContent(el, 'abono') === 'true',
-      dias_abono: parseInt(getTextContent(el, 'diasAbono')) || 0,
-      dobra: getTextContent(el, 'dobra') === 'true',
+      dias_abono: parseInt(getTextContent(el, 'quantidadeDiasAbono') || getTextContent(el, 'diasAbono')) || 0,
+      dobra: getTextContent(el, 'dobraGeral') === 'true' || getTextContent(el, 'dobra') === 'true',
       situacao: getTextContent(el, 'situacao') || 'GOZADAS',
       gozo_inicio: tsToDate(getTextContent(el, 'dataInicialGozo')),
       gozo_fim: tsToDate(getTextContent(el, 'dataFinalGozo')),
@@ -707,6 +725,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       parcelas: parseInt(getTextContent(segEl, 'parcelas')) || 0,
       recebeu: getTextContent(segEl, 'recebeu') === 'true',
     } : undefined,
+    avisos: avisos.length > 0 ? avisos : undefined,
   };
 }
 

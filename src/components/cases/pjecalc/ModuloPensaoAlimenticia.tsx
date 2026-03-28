@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Save, Loader2 } from "lucide-react";
 import * as svc from "@/lib/pjecalc/service";
@@ -20,7 +21,7 @@ export function ModuloPensaoAlimenticia({ caseId }: Props) {
     queryFn: () => svc.getPensaoConfig(caseId),
   });
 
-  const [form, setForm] = useState({ apurar: false, percentual: '', incidir_sobre_juros: false });
+  const [form, setForm] = useState({ apurar: false, percentual: '', incidir_sobre_juros: false, base: 'liquido' as 'liquido' | 'bruto' | 'principal' });
 
   useEffect(() => {
     if (data) {
@@ -29,6 +30,7 @@ export function ModuloPensaoAlimenticia({ caseId }: Props) {
         apurar: (d.apurar as boolean) ?? false,
         percentual: d.percentual?.toString() || '',
         incidir_sobre_juros: (d.incidir_sobre_juros as boolean) ?? false,
+        base: ((d.base_incidencia as string) || 'liquido') as 'liquido' | 'bruto' | 'principal',
       });
     }
   }, [data]);
@@ -38,7 +40,7 @@ export function ModuloPensaoAlimenticia({ caseId }: Props) {
     try {
       await svc.upsertPensaoConfig(caseId, {
         apurar: form.apurar, percentual: form.percentual ? parseFloat(form.percentual) : 0,
-        incidir_sobre_juros: form.incidir_sobre_juros, base: 'liquido', beneficiario: '', observacoes: '', valor_fixo: null,
+        incidir_sobre_juros: form.incidir_sobre_juros, base: form.base, beneficiario: '', observacoes: '', valor_fixo: null,
       });
       qc.invalidateQueries({ queryKey: ["pjecalc_pensao_config", caseId] });
       toast.success("Pensão Alimentícia salva!");
@@ -62,7 +64,17 @@ export function ModuloPensaoAlimenticia({ caseId }: Props) {
             <div className="space-y-4">
               <div><Label className="text-xs font-semibold">Alíquota (%)</Label><Input type="number" step="0.01" value={form.percentual} onChange={e => setForm(p => ({ ...p, percentual: e.target.value }))} className="mt-1 h-8 text-xs w-40" placeholder="Ex: 30" /></div>
               <div className="flex items-center gap-2"><Checkbox checked={form.incidir_sobre_juros} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_juros: !!v }))} /><Label className="text-xs">Incidir sobre Juros</Label></div>
-              <p className="text-[10px] text-muted-foreground">O desconto de pensão alimentícia será aplicado sobre a base líquida da condenação conforme determinação judicial.</p>
+              <div>
+                <Label className="text-xs font-semibold">Base de Cálculo</Label>
+                <Select value={form.base} onValueChange={v => setForm(p => ({ ...p, base: v as typeof form.base }))}>
+                  <SelectTrigger className="mt-1 h-8 text-xs w-56"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="liquido">Base Líquida (após INSS e IR)</SelectItem>
+                    <SelectItem value="bruto">Base Bruta (antes dos descontos)</SelectItem>
+                    <SelectItem value="principal">Somente Principal (sem multas)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
         </CardContent>

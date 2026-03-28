@@ -117,6 +117,7 @@ function toEngineParams(p: PjecalcParametrosRow): PjeParametros {
     sabado_dia_util: p.sabado_dia_util ?? true,
     considerar_feriado_estadual: p.considerar_feriado_estadual ?? false,
     considerar_feriado_municipal: p.considerar_feriado_municipal ?? false,
+    tipo_mes: (p.tipo_mes as 'civil' | 'comercial' | null | undefined) ?? 'comercial',
   };
 }
 
@@ -145,6 +146,50 @@ function toEngineFerias(ferias: PjecalcFeriasRow[]): PjeFerias[] {
     abono_dias: f.dias_abono || 0,
     periodos_gozo: f.gozo_inicio ? [{ inicio: f.gozo_inicio, fim: f.gozo_fim || f.gozo_inicio, dias: f.dias || 30 }] : [],
   }));
+}
+
+// Normalise DB enum values to engine enum values (case-insensitive)
+function normalizeDivisorTipo(raw: string | null | undefined): PjeVerba['tipo_divisor'] {
+  const map: Record<string, PjeVerba['tipo_divisor']> = {
+    'INFORMADO': 'informado', 'OUTRO_VALOR': 'informado',
+    'JORNADA': 'jornada', 'MENSAL': 'mensal', 'DIARIO': 'diario',
+    'HORA': 'hora', 'MINUTO': 'minuto',
+  };
+  return map[(raw || '').toUpperCase()] ?? 'informado';
+}
+
+function normalizeQuantidadeTipo(raw: string | null | undefined, caracteristica: string): PjeVerba['tipo_quantidade'] {
+  const map: Record<string, PjeVerba['tipo_quantidade']> = {
+    'INFORMADA': 'informada', 'AVOS': 'avos', 'CALENDARIO': 'calendario',
+    'REPOUSOS': 'repousos', 'CARTAO_HORAS': 'cartao_horas',
+    'CARTAO_DIAS': 'cartao_dias', 'MEDIA_APURADA': 'media_apurada',
+  };
+  const fromDB = map[(raw || '').toUpperCase()];
+  if (fromDB) return fromDB;
+  // Fallback: infer from caracteristica when DB not populated
+  if (caracteristica === '13_salario' || caracteristica === 'ferias') return 'avos';
+  return 'informada';
+}
+
+function normalizeComportamento(raw: string | null | undefined): PjeVerba['comportamento_reflexo'] {
+  const map: Record<string, PjeVerba['comportamento_reflexo']> = {
+    'VALOR_MENSAL': 'valor_mensal', 'MEDIA_VALOR_ABSOLUTO': 'media_valor_absoluto',
+    'MEDIA_VALOR_CORRIGIDO': 'media_valor_corrigido', 'MEDIA_QUANTIDADE': 'media_quantidade',
+    'MEDIA_PELA_QUANTIDADE': 'media_pela_quantidade',
+  };
+  return map[(raw || '').toUpperCase()] ?? 'valor_mensal';
+}
+
+function normalizeGerarVerba(raw: string | null | undefined): 'diferenca' | 'devido' {
+  return (raw || '').toUpperCase() === 'DEVIDO' ? 'devido' : 'diferenca';
+}
+
+function normalizeFracaoMes(raw: string | null | undefined): PjeVerba['fracao_mes_modo'] {
+  const map: Record<string, PjeVerba['fracao_mes_modo']> = {
+    'MANTER_FRACAO': 'manter_fracao', 'INTEGRALIZAR': 'integralizar',
+    'DESPREZAR': 'desprezar', 'DESPREZAR_MENOR_15': 'desprezar_menor_15',
+  };
+  return map[(raw || '').toUpperCase()] ?? 'manter_fracao';
 }
 
 function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
@@ -188,6 +233,15 @@ function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
       pensao_alimenticia: false,
     };
 
+    // Read engine-critical fields from DB (now exposed via view after migration 20260327000010)
+    const tipoDivisor = normalizeDivisorTipo(v.divisor_tipo);
+    const tipoQuantidade = normalizeQuantidadeTipo(v.quantidade_tipo, caracteristica);
+    const fracaoMesModo = normalizeFracaoMes(v.fracao_mes_modo);
+    const comportamentoReflexa = v.comportamento_reflexo
+      ? normalizeComportamento(v.comportamento_reflexo)
+      : undefined;
+    const periodoMediaReflexa = v.periodo_media_reflexo as PjeVerba['periodo_media_reflexo'] | undefined;
+
     return {
       id: v.id,
       nome: v.nome,
@@ -195,9 +249,9 @@ function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
       valor: (v.valor as 'calculado' | 'informado') || 'calculado',
       caracteristica,
       ocorrencia_pagamento: ocorrenciaPagamento,
-      compor_principal: true,
+      compor_principal: v.compor_principal !== false,
       zerar_valor_negativo: false,
-      dobrar_valor_devido: false,
+      dobrar_valor_devido: v.dobrar_valor_devido === true,
       periodo_inicio: v.periodo_inicio || '',
       periodo_fim: v.periodo_fim || '',
       base_calculo: {
@@ -207,20 +261,29 @@ function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
         proporcionalizar: bcProporcionalizar,
         integralizar: bcIntegralizar,
       },
-      tipo_divisor: 'informado' as const,
+      tipo_divisor: tipoDivisor,
       divisor_informado: v.divisor_informado || 1,
       multiplicador: v.multiplicador || 1,
-      tipo_quantidade: caracteristica === '13_salario' || caracteristica === 'ferias' ? 'avos' as const : 'informada' as const,
-      quantidade_informada: 1,
-      quantidade_proporcionalizar: false,
-      exclusoes: { faltas_justificadas: false, faltas_nao_justificadas: false, ferias_gozadas: false },
+      tipo_quantidade: tipoQuantidade,
+      quantidade_informada: v.quantidade_valor ?? 1,
+      quantidade_proporcionalizar: v.quantidade_proporcionalizar === true,
+      fracao_mes_modo: fracaoMesModo,
+      exclusoes: {
+        faltas_justificadas: v.excluir_falta_justificada === true,
+        faltas_nao_justificadas: v.excluir_falta_nao_justificada === true,
+        ferias_gozadas: v.excluir_ferias_gozadas === true,
+      },
       valor_informado_devido: v.valor_informado_devido ?? undefined,
       valor_informado_pago: v.valor_informado_pago ?? undefined,
       incidencias,
       juros_ajuizamento: 'ocorrencias_vencidas' as const,
       verba_principal_id: v.verba_principal_id ?? undefined,
-      gerar_verba_reflexa: 'diferenca' as const,
-      gerar_verba_principal: 'diferenca' as const,
+      gerar_verba_reflexa: normalizeGerarVerba(v.gerar_reflexo),
+      gerar_verba_principal: normalizeGerarVerba(v.gerar_principal),
+      comportamento_reflexo: comportamentoReflexa,
+      periodo_media_reflexo: periodoMediaReflexa,
+      hora_noturna_ficticia: v.hora_noturna_ficticia === true,
+      constante_mensal: v.constante_mensal ?? undefined,
       ordem: v.ordem || 0,
     };
   });
@@ -241,51 +304,66 @@ function toEngineCartaoPonto(cp: PjecalcCartaoPontoRow[]): PjeCartaoPonto[] {
 }
 
 function toEngineFgtsConfig(cfg: PjecalcFgtsConfigRow | null): PjeFGTSConfig {
+  // Support both old (habilitado/percentual_multa) and new column names
+  const apurar = cfg?.apurar ?? cfg?.habilitado ?? true;
+  const multaPercentual = cfg?.multa_percentual ?? cfg?.percentual_multa ?? 40;
+  const saldosSaques = Array.isArray(cfg?.saldos_saques) ? cfg!.saldos_saques : [];
   return {
-    apurar: cfg?.habilitado ?? true,
-    destino: 'pagar_reclamante',
-    compor_principal: false,
-    multa_apurar: true,
-    multa_tipo: 'calculada',
-    multa_percentual: cfg?.percentual_multa ?? 40,
-    multa_base: 'diferenca',
-    saldos_saques: [],
-    deduzir_saldo: false,
-    lc110_10: false,
-    lc110_05: false,
+    apurar,
+    destino: (cfg?.destino as PjeFGTSConfig['destino']) ?? 'pagar_reclamante',
+    compor_principal: cfg?.compor_principal ?? false,
+    multa_apurar: cfg?.multa_apurar ?? true,
+    multa_tipo: (cfg?.multa_tipo as PjeFGTSConfig['multa_tipo']) ?? 'calculada',
+    multa_percentual: multaPercentual,
+    multa_base: (cfg?.multa_base as PjeFGTSConfig['multa_base']) ?? 'diferenca',
+    multa_valor_informado: cfg?.multa_valor_informado ?? undefined,
+    saldos_saques: saldosSaques,
+    deduzir_saldo: cfg?.deduzir_saldo ?? false,
+    lc110_10: cfg?.lc110_10 ?? false,
+    lc110_05: cfg?.lc110_05 ?? false,
   };
 }
 
 function toEngineCsConfig(cfg: PjecalcCsConfigRow | null): PjeCSConfig {
+  // Support both old (habilitado/aliquota_empresa) and new column names
+  const apurarSegurado = cfg?.apurar_segurado ?? cfg?.habilitado ?? true;
+  const aliqEmpresa = cfg?.aliquota_empresa_fixa ?? cfg?.aliquota_empresa ?? 20;
+  const aliqSat = cfg?.aliquota_sat_fixa ?? cfg?.aliquota_sat ?? 2;
+  const aliqTerceiros = cfg?.aliquota_terceiros_fixa ?? cfg?.aliquota_terceiros ?? 5.8;
   return {
-    apurar_segurado: cfg?.habilitado ?? true,
+    apurar_segurado: apurarSegurado,
     cobrar_reclamante: cfg?.cobrar_reclamante ?? true,
     cs_sobre_salarios_pagos: cfg?.cs_sobre_salarios_pagos ?? false,
-    aliquota_segurado_tipo: 'empregado',
-    limitar_teto: true,
-    apurar_empresa: true,
-    apurar_sat: true,
-    apurar_terceiros: true,
+    aliquota_segurado_tipo: (cfg?.aliquota_segurado_tipo as PjeCSConfig['aliquota_segurado_tipo']) ?? 'empregado',
+    aliquota_segurado_fixa: cfg?.aliquota_segurado_fixa ?? undefined,
+    limitar_teto: cfg?.limitar_teto ?? true,
+    apurar_empresa: cfg?.apurar_empresa ?? true,
+    apurar_sat: cfg?.apurar_sat ?? true,
+    apurar_terceiros: cfg?.apurar_terceiros ?? true,
     aliquota_empregador_tipo: 'fixa',
-    aliquota_empresa_fixa: cfg?.aliquota_empresa ?? 20,
-    aliquota_sat_fixa: cfg?.aliquota_sat ?? 2,
-    aliquota_terceiros_fixa: cfg?.aliquota_terceiros ?? 5.8,
-    periodos_simples: [],
+    aliquota_empresa_fixa: aliqEmpresa,
+    aliquota_sat_fixa: aliqSat,
+    aliquota_terceiros_fixa: aliqTerceiros,
+    periodos_simples: Array.isArray(cfg?.periodos_simples) ? cfg!.periodos_simples as PjeCSConfig['periodos_simples'] : [],
+    contribuicao_sindical: cfg?.contribuicao_sindical ?? false,
+    contribuicao_sindical_pos2017: cfg?.contribuicao_sindical_pos2017 ?? false,
   };
 }
 
 function toEngineIrConfig(cfg: PjecalcIrConfigRow | null): PjeIRConfig {
+  // Support both old (habilitado) and new column names (apurar)
+  const apurar = cfg?.apurar ?? cfg?.habilitado ?? true;
   return {
-    apurar: cfg?.habilitado ?? true,
-    incidir_sobre_juros: false,
-    cobrar_reclamado: false,
-    tributacao_exclusiva_13: true,
-    tributacao_separada_ferias: true,
-    deduzir_cs: true,
-    deduzir_prev_privada: false,
-    deduzir_pensao: false,
-    deduzir_honorarios: false,
-    aposentado_65: false,
+    apurar,
+    incidir_sobre_juros: cfg?.incidir_sobre_juros ?? false,
+    cobrar_reclamado: cfg?.cobrar_reclamado ?? false,
+    tributacao_exclusiva_13: cfg?.tributacao_exclusiva_13 ?? true,
+    tributacao_separada_ferias: cfg?.tributacao_separada_ferias ?? true,
+    deduzir_cs: cfg?.deduzir_cs ?? true,
+    deduzir_prev_privada: cfg?.deduzir_prev_privada ?? false,
+    deduzir_pensao: cfg?.deduzir_pensao ?? false,
+    deduzir_honorarios: cfg?.deduzir_honorarios ?? false,
+    aposentado_65: cfg?.aposentado_65 ?? false,
     dependentes: cfg?.dependentes ?? 0,
   };
 }
@@ -304,7 +382,7 @@ function toEngineCorrecaoConfig(
         ? JSON.parse(correcaoRow.combinacoes_indice)
         : correcaoRow.combinacoes_indice;
       combinacoes_indice = parsed;
-    } catch { /* ignore */ }
+    } catch (e) { console.warn('[ORCHESTRATOR] Falha ao parsear combinacoes_indice JSON:', e); }
   }
   if (correcaoRow?.combinacoes_juros) {
     try {
@@ -312,7 +390,7 @@ function toEngineCorrecaoConfig(
         ? JSON.parse(correcaoRow.combinacoes_juros)
         : correcaoRow.combinacoes_juros;
       combinacoes_juros = parsed;
-    } catch { /* ignore */ }
+    } catch (e) { console.warn('[ORCHESTRATOR] Falha ao parsear combinacoes_juros JSON:', e); }
   }
 
   const jurosRow = atualizacaoConfig.find(a => a.tipo === 'juros');
@@ -326,7 +404,12 @@ function toEngineCorrecaoConfig(
   // CRITICAL: data_liquidacao MUST be deterministic — NEVER use new Date()
   const dataLiq = cfg?.data_liquidacao;
   if (!dataLiq) {
-    console.error('[ORCHESTRATOR] CRITICAL: data_liquidacao not set in correcaoConfig — calculation will NOT be deterministic');
+    throw new Error(
+      'data_liquidacao não definida: preencha o campo "Data de Liquidação" na aba de Correção Monetária ' +
+      'para garantir que o cálculo seja determinístico e reprodutível. ' +
+      'Usar a data atual como fallback produziria resultados diferentes a cada execução, ' +
+      'o que é inaceitável em cálculo judicial.'
+    );
   }
 
   // FIX AUDIT-001: Read juros_apos_deducao_cs from atualizacaoConfig instead of hardcoding true.
@@ -347,7 +430,7 @@ function toEngineCorrecaoConfig(
     juros_inicio: (cfg?.juros_inicio as 'ajuizamento' | 'citacao' | 'vencimento') || 'ajuizamento',
     multa_523: cfg?.multa_523 ?? false,
     multa_523_percentual: cfg?.multa_523_percentual ?? 10,
-    data_liquidacao: dataLiq || new Date().toISOString().slice(0, 10),
+    data_liquidacao: dataLiq,
     combinacoes_indice,
     combinacoes_juros,
     juros_apos_deducao_cs: jurosAposCS,
@@ -519,6 +602,19 @@ async function loadIndicesDB(): Promise<PjeIndiceRow[]> {
   }
 }
 
+async function loadSeguroConfig(caseId: string): Promise<{ apurar: boolean; parcelas: number; recebeu: boolean; valor_parcela?: number } | null> {
+  try {
+    const data = await svc.getSeguroConfig(caseId);
+    if (!data) return null;
+    return {
+      apurar: (data.apurar as boolean) ?? false,
+      parcelas: (data.parcelas as number) ?? 5,
+      recebeu: (data.recebeu as boolean) ?? false,
+      valor_parcela: data.valor_parcela ? Number(data.valor_parcela) : undefined,
+    };
+  } catch { return null; }
+}
+
 async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeguroDesempregoDB[]> {
   try {
     const { data } = await supabase
@@ -533,6 +629,59 @@ async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeg
         valor_inicial: Number(r.valor_inicial), valor_final: Number(r.valor_final),
         percentual: Number(r.percentual), valor_soma: Number(r.valor_soma),
         valor_piso: Number(r.valor_piso), valor_teto: Number(r.valor_teto),
+      }));
+    }
+    return [];
+  } catch { return []; }
+}
+
+async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalarioMinimoRow[]> {
+  try {
+    const { data } = await supabase
+      .from('pjecalc_salario_minimo' as any)
+      .select('competencia, valor')
+      .order('competencia', { ascending: true });
+    if (data && data.length > 0) {
+      console.log(`[ORCHESTRATOR] Loaded ${data.length} salário mínimo registros from DB`);
+      return (data as any[]).map(r => ({
+        competencia: r.competencia,
+        valor: Number(r.valor),
+      }));
+    }
+    return [];
+  } catch { return []; }
+}
+
+async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types').PjeExcecaoCargaHoraria[]> {
+  try {
+    const { data } = await supabase
+      .from('pjecalc_excecoes_carga' as any)
+      .select('id, periodo_inicio, periodo_fim, carga_horaria_mensal')
+      .eq('case_id', caseId);
+    if (data && data.length > 0) {
+      console.log(`[ORCHESTRATOR] Loaded ${data.length} exceções de carga horária`);
+      return (data as any[]).map(r => ({
+        data_inicial: r.periodo_inicio,
+        data_final: r.periodo_fim,
+        carga_horaria: Number(r.carga_horaria_mensal),
+      }));
+    }
+    return [];
+  } catch { return []; }
+}
+
+async function loadExcecoesSabado(caseId: string): Promise<import('./engine-types').PjeExcecaoSabado[]> {
+  try {
+    const { data } = await supabase
+      .from('pjecalc_excecoes_sabado' as any)
+      .select('id, data_inicio, data_fim, sabado_dia_util')
+      .eq('case_id', caseId);
+    if (data && data.length > 0) {
+      console.log(`[ORCHESTRATOR] Loaded ${data.length} exceções de sábado`);
+      return (data as any[]).map(r => ({
+        data_inicial: r.data_inicio,
+        data_final: r.data_fim,
+        sabado_dia_util: Boolean(r.sabado_dia_util),
       }));
     }
     return [];
@@ -585,6 +734,9 @@ export async function executarLiquidacao(
     salarioFamiliaConfig,
     seguroDesempregoDB,
     salarioFamiliaDB,
+    salarioMinimoDB,
+    excecoesCargaDB,
+    excecoesSabadoDB,
   ] = await Promise.all([
     svc.getHistoricoOcorrencias(caseId),
     loadIndicesDB(),
@@ -596,6 +748,9 @@ export async function executarLiquidacao(
     loadSalarioFamiliaConfig(caseId),
     loadSeguroDesempregoDB(),
     loadSalarioFamiliaDBRows(),
+    loadSalarioMinimoDB(),
+    loadExcecoesCarga(caseId),
+    loadExcecoesSabado(caseId),
   ]);
 
   // 2.5. CANONICAL INPUT LAYER — Resolve, Validate, Score
@@ -646,6 +801,34 @@ export async function executarLiquidacao(
 
   // 3. Convert to engine types
   const engineParams = toEngineParams(caseData.params);
+
+  // P0 FIX: propagate data_citacao from dadosProcesso → engine params
+  // (pjecalc_parametros VIEW does not expose data_citacao; it lives in pjecalc_dados_processo)
+  const dataCitacao = (caseData as any).dadosProcesso?.data_citacao;
+  if (dataCitacao) {
+    engineParams.data_citacao = dataCitacao;
+    console.log(`[ORCHESTRATOR] data_citacao set: ${dataCitacao}`);
+  }
+
+  // Propagate modo_calculo from dadosProcesso → engine params
+  const modoCalculo = (caseData as any).dadosProcesso?.modo_calculo as string | undefined;
+  if (modoCalculo === 'independent' || modoCalculo === 'assisted_from_pjc') {
+    engineParams.modo_calculo = modoCalculo;
+    console.log(`[ORCHESTRATOR] modo_calculo set: ${modoCalculo}`);
+  }
+
+  // Pre-flight validation: independent mode + ADC 58/59 requires data_citacao
+  if (engineParams.modo_calculo === 'independent') {
+    const correcaoIndice = (caseData as any).correcaoConfig?.indice as string | undefined;
+    const isADC = correcaoIndice === 'IPCA-E' || correcaoIndice === 'SELIC';
+    if (isADC && !engineParams.data_citacao) {
+      throw new Error(
+        'E_CITACAO_OBRIGATORIA: Cálculo independente com ADC 58/59 (IPCA-E/SELIC) exige data_citacao. ' +
+        'Preencha em Dados do Processo → Datas Processuais → Citação antes de calcular.'
+      );
+    }
+  }
+
   const engineFaltas = toEngineFaltas(caseData.faltas);
   const engineFerias = toEngineFerias(caseData.ferias);
   const engineCartao = toEngineCartaoPonto(caseData.cartaoPonto);
@@ -756,7 +939,15 @@ export async function executarLiquidacao(
   const engineHonorarios = toEngineHonorariosConfig(caseData.honorarios);
   const engineCustas = toEngineCustasConfig(caseData.custasConfig);
 
-  const engineSeguro: PjeSeguroConfig = { apurar: false, parcelas: 0, recebeu: false };
+  const rawSeguro = await loadSeguroConfig(caseId);
+  const engineSeguro: PjeSeguroConfig = rawSeguro
+    ? {
+        apurar: rawSeguro.apurar ?? false,
+        parcelas: rawSeguro.parcelas ?? 5,
+        recebeu: rawSeguro.recebeu ?? false,
+        valor_parcela: rawSeguro.valor_parcela ?? undefined,
+      }
+    : { apurar: false, parcelas: 0, recebeu: false };
 
   // 3.5. PRE-CALCULATION TABLE VALIDATION — Block if essential tables missing
   const hasPrecomputed = engineVerbas.some(v => v.ocorrencias_precomputadas && v.ocorrencias_precomputadas.length > 0);
@@ -806,14 +997,15 @@ export async function executarLiquidacao(
     indicesDB,           // 14: correction indices  
     faixasINSSDB,        // 15: INSS progressive brackets
     faixasIRDB,          // 16: IR brackets
-    [],                  // 17: excecoesCargas (TODO: load from pjecalc_excecoes_carga when available)
+    excecoesCargaDB,     // 17: exceções de carga horária (jornadas reduzidas)
     feriadosDB,          // 18: holidays
     prevPrivadaConfig,   // 19: previdência privada
     pensaoConfig,        // 20: pensão alimentícia
     salarioFamiliaConfig,// 21: salário família
     seguroDesempregoDB,  // 22: seguro-desemprego DB rows
     salarioFamiliaDB,    // 23: salário-família DB rows
-    [],                  // 24: excecoesSabado (TODO: load from DB when available)
+    excecoesSabadoDB,    // 24: exceções de sábado (dia útil override)
+    salarioMinimoDB,     // 25: salário mínimo DB (for insalubridade base — art. 192 CLT)
   );
 
   const result = engine.liquidar();

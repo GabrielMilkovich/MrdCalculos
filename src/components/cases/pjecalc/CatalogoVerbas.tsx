@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { BookOpen, Search, Loader2, Zap, UserMinus, Scale, Clock, Timer, ShieldAlert, LogOut, Handshake, PackagePlus } from "lucide-react";
+import { BookOpen, Search, Loader2, Zap, UserMinus, Scale, Clock, Timer, ShieldAlert, LogOut, Handshake, PackagePlus, TrendingUp, Layers, DollarSign, Calendar, MapPin, Award, Bus, Heart, Baby, MinusCircle, Coins, AlertTriangle, Moon, Users } from "lucide-react";
 import { TEMPLATES_EXPRESSO, type TemplateExpresso } from "@/lib/pjecalc/templates-expresso";
 
 // =====================================================
@@ -85,6 +85,20 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Zap: <Zap className="h-5 w-5" />,
   LogOut: <LogOut className="h-5 w-5" />,
   Handshake: <Handshake className="h-5 w-5" />,
+  TrendingUp: <TrendingUp className="h-5 w-5" />,
+  Layers: <Layers className="h-5 w-5" />,
+  DollarSign: <DollarSign className="h-5 w-5" />,
+  Calendar: <Calendar className="h-5 w-5" />,
+  MapPin: <MapPin className="h-5 w-5" />,
+  Award: <Award className="h-5 w-5" />,
+  Bus: <Bus className="h-5 w-5" />,
+  Heart: <Heart className="h-5 w-5" />,
+  Baby: <Baby className="h-5 w-5" />,
+  MinusCircle: <MinusCircle className="h-5 w-5" />,
+  Coins: <Coins className="h-5 w-5" />,
+  AlertTriangle: <AlertTriangle className="h-5 w-5" />,
+  Moon: <Moon className="h-5 w-5" />,
+  Users: <Users className="h-5 w-5" />,
 };
 
 const CAT_COLORS: Record<string, string> = {
@@ -177,6 +191,7 @@ export function CatalogoVerbas({ caseId, periodoInicio, periodoFim, ordemBase, o
           compor_principal: v.compor_principal,
           incidencias: v.incidencias,
           exclusoes: v.exclusoes,
+          ...(v.base_calculo ? { base_calculo: v.base_calculo } : {}),
           periodo_inicio: periodoInicio,
           periodo_fim: periodoFim,
           ordem: ordem++,

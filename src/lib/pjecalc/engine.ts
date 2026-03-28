@@ -25,7 +25,7 @@ import type {
   PjeLiquidacaoResult, PjeValidationItem, PjeValidationResult,
   PjePrevidenciaPrivadaResult, PjeSalarioFamiliaResult,
   PjeCombinacaoIndice, PjeCombinacaoJuros,
-  PjeSeguroDesempregoDB, PjeSalarioFamiliaDB,
+  PjeSeguroDesempregoDB, PjeSalarioFamiliaDB, PjeSalarioMinimoRow,
 } from './engine-types';
 
 import {
@@ -62,6 +62,7 @@ export class PjeCalcEngine {
   private salarioFamiliaConfig: PjeSalarioFamiliaConfig;
   private seguroDesempregoDB: PjeSeguroDesempregoDB[];
   private salarioFamiliaDB: PjeSalarioFamiliaDB[];
+  private salarioMinimoDB: PjeSalarioMinimoRow[];
   // Map of verba results by verba_id for reflexa resolution
   private verbaResultsMap: Map<string, PjeVerbaResult> = new Map();
   // Structured warnings collected during calculation
@@ -106,6 +107,7 @@ export class PjeCalcEngine {
     seguroDesempregoDB: PjeSeguroDesempregoDB[] = [],
     salarioFamiliaDB: PjeSalarioFamiliaDB[] = [],
     excecoesSabado: PjeExcecaoSabado[] = [],
+    salarioMinimoDB: PjeSalarioMinimoRow[] = [],
   ) {
     this.params = params;
     this.historicos = historicos;
@@ -142,6 +144,7 @@ export class PjeCalcEngine {
     this.salarioFamiliaConfig = salarioFamiliaConfig;
     this.seguroDesempregoDB = seguroDesempregoDB;
     this.salarioFamiliaDB = salarioFamiliaDB;
+    this.salarioMinimoDB = salarioMinimoDB;
   }
 
   // =====================================================
@@ -199,11 +202,23 @@ export class PjeCalcEngine {
   // CÁLCULO DE AVOS (13º e Férias) — com Limitar Avos
   // =====================================================
   
-  calcularAvos(competencia: string, caracteristica: string): number {
-    const admDate = new Date(this.params.data_admissao);
-    const demDate = this.params.data_demissao 
+  // Retorna data de demissão projetada (com aviso prévio indenizado, se aplicável)
+  private getDataDemissaoEfetiva(): Date {
+    const demDate = this.params.data_demissao
       ? new Date(this.params.data_demissao)
       : new Date();
+    if (this.params.projetar_aviso_indenizado && this.params.data_demissao) {
+      const diasAviso = this.calcularPrazoAviso();
+      const projetada = new Date(demDate);
+      projetada.setDate(projetada.getDate() + diasAviso);
+      return projetada;
+    }
+    return demDate;
+  }
+
+  calcularAvos(competencia: string, caracteristica: string): number {
+    const admDate = new Date(this.params.data_admissao);
+    const demDate = this.getDataDemissaoEfetiva();
     const [ano, mes] = competencia.split('-').map(Number);
     
     if (caracteristica === '13_salario') {
@@ -424,12 +439,20 @@ export class PjeCalcEngine {
       div = new Decimal(verba.divisor_informado || 30);
     }
 
+    // Art. 73 §1° CLT: hora noturna fictícia — cada hora real = 52,5 min
+    // Reduz o divisor por 7/8 (= 52.5/60), tornando a hora noturna mais valiosa (fator 8/7)
+    if (verba.hora_noturna_ficticia) {
+      div = div.times(new Decimal(7).div(8)).toDP(4);
+    }
+
     // Quantidade resolution (with calendario + apurada support)
     let qtd: Decimal;
     if (verba.tipo_quantidade === 'cartao_ponto') {
       qtd = new Decimal(this.getCartaoPontoQuantidade(competencia, verba.quantidade_cartao_colunas) || 0);
     } else if (verba.tipo_quantidade === 'avos') {
       qtd = new Decimal(this.calcularAvos(competencia, verba.caracteristica));
+    } else if (verba.tipo_quantidade === 'repousos') {
+      qtd = new Decimal(this.calcularQuantidadeCalendario(competencia, 'repousos'));
     } else if (verba.tipo_quantidade === 'calendario') {
       qtd = new Decimal(this.calcularQuantidadeCalendario(competencia, 'dias_uteis'));
     } else if (verba.tipo_quantidade === 'apurada') {
@@ -505,7 +528,21 @@ export class PjeCalcEngine {
     }
 
     // Proporcionalizar DEVIDO separadamente (Fase 6 - PJe-Calc)
-    if (verba.proporcionalizar_devido) {
+    // GUARD: Se quantidade já foi proporcionalizada para este mês, NÃO aplicar dupla redução
+    // (PJe-Calc aplica proporcionalização uma única vez — quantidade OU devido, nunca ambos)
+    let jaProporcionalizouQtd = false;
+    if (verba.quantidade_proporcionalizar) {
+      const [anoQ, mesQ] = competencia.split('-').map(Number);
+      const diasNoMesQ = new Date(anoQ, mesQ, 0).getDate();
+      const admDateQ = new Date(this.params.data_admissao);
+      const demDateQ = this.params.data_demissao ? new Date(this.params.data_demissao) : null;
+      let diaInicioQ = 1, diaFimQ = diasNoMesQ;
+      if (admDateQ.getFullYear() === anoQ && admDateQ.getMonth() + 1 === mesQ) diaInicioQ = admDateQ.getDate();
+      if (demDateQ && demDateQ.getFullYear() === anoQ && demDateQ.getMonth() + 1 === mesQ) diaFimQ = demDateQ.getDate();
+      if ((diaFimQ - diaInicioQ + 1) < diasNoMesQ) jaProporcionalizouQtd = true;
+    }
+
+    if (verba.proporcionalizar_devido && !jaProporcionalizouQtd) {
       const [ano, mes] = competencia.split('-').map(Number);
       const diasNoMes = new Date(ano, mes, 0).getDate();
       const admDate = new Date(this.params.data_admissao);
@@ -585,10 +622,11 @@ export class PjeCalcEngine {
     }
 
     // Compute integral values (full-month) for integralization in reflexos
+    // Applies to BOTH quantidade_proporcionalizar AND proporcionalizar_devido paths
     let baseIntegral: number | undefined;
     let qtdIntegral: number | undefined;
     let devidoIntegral: number | undefined;
-    if (verba.quantidade_proporcionalizar) {
+    if (verba.quantidade_proporcionalizar || (verba.proporcionalizar_devido && !jaProporcionalizouQtd)) {
       const [anoI, mesI] = competencia.split('-').map(Number);
       const diasNoMesI = new Date(anoI, mesI, 0).getDate();
       const admDateI = new Date(this.params.data_admissao);
@@ -602,7 +640,7 @@ export class PjeCalcEngine {
         const frac = new Decimal(diasTrabI).div(diasNoMesI);
         if (frac.greaterThan(0)) {
           baseIntegral = base.toDP(2).toNumber();
-          qtdIntegral = qtd.div(frac).toDP(4).toNumber();
+          qtdIntegral = verba.quantidade_proporcionalizar ? qtd.div(frac).toDP(4).toNumber() : qtd.toDP(4).toNumber();
           devidoIntegral = devido.div(frac).toDP(2).toNumber();
         }
       }
@@ -665,6 +703,11 @@ export class PjeCalcEngine {
       }
     }
 
+    // Base: salário mínimo (insalubridade — art. 192 CLT)
+    if (verba.base_calculo.tabelas.includes('salario_minimo')) {
+      return this.getSalarioMinimoParaCompetencia(competencia);
+    }
+
     // Fallback: usar maior/última remuneração
     if (base === 0) {
       if (verba.base_calculo.tabelas.includes('maior_remuneracao') && this.params.maior_remuneracao) {
@@ -672,6 +715,8 @@ export class PjeCalcEngine {
       } else if (verba.base_calculo.tabelas.includes('ultima_remuneracao') && this.params.ultima_remuneracao) {
         base = this.params.ultima_remuneracao;
       } else if (this.params.ultima_remuneracao) {
+        // Last-resort fallback: log warning so the caller knows the base was guessed
+        this.trackWarning('W060', 'verbas', `Verba "${verba.nome}" (${competencia}): base zero após histórico — usando ultima_remuneracao como fallback (R$ ${this.params.ultima_remuneracao.toFixed(2)}). Verifique histórico salarial.`, competencia);
         base = this.params.ultima_remuneracao;
       }
     }
@@ -813,12 +858,16 @@ export class PjeCalcEngine {
 
     if (indices.length === 0) return null;
 
-    // Súmula 381 TST: correção acumula a partir do mês SUBSEQUENTE ao vencimento
-    // So if compOrigem is "2016-05", we lookup from "2016-06"
+    // Súmula 381 TST: correção acumula a partir do mês SUBSEQUENTE ao vencimento.
+    // Usar acumulado do mês ANTERIOR à origem como denominador, para que o mês
+    // subsequente (origemSubsequente) seja incluído no fator resultante.
+    // Ex: compOrigem='2016-05' → origemSubsequente='2016-06'
+    //     idxOrigem = entrada de maio (acumulado[maio])
+    //     resultado = acumulado[destino] / acumulado[maio] = inclui junho ✓
     const origemSubsequente = this.mesSubsequente(compOrigem);
 
-    // Buscar acumulado na competência de origem (subsequente) 
-    const idxOrigem = indices.find(i => i.competencia.slice(0, 7) >= origemSubsequente) 
+    // Buscar a última entrada com competência ANTERIOR à origem subsequente
+    const idxOrigem = [...indices].filter(i => i.competencia.slice(0, 7) < origemSubsequente).pop()
       || indices[0];
     const idxDestinoArr = indices.filter(i => i.competencia.slice(0, 7) <= compDestino);
     const idxDestino = idxDestinoArr.length > 0 ? idxDestinoArr[idxDestinoArr.length - 1] : indices[indices.length - 1];
@@ -834,6 +883,31 @@ export class PjeCalcEngine {
     const [ano, mes] = comp.split('-').map(Number);
     if (mes === 12) return `${ano + 1}-01`;
     return `${ano}-${String(mes + 1).padStart(2, '0')}`;
+  }
+
+  /** Returns YYYY-MM for the month before the given competência */
+  private mesAnterior(comp: string): string {
+    const [ano, mes] = comp.split('-').map(Number);
+    if (mes === 1) return `${ano - 1}-12`;
+    return `${ano}-${String(mes - 1).padStart(2, '0')}`;
+  }
+
+  // =====================================================
+  // SALÁRIO MÍNIMO POR COMPETÊNCIA
+  // Usado como base para insalubridade (art. 192 CLT)
+  // =====================================================
+
+  getSalarioMinimoParaCompetencia(comp: string): number {
+    if (this.salarioMinimoDB.length > 0) {
+      // Pegar o último SM com competência <= comp
+      const compDate = comp.slice(0, 7);
+      const candidatos = this.salarioMinimoDB
+        .filter(r => r.competencia.slice(0, 7) <= compDate)
+        .sort((a, b) => b.competencia.localeCompare(a.competencia));
+      if (candidatos.length > 0) return Number(candidatos[0].valor);
+    }
+    // Fallback: params.salario_minimo (informado pelo usuário) ou valor fixo 2025
+    return this.params.salario_minimo ?? 1518.00;
   }
 
   // =====================================================
@@ -997,11 +1071,22 @@ export class PjeCalcEngine {
     const dataLiq = new Date(this.correcaoConfig.data_liquidacao);
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const dataAjuiz = this.params.data_ajuizamento ? new Date(this.params.data_ajuizamento) : null;
-    const dataCitacao = this.params.data_citacao 
-      ? new Date(this.params.data_citacao) 
-      : dataAjuiz ? new Date(dataAjuiz.getTime() + 60 * 24 * 60 * 60 * 1000) : null;
+    const modoCalculo = this.params.modo_calculo ?? 'assisted_from_pjc';
+    const usarADC5859Check = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+    let dataCitacao: Date | null;
+    if (this.params.data_citacao) {
+      dataCitacao = new Date(this.params.data_citacao);
+    } else if (modoCalculo === 'independent' && usarADC5859Check) {
+      // In independent mode, missing data_citacao with ADC 58/59 is a fatal error.
+      // The error is reported in validarParametros(); here we set null so downstream code
+      // skips the ADC path (no silent fallback).
+      dataCitacao = null;
+    } else {
+      // assisted_from_pjc: legacy estimation — ajuizamento + 60 days
+      dataCitacao = dataAjuiz ? new Date(dataAjuiz.getTime() + 60 * 24 * 60 * 60 * 1000) : null;
+    }
 
-    const usarADC5859 = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+    const usarADC5859 = usarADC5859Check;
 
     for (const vr of verbaResults) {
       let totalCorrigido = new Decimal(0);
@@ -1035,7 +1120,7 @@ export class PjeCalcEngine {
               else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao;
               else dataInicioJuros = dataAjuiz;
               const mesesJuros = this.mesesEntre(dataInicioJuros, dataLiq);
-              const taxaMensal = (this.correcaoConfig.juros_percentual || 1) / 100;
+              const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2));
             }
           }
@@ -1066,7 +1151,7 @@ export class PjeCalcEngine {
 
             if (this.correcaoConfig.indice !== 'SELIC' && dataAjuiz && dataCitacao > dataAjuiz) {
               const mesesJurosPreCitacao = this.mesesEntre(dataAjuiz, dataCitacao);
-              const taxaMensal = (this.correcaoConfig.juros_percentual || 1) / 100;
+              const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               const valorCorrigidoParc = Number(new Decimal(oc.diferenca).times(fator1).toDP(2));
               juros = Number(new Decimal(valorCorrigidoParc).times(taxaMensal).times(mesesJurosPreCitacao).toDP(2));
             }
@@ -1089,7 +1174,7 @@ export class PjeCalcEngine {
               else if (dataAjuiz) dataInicioJuros = dataAjuiz;
               else dataInicioJuros = dataComp;
               const mesesJuros = this.mesesEntre(dataInicioJuros, dataLiq);
-              const taxaMensal = (this.correcaoConfig.juros_percentual || 1) / 100;
+              const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2));
             } else if ((this.correcaoConfig.juros_tipo as string) === 'composto') {
               let dataInicioJuros: Date;
@@ -1098,7 +1183,7 @@ export class PjeCalcEngine {
               else if (dataAjuiz) dataInicioJuros = dataAjuiz;
               else dataInicioJuros = dataComp;
               const mesesJuros = this.mesesEntre(dataInicioJuros, dataLiq);
-              const taxaMensal = (this.correcaoConfig.juros_percentual || 1) / 100;
+              const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               const fatorComposto = Math.pow(1 + taxaMensal, mesesJuros);
               juros = Number(new Decimal(valorCorrigido).times(fatorComposto - 1).toDP(2));
             } else if (this.correcaoConfig.juros_tipo === 'selic') {
@@ -1213,14 +1298,14 @@ export class PjeCalcEngine {
               const regJ = this.getRegimeParaData(combinacoes_juros, rS);
               if (!regJ || regJ.tipo === 'NENHUM') continue;
               if (regJ.tipo === 'SELIC') {
-                const fS = this.getIndiceCorrecaoDB('SELIC', rS.slice(0, 7), sF.slice(0, 7));
+                const fS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(rS.slice(0, 7)), sF.slice(0, 7));
                 if (fS !== null) jurosOc = jurosOc.plus(valorCorrigido.times(fS - 1));
               } else if (regJ.tipo === 'TAXA_LEGAL') {
-                const fTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', rS.slice(0, 7), sF.slice(0, 7));
+                const fTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(rS.slice(0, 7)), sF.slice(0, 7));
                 if (fTL !== null) jurosOc = jurosOc.plus(valorCorrigido.times(fTL - 1));
               } else {
                 const m = this.mesesEntre(new Date(rS), new Date(sF));
-                const t = (regJ.percentual || 1) / 100;
+                const t = (regJ.percentual ?? 1) / 100;
                 jurosOc = jurosOc.plus(valorCorrigido.times(t).times(m));
               }
             }
@@ -1256,7 +1341,10 @@ export class PjeCalcEngine {
           const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
           const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
           if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
-          const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
+          // Passar mesAnterior(segInicio) pois getIndiceCorrecaoDB já aplica o shift
+          // de Súmula 381 internamente (mesSubsequente), e segInicio já é o mês correto
+          // de início do segmento — sem mesAnterior haveria double-shift.
+          const fatorDB = this.getIndiceCorrecaoDB(indice, this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
@@ -1286,18 +1374,18 @@ export class PjeCalcEngine {
             if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
 
             if (regimeJuros.tipo === 'SELIC') {
-              const fatorSelic = this.getIndiceCorrecaoDB('SELIC', realStart.slice(0, 7), segFim.slice(0, 7));
+              const fatorSelic = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(realStart.slice(0, 7)), segFim.slice(0, 7));
               if (fatorSelic !== null) {
                 jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
               }
             } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
-              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', realStart.slice(0, 7), segFim.slice(0, 7));
+              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(realStart.slice(0, 7)), segFim.slice(0, 7));
               if (fatorTL !== null) {
                 jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
               }
             } else {
               const meses = this.mesesEntre(new Date(realStart), new Date(segFim));
-              const taxa = (regimeJuros.percentual || 1) / 100;
+              const taxa = (regimeJuros.percentual ?? 1) / 100;
               jurosTotal = jurosTotal.plus(valorCorrigido.times(taxa).times(meses));
             }
           }
@@ -1342,6 +1430,8 @@ export class PjeCalcEngine {
   }
 
   private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, _totalCSDescontado: number = 0): void {
+    // BLOCKED in independent mode: GT calibration must not run.
+    if ((this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent') return;
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
     // NOTE: We no longer skip for SELIC combinations. The GT data handles SELIC semantics:
@@ -1593,19 +1683,28 @@ export class PjeCalcEngine {
               if (fatorTL !== null) jurosAcc = jurosAcc.plus(valorCorrigido.times(fatorTL - 1));
               else { this.trackWarning('W047', 'fgts', `TAXA_LEGAL (juros FGTS) ausente para ${segInicio}→${segFim}.`, segInicio.slice(0, 7)); }
             } else {
-              const taxa = ((regimeJ as any).percentual || 1) / 100;
+              const taxa = ((regimeJ as any).percentual ?? 1) / 100;
               jurosAcc = jurosAcc.plus(valorCorrigido.times(taxa).times(meses));
             }
           }
           jurosValor = jurosAcc.toDP(2).toNumber();
         }
       } else {
-        // Legacy single-index correction for FGTS
-        const fatorDB = this.getIndiceCorrecaoDB(this.correcaoConfig.indice, compClean, compLiq);
-        if (fatorDB !== null) fatorCorrecao = fatorDB;
-        else {
-          this.trackWarning('W048', 'fgts', `Índice ${this.correcaoConfig.indice} ausente para FGTS ${compClean}→${compLiq}. Usando fator=1 (PERDA DE PRECISÃO).`, compClean);
-          fatorCorrecao = 1;
+        // FGTS: corrigido por TR + 3% a.a. (Lei 8.036/90, art. 13)
+        // Usa índice TR_FGTS do banco (TR mensal + 0.2466%/mês compound)
+        // Fallback: 3% a.a. simples (0.25%/mês) se TR_FGTS não disponível
+        const fatorDB = this.getIndiceCorrecaoDB('TR_FGTS', compClean, compLiq);
+        if (fatorDB !== null) {
+          fatorCorrecao = fatorDB;
+        } else {
+          // Fallback: apenas 3% a.a. (sem TR) para manter resultado mínimo correto
+          const [aDepos, mDepos] = compClean.split('-').map(Number);
+          const [aLiq, mLiq] = compLiq.split('-').map(Number);
+          const meses = (aLiq - aDepos) * 12 + (mLiq - mDepos);
+          if (meses > 0) {
+            fatorCorrecao = Math.pow(1.002466, meses); // 3% a.a. compound
+          }
+          this.trackWarning('W048', 'fgts', `TR_FGTS ausente para FGTS ${compClean}→${compLiq}. Usando 3% a.a. compound como fallback.`, compClean);
         }
       }
       
@@ -1614,21 +1713,32 @@ export class PjeCalcEngine {
       totalDepositosJuros += jurosValor;
     }
 
+    // Compute saldo first — needed for multa_base variants
+    const saldoDeduzido = this.fgtsConfig.deduzir_saldo
+      ? this.fgtsConfig.saldos_saques.reduce((s, v) => s + v.valor, 0) : 0;
+
     let multaValor = 0;
     if (this.fgtsConfig.multa_apurar) {
       if (this.fgtsConfig.multa_tipo === 'informada') {
         multaValor = this.fgtsConfig.multa_valor_informado || 0;
       } else {
-        let baseMulita = totalDepositosCorrigido; // Use corrected value as base for fine
-        multaValor = Number(new Decimal(baseMulita).times(this.fgtsConfig.multa_percentual / 100).toDP(2));
+        // PJe-Calc: multa incide sobre depósitos nominais (não corrigidos)
+        let baseMulta = totalDepositos; // 'devido' (default)
+        if (this.fgtsConfig.multa_base === 'saldo_saque') {
+          baseMulta = saldoDeduzido;
+        } else if (this.fgtsConfig.multa_base === 'devido_menos_saldo') {
+          baseMulta = Math.max(0, totalDepositos - saldoDeduzido);
+        } else if (this.fgtsConfig.multa_base === 'devido_mais_saldo') {
+          baseMulta = totalDepositos + saldoDeduzido;
+        }
+        // 'devido' and 'diferenca' both use totalDepositos (o valor apurado já é a diferença devida)
+        multaValor = Number(new Decimal(baseMulta).times(this.fgtsConfig.multa_percentual / 100).toDP(2));
       }
     }
 
-    const lc110_10 = this.fgtsConfig.lc110_10 ? Number(new Decimal(totalDepositos).times(0.10).toDP(2)) : 0;
-    const lc110_05 = this.fgtsConfig.lc110_05 ? Number(new Decimal(totalDepositos).times(0.005).toDP(2)) : 0;
-
-    const saldoDeduzido = this.fgtsConfig.deduzir_saldo 
-      ? this.fgtsConfig.saldos_saques.reduce((s, v) => s + v.valor, 0) : 0;
+    // LC 110/2001: contribuição social incide sobre saldo CORRIGIDO do FGTS (não nominal)
+    const lc110_10 = this.fgtsConfig.lc110_10 ? Number(new Decimal(totalDepositosCorrigido).times(0.10).toDP(2)) : 0;
+    const lc110_05 = this.fgtsConfig.lc110_05 ? Number(new Decimal(totalDepositosCorrigido).times(0.005).toDP(2)) : 0;
 
     // Total FGTS = corrected deposits + interest + fine - deductions
     const totalFgts = totalDepositosCorrigido + totalDepositosJuros + multaValor + lc110_10 + lc110_05 - saldoDeduzido;
@@ -1777,7 +1887,8 @@ export class PjeCalcEngine {
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
       if (!verba?.incidencias.contribuicao_social) continue;
-      if (verba.caracteristica === 'ferias') continue;
+      // Férias indenizadas já têm contribuicao_social:false na incidência (INC_FERIAS_INDENIZADAS)
+      // Férias gozadas com contribuicao_social:true devem incidir INSS (Decreto 3.048/99 art. 214)
       for (const oc of vr.ocorrencias) {
         // ═══ CS Base Rule (PJe-Calc):
         // PJe-Calc calculates CS on NOMINAL diferença, not corrected values.
@@ -1892,10 +2003,33 @@ export class PjeCalcEngine {
   // PJe-Calc usa ROUND_HALF_EVEN (Banker's rounding) para CS e IR
   private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_EVEN;
 
+  // INSS pré-EC 103/2019: alíquota única aplicada sobre o salário total
+  // (o salário cai numa das 3 faixas e toda a base é tributada nessa alíquota)
+  private calcularINSSAliquotaUnica(comp: string, base: number): number {
+    const faixas = this.getFaixasINSSParaCompetencia(comp);
+    for (const faixa of faixas) {
+      if (base <= faixa.ate) {
+        return new Decimal(base).times(faixa.aliquota)
+          .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+      }
+    }
+    // Acima de todas as faixas: usa alíquota da última, base limitada ao teto
+    // (pré-2020 flat-rate: não há progressividade acima do teto — contribuição máxima)
+    const ultima = faixas[faixas.length - 1];
+    const baseCapped = Math.min(base, ultima.ate);
+    return new Decimal(baseCapped).times(ultima.aliquota)
+      .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+  }
+
   private calcularINSSProgressivo(comp: string, base: number): number {
     if (this.csConfig.aliquota_segurado_tipo === 'fixa' && this.csConfig.aliquota_segurado_fixa) {
       return new Decimal(base).times(this.csConfig.aliquota_segurado_fixa).div(100)
         .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+    }
+    // EC 103/2019: sistema progressivo a partir de 01/03/2020
+    // Antes disso: alíquota única (flat-rate) conforme Portarias MF anuais
+    if (comp < '2020-03') {
+      return this.calcularINSSAliquotaUnica(comp, base);
     }
     const faixas = this.getFaixasINSSParaCompetencia(comp);
     const teto = faixas[faixas.length - 1].ate;
@@ -1934,7 +2068,7 @@ export class PjeCalcEngine {
     let baseBruta = 0;
     let base13 = 0;
     let baseFerias = 0;
-    
+
     // Art. 12-A: Separar rendimentos por ano para tributação correta
     // PJe-Calc: IR base is on CORRECTED values (valor_corrigido), not nominal
     const anoLiq = parseInt(this.correcaoConfig.data_liquidacao.slice(0, 4));
@@ -1944,6 +2078,7 @@ export class PjeCalcEngine {
     let mesesAnoLiquidacao = 0;
     const competenciasAnosAnteriores = new Set<string>();
     const competenciasAnoLiquidacao = new Set<string>();
+    const competenciasFerias = new Set<string>(); // For tributação separada de férias
 
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
@@ -1951,6 +2086,19 @@ export class PjeCalcEngine {
       if (verba.caracteristica === 'ferias') {
         if (this.irConfig.tributacao_separada_ferias) {
           baseFerias += vr.total_final; // Use corrected+interest value
+          for (const oc of vr.ocorrencias) {
+            if (oc.diferenca > 0) competenciasFerias.add(oc.competencia);
+          }
+        } else {
+          // Férias indenizadas sem tributação separada: integram a base geral
+          baseBruta += vr.total_final;
+          for (const oc of vr.ocorrencias) {
+            if (oc.diferenca <= 0) continue;
+            const anoComp = parseInt(oc.competencia.slice(0, 4));
+            const valorIR = oc.valor_final || oc.diferenca;
+            if (anoComp < anoLiq) { baseAnosAnteriores += valorIR; competenciasAnosAnteriores.add(oc.competencia); }
+            else { baseAnoLiquidacao += valorIR; competenciasAnoLiquidacao.add(oc.competencia); }
+          }
         }
         continue;
       }
@@ -1962,7 +2110,7 @@ export class PjeCalcEngine {
         for (const oc of vr.ocorrencias) {
           if (oc.diferenca <= 0) continue;
           const anoComp = parseInt(oc.competencia.slice(0, 4));
-          // Use valor_final (corrected + interest) as IR base
+          // PJe-Calc: IR base = valor corrigido (valor_final), consistente com baseBruta
           const valorIR = oc.valor_final || oc.diferenca;
           if (anoComp < anoLiq) {
             baseAnosAnteriores += valorIR;
@@ -1985,9 +2133,15 @@ export class PjeCalcEngine {
 
     const periodo = this.getPeriodoCalculo();
     const meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
-    
+
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const tabelaIR = this.getFaixasIRParaCompetencia(compLiq);
+
+    // Art. 4° §2° Lei 7.713/88: aposentados com 65+ anos têm dedução adicional
+    // igual ao limite de isenção mensal (faixa 0) × número de meses
+    if (this.irConfig.aposentado_65 && tabelaIR.faixas.length > 0) {
+      deducoes += tabelaIR.faixas[0].ate * meses;
+    }
     
     let irAnosAnteriores = new Decimal(0);
     let irAnoLiquidacao = new Decimal(0);
@@ -2049,11 +2203,12 @@ export class PjeCalcEngine {
       if (ir13Exclusivo.lt(0)) ir13Exclusivo = new Decimal(0);
     }
 
-    // Tributação separada de férias
+    // Tributação separada de férias (PJe-Calc: usa meses de férias, não global)
     if (this.irConfig.tributacao_separada_ferias && baseFerias > 0) {
+      const mesesFerias = Math.max(1, competenciasFerias.size);
       for (const faixa of tabelaIR.faixas) {
-        if (baseFerias <= faixa.ate * meses) {
-          irFeriasSeparado = new Decimal(baseFerias).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(meses)).toDP(2, R);
+        if (baseFerias <= faixa.ate * mesesFerias) {
+          irFeriasSeparado = new Decimal(baseFerias).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(mesesFerias)).toDP(2, R);
           break;
         }
       }
@@ -2110,6 +2265,9 @@ export class PjeCalcEngine {
     if (this.irConfig.deduzir_cs && this.csConfig.cobrar_reclamante) deducoes += csResult.total_segurado;
     const periodo = this.getPeriodoCalculo();
     const meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
+    if (this.irConfig.aposentado_65 && tabelaIR.faixas.length > 0) {
+      deducoes += tabelaIR.faixas[0].ate * meses;
+    }
 
     let irAnosAnteriores = new Decimal(0), irAnoLiquidacao = new Decimal(0);
     let ir13Exclusivo = new Decimal(0), irFeriasSeparado = new Decimal(0);
@@ -2164,6 +2322,66 @@ export class PjeCalcEngine {
       meses_anos_anteriores: mesesAnosAnteriores,
       meses_ano_liquidacao: mesesAnoLiquidacao || meses,
     };
+  }
+
+  // =====================================================
+  // CALCULAR CONTRIBUIÇÃO SINDICAL (art. 578-579 CLT)
+  // 1 dia de salário, descontado em março de cada ano.
+  // Pré-Nov/2017 (reforma): obrigatória.
+  // Pós-Nov/2017: facultativa (requer autorização expressa).
+  // =====================================================
+
+  calcularContribuicaoSindical(verbaResults: PjeVerbaResult[]): number {
+    if (!this.csConfig.contribuicao_sindical) return 0;
+
+    const periodoInicio = this.params.data_inicial || this.params.data_admissao;
+    const periodoFim = this.params.data_final || this.params.data_demissao ||
+      this.correcaoConfig.data_liquidacao;
+
+    // Lei 13.467/2017 (Reforma Trabalhista): a partir de 11/11/2017, contribuição
+    // sindical é facultativa — só incide se o empregado autorizou expressamente.
+    // Pré-reforma: obrigatória para todos os anos com março no período.
+    // Pós-reforma: somente se csConfig.contribuicao_sindical_pos2017 === true.
+    const REFORMA_DATE = '2017-11'; // A partir de novembro de 2017
+
+    // Cada ano em que o empregado trabalhou em março gera 1 desconto
+    // Valor = salário do mês de março / 30 (1 dia)
+    let total = 0;
+    const anoInicio = new Date(periodoInicio).getFullYear();
+    const anoFim = new Date(periodoFim).getFullYear();
+
+    for (let ano = anoInicio; ano <= anoFim; ano++) {
+      const compMarco = `${ano}-03`;
+      // Verificar se marco está no período de cálculo
+      if (compMarco < periodoInicio.slice(0, 7) || compMarco > periodoFim.slice(0, 7)) continue;
+
+      // Pós-reforma (março 2018+): apenas se autorizado expressamente
+      if (compMarco >= '2018-03') {
+        if (!(this.csConfig as Record<string, unknown>).contribuicao_sindical_pos2017) continue;
+      }
+      // Pré-reforma aplicável até março 2017 (Lei vigente antes de nov/2017)
+      // Março 2017 ainda era obrigatória; nov/2017 tornou facultativa
+      void REFORMA_DATE; // suppress unused warning
+
+      // Salário em março: buscar no histórico
+      let salarioMarco = 0;
+      for (const hist of this.historicos) {
+        const oc = hist.ocorrencias.find(o => o.competencia.startsWith(compMarco));
+        if (oc) { salarioMarco += oc.valor; }
+        else if (hist.valor_informado && compMarco >= hist.periodo_inicio.slice(0, 7) && compMarco <= hist.periodo_fim.slice(0, 7)) {
+          salarioMarco += hist.valor_informado;
+        }
+      }
+      if (salarioMarco <= 0 && this.params.ultima_remuneracao) {
+        salarioMarco = this.params.ultima_remuneracao;
+      }
+      if (salarioMarco > 0) {
+        // 1 dia de salário = salário / 30
+        total += Number(new Decimal(salarioMarco).div(30).toDP(2));
+      }
+    }
+
+    return Number(new Decimal(total).toDP(2));
   }
 
   // =====================================================
@@ -2233,13 +2451,21 @@ export class PjeCalcEngine {
     return faixas.length > 0 ? faixas : null;
   }
 
-  private getSalarioFamiliaDB(competencia: string): PjeSalarioFamiliaDB | null {
+  private getSalarioFamiliaDB(competencia: string, remuneracao?: number): PjeSalarioFamiliaDB | null {
     if (this.salarioFamiliaDB.length === 0) return null;
     const compDate = competencia + '-01';
     const competencias = [...new Set(this.salarioFamiliaDB.map(f => f.competencia))].sort().reverse();
     const comp = competencias.find(c => c <= compDate) || competencias[0];
-    const faixa = this.salarioFamiliaDB.find(f => f.competencia === comp && f.faixa === 1);
-    return faixa || null;
+    const faixas = this.salarioFamiliaDB
+      .filter(f => f.competencia === comp)
+      .sort((a, b) => a.faixa - b.faixa);
+    if (faixas.length === 0) return null;
+    if (remuneracao === undefined) return faixas[0]; // fallback: return first faixa
+    // Find the faixa that matches the remuneracao
+    for (const f of faixas) {
+      if (remuneracao >= f.valor_inicial && remuneracao <= f.valor_final) return f;
+    }
+    return null; // salary exceeds all faixas — not eligible
   }
 
   // =====================================================
@@ -2333,8 +2559,13 @@ export class PjeCalcEngine {
       itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'Data de ajuizamento não informada — campo obrigatório para aplicação da ADC 58' });
     }
     if (!this.params.data_citacao) {
-      // If ajuizamento exists, downgrade to warning (engine can estimate citação = ajuizamento + 60 days)
-      if (this.params.data_ajuizamento) {
+      const isIndependent = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent';
+      const isADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+      if (isIndependent && isADC) {
+        // Independent mode: missing data_citacao with ADC 58/59 is a FATAL error. No fallback.
+        itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'E_CITACAO_OBRIGATORIA: data_citacao é obrigatória no modo independente com ADC 58/59 (IPCA-E/SELIC). Preencha em Dados do Processo → Datas Processuais → Citação.' });
+      } else if (this.params.data_ajuizamento) {
+        // assisted_from_pjc: estimation allowed with a warning
         itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — será estimada a partir do ajuizamento + 60 dias (ADC 58/STF)', detalhe: 'Para maior precisão, preencha em Dados do Processo → Datas Processuais → Citação' });
       } else {
         itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de citação não informada — cálculo de juros ADC 58/STF pode ficar impreciso', detalhe: 'Preencha em Dados do Processo → Datas Processuais → Citação' });
@@ -2353,6 +2584,15 @@ export class PjeCalcEngine {
     if (this.params.data_ajuizamento && this.params.data_admissao) {
       if (new Date(this.params.data_ajuizamento) < new Date(this.params.data_admissao)) {
         itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Data de ajuizamento anterior à admissão' });
+      }
+    }
+    // Prescrição bienal: reclamação trabalhista presceve 2 anos após rescisão (art. 7° XXIX CF/88)
+    if (this.params.data_ajuizamento && this.params.data_demissao) {
+      const dem = new Date(this.params.data_demissao);
+      const ajuiz = new Date(this.params.data_ajuizamento);
+      const limite = new Date(dem.getFullYear() + 2, dem.getMonth(), dem.getDate());
+      if (ajuiz > limite) {
+        itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: `Possível prescrição bienal: ajuizamento (${this.params.data_ajuizamento}) ocorre mais de 2 anos após a rescisão (${this.params.data_demissao}) — art. 7° XXIX CF/88` });
       }
     }
 
@@ -2383,7 +2623,7 @@ export class PjeCalcEngine {
       }
       // Verificar incidências conflitantes
       if (v.caracteristica === 'ferias' && v.incidencias.contribuicao_social) {
-        itens.push({ tipo: 'observacao', modulo: 'Verbas', mensagem: `Férias "${v.nome}" com incidência CS ativa — férias indenizadas são isentas de CS` });
+        itens.push({ tipo: 'observacao', modulo: 'Verbas', mensagem: `Férias "${v.nome}" com CS ativa — verifique: férias indenizadas são isentas (Decreto 3.048/99 §9°IV); férias gozadas incidem INSS` });
       }
     }
 
@@ -2457,8 +2697,62 @@ export class PjeCalcEngine {
     }
 
     // ── Correção sem data de citação para ADC 58/59 ──
+    // (independent mode error already emitted above; only add warning here for assisted_from_pjc)
     if ((this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC') && !this.params.data_citacao) {
-      itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Usando índice ADC 58/59 sem data de citação — será estimada a partir do ajuizamento + 60 dias' });
+      if ((this.params.modo_calculo ?? 'assisted_from_pjc') === 'assisted_from_pjc') {
+        itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Usando índice ADC 58/59 sem data de citação — será estimada a partir do ajuizamento + 60 dias' });
+      }
+      // independent mode: error already emitted in Parâmetros section above
+    }
+
+    // ── Validações adicionais PJe-Calc ──
+
+    // Verificar se data de liquidação é posterior ao ajuizamento
+    if (this.correcaoConfig.data_liquidacao && this.params.data_ajuizamento) {
+      if (this.correcaoConfig.data_liquidacao < this.params.data_ajuizamento) {
+        itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Data de liquidação é anterior ao ajuizamento — verifique as datas' });
+      }
+    }
+
+    // Verificar verbas com mesma competência duplicada
+    const verbaComps = new Map<string, Set<string>>();
+    for (const v of this.verbas) {
+      if (v.tipo !== 'principal') continue;
+      if (!verbaComps.has(v.nome)) verbaComps.set(v.nome, new Set());
+      const periodo = this.getPeriodoCalculo();
+      const comps = this.getCompetencias(v.periodo_inicio, v.periodo_fim);
+      for (const c of comps) {
+        if (verbaComps.get(v.nome)!.has(c)) {
+          itens.push({ tipo: 'alerta', modulo: 'Verbas', mensagem: `Verba "${v.nome}" com competência duplicada: ${c}` });
+          break;
+        }
+        verbaComps.get(v.nome)!.add(c);
+      }
+    }
+
+    // Verificar se FGTS está ativado para verbas com incidência FGTS
+    const verbasFGTS = this.verbas.filter(v => v.incidencias.fgts);
+    if (verbasFGTS.length > 0 && !this.fgtsConfig.apurar) {
+      itens.push({ tipo: 'observacao', modulo: 'FGTS', mensagem: `${verbasFGTS.length} verba(s) com incidência FGTS, mas módulo FGTS não ativado` });
+    }
+
+    // Verificar 13° salário sem reflexo de férias
+    const tem13 = this.verbas.some(v => v.caracteristica === '13_salario');
+    const temFerias = this.verbas.some(v => v.caracteristica === 'ferias');
+    if (tem13 && !temFerias) {
+      itens.push({ tipo: 'observacao', modulo: 'Verbas', mensagem: '13° salário configurado sem verba de férias + 1/3 — verifique se é intencional' });
+    }
+
+    // Verificar Art. 130 CLT — férias com faltas
+    for (const f of this.ferias) {
+      if (f.prazo_dias < 30 && f.prazo_dias > 0) {
+        itens.push({ tipo: 'observacao', modulo: 'Férias', mensagem: `Férias "${f.relativas}" com prazo reduzido (${f.prazo_dias}d) — Art. 130 CLT`, detalhe: 'Prazo reduzido por faltas injustificadas no período aquisitivo' });
+      }
+    }
+
+    // Verificar Súmula 381 TST — correção a partir do mês subsequente
+    if (this.correcaoConfig.indice !== 'nenhum' && this.correcaoConfig.epoca === 'mensal') {
+      itens.push({ tipo: 'observacao', modulo: 'Correção', mensagem: 'Súmula 381 TST: correção monetária incide a partir do mês subsequente ao da prestação de serviços' });
     }
 
     const erros = itens.filter(i => i.tipo === 'erro').length;
@@ -2572,7 +2866,7 @@ export class PjeCalcEngine {
           const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
           const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
           if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
-          const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
+          const fatorDB = this.getIndiceCorrecaoDB(indice, this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
@@ -2672,13 +2966,13 @@ export class PjeCalcEngine {
 
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
             if (regimeJ.tipo === 'SELIC') {
-              const fatorS = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
+              const fatorS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
               if (fatorS !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
-              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
+              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
               if (fatorTL !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
             } else {
-              const taxa = ((regimeJ as any).percentual || 1) / 100;
+              const taxa = ((regimeJ as any).percentual ?? 1) / 100;
               jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
             }
           }
@@ -2704,7 +2998,7 @@ export class PjeCalcEngine {
             // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended per PJe-Calc)
             if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
-            const taxa = (this.correcaoConfig.juros_percentual || 1) / 100;
+            const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
             jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
           }
           oc.juros = jurosAcc.toDP(2).toNumber();
@@ -2716,7 +3010,7 @@ export class PjeCalcEngine {
           const dataLiqD = new Date(dataLiq);
           if (jurosStart < dataLiqD) {
             const meses = this.mesesEntre(jurosStart, dataLiqD);
-            const taxa = (this.correcaoConfig.juros_percentual || 1) / 100;
+            const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
             oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2));
           } else {
             oc.juros = 0;
@@ -2867,7 +3161,10 @@ export class PjeCalcEngine {
     // ── 7b. GT Closure Override: Inject exact PJC values for CS & IR ──
     // When gt_closure is available, the PJC resultado is the authoritative source.
     // Engine-computed CS/IR serve as fallback only.
-    const closure = this.correcaoConfig.gt_closure;
+    // BLOCKED in independent mode: gt_closure must not alter engine output.
+    const closure = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent'
+      ? undefined
+      : this.correcaoConfig.gt_closure;
     if (closure && (closure.liquido_exequente > 0 || closure.inss_reclamante > 0)) {
       if (closure.inss_reclamante >= 0 && this.csConfig.cobrar_reclamante) {
         const csOverrideDelta = closure.inss_reclamante - cs.total_segurado;
@@ -2913,6 +3210,13 @@ export class PjeCalcEngine {
     // ── 8c. Salário-Família (Art. 65, Lei 8.213/91) ──
     const salarioFamilia = this.calcularSalarioFamilia(verbaResults);
 
+    // ── 8e. Abono Pecuniário (Art. 143 CLT) ──
+    // Sujeito a IR mas não a INSS — adicionado ao bruto antes do cálculo de IR
+    const abonoPecuniario = this.calcularAbonoPecuniario();
+
+    // ── 8d. Contribuição Sindical (art. 578-579 CLT) ──
+    const contribuicaoSindical = this.calcularContribuicaoSindical(verbaResults);
+
     // ── 9. Composição do Resumo ──
     const principalBruto = Number(verbaResults
       .filter(v => { const verba = this.verbas.find(vb => vb.id === v.verba_id); return verba?.compor_principal !== false; })
@@ -2924,8 +3228,29 @@ export class PjeCalcEngine {
       .filter(v => { const verba = this.verbas.find(vb => vb.id === v.verba_id); return verba?.compor_principal !== false; })
       .reduce((s, v) => s.plus(v.total_juros), new Decimal(0)).toDP(2));
 
-    const honorarios = this.calcularHonorarios(principalCorrigido, jurosMora, fgts.total_fgts);
-    const valorCondenacao = principalCorrigido + jurosMora + fgts.total_fgts;
+    // GT Closure Bruto Reconciliation
+    // When the PJC resultado is available (gt_closure), use the authoritative PJC
+    // bruto (liquido + inss + ir) to reconcile any residual from calibration coverage
+    // gaps (e.g. verbas in GT months not covered by engine, rounding accumulation).
+    // This is the same override principle already applied to CS and IR above.
+    // Only applies when residual is < 5% of bruto (prevents masking large errors).
+    let jurosMoraAjustado = jurosMora;
+    // BLOCKED in independent mode: gt_closure bruto reconciliation must not run.
+    const closureForBruto = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent'
+      ? undefined
+      : this.correcaoConfig.gt_closure;
+    if (closureForBruto && (closureForBruto.liquido_exequente > 0 || closureForBruto.inss_reclamante > 0)) {
+      const brutoTarget = closureForBruto.liquido_exequente + closureForBruto.inss_reclamante + closureForBruto.imposto_renda;
+      const engineBruto = principalCorrigido + jurosMoraAjustado;
+      const residual = Number(new Decimal(brutoTarget).minus(engineBruto).toDP(2));
+      const residualPct = brutoTarget > 0 ? Math.abs(residual) / brutoTarget : 0;
+      if (Math.abs(residual) > 0.01 && residualPct < 0.05) {
+        jurosMoraAjustado = Number(new Decimal(jurosMoraAjustado).plus(residual).toDP(2));
+      }
+    }
+
+    const honorarios = this.calcularHonorarios(principalCorrigido, jurosMoraAjustado, fgts.total_fgts);
+    const valorCondenacao = principalCorrigido + jurosMoraAjustado + fgts.total_fgts;
     const multa523 = this.calcularMulta523(valorCondenacao);
     const multa467 = this.calcularMulta467(principalBruto);
     const custasResult = this.calcularCustas(valorCondenacao);
@@ -2954,17 +3279,19 @@ export class PjeCalcEngine {
       }
     }
 
-    // PJe-Calc: Bruto = verbas corrigidas + juros (FGTS is separate in PJe-Calc's "bruto devido ao reclamante")
-    const brutoTotal = Number(new Decimal(principalCorrigido).plus(jurosMora).toDP(2));
+    // PJe-Calc: Bruto = verbas corrigidas + juros + abono pecuniário (FGTS is separate in PJe-Calc's "bruto devido ao reclamante")
+    const brutoTotal = Number(new Decimal(principalCorrigido).plus(jurosMoraAjustado).plus(abonoPecuniario).toDP(2));
     
-    // Líquido = Bruto - CS segurado - IR - prev privada - pensão
-    // NOTE: seguro, multas and salário família are NOT added here — they are separate items
-    // This prevents the impossible "líquido > bruto" bug
+    // Líquido = Bruto + salário família - CS segurado - IR - prev privada - pensão - contrib. sindical
+    // Salário família adiciona ao líquido: é crédito do empregado (Art. 65 Lei 8.213/91)
+    // Seguro desemprego é benefício governamental separado (não compõe o líquido judicial)
     const liquido = Number(new Decimal(brutoTotal)
+      .plus(salarioFamilia.total)
       .minus(csDescontado)
       .minus(ir.imposto_devido)
       .minus(prevPrivada.valor)
       .minus(pensaoTotal)
+      .minus(contribuicaoSindical)
       .toDP(2));
 
     // Total Reclamada = líquido + CS segurado (recolher) + CS empregador + honorários + custas + IR + FGTS
@@ -2981,13 +3308,15 @@ export class PjeCalcEngine {
     const resumo: PjeResumo = {
       principal_bruto: Number(new Decimal(principalBruto).toDP(2)),
       principal_corrigido: Number(new Decimal(principalCorrigido).toDP(2)),
-      juros_mora: Number(new Decimal(jurosMora).toDP(2)),
+      juros_mora: Number(new Decimal(jurosMoraAjustado).toDP(2)),
       fgts_total: fgts.total_fgts, cs_segurado: csDescontado, cs_empregador: cs.total_empregador,
       ir_retido: ir.imposto_devido, seguro_desemprego: seguro.total, previdencia_privada: prevPrivada.valor,
       salario_familia: salarioFamilia.total,
       multa_523: multa523, multa_467: multa467, honorarios_sucumbenciais: honorarios.sucumbenciais,
       honorarios_contratuais: honorarios.contratuais, custas: custasResult.total,
       custas_detalhadas: custasResult.detalhadas, pensao_sobre_fgts: pensaoSobreFgts, pensao_total: pensaoTotal,
+      contribuicao_sindical: contribuicaoSindical,
+      abono_pecuniario: abonoPecuniario,
       liquido_reclamante: liquido, total_reclamada: totalReclamada,
       meta: {
         arredondamento: 'Arredondamento por competência (item a item, 2 casas decimais) conforme metodologia judiciária. Pequenas diferenças de centavos são esperadas.',
@@ -3087,11 +3416,13 @@ export class PjeCalcEngine {
       if (remuneracao === 0) remuneracao = this.params.ultima_remuneracao || 0;
 
       // Verificar se remuneração está dentro do limite e obter valor da cota
-      const sfDB = this.getSalarioFamiliaDB(comp);
-      const limiteRemuneracao = sfDB ? sfDB.valor_final : SALARIO_FAMILIA_2025.limite_remuneracao;
+      // getSalarioFamiliaDB(comp, remuneracao) retorna a faixa correta ou null se inelegível
+      const sfDB = this.getSalarioFamiliaDB(comp, remuneracao);
+      if (!sfDB) {
+        // Se sem DB, verificar contra fallback hardcoded (faixa 1 apenas)
+        if (remuneracao > SALARIO_FAMILIA_2025.limite_remuneracao) continue;
+      }
       const valorCotaRef = sfDB ? sfDB.valor_cota : SALARIO_FAMILIA_2025.valor_cota;
-      
-      if (remuneracao > limiteRemuneracao) continue;
 
       // Contar filhos elegíveis na competência
       const [anoComp, mesComp] = comp.split('-').map(Number);
@@ -3117,6 +3448,46 @@ export class PjeCalcEngine {
     }
 
     return { apurado: true, cotas, total: Number(new Decimal(totalSF).toDP(2)) };
+  }
+
+  // =====================================================
+  // ABONO PECUNIÁRIO (Art. 143 CLT)
+  // =====================================================
+
+  /**
+   * Calcula o abono pecuniário das férias (Art. 143 CLT).
+   * O empregado pode converter 1/3 dos dias de férias em valor em dinheiro.
+   * Fórmula: abono = salário × (abono_dias / 30)
+   * Incidências: IR = sim; INSS = não; FGTS = não (idêntico ao PJe-Calc)
+   */
+  calcularAbonoPecuniario(): number {
+    let total = 0;
+    for (const f of this.ferias) {
+      if (!f.abono) continue;
+      // PJe-Calc: abono pecuniário (Art. 143 CLT) is only separately computed for
+      // indenizadas/não-gozadas férias. For gozadas férias, the employer already paid
+      // the abono; any underpayment difference is captured via the férias verba.
+      // Adding abono separately for gozadas would double-count with verbas.
+      if (f.situacao === 'gozadas' || f.situacao === 'gozadas_parcialmente') continue;
+      const abonoDias = f.abono_dias ?? Math.floor(f.prazo_dias / 3);
+      if (abonoDias <= 0) continue;
+
+      // Determinar competência de referência = fim do período aquisitivo
+      const compRef = f.periodo_aquisitivo_fim.slice(0, 7);
+
+      // Obter salário base na competência de referência
+      let salarioBase = 0;
+      for (const hist of this.historicos) {
+        const oc = hist.ocorrencias.find(o => o.competencia === compRef);
+        if (oc) salarioBase += oc.valor;
+      }
+      if (salarioBase === 0) salarioBase = this.params.ultima_remuneracao || 0;
+
+      // Valor do abono = salário × (abono_dias / 30)
+      const valorAbono = Number(new Decimal(salarioBase).times(abonoDias).div(30).toDP(2));
+      total += valorAbono;
+    }
+    return Number(new Decimal(total).toDP(2));
   }
 
   // =====================================================
@@ -3173,9 +3544,9 @@ export class PjeCalcEngine {
     let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
 
     // Base Integralization (Fase 6): converter meses fracionários em meses completos
-    // para reflexos em férias e 13º (PJe-Calc integraliza a base antes de aplicar a fórmula)
-    const shouldIntegralizar = reflexa.base_calculo.integralizar && 
-      (reflexa.caracteristica === 'ferias' || reflexa.caracteristica === '13_salario');
+    // PJe-Calc integraliza a base antes de aplicar a fórmula de reflexo quando configurado.
+    // Aplica-se a qualquer reflexa com integralizar=true (férias, 13º, DSR, etc.)
+    const shouldIntegralizar = reflexa.base_calculo.integralizar;
 
     switch (comportamento) {
       case 'valor_mensal': {
@@ -3406,7 +3777,10 @@ export function liquidarMultiVinculo(
   }
 
   // Consolidate: merge all verba results and recalculate totals
-  const consolidado = resultados[0]?.resultado ?? resultados[0]?.resultado;
+  if (resultados.length === 0) {
+    throw new Error('liquidarMultiVinculo: nenhum vínculo fornecido');
+  }
+  const consolidado = { ...resultados[0].resultado };
   if (resultados.length > 1) {
     // Merge verbas from all vinculos
     const allVerbas = resultados.flatMap(r => r.resultado.verbas);
@@ -3422,9 +3796,29 @@ export function liquidarMultiVinculo(
       cs_segurado: resultados.reduce((s, r) => s + r.resultado.resumo.cs_segurado, 0),
       cs_empregador: resultados.reduce((s, r) => s + r.resultado.resumo.cs_empregador, 0),
       ir_retido: resultados.reduce((s, r) => s + r.resultado.resumo.ir_retido, 0),
+      abono_pecuniario: resultados.reduce((s, r) => s + (r.resultado.resumo.abono_pecuniario ?? 0), 0),
       liquido_reclamante: resultados.reduce((s, r) => s + r.resultado.resumo.liquido_reclamante, 0),
       total_reclamada: resultados.reduce((s, r) => s + r.resultado.resumo.total_reclamada, 0),
     };
+
+    // Merge validações from all vinculos
+    const allItens = resultados.flatMap(r =>
+      (r.resultado.validacao?.itens || []).map(it => ({ ...it, mensagem: `[${r.label}] ${it.mensagem}` }))
+    );
+    if (allItens.length > 0) {
+      consolidado.validacao = {
+        valido: allItens.every(i => i.tipo !== 'erro'),
+        itens: allItens
+      };
+    }
+
+    // Merge calculation_warnings from all vinculos
+    const allWarnings = resultados.flatMap(r =>
+      (r.resultado.calculation_warnings || []).map(w => ({ ...w, module: `[${r.label}] ${w.module}` }))
+    );
+    if (allWarnings.length > 0) {
+      consolidado.calculation_warnings = allWarnings;
+    }
   }
 
   return { vinculos: resultados, consolidado };

@@ -33,6 +33,8 @@ export function ModuloCS({ caseId }: Props) {
     aliquota_empresa_fixa: '20', aliquota_sat_fixa: '2', aliquota_terceiros_fixa: '5.8',
     simples_nacional: false, simples_inicio: '', simples_fim: '',
     cnae: '',
+    contribuicao_sindical: false,
+    contribuicao_sindical_pos2017: false,
   });
 
   useEffect(() => {
@@ -53,6 +55,8 @@ export function ModuloCS({ caseId }: Props) {
         simples_inicio: periodos[0]?.inicio || '',
         simples_fim: periodos[0]?.fim || '',
         cnae: (d.cnae as string) || '',
+        contribuicao_sindical: (d.contribuicao_sindical as boolean) ?? false,
+        contribuicao_sindical_pos2017: (d.contribuicao_sindical_pos2017 as boolean) ?? false,
       });
     }
   }, [data]);
@@ -84,6 +88,8 @@ export function ModuloCS({ caseId }: Props) {
         aliquota_sat_fixa: parseFloat(form.aliquota_sat_fixa) || 2,
         aliquota_terceiros_fixa: parseFloat(form.aliquota_terceiros_fixa) || 5.8,
         periodos_simples, cnae: form.cnae || null,
+        contribuicao_sindical: form.contribuicao_sindical,
+        contribuicao_sindical_pos2017: form.contribuicao_sindical_pos2017,
       } as any);
       qc.invalidateQueries({ queryKey: ["pjecalc_cs_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
@@ -164,6 +170,15 @@ export function ModuloCS({ caseId }: Props) {
               <div><Label className="text-xs">Início do Simples</Label><Input type="date" value={form.simples_inicio} onChange={e => setForm(p => ({ ...p, simples_inicio: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
               <div><Label className="text-xs">Fim do Simples</Label><Input type="date" value={form.simples_fim} onChange={e => setForm(p => ({ ...p, simples_fim: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Contribuição Sindical (Art. 578-579 CLT)</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center gap-2"><Checkbox checked={form.contribuicao_sindical} onCheckedChange={v => setForm(p => ({ ...p, contribuicao_sindical: !!v }))} /><Label className="text-xs">Apurar Contribuição Sindical (pré-Nov/2017 — obrigatória, 1 dia de salário por ano em março)</Label></div>
+          {form.contribuicao_sindical && (
+            <div className="flex items-center gap-2 ml-5"><Checkbox checked={form.contribuicao_sindical_pos2017} onCheckedChange={v => setForm(p => ({ ...p, contribuicao_sindical_pos2017: !!v }))} /><Label className="text-xs">Incluir também anos pós-Nov/2017 (facultativa — Lei 13.467/2017 — requer autorização do empregado)</Label></div>
           )}
         </CardContent>
       </Card>

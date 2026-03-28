@@ -2,12 +2,27 @@
 // PJe-CALC ENGINE - TIPOS E INTERFACES
 // =====================================================
 
+/**
+ * Calculation mode:
+ * - 'assisted_from_pjc': Uses GT artifacts (gt_closure, calibrators) from an imported .pjc file.
+ *   Falls back to ajuizamento+60d estimate when data_citacao is absent (backward-compatible).
+ * - 'independent': Pure independent calculation. NO gt_closure, NO INSS/IR overrides,
+ *   NO calibration. Requires data_citacao when ADC 58/59 post-citation phase exists;
+ *   throws E_CITACAO_OBRIGATORIA if absent.
+ */
+export type PjeCalcMode = 'assisted_from_pjc' | 'independent';
+
 export interface PjeParametros {
   case_id: string;
   data_admissao: string;
   data_demissao?: string;
   data_ajuizamento: string;
   data_citacao?: string;
+  /**
+   * Calculation mode. Defaults to 'assisted_from_pjc' when omitted (backward-compatible).
+   * Set to 'independent' to enforce strict independent calculation without GT artifacts.
+   */
+  modo_calculo?: PjeCalcMode;
   data_inicial?: string;
   data_final?: string;
   estado: string;
@@ -152,7 +167,7 @@ export interface PjeVerba {
   divisor_informado: number;
   divisor_cartao_colunas?: string[];
   multiplicador: number;
-  tipo_quantidade: 'informada' | 'avos' | 'apurada' | 'calendario' | 'cartao_ponto';
+  tipo_quantidade: 'informada' | 'avos' | 'apurada' | 'repousos' | 'calendario' | 'cartao_ponto';
   quantidade_informada: number;
   quantidade_cartao_colunas?: string[];
   quantidade_proporcionalizar: boolean;
@@ -161,6 +176,9 @@ export interface PjeVerba {
   
   /** Modo de fração de mês: manter_fracao | integralizar | desprezar | desprezar_menor_15 */
   fracao_mes_modo?: 'manter_fracao' | 'integralizar' | 'desprezar' | 'desprezar_menor_15';
+
+  /** Art. 73 §1° CLT: hora noturna fictícia — cada hora real = 52,5 min → fator 8/7 sobre divisor */
+  hora_noturna_ficticia?: boolean;
   
   exclusoes: {
     faltas_justificadas: boolean;
@@ -357,6 +375,12 @@ export interface PjeCSConfig {
   separar_reclamante_beneficiario?: boolean;
   /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, use these exact CS bases */
   apuracao_juros_gt?: PjeApuracaoJurosGT[];
+  /** Contribuição Sindical (art. 578 CLT) — 1 dia de salário, descontado em março.
+   *  Pré-reforma (< nov/2017): obrigatória. Pós-reforma: facultativa. */
+  contribuicao_sindical?: boolean;
+  /** Lei 13.467/2017: contribuição sindical pós-nov/2017 é facultativa.
+   *  Quando true, aplica também para anos 2018+. */
+  contribuicao_sindical_pos2017?: boolean;
 }
 
 export interface PjeIRConfig {
@@ -630,6 +654,9 @@ export interface PjeResumo {
   custas_detalhadas: PjeCustaResult[];
   pensao_sobre_fgts: number;
   pensao_total: number;
+  contribuicao_sindical: number;
+  /** Abono pecuniário férias (Art. 143 CLT) — sujeito a IR, não ao INSS */
+  abono_pecuniario: number;
   liquido_reclamante: number;
   total_reclamada: number;
   /** Metadata for transparency */
@@ -668,6 +695,11 @@ export interface PjeIRFaixaRow {
   aliquota: number;
   deducao: number;
   deducao_dependente: number;
+}
+
+export interface PjeSalarioMinimoRow {
+  competencia: string; // YYYY-MM-DD
+  valor: number;
 }
 
 export interface PjeValidationItem {
