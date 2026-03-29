@@ -899,6 +899,19 @@ export class PjeCalcEngine {
   // Retorna fator acumulado entre competência e liquidação
   // =====================================================
 
+  /**
+   * PJe-Calc: acumular_indices_correcao — 'mensal' | 'anual' | 'periodo'
+   *
+   * All three modes produce the same result when using accumulated indices from the DB,
+   * because the formula `acumulado[dest] / acumulado[origin]` inherently computes the
+   * full-period ratio. In PJe-Calc's internal representation:
+   *  - 'mensal': multiply month-by-month factors (equivalent to acumulado ratio)
+   *  - 'anual': use December indices per year (equivalent when series is continuous)
+   *  - 'periodo': single ratio from start to end (the formula below)
+   *
+   * The config field is persisted via correcaoConfig.acumular_indices_correcao and
+   * defaults to 'mensal' when absent.
+   */
   private getIndiceCorrecaoDB(nomeIndice: string, compOrigem: string, compDestino: string): number | null {
     if (this.indicesDB.length === 0) return null;
 
@@ -1157,12 +1170,15 @@ export class PjeCalcEngine {
       let totalJuros = new Decimal(0);
       let totalFinal = new Decimal(0);
 
+      // Súmula 439 TST: lookup original verba for sumula_439_tst flag
+      const verbaOriginal = this.verbas.find(v => v.id === vr.verba_id);
+
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
         const [ano, mes] = oc.competencia.split('-').map(Number);
         const dataComp = new Date(ano, mes - 1, 1);
-        
+
         let indiceCorrecao = 1;
         let juros = 0;
 
@@ -1170,11 +1186,11 @@ export class PjeCalcEngine {
         if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
-          
+
           // Determine if SELIC regime (already includes interest)
           const isSelic = this.correcaoConfig.indice === 'SELIC';
           oc.pjc_ground_truth_regime = isSelic ? 'SELIC' : this.correcaoConfig.indice;
-          
+
           if (!isSelic) {
             // Calculate interest separately for non-SELIC regimes
             const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2, Decimal.ROUND_HALF_EVEN));
@@ -1184,6 +1200,10 @@ export class PjeCalcEngine {
               if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
               else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao;
               else dataInicioJuros = dataAjuiz;
+              // Súmula 439 TST: danos morais — juros desde o ajuizamento
+              if (verbaOriginal?.sumula_439_tst && this.params.data_ajuizamento) {
+                dataInicioJuros = new Date(this.params.data_ajuizamento);
+              }
               // FIX 1: PJe-Calc counts interest months inclusive of start month
               const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
@@ -1240,6 +1260,10 @@ export class PjeCalcEngine {
               else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao!;
               else if (dataAjuiz) dataInicioJuros = dataAjuiz;
               else dataInicioJuros = dataComp;
+              // Súmula 439 TST: danos morais — juros desde o ajuizamento
+              if (verbaOriginal?.sumula_439_tst && this.params.data_ajuizamento) {
+                dataInicioJuros = new Date(this.params.data_ajuizamento);
+              }
               // FIX 1: PJe-Calc counts interest months inclusive of start month
               const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
@@ -1250,6 +1274,10 @@ export class PjeCalcEngine {
               else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao!;
               else if (dataAjuiz) dataInicioJuros = dataAjuiz;
               else dataInicioJuros = dataComp;
+              // Súmula 439 TST: danos morais — juros desde o ajuizamento
+              if (verbaOriginal?.sumula_439_tst && this.params.data_ajuizamento) {
+                dataInicioJuros = new Date(this.params.data_ajuizamento);
+              }
               // FIX 1: PJe-Calc counts interest months inclusive of start month
               const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
@@ -1300,7 +1328,7 @@ export class PjeCalcEngine {
 
     // Map IPCA-E → IPCAE for index lookup compatibility
     const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE' };
+      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'SELIC_SIMPLES': 'SELIC', 'SELIC_COMPOSTA': 'SELIC', 'SELIC_RF': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE', 'IPC': 'IPC', 'IPCA-E_TR': 'IPCA-E', 'TUACDT': 'FACDT', 'DEVEDOR_FP': 'SELIC', 'REPETICAO_INDEBITO': 'SELIC', 'TABELA_JT_MENSAL': 'INPC', 'TABELA_JT_DIARIA': 'INPC' };
       return map[ind] || ind;
     };
 
@@ -1308,6 +1336,14 @@ export class PjeCalcEngine {
       let totalCorrigido = new Decimal(0);
       let totalJuros = new Decimal(0);
       let totalFinal = new Decimal(0);
+
+      // Súmula 439 TST: lookup original verba for sumula_439_tst flag
+      const verbaOriginalComb = this.verbas.find(v => v.id === vr.verba_id);
+      // Súmula 439 TST: override interest start to ajuizamento for dano moral verbas
+      let effectiveJurosStart = jurosStartDate;
+      if (verbaOriginalComb?.sumula_439_tst && this.params.data_ajuizamento) {
+        effectiveJurosStart = this.params.data_ajuizamento;
+      }
 
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
@@ -1344,7 +1380,7 @@ export class PjeCalcEngine {
 
           // Calculate interest for this GT occurrence using the same logic as non-GT
           let jurosOc = new Decimal(0);
-          const jurosEffectiveStartGT = jurosStartDate || compDateGT;
+          const jurosEffectiveStartGT = effectiveJurosStart || compDateGT;
           if (!jurosDisabled) {
             const bpGT = new Set<string>();
             bpGT.add(compDateGT);
@@ -1426,7 +1462,7 @@ export class PjeCalcEngine {
 
         // Calculate interest segment-by-segment
         let jurosTotal = new Decimal(0);
-        const jurosEffectiveStart = jurosStartDate || compDateJuros;
+        const jurosEffectiveStart = effectiveJurosStart || compDateJuros;
 
         if (!jurosDisabled) {
           for (let i = 0; i < datas.length - 1; i++) {
@@ -1746,7 +1782,7 @@ export class PjeCalcEngine {
           const regime = this.getRegimeParaData(this.correcaoConfig.combinacoes_indice, segInicio);
           const indice = regime?.indice || 'SEM_CORRECAO';
           if (indice === 'SEM_CORRECAO' || indice === 'Sem Correção' || indice === 'NENHUM') continue;
-          const normalMap: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR' };
+          const normalMap: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'SELIC_SIMPLES': 'SELIC', 'SELIC_COMPOSTA': 'SELIC', 'SELIC_RF': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE', 'IPC': 'IPC', 'IPCA-E_TR': 'IPCA-E', 'TUACDT': 'FACDT', 'DEVEDOR_FP': 'SELIC', 'REPETICAO_INDEBITO': 'SELIC', 'TABELA_JT_MENSAL': 'INPC', 'TABELA_JT_DIARIA': 'INPC' };
           const indiceNorm = normalMap[indice] || indice;
           const fatorDB = this.getIndiceCorrecaoDB(indiceNorm, segInicio.slice(0, 7), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
@@ -3138,7 +3174,7 @@ export class PjeCalcEngine {
     const dataLiq = this.correcaoConfig.data_liquidacao;
 
     const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE' };
+      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'SELIC_SIMPLES': 'SELIC', 'SELIC_COMPOSTA': 'SELIC', 'SELIC_RF': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE', 'IPC': 'IPC', 'IPCA-E_TR': 'IPCA-E', 'TUACDT': 'FACDT', 'DEVEDOR_FP': 'SELIC', 'REPETICAO_INDEBITO': 'SELIC', 'TABELA_JT_MENSAL': 'INPC', 'TABELA_JT_DIARIA': 'INPC' };
       return map[ind] || ind;
     };
 
@@ -3229,7 +3265,7 @@ export class PjeCalcEngine {
     const jurosDisabled = jurosStartDate != null && jurosStartDate > dataLiq;
 
     const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE' };
+      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'SELIC_SIMPLES': 'SELIC', 'SELIC_COMPOSTA': 'SELIC', 'SELIC_RF': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE', 'IPC': 'IPC', 'IPCA-E_TR': 'IPCA-E', 'TUACDT': 'FACDT', 'DEVEDOR_FP': 'SELIC', 'REPETICAO_INDEBITO': 'SELIC', 'TABELA_JT_MENSAL': 'INPC', 'TABELA_JT_DIARIA': 'INPC' };
       return map[ind] || ind;
     };
 
@@ -3239,6 +3275,14 @@ export class PjeCalcEngine {
     for (const vr of verbaResults) {
       let totalJuros = 0;
       let totalFinal = 0;
+
+      // Súmula 439 TST: lookup original verba for sumula_439_tst flag
+      const verbaOriginalAposCS = this.verbas.find(v => v.id === vr.verba_id);
+      // Súmula 439 TST: override interest start to ajuizamento for dano moral verbas
+      let effectiveJurosStartAposCS = jurosStartDate;
+      if (verbaOriginalAposCS?.sumula_439_tst && this.params.data_ajuizamento) {
+        effectiveJurosStartAposCS = this.params.data_ajuizamento;
+      }
 
       // PJe-Calc excludes FÉRIAS, 13° SALÁRIO and AVISO PRÉVIO from interest in ADC 58/59 regime.
       const excluirJuros = usarADCJuros &&
@@ -3266,13 +3310,13 @@ export class PjeCalcEngine {
         const csShare = totalCorrigido > 0
           ? Number(new Decimal(totalCSDescontado).times(oc.valor_corrigido).div(totalCorrigido).toDP(2))
           : 0;
-        
+
         // Base for interest = corrected - CS share
         const baseJuros = new Decimal(oc.valor_corrigido).minus(csShare);
 
         if (!jurosDisabled && combinacoes_juros.length > 0 && combinacoes_indice.length > 0) {
           const compDate = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
-          const jurosEffectiveStart = jurosStartDate || compDate;
+          const jurosEffectiveStart = effectiveJurosStartAposCS || compDate;
           const breakpoints = new Set<string>();
           breakpoints.add(jurosEffectiveStart);
           breakpoints.add(dataLiq);
@@ -3316,7 +3360,7 @@ export class PjeCalcEngine {
           // No juros combinations, but index combinations exist — respect index regime
           // Skip interest during SELIC/SEM_CORRECAO periods (they include interest or suspend it)
           const compDate = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
-          const jurosEffectiveStart = jurosStartDate || compDate;
+          const jurosEffectiveStart = effectiveJurosStartAposCS || compDate;
           const breakpoints = new Set<string>();
           breakpoints.add(jurosEffectiveStart);
           breakpoints.add(dataLiq);

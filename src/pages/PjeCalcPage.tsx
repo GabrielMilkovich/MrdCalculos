@@ -68,6 +68,7 @@ import { ModuloAjusteSentenca } from "@/components/cases/pjecalc/ModuloAjusteSen
 import { ModuloESocial } from "@/components/cases/pjecalc/ModuloESocial";
 import { ComparacaoCenarios } from "@/components/cases/pjecalc/ComparacaoCenarios";
 import { FidelidadePanel } from "@/components/cases/pjecalc/FidelidadePanel";
+import { ModuloAtualizacao } from "@/components/cases/pjecalc/ModuloAtualizacao";
 import { AuditAgentPanel } from "@/components/cases/pjecalc/AuditAgentPanel";
 import { getRastreabilidadeGeral, type ModuleStatus } from "@/lib/pjecalc/completude";
 
@@ -104,6 +105,7 @@ const MODULOS = [
   { id: 'prev_privada', label: 'Prev. Privada', icon: Shield, desc: 'Complementar' },
   { id: 'honorarios', label: 'Honorários', icon: Scale, desc: 'Sucumbenciais e contratuais' },
   { id: 'custas', label: 'Custas', icon: Receipt, desc: 'Custas processuais' },
+  { id: 'atualizacao', label: 'Atualização', icon: TrendingUp, desc: 'Atualização pós-pagamento' },
   { id: 'resumo', label: 'Resumo', icon: FileBarChart, desc: 'Resultado da liquidação' },
   { id: 'evolucao_debito', label: 'Evolução do Débito', icon: TrendingUp, desc: 'Gráfico mensal do débito' },
   { id: 'exportacao', label: 'Exportar Excel', icon: FileBarChart, desc: 'Planilha de cálculo' },
@@ -325,6 +327,7 @@ export default function PjeCalcPage() {
         case 'honorarios': return <ModuloHonorarios caseId={caseId!} />;
         case 'prev_privada': return <ModuloPrevidenciaPrivada caseId={caseId!} />;
         case 'custas': return <ModuloCustas caseId={caseId!} />;
+        case 'atualizacao': return <ModuloAtualizacao caseId={caseId!} />;
         case 'resumo': return (<>
             <ModuloResumo caseId={caseId!} onBeforeLiquidar={async () => { await handleSaveParams(); }} />
             {calc.rawResultado?.resultado && calc.correcaoConfig?.ente_publico && (
@@ -333,7 +336,13 @@ export default function PjeCalcPage() {
           </>);
         case 'evolucao_debito': return calc.rawResultado?.resultado ? <EvolucaoDebito result={calc.rawResultado.resultado as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
         case 'exportacao': return calc.rawResultado?.resultado ? <ExportacaoExcel result={calc.rawResultado.resultado as any} params={formParams as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
-        case 'fidelidade': return <FidelidadePanel fidelityReport={null} parityReport={null} />;
+        case 'fidelidade':
+          return calc.rawResultado?.resultado
+            ? <FidelidadePanel
+                fidelityReport={(calc.rawResultado as any).fidelityReport || null}
+                parityReport={(calc.rawResultado as any).parityReport || null}
+              />
+            : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidacao primeiro para ver o relatorio de fidelidade.</CardContent></Card>;
         case 'esocial': return <ModuloESocial caseId={caseId!} resultado={(calc.rawResultado?.resultado || null) as any} params={formParams} />;
         case 'tabelas_regionais': return <ModuloTabelasRegionais caseId={caseId!} estado={formParams.estado} municipio={formParams.municipio} />;
         case 'memoria': return calc.rawResultado?.resultado ? <MemoriaCalculoExpandida resultado={calc.rawResultado.resultado as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
