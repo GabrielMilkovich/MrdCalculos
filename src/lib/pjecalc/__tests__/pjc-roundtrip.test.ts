@@ -87,7 +87,7 @@ describe('PJC Golden Reference — caso-real.pjc', () => {
   };
 
   it('pjc file exists and is valid XML', () => {
-    const pjcPath = resolve(__dirname, '../../data/caso-real.pjc');
+    const pjcPath = resolve(__dirname, '../../../data/caso-real.pjc');
     const content = readFileSync(pjcPath, 'latin1');
     expect(content).toBeTruthy();
     expect(content.startsWith('<?xml')).toBe(true);
@@ -96,13 +96,13 @@ describe('PJC Golden Reference — caso-real.pjc', () => {
   });
 
   it('pjc file contains expected beneficiario', () => {
-    const pjcPath = resolve(__dirname, '../../data/caso-real.pjc');
+    const pjcPath = resolve(__dirname, '../../../data/caso-real.pjc');
     const content = readFileSync(pjcPath, 'latin1');
     expect(content).toContain('MARIA MADALENA ALVES FERREIRA');
   });
 
   it('pjc file contains expected reclamado', () => {
-    const pjcPath = resolve(__dirname, '../../data/caso-real.pjc');
+    const pjcPath = resolve(__dirname, '../../../data/caso-real.pjc');
     const content = readFileSync(pjcPath, 'latin1');
     expect(content).toContain('GRUPO CASAS BAHIA S.A.');
   });
@@ -124,7 +124,7 @@ describe('PJC Golden Reference — caso-real.pjc', () => {
   });
 
   it('pjc contains key verbas for the case', () => {
-    const pjcPath = resolve(__dirname, '../../data/caso-real.pjc');
+    const pjcPath = resolve(__dirname, '../../../data/caso-real.pjc');
     const content = readFileSync(pjcPath, 'latin1');
 
     // Principal verbas (XML-encoded)
@@ -139,7 +139,7 @@ describe('PJC Golden Reference — caso-real.pjc', () => {
   });
 
   it('pjc contains reflexos (13o, aviso previo, ferias)', () => {
-    const pjcPath = resolve(__dirname, '../../data/caso-real.pjc');
+    const pjcPath = resolve(__dirname, '../../../data/caso-real.pjc');
     const content = readFileSync(pjcPath, 'latin1');
 
     // These appear as XML-encoded names in the file
@@ -179,7 +179,7 @@ describe('PJC Golden Reference — caso-real.pjc', () => {
   });
 
   it('pjc file contains ApuracaoDeJuros section for correction data', () => {
-    const pjcPath = resolve(__dirname, '../../data/caso-real.pjc');
+    const pjcPath = resolve(__dirname, '../../../data/caso-real.pjc');
     const content = readFileSync(pjcPath, 'latin1');
     // The PJC contains juros/correction consolidation data
     expect(content).toContain('ApuracaoDeJuros');
