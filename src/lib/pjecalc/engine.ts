@@ -2374,22 +2374,26 @@ export class PjeCalcEngine {
     const competenciasAnoLiquidacao = new Set<string>();
     const competenciasFerias = new Set<string>(); // For tributação separada de férias
 
+    // When incidir_sobre_juros = false (PJe-Calc default), IR base uses
+    // valor_corrigido (without juros). When true, uses valor_final (with juros).
+    const irUsarValorFinal = this.irConfig.incidir_sobre_juros !== false;
+
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
       if (!verba?.incidencias.irpf) continue;
+      const vrBaseIR = irUsarValorFinal ? vr.total_final : vr.total_corrigido;
       if (verba.caracteristica === 'ferias') {
         if (this.irConfig.tributacao_separada_ferias) {
-          baseFerias += vr.total_final; // Use corrected+interest value
+          baseFerias += vrBaseIR;
           for (const oc of vr.ocorrencias) {
             if (oc.diferenca > 0) competenciasFerias.add(oc.competencia);
           }
         } else {
-          // Férias indenizadas sem tributação separada: integram a base geral
-          baseBruta += vr.total_final;
+          baseBruta += vrBaseIR;
           for (const oc of vr.ocorrencias) {
             if (oc.diferenca <= 0) continue;
             const anoComp = parseInt(oc.competencia.slice(0, 4));
-            const valorIR = oc.valor_final || oc.diferenca;
+            const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : (oc.valor_corrigido || oc.diferenca);
             if (anoComp < anoLiq) { baseAnosAnteriores += valorIR; competenciasAnosAnteriores.add(oc.competencia); }
             else { baseAnoLiquidacao += valorIR; competenciasAnoLiquidacao.add(oc.competencia); }
           }
@@ -2397,15 +2401,13 @@ export class PjeCalcEngine {
         continue;
       }
       if (verba.caracteristica === '13_salario' && this.irConfig.tributacao_exclusiva_13) {
-        base13 += vr.total_final; // Use corrected+interest value
+        base13 += vrBaseIR;
       } else {
-        baseBruta += vr.total_final; // Use corrected+interest value
-        // Classificar por ano para Art. 12-A
+        baseBruta += vrBaseIR;
         for (const oc of vr.ocorrencias) {
           if (oc.diferenca <= 0) continue;
           const anoComp = parseInt(oc.competencia.slice(0, 4));
-          // PJe-Calc: IR base = valor corrigido (valor_final), consistente com baseBruta
-          const valorIR = oc.valor_final || oc.diferenca;
+          const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : (oc.valor_corrigido || oc.diferenca);
           if (anoComp < anoLiq) {
             baseAnosAnteriores += valorIR;
             competenciasAnosAnteriores.add(oc.competencia);
