@@ -2848,7 +2848,7 @@ export class PjeCalcEngine {
 
     // ── Histórico salarial ──
     if (this.historicos.length === 0 && !this.params.ultima_remuneracao && !this.params.maior_remuneracao) {
-      itens.push({ tipo: 'alerta', modulo: 'Histórico', mensagem: 'Sem histórico salarial e sem remuneração informada nos parâmetros', detalhe: 'As verbas podem resultar em valor zero' });
+      itens.push({ tipo: 'erro', modulo: 'Histórico', mensagem: 'Sem histórico salarial e sem remuneração informada — cálculo bloqueado. Cadastre pelo menos um histórico salarial ou informe Última/Maior Remuneração nos parâmetros.', detalhe: 'Sem base salarial, todas as verbas resultarão em R$ 0,00.' });
     }
 
     // ── Férias ──
