@@ -60,7 +60,7 @@ export class EstabilidadeModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0) return 0;
     // Full salary for each month of the stability period
     const resultado = new Decimal(inputs.base)
@@ -71,7 +71,7 @@ export class EstabilidadeModule implements VerbaModule {
     return resultado.toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [
       { targetVerba: '13o Salario', tipo: '13_salario', baseMultiplier: 1, divisor: 12, periodoMedia: 'ano_civil' },
       { targetVerba: 'Ferias + 1/3', tipo: 'ferias', baseMultiplier: 1.3333, divisor: 12, periodoMedia: 'periodo_aquisitivo' },
@@ -79,7 +79,7 @@ export class EstabilidadeModule implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 

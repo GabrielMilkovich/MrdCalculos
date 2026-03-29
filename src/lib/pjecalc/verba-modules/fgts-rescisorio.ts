@@ -53,18 +53,18 @@ export class FGTSDiferencasModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base)
       .times(inputs.multiplicador)
       .div(100).toDP(2)
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: false, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 
@@ -110,18 +110,18 @@ export class Multa40FGTSModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base)
       .times(inputs.multiplicador)
       .div(100).toDP(2)
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: false, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 

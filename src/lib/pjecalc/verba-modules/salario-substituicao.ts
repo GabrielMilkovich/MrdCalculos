@@ -45,14 +45,14 @@ export class SalarioSubstituicaoModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base)
       .times(inputs.quantidade)
       .toDP(2)
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [
       { targetVerba: 'DSR', tipo: 'dsr', baseMultiplier: 1, divisor: 1, periodoMedia: '12_meses' },
       { targetVerba: '13º Salário', tipo: '13_salario', baseMultiplier: 1, divisor: 12 },
@@ -61,7 +61,7 @@ export class SalarioSubstituicaoModule implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 

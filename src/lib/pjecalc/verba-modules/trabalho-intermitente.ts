@@ -73,7 +73,7 @@ export class TrabalhoIntermitenteModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0 || inputs.divisor <= 0 || inputs.quantidade <= 0) return 0;
     // salário / divisor (carga horária) × horas trabalhadas × multiplicador
     return new Decimal(inputs.base)
@@ -84,7 +84,7 @@ export class TrabalhoIntermitenteModule implements VerbaModule {
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     // Art. 452-A §6° CLT: ao final de cada período de prestação de serviço,
     // o empregado recebe férias proporcionais + 1/3, 13° proporcional, DSR e FGTS
     return [
@@ -95,7 +95,7 @@ export class TrabalhoIntermitenteModule implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 

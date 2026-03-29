@@ -83,7 +83,7 @@ export class DiferencasSalariaisModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0) return 0;
     const resultado = new Decimal(inputs.base)
       .times(inputs.multiplicador)
@@ -93,7 +93,7 @@ export class DiferencasSalariaisModule implements VerbaModule {
     return resultado.toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [
       { targetVerba: 'DSR', tipo: 'dsr', baseMultiplier: 1, divisor: 26 },
       { targetVerba: '13o Salario', tipo: '13_salario', baseMultiplier: 1, divisor: 12, periodoMedia: 'ano_civil' },
@@ -102,7 +102,7 @@ export class DiferencasSalariaisModule implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 

@@ -67,7 +67,7 @@ export class FeriasVencidasModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base)
       .div(inputs.divisor).toDP(2)
       .times(inputs.quantidade).toDP(2)
@@ -75,13 +75,13 @@ export class FeriasVencidasModule implements VerbaModule {
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [
       { targetVerba: 'FGTS', tipo: 'fgts', baseMultiplier: 0.08, divisor: 1 },
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     // Férias indenizadas: natureza indenizatória (isenta de INSS/IRRF)
     return { fgts: true, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
@@ -143,7 +143,7 @@ export class FeriasProporcionaisModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base)
       .div(inputs.divisor).toDP(2)
       .times(inputs.quantidade).toDP(2)
@@ -151,13 +151,13 @@ export class FeriasProporcionaisModule implements VerbaModule {
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [
       { targetVerba: 'FGTS', tipo: 'fgts', baseMultiplier: 0.08, divisor: 1 },
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 

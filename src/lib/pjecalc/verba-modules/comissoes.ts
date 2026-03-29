@@ -54,7 +54,7 @@ export class ComissoesModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0 || inputs.divisor <= 0) return 0;
     return new Decimal(inputs.base)
       .times(inputs.multiplicador)
@@ -64,7 +64,7 @@ export class ComissoesModule implements VerbaModule {
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [
       { targetVerba: 'DSR', tipo: 'dsr', baseMultiplier: 1, divisor: 1 },
       { targetVerba: '13º Salário', tipo: '13_salario', baseMultiplier: 1, divisor: 12, periodoMedia: 'ano_civil' },
@@ -73,7 +73,7 @@ export class ComissoesModule implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 
@@ -128,7 +128,7 @@ export class PremioModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0) return 0;
     return new Decimal(inputs.base)
       .times(inputs.multiplicador)
@@ -137,7 +137,7 @@ export class PremioModule implements VerbaModule {
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [
       { targetVerba: '13º Salário', tipo: '13_salario', baseMultiplier: 1, divisor: 12, periodoMedia: 'ano_civil' },
       { targetVerba: 'Férias + 1/3', tipo: 'ferias', baseMultiplier: 1.3333, divisor: 12, periodoMedia: 'periodo_aquisitivo' },
@@ -145,7 +145,7 @@ export class PremioModule implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 

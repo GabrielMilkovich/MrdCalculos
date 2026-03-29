@@ -62,7 +62,7 @@ export class SalarioMaternidadeModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0) return 0;
     // Full salary per month of maternity leave
     const resultado = new Decimal(inputs.base)
@@ -73,7 +73,7 @@ export class SalarioMaternidadeModule implements VerbaModule {
     return resultado.toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     // Salario-maternidade generates reflexos in 13o and ferias
     // but NOT in FGTS (employer already deposits during leave)
     return [
@@ -82,7 +82,7 @@ export class SalarioMaternidadeModule implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     // INSS incides but is employer-paid (no employee deduction)
     // No FGTS (already deposited); no IR on maternity pay
     return { fgts: false, inss: true, irrf: false, natureza: 'salarial' };

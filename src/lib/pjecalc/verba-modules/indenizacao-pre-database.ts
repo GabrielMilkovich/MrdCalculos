@@ -60,7 +60,7 @@ export class IndenizacaoPreDatabaseModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0) return 0;
     // One additional monthly salary
     const resultado = new Decimal(inputs.base)
@@ -71,12 +71,12 @@ export class IndenizacaoPreDatabaseModule implements VerbaModule {
     return resultado.toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     // Natureza indenizatoria — sem reflexos
     return [];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: false, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 

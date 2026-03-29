@@ -84,7 +84,7 @@ export class AvisoPrevioModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0 || inputs.divisor <= 0) return 0;
     // Formula: (Base / Divisor) x Quantidade x Multiplicador
     const resultado = new Decimal(inputs.base)

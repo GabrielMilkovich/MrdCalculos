@@ -66,7 +66,7 @@ export class DanosMateriaisModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0) return 0;
     const resultado = new Decimal(inputs.base)
       .times(inputs.multiplicador)
@@ -76,12 +76,12 @@ export class DanosMateriaisModule implements VerbaModule {
     return resultado.toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     // Danos materiais typically have no reflexos (natureza indenizatoria)
     return [];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: false, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 
