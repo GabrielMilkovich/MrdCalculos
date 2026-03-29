@@ -2596,7 +2596,13 @@ export class PjeCalcEngine {
   private getSeguroDesempregoDB(): PjeSeguroDesempregoDB[] | null {
     if (this.seguroDesempregoDB.length === 0) return null;
     // Find faixas for the most recent competencia <= demissao date
-    const refDate = this.params.data_demissao || this.params.data_final || new Date().toISOString().slice(0, 10);
+    const refDate = this.params.data_demissao || this.params.data_final || this.correcaoConfig?.data_liquidacao;
+    if (!refDate) {
+      this.trackWarning('W_SEGURO_SEM_DATA', 'seguro_desemprego', 'data_demissao ausente para lookup de faixas seguro-desemprego — usando primeira competência disponível');
+      const competencias = [...new Set(this.seguroDesempregoDB.map(f => f.competencia))].sort().reverse();
+      const faixas = this.seguroDesempregoDB.filter(f => f.competencia === competencias[0]).sort((a, b) => a.faixa - b.faixa);
+      return faixas.length > 0 ? faixas : null;
+    }
     const competencias = [...new Set(this.seguroDesempregoDB.map(f => f.competencia))].sort().reverse();
     const comp = competencias.find(c => c <= refDate) || competencias[0];
     const faixas = this.seguroDesempregoDB.filter(f => f.competencia === comp).sort((a, b) => a.faixa - b.faixa);
@@ -3931,6 +3937,18 @@ export class PjeCalcEngine {
     return grupos;
   }
 
+  /**
+   * Deterministic competencia for reflexa verba — NEVER uses new Date().
+   * Falls back through data_demissao → data_final → data_liquidacao.
+   */
+  private getCompetenciaDesligamento(): string {
+    const d = this.params.data_demissao || this.params.data_final || this.correcaoConfig?.data_liquidacao;
+    if (!d) {
+      throw new Error('E_DATA_OBRIGATORIA: data_demissao é obrigatória para determinar competência de verba reflexa');
+    }
+    return d.slice(0, 7);
+  }
+
   private calcularVerbaReflexa(reflexa: PjeVerba, principalResult: PjeVerbaResult): PjeVerbaResult {
     const comportamento = reflexa.comportamento_reflexo || 'valor_mensal';
     const ocorrencias: PjeOcorrenciaResult[] = [];
@@ -3985,9 +4003,9 @@ export class PjeCalcEngine {
           } else if (periodoMedia === 'periodo_aquisitivo') {
             // Use end of acquisition period
             const parts = grupoKey.split('_');
-            comp = parts.length > 1 ? parts[1].slice(0, 7) : (this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7));
+            comp = parts.length > 1 ? parts[1].slice(0, 7) : (this.getCompetenciaDesligamento());
           } else {
-            comp = this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7);
+            comp = this.getCompetenciaDesligamento();
           }
 
           const result = this.calcularOcorrencia(reflexa, comp, media);
@@ -4010,7 +4028,7 @@ export class PjeCalcEngine {
           });
         const mediaCorr = valoresCorrigidos.length > 0 
           ? valoresCorrigidos.reduce((s, v) => s + v, 0) / valoresCorrigidos.length : 0;
-        const comp = this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7);
+        const comp = this.getCompetenciaDesligamento();
         const result = this.calcularOcorrencia(reflexa, comp, mediaCorr);
         ocorrencias.push(result);
         totalDevido = totalDevido.plus(result.devido);
@@ -4021,7 +4039,7 @@ export class PjeCalcEngine {
       case 'media_quantidade': {
         const qtds = principalResult.ocorrencias.filter(o => o.quantidade > 0).map(o => o.quantidade);
         const mediaQtd = qtds.length > 0 ? qtds.reduce((s, v) => s + v, 0) / qtds.length : 0;
-        const comp = this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7);
+        const comp = this.getCompetenciaDesligamento();
         const baseUnitaria = this.getBaseParaCompetencia(reflexa, comp);
         const result = this.calcularOcorrencia(
           { ...reflexa, quantidade_informada: mediaQtd, tipo_quantidade: 'informada' },
@@ -4088,9 +4106,9 @@ export class PjeCalcEngine {
             comp = `${grupoKey}-12`; // December of the year for 13º
           } else if (periodoMedia === 'periodo_aquisitivo') {
             const parts = grupoKey.split('_');
-            comp = parts.length > 1 ? parts[1].slice(0, 7) : (this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7));
+            comp = parts.length > 1 ? parts[1].slice(0, 7) : (this.getCompetenciaDesligamento());
           } else {
-            comp = this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7);
+            comp = this.getCompetenciaDesligamento();
           }
 
           // Calculate occurrence using the weighted average as base
@@ -4105,7 +4123,7 @@ export class PjeCalcEngine {
       default: {
         const valores = principalResult.ocorrencias.filter(o => o.diferenca > 0).map(o => o.diferenca);
         const media = valores.length > 0 ? valores.reduce((s, v) => new Decimal(s).plus(v), new Decimal(0)).div(valores.length).toDP(2).toNumber() : 0;
-        const comp = this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7);
+        const comp = this.getCompetenciaDesligamento();
         const result = this.calcularOcorrencia(reflexa, comp, media);
         ocorrencias.push(result);
         totalDevido = totalDevido.plus(result.devido);
