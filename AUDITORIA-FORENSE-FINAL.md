@@ -147,6 +147,38 @@ O MRD Calc possui um motor de cálculo funcional com fórmula PJe-Calc correta (
 
 ---
 
+## D2. ACHADOS DO FLUXO DE DADOS
+
+### Campos mortos (definidos nos tipos, nunca usados em produção)
+- `PjeMultiVinculo`, `PjeVinculoData`, `vinculo_id`, `vinculo_label` — multi-vínculo é feature fantasma
+- `data_prescricao_quinquenal` — campo existe, nunca populado
+- `salario_minimo` em PjeParametros — engine usa tabela DB, não esse campo
+- `incidencias.previdencia_privada` e `incidencias.pensao_alimenticia` — sempre hardcoded false no orchestrator
+
+### Dados perdidos no round-trip PJC → DB → Engine
+- `dados_extras` do CartaoPonto (horas_art384, inter_jornadas, repousos_trabalhados) — populado pelo import PJC mas **descartado pelo orchestrator** ao ler do DB
+- Férias: tipo suporta 3 períodos de gozo (Art. 134 CLT fracionamento), orchestrator só mapeia 1
+- `diaFechamentoMes` do PJC — parseado mas nunca usado
+- `regimeDoContrato` do PJC — não mapeado para `regime_trabalho`
+
+### Defaults perigosos no import PJC
+- Honorários: hardcoded 15% (PJC tem valor mas não percentual)
+- IR dependentes: default 0 (PJC não expõe)
+- IR incidir_sobre_juros: default false
+- CS períodos Simples Nacional: default []
+- FGTS saldos/saques: default []
+
+### Relatórios PDF — Itens ausentes vs PJe-Calc
+- Sem tabela separada "Apuração de Juros" (juros é só coluna na memória)
+- Sem audit trail no PDF
+- Sem calculation warnings no PDF
+- Sem detalhe seguro-desemprego, pensão, prev. privada, salário-família
+
+### Persistência
+- Sem transações atômicas (resultado e ocorrências salvos separadamente)
+- Sem versionamento explícito (acumula mas só último recuperável)
+- Sem mecanismo de diff entre versões
+
 ## E. CRITÉRIOS DE ACEITE PARA EQUIVALÊNCIA REAL
 
 O sistema pode ser considerado equivalente ao PJe-Calc quando:
