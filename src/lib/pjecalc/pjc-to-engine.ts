@@ -99,7 +99,7 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     irConfig: buildDefaultIRConfig(analysis),
     correcaoConfig: buildCorrecaoConfig(analysis),
     honorariosConfig: buildHonorariosConfig(analysis),
-    custasConfig: buildDefaultCustasConfig(),
+    custasConfig: buildCustasConfig(a),
     seguroConfig: buildSeguroConfig(analysis),
     excecoesCargas,
     excecoesSabado,
@@ -529,7 +529,10 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
     apurar_segurado: csConf?.apurar_segurado ?? (a.resultado.inss_reclamante > 0),
     cobrar_reclamante: csConf?.apurar_segurado ?? (a.resultado.inss_reclamante > 0),
     cs_sobre_salarios_pagos: false,
-    aliquota_segurado_tipo: 'empregado',
+    // Map PJC aliquotaSegurado: if it's a flat rate (e.g. 8.00), use 'fixa'
+    // PJe-Calc uses "Segurado Empregado" (progressive) or fixed aliquota
+    aliquota_segurado_tipo: csConf?.aliquota_segurado && csConf.aliquota_segurado > 0 ? 'fixa' : 'empregado',
+    aliquota_segurado_fixa: csConf?.aliquota_segurado || undefined,
     limitar_teto: true,
     apurar_empresa: csConf?.apurar_empresa ?? (a.resultado.inss_reclamado > 0),
     apurar_sat: (csConf?.aliquota_sat ?? 0) > 0,
@@ -646,12 +649,33 @@ function buildHonorariosConfig(a: PJCAnalysis): PjeHonorariosConfig {
   };
 }
 
-function buildDefaultCustasConfig(): PjeCustasConfig {
+function buildCustasConfig(a: PJCAnalysis): PjeCustasConfig {
+  const custasTotal = a.resultado.custas || 0;
+  // If PJC has custas value, use it as fixed amount (not percentage)
+  if (custasTotal > 0) {
+    return {
+      apurar: true,
+      percentual: 0, // Fixed value, not percentage
+      valor_minimo: custasTotal,
+      valor_maximo: custasTotal,
+      isento: false,
+      assistencia_judiciaria: false,
+      itens: [{
+        tipo: 'judiciais',
+        descricao: 'Custas Judiciais (valor do PJe-Calc)',
+        apurar: true,
+        percentual: 0,
+        valor_fixo: custasTotal,
+        valor_minimo: custasTotal,
+        isento: false,
+      }],
+    };
+  }
   return {
-    apurar: true,
-    percentual: 2,
-    valor_minimo: 10.64,
-    isento: false,
+    apurar: false,
+    percentual: 0,
+    valor_minimo: 0,
+    isento: true,
     assistencia_judiciaria: false,
     itens: [],
   };

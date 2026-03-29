@@ -44,6 +44,7 @@ export interface PJCAnalysis {
   cs_config?: {
     apurar_segurado: boolean;
     apurar_empresa: boolean;
+    aliquota_segurado: number;
     aliquota_empresa: number;
     aliquota_sat: number;
     aliquota_terceiros: number;
@@ -613,6 +614,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     cs_config = {
       apurar_segurado: getTextContent(csConfigEl, 'apurarSegurado') !== 'false',
       apurar_empresa: getTextContent(csConfigEl, 'apurarEmpresa') !== 'false',
+      aliquota_segurado: parseNum(getTextContent(csConfigEl, 'aliquotaSegurado')) || 0,
       aliquota_empresa: parseNum(getTextContent(csConfigEl, 'aliquotaEmpresa') || getTextContent(csConfigEl, 'aliquotaPatronal')) || 20,
       aliquota_sat: parseNum(getTextContent(csConfigEl, 'aliquotaSAT') || getTextContent(csConfigEl, 'aliquotaRat')) || 0,
       aliquota_terceiros: parseNum(getTextContent(csConfigEl, 'aliquotaTerceiros')) || 0,
@@ -620,7 +622,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   }
   // If PJC resultado shows zero CS, disable it
   if (resultado.inss_reclamante === 0 && resultado.inss_reclamado === 0) {
-    cs_config = { apurar_segurado: false, apurar_empresa: false, aliquota_empresa: 0, aliquota_sat: 0, aliquota_terceiros: 0 };
+    cs_config = { apurar_segurado: false, apurar_empresa: false, aliquota_segurado: 0, aliquota_empresa: 0, aliquota_sat: 0, aliquota_terceiros: 0 };
   }
 
   // --- ApuracaoDeJuros (Ground Truth consolidation) ---
