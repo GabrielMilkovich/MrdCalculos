@@ -38,8 +38,11 @@ async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false): Prom
         for (let i = 1; i < lines.length; i++) {
           const line = lines[i].trim();
           if (!line) continue;
-          const [d, v] = line.split(';');
-          if (d && v) allData.push({ data: d.trim(), valor: v.trim() });
+          // CSV format: "data";"dataFim";"valor" — values are quoted
+          const parts = line.split(';').map(p => p.replace(/"/g, '').trim());
+          const d = parts[0]; // dd/mm/yyyy
+          const v = parts[2] || parts[1]; // valor is 3rd column
+          if (d && v && d.includes('/')) allData.push({ data: d, valor: v });
         }
       } else {
         await csvResp.text();
