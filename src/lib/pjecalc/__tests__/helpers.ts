@@ -16,6 +16,8 @@ export function makeParams(overrides: Partial<PjeParametros> = {}): PjeParametro
     data_admissao: '2020-01-01',
     data_demissao: '2023-12-31',
     data_ajuizamento: '2024-06-01',
+    data_citacao: '2024-08-01',
+    modo_calculo: 'independent' as const,
     estado: 'SP',
     municipio: 'Sao Paulo',
     regime_trabalho: 'tempo_integral',

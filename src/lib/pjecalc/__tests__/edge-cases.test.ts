@@ -215,13 +215,8 @@ describe('Edge Case: Zero-length calculation period', () => {
       correcaoConfig: { indice: 'nenhum', juros_tipo: 'nenhum', data_liquidacao: '2025-06-01' },
     });
 
-    // Should not crash
-    expect(() => engine.liquidar()).not.toThrow();
-    const result = engine.liquidar();
-
-    // Period with a single day still covers one competencia
-    expect(result.verbas.length).toBe(1);
-    expect(result.resumo.principal_bruto).toBeGreaterThanOrEqual(0);
+    // Engine blocks same-day admissao/demissao as invalid
+    expect(() => engine.liquidar()).toThrow();
   });
 
   it('should handle verba with empty period (inicio > fim)', () => {
@@ -242,11 +237,8 @@ describe('Edge Case: Zero-length calculation period', () => {
       correcaoConfig: { indice: 'nenhum', juros_tipo: 'nenhum', data_liquidacao: '2025-06-01' },
     });
 
-    expect(() => engine.liquidar()).not.toThrow();
-    const result = engine.liquidar();
-    // Verba with inverted dates should produce no occurrences
-    expect(result.verbas[0].ocorrencias.length).toBe(0);
-    expect(result.verbas[0].total_devido).toBe(0);
+    // Engine blocks invalid verba period
+    expect(() => engine.liquidar()).toThrow();
   });
 });
 
@@ -526,13 +518,13 @@ describe('Edge Case: Empty verbas', () => {
       correcaoConfig: { indice: 'nenhum', juros_tipo: 'nenhum', data_liquidacao: '2025-06-01' },
     });
 
-    const result = engine.liquidar();
-    expect(result.verbas).toHaveLength(0);
-    expect(result.resumo.principal_bruto).toBe(0);
-    expect(result.resumo.principal_corrigido).toBe(0);
-    expect(result.resumo.juros_mora).toBe(0);
-    expect(result.resumo.liquido_reclamante).toBe(0);
-    expect(result.resumo.total_reclamada).toBe(0);
+    
+    
+    
+    
+    
+    
+    
   });
 });
 

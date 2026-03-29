@@ -166,9 +166,7 @@ describe('PjeCalcEngine - liquidar() integration', () => {
       correcaoConfig: { indice: 'nenhum', juros_tipo: 'nenhum', data_liquidacao: '2025-06-01' },
     });
 
-    const result = engine.liquidar();
-    expect(result.verbas).toHaveLength(0);
-    expect(result.resumo.principal_bruto).toBe(0);
-    expect(result.resumo.liquido_reclamante).toBe(0);
+    // Engine now blocks calculation when no verbas are configured
+    expect(() => engine.liquidar()).toThrow();
   });
 });
