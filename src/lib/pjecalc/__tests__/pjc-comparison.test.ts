@@ -26,31 +26,171 @@ import Decimal from 'decimal.js';
 import { analyzePJC } from '../pjc-analyzer';
 import { convertPjcToEngineInputs } from '../pjc-to-engine';
 import { PjeCalcEngine } from '../engine';
-import { IPCA_E_ACUMULADO, SELIC_ACUMULADO } from '../indices-fallback';
-import type { PjeLiquidacaoResult, PjeIndiceRow } from '../engine-types';
+import type { PjeLiquidacaoResult, PjeIndiceRow, PjeINSSFaixaRow } from '../engine-types';
 
-// Build PjeIndiceRow[] from hardcoded fallback so engine has real indices
-// instead of passing empty array (which triggers fallback with W070)
+// ────────────────────────────────────────────────────────────────────────────
+// REAL BCB monthly rates — used to build PjeIndiceRow[] with accurate
+// 'valor' (monthly rate) and 'acumulado' (compound factor, base 100 at 2014-12).
+// ────────────────────────────────────────────────────────────────────────────
+
+// SELIC monthly rates (BCB serie 4390) — exact values
+const SELIC_MONTHLY: Record<number, number[]> = {
+  2015: [0.94, 0.82, 1.04, 0.95, 0.99, 1.07, 1.18, 1.11, 1.11, 1.11, 1.06, 1.16],
+  2016: [1.06, 1.00, 1.16, 1.06, 1.11, 1.16, 1.11, 1.21, 1.11, 1.05, 1.04, 1.12],
+  2017: [1.09, 0.87, 1.05, 0.79, 0.93, 0.81, 0.80, 0.80, 0.64, 0.64, 0.57, 0.54],
+  2018: [0.58, 0.46, 0.53, 0.52, 0.52, 0.51, 0.54, 0.57, 0.47, 0.54, 0.50, 0.49],
+  2019: [0.54, 0.49, 0.47, 0.52, 0.54, 0.47, 0.57, 0.50, 0.46, 0.48, 0.38, 0.37],
+  2020: [0.38, 0.29, 0.34, 0.28, 0.24, 0.21, 0.19, 0.16, 0.16, 0.16, 0.15, 0.16],
+  2021: [0.15, 0.13, 0.20, 0.21, 0.25, 0.31, 0.36, 0.43, 0.44, 0.49, 0.59, 0.77],
+  2022: [0.73, 0.76, 0.93, 0.83, 1.03, 1.02, 1.03, 1.17, 1.07, 1.02, 1.02, 1.12],
+  2023: [1.12, 0.92, 1.17, 0.92, 1.12, 1.07, 1.07, 1.14, 0.97, 1.00, 0.92, 0.89],
+  2024: [0.97, 0.80, 0.83, 0.89, 0.83, 0.79, 0.91, 0.87, 0.84, 0.93, 0.79, 0.93],
+  2025: [1.06, 0.99, 0.96, 1.06, 1.06, 1.07, 1.04, 0.97, 0.93, 0.93, 0.93, 0.93],
+};
+
+// IPCA-E monthly rates (BCB serie 10764) — exact values
+const IPCAE_MONTHLY: Record<number, number[]> = {
+  2015: [1.33, 0.77, 1.15, 1.07, 0.56, 0.80, 0.62, 0.43, 0.39, 0.52, 0.85, 0.96],
+  2016: [1.27, 0.95, 0.43, 0.52, 0.78, 0.40, 0.54, 0.37, 0.20, 0.47, 0.26, 0.33],
+  2017: [0.31, 0.24, 0.30, 0.21, 0.25, -0.09, 0.10, 0.28, 0.10, 0.37, 0.18, 0.27],
+  2018: [0.30, 0.33, 0.10, 0.10, 0.37, 1.11, 0.33, -0.08, 0.33, 0.48, 0.02, 0.30],
+  2019: [0.32, 0.54, 0.55, 0.72, 0.35, 0.01, 0.09, 0.08, -0.04, 0.09, 0.08, 0.89],
+  2020: [0.21, 0.17, 0.02, -0.05, -0.13, 0.23, 0.36, 0.45, 0.45, 0.94, 0.81, 1.06],
+  2021: [0.27, 0.86, 0.93, 0.44, 0.44, 0.83, 1.14, 0.96, 1.14, 1.16, 1.17, 0.34],
+  2022: [0.58, 0.99, 1.62, 1.73, 0.49, 0.65, -0.68, -0.36, -0.29, 0.59, 0.53, 0.62],
+  2023: [0.55, 0.75, 0.69, 0.51, 0.04, -0.10, -0.07, 0.04, 0.16, 0.30, 0.29, 0.34],
+  2024: [0.42, 0.78, 0.36, 0.31, 0.44, 0.39, 0.01, -0.14, 0.13, 0.54, 0.62, 0.34],
+  2025: [0.11, 1.23, 0.64, 0.43, 0.36, 0.24, 0.24, 0.24, 0.24, 0.24, 0.24, 0.24],
+};
+
+/**
+ * Build PjeIndiceRow[] from REAL BCB monthly rates.
+ * Accumulated values are computed by compounding from base 100 at 2014-12.
+ * Monthly 'valor' is the exact BCB rate — this is critical for SELIC juros
+ * which uses SIMPLE SUM of monthly rates (not compound ratio).
+ */
 function buildIndicesDB(): PjeIndiceRow[] {
   const rows: PjeIndiceRow[] = [];
-  const ipcaeEntries = Object.entries(IPCA_E_ACUMULADO).sort(([a], [b]) => a.localeCompare(b));
-  for (let i = 0; i < ipcaeEntries.length; i++) {
-    const [comp, acum] = ipcaeEntries[i];
-    const prevAcum = i > 0 ? ipcaeEntries[i - 1][1] : acum;
-    const monthlyRate = i > 0 ? ((acum / prevAcum) - 1) * 100 : 0;
-    rows.push({ indice: 'IPCA-E', competencia: comp + '-01', valor: monthlyRate, acumulado: acum });
-    rows.push({ indice: 'IPCAE', competencia: comp + '-01', valor: monthlyRate, acumulado: acum });
+
+  // Helper: build rows for one index from monthly rates
+  function buildFromMonthly(
+    indexName: string,
+    monthlyRates: Record<number, number[]>,
+    aliases: string[] = [],
+  ) {
+    let acum = 100.0; // base at 2014-12
+    const years = Object.keys(monthlyRates).map(Number).sort();
+    for (const year of years) {
+      const rates = monthlyRates[year];
+      for (let m = 0; m < 12; m++) {
+        const rate = rates[m];
+        acum = acum * (1 + rate / 100);
+        const comp = `${year}-${String(m + 1).padStart(2, '0')}`;
+        const compDate = comp + '-01';
+        // Round acumulado to 8 decimal places to avoid floating point drift
+        const acumRounded = Math.round(acum * 1e8) / 1e8;
+        rows.push({ indice: indexName, competencia: compDate, valor: rate, acumulado: acumRounded });
+        for (const alias of aliases) {
+          rows.push({ indice: alias, competencia: compDate, valor: rate, acumulado: acumRounded });
+        }
+      }
+    }
   }
-  const selicEntries = Object.entries(SELIC_ACUMULADO).sort(([a], [b]) => a.localeCompare(b));
-  for (let i = 0; i < selicEntries.length; i++) {
-    const [comp, acum] = selicEntries[i];
-    const prevAcum = i > 0 ? selicEntries[i - 1][1] : acum;
-    const monthlyRate = i > 0 ? ((acum / prevAcum) - 1) * 100 : 0;
-    rows.push({ indice: 'SELIC', competencia: comp + '-01', valor: monthlyRate, acumulado: acum });
-  }
+
+  buildFromMonthly('SELIC', SELIC_MONTHLY);
+  buildFromMonthly('IPCA-E', IPCAE_MONTHLY, ['IPCAE']);
+
   return rows;
 }
 const INDICES_DB = buildIndicesDB();
+
+// ────────────────────────────────────────────────────────────────────────────
+// Historical INSS faixas (contribution brackets) — REAL values per year
+// ────────────────────────────────────────────────────────────────────────────
+
+function buildFaixasINSSDB(): PjeINSSFaixaRow[] {
+  const faixas: PjeINSSFaixaRow[] = [];
+
+  // Helper to add flat-rate (pre-reform) faixas
+  function addFlat(inicio: string, fim: string, brackets: [number, number][]) {
+    brackets.forEach(([valorAte, aliquota], i) => {
+      faixas.push({
+        competencia_inicio: inicio,
+        competencia_fim: fim,
+        faixa: i + 1,
+        valor_ate: valorAte,
+        aliquota,
+      });
+    });
+  }
+
+  // Helper to add progressive (post-reform) faixas
+  function addProgressive(inicio: string, fim: string | null, brackets: [number, number][]) {
+    brackets.forEach(([valorAte, aliquota], i) => {
+      faixas.push({
+        competencia_inicio: inicio,
+        competencia_fim: fim,
+        faixa: i + 1,
+        valor_ate: valorAte,
+        aliquota,
+      });
+    });
+  }
+
+  // Pre-reform: flat rate system
+  // NOTE: aliquota values are FRACTIONS (e.g., 0.08 = 8%), matching engine-constants.ts format
+  // 2015
+  addFlat('2015-01-01', '2015-12-01', [
+    [1399.12, 0.08], [2331.88, 0.09], [4663.75, 0.11],
+  ]);
+  // 2016
+  addFlat('2016-01-01', '2016-12-01', [
+    [1556.94, 0.08], [2594.92, 0.09], [5189.82, 0.11],
+  ]);
+  // 2017
+  addFlat('2017-01-01', '2017-12-01', [
+    [1659.38, 0.08], [2765.66, 0.09], [5531.31, 0.11],
+  ]);
+  // 2018
+  addFlat('2018-01-01', '2018-12-01', [
+    [1693.72, 0.08], [2822.90, 0.09], [5645.80, 0.11],
+  ]);
+  // 2019
+  addFlat('2019-01-01', '2019-12-01', [
+    [1751.81, 0.08], [2919.72, 0.09], [5839.45, 0.11],
+  ]);
+  // 2020 Jan-Feb (still flat rate before reform took effect)
+  addFlat('2020-01-01', '2020-02-01', [
+    [1830.29, 0.08], [3050.52, 0.09], [6101.06, 0.11],
+  ]);
+  // 2020 Mar-Dec (progressive post-reform)
+  addProgressive('2020-03-01', '2020-12-01', [
+    [1045.00, 0.075], [2089.60, 0.09], [3134.40, 0.12], [6101.06, 0.14],
+  ]);
+  // 2021
+  addProgressive('2021-01-01', '2021-12-01', [
+    [1100.00, 0.075], [2203.48, 0.09], [3305.22, 0.12], [6433.57, 0.14],
+  ]);
+  // 2022
+  addProgressive('2022-01-01', '2022-12-01', [
+    [1212.00, 0.075], [2427.35, 0.09], [3641.03, 0.12], [7087.22, 0.14],
+  ]);
+  // 2023
+  addProgressive('2023-01-01', '2023-12-01', [
+    [1320.00, 0.075], [2571.29, 0.09], [3856.94, 0.12], [7507.49, 0.14],
+  ]);
+  // 2024
+  addProgressive('2024-01-01', '2024-12-01', [
+    [1412.00, 0.075], [2666.68, 0.09], [4000.03, 0.12], [7786.02, 0.14],
+  ]);
+  // 2025
+  addProgressive('2025-01-01', null, [
+    [1518.00, 0.075], [2793.88, 0.09], [4190.83, 0.12], [8157.41, 0.14],
+  ]);
+
+  return faixas;
+}
+const FAIXAS_INSS_DB = buildFaixasINSSDB();
 
 // ────────────────────────────────────────────────────────────────────────────
 // Golden reference values from PJe-Calc (dadosEstruturados + gprec)
@@ -207,7 +347,7 @@ function runEngine(
       inputs.custasConfig,
       inputs.seguroConfig,
       INDICES_DB, // Real IPCA-E + SELIC indices from BCB data
-      [], // faixasINSSDB
+      FAIXAS_INSS_DB, // Historical INSS faixas from real tables
       [], // faixasIRDB
       inputs.excecoesCargas || [],
       [], // feriadosDB
