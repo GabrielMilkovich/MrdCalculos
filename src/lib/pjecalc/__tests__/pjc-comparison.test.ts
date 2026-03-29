@@ -33,12 +33,20 @@ import type { PjeLiquidacaoResult, PjeIndiceRow } from '../engine-types';
 // instead of passing empty array (which triggers fallback with W070)
 function buildIndicesDB(): PjeIndiceRow[] {
   const rows: PjeIndiceRow[] = [];
-  for (const [comp, acum] of Object.entries(IPCA_E_ACUMULADO)) {
-    rows.push({ indice: 'IPCA-E', competencia: comp + '-01', valor: 0, acumulado: acum });
-    rows.push({ indice: 'IPCAE', competencia: comp + '-01', valor: 0, acumulado: acum });
+  const ipcaeEntries = Object.entries(IPCA_E_ACUMULADO).sort(([a], [b]) => a.localeCompare(b));
+  for (let i = 0; i < ipcaeEntries.length; i++) {
+    const [comp, acum] = ipcaeEntries[i];
+    const prevAcum = i > 0 ? ipcaeEntries[i - 1][1] : acum;
+    const monthlyRate = i > 0 ? ((acum / prevAcum) - 1) * 100 : 0;
+    rows.push({ indice: 'IPCA-E', competencia: comp + '-01', valor: monthlyRate, acumulado: acum });
+    rows.push({ indice: 'IPCAE', competencia: comp + '-01', valor: monthlyRate, acumulado: acum });
   }
-  for (const [comp, acum] of Object.entries(SELIC_ACUMULADO)) {
-    rows.push({ indice: 'SELIC', competencia: comp + '-01', valor: 0, acumulado: acum });
+  const selicEntries = Object.entries(SELIC_ACUMULADO).sort(([a], [b]) => a.localeCompare(b));
+  for (let i = 0; i < selicEntries.length; i++) {
+    const [comp, acum] = selicEntries[i];
+    const prevAcum = i > 0 ? selicEntries[i - 1][1] : acum;
+    const monthlyRate = i > 0 ? ((acum / prevAcum) - 1) * 100 : 0;
+    rows.push({ indice: 'SELIC', competencia: comp + '-01', valor: monthlyRate, acumulado: acum });
   }
   return rows;
 }

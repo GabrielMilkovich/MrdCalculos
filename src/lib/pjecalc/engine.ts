@@ -1599,9 +1599,21 @@ export class PjeCalcEngine {
             if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
 
             if (regimeJuros.tipo === 'SELIC') {
-              const fatorSelic = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(realStart.slice(0, 7)), segFim.slice(0, 7));
-              if (fatorSelic !== null) {
-                jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
+              // PJe-Calc uses SIMPLE SUM of monthly SELIC rates, not compound ratio.
+              // Sum monthly 'valor' (% rate) from start to end, then apply as simple interest.
+              const startComp = realStart.slice(0, 7);
+              const endComp = segFim.slice(0, 7);
+              const selicMonthly = this.indicesDB
+                .filter(i => (i.indice === 'SELIC' || i.indice === 'selic') && i.competencia.slice(0, 7) >= startComp && i.competencia.slice(0, 7) < endComp)
+                .reduce((sum, i) => sum + (i.valor || 0), 0);
+              if (selicMonthly > 0) {
+                jurosTotal = jurosTotal.plus(valorCorrigido.times(selicMonthly / 100));
+              } else {
+                // Fallback: use accumulated ratio if monthly values not available
+                const fatorSelic = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(startComp), endComp);
+                if (fatorSelic !== null) {
+                  jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
+                }
               }
             } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(realStart.slice(0, 7)), segFim.slice(0, 7));
