@@ -157,7 +157,7 @@ export function SeletorTRT({ selectedTrtId, onSelect, compact }: Props) {
               <div className="flex items-center gap-2 p-2 rounded bg-muted/40">
                 <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>
-                  Sabado:{" "}
+                  Sábado:{" "}
                   <span className="font-medium">
                     {selectedTrt.sabado_dia_util_default
                       ? "Dia útil"
