@@ -1,5 +1,5 @@
 /**
- * @vitest-environment node
+ * @vitest-environment jsdom
  * 
  * Integration test: runs PJC comparison using REAL indices from Supabase production DB.
  * This proves whether the delta comes from data precision or engine logic.
