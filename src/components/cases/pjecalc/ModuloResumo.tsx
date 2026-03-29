@@ -34,6 +34,8 @@ import { gerarRelatorioCompleto, downloadRelatorioCompleto } from "@/lib/pjecalc
 import { downloadXML } from "@/lib/pjecalc/xml-export";
 import { fecharCalculo, reabrirCalculo, duplicarCalculo } from "@/lib/pjecalc/calc-operations";
 import { RelatorioConsolidado } from "./RelatorioConsolidado";
+import { RelatorioPDFDownload } from "./RelatorioPDFDownload";
+import type { DadosProcesso } from "@/lib/pjecalc/pdf/types";
 
 interface Props { caseId: string; }
 
@@ -647,6 +649,17 @@ export function ModuloResumo({ caseId }: Props) {
               </DropdownMenu>
 
               <RelatorioConsolidado processoNumero={caseData?.numero_processo || undefined} clienteNome={caseData?.cliente} />
+
+              {/* New modular PDF engine */}
+              <RelatorioPDFDownload
+                result={res}
+                params={paramsData as PjeParametros | undefined}
+                dadosProcesso={reportMetaCompleto as DadosProcesso}
+                showDropdown
+                variant="outline"
+                size="sm"
+                label="PDF (v2)"
+              />
 
               {/* Operations dropdown */}
               <DropdownMenu>
