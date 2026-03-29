@@ -170,11 +170,11 @@ export interface PjeVerba {
     integralizar: boolean;
   };
   
-  tipo_divisor: 'informado' | 'carga_horaria' | 'dias_uteis' | 'cartao_ponto' | 'calendario';
+  tipo_divisor: 'informado' | 'carga_horaria' | 'dias_uteis' | 'cartao_ponto' | 'calendario' | 'jornada' | 'mensal' | 'diario' | 'hora' | 'minuto';
   divisor_informado: number;
   divisor_cartao_colunas?: string[];
   multiplicador: number;
-  tipo_quantidade: 'informada' | 'avos' | 'apurada' | 'repousos' | 'calendario' | 'cartao_ponto';
+  tipo_quantidade: 'informada' | 'avos' | 'apurada' | 'repousos' | 'calendario' | 'cartao_ponto' | 'cartao_horas' | 'cartao_dias' | 'media_apurada';
   quantidade_informada: number;
   quantidade_cartao_colunas?: string[];
   quantidade_proporcionalizar: boolean;

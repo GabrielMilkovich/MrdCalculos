@@ -36,7 +36,7 @@ export async function getSalariosMinimos(): Promise<SalarioMinimoEntry[]> {
       .order('competencia', { ascending: false });
 
     if (error) throw new Error(`Falha ao carregar salários mínimos: ${error.message}`);
-    const result = (data || []) as SalarioMinimoEntry[];
+    const result = (data || []) as unknown as SalarioMinimoEntry[];
     setCache('salarios_minimos', result);
     return result;
   } catch (err) {
@@ -57,7 +57,7 @@ export async function getINSSFaixas(): Promise<INSSFaixa[]> {
       .order('competencia_inicio', { ascending: false });
 
     if (error) throw new Error(`Falha ao carregar faixas INSS: ${error.message}`);
-    const result = (data || []) as INSSFaixa[];
+    const result = (data || []) as unknown as INSSFaixa[];
     setCache('inss_faixas', result);
     return result;
   } catch (err) {
@@ -78,7 +78,7 @@ export async function getIRFaixas(): Promise<IRFaixa[]> {
       .order('competencia_inicio', { ascending: false });
 
     if (error) throw new Error(`Falha ao carregar faixas IR: ${error.message}`);
-    const result = (data || []) as IRFaixa[];
+    const result = (data || []) as unknown as IRFaixa[];
     setCache('ir_faixas', result);
     return result;
   } catch (err) {
@@ -100,7 +100,7 @@ export async function getIndicesCorrecao(indice?: string): Promise<IndiceCorreca
 
     const { data, error } = await query;
     if (error) throw new Error(`Falha ao carregar índices de correção: ${error.message}`);
-    const result = (data || []) as IndiceCorrecao[];
+    const result = (data || []) as unknown as IndiceCorrecao[];
     setCache(cacheKey, result);
     return result;
   } catch (err) {
