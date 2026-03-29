@@ -37,9 +37,9 @@ import { RelatorioConsolidado } from "./RelatorioConsolidado";
 import { RelatorioPDFDownload } from "./RelatorioPDFDownload";
 import type { DadosProcesso } from "@/lib/pjecalc/pdf/types";
 
-interface Props { caseId: string; }
+interface Props { caseId: string; onBeforeLiquidar?: () => Promise<void>; }
 
-export function ModuloResumo({ caseId }: Props) {
+export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'resumo' | 'memoria' | 'revisao' | 'comparacao' | 'paridade'>('resumo');
@@ -105,6 +105,11 @@ export function ModuloResumo({ caseId }: Props) {
     setLiquidando(true);
     setValidacao(null);
     try {
+      // Force save current form params before loading from DB
+      if (onBeforeLiquidar) {
+        await onBeforeLiquidar();
+      }
+
       // Load all module data in parallel via service layer
       const [paramsRes, histData, faltasData, feriasData, verbasData, cartaoData] = await Promise.all([
         svc.getParametros(caseId),

@@ -166,6 +166,7 @@ export default function PjeCalcPage() {
     projetar_aviso_indenizado: false, limitar_avos_periodo: false,
     zerar_valor_negativo: false, sabado_dia_util: true,
     considerar_feriado_estadual: false, considerar_feriado_municipal: false,
+    pontos_facultativos: [] as string[],
     tipo_mes: 'civil' as 'civil' | 'comercial',
     comentarios: '',
   });
@@ -196,6 +197,7 @@ export default function PjeCalcPage() {
         sabado_dia_util: calc.params.sabado_dia_util ?? true,
         considerar_feriado_estadual: calc.params.considerar_feriado_estadual || false,
         considerar_feriado_municipal: calc.params.considerar_feriado_municipal || false,
+        pontos_facultativos: (calc.params as any).pontos_facultativos || [],
         tipo_mes: (calc.params as any).tipo_mes || 'civil',
         comentarios: calc.params.comentarios || '',
       });
@@ -205,8 +207,9 @@ export default function PjeCalcPage() {
   // =====================================================
   // SAVE PARAMS — via hook mutation
   // =====================================================
-  const handleSaveParams = () => {
-    calc.saveParams.mutate({
+  const handleSaveParams = async () => {
+    await new Promise<void>((resolve, reject) => {
+      calc.saveParams.mutate({
       case_id: caseId!,
       estado: formParams.estado,
       municipio: formParams.municipio,
@@ -231,9 +234,11 @@ export default function PjeCalcPage() {
       sabado_dia_util: formParams.sabado_dia_util,
       considerar_feriado_estadual: formParams.considerar_feriado_estadual,
       considerar_feriado_municipal: formParams.considerar_feriado_municipal,
+      pontos_facultativos: formParams.pontos_facultativos,
       tipo_mes: formParams.tipo_mes,
       comentarios: formParams.comentarios,
-    } as any);
+    } as any, { onSuccess: () => resolve(), onError: (e: Error) => reject(e) });
+    });
   };
 
   // =====================================================
@@ -321,7 +326,7 @@ export default function PjeCalcPage() {
         case 'prev_privada': return <ModuloPrevidenciaPrivada caseId={caseId!} />;
         case 'custas': return <ModuloCustas caseId={caseId!} />;
         case 'resumo': return (<>
-            <ModuloResumo caseId={caseId!} />
+            <ModuloResumo caseId={caseId!} onBeforeLiquidar={async () => { await handleSaveParams(); }} />
             {calc.rawResultado?.resultado && calc.correcaoConfig?.ente_publico && (
               <ClassificacaoPrecatorio resumo={(calc.rawResultado.resultado as any).resumo} />
             )}
@@ -476,7 +481,7 @@ export default function PjeCalcPage() {
             <Label className="text-xs">Regime de Trabalho</Label>
             <Select value={formParams.regime_trabalho} onValueChange={v => setFormParams(p => ({ ...p, regime_trabalho: v }))}>
               <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="tempo_integral">Tempo Integral</SelectItem><SelectItem value="tempo_parcial">Tempo Parcial</SelectItem></SelectContent>
+              <SelectContent><SelectItem value="tempo_integral">Tempo Integral</SelectItem><SelectItem value="tempo_parcial">Tempo Parcial</SelectItem><SelectItem value="intermitente">Trabalho Intermitente</SelectItem></SelectContent>
             </Select>
           </div>
           <div><Label className="text-xs">Carga Horária Mensal</Label><Input type="number" value={formParams.carga_horaria_padrao} onChange={e => setFormParams(p => ({ ...p, carga_horaria_padrao: parseInt(e.target.value) || 220 }))} className="mt-1 h-8 text-xs" /></div>
@@ -521,6 +526,30 @@ export default function PjeCalcPage() {
           <div className="flex items-center gap-2"><Checkbox checked={formParams.sabado_dia_util} onCheckedChange={v => setFormParams(p => ({ ...p, sabado_dia_util: !!v }))} /><Label className="text-xs">Sábado como Dia Útil</Label></div>
           <div className="flex items-center gap-2"><Checkbox checked={formParams.considerar_feriado_estadual} onCheckedChange={v => setFormParams(p => ({ ...p, considerar_feriado_estadual: !!v }))} /><Label className="text-xs">Considerar Feriado Estadual</Label></div>
           <div className="flex items-center gap-2"><Checkbox checked={formParams.considerar_feriado_municipal} onCheckedChange={v => setFormParams(p => ({ ...p, considerar_feriado_municipal: !!v }))} /><Label className="text-xs">Considerar Feriado Municipal</Label></div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Pontos Facultativos</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          {[
+            { value: 'sexta_santa', label: 'Sexta-feira Santa' },
+            { value: 'carnaval', label: 'Carnaval' },
+            { value: 'corpus_christi', label: 'Corpus Christi' },
+          ].map(pf => (
+            <div key={pf.value} className="flex items-center gap-2">
+              <Checkbox
+                checked={formParams.pontos_facultativos.includes(pf.value)}
+                onCheckedChange={v => setFormParams(p => ({
+                  ...p,
+                  pontos_facultativos: v
+                    ? [...p.pontos_facultativos, pf.value]
+                    : p.pontos_facultativos.filter(x => x !== pf.value),
+                }))}
+              />
+              <Label className="text-xs">{pf.label}</Label>
+            </div>
+          ))}
+          <div className="text-[10px] text-muted-foreground mt-1">Abrangência: Nacional</div>
         </CardContent>
       </Card>
       <ExcecoesSabado caseId={caseId!} globalSabadoDiaUtil={formParams.sabado_dia_util} />

@@ -27,7 +27,7 @@ export interface PjeParametros {
   data_final?: string;
   estado: string;
   municipio: string;
-  regime_trabalho: 'tempo_integral' | 'tempo_parcial';
+  regime_trabalho: 'tempo_integral' | 'tempo_parcial' | 'intermitente';
   carga_horaria_padrao: number;
   prescricao_quinquenal: boolean;
   prescricao_fgts: boolean;
@@ -43,6 +43,8 @@ export interface PjeParametros {
   sabado_dia_util: boolean;
   considerar_feriado_estadual: boolean;
   considerar_feriado_municipal: boolean;
+  /** Pontos Facultativos a considerar como feriado (Sexta-feira Santa, Carnaval, Corpus Christi) */
+  pontos_facultativos?: ('sexta_santa' | 'carnaval' | 'corpus_christi')[];
   /** Art. 64 CLT: 'comercial' usa 30 dias fixos; 'civil' usa dias reais do mês */
   tipo_mes?: 'civil' | 'comercial';
   /** Multi-link: identifier for this employment contract (vínculos múltiplos) */
@@ -150,6 +152,11 @@ export interface PjeVerba {
   caracteristica: 'comum' | '13_salario' | 'aviso_previo' | 'ferias';
   ocorrencia_pagamento: 'mensal' | 'dezembro' | 'periodo_aquisitivo' | 'desligamento';
   compor_principal: boolean;
+
+  /** Assunto CNJ (e.g. "2140 - INTERVALO INTRAJORNADA") */
+  assunto_cnj?: string;
+  /** Aplicar Súmula nº 439 do TST (juros desde o ajuizamento para danos morais) */
+  sumula_439_tst?: boolean;
   zerar_valor_negativo: boolean;
   dobrar_valor_devido: boolean;
   periodo_inicio: string;
@@ -454,6 +461,8 @@ export interface PjeCorrecaoConfig {
   ente_publico?: boolean;
   /** PJC: aplicarJurosFasePreJudicial */
   aplicar_juros_fase_pre_judicial?: boolean;
+  /** PJe-Calc: Acumular Índices de Correção — 'mensal' | 'anual' | 'periodo' */
+  acumular_indices_correcao?: 'mensal' | 'anual' | 'periodo';
   /** OJ 394 SDI-1 TST: juros calculados sobre base após dedução de IR.
    *  When true, interest should be recalculated on the post-IR base. */
   oj_394_juros_pos_ir?: boolean;

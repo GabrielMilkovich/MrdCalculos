@@ -13,14 +13,29 @@ import * as svc from "@/lib/pjecalc/service";
 
 const INDICES = [
   { value: 'IPCA-E', label: 'IPCA-E' }, { value: 'SELIC', label: 'SELIC (Receita Federal)' },
+  { value: 'SELIC_SIMPLES', label: 'SELIC Simples' }, { value: 'SELIC_COMPOSTA', label: 'SELIC Composta' },
   { value: 'TR', label: 'TR' }, { value: 'INPC', label: 'INPC' }, { value: 'IGP-M', label: 'IGP-M' },
   { value: 'IGP-DI', label: 'IGP-DI' }, { value: 'IPCA', label: 'IPCA' }, { value: 'IPC-FIPE', label: 'IPC-FIPE' },
+  { value: 'IPC', label: 'IPC' },
+  { value: 'IPCA-E_TR', label: 'IPCA-E/TR' },
   { value: 'TJLP', label: 'TJLP' }, { value: 'TLP', label: 'TLP' }, { value: 'FACDT', label: 'FACDT' },
+  { value: 'TUACDT', label: 'TUACDT (Tab. Única At. Conv. Déb. Trab.)' },
+  { value: 'DEVEDOR_FP', label: 'Devedor Fazenda Pública' },
+  { value: 'REPETICAO_INDEBITO', label: 'Repetição Indébito Tributário' },
+  { value: 'TABELA_JT_MENSAL', label: 'Tabela JT Mensal' },
+  { value: 'TABELA_JT_DIARIA', label: 'Tabela JT Diária' },
   { value: 'SEM_CORRECAO', label: 'Sem Correção' },
 ];
 
 const TABELAS_JUROS = [
-  { value: 'TRD_SIMPLES', label: 'TRD Juros Simples' }, { value: 'SELIC_RF', label: 'SELIC (Receita Federal)' },
+  { value: 'JUROS_PADRAO', label: 'Juros Padrão' },
+  { value: 'TRD_SIMPLES', label: 'TRD Juros Simples' }, { value: 'TRD_COMPOSTOS', label: 'TRD Juros Compostos' },
+  { value: 'SELIC_RF', label: 'SELIC (Receita Federal)' },
+  { value: 'JUROS_CADERNETA', label: 'Juros Caderneta de Poupança' },
+  { value: 'JUROS_FAZENDA_PUBLICA', label: 'Juros Fazenda Pública' },
+  { value: 'JUROS_SIMPLES_05', label: 'Juros Simples 0,5% a.m.' },
+  { value: 'JUROS_SIMPLES_10', label: 'Juros Simples 1,0% a.m.' },
+  { value: 'JUROS_SIMPLES_0033', label: 'Juros Simples 0,0333333% a.d.' },
   { value: 'TAXA_LEGAL', label: 'Taxa Legal' }, { value: 'SEM_JUROS', label: 'Sem Juros' },
 ];
 
@@ -44,6 +59,7 @@ export function ModuloCorrecao({ caseId }: Props) {
     juros_inicio: 'ajuizamento' as 'ajuizamento' | 'citacao' | 'distribuicao',
     multa_523: false,
     multa_523_percentual: 10,
+    acumular_indices_correcao: 'mensal' as 'mensal' | 'anual' | 'periodo',
   });
 
   useEffect(() => {
@@ -68,6 +84,7 @@ export function ModuloCorrecao({ caseId }: Props) {
         juros_inicio: ((d.juros_inicio as string) || 'ajuizamento') as 'ajuizamento' | 'citacao' | 'distribuicao',
         multa_523: (d.multa_523 as boolean) ?? false,
         multa_523_percentual: (d.multa_523_percentual as number) ?? 10,
+        acumular_indices_correcao: ((d.acumular_indices_correcao as string) || 'mensal') as 'mensal' | 'anual' | 'periodo',
       });
     }
   }, [data]);
@@ -85,6 +102,7 @@ export function ModuloCorrecao({ caseId }: Props) {
         combinacoes_indice: form.combinar_indice ? JSON.stringify(form.combinacoes_indice) : undefined,
         combinacoes_juros: form.combinar_juros ? JSON.stringify(form.combinacoes_juros) : undefined,
         transicao_adc58: form.combinar_indice,
+        acumular_indices_correcao: form.acumular_indices_correcao,
       });
       qc.invalidateQueries({ queryKey: ["pjecalc_correcao_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
@@ -136,6 +154,17 @@ export function ModuloCorrecao({ caseId }: Props) {
             </TabsList>
             <TabsContent value="gerais" className="space-y-3">
               <div><Label className="text-xs">Data da Liquidação</Label><Input type="date" value={form.data_liquidacao} onChange={e => setForm(p => ({ ...p, data_liquidacao: e.target.value }))} className="mt-1 h-8 text-xs w-48" /></div>
+              <div>
+                <Label className="text-xs">Acumular Índices de Correção</Label>
+                <Select value={form.acumular_indices_correcao} onValueChange={v => setForm(p => ({ ...p, acumular_indices_correcao: v as typeof form.acumular_indices_correcao }))}>
+                  <SelectTrigger className="mt-1 h-8 text-xs w-64"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mensal">Mensal</SelectItem>
+                    <SelectItem value="anual">Anual</SelectItem>
+                    <SelectItem value="periodo">Por Período</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div>
                 <Label className="text-xs">Início dos Juros de Mora</Label>
                 <Select value={form.juros_inicio} onValueChange={v => setForm(p => ({ ...p, juros_inicio: v as typeof form.juros_inicio }))}>
