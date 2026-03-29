@@ -7,6 +7,7 @@
 import Decimal from 'decimal.js';
 import { getReformaRules, REFORMA_DATE } from './reforma-trabalhista';
 import { getFPASByCodigo } from './terceiros-contributions';
+import { IPCA_E_ACUMULADO, SELIC_ACUMULADO } from './indices-fallback';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
 
@@ -913,14 +914,20 @@ export class PjeCalcEngine {
    * defaults to 'mensal' when absent.
    */
   private getIndiceCorrecaoDB(nomeIndice: string, compOrigem: string, compDestino: string): number | null {
-    if (this.indicesDB.length === 0) return null;
+    if (this.indicesDB.length === 0) {
+      // Try fallback hardcoded indices
+      return this.getIndiceFallback(nomeIndice, compOrigem, compDestino);
+    }
 
     // Filtrar por índice
     const indices = this.indicesDB
       .filter(i => i.indice === nomeIndice)
       .sort((a, b) => (a.competencia || '').localeCompare(b.competencia || ''));
 
-    if (indices.length === 0) return null;
+    if (indices.length === 0) {
+      // Try fallback hardcoded indices
+      return this.getIndiceFallback(nomeIndice, compOrigem, compDestino);
+    }
 
     // Súmula 381 TST: correção acumula a partir do mês SUBSEQUENTE ao vencimento.
     // Usar acumulado do mês ANTERIOR à origem como denominador, para que o mês
@@ -954,6 +961,38 @@ export class PjeCalcEngine {
     const [ano, mes] = comp.split('-').map(Number);
     if (mes === 1) return `${ano - 1}-12`;
     return `${ano}-${String(mes - 1).padStart(2, '0')}`;
+  }
+
+  /**
+   * Fallback: use hardcoded accumulated indices when DB has no data for the given index.
+   * Applies the same Súmula 381 logic as getIndiceCorrecaoDB (origin = month before subsequente).
+   */
+  private getIndiceFallback(nomeIndice: string, compOrigem: string, compDestino: string): number | null {
+    const fallbackMap: Record<string, Record<string, number>> = {
+      'IPCAE': IPCA_E_ACUMULADO,
+      'IPCA-E': IPCA_E_ACUMULADO,
+      'SELIC': SELIC_ACUMULADO,
+    };
+    const fallback = fallbackMap[nomeIndice];
+    if (!fallback) return null;
+
+    // Súmula 381: use the month before the subsequente as origin denominator
+    // This means we use compOrigem itself (the month *before* origemSubsequente)
+    const origemKey = compOrigem.slice(0, 7);
+    const destinoKey = compDestino.slice(0, 7);
+    const acumOrigem = fallback[origemKey];
+    const acumDestino = fallback[destinoKey];
+
+    if (acumOrigem && acumDestino && acumOrigem !== 0) {
+      this.trackWarning(
+        'W070',
+        'correcao',
+        `Usando índice ${nomeIndice} do fallback hardcoded (não do banco). Valores podem ter precisão limitada.`,
+        compOrigem,
+      );
+      return acumDestino / acumOrigem;
+    }
+    return null;
   }
 
   // =====================================================
