@@ -660,15 +660,7 @@ function buildCustasConfig(a: PJCAnalysis): PjeCustasConfig {
       valor_maximo: custasTotal,
       isento: false,
       assistencia_judiciaria: false,
-      itens: [{
-        tipo: 'judiciais',
-        descricao: 'Custas Judiciais (valor do PJe-Calc)',
-        apurar: true,
-        percentual: 0,
-        valor_fixo: custasTotal,
-        valor_minimo: custasTotal,
-        isento: false,
-      }],
+      itens: [], // No additional items — the padrão calculation uses valor_minimo/maximo
     };
   }
   return {

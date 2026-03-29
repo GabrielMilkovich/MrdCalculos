@@ -26,7 +26,23 @@ import Decimal from 'decimal.js';
 import { analyzePJC } from '../pjc-analyzer';
 import { convertPjcToEngineInputs } from '../pjc-to-engine';
 import { PjeCalcEngine } from '../engine';
-import type { PjeLiquidacaoResult } from '../engine-types';
+import { IPCA_E_ACUMULADO, SELIC_ACUMULADO } from '../indices-fallback';
+import type { PjeLiquidacaoResult, PjeIndiceRow } from '../engine-types';
+
+// Build PjeIndiceRow[] from hardcoded fallback so engine has real indices
+// instead of passing empty array (which triggers fallback with W070)
+function buildIndicesDB(): PjeIndiceRow[] {
+  const rows: PjeIndiceRow[] = [];
+  for (const [comp, acum] of Object.entries(IPCA_E_ACUMULADO)) {
+    rows.push({ indice: 'IPCA-E', competencia: comp + '-01', valor: 0, acumulado: acum });
+    rows.push({ indice: 'IPCAE', competencia: comp + '-01', valor: 0, acumulado: acum });
+  }
+  for (const [comp, acum] of Object.entries(SELIC_ACUMULADO)) {
+    rows.push({ indice: 'SELIC', competencia: comp + '-01', valor: 0, acumulado: acum });
+  }
+  return rows;
+}
+const INDICES_DB = buildIndicesDB();
 
 // ────────────────────────────────────────────────────────────────────────────
 // Golden reference values from PJe-Calc (dadosEstruturados + gprec)
@@ -182,7 +198,7 @@ function runEngine(
       inputs.honorariosConfig,
       inputs.custasConfig,
       inputs.seguroConfig,
-      [], // indicesDB — empty, engine uses fallback
+      INDICES_DB, // Real IPCA-E + SELIC indices from BCB data
       [], // faixasINSSDB
       [], // faixasIRDB
       inputs.excecoesCargas || [],
