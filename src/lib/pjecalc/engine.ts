@@ -1507,8 +1507,14 @@ export class PjeCalcEngine {
               const rS = sI < jurosEffectiveStartGT ? jurosEffectiveStartGT : sI;
               const regI = this.getRegimeParaData(combinacoes_indice, rS);
               const iN = normalizeIndice(regI?.indice || 'SEM_CORRECAO');
-              // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended per PJe-Calc)
-              if (iN === 'SELIC' || iN === 'SEM_CORRECAO' || iN === 'Sem Correção' || iN === 'NENHUM') continue;
+              // Skip interest during SELIC index regime (already includes interest).
+              if (iN === 'SELIC') continue;
+              // SEM_CORRECAO: skip juros UNLESS the juros regime for this segment is SELIC
+              // (ADC 58/59: post-ajuizamento has SEM_CORRECAO index + SELIC juros)
+              if (iN === 'SEM_CORRECAO' || iN === 'Sem Correção' || iN === 'NENHUM') {
+                const regJCheck = this.getRegimeParaData(combinacoes_juros, rS);
+                if (!regJCheck || regJCheck.tipo !== 'SELIC') continue;
+              }
               const regJ = this.getRegimeParaData(combinacoes_juros, rS);
               if (!regJ || regJ.tipo === 'NENHUM') continue;
               if (regJ.tipo === 'SELIC') {
@@ -1583,8 +1589,13 @@ export class PjeCalcEngine {
             const indiceNorm = normalizeIndice(regimeIndice?.indice || 'SEM_CORRECAO');
             const regimeJuros = this.getRegimeParaData(combinacoes_juros, realStart);
 
-            // Skip interest during SELIC (already includes interest) and SEM_CORRECAO (suspended per PJe-Calc)
-            if (indiceNorm === 'SELIC' || indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
+            // Skip interest during SELIC index regime (already includes interest)
+            if (indiceNorm === 'SELIC') continue;
+            // SEM_CORRECAO: skip juros UNLESS juros regime is SELIC (ADC 58/59)
+            if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
+              const regJCheck = this.getRegimeParaData(combinacoes_juros, rS);
+              if (!regJCheck || regJCheck.tipo !== 'SELIC') continue;
+            }
             if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
 
             if (regimeJuros.tipo === 'SELIC') {
@@ -3445,7 +3456,13 @@ export class PjeCalcEngine {
             // SEM_CORRECAO/NENHUM = suspended period → no interest.
             // SELIC: when juros_apos_deducao_cs=true, SELIC IS the interest (correction phase already ran via aplicarCorrecaoCombinacaoSomente).
             //        when juros_apos_deducao_cs=false, SELIC already includes interest in the correction factor → skip to avoid double-counting.
-            if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
+            // SEM_CORRECAO: skip juros UNLESS juros regime is SELIC (ADC 58/59 post-ajuizamento)
+            {
+              const regJCheck2 = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
+              if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
+                if (!regJCheck2 || regJCheck2.tipo !== 'SELIC') continue;
+              }
+            }
             if (indiceNorm === 'SELIC' && !this.correcaoConfig.juros_apos_deducao_cs) continue;
 
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
@@ -3485,7 +3502,13 @@ export class PjeCalcEngine {
             // SEM_CORRECAO/NENHUM = suspended period → no interest.
             // SELIC: when juros_apos_deducao_cs=true, SELIC IS the interest (correction phase already ran).
             //        when juros_apos_deducao_cs=false, SELIC already includes interest → skip.
-            if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') continue;
+            // SEM_CORRECAO: skip juros UNLESS juros regime is SELIC (ADC 58/59 post-ajuizamento)
+            {
+              const regJCheck2 = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
+              if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
+                if (!regJCheck2 || regJCheck2.tipo !== 'SELIC') continue;
+              }
+            }
             if (indiceNorm === 'SELIC' && !this.correcaoConfig.juros_apos_deducao_cs) continue;
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
             const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
