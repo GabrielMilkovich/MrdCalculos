@@ -42,8 +42,7 @@ async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false): Prom
           if (d && v) allData.push({ data: d.trim(), valor: v.trim() });
         }
       } else {
-          await csvResp.text();
-        }
+        await csvResp.text();
       }
       await new Promise(r => setTimeout(r, 300));
     }
