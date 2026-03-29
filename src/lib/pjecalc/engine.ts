@@ -919,9 +919,16 @@ export class PjeCalcEngine {
       return this.getIndiceFallback(nomeIndice, compOrigem, compDestino);
     }
 
-    // Filtrar por índice
+    // Filtrar por índice — check both normalized name and common aliases
+    const aliases: Record<string, string[]> = {
+      'IPCA-E': ['IPCA-E', 'IPCAE', 'IPCA_E'],
+      'IGP-M': ['IGP-M', 'IGPM', 'IGP_M'],
+      'IGP-DI': ['IGP-DI', 'IGPDI', 'IGP_DI'],
+      'IPC-FIPE': ['IPC-FIPE', 'IPCFIPE'],
+    };
+    const searchNames = aliases[nomeIndice] || [nomeIndice];
     const indices = this.indicesDB
-      .filter(i => i.indice === nomeIndice)
+      .filter(i => searchNames.includes(i.indice))
       .sort((a, b) => (a.competencia || '').localeCompare(b.competencia || ''));
 
     if (indices.length === 0) {
