@@ -65,11 +65,11 @@ export function SeletorTRT({ selectedTrtId, onSelect, compact }: Props) {
     if (trt) {
       const notes: string[] = [];
       if (!trt.sabado_dia_util_default) {
-        notes.push("Sabado NAO e dia util (Sabadao)");
+        notes.push("Sábado NÃO é dia útil (Sabadão)");
       }
-      notes.push(`Indice preferencial: ${trt.indice_correcao_preferencial}`);
+      notes.push(`Índice preferencial: ${trt.indice_correcao_preferencial}`);
       if (trt.honorarios_default_pct !== 15) {
-        notes.push(`Honorarios: ${trt.honorarios_default_pct}%`);
+        notes.push(`Honorários: ${trt.honorarios_default_pct}%`);
       }
 
       toast.success(
@@ -137,7 +137,7 @@ export function SeletorTRT({ selectedTrtId, onSelect, compact }: Props) {
           onValueChange={handleSelect}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Selecione o TRT da jurisdicao..." />
+            <SelectValue placeholder="Selecione o TRT da jurisdição..." />
           </SelectTrigger>
           <SelectContent>
             <ScrollArea className="h-[300px]">
@@ -160,24 +160,24 @@ export function SeletorTRT({ selectedTrtId, onSelect, compact }: Props) {
                   Sabado:{" "}
                   <span className="font-medium">
                     {selectedTrt.sabado_dia_util_default
-                      ? "Dia util"
-                      : "NAO dia util"}
+                      ? "Dia útil"
+                      : "NÃO dia útil"}
                   </span>
                 </span>
                 {!selectedTrt.sabado_dia_util_default && (
                   <Badge variant="outline" className="text-[10px] h-4 px-1 bg-amber-50 text-amber-700 border-amber-200">
-                    Sabadao
+                    Sabadão
                   </Badge>
                 )}
               </div>
               <div className="flex items-center gap-2 p-2 rounded bg-muted/40">
-                <span className="text-muted-foreground text-xs">Indice:</span>
+                <span className="text-muted-foreground text-xs">Índice:</span>
                 <Badge variant="secondary" className="text-[10px] h-5">
                   {selectedTrt.indice_correcao_preferencial}
                 </Badge>
               </div>
               <div className="flex items-center gap-2 p-2 rounded bg-muted/40">
-                <span className="text-muted-foreground text-xs">Honorarios:</span>
+                <span className="text-muted-foreground text-xs">Honorários:</span>
                 <span className="font-medium">
                   {selectedTrt.honorarios_default_pct}%
                 </span>
@@ -231,7 +231,7 @@ export function SeletorTRT({ selectedTrtId, onSelect, compact }: Props) {
                 rel="noopener noreferrer"
                 className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
               >
-                Tabela Unica do {selectedTrt.sigla}
+                Tabela Única do {selectedTrt.sigla}
                 <ChevronRight className="h-3 w-3" />
               </a>
             )}
@@ -280,15 +280,15 @@ function TRTDetailDialog({
               value={trt.estados.join(", ")}
             />
             <InfoRow
-              label="Sabado dia util"
-              value={trt.sabado_dia_util_default ? "Sim" : "Nao (Sabadao)"}
+              label="Sábado dia útil"
+              value={trt.sabado_dia_util_default ? "Sim" : "Não (Sabadão)"}
             />
             <InfoRow
-              label="Indice preferencial"
+              label="Índice preferencial"
               value={trt.indice_correcao_preferencial}
             />
             <InfoRow
-              label="Honorarios"
+              label="Honorários"
               value={`${trt.honorarios_default_pct}%`}
             />
             <InfoRow
@@ -301,7 +301,7 @@ function TRTDetailDialog({
           {trt.regras_especificas.length > 0 && (
             <div className="space-y-2">
               <h4 className="text-sm font-medium">
-                Jurisprudencia Regional
+                Jurisprudência Regional
               </h4>
               <ScrollArea className="max-h-48">
                 <div className="space-y-2">
@@ -337,7 +337,7 @@ function TRTDetailDialog({
               rel="noopener noreferrer"
               className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
             >
-              Acessar Tabela Unica
+              Acessar Tabela Única
               <ChevronRight className="h-3.5 w-3.5" />
             </a>
           )}

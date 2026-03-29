@@ -348,7 +348,7 @@ export function ModuloResumo({ caseId }: Props) {
         fgtsConfig, csConfig, irConfig, correcaoConfigLocal,
         honorariosConfig, custasConfigLocal, seguroConfig,
         indicesDB, faixasINSSDB, faixasIRDB,
-        [], // excecoesCargas (TODO: load if table exists)
+        [], // excecoesCargas — no service method (getExcecoesCarga) available yet; engine handles empty array gracefully
         feriadosDB.map(f => ({ ...f, tipo: f.tipo as "estadual" | "facultativo" | "municipal" | "nacional" })),
         prevPrivadaConfig,
         pensaoConfig,

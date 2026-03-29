@@ -204,6 +204,7 @@ export function ModuloAjusteSentenca({ caseId, dataAdmissao, dataDemissao, carga
   };
 
   const deleteRuleset = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta regra?')) return;
     await (supabase.from as any)("sentenca_rulesets").delete().eq("id", id);
     qc.invalidateQueries({ queryKey: ["sentenca_rulesets", caseId] });
     toast.success("Regra excluída.");

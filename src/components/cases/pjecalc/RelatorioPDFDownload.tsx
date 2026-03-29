@@ -71,8 +71,8 @@ function buildReport(
 function reportLabel(type: ReportType): string {
   switch (type) {
     case 'resumo': return 'Resumo';
-    case 'memoria': return 'Memoria de Calculo';
-    default: return 'Relatorio';
+    case 'memoria': return 'Memória de Cálculo';
+    default: return 'Relatório';
   }
 }
 
@@ -97,7 +97,7 @@ export function RelatorioPDFDownload({
       openAndPrint(html);
     } catch (err) {
       console.error('PDF generation error:', err);
-      toast.error('Erro ao gerar relatorio PDF. Tente novamente.');
+      toast.error('Erro ao gerar relatório PDF. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -114,10 +114,10 @@ export function RelatorioPDFDownload({
         dadosProcesso.dataLiquidacao
       );
       downloadHTML(html, filename);
-      toast.success('Relatorio baixado com sucesso.');
+      toast.success('Relatório baixado com sucesso.');
     } catch (err) {
       console.error('PDF download error:', err);
-      toast.error('Erro ao baixar relatorio. Tente novamente.');
+      toast.error('Erro ao baixar relatório. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -129,20 +129,20 @@ export function RelatorioPDFDownload({
         <DropdownMenuTrigger asChild>
           <Button variant={variant} size={size} disabled={loading} className={className}>
             {loading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileBarChart className="h-4 w-4 mr-1" />}
-            {label || 'Relatorio PDF'}
+            {label || 'Relatório PDF'}
             <ChevronDown className="h-3 w-3 ml-1" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => handlePrint('memoria')}>
-            <FileBarChart className="h-4 w-4 mr-2" /> Imprimir Memoria de Calculo
+            <FileBarChart className="h-4 w-4 mr-2" /> Imprimir Memória de Cálculo
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handlePrint('resumo')}>
             <FileBarChart className="h-4 w-4 mr-2" /> Imprimir Resumo
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => handleDownload('memoria')}>
-            <Download className="h-4 w-4 mr-2" /> Baixar Memoria de Calculo
+            <Download className="h-4 w-4 mr-2" /> Baixar Memória de Cálculo
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleDownload('resumo')}>
             <Download className="h-4 w-4 mr-2" /> Baixar Resumo

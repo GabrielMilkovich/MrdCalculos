@@ -90,7 +90,7 @@ export function ModuloEquiparacaoSalarial({ caseId }: Props) {
       });
       qc.invalidateQueries({ queryKey: ["pjecalc_multas_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
-      toast.success("Equiparacao salarial salva!");
+      toast.success("Equiparação salarial salva!");
     } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
   };
@@ -99,7 +99,7 @@ export function ModuloEquiparacaoSalarial({ caseId }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Scale className="h-5 w-5" /> Equiparacao Salarial
+          <Scale className="h-5 w-5" /> Equiparação Salarial
         </h2>
         <Button onClick={save} disabled={saving} size="sm">
           {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />} Salvar
@@ -108,12 +108,12 @@ export function ModuloEquiparacaoSalarial({ caseId }: Props) {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Art. 461 CLT - Equiparacao Salarial</CardTitle>
+          <CardTitle className="text-sm">Art. 461 CLT - Equiparação Salarial</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-2">
             <Checkbox checked={config.ativo} onCheckedChange={v => update({ ativo: !!v })} />
-            <Label className="text-xs">Apurar diferencas por equiparacao salarial</Label>
+            <Label className="text-xs">Apurar diferenças por equiparação salarial</Label>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -127,7 +127,7 @@ export function ModuloEquiparacaoSalarial({ caseId }: Props) {
               />
             </div>
             <div>
-              <Label className="text-xs">Funcao do Paradigma</Label>
+              <Label className="text-xs">Função do Paradigma</Label>
               <Input
                 value={config.paradigma_funcao}
                 onChange={e => update({ paradigma_funcao: e.target.value })}
@@ -139,11 +139,11 @@ export function ModuloEquiparacaoSalarial({ caseId }: Props) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Periodo Inicio</Label>
+              <Label className="text-xs">Período Início</Label>
               <Input type="date" value={config.periodo_inicio} onChange={e => update({ periodo_inicio: e.target.value })} className="h-8 text-xs mt-1" />
             </div>
             <div>
-              <Label className="text-xs">Periodo Fim</Label>
+              <Label className="text-xs">Período Fim</Label>
               <Input type="date" value={config.periodo_fim} onChange={e => update({ periodo_fim: e.target.value })} className="h-8 text-xs mt-1" />
             </div>
           </div>
@@ -153,23 +153,23 @@ export function ModuloEquiparacaoSalarial({ caseId }: Props) {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm">Salarios por Competencia</CardTitle>
+            <CardTitle className="text-sm">Salários por Competência</CardTitle>
             <Button onClick={openNew} size="sm" className="h-8"><Plus className="h-3.5 w-3.5 mr-1" /> Novo</Button>
           </div>
         </CardHeader>
         <CardContent>
           {config.salarios.length === 0 ? (
-            <p className="text-xs text-muted-foreground font-medium py-4">Nenhum salario informado. Adicione as competencias com os salarios do paradigma e do empregado.</p>
+            <p className="text-xs text-muted-foreground font-medium py-4">Nenhum salário informado. Adicione as competências com os salários do paradigma e do empregado.</p>
           ) : (
             <div className="border border-border rounded overflow-hidden">
               <table className="w-full text-xs">
-                <thead><tr className="bg-muted/50 border-b border-border"><th className="p-2 text-left font-medium w-20">Acao</th><th className="p-2 text-left font-medium">Competencia</th><th className="p-2 text-right font-medium">Sal. Paradigma</th><th className="p-2 text-right font-medium">Sal. Empregado</th><th className="p-2 text-right font-medium">Diferenca</th></tr></thead>
+                <thead><tr className="bg-muted/50 border-b border-border"><th className="p-2 text-left font-medium w-20">Ação</th><th className="p-2 text-left font-medium">Competência</th><th className="p-2 text-right font-medium">Sal. Paradigma</th><th className="p-2 text-right font-medium">Sal. Empregado</th><th className="p-2 text-right font-medium">Diferença</th></tr></thead>
                 <tbody>
                   {config.salarios.map((s, idx) => {
                     const dif = Math.max(0, parseFloat(s.salario_paradigma || '0') - parseFloat(s.salario_empregado || '0'));
                     return (
                       <tr key={idx} className="border-b border-border/50 hover:bg-muted/20">
-                        <td className="p-2"><div className="flex gap-1"><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(idx)}><Pencil className="h-3 w-3" /></Button><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => update({ salarios: config.salarios.filter((_, i) => i !== idx) })}><Trash2 className="h-3 w-3 text-destructive" /></Button></div></td>
+                        <td className="p-2"><div className="flex gap-1"><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(idx)}><Pencil className="h-3 w-3" /></Button><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { if (window.confirm('Tem certeza que deseja excluir este registro de salário?')) update({ salarios: config.salarios.filter((_, i) => i !== idx) }); }}><Trash2 className="h-3 w-3 text-destructive" /></Button></div></td>
                         <td className="p-2 font-medium">{s.competencia || '---'}</td>
                         <td className="p-2 text-right">{parseFloat(s.salario_paradigma || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                         <td className="p-2 text-right">{parseFloat(s.salario_empregado || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
@@ -187,19 +187,19 @@ export function ModuloEquiparacaoSalarial({ caseId }: Props) {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="text-sm">{editIdx !== null ? 'Editar' : 'Novo'} Salario por Competencia</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-sm">{editIdx !== null ? 'Editar' : 'Novo'} Salário por Competência</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label className="text-xs">Competencia (YYYY-MM)</Label><Input value={editForm.competencia} onChange={e => setEditForm(p => ({ ...p, competencia: e.target.value }))} className="h-8 text-xs mt-1" placeholder="2024-01" /></div>
-            <div><Label className="text-xs">Salario do Paradigma (R$)</Label><Input type="number" step="0.01" value={editForm.salario_paradigma} onChange={e => setEditForm(p => ({ ...p, salario_paradigma: e.target.value }))} className="h-8 text-xs mt-1" /></div>
-            <div><Label className="text-xs">Salario do Empregado (R$)</Label><Input type="number" step="0.01" value={editForm.salario_empregado} onChange={e => setEditForm(p => ({ ...p, salario_empregado: e.target.value }))} className="h-8 text-xs mt-1" /></div>
+            <div><Label className="text-xs">Competência (YYYY-MM)</Label><Input value={editForm.competencia} onChange={e => setEditForm(p => ({ ...p, competencia: e.target.value }))} className="h-8 text-xs mt-1" placeholder="2024-01" /></div>
+            <div><Label className="text-xs">Salário do Paradigma (R$)</Label><Input type="number" step="0.01" value={editForm.salario_paradigma} onChange={e => setEditForm(p => ({ ...p, salario_paradigma: e.target.value }))} className="h-8 text-xs mt-1" /></div>
+            <div><Label className="text-xs">Salário do Empregado (R$)</Label><Input type="number" step="0.01" value={editForm.salario_empregado} onChange={e => setEditForm(p => ({ ...p, salario_empregado: e.target.value }))} className="h-8 text-xs mt-1" /></div>
           </div>
           <DialogFooter><Button size="sm" onClick={saveItem}>Confirmar</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <p className="text-[10px] text-muted-foreground">
-        Art. 461 CLT + Sumula 6 TST: mesma funcao, mesmo empregador, mesma localidade.
-        Gera reflexos em 13o, ferias + 1/3, DSR e FGTS.
+        Art. 461 CLT + Súmula 6 TST: mesma função, mesmo empregador, mesma localidade.
+        Gera reflexos em 13º, férias + 1/3, DSR e FGTS.
       </p>
     </div>
   );

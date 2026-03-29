@@ -181,6 +181,7 @@ export function GradeOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, pe
 
   const deleteSelected = async () => {
     if (selectedRows.size === 0) return;
+    if (!window.confirm(`Tem certeza que deseja excluir ${selectedRows.size} ocorrência(s)?`)) return;
     for (const id of selectedRows) {
       await svc.deleteOcorrenciaById(id);
     }

@@ -97,15 +97,15 @@ export function ModuloPericulosidade({ caseId }: Props) {
                 onChange={e => update({ percentual: e.target.value })}
                 className="h-8 text-xs mt-1"
               />
-              <p className="text-[10px] text-muted-foreground mt-0.5">Art. 193 CLT: 30% sobre salario base</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Art. 193 CLT: 30% sobre salário base</p>
             </div>
             <div>
-              <Label className="text-xs">Base de Calculo</Label>
+              <Label className="text-xs">Base de Cálculo</Label>
               <Select value={config.base_calculo} onValueChange={v => update({ base_calculo: v as PericulosidadeConfig['base_calculo'] })}>
                 <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="salario_base">Salario Base (sem adicionais)</SelectItem>
-                  <SelectItem value="salario_contratual">Salario Contratual</SelectItem>
+                  <SelectItem value="salario_base">Salário Base (sem adicionais)</SelectItem>
+                  <SelectItem value="salario_contratual">Salário Contratual</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -113,7 +113,7 @@ export function ModuloPericulosidade({ caseId }: Props) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Periodo Inicio</Label>
+              <Label className="text-xs">Período Início</Label>
               <Input
                 type="date"
                 value={config.periodo_inicio}
@@ -122,7 +122,7 @@ export function ModuloPericulosidade({ caseId }: Props) {
               />
             </div>
             <div>
-              <Label className="text-xs">Periodo Fim</Label>
+              <Label className="text-xs">Período Fim</Label>
               <Input
                 type="date"
                 value={config.periodo_fim}
@@ -133,18 +133,18 @@ export function ModuloPericulosidade({ caseId }: Props) {
           </div>
 
           <div>
-            <Label className="text-xs">Observacoes</Label>
+            <Label className="text-xs">Observações</Label>
             <Input
               value={config.observacoes}
               onChange={e => update({ observacoes: e.target.value })}
               className="h-8 text-xs mt-1"
-              placeholder="Ex: Laudo pericial positivo. Nao acumula com insalubridade (Art. 193 §2)."
+              placeholder="Ex: Laudo pericial positivo. Não acumula com insalubridade (Art. 193 §2)."
             />
           </div>
 
           <p className="text-[10px] text-muted-foreground border-t pt-2">
-            Importante: O adicional de periculosidade NAO acumula com insalubridade (Art. 193 §2 CLT).
-            Gera reflexos em 13o salario, ferias + 1/3 e FGTS.
+            Importante: O adicional de periculosidade NÃO acumula com insalubridade (Art. 193 §2 CLT).
+            Gera reflexos em 13º salário, férias + 1/3 e FGTS.
           </p>
         </CardContent>
       </Card>

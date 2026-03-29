@@ -67,7 +67,7 @@ const chartConfig: ChartConfig = {
     color: "hsl(var(--chart-1))",
   },
   correcao_acumulada: {
-    label: "Correcao Monetaria",
+    label: "Correção Monetária",
     color: "hsl(var(--chart-2))",
   },
   juros_acumulados: {
@@ -108,13 +108,13 @@ export function EvolucaoDebito({ result, correcaoConfig }: Props) {
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <TrendingUp className="h-4 w-4" />
-            Evolucao do Debito
+            Evolução do Débito
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Nenhum dado disponivel para gerar a evolucao do debito.
-            Execute a liquidacao primeiro.
+            Nenhum dado disponível para gerar a evolução do débito.
+            Execute a liquidação primeiro.
           </p>
         </CardContent>
       </Card>
@@ -138,7 +138,7 @@ export function EvolucaoDebito({ result, correcaoConfig }: Props) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <TrendingUp className="h-4 w-4" />
-            Evolucao do Debito
+            Evolução do Débito
           </CardTitle>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-[10px] h-5">
@@ -165,7 +165,7 @@ export function EvolucaoDebito({ result, correcaoConfig }: Props) {
             prefix="R$"
           />
           <SummaryCard
-            label="Correcao Total"
+            label="Correção Total"
             value={fmt(entries[entries.length - 1].correcao_acumulada)}
             prefix="R$"
           />
@@ -177,7 +177,7 @@ export function EvolucaoDebito({ result, correcaoConfig }: Props) {
           <SummaryCard
             label="Crescimento"
             value={`${summary.crescimento_total_pct.toFixed(1)}%`}
-            detail={`Media: ${summary.taxa_mensal_media.toFixed(2)}%/mes`}
+            detail={`Média: ${summary.taxa_mensal_media.toFixed(2)}%/mês`}
             positive={summary.crescimento_total_pct > 0}
           />
         </div>
@@ -187,7 +187,7 @@ export function EvolucaoDebito({ result, correcaoConfig }: Props) {
           <TabsList className="h-8">
             <TabsTrigger value="chart" className="text-xs gap-1 h-6">
               <BarChart3 className="h-3 w-3" />
-              Grafico
+              Gráfico
             </TabsTrigger>
             <TabsTrigger value="table" className="text-xs gap-1 h-6">
               <TableIcon className="h-3 w-3" />
@@ -288,12 +288,12 @@ export function EvolucaoDebito({ result, correcaoConfig }: Props) {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">Competencia</TableHead>
+                    <TableHead className="text-xs">Competência</TableHead>
                     <TableHead className="text-xs text-right">
                       Principal Acum.
                     </TableHead>
                     <TableHead className="text-xs text-right">
-                      Correcao Acum.
+                      Correção Acum.
                     </TableHead>
                     <TableHead className="text-xs text-right">
                       Juros Acum.

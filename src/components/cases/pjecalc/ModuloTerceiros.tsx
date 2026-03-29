@@ -140,9 +140,9 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
           .reduce((sum, e) => sum + e.aliquota, 0),
       });
       onConfigChange?.(config);
-      toast.success("Configuracao de terceiros salva.");
+      toast.success("Configuração de terceiros salva.");
     } catch (err) {
-      toast.error("Erro ao salvar configuracao de terceiros.");
+      toast.error("Erro ao salvar configuração de terceiros.");
     } finally {
       setSaving(false);
     }
@@ -158,7 +158,7 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <Building2 className="h-4 w-4" />
-          Contribuicoes de Terceiros (Sistema S)
+          Contribuições de Terceiros (Sistema S)
           {config.apurar && (
             <Badge variant="secondary" className="ml-auto text-[10px] h-5">
               {activeAliquotaTotal.toFixed(1)}%
@@ -181,7 +181,7 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
             }}
           />
           <Label htmlFor="terceiros-apurar" className="text-sm">
-            Apurar contribuicoes de terceiros
+            Apurar contribuições de terceiros
           </Label>
         </div>
 
@@ -189,7 +189,7 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
           <>
             {/* FPAS Selector */}
             <div className="space-y-1.5">
-              <Label className="text-sm">Codigo FPAS</Label>
+              <Label className="text-sm">Código FPAS</Label>
               <Select value={config.fpas} onValueChange={handleFPASChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o FPAS..." />
@@ -204,7 +204,7 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
               </Select>
               {selectedFPAS && (
                 <p className="text-xs text-muted-foreground">
-                  Atividade: {selectedFPAS.atividade} | Total padrao:{" "}
+                  Atividade: {selectedFPAS.atividade} | Total padrão:{" "}
                   {selectedFPAS.total_terceiros}%
                 </p>
               )}
@@ -217,7 +217,7 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
                   <TableRow>
                     <TableHead className="w-10">Ativa</TableHead>
                     <TableHead>Entidade</TableHead>
-                    <TableHead className="w-20 text-right">Aliquota %</TableHead>
+                    <TableHead className="w-20 text-right">Alíquota %</TableHead>
                     {preview && (
                       <TableHead className="w-28 text-right">Valor (R$)</TableHead>
                     )}
@@ -297,7 +297,7 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
               <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-muted/20 rounded">
                 <Calculator className="h-3.5 w-3.5" />
                 <span>
-                  Previa calculada sobre base de R$ {fmt(baseCalculo)} (mesma
+                  Prévia calculada sobre base de R$ {fmt(baseCalculo)} (mesma
                   base INSS)
                 </span>
               </div>
@@ -316,7 +316,7 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
                 ) : (
                   <Save className="h-3.5 w-3.5" />
                 )}
-                Salvar Configuracao
+                Salvar Configuração
               </Button>
             </div>
           </>

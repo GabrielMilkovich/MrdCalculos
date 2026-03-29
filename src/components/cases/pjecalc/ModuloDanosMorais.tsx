@@ -80,12 +80,12 @@ export function ModuloDanosMorais({ caseId }: Props) {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Art. 223-G CLT - Indenizacao por Danos Morais</CardTitle>
+          <CardTitle className="text-sm">Art. 223-G CLT - Indenização por Danos Morais</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-2">
             <Checkbox checked={config.ativo} onCheckedChange={v => update({ ativo: !!v })} />
-            <Label className="text-xs">Apurar indenizacao por danos morais</Label>
+            <Label className="text-xs">Apurar indenização por danos morais</Label>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -100,20 +100,20 @@ export function ModuloDanosMorais({ caseId }: Props) {
               />
             </div>
             <div>
-              <Label className="text-xs">Data da Sentenca</Label>
+              <Label className="text-xs">Data da Sentença</Label>
               <Input
                 type="date"
                 value={config.data_sentenca}
                 onChange={e => update({ data_sentenca: e.target.value })}
                 className="h-8 text-xs mt-1"
               />
-              <p className="text-[10px] text-muted-foreground mt-0.5">Correcao monetaria a partir desta data</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Correção monetária a partir desta data</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Indice de Correcao</Label>
+              <Label className="text-xs">Índice de Correção</Label>
               <Select value={config.indice_correcao} onValueChange={v => update({ indice_correcao: v as DanosMoraisConfig['indice_correcao'] })}>
                 <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -129,28 +129,28 @@ export function ModuloDanosMorais({ caseId }: Props) {
               <Select value={config.grau_ofensa} onValueChange={v => update({ grau_ofensa: v as DanosMoraisConfig['grau_ofensa'] })}>
                 <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="leve">Leve (ate 3x ultimo salario)</SelectItem>
-                  <SelectItem value="medio">Medio (ate 5x ultimo salario)</SelectItem>
-                  <SelectItem value="grave">Grave (ate 20x ultimo salario)</SelectItem>
-                  <SelectItem value="gravissimo">Gravissimo (ate 50x ultimo salario)</SelectItem>
+                  <SelectItem value="leve">Leve (até 3x último salário)</SelectItem>
+                  <SelectItem value="medio">Médio (até 5x último salário)</SelectItem>
+                  <SelectItem value="grave">Grave (até 20x último salário)</SelectItem>
+                  <SelectItem value="gravissimo">Gravíssimo (até 50x último salário)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div>
-            <Label className="text-xs">Observacoes</Label>
+            <Label className="text-xs">Observações</Label>
             <Input
               value={config.observacoes}
               onChange={e => update({ observacoes: e.target.value })}
               className="h-8 text-xs mt-1"
-              placeholder="Ex: Assedio moral comprovado. Sentenca de 1a instancia."
+              placeholder="Ex: Assédio moral comprovado. Sentença de 1a instância."
             />
           </div>
 
           <p className="text-[10px] text-muted-foreground border-t pt-2">
-            Natureza indenizatoria: NAO incide FGTS, INSS ou IRPF. NAO gera reflexos.
-            Correcao monetaria a partir da data da sentenca (Sumula 439 TST).
+            Natureza indenizatória: NÃO incide FGTS, INSS ou IRPF. NÃO gera reflexos.
+            Correção monetária a partir da data da sentença (Súmula 439 TST).
           </p>
         </CardContent>
       </Card>
