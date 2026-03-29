@@ -151,7 +151,7 @@ serve(async (req) => {
 
   for (const serie of seriesToProcess) {
     try {
-      const data = await fetchBCBSeries(serie.id, serie.daily);
+      const data = await fetchBCBSeries(serie.id, serie.daily, serie.daily ? dailyWindowIndex : null);
 
       if (data.length === 0) {
         results[serie.name] = { error: 'No data returned from BCB API' };
