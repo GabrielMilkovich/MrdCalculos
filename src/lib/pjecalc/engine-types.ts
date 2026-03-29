@@ -395,6 +395,8 @@ export interface PjeCSConfig {
   /** Lei 13.467/2017: contribuição sindical pós-nov/2017 é facultativa.
    *  Quando true, aplica também para anos 2018+. */
   contribuicao_sindical_pos2017?: boolean;
+  /** Código FPAS para cálculo de terceiros */
+  fpas_code?: string;
 }
 
 export interface PjeIRConfig {

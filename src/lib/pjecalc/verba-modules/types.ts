@@ -129,13 +129,13 @@ export interface VerbaModule {
   resolveInputs(ctx: VerbaModuleContext, verba: PjeVerba): ResolvedInputs;
 
   /** Apply the calculation formula */
-  applyFormula(inputs: ResolvedInputs, verba: PjeVerba): number;
+  applyFormula(inputs: ResolvedInputs, verba?: PjeVerba): number;
 
   /** Declare which reflections this verba generates */
-  getReflections(verba: PjeVerba): ReflectionSpec[];
+  getReflections(verba?: PjeVerba): ReflectionSpec[];
 
   /** Declare incidence rules */
-  getIncidences(verba: PjeVerba): IncidenceSpec;
+  getIncidences(verba?: PjeVerba): IncidenceSpec;
 
   /** Build audit trail entries */
   buildAuditTrail(ctx: VerbaModuleContext, inputs: ResolvedInputs, resultado: number): ModuleAuditEntry[];
