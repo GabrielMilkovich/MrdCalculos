@@ -273,7 +273,7 @@ export default function PjeCalcPage() {
     });
   }, [caseId, formParams, calc.saveParams]);
 
-  const { isSaving: isAutoSaving, lastSaved: autoSaveLastSaved } = useAutoSave(formParams, autoSaveFn, 5000);
+  const { isSaving: isAutoSaving, lastSaved: autoSaveLastSaved } = useAutoSave(formParams, autoSaveFn, 1500);
 
   // =====================================================
   // RENDER MODULES
