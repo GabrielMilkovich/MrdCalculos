@@ -559,6 +559,11 @@ export interface PjecalcCorrecaoConfigInsert {
   multa_523?: boolean;
   multa_523_percentual?: number;
   data_liquidacao?: string;
+  combinacoes_indice?: string; // JSON stringified
+  combinacoes_juros?: string;  // JSON stringified
+  transicao_adc58?: boolean;
+  juros_apos_deducao_cs?: boolean;
+  ente_publico?: boolean;
 }
 
 export interface PjecalcHonorariosRow {

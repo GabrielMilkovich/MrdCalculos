@@ -82,6 +82,9 @@ export function ModuloCorrecao({ caseId }: Props) {
         juros_percentual: 1, juros_inicio: form.juros_inicio,
         multa_523: form.multa_523, multa_523_percentual: form.multa_523_percentual,
         data_liquidacao: form.data_liquidacao,
+        combinacoes_indice: form.combinar_indice ? JSON.stringify(form.combinacoes_indice) : undefined,
+        combinacoes_juros: form.combinar_juros ? JSON.stringify(form.combinacoes_juros) : undefined,
+        transicao_adc58: form.combinar_indice,
       });
       qc.invalidateQueries({ queryKey: ["pjecalc_correcao_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });

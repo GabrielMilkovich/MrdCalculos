@@ -37,6 +37,14 @@ export function ModuloDadosProcesso({ caseId }: Props) {
   });
 
   const [citacaoEnabled, setCitacaoEnabled] = useState(true);
+
+  // Persist citação toggle state via modo_calculo field
+  useEffect(() => {
+    if (data) {
+      // If modo_calculo is 'independent', ADC 58 was explicitly disabled
+      setCitacaoEnabled(data.modo_calculo !== 'independent');
+    }
+  }, [data]);
   const [buscandoCitacao, setBuscandoCitacao] = useState(false);
   const [form, setForm] = useState({
     numero_processo: '', vara: '', comarca: '', uf: 'SP', tipo_acao: 'trabalhista',
@@ -116,7 +124,12 @@ export function ModuloDadosProcesso({ caseId }: Props) {
   const save = async () => {
     setSaving(true);
     try {
-      const payload = { case_id: caseId, ...form };
+      const payload = {
+        case_id: caseId,
+        ...form,
+        // Persist ADC 58 toggle: 'independent' means disabled, 'assisted_from_pjc' means enabled
+        modo_calculo: citacaoEnabled ? 'assisted_from_pjc' : 'independent',
+      };
       if (data?.id) {
         await supabase.from("pjecalc_dados_processo" as any).update(payload).eq("id", data.id);
       } else {
