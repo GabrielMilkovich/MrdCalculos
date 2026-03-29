@@ -19,7 +19,7 @@ const SERIES = [
  * Fetch BCB series data, trying JSON first then falling back to CSV format.
  * For daily series (like TR), splits into 10-year windows.
  */
-async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false): Promise<{ data: string; valor: string }[]> {
+async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false, windowIndex: number | null = null): Promise<{ data: string; valor: string }[]> {
   const headers = { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 PjeCalc/1.0' };
 
   if (isDailyPeriodicity) {
