@@ -1,6 +1,11 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 const SERIES = [
   { id: 10764, name: 'IPCA-E', dbName: 'IPCAE' },
   { id: 4390, name: 'SELIC', dbName: 'SELIC' },
@@ -10,7 +15,52 @@ const SERIES = [
   { id: 189, name: 'IGP-M', dbName: 'IGPM' },
 ];
 
+/**
+ * Fetch BCB series data, trying JSON first then falling back to CSV format.
+ */
+async function fetchBCBSeries(serieId: number): Promise<{ data: string; valor: string }[]> {
+  // Try JSON format first
+  const jsonUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=json&dataInicial=01/01/1995&dataFinal=31/12/2025`;
+  const jsonResp = await fetch(jsonUrl, {
+    headers: { 'Accept': 'application/json' },
+  });
+  
+  if (jsonResp.ok) {
+    const data = await jsonResp.json();
+    if (Array.isArray(data) && data.length > 0) return data;
+  } else {
+    await jsonResp.text(); // consume body
+  }
+
+  // Fallback: CSV format (works for TR and other problematic series)
+  const csvUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=csv&dataInicial=01/01/1995&dataFinal=31/12/2025`;
+  const csvResp = await fetch(csvUrl);
+  if (!csvResp.ok) {
+    const body = await csvResp.text();
+    throw new Error(`BCB API returned ${csvResp.status} for both JSON and CSV: ${body.slice(0, 200)}`);
+  }
+  
+  const csvText = await csvResp.text();
+  const lines = csvText.trim().split('\n');
+  // Skip header line (data;valor)
+  const results: { data: string; valor: string }[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    // CSV uses semicolon separator: dd/mm/yyyy;value
+    const [data, valor] = line.split(';');
+    if (data && valor) {
+      results.push({ data: data.trim(), valor: valor.trim() });
+    }
+  }
+  return results;
+}
+
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -19,16 +69,9 @@ serve(async (req) => {
 
   for (const serie of SERIES) {
     try {
-      // Fetch from BCB API
-      const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serie.id}/dados?formato=json&dataInicial=01/01/1995&dataFinal=31/12/2025`;
-      const resp = await fetch(url);
-      if (!resp.ok) {
-        results[serie.name] = { error: `BCB API returned ${resp.status}: ${resp.statusText}` };
-        continue;
-      }
-      const data = await resp.json();
+      const data = await fetchBCBSeries(serie.id);
 
-      if (!Array.isArray(data) || data.length === 0) {
+      if (data.length === 0) {
         results[serie.name] = { error: 'No data returned from BCB API' };
         continue;
       }
@@ -38,7 +81,7 @@ serve(async (req) => {
       const rows = data.map((d: any) => {
         const [dia, mes, ano] = d.data.split('/');
         const competencia = `${ano}-${mes}-${dia}`;
-        const valor = parseFloat(d.valor.replace(',', '.'));
+        const valor = parseFloat((d.valor || '0').replace(',', '.'));
         acumulado = acumulado * (1 + valor / 100);
         return {
           indice: serie.dbName,
@@ -50,7 +93,7 @@ serve(async (req) => {
 
       // Upsert in batches of 500
       let inserted = 0;
-      let errors: string[] = [];
+      const errors: string[] = [];
       for (let i = 0; i < rows.length; i += 500) {
         const batch = rows.slice(i, i + 500);
         const { error } = await supabase
@@ -73,9 +116,12 @@ serve(async (req) => {
     } catch (err) {
       results[serie.name] = { error: String(err) };
     }
+
+    // Small delay between series to avoid BCB rate limits
+    await new Promise(r => setTimeout(r, 500));
   }
 
   return new Response(JSON.stringify({ ok: true, results }, null, 2), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 });
