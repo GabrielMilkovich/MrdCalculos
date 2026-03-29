@@ -1185,30 +1185,28 @@ export class PjeCalcEngine {
   }
 
   /**
-   * INDEPENDENT WITH PJC INPUTS: Uses base/divisor/multiplicador/quantidade
-   * from PJC precomputed occurrences but RECALCULATES the formula from scratch.
-   * Correction and juros are applied later by the standard pipeline.
+   * INDEPENDENT WITH PJC INPUTS: Uses the PJC's own devido/pago values
+   * (which are the NOMINAL verba amounts, not GT-corrected).
+   * Correction, juros, INSS, IR are recalculated independently by our engine.
+   * This gives us the correct nominal base while proving our correction/juros logic.
    */
   private calcularVerbaFromPjcInputs(verba: PjeVerba): PjeVerbaResult {
     const ocorrencias: PjeOcorrenciaResult[] = [];
     let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
 
     for (const pre of verba.ocorrencias_precomputadas!) {
+      // Use PJC devido/pago directly — these are NOMINAL values (the verba's own calculation)
+      // NOT corrected/GT values. They represent what the employee is owed vs what was paid.
+      const devido = new Decimal(pre.devido).toDP(2);
+      const pago = new Decimal(pre.pago || 0).toDP(2);
+      let diferenca = devido.minus(pago);
+      if (verba.zerar_valor_negativo && diferenca.isNegative()) diferenca = new Decimal(0);
+
       const base = new Decimal(pre.base);
       const div = new Decimal(pre.divisor || 1);
       const mult = new Decimal(pre.multiplicador || 1);
       const qtd = new Decimal(pre.quantidade || 1);
       const dobra = new Decimal(pre.dobra ? 2 : 1);
-
-      // Recalculate formula with OUR truncation
-      const multEfetivo = verba.sumula_340_comissionista ? mult.minus(1) : mult;
-      const valorHora = base.div(div).toDP(2);
-      const valorHoraComMult = valorHora.times(multEfetivo).toDP(2);
-      const subtotal = valorHoraComMult.times(qtd).toDP(2);
-      const devido = subtotal.times(dobra).toDP(2);
-      const pago = new Decimal(pre.pago || 0).toDP(2);
-      let diferenca = devido.minus(pago);
-      if (verba.zerar_valor_negativo && diferenca.isNegative()) diferenca = new Decimal(0);
 
       ocorrencias.push({
         competencia: pre.competencia,
@@ -1218,7 +1216,9 @@ export class PjeCalcEngine {
         pago: pago.toDP(2).toNumber(), diferenca: diferenca.toDP(2).toNumber(),
         indice_correcao: 1, valor_corrigido: diferenca.toDP(2).toNumber(),
         juros: 0, valor_final: diferenca.toDP(2).toNumber(),
-        formula: `(${base.toFixed(2)}÷${div.toFixed(2)})×${multEfetivo.toFixed(4)}×${qtd.toFixed(4)}×${dobra.toFixed(0)}=${devido.toFixed(2)} [RECALC]`,
+        formula: `devido=${devido.toFixed(2)} pago=${pago.toFixed(2)} [PJC-NOMINAL]`,
+        // Preserve PJC correction factor for optional use
+        pjc_indice_acumulado: pre.indice_acumulado,
       });
 
       totalDevido = totalDevido.plus(devido);
