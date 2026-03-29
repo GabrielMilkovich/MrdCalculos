@@ -64,5 +64,11 @@ export function renderTotals(ctx: PDFRenderContext): string {
   <!-- Footer -->
   <div class="page-footer">
     <span>Calculo liquidado por MRDcalc v${config.engineVersion} em ${hoje}</span>
+  </div>
+
+  <!-- Compliance footer -->
+  <div class="footer-compliance" style="margin-top: 40px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 9px; color: #666; text-align: center;">
+    Gerado pelo MRD CALC — resultados sujeitos à conferência com o PJe-Calc oficial.<br/>
+    Este documento não substitui a memória de cálculo oficial para fins processuais.
   </div>`;
 }

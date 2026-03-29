@@ -157,6 +157,15 @@ tr.subtotal td { font-weight: 700; border-top: 2px solid #003366; background: #e
 @media print {
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
+  .footer-compliance {
+    position: fixed;
+    bottom: 10mm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 8px;
+    color: #999;
+  }
 }
 
 /* ── Screen-only controls (print button bar) ── */
