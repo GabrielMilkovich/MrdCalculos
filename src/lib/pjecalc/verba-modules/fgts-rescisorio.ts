@@ -84,7 +84,7 @@ export class Multa40FGTSModule implements VerbaModule {
   readonly familia = 'rescisoria' as const;
   readonly dependencias = ['FGTS_DIF'];
 
-  canApply(ctx: VerbaModuleContext): boolean {
+  canApply(ctx: VerbaModuleContext, _verba?: PjeVerba): boolean {
     return !!ctx.demissao;
   }
 
