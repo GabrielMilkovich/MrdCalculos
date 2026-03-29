@@ -23,11 +23,11 @@ export class FGTSDiferencasModule implements VerbaModule {
   readonly familia = 'tributario' as const;
   readonly dependencias = ['HE_50', 'HE_100', 'DSR', 'SALDO_SAL', 'AVISO_PREVIO', 'DECIMO_PROP', 'FERIAS_VENC', 'FERIAS_PROP'];
 
-  canApply(): boolean {
+  canApply(_ctx?: VerbaModuleContext, _verba?: PjeVerba): boolean {
     return true;
   }
 
-  resolveInputs(ctx: VerbaModuleContext): ResolvedInputs {
+  resolveInputs(ctx: VerbaModuleContext, _verba?: PjeVerba): ResolvedInputs {
     // Base = soma de todas as diferenças salariais que incidem FGTS
     let totalBase = new Decimal(0);
     const sources: string[] = [];
@@ -88,7 +88,7 @@ export class Multa40FGTSModule implements VerbaModule {
     return !!ctx.demissao;
   }
 
-  resolveInputs(ctx: VerbaModuleContext): ResolvedInputs {
+  resolveInputs(ctx: VerbaModuleContext, _verba?: PjeVerba): ResolvedInputs {
     // Base = total de FGTS devidos (soma de todas as competências)
     let totalFGTS = new Decimal(0);
     const fgtsResults = ctx.resultadosAnteriores.get('FGTS_DIF') || [];

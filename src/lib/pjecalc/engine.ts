@@ -2646,7 +2646,7 @@ export class PjeCalcEngine {
 
       // Pós-reforma (março 2018+): apenas se autorizado expressamente
       if (compMarco >= '2018-03') {
-        if (!(this.csConfig as Record<string, unknown>).contribuicao_sindical_pos2017) continue;
+        if (!(this.csConfig as unknown as Record<string, unknown>).contribuicao_sindical_pos2017) continue;
       }
       // Pré-reforma aplicável até março 2017 (Lei vigente antes de nov/2017)
       // Março 2017 ainda era obrigatória; nov/2017 tornou facultativa
@@ -3162,7 +3162,7 @@ export class PjeCalcEngine {
         });
 
         // Check for intrajornada verbas specifically
-        const verbasIntrajornada = this.verbas.filter(v => v.caracteristica === 'intrajornada');
+        const verbasIntrajornada = this.verbas.filter(v => (v.caracteristica as string) === 'intrajornada');
         for (const v of verbasIntrajornada) {
           const rulesInicio = getReformaRules(v.periodo_inicio);
           const rulesFim = getReformaRules(v.periodo_fim);
@@ -3611,7 +3611,7 @@ export class PjeCalcEngine {
     // For intrajornada verbas with periods spanning the Reforma date,
     // auto-adjust incidences: remuneratória (pre) vs indenizatória (post).
     for (const verba of this.verbas) {
-      if (verba.caracteristica === 'intrajornada' && verba.periodo_fim >= '2017-11') {
+      if ((verba.caracteristica as string) === 'intrajornada' && verba.periodo_fim >= '2017-11') {
         const rules = getReformaRules(verba.periodo_inicio || this.params.data_admissao);
         if (rules.intervalo_natureza === 'indenizatoria') {
           // Post-Reforma: intervalo intrajornada é indenizatório — sem reflexos em 13º/férias
@@ -4387,7 +4387,10 @@ export function liquidarMultiVinculo(
     if (allItens.length > 0) {
       consolidado.validacao = {
         valido: allItens.every(i => i.tipo !== 'erro'),
-        itens: allItens
+        itens: allItens,
+        erros: allItens.filter(i => i.tipo === 'erro').length,
+        alertas: allItens.filter(i => i.tipo === 'alerta').length,
+        observacoes: allItens.filter(i => i.tipo === 'observacao').length,
       };
     }
 
