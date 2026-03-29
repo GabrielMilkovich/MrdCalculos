@@ -111,9 +111,24 @@ serve(async (req) => {
         continue;
       }
 
+      // For daily series (TR), aggregate to monthly using the first day's value
+      let processedData = data;
+      if (serie.daily) {
+        const monthlyMap = new Map<string, { data: string; valor: string }>();
+        for (const d of data) {
+          const [dia, mes, ano] = d.data.split('/');
+          const monthKey = `${ano}-${mes}`;
+          // Keep first entry of each month (1st day value = the monthly TR rate)
+          if (!monthlyMap.has(monthKey)) {
+            monthlyMap.set(monthKey, { data: `01/${mes}/${ano}`, valor: d.valor });
+          }
+        }
+        processedData = Array.from(monthlyMap.values());
+      }
+
       // Calculate accumulated factor
       let acumulado = 100; // Base 100
-      const rows = data.map((d: any) => {
+      const rows = processedData.map((d: any) => {
         const [dia, mes, ano] = d.data.split('/');
         const competencia = `${ano}-${mes}-${dia}`;
         const valor = parseFloat((d.valor || '0').replace(',', '.'));
