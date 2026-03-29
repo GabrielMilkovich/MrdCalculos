@@ -17,9 +17,46 @@ const SERIES = [
 
 /**
  * Fetch BCB series data, trying JSON first then falling back to CSV format.
+ * For daily series (like TR), splits into 10-year windows.
  */
-async function fetchBCBSeries(serieId: number): Promise<{ data: string; valor: string }[]> {
-  // Try JSON format first
+async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false): Promise<{ data: string; valor: string }[]> {
+  if (isDailyPeriodicity) {
+    // Split into 10-year windows for daily series
+    const allData: { data: string; valor: string }[] = [];
+    const windows = [
+      ['01/01/1995', '31/12/2004'],
+      ['01/01/2005', '31/12/2014'],
+      ['01/01/2015', '31/12/2025'],
+    ];
+    for (const [start, end] of windows) {
+      const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=json&dataInicial=${start}&dataFinal=${end}`;
+      const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (Array.isArray(data)) allData.push(...data);
+      } else {
+        // Try CSV fallback for this window
+        const csvUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=csv&dataInicial=${start}&dataFinal=${end}`;
+        const csvResp = await fetch(csvUrl);
+        if (csvResp.ok) {
+          const csvText = await csvResp.text();
+          const lines = csvText.trim().split('\n');
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const [d, v] = line.split(';');
+            if (d && v) allData.push({ data: d.trim(), valor: v.trim() });
+          }
+        } else {
+          await csvResp.text();
+        }
+      }
+      await new Promise(r => setTimeout(r, 300));
+    }
+    return allData;
+  }
+
+  // Non-daily series: single request
   const jsonUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=json&dataInicial=01/01/1995&dataFinal=31/12/2025`;
   const jsonResp = await fetch(jsonUrl, {
     headers: { 'Accept': 'application/json' },
@@ -29,10 +66,10 @@ async function fetchBCBSeries(serieId: number): Promise<{ data: string; valor: s
     const data = await jsonResp.json();
     if (Array.isArray(data) && data.length > 0) return data;
   } else {
-    await jsonResp.text(); // consume body
+    await jsonResp.text();
   }
 
-  // Fallback: CSV format (works for TR and other problematic series)
+  // Fallback: CSV format
   const csvUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=csv&dataInicial=01/01/1995&dataFinal=31/12/2025`;
   const csvResp = await fetch(csvUrl);
   if (!csvResp.ok) {
@@ -42,12 +79,10 @@ async function fetchBCBSeries(serieId: number): Promise<{ data: string; valor: s
   
   const csvText = await csvResp.text();
   const lines = csvText.trim().split('\n');
-  // Skip header line (data;valor)
   const results: { data: string; valor: string }[] = [];
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    // CSV uses semicolon separator: dd/mm/yyyy;value
     const [data, valor] = line.split(';');
     if (data && valor) {
       results.push({ data: data.trim(), valor: valor.trim() });
