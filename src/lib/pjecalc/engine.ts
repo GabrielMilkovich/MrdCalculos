@@ -3482,8 +3482,18 @@ export class PjeCalcEngine {
 
             const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
             if (regimeJ.tipo === 'SELIC') {
-              const fatorS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
-              if (fatorS !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
+              // PJe-Calc uses SIMPLE SUM of monthly SELIC rates
+              const startC = segInicio.slice(0, 7);
+              const endC = segFim.slice(0, 7);
+              const selicSum = this.indicesDB
+                .filter(idx => (idx.indice === 'SELIC' || idx.indice === 'selic') && idx.competencia.slice(0, 7) >= startC && idx.competencia.slice(0, 7) < endC)
+                .reduce((s, idx) => s + (idx.valor || 0), 0);
+              if (selicSum > 0) {
+                jurosAcc = jurosAcc.plus(baseJuros.times(selicSum / 100));
+              } else {
+                const fatorS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(startC), endC);
+                if (fatorS !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
+              }
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
               if (fatorTL !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
