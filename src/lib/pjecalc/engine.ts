@@ -3400,8 +3400,13 @@ export class PjeCalcEngine {
       return map[ind] || ind;
     };
 
+    // ADC 58/59 regime: check if any combination uses IPCA-E or SELIC
+    const combIndices = this.correcaoConfig.combinacoes_indice || [];
+    const combJuros = this.correcaoConfig.combinacoes_juros || [];
     const usarADCJuros = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC'
-      || (this.correcaoConfig.combinacoes_indice || []).some(c => c.indice === 'SELIC');
+      || this.correcaoConfig.indice === 'COMBINACAO'
+      || combIndices.some(c => c.indice === 'SELIC' || c.indice === 'IPCA-E' || c.indice === 'IPCAE')
+      || combJuros.some(c => c.tipo === 'SELIC');
 
     for (const vr of verbaResults) {
       let totalJuros = 0;
