@@ -19,35 +19,73 @@ const SERIES = [
  * Fetch BCB series data, trying JSON first then falling back to CSV format.
  * For daily series (like TR), splits into 10-year windows.
  */
-async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false): Promise<{ data: string; valor: string }[]> {
+async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false, windowIndex: number | null = null): Promise<{ data: string; valor: string }[]> {
+  const headers = { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 PjeCalc/1.0' };
+
   if (isDailyPeriodicity) {
-    // Split into 10-year windows for daily series
     const allData: { data: string; valor: string }[] = [];
+    // Use 5-year windows for daily series to avoid timeouts
     const windows = [
-      ['01/01/1995', '31/12/2004'],
-      ['01/01/2005', '31/12/2014'],
-      ['01/01/2015', '31/12/2025'],
+      ['01/01/1995', '31/12/1999'],
+      ['01/01/2000', '31/12/2004'],
+      ['01/01/2005', '31/12/2009'],
+      ['01/01/2010', '31/12/2014'],
+      ['01/01/2015', '31/12/2019'],
+      ['01/01/2020', '31/12/2025'],
     ];
-    for (const [start, end] of windows) {
-      // Use CSV directly for daily series (BCB returns XML for JSON format on some series)
-      const csvUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=csv&dataInicial=${start}&dataFinal=${end}`;
-      const csvResp = await fetch(csvUrl);
-      if (csvResp.ok) {
-        const csvText = await csvResp.text();
-        const lines = csvText.trim().split('\n');
-        for (let i = 1; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line) continue;
-          // CSV format: "data";"dataFim";"valor" — values are quoted
-          const parts = line.split(';').map(p => p.replace(/"/g, '').trim());
-          const d = parts[0]; // dd/mm/yyyy
-          const v = parts[2] || parts[1]; // valor is 3rd column
-          if (d && v && d.includes('/')) allData.push({ data: d, valor: v });
+    const selectedWindows = windowIndex !== null ? [windows[windowIndex]] : windows;
+    for (const [start, end] of selectedWindows) {
+      // Try JSON first for daily series
+      const jsonUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=json&dataInicial=${start}&dataFinal=${end}`;
+      console.log(`Fetching daily ${serieId} window ${start}-${end} (JSON)...`);
+      try {
+        const jsonResp = await fetch(jsonUrl, { headers });
+        if (jsonResp.ok) {
+          const contentType = jsonResp.headers.get('content-type') || '';
+          if (contentType.includes('json')) {
+            const data = await jsonResp.json();
+            if (Array.isArray(data)) {
+              console.log(`  Got ${data.length} JSON records`);
+              allData.push(...data);
+              await new Promise(r => setTimeout(r, 500));
+              continue;
+            }
+          } else {
+            await jsonResp.text(); // consume body
+          }
+        } else {
+          console.log(`  JSON failed: ${jsonResp.status}`);
+          await jsonResp.text();
         }
-      } else {
-        await csvResp.text();
+      } catch (e) {
+        console.log(`  JSON error: ${e}`);
       }
-      await new Promise(r => setTimeout(r, 300));
+
+      // Fallback to CSV
+      const csvUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=csv&dataInicial=${start}&dataFinal=${end}`;
+      console.log(`  Trying CSV fallback...`);
+      try {
+        const csvResp = await fetch(csvUrl, { headers: { 'User-Agent': 'Mozilla/5.0 PjeCalc/1.0' } });
+        if (csvResp.ok) {
+          const csvText = await csvResp.text();
+          const lines = csvText.trim().split('\n');
+          console.log(`  CSV lines: ${lines.length}`);
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const parts = line.split(';').map(p => p.replace(/"/g, '').trim());
+            const d = parts[0];
+            const v = parts.length >= 3 ? parts[2] : parts[1];
+            if (d && v && d.includes('/')) allData.push({ data: d, valor: v });
+          }
+        } else {
+          console.log(`  CSV failed: ${csvResp.status}`);
+          await csvResp.text();
+        }
+      } catch (e) {
+        console.log(`  CSV error: ${e}`);
+      }
+      await new Promise(r => setTimeout(r, 800));
     }
     return allData;
   }
@@ -98,11 +136,13 @@ serve(async (req) => {
 
   const results: Record<string, any> = {};
   
-  // Allow filtering to specific series via request body
+  // Allow filtering to specific series and daily window index
   let filterNames: string[] | null = null;
+  let dailyWindowIndex: number | null = null;
   try {
     const body = await req.json();
     if (body?.series && Array.isArray(body.series)) filterNames = body.series;
+    if (typeof body?.dailyWindow === 'number') dailyWindowIndex = body.dailyWindow;
   } catch { /* no body or invalid JSON */ }
 
   const seriesToProcess = filterNames 
@@ -111,7 +151,7 @@ serve(async (req) => {
 
   for (const serie of seriesToProcess) {
     try {
-      const data = await fetchBCBSeries(serie.id, serie.daily);
+      const data = await fetchBCBSeries(serie.id, serie.daily, serie.daily ? dailyWindowIndex : null);
 
       if (data.length === 0) {
         results[serie.name] = { error: 'No data returned from BCB API' };
