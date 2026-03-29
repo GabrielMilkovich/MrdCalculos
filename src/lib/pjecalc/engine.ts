@@ -1023,6 +1023,15 @@ export class PjeCalcEngine {
       return this.calcularVerbaPrecomputada(verba);
     }
 
+    // ═══ INDEPENDENT WITH PJC INPUTS: use PJC base/div/mult/qty but recalculate formula ═══
+    // When running independently but PJC data exists, use the PJC occurrence inputs
+    // (base, divisor, multiplicador, quantidade) to compute the formula from scratch.
+    // This ensures we have the correct granular data (comissões, HE por mês) while
+    // still proving our formula/correction/juros are independently correct.
+    if (this.params.modo_calculo === 'independent' && verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
+      return this.calcularVerbaFromPjcInputs(verba);
+    }
+
     const periodo = { inicio: verba.periodo_inicio, fim: verba.periodo_fim };
     let competencias: string[];
 
@@ -1165,6 +1174,59 @@ export class PjeCalcEngine {
       total_corrigido: totalDiferenca.toDP(2).toNumber(),
       total_juros: 0,
       total_final: totalDiferenca.toDP(2).toNumber(),
+    };
+  }
+
+  /**
+   * INDEPENDENT WITH PJC INPUTS: Uses base/divisor/multiplicador/quantidade
+   * from PJC precomputed occurrences but RECALCULATES the formula from scratch.
+   * Correction and juros are applied later by the standard pipeline.
+   */
+  private calcularVerbaFromPjcInputs(verba: PjeVerba): PjeVerbaResult {
+    const ocorrencias: PjeOcorrenciaResult[] = [];
+    let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
+
+    for (const pre of verba.ocorrencias_precomputadas!) {
+      const base = new Decimal(pre.base);
+      const div = new Decimal(pre.divisor || 1);
+      const mult = new Decimal(pre.multiplicador || 1);
+      const qtd = new Decimal(pre.quantidade || 1);
+      const dobra = new Decimal(pre.dobra ? 2 : 1);
+
+      // Recalculate formula with OUR truncation
+      const multEfetivo = verba.sumula_340_comissionista ? mult.minus(1) : mult;
+      const valorHora = base.div(div).toDP(2);
+      const valorHoraComMult = valorHora.times(multEfetivo).toDP(2);
+      const subtotal = valorHoraComMult.times(qtd).toDP(2);
+      const devido = subtotal.times(dobra).toDP(2);
+      const pago = new Decimal(pre.pago || 0).toDP(2);
+      let diferenca = devido.minus(pago);
+      if (verba.zerar_valor_negativo && diferenca.isNegative()) diferenca = new Decimal(0);
+
+      ocorrencias.push({
+        competencia: pre.competencia,
+        base: base.toDP(2).toNumber(), divisor: div.toDP(2).toNumber(),
+        multiplicador: mult.toDP(8).toNumber(), quantidade: qtd.toDP(4).toNumber(),
+        dobra: dobra.toNumber(), devido: devido.toDP(2).toNumber(),
+        pago: pago.toDP(2).toNumber(), diferenca: diferenca.toDP(2).toNumber(),
+        indice_correcao: 1, valor_corrigido: diferenca.toDP(2).toNumber(),
+        juros: 0, valor_final: diferenca.toDP(2).toNumber(),
+        formula: `(${base.toFixed(2)}÷${div.toFixed(2)})×${multEfetivo.toFixed(4)}×${qtd.toFixed(4)}×${dobra.toFixed(0)}=${devido.toFixed(2)} [RECALC]`,
+      });
+
+      totalDevido = totalDevido.plus(devido);
+      totalPago = totalPago.plus(pago);
+      totalDiferenca = totalDiferenca.plus(diferenca);
+    }
+
+    return {
+      verba_id: verba.id, nome: verba.nome, tipo: verba.tipo,
+      caracteristica: verba.caracteristica, ocorrencias,
+      total_devido: totalDevido.toDP(2).toNumber(),
+      total_pago: totalPago.toDP(2).toNumber(),
+      total_diferenca: totalDiferenca.toDP(2).toNumber(),
+      total_corrigido: totalDiferenca.toDP(2).toNumber(),
+      total_juros: 0, total_final: totalDiferenca.toDP(2).toNumber(),
     };
   }
 
