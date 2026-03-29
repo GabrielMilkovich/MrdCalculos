@@ -496,8 +496,8 @@ async function loadINSSFaixas(): Promise<PjeINSSFaixaRow[]> {
       aliquota: Number(r.aliquota || 0),
     }));
   } catch (e) {
-    console.warn('[ORCHESTRATOR] Failed to load INSS faixas:', e);
-    return [];
+    console.error('[ORCHESTRATOR] Failed to load INSS faixas:', e);
+    throw e; // MUST throw — empty faixas silently causes wrong CS calculations
   }
 }
 
@@ -519,8 +519,8 @@ async function loadIRFaixas(): Promise<PjeIRFaixaRow[]> {
       deducao_dependente: Number(r.deducao_dependente || 0),
     }));
   } catch (e) {
-    console.warn('[ORCHESTRATOR] Failed to load IR faixas:', e);
-    return [];
+    console.error('[ORCHESTRATOR] Failed to load IR faixas:', e);
+    throw e; // MUST throw — empty faixas silently causes wrong IR calculations
   }
 }
 
@@ -537,8 +537,8 @@ async function loadFeriados(): Promise<PjeFeriadoDB[]> {
       municipio: r.municipio ? String(r.municipio) : undefined,
     }));
   } catch (e) {
-    console.warn('[ORCHESTRATOR] Failed to load feriados:', e);
-    return [];
+    console.error('[ORCHESTRATOR] Failed to load feriados:', e);
+    throw e; // MUST throw — missing feriados causes wrong dias_uteis calculations
   }
 }
 
@@ -552,7 +552,14 @@ async function loadPensaoConfig(caseId: string): Promise<PjePensaoConfig> {
       valor_fixo: cfg.valor_fixo ? Number(cfg.valor_fixo) : undefined,
       base: (cfg.base_incidencia as 'liquido' | 'bruto' | 'bruto_menos_inss') || 'liquido',
     };
-  } catch { return { apurar: false, percentual: 0, base: 'liquido' }; }
+  } catch (err: any) {
+    // "No rows" is expected — pensao may not be configured
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) {
+      return { apurar: false, percentual: 0, base: 'liquido' };
+    }
+    console.error('[ORCHESTRATOR] Erro inesperado em loadPensaoConfig:', err);
+    throw err;
+  }
 }
 
 async function loadPrevPrivadaConfig(caseId: string): Promise<PjePrevidenciaPrivadaConfig> {
@@ -565,7 +572,13 @@ async function loadPrevPrivadaConfig(caseId: string): Promise<PjePrevidenciaPriv
       base_calculo: (cfg.base_calculo as 'diferenca' | 'devido' | 'corrigido') || 'diferenca',
       deduzir_ir: !!cfg.deduzir_ir,
     };
-  } catch { return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false }; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) {
+      return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false };
+    }
+    console.error('[ORCHESTRATOR] Erro inesperado em loadPrevPrivadaConfig:', err);
+    throw err;
+  }
 }
 
 async function loadSalarioFamiliaConfig(caseId: string): Promise<PjeSalarioFamiliaConfig> {
@@ -576,7 +589,13 @@ async function loadSalarioFamiliaConfig(caseId: string): Promise<PjeSalarioFamil
       apurar: !!cfg.apurar,
       numero_filhos: Number(cfg.numero_filhos || 0),
     };
-  } catch { return { apurar: false, numero_filhos: 0 }; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) {
+      return { apurar: false, numero_filhos: 0 };
+    }
+    console.error('[ORCHESTRATOR] Erro inesperado em loadSalarioFamiliaConfig:', err);
+    throw err;
+  }
 }
 
 async function loadIndicesDB(): Promise<PjeIndiceRow[]> {
@@ -599,8 +618,8 @@ async function loadIndicesDB(): Promise<PjeIndiceRow[]> {
     console.warn('[ORCHESTRATOR] No correction indices found in DB — fallback rates will be used');
     return [];
   } catch (e) {
-    console.warn('[ORCHESTRATOR] Failed to load correction indices:', e);
-    return [];
+    console.error('[ORCHESTRATOR] Failed to load correction indices:', e);
+    throw e; // MUST throw — empty indices silently causes wrong monetary correction
   }
 }
 
@@ -614,7 +633,11 @@ async function loadSeguroConfig(caseId: string): Promise<{ apurar: boolean; parc
       recebeu: (data.recebeu as boolean) ?? false,
       valor_parcela: data.valor_parcela ? Number(data.valor_parcela) : undefined,
     };
-  } catch { return null; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
+    console.error('[ORCHESTRATOR] Erro inesperado em loadSeguroConfig:', err);
+    throw err;
+  }
 }
 
 async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeguroDesempregoDB[]> {
@@ -634,7 +657,11 @@ async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeg
       }));
     }
     return [];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[ORCHESTRATOR] Erro inesperado em loadSeguroDesempregoDB:', err);
+    throw err;
+  }
 }
 
 async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalarioMinimoRow[]> {
@@ -651,7 +678,11 @@ async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalari
       }));
     }
     return [];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[ORCHESTRATOR] Erro inesperado em loadSalarioMinimoDB:', err);
+    throw err;
+  }
 }
 
 async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types').PjeExcecaoCargaHoraria[]> {
@@ -669,7 +700,11 @@ async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types
       }));
     }
     return [];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[ORCHESTRATOR] Erro inesperado em loadExcecoesCarga:', err);
+    throw err;
+  }
 }
 
 async function loadExcecoesSabado(caseId: string): Promise<import('./engine-types').PjeExcecaoSabado[]> {
@@ -687,7 +722,11 @@ async function loadExcecoesSabado(caseId: string): Promise<import('./engine-type
       }));
     }
     return [];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[ORCHESTRATOR] Erro inesperado em loadExcecoesSabado:', err);
+    throw err;
+  }
 }
 
 async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeSalarioFamiliaDB[]> {
@@ -706,7 +745,11 @@ async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeS
       }));
     }
     return [];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[ORCHESTRATOR] Erro inesperado em loadSalarioFamiliaDBRows:', err);
+    throw err;
+  }
 }
 
 

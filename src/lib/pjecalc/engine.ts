@@ -177,9 +177,11 @@ export class PjeCalcEngine {
     const fimCandidatos: string[] = [];
     if (this.params.data_demissao) fimCandidatos.push(this.params.data_demissao);
     if (this.params.data_final) fimCandidatos.push(this.params.data_final);
-    const fim = fimCandidatos.sort()[0] 
-      || this.correcaoConfig?.data_liquidacao 
-      || new Date().toISOString().slice(0, 10);
+    const fim = fimCandidatos.sort()[0]
+      || this.correcaoConfig?.data_liquidacao;
+    if (!fim) {
+      throw new Error('E_DATA_OBRIGATORIA: data_demissao, data_final ou data_liquidacao é obrigatória para determinar o período de cálculo');
+    }
 
     return { inicio, fim };
   }
@@ -206,9 +208,16 @@ export class PjeCalcEngine {
   
   // Retorna data de demissão projetada (com aviso prévio indenizado, se aplicável)
   private getDataDemissaoEfetiva(): Date {
-    const demDate = this.params.data_demissao
-      ? new Date(this.params.data_demissao)
-      : new Date();
+    if (!this.params.data_demissao) {
+      // Fallback to data_final or data_liquidacao — NEVER use current date
+      const fallback = this.params.data_final || this.correcaoConfig?.data_liquidacao;
+      if (!fallback) {
+        throw new Error('E_DATA_OBRIGATORIA: data_demissao é obrigatória para cálculo de avos (13º/férias)');
+      }
+      this.trackWarning('W_DEMISSAO_FALLBACK', 'avos', `data_demissao ausente — usando ${fallback} como fallback`);
+      return new Date(fallback);
+    }
+    const demDate = new Date(this.params.data_demissao);
     if (this.params.projetar_aviso_indenizado && this.params.data_demissao) {
       const diasAviso = this.calcularPrazoAviso();
       const projetada = new Date(demDate);
@@ -365,7 +374,11 @@ export class PjeCalcEngine {
     if (this.params.prazo_aviso_previo === 'nao_apurar') return 30;
     if (this.params.prazo_aviso_previo === 'informado') return this.params.prazo_aviso_dias || 30;
     const adm = new Date(this.params.data_admissao);
-    const dem = this.params.data_demissao ? new Date(this.params.data_demissao) : new Date();
+    const demStr = this.params.data_demissao || this.params.data_final || this.correcaoConfig?.data_liquidacao;
+    if (!demStr) {
+      throw new Error('E_DATA_OBRIGATORIA: data_demissao é obrigatória para calcular prazo do aviso prévio');
+    }
+    const dem = new Date(demStr);
     const anosServico = Math.floor((dem.getTime() - adm.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
     return Math.min(90, 30 + (anosServico * 3));
   }
@@ -682,17 +695,25 @@ export class PjeCalcEngine {
     let base = 0;
 
     // Bases do histórico salarial
+    // PJe-Calc: when multiple historicos cover the same competencia, use the MOST RECENT one
     if (verba.base_calculo.historicos.length > 0) {
+      const matchingHistoricos: { periodo_inicio: string; valor: number }[] = [];
       for (const histId of verba.base_calculo.historicos) {
         const hist = this.historicos.find(h => h.id === histId);
         if (!hist) continue;
         const oc = hist.ocorrencias.find(o => o.competencia === competencia);
-        if (oc) base += oc.valor;
+        if (oc) matchingHistoricos.push({ periodo_inicio: hist.periodo_inicio, valor: oc.valor });
+      }
+      if (matchingHistoricos.length > 0) {
+        // Use the most recent historico (latest periodo_inicio), not sum
+        matchingHistoricos.sort((a, b) => b.periodo_inicio.localeCompare(a.periodo_inicio));
+        base = matchingHistoricos[0].valor;
       }
     }
 
     // Se não tem histórico específico, buscar qualquer histórico que cubra a competência
     if (base === 0 && verba.base_calculo.historicos.length === 0) {
+      const matchingHistoricos: { periodo_inicio: string; valor: number }[] = [];
       for (const hist of this.historicos) {
         const compDate = new Date(competencia + '-01');
         const hInicio = new Date(hist.periodo_inicio);
@@ -700,11 +721,16 @@ export class PjeCalcEngine {
         if (compDate >= hInicio && compDate <= hFim) {
           const oc = hist.ocorrencias.find(o => o.competencia === competencia);
           if (oc) {
-            base += oc.valor;
+            matchingHistoricos.push({ periodo_inicio: hist.periodo_inicio, valor: oc.valor });
           } else if (hist.valor_informado) {
-            base += hist.valor_informado;
+            matchingHistoricos.push({ periodo_inicio: hist.periodo_inicio, valor: hist.valor_informado });
           }
         }
+      }
+      if (matchingHistoricos.length > 0) {
+        // Use the most recent historico (latest periodo_inicio), not sum
+        matchingHistoricos.sort((a, b) => b.periodo_inicio.localeCompare(a.periodo_inicio));
+        base = matchingHistoricos[0].valor;
       }
     }
 
@@ -961,13 +987,26 @@ export class PjeCalcEngine {
         }
         break;
       }
-      case 'desligamento':
-        competencias = [this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7)];
+      case 'desligamento': {
+        const desligComp = this.params.data_demissao?.slice(0, 7)
+          || this.params.data_final?.slice(0, 7)
+          || this.correcaoConfig?.data_liquidacao?.slice(0, 7);
+        if (!desligComp) {
+          throw new Error('E_DATA_OBRIGATORIA: data_demissao é obrigatória para verba de desligamento');
+        }
+        competencias = [desligComp];
         break;
+      }
       case 'periodo_aquisitivo':
         competencias = this.ferias.map(f => f.periodo_aquisitivo_fim.slice(0, 7));
         if (competencias.length === 0) {
-          competencias = [this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7)];
+          const paqComp = this.params.data_demissao?.slice(0, 7)
+            || this.params.data_final?.slice(0, 7)
+            || this.correcaoConfig?.data_liquidacao?.slice(0, 7);
+          if (!paqComp) {
+            throw new Error('E_DATA_OBRIGATORIA: data_demissao é obrigatória para verba de período aquisitivo sem férias cadastradas');
+          }
+          competencias = [paqComp];
         }
         break;
       default:
@@ -1138,7 +1177,7 @@ export class PjeCalcEngine {
           
           if (!isSelic) {
             // Calculate interest separately for non-SELIC regimes
-            const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
+            const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2, Decimal.ROUND_HALF_EVEN));
             // Fazenda Pública (EC 113/2021): juros limitados à SELIC; não aplicar juros simples de 1% a.m.
             if (this.correcaoConfig.juros_tipo === 'simples_mensal' && dataAjuiz && !this.correcaoConfig.ente_publico) {
               let dataInicioJuros: Date;
@@ -1148,7 +1187,7 @@ export class PjeCalcEngine {
               // FIX 1: PJe-Calc counts interest months inclusive of start month
               const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
-              juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2));
+              juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2, Decimal.ROUND_HALF_EVEN));
             }
           }
         } else if (usarADC5859 && dataCitacao) {
@@ -1180,8 +1219,8 @@ export class PjeCalcEngine {
               // FIX 1: PJe-Calc counts interest months inclusive of start month
               const mesesJurosPreCitacao = this.mesesEntreInclusivo(dataAjuiz, dataCitacao);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
-              const valorCorrigidoParc = Number(new Decimal(oc.diferenca).times(fator1).toDP(2));
-              juros = Number(new Decimal(valorCorrigidoParc).times(taxaMensal).times(mesesJurosPreCitacao).toDP(2));
+              const valorCorrigidoParc = Number(new Decimal(oc.diferenca).times(fator1).toDP(2, Decimal.ROUND_HALF_EVEN));
+              juros = Number(new Decimal(valorCorrigidoParc).times(taxaMensal).times(mesesJurosPreCitacao).toDP(2, Decimal.ROUND_HALF_EVEN));
             }
           }
         } else {
@@ -1194,7 +1233,7 @@ export class PjeCalcEngine {
           }
 
           if (this.correcaoConfig.indice !== 'SELIC') {
-            const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
+            const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2, Decimal.ROUND_HALF_EVEN));
             if (this.correcaoConfig.juros_tipo === 'simples_mensal') {
               let dataInicioJuros: Date;
               if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
@@ -1204,7 +1243,7 @@ export class PjeCalcEngine {
               // FIX 1: PJe-Calc counts interest months inclusive of start month
               const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
-              juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2));
+              juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2, Decimal.ROUND_HALF_EVEN));
             } else if ((this.correcaoConfig.juros_tipo as string) === 'composto') {
               let dataInicioJuros: Date;
               if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
@@ -1216,14 +1255,14 @@ export class PjeCalcEngine {
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               // FIX 2: Use Decimal.js instead of Math.pow for compound interest precision
               const fatorComposto = new Decimal(1).plus(taxaMensal).pow(mesesJuros);
-              juros = Number(new Decimal(valorCorrigido).times(fatorComposto.minus(1)).toDP(2));
+              juros = Number(new Decimal(valorCorrigido).times(fatorComposto.minus(1)).toDP(2, Decimal.ROUND_HALF_EVEN));
             } else if (this.correcaoConfig.juros_tipo === 'selic') {
               juros = 0;
             }
           }
         }
 
-        const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
+        const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2, Decimal.ROUND_HALF_EVEN));
         oc.indice_correcao = Number(new Decimal(indiceCorrecao).toDP(6));
         oc.valor_corrigido = valorCorrigido;
         oc.juros = juros;
@@ -1599,7 +1638,7 @@ export class PjeCalcEngine {
    */
   private mesesEntreInclusivo(d1: Date, d2: Date): number {
     const exclusive = this.mesesEntre(d1, d2);
-    return exclusive > 0 ? exclusive + 1 : 0;
+    return exclusive + 1; // Always at least 1 month (same-month = 1)
   }
 
   // =====================================================
@@ -1870,13 +1909,16 @@ export class PjeCalcEngine {
           const base13 = gtBase13ByComp[comp] || 0;
           const totalBase = baseNormal + base13;
           if (totalBase <= 0) continue;
-          
-          // Use pre-computed CS from PJe-Calc when available, otherwise calculate
+
+          // PJe-Calc: INSS on 13º is calculated on a SEPARATE basis with its own teto
           let imposto: number;
           if (hasPrecomputedCS) {
             imposto = (gtCSNormalByComp[comp] || 0) + (gtCS13ByComp[comp] || 0);
           } else {
-            imposto = this.calcularINSSProgressivo(comp, totalBase);
+            // Calculate INSS separately for normal and 13º bases (each with own teto)
+            const impostoNormal = baseNormal > 0 ? this.calcularINSSProgressivo(comp, baseNormal) : 0;
+            const imposto13 = base13 > 0 ? this.calcularINSSProgressivo(comp, base13) : 0;
+            imposto = impostoNormal + imposto13;
           }
 
           // Apply monetary correction: derive factor from GT valorCorrigido / cs_base
@@ -1946,11 +1988,13 @@ export class PjeCalcEngine {
     // base_cs_segurado: 'bruto' usa oc.devido, 'liquido' (default) usa oc.diferenca
     const usarBruto = this.csConfig.base_cs_segurado === 'bruto';
     const basesDevidos: Record<string, number> = {};
+    const bases13Devidos: Record<string, number> = {};
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
       if (!verba?.incidencias.contribuicao_social) continue;
       // Férias indenizadas já têm contribuicao_social:false na incidência (INC_FERIAS_INDENIZADAS)
       // Férias gozadas com contribuicao_social:true devem incidir INSS (Decreto 3.048/99 art. 214)
+      const is13 = verba.caracteristica === '13_salario';
       for (const oc of vr.ocorrencias) {
         // ═══ CS Base Rule (PJe-Calc):
         // PJe-Calc calculates CS on NOMINAL diferença, not corrected values.
@@ -1964,7 +2008,9 @@ export class PjeCalcEngine {
           val = usarBruto ? oc.devido : oc.diferenca;
         }
         if (val <= 0) continue;
-        basesDevidos[oc.competencia] = (basesDevidos[oc.competencia] || 0) + val;
+        // PJe-Calc: INSS on 13º uses a SEPARATE basis with its own teto
+        const target = is13 ? bases13Devidos : basesDevidos;
+        target[oc.competencia] = (target[oc.competencia] || 0) + val;
       }
     }
 
@@ -1981,11 +2027,20 @@ export class PjeCalcEngine {
 
     // Apurar segurado sobre DEVIDOS
     if (this.csConfig.apurar_segurado) {
-      for (const [comp, base] of Object.entries(basesDevidos)) {
-        const imposto = this.calcularINSSProgressivo(comp, base);
+      // Collect all competencias from both normal and 13º
+      const allDevidosComps = Array.from(new Set([...Object.keys(basesDevidos), ...Object.keys(bases13Devidos)]));
+      for (const comp of allDevidosComps) {
+        const baseNormal = basesDevidos[comp] || 0;
+        const base13Val = bases13Devidos[comp] || 0;
+        const totalBase = baseNormal + base13Val;
+        if (totalBase <= 0) continue;
+        // PJe-Calc: calculate INSS separately for normal and 13º (each with own teto)
+        const impostoNormal = baseNormal > 0 ? this.calcularINSSProgressivo(comp, baseNormal) : 0;
+        const imposto13 = base13Val > 0 ? this.calcularINSSProgressivo(comp, base13Val) : 0;
+        const imposto = impostoNormal + imposto13;
         segurado_devidos.push({
-          competencia: comp, base,
-          aliquota: base > 0 ? imposto / base : 0,
+          competencia: comp, base: totalBase,
+          aliquota: totalBase > 0 ? imposto / totalBase : 0,
           valor: Number(new Decimal(imposto).toDP(2)),
           recolhido: 0,
           diferenca: Number(new Decimal(imposto).toDP(2)),
@@ -2342,8 +2397,22 @@ export class PjeCalcEngine {
       }
     }
 
-    const mesesAnosAnteriores = compsAnteriores.size;
-    const mesesAnoLiquidacao = compsLiquidacao.size;
+    // FIX: PJe-Calc counts TOTAL months in the period (first to last),
+    // not just the count of distinct months with income.
+    let mesesAnosAnteriores: number;
+    if (compsAnteriores.size > 0) {
+      const sortedAnts = [...compsAnteriores].sort();
+      mesesAnosAnteriores = this.getCompetencias(sortedAnts[0], sortedAnts[sortedAnts.length - 1]).length;
+    } else {
+      mesesAnosAnteriores = 0;
+    }
+    let mesesAnoLiquidacao: number;
+    if (compsLiquidacao.size > 0) {
+      const sortedLiqs = [...compsLiquidacao].sort();
+      mesesAnoLiquidacao = this.getCompetencias(sortedLiqs[0], sortedLiqs[sortedLiqs.length - 1]).length;
+    } else {
+      mesesAnoLiquidacao = 0;
+    }
     let deducoes = 0;
     if (this.irConfig.deduzir_cs && this.csConfig.cobrar_reclamante) deducoes += csResult.total_segurado;
     const periodo = this.getPeriodoCalculo();
@@ -2558,7 +2627,8 @@ export class PjeCalcEngine {
     let contratuais = 0;
 
     if (this.honorariosConfig.apurar_sucumbenciais) {
-      const baseHon = principalCorrigido + juros + fgts;
+      // PJe-Calc: honorários base does NOT include FGTS
+      const baseHon = principalCorrigido + juros;
       sucumbenciais = Number(new Decimal(baseHon).times(this.honorariosConfig.percentual_sucumbenciais / 100).toDP(2));
     }
 
@@ -2566,7 +2636,8 @@ export class PjeCalcEngine {
       if (this.honorariosConfig.valor_fixo) {
         contratuais = this.honorariosConfig.valor_fixo;
       } else {
-        const baseHon = principalCorrigido + juros + fgts;
+        // PJe-Calc: honorários base does NOT include FGTS
+        const baseHon = principalCorrigido + juros;
         contratuais = Number(new Decimal(baseHon).times(this.honorariosConfig.percentual_contratuais / 100).toDP(2));
       }
     }
@@ -3043,7 +3114,7 @@ export class PjeCalcEngine {
           }
         }
 
-        const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2));
+        const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2, Decimal.ROUND_HALF_EVEN));
         oc.indice_correcao = Number(new Decimal(indiceCorrecao).toDP(6));
         oc.valor_corrigido = valorCorrigido;
         oc.juros = 0;
@@ -3277,7 +3348,7 @@ export class PjeCalcEngine {
               const compLiqD = dataLiq.slice(0, 7);
               const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiqD);
               if (fatorSELIC !== null) {
-                oc.juros = Number(baseJuros.times(fatorSELIC - 1).toDP(2));
+                oc.juros = Number(baseJuros.times(fatorSELIC - 1).toDP(2, Decimal.ROUND_HALF_EVEN));
               } else {
                 this.trackWarning('W049', 'juros', `SELIC ausente para ${compCitacao}→${compLiqD} (juros ADC 58/59 legacy). Usando 0.`, oc.competencia);
                 oc.juros = 0;
@@ -3286,7 +3357,7 @@ export class PjeCalcEngine {
               // FIX 1: PJe-Calc counts interest months inclusive of start month
               const meses = this.mesesEntreInclusivo(jurosStart, dataLiqD);
               const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
-              oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2));
+              oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2, Decimal.ROUND_HALF_EVEN));
             }
           } else {
             oc.juros = 0;
@@ -3905,8 +3976,8 @@ export class PjeCalcEngine {
               }
               return val;
             });
-          const media = valores.length > 0 ? valores.reduce((s, v) => s + v, 0) / valores.length : 0;
-          
+          const media = valores.length > 0 ? valores.reduce((s, v) => new Decimal(s).plus(v), new Decimal(0)).div(valores.length).toDP(2).toNumber() : 0;
+
           // Determine competencia for this group
           let comp: string;
           if (periodoMedia === 'ano_civil') {
@@ -4033,7 +4104,7 @@ export class PjeCalcEngine {
       }
       default: {
         const valores = principalResult.ocorrencias.filter(o => o.diferenca > 0).map(o => o.diferenca);
-        const media = valores.length > 0 ? valores.reduce((s, v) => s + v, 0) / valores.length : 0;
+        const media = valores.length > 0 ? valores.reduce((s, v) => new Decimal(s).plus(v), new Decimal(0)).div(valores.length).toDP(2).toNumber() : 0;
         const comp = this.params.data_demissao?.slice(0, 7) || new Date().toISOString().slice(0, 7);
         const result = this.calcularOcorrencia(reflexa, comp, media);
         ocorrencias.push(result);

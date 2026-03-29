@@ -434,9 +434,17 @@ export async function getMultasConfig(caseId: string): Promise<PjecalcMultasConf
   try {
     const { data, error } = await fromView('pjecalc_multas_config')
       .select('*').eq('case_id', caseId).maybeSingle();
-    if (error) { console.warn('getMultasConfig:', error.message); return null; }
+    if (error) {
+      if (error.code === 'PGRST116' || error.message?.includes('not found')) return null;
+      console.error('[PjeCalcService] Erro inesperado em getMultasConfig:', error);
+      throw error;
+    }
     return data as PjecalcMultasConfigRow | null;
-  } catch { return null; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
+    console.error('[PjeCalcService] Erro inesperado em getMultasConfig:', err);
+    throw err;
+  }
 }
 
 export async function upsertMultasConfig(caseId: string, payload: Record<string, unknown>): Promise<void> {
@@ -457,9 +465,17 @@ export async function getPensaoConfig(caseId: string): Promise<Record<string, un
   try {
     const { data, error } = await fromView('pjecalc_pensao_config')
       .select('*').eq('case_id', caseId).maybeSingle();
-    if (error) { console.warn('getPensaoConfig:', error.message); return null; }
+    if (error) {
+      if (error.code === 'PGRST116' || error.message?.includes('not found')) return null;
+      console.error('[PjeCalcService] Erro inesperado em getPensaoConfig:', error);
+      throw error;
+    }
     return data as Record<string, unknown> | null;
-  } catch { return null; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
+    console.error('[PjeCalcService] Erro inesperado em getPensaoConfig:', err);
+    throw err;
+  }
 }
 
 export async function upsertPensaoConfig(caseId: string, payload: Record<string, unknown>): Promise<void> {
@@ -480,9 +496,17 @@ export async function getPrevPrivConfig(caseId: string): Promise<Record<string, 
   try {
     const { data, error } = await fromView('pjecalc_previdencia_privada_config')
       .select('*').eq('case_id', caseId).maybeSingle();
-    if (error) { console.warn('getPrevPrivConfig:', error.message); return null; }
+    if (error) {
+      if (error.code === 'PGRST116' || error.message?.includes('not found')) return null;
+      console.error('[PjeCalcService] Erro inesperado em getPrevPrivConfig:', error);
+      throw error;
+    }
     return data as Record<string, unknown> | null;
-  } catch { return null; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
+    console.error('[PjeCalcService] Erro inesperado em getPrevPrivConfig:', err);
+    throw err;
+  }
 }
 
 export async function upsertPrevPrivConfig(caseId: string, payload: Record<string, unknown>): Promise<void> {
@@ -503,9 +527,17 @@ export async function getSalarioFamiliaConfig(caseId: string): Promise<Record<st
   try {
     const { data, error } = await fromView('pjecalc_salario_familia_config')
       .select('*').eq('case_id', caseId).maybeSingle();
-    if (error) { console.warn('getSalarioFamiliaConfig:', error.message); return null; }
+    if (error) {
+      if (error.code === 'PGRST116' || error.message?.includes('not found')) return null;
+      console.error('[PjeCalcService] Erro inesperado em getSalarioFamiliaConfig:', error);
+      throw error;
+    }
     return data as Record<string, unknown> | null;
-  } catch { return null; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
+    console.error('[PjeCalcService] Erro inesperado em getSalarioFamiliaConfig:', err);
+    throw err;
+  }
 }
 
 export async function upsertSalarioFamiliaConfig(caseId: string, payload: Record<string, unknown>): Promise<void> {
@@ -526,9 +558,17 @@ export async function getSeguroConfig(caseId: string): Promise<Record<string, un
   try {
     const { data, error } = await fromView('pjecalc_seguro_config')
       .select('*').eq('case_id', caseId).maybeSingle();
-    if (error) { console.warn('getSeguroConfig:', error.message); return null; }
+    if (error) {
+      if (error.code === 'PGRST116' || error.message?.includes('not found')) return null;
+      console.error('[PjeCalcService] Erro inesperado em getSeguroConfig:', error);
+      throw error;
+    }
     return data as Record<string, unknown> | null;
-  } catch { return null; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
+    console.error('[PjeCalcService] Erro inesperado em getSeguroConfig:', err);
+    throw err;
+  }
 }
 
 export async function upsertSeguroConfig(caseId: string, payload: Record<string, unknown>): Promise<void> {
@@ -639,9 +679,17 @@ export async function insertCsOcorrenciasBatch(rows: Record<string, unknown>[]):
 export async function getFgtsSaldosSaques(caseId: string): Promise<Record<string, unknown>[]> {
   try {
     const { data, error } = await fromView('pjecalc_fgts_saldos_saques').select('*').eq('case_id', caseId).order('data');
-    if (error) { console.warn('getFgtsSaldosSaques:', error.message); return []; }
+    if (error) {
+      if (error.code === 'PGRST116' || error.message?.includes('not found')) return [];
+      console.error('[PjeCalcService] Erro inesperado em getFgtsSaldosSaques:', error);
+      throw error;
+    }
     return (data || []) as Record<string, unknown>[];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[PjeCalcService] Erro inesperado em getFgtsSaldosSaques:', err);
+    throw err;
+  }
 }
 
 export async function insertFgtsSaldoSaque(payload: Record<string, unknown>): Promise<void> {
@@ -700,9 +748,17 @@ export async function getAtualizacaoConfig(caseId: string): Promise<PjecalcAtual
     const { data, error } = await fromView('pjecalc_atualizacao_config')
       .select('*')
       .eq('calculo_id', calculoId);
-    if (error) { console.warn('getAtualizacaoConfig:', error.message); return []; }
+    if (error) {
+      if (error.code === 'PGRST116' || error.message?.includes('not found')) return [];
+      console.error('[PjeCalcService] Erro inesperado em getAtualizacaoConfig:', error);
+      throw error;
+    }
     return (data || []) as PjecalcAtualizacaoConfigRow[];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[PjeCalcService] Erro inesperado em getAtualizacaoConfig:', err);
+    throw err;
+  }
 }
 
 export async function loadCaseData(caseId: string): Promise<PjecalcCaseData> {
@@ -826,9 +882,17 @@ export async function getObservacoes(caseId: string, modulo: string): Promise<Pj
       .eq('case_id', caseId)
       .eq('modulo', modulo)
       .order('created_at', { ascending: false });
-    if (error) { console.warn('getObservacoes:', error.message); return []; }
+    if (error) {
+      if (error.code === 'PGRST116' || error.message?.includes('not found')) return [];
+      console.error('[PjeCalcService] Erro inesperado em getObservacoes:', error);
+      throw error;
+    }
     return (data || []) as PjecalcObservacaoRow[];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[PjeCalcService] Erro inesperado em getObservacoes:', err);
+    throw err;
+  }
 }
 
 export async function insertObservacao(payload: { case_id: string; modulo: string; tipo: string; texto: string; created_by?: string }): Promise<void> {
@@ -892,25 +956,43 @@ export async function getIndicesCorrecao(): Promise<Record<string, unknown>[]> {
 export async function getInssFaixas(): Promise<Record<string, unknown>[]> {
   try {
     const { data, error } = await fromView('pjecalc_inss_faixas').select('*').order('competencia_inicio,faixa');
-    if (error) { console.warn('getInssFaixas:', error.message); return []; }
+    if (error) {
+      console.error('[PjeCalcService] Falha ao carregar pjecalc_inss_faixas:', error);
+      throw error;
+    }
     return (data || []) as Record<string, unknown>[];
-  } catch { return []; }
+  } catch (err) {
+    console.error('[PjeCalcService] Falha ao carregar pjecalc_inss_faixas:', err);
+    throw err;
+  }
 }
 
 export async function getIrFaixas(): Promise<Record<string, unknown>[]> {
   try {
     const { data, error } = await fromView('pjecalc_ir_faixas').select('*').order('competencia_inicio,faixa');
-    if (error) { console.warn('getIrFaixas:', error.message); return []; }
+    if (error) {
+      console.error('[PjeCalcService] Falha ao carregar pjecalc_ir_faixas:', error);
+      throw error;
+    }
     return (data || []) as Record<string, unknown>[];
-  } catch { return []; }
+  } catch (err) {
+    console.error('[PjeCalcService] Falha ao carregar pjecalc_ir_faixas:', err);
+    throw err;
+  }
 }
 
 export async function getFeriados(): Promise<Record<string, unknown>[]> {
   try {
     const { data, error } = await fromView('pjecalc_feriados').select('*');
-    if (error) { console.warn('getFeriados:', error.message); return []; }
+    if (error) {
+      console.error('[PjeCalcService] Falha ao carregar pjecalc_feriados:', error);
+      throw error;
+    }
     return (data || []) as Record<string, unknown>[];
-  } catch { return []; }
+  } catch (err) {
+    console.error('[PjeCalcService] Falha ao carregar pjecalc_feriados:', err);
+    throw err;
+  }
 }
 
 // =====================================================
