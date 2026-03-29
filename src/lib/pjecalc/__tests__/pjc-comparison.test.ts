@@ -159,6 +159,12 @@ function runEngine(
     if (inputs.irConfig.apuracao_juros_gt) {
       inputs.irConfig.apuracao_juros_gt = undefined;
     }
+    // Independent mode requires data_citacao for ADC 58/59 (IPCA-E/SELIC).
+    // PJC files rarely contain dataCitacao. Use ajuizamento as a reasonable proxy
+    // (common judicial practice: citacao happens shortly after ajuizamento).
+    if (!inputs.params.data_citacao) {
+      inputs.params.data_citacao = inputs.params.data_ajuizamento;
+    }
   }
 
   try {
