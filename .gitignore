@@ -25,3 +25,8 @@ dist-ssr
 
 # Claude Code worktrees
 .claude/
+
+# Environment variables (NEVER commit credentials)
+.env
+.env.local
+.env.*.local

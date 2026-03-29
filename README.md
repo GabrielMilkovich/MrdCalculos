@@ -1,73 +1,61 @@
-# Welcome to your Lovable project
+# MRD CALC — Liquidação Trabalhista Inteligente
 
-## Project info
+Sistema profissional de cálculos trabalhistas com motor de cálculo autônomo, precisão pericial via Decimal.js, e paridade funcional com o PJe-Calc.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Funcionalidades
 
-## How can I edit this code?
+- **Motor de cálculo autônomo** — fórmula PJe-Calc com truncamento por etapa, Decimal.js (20 dígitos)
+- **42 templates de verbas** — horas extras, reflexos, rescisórias, adicionais, multas, indenizações
+- **Correção monetária** — 16 índices (IPCA-E, SELIC, INPC, TR, IGP-M, etc.), ADC 58/59 STF
+- **INSS progressivo** — faixas históricas, patronal, SAT/RAT, terceiros por FPAS, doméstico LC 150
+- **IRRF com RRA** — Art. 12-A, tributação exclusiva 13º, dependentes
+- **FGTS** — depósitos 8%/2%, multa 40%/20%, LC 110, JAM/TR
+- **Reflexos em DAG** — ordenação topológica com cascade DSR→13º→férias→FGTS
+- **Relatórios PDF** — 12 seções modulares, memória de cálculo, warnings, auditoria
+- **Import/Export** — XML PJC, XLSX, CSV, eSocial S-2500/2501, GPS/DARF
+- **Modo independente** — cálculo 100% autônomo, sem dependência do PJe-Calc
+- **202 testes automatizados** — Vitest, golden parity, edge cases
 
-There are several ways of editing your application.
+## Setup
 
-**Use Lovable**
+```bash
+# 1. Clone o repositório
+git clone https://github.com/GabrielMilkovich/MrdCalculos.git
+cd MrdCalculos
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+# 2. Copie as variáveis de ambiente
+cp .env.example .env
+# Edite .env com suas credenciais Supabase
 
-Changes made via Lovable will be committed automatically to this repo.
+# 3. Instale dependências
+npm install
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# 4. Inicie o servidor de desenvolvimento
 npm run dev
+
+# 5. Rode os testes
+npm test
 ```
 
-**Edit a file directly in GitHub**
+## Variáveis de Ambiente
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Copie `.env.example` para `.env` e preencha:
 
-**Use GitHub Codespaces**
+| Variável | Descrição |
+|----------|-----------|
+| `VITE_SUPABASE_URL` | URL do seu projeto Supabase |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Chave anon/public do Supabase |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+**NUNCA commite o arquivo `.env` com credenciais reais.**
 
-## What technologies are used for this project?
+## Stack
 
-This project is built with:
+- React 18 + TypeScript + Vite
+- Supabase (PostgreSQL + Edge Functions + Auth)
+- Decimal.js (precisão de 20 dígitos)
+- Tailwind CSS + shadcn/ui
+- Vitest (testes)
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Licença
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Proprietário. Todos os direitos reservados.
