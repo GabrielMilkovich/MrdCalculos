@@ -57,19 +57,19 @@ export class PLRProporcionalModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base)
       .div(inputs.divisor).toDP(2)
       .times(inputs.quantidade).toDP(2)
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     // PLR NÃO gera reflexos (Art. 3º Lei 10.101/2000)
     return [];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     // PLR: isenta INSS/FGTS, tributação exclusiva IRRF
     return { fgts: false, inss: false, irrf: true, natureza: 'salarial' };
   }

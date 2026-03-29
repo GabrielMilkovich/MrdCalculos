@@ -47,18 +47,18 @@ export class SaldoSalarioModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base)
       .div(inputs.divisor).toDP(2)
       .times(inputs.quantidade).toDP(2)
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [{ targetVerba: 'FGTS', tipo: 'fgts', baseMultiplier: 0.08, divisor: 1 }];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 
@@ -107,14 +107,14 @@ export class AvisoPrevioModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base)
       .div(inputs.divisor).toDP(2)
       .times(inputs.quantidade).toDP(2)
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [
       { targetVerba: '13º Salário', tipo: '13_salario', baseMultiplier: 1, divisor: 12 },
       { targetVerba: 'Férias + 1/3', tipo: 'ferias', baseMultiplier: 1.3333, divisor: 12 },
@@ -122,7 +122,7 @@ export class AvisoPrevioModule implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 

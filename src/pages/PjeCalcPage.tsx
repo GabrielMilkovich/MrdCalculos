@@ -330,7 +330,7 @@ export default function PjeCalcPage() {
         case 'atualizacao': return <ModuloAtualizacao caseId={caseId!} />;
         case 'resumo': return (<>
             <ModuloResumo caseId={caseId!} onBeforeLiquidar={async () => { await handleSaveParams(); }} />
-            {calc.rawResultado?.resultado && calc.correcaoConfig?.ente_publico && (
+            {calc.rawResultado?.resultado && (calc.correcaoConfig as any)?.ente_publico && (
               <ClassificacaoPrecatorio resumo={(calc.rawResultado.resultado as any).resumo} />
             )}
           </>);

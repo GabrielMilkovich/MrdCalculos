@@ -75,7 +75,7 @@ export class HorasExtras50Module implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     const base = new Decimal(inputs.base);
     const div = new Decimal(inputs.divisor);
     const mult = new Decimal(inputs.multiplicador);
@@ -98,7 +98,7 @@ export class HorasExtras50Module implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 
@@ -144,7 +144,7 @@ export class HorasExtras100Module implements VerbaModule {
     return { ...base, quantidade, quantidadeSource, multiplicador: verba.multiplicador || 2.0 };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new HorasExtras50Module().applyFormula(inputs);
   }
 
@@ -152,7 +152,7 @@ export class HorasExtras100Module implements VerbaModule {
     return new HorasExtras50Module().getReflections(verba);
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 

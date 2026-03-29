@@ -318,7 +318,7 @@ function toEngineFgtsConfig(cfg: PjecalcFgtsConfigRow | null): PjeFGTSConfig {
     multa_percentual: multaPercentual,
     multa_base: (cfg?.multa_base as PjeFGTSConfig['multa_base']) ?? 'diferenca',
     multa_valor_informado: cfg?.multa_valor_informado ?? undefined,
-    saldos_saques: saldosSaques,
+    saldos_saques: saldosSaques as any,
     deduzir_saldo: cfg?.deduzir_saldo ?? false,
     lc110_10: cfg?.lc110_10 ?? false,
     lc110_05: cfg?.lc110_05 ?? false,
@@ -348,7 +348,7 @@ function toEngineCsConfig(cfg: PjecalcCsConfigRow | null): PjeCSConfig {
     periodos_simples: Array.isArray(cfg?.periodos_simples) ? cfg!.periodos_simples as PjeCSConfig['periodos_simples'] : [],
     contribuicao_sindical: cfg?.contribuicao_sindical ?? false,
     contribuicao_sindical_pos2017: cfg?.contribuicao_sindical_pos2017 ?? false,
-    fpas_code: (cfg as Record<string, unknown> | null)?.fpas_code as string | undefined,
+    fpas_code: (cfg as unknown as Record<string, unknown> | null)?.fpas_code as string | undefined,
   };
 }
 
@@ -693,7 +693,7 @@ async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types
       .eq('case_id', caseId);
     if (data && data.length > 0) {
       console.log(`[ORCHESTRATOR] Loaded ${data.length} exceções de carga horária`);
-      return (data as { periodo_inicio: string; periodo_fim: string; carga_horaria_mensal: number }[]).map(r => ({
+      return (data as unknown as { periodo_inicio: string; periodo_fim: string; carga_horaria_mensal: number }[]).map(r => ({
         data_inicial: r.periodo_inicio,
         data_final: r.periodo_fim,
         carga_horaria: Number(r.carga_horaria_mensal),
@@ -715,7 +715,7 @@ async function loadExcecoesSabado(caseId: string): Promise<import('./engine-type
       .eq('case_id', caseId);
     if (data && data.length > 0) {
       console.log(`[ORCHESTRATOR] Loaded ${data.length} exceções de sábado`);
-      return (data as { data_inicio: string; data_fim: string; sabado_dia_util: boolean }[]).map(r => ({
+      return (data as unknown as { data_inicio: string; data_fim: string; sabado_dia_util: boolean }[]).map(r => ({
         data_inicial: r.data_inicio,
         data_final: r.data_fim,
         sabado_dia_util: Boolean(r.sabado_dia_util),

@@ -379,11 +379,11 @@ Deno.serve(async (req) => {
       }));
       for (let i = 0; i < oficialRows.length; i += 500) {
         const chunk = oficialRows.slice(i, i + 500);
-        await sb
-          .from("indices_oficiais")
-          .upsert(chunk, { onConflict: "serie_id,data_referencia" })
-          .then(() => {})
-          .catch(() => {}); // Best-effort for dual-write
+        try {
+          await sb
+            .from("indices_oficiais")
+            .upsert(chunk, { onConflict: "serie_id,data_referencia" });
+        } catch { /* Best-effort for dual-write */ }
       }
 
       // Update sync_status
@@ -431,19 +431,20 @@ Deno.serve(async (req) => {
       };
 
       // Record error in sync_status
-      await sb
-        .from("sync_status")
-        .upsert(
-          {
-            serie_id: serie.serieId,
-            serie_nome: serie.indice,
-            status: "error",
-            last_sync_attempt: new Date().toISOString(),
-            error_message: msg,
-          },
-          { onConflict: "serie_id" }
-        )
-        .catch(() => {});
+      try {
+        await sb
+          .from("sync_status")
+          .upsert(
+            {
+              serie_id: serie.serieId,
+              serie_nome: serie.indice,
+              status: "error",
+              last_sync_attempt: new Date().toISOString(),
+              error_message: msg,
+            },
+            { onConflict: "serie_id" }
+          );
+      } catch { /* best-effort */ }
     }
   }
 

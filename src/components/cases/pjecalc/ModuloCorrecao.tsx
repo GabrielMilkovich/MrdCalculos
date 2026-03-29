@@ -102,7 +102,6 @@ export function ModuloCorrecao({ caseId }: Props) {
         combinacoes_indice: form.combinar_indice ? JSON.stringify(form.combinacoes_indice) : undefined,
         combinacoes_juros: form.combinar_juros ? JSON.stringify(form.combinacoes_juros) : undefined,
         transicao_adc58: form.combinar_indice,
-        acumular_indices_correcao: form.acumular_indices_correcao,
       });
       qc.invalidateQueries({ queryKey: ["pjecalc_correcao_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });

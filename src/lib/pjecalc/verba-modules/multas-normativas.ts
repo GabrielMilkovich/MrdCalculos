@@ -47,7 +47,7 @@ export class MultasNormativasModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0) return 0;
     // valor_fixo x multiplicador x quantidade / divisor
     const resultado = new Decimal(inputs.base)
@@ -58,12 +58,12 @@ export class MultasNormativasModule implements VerbaModule {
     return resultado.toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     // Multas normativas NAO geram reflexos (natureza indenizatoria)
     return [];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: false, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 

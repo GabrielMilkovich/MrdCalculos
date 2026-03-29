@@ -62,7 +62,7 @@ export class GorjetasModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0 || inputs.divisor <= 0) return 0;
     return new Decimal(inputs.base)
       .times(inputs.multiplicador)
@@ -72,7 +72,7 @@ export class GorjetasModule implements VerbaModule {
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     // Art. 457 CLT: gorjetas integram salário — reflexos em todos os títulos
     return [
       { targetVerba: 'DSR', tipo: 'dsr', baseMultiplier: 1, divisor: 1 },
@@ -82,7 +82,7 @@ export class GorjetasModule implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 

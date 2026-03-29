@@ -60,7 +60,7 @@ export class AcumuloFuncaoModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     if (inputs.base <= 0) return 0;
     // Formula: Base x Percentual x Quantidade / Divisor
     const resultado = new Decimal(inputs.base)
@@ -71,7 +71,7 @@ export class AcumuloFuncaoModule implements VerbaModule {
     return resultado.toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [
       { targetVerba: 'DSR', tipo: 'dsr', baseMultiplier: 1, divisor: 26 },
       { targetVerba: '13o Salario', tipo: '13_salario', baseMultiplier: 1, divisor: 12, periodoMedia: 'ano_civil' },
@@ -80,7 +80,7 @@ export class AcumuloFuncaoModule implements VerbaModule {
     ];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: true, inss: true, irrf: true, natureza: 'salarial' };
   }
 

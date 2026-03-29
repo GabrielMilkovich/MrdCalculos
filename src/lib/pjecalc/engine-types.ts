@@ -170,11 +170,11 @@ export interface PjeVerba {
     integralizar: boolean;
   };
   
-  tipo_divisor: 'informado' | 'carga_horaria' | 'dias_uteis' | 'cartao_ponto' | 'calendario';
+  tipo_divisor: 'informado' | 'carga_horaria' | 'dias_uteis' | 'cartao_ponto' | 'calendario' | 'jornada' | 'mensal' | 'diario' | 'hora' | 'minuto';
   divisor_informado: number;
   divisor_cartao_colunas?: string[];
   multiplicador: number;
-  tipo_quantidade: 'informada' | 'avos' | 'apurada' | 'repousos' | 'calendario' | 'cartao_ponto';
+  tipo_quantidade: 'informada' | 'avos' | 'apurada' | 'repousos' | 'calendario' | 'cartao_ponto' | 'cartao_horas' | 'cartao_dias' | 'media_apurada';
   quantidade_informada: number;
   quantidade_cartao_colunas?: string[];
   quantidade_proporcionalizar: boolean;
@@ -395,6 +395,8 @@ export interface PjeCSConfig {
   /** Lei 13.467/2017: contribuição sindical pós-nov/2017 é facultativa.
    *  Quando true, aplica também para anos 2018+. */
   contribuicao_sindical_pos2017?: boolean;
+  /** Código FPAS para cálculo de terceiros */
+  fpas_code?: string;
 }
 
 export interface PjeIRConfig {

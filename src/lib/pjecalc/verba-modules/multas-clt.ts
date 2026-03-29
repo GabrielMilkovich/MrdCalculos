@@ -40,13 +40,13 @@ export class Multa467Module implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base).times(inputs.multiplicador).toDP(2).toNumber();
   }
 
-  getReflections(): ReflectionSpec[] { return []; }
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] { return []; }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: false, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 
@@ -93,13 +93,13 @@ export class Multa477Module implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base).times(inputs.multiplicador).toDP(2).toNumber();
   }
 
-  getReflections(): ReflectionSpec[] { return []; }
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] { return []; }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: false, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 

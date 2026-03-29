@@ -23,11 +23,11 @@ export class FGTSDiferencasModule implements VerbaModule {
   readonly familia = 'tributario' as const;
   readonly dependencias = ['HE_50', 'HE_100', 'DSR', 'SALDO_SAL', 'AVISO_PREVIO', 'DECIMO_PROP', 'FERIAS_VENC', 'FERIAS_PROP'];
 
-  canApply(): boolean {
+  canApply(_ctx?: VerbaModuleContext, _verba?: PjeVerba): boolean {
     return true;
   }
 
-  resolveInputs(ctx: VerbaModuleContext): ResolvedInputs {
+  resolveInputs(ctx: VerbaModuleContext, _verba?: PjeVerba): ResolvedInputs {
     // Base = soma de todas as diferenças salariais que incidem FGTS
     let totalBase = new Decimal(0);
     const sources: string[] = [];
@@ -53,18 +53,18 @@ export class FGTSDiferencasModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base)
       .times(inputs.multiplicador)
       .div(100).toDP(2)
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: false, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 
@@ -84,11 +84,11 @@ export class Multa40FGTSModule implements VerbaModule {
   readonly familia = 'rescisoria' as const;
   readonly dependencias = ['FGTS_DIF'];
 
-  canApply(ctx: VerbaModuleContext): boolean {
+  canApply(ctx: VerbaModuleContext, _verba?: PjeVerba): boolean {
     return !!ctx.demissao;
   }
 
-  resolveInputs(ctx: VerbaModuleContext): ResolvedInputs {
+  resolveInputs(ctx: VerbaModuleContext, _verba?: PjeVerba): ResolvedInputs {
     // Base = total de FGTS devidos (soma de todas as competências)
     let totalFGTS = new Decimal(0);
     const fgtsResults = ctx.resultadosAnteriores.get('FGTS_DIF') || [];
@@ -110,18 +110,18 @@ export class Multa40FGTSModule implements VerbaModule {
     };
   }
 
-  applyFormula(inputs: ResolvedInputs): number {
+  applyFormula(inputs: ResolvedInputs, _verba?: PjeVerba): number {
     return new Decimal(inputs.base)
       .times(inputs.multiplicador)
       .div(100).toDP(2)
       .toNumber();
   }
 
-  getReflections(): ReflectionSpec[] {
+  getReflections(_verba?: PjeVerba): ReflectionSpec[] {
     return [];
   }
 
-  getIncidences(): IncidenceSpec {
+  getIncidences(_verba?: PjeVerba): IncidenceSpec {
     return { fgts: false, inss: false, irrf: false, natureza: 'indenizatoria' };
   }
 
