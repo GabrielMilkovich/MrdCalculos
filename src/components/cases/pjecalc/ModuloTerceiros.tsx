@@ -39,6 +39,7 @@ import {
   type TerceirosResult,
   type FPASDefinition,
 } from "@/lib/pjecalc/terceiros-contributions";
+import { getCsConfig, upsertCsConfig } from "@/lib/pjecalc/service";
 
 interface Props {
   caseId: string;
@@ -57,11 +58,25 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
     entidades: [],
   });
 
-  // Initialize with default FPAS (Commerce)
+  // Load existing FPAS config from DB, or fall back to default (Commerce)
   useEffect(() => {
-    const initial = buildTerceirosConfigFromFPAS("515");
-    setConfig(initial);
-  }, []);
+    let cancelled = false;
+    (async () => {
+      try {
+        const csConfig = await getCsConfig(caseId);
+        if (cancelled) return;
+        const fpasCode = csConfig?.fpas_code || "515";
+        const initial = buildTerceirosConfigFromFPAS(fpasCode);
+        setConfig(initial);
+      } catch {
+        if (!cancelled) {
+          const initial = buildTerceirosConfigFromFPAS("515");
+          setConfig(initial);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [caseId]);
 
   // Computed preview
   const preview: TerceirosResult | null = useMemo(() => {
@@ -69,10 +84,17 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
     return calcularTerceiros(baseCalculo, config);
   }, [config, baseCalculo]);
 
-  const handleFPASChange = (fpas: string) => {
+  const handleFPASChange = async (fpas: string) => {
     const newConfig = buildTerceirosConfigFromFPAS(fpas);
     setConfig(newConfig);
     onConfigChange?.(newConfig);
+
+    // Persist FPAS code to DB
+    try {
+      await upsertCsConfig({ case_id: caseId, fpas_code: fpas });
+    } catch {
+      toast.error("Erro ao salvar código FPAS.");
+    }
 
     const def = FPAS_DEFINITIONS.find((f) => f.codigo === fpas);
     if (def) {
@@ -109,8 +131,14 @@ export function ModuloTerceiros({ caseId, baseCalculo, onConfigChange }: Props) 
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Persist to pjecalc config via service
-      // For now, emit via callback
+      await upsertCsConfig({
+        case_id: caseId,
+        fpas_code: config.fpas,
+        apurar_terceiros: config.apurar,
+        aliquota_terceiros_fixa: config.entidades
+          .filter((e) => e.ativa)
+          .reduce((sum, e) => sum + e.aliquota, 0),
+      });
       onConfigChange?.(config);
       toast.success("Configuracao de terceiros salva.");
     } catch (err) {

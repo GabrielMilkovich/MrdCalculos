@@ -28,7 +28,7 @@ function calcDiasAvisoProporcional(admissao: string, demissao?: string): number 
 }
 
 export class AvisoPrevioModule implements VerbaModule {
-  readonly id = 'AVISO_PREVIO';
+  readonly id = 'AVISO_PREVIO_PROPORCIONAL';
   readonly nome = 'Aviso Previo';
   readonly familia = 'rescisoria' as const;
   readonly dependencias: string[] = [];

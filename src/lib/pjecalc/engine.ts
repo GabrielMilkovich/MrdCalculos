@@ -5,6 +5,7 @@
 // =====================================================
 
 import Decimal from 'decimal.js';
+import { getReformaRules, REFORMA_DATE } from './reforma-trabalhista';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
 
@@ -2874,12 +2875,12 @@ export class PjeCalcEngine {
       itens.push({ tipo: 'observacao', modulo: 'Correção', mensagem: 'Súmula 381 TST: correção monetária incide a partir do mês subsequente ao da prestação de serviços' });
     }
 
-    // FIX 6: OJ 394 SDI-1 TST — warn that post-IR interest recalculation is not yet implemented
+    // OJ 394 SDI-1 TST — informational note when active
     if (this.correcaoConfig.oj_394_juros_pos_ir) {
       itens.push({
-        tipo: 'alerta', modulo: 'Correção',
-        mensagem: 'OJ 394 SDI-1 TST: flag oj_394_juros_pos_ir está ativada, mas o recálculo de juros sobre a base pós-IR ainda NÃO está implementado. Os juros estão sendo calculados sobre a base bruta (antes do IR). O valor final pode divergir do PJe-Calc quando OJ 394 é aplicada.',
-        detalhe: 'OJ 394 determina que, em certas hipóteses, os juros de mora incidem sobre o valor da condenação já deduzido o IR. Implementação completa requer recálculo do juros após apuração do IR.',
+        tipo: 'observacao', modulo: 'Correção',
+        mensagem: 'OJ 394 SDI-1 TST: juros de mora serão recalculados sobre a base pós-IR (após dedução proporcional do imposto de renda).',
+        detalhe: 'OJ 394 determina que os juros de mora incidem sobre o valor da condenação já deduzido o IR. O recálculo é aplicado após a apuração do IR no método liquidar().',
       });
     }
 
@@ -2922,6 +2923,32 @@ export class PjeCalcEngine {
           mensagem: `Art. 11-A CLT (Reforma Trabalhista): verificar prescrição intercorrente — liquidação ocorre ${anosDesdeAjuizamento.toFixed(1)} anos após o ajuizamento. Se houve inércia superior a 2 anos na fase de execução, o crédito pode estar prescrito.`,
           detalhe: 'A prescrição intercorrente (Art. 11-A CLT, incluído pela Lei 13.467/2017) se aplica na fase de execução quando o exequente permanece inerte por mais de 2 anos. O prazo é contado a partir da intimação para cumprimento da obrigação.',
         });
+      }
+    }
+
+    // ── Reforma Trabalhista (Lei 13.467/2017) ──
+    if (this.params.data_admissao && this.correcaoConfig.data_liquidacao) {
+      const periodo = this.getPeriodoCalculo();
+      if (periodo.inicio < REFORMA_DATE && periodo.fim >= REFORMA_DATE) {
+        itens.push({
+          tipo: 'alerta', modulo: 'Reforma Trabalhista',
+          mensagem: 'O período de cálculo abrange a Reforma Trabalhista (Lei 13.467/2017, vigência 11/11/2017). Verbas como intervalo intrajornada podem ter natureza jurídica diferente antes e depois da Reforma.',
+          detalhe: 'Verifique se as incidências das verbas estão configuradas corretamente para cada período.',
+        });
+
+        // Check for intrajornada verbas specifically
+        const verbasIntrajornada = this.verbas.filter(v => v.caracteristica === 'intrajornada');
+        for (const v of verbasIntrajornada) {
+          const rulesInicio = getReformaRules(v.periodo_inicio);
+          const rulesFim = getReformaRules(v.periodo_fim);
+          if (rulesInicio.intervalo_natureza !== rulesFim.intervalo_natureza) {
+            itens.push({
+              tipo: 'alerta', modulo: 'Reforma Trabalhista',
+              mensagem: `Verba "${v.nome}" (intrajornada) abrange período pré e pós-Reforma: natureza remuneratória (com reflexos) até 10/11/2017 e indenizatória (sem reflexos) a partir de 11/11/2017 (Art. 71 §4° CLT).`,
+              detalhe: 'Considere dividir a verba em dois períodos com incidências distintas para cada natureza jurídica.',
+            });
+          }
+        }
       }
     }
 
@@ -3435,6 +3462,29 @@ export class PjeCalcEngine {
           ir = { ...ir, imposto_devido: closure.imposto_renda };
         }
       }
+    }
+
+    // ── 7c. OJ 394 SDI-1 TST: Recalculate juros on post-IR base ──
+    if (this.correcaoConfig.oj_394_juros_pos_ir && ir.imposto_devido > 0) {
+      const totalFinal = verbaResults.reduce((s, v) => s + v.total_final, 0);
+      for (const vr of verbaResults) {
+        for (const oc of vr.ocorrencias) {
+          if (oc.valor_final > 0 && totalFinal > 0) {
+            const propIR = (oc.valor_final / totalFinal) * ir.imposto_devido;
+            const basePostIR = Math.max(0, oc.valor_corrigido - propIR);
+            // Recalculate juros on reduced base
+            if (oc.juros > 0 && oc.valor_corrigido > 0) {
+              const ratio = basePostIR / oc.valor_corrigido;
+              oc.juros = Number(new Decimal(oc.juros).times(ratio).toDP(2));
+              oc.valor_final = Number(new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2));
+            }
+          }
+        }
+        // Recalculate verba totals
+        vr.total_juros = vr.ocorrencias.reduce((s, o) => s + o.juros, 0);
+        vr.total_final = vr.ocorrencias.reduce((s, o) => s + o.valor_final, 0);
+      }
+      audit('oj_394', 'OJ 394 SDI-1 TST: Juros recalculados sobre base pós-IR');
     }
 
     // ── 8. Seguro-Desemprego ──

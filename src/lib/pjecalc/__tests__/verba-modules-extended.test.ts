@@ -299,8 +299,8 @@ describe('VerbaModule - Periculosidade', () => {
 describe('VerbaModule - Aviso Previo', () => {
   const mod = new AvisoPrevioModule();
 
-  it('is registered with id AVISO_PREVIO', () => {
-    expect(getVerbaModule('AVISO_PREVIO')).toBeDefined();
+  it('is registered with id AVISO_PREVIO_PROPORCIONAL', () => {
+    expect(getVerbaModule('AVISO_PREVIO_PROPORCIONAL')).toBeDefined();
   });
 
   it('calculates proportional days: 30d + 3d/year (3 years = 39d)', () => {
@@ -592,7 +592,12 @@ describe('VerbaModule - Danos Morais', () => {
   });
 
   it('calculates fixed court-decided amount', () => {
-    const verba = makeVerba({ valor_informado_devido: 15000, multiplicador: 1 });
+    const verba = makeVerba({
+      valor_informado_devido: 15000,
+      multiplicador: 1,
+      quantidade_informada: 1,
+      divisor_informado: 1,
+    });
     const inputs = mod.resolveInputs(makeContext(), verba);
     expect(inputs.base).toBe(15000);
 
@@ -601,7 +606,7 @@ describe('VerbaModule - Danos Morais', () => {
   });
 
   it('single occurrence (quantidade = 1)', () => {
-    const verba = makeVerba({ valor_informado_devido: 20000 });
+    const verba = makeVerba({ valor_informado_devido: 20000, quantidade_informada: 1, divisor_informado: 1 });
     const inputs = mod.resolveInputs(makeContext(), verba);
     expect(inputs.quantidade).toBe(1);
   });

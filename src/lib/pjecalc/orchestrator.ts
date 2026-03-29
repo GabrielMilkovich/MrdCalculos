@@ -827,6 +827,80 @@ function multasConfigToVerbas(
     });
   }
 
+  // ── Periculosidade (Art. 193 CLT) ──
+  if (cfg.periculosidade_config) {
+    const pc = cfg.periculosidade_config as { ativo: boolean; percentual: string; periodo_inicio: string; periodo_fim: string; base_calculo: string };
+    if (pc.ativo) {
+      const v = defaultVerba('periculosidade_auto', 'Adicional de Periculosidade');
+      v.valor = 'calculado';
+      v.multiplicador = Number(pc.percentual || 30) / 100;
+      v.periodo_inicio = pc.periodo_inicio || periodoInicio;
+      v.periodo_fim = pc.periodo_fim || periodoFim;
+      v.ocorrencia_pagamento = 'mensal';
+      v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+      if (historicos.length > 0) v.base_calculo.historicos = [historicos[0].id];
+      v.ordem = 9020;
+      result.push(v);
+    }
+  }
+
+  // ── Danos Morais (Art. 223-G CLT) ──
+  if (cfg.danos_morais_config) {
+    const dm = cfg.danos_morais_config as { ativo: boolean; valor: string; data_sentenca: string };
+    if (dm.ativo && Number(dm.valor) > 0) {
+      const v = defaultVerba('danos_morais_auto', 'Indenização por Danos Morais');
+      v.valor_informado_devido = Number(dm.valor);
+      v.periodo_inicio = dm.data_sentenca || periodoFim;
+      v.periodo_fim = dm.data_sentenca || periodoFim;
+      v.incidencias = { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false };
+      v.ordem = 9030;
+      result.push(v);
+    }
+  }
+
+  // ── Equiparação Salarial (Art. 461 CLT) ──
+  if (cfg.equiparacao_config) {
+    const eq = cfg.equiparacao_config as {
+      ativo: boolean;
+      paradigma_nome: string;
+      periodo_inicio: string;
+      periodo_fim: string;
+      salarios: Array<{ competencia: string; salario_paradigma: string; salario_empregado: string }>;
+    };
+    if (eq.ativo && Array.isArray(eq.salarios) && eq.salarios.length > 0) {
+      eq.salarios.forEach((s, idx) => {
+        const diferenca = Number(s.salario_paradigma || 0) - Number(s.salario_empregado || 0);
+        if (diferenca > 0) {
+          const v = defaultVerba(`equiparacao_auto_${idx}`, `Diferença Salarial - Equiparação ${eq.paradigma_nome || ''} (${s.competencia})`);
+          v.valor_informado_devido = diferenca;
+          v.periodo_inicio = s.competencia || eq.periodo_inicio || periodoInicio;
+          v.periodo_fim = s.competencia || eq.periodo_fim || periodoFim;
+          v.ocorrencia_pagamento = 'mensal';
+          v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+          v.ordem = 9040 + idx;
+          result.push(v);
+        }
+      });
+    }
+  }
+
+  // ── Estabilidade Provisória ──
+  if (cfg.estabilidade_config) {
+    const est = cfg.estabilidade_config as { ativo: boolean; tipo: string; periodo_inicio: string; periodo_fim: string };
+    if (est.ativo && est.periodo_inicio && est.periodo_fim) {
+      const v = defaultVerba('estabilidade_auto', `Indenização Estabilidade (${est.tipo || 'provisória'})`);
+      v.valor = 'calculado';
+      v.multiplicador = 1;
+      v.periodo_inicio = est.periodo_inicio;
+      v.periodo_fim = est.periodo_fim;
+      v.ocorrencia_pagamento = 'mensal';
+      v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+      if (historicos.length > 0) v.base_calculo.historicos = [historicos[0].id];
+      v.ordem = 9050;
+      result.push(v);
+    }
+  }
+
   return result;
 }
 
