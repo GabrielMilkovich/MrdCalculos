@@ -445,7 +445,7 @@ export function DocumentsManager({
       toast.info("🔄 Sincronizando dados extraídos com módulos do cálculo...");
       try {
         const syncResult = await syncFromValidation(caseId);
-        console.log("[SYNC] Result:", syncResult);
+        // sync result logged for debugging
         queryClient.invalidateQueries({ queryKey: ['pjecalc_case_data'] });
       } catch (e) {
         console.error("[SYNC] Error:", e);
