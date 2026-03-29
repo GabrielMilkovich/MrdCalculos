@@ -6,6 +6,7 @@
 
 import Decimal from 'decimal.js';
 import { getReformaRules, REFORMA_DATE } from './reforma-trabalhista';
+import { getFPASByCodigo } from './terceiros-contributions';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
 
@@ -518,10 +519,13 @@ export class PjeCalcEngine {
         devido = new Decimal(verba.valor_informado_devido || 0);
       }
     } else {
+      // Súmula 340 TST: comissionista puro — HE = apenas adicional
+      // Ex: mult=1.5 → efetivo=0.5 (apenas o adicional de 50%, não a hora cheia)
+      const multEfetivo = verba.sumula_340_comissionista ? mult.minus(1) : mult;
       // Etapa 1: valor_hora = Base / Divisor (truncado)
       const valorHora = base.div(div).toDP(2);
       // Etapa 2: valor_hora_com_mult = valor_hora × Multiplicador (truncado)
-      const valorHoraComMult = valorHora.times(mult).toDP(2);
+      const valorHoraComMult = valorHora.times(multEfetivo).toDP(2);
       // Etapa 3: subtotal = valor_hora_com_mult × Quantidade (truncado)
       const subtotal = valorHoraComMult.times(qtd).toDP(2);
       // Etapa 4: devido = subtotal × Dobra (truncado)
@@ -1651,9 +1655,12 @@ export class PjeCalcEngine {
     // (substitui a multa de 40% na rescisão)
     const isDomestico = this.csConfig.aliquota_segurado_tipo === 'domestico';
 
+    // Lei 10.097/2000: menor aprendiz recolhe 2% de FGTS, não 8%
+    const aliqFGTS = this.verbas.some(v => v.tipo_fgts === 'aprendiz') ? 0.02 : 0.08;
+
     for (const [comp, base] of Object.entries(basesPorComp)) {
-      const valor = Number(new Decimal(base).times(0.08).toDP(2));
-      depositos.push({ competencia: comp, base, aliquota: 0.08, valor });
+      const valor = Number(new Decimal(base).times(aliqFGTS).toDP(2));
+      depositos.push({ competencia: comp, base, aliquota: aliqFGTS, valor });
       if (isDomestico) {
         // LC 150/2015, Art. 22: 3.2% indenização compensatória depositada mensalmente
         const indenComp = Number(new Decimal(base).times(0.032).toDP(2));
@@ -1661,8 +1668,8 @@ export class PjeCalcEngine {
       }
     }
     for (const [comp, base] of Object.entries(bases13PorComp)) {
-      const valor = Number(new Decimal(base).times(0.08).toDP(2));
-      depositos.push({ competencia: comp + '-13', base, aliquota: 0.08, valor });
+      const valor = Number(new Decimal(base).times(aliqFGTS).toDP(2));
+      depositos.push({ competencia: comp + '-13', base, aliquota: aliqFGTS, valor });
       if (isDomestico) {
         const indenComp = Number(new Decimal(base).times(0.032).toDP(2));
         depositos.push({ competencia: comp + '-13-inden', base, aliquota: 0.032, valor: indenComp });
@@ -1909,7 +1916,9 @@ export class PjeCalcEngine {
             const isDomesticoCS = this.csConfig.aliquota_segurado_tipo === 'domestico';
             const aliqEmp = isDomesticoCS ? 0.08 : (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
             const aliqSat = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
-            const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
+            // FPAS-based terceiros: use real rate by FPAS code when available
+            const fpas = this.csConfig.fpas_code ? getFPASByCodigo(this.csConfig.fpas_code) : undefined;
+            const aliqTerc = fpas ? fpas.entidades.reduce((s, e) => s + e.aliquota, 0) / 100 : (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
             // Apply correction factor from GT for employer CS
             const cf = correctionFactorByComp[comp] ?? 1;
             const correctedBase = cf > 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
@@ -2019,7 +2028,9 @@ export class PjeCalcEngine {
           const isDomesticoCS = this.csConfig.aliquota_segurado_tipo === 'domestico';
           const aliqEmp = isDomesticoCS ? 0.08 : (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
           const aliqSat = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
-          const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
+          // FPAS-based terceiros: use real rate by FPAS code when available
+          const fpasStd = this.csConfig.fpas_code ? getFPASByCodigo(this.csConfig.fpas_code) : undefined;
+          const aliqTerc = fpasStd ? fpasStd.entidades.reduce((s, e) => s + e.aliquota, 0) / 100 : (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
           empregador.push({
             competencia: comp,
             empresa: this.csConfig.apurar_empresa ? Number(new Decimal(base).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0,
@@ -3363,6 +3374,20 @@ export class PjeCalcEngine {
       this.verbaResultsMap.set(verba.id, result);
       audit('verba', `Verba "${verba.nome}": ${result.ocorrencias.length} oc, total=${result.total_diferenca.toFixed(2)}`, { rubrica: verba.nome, resultado: result.total_diferenca });
     };
+
+    // ── Reforma Trabalhista auto-switching (Lei 13.467/2017) ──
+    // For intrajornada verbas with periods spanning the Reforma date,
+    // auto-adjust incidences: remuneratória (pre) vs indenizatória (post).
+    for (const verba of this.verbas) {
+      if (verba.caracteristica === 'intrajornada' && verba.periodo_fim >= '2017-11') {
+        const rules = getReformaRules(verba.periodo_inicio || this.params.data_admissao);
+        if (rules.intervalo_natureza === 'indenizatoria') {
+          // Post-Reforma: intervalo intrajornada é indenizatório — sem reflexos em 13º/férias
+          verba.incidencias = { ...verba.incidencias, fgts: false, contribuicao_social: false };
+          audit('reforma', `Verba "${verba.nome}": natureza ajustada para indenizatória (pós-Reforma Art. 71 §4° CLT)`);
+        }
+      }
+    }
 
     // Process all verbas in dependency order
     const sorted = [...this.verbas].sort((a, b) => {

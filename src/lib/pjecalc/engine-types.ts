@@ -179,7 +179,14 @@ export interface PjeVerba {
 
   /** Art. 73 §1° CLT: hora noturna fictícia — cada hora real = 52,5 min → fator 8/7 sobre divisor */
   hora_noturna_ficticia?: boolean;
-  
+
+  /** Súmula 340 TST: comissionista puro — HE = apenas adicional (50%), não hora cheia (150%).
+   *  Quando true, o multiplicador de HE é aplicado como (mult - 1), ex: 1.5 → 0.5 */
+  sumula_340_comissionista?: boolean;
+
+  /** Tipo do empregado para FGTS: 'normal' (8%) ou 'aprendiz' (2%) — Lei 10.097/2000 */
+  tipo_fgts?: 'normal' | 'aprendiz';
+
   exclusoes: {
     faltas_justificadas: boolean;
     faltas_nao_justificadas: boolean;
