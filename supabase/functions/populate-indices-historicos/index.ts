@@ -135,11 +135,13 @@ serve(async (req) => {
 
   const results: Record<string, any> = {};
   
-  // Allow filtering to specific series via request body
+  // Allow filtering to specific series and daily window index
   let filterNames: string[] | null = null;
+  let dailyWindowIndex: number | null = null;
   try {
     const body = await req.json();
     if (body?.series && Array.isArray(body.series)) filterNames = body.series;
+    if (typeof body?.dailyWindow === 'number') dailyWindowIndex = body.dailyWindow;
   } catch { /* no body or invalid JSON */ }
 
   const seriesToProcess = filterNames 
