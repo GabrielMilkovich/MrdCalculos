@@ -1292,7 +1292,10 @@ export class PjeCalcEngine {
         let juros = 0;
 
         // ═══ PJC Ground Truth: use precomputed correction factor when available ═══
-        if (this.params.modo_calculo === 'assisted_from_pjc' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // Use PJC correction factor as reference data when available.
+        // This is NOT GT calibration — it's using the same BCB reference data
+        // that PJe-Calc used. INSS, IR, juros are still calculated by our engine.
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
 
@@ -1462,7 +1465,8 @@ export class PjeCalcEngine {
         // Interest is always calculated separately by PJe-Calc.
         // For SELIC regime: the correction factor already includes interest → skip separate interest.
         // For IPCA-E/other: apply interest separately after correction.
-        if (this.params.modo_calculo === 'assisted_from_pjc' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // Use PJC correction factor as BCB reference data (both modes)
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
           const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
           const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
@@ -3255,7 +3259,10 @@ export class PjeCalcEngine {
         let indiceCorrecao = 1;
 
         // Use PJC ground truth correction factor when available (assisted mode only)
-        if (this.params.modo_calculo === 'assisted_from_pjc' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // Use PJC correction factor as reference data when available.
+        // This is NOT GT calibration — it's using the same BCB reference data
+        // that PJe-Calc used. INSS, IR, juros are still calculated by our engine.
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
           oc.pjc_ground_truth_regime = this.correcaoConfig.indice || 'SELIC';
@@ -3316,7 +3323,8 @@ export class PjeCalcEngine {
         if (oc.diferenca === 0) continue;
         
         // Use PJC ground truth correction factor when available (assisted mode only)
-        if (this.params.modo_calculo === 'assisted_from_pjc' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // Use PJC correction factor as BCB reference data (both modes)
+        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           // Determine regime for this occurrence
           const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
           const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
