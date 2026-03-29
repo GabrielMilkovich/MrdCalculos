@@ -942,7 +942,21 @@ function parseOcorrencias(verbaEl: Element): {
   const ocListEl = verbaEl.getElementsByTagName('ocorrencias')[0];
   if (!ocListEl) return { ocorrencias, total_devido: 0, total_pago: 0, total_diferenca: 0 };
 
+  // First pass: collect indiceAcumulado from version-0 (original) occurrences by competencia.
+  // PJe-Calc stores indiceAcumulado on originals, not on calculated (versao>0) occurrences.
+  const indiceByComp = new Map<string, number>();
   const ocEls = ocListEl.getElementsByTagName('OcorrenciaDeVerba');
+  for (const oc of Array.from(ocEls)) {
+    const versao = parseInt(getTextContent(oc, 'versao')) || 0;
+    if (versao !== 0) continue;
+    const idx = parseNum(getTextContent(oc, 'indiceAcumulado'));
+    if (idx > 0) {
+      const comp = tsToDate(getTextContent(oc, 'dataInicial'));
+      if (comp) indiceByComp.set(comp.slice(0, 7), idx);
+    }
+  }
+
+  // Second pass: extract calculated occurrences (versao > 0)
   for (const oc of Array.from(ocEls)) {
     // Skip "original" sub-occurrences
     if (oc.parentElement?.tagName === 'ocorrenciaOriginal') continue;
@@ -955,8 +969,15 @@ function parseOcorrencias(verbaEl: Element): {
     total_devido += devido;
     total_pago += pago;
 
+    const comp = tsToDate(getTextContent(oc, 'dataInicial'));
+    // Use indiceAcumulado from calculated occurrence if present, otherwise
+    // fall back to the original occurrence for the same competencia
+    const indiceCalc = parseNum(getTextContent(oc, 'indiceAcumulado'));
+    const indiceFallback = indiceByComp.get(comp?.slice(0, 7) || '');
+    const indiceAcumulado = indiceCalc > 0 ? indiceCalc : (indiceFallback || undefined);
+
     ocorrencias.push({
-      competencia: tsToDate(getTextContent(oc, 'dataInicial')),
+      competencia: comp,
       base: parseNum(getTextContent(oc, 'base')),
       base_integral: parseNum(getTextContent(oc, 'baseIntegral')) || undefined,
       divisor: parseNum(getTextContent(oc, 'divisor')),
@@ -968,7 +989,7 @@ function parseOcorrencias(verbaEl: Element): {
       devido_integral: parseNum(getTextContent(oc, 'devidoIntegral')) || undefined,
       pago,
       pago_integral: parseNum(getTextContent(oc, 'pagoIntegral')) || undefined,
-      indice_acumulado: parseNum(getTextContent(oc, 'indiceAcumulado')) || undefined,
+      indice_acumulado: indiceAcumulado,
       caracteristica: getTextContent(oc, 'caracteristica'),
     });
   }

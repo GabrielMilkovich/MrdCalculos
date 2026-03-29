@@ -2376,7 +2376,8 @@ export class PjeCalcEngine {
 
     // When incidir_sobre_juros = false (PJe-Calc default), IR base uses
     // valor_corrigido (without juros). When true, uses valor_final (with juros).
-    const irUsarValorFinal = this.irConfig.incidir_sobre_juros !== false;
+    // Use strict === true so undefined/null defaults to excluding juros from IR base
+    const irUsarValorFinal = this.irConfig.incidir_sobre_juros === true;
 
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
