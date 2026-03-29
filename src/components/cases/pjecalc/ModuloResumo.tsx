@@ -403,7 +403,10 @@ export function ModuloResumo({ caseId }: Props) {
         engine_version: '2.1.0',
         resumo_verbas: result as any,
       });
-      if (resError) console.error("Erro ao persistir resultado:", resError);
+      if (resError) {
+        console.error("Erro ao persistir resultado:", resError);
+        toast.error("Erro ao salvar resultado no banco de dados. O cálculo foi executado mas pode não ter sido salvo.");
+      }
 
       // ── Persistir ocorrências calculadas na tabela REAL (pjecalc_ocorrencia_calculo) ──
       const ocRows: any[] = [];
@@ -440,7 +443,10 @@ export function ModuloResumo({ caseId }: Props) {
         // Insert in batches of 500
         for (let i = 0; i < ocRows.length; i += 500) {
           const { error: ocErr } = await supabase.from("pjecalc_ocorrencia_calculo" as any).insert(ocRows.slice(i, i + 500));
-          if (ocErr) console.error("Erro ao persistir ocorrências:", ocErr);
+          if (ocErr) {
+            console.error("Erro ao persistir ocorrências:", ocErr);
+            toast.warning("Algumas ocorrências podem não ter sido salvas. Tente recalcular.");
+          }
         }
       }
 
