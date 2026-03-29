@@ -33,7 +33,8 @@ async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false, windo
       ['01/01/2015', '31/12/2019'],
       ['01/01/2020', '31/12/2025'],
     ];
-    for (const [start, end] of windows) {
+    const selectedWindows = windowIndex !== null ? [windows[windowIndex]] : windows;
+    for (const [start, end] of selectedWindows) {
       // Try JSON first for daily series
       const jsonUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=json&dataInicial=${start}&dataFinal=${end}`;
       console.log(`Fetching daily ${serieId} window ${start}-${end} (JSON)...`);
