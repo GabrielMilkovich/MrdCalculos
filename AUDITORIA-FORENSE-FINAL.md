@@ -193,6 +193,24 @@ O sistema pode ser considerado equivalente ao PJe-Calc quando:
 
 ---
 
+## D3. ACHADOS DE CONFIABILIDADE E SEGURANÇA
+
+### SEGURANÇA — CRÍTICO
+**RLS `USING (true)` em TODAS as tabelas pjecalc_***. Qualquer usuário autenticado pode ler, modificar ou deletar cálculos de QUALQUER outro usuário. Tabelas de ocorrências permitem acesso ANÔNIMO. Dados sensíveis expostos: CPF, CNPJ, salários, cálculos judiciais.
+- Correção: substituir por `USING (EXISTS (SELECT 1 FROM cases c WHERE c.id = TABLE.case_id AND c.criado_por = auth.uid()))`
+
+### ERROS ENGOLIDOS — CRÍTICO
+**11+ funções no service.ts** e **9+ funções no orchestrator.ts** engolem erros com `catch { return null/[] }`. Se tabela de INSS/IR estiver inacessível (timeout, migration quebrada, DNS), o engine usa defaults 2025 sem nenhum aviso ao usuário. Persistência de resultado tem `console.error` mas não propaga o erro — chamador recebe sucesso.
+
+### NÃO-DETERMINISMO — CRÍTICO
+**10+ locais no engine.ts** usam `new Date()` como fallback para datas ausentes. Executar o mesmo cálculo em dias diferentes produz resultados diferentes. Fatal para processos judiciais onde reprodutibilidade é obrigatória.
+
+### CONCORRÊNCIA — ALTO
+Zero transações, zero locks, zero versionamento. Dois usuários calculando o mesmo caso simultaneamente produzem estado corrompido (ocorrências de ambos interleaved).
+
+### PERSISTÊNCIA — ALTO
+Ocorrências inseridas uma-a-uma em loop (potencialmente 6.000+ calls para caso longo). Janela máxima para falha parcial. Se browser fecha no meio, resultado salvo com metade das ocorrências.
+
 ## F. CONCLUSÃO HONESTA
 
 ### Distância do PJe-Calc
@@ -219,4 +237,11 @@ O motor de cálculo está **arquiteturalmente correto** — fórmula, ordem, tru
 5. Golden tests com .pjc real medindo delta por componente
 6. Versionamento de resultados
 
-O sistema é **funcional para uso profissional** hoje, com a ressalva de que divergências de centavos são prováveis em cálculos longos (>5 anos) por causa da perda de precisão nas conversões Number(). Para paridade exata com o PJe-Calc, é necessário eliminar essas conversões e validar contra casos reais.
+O sistema é **funcional como protótipo avançado**, mas **NÃO está pronto para produção** em contexto jurídico por causa de:
+1. **Segurança**: RLS aberto permite acesso cross-user a dados sensíveis
+2. **Confiabilidade**: erros engolidos silenciosamente podem produzir resultados errados sem aviso
+3. **Determinismo**: `new Date()` como fallback torna resultados não-reprodutíveis
+4. **Precisão**: correção monetária usa rounding mode errado, causando divergência de centavos
+5. **Persistência**: sem transações atômicas, resultados podem ser parcialmente salvos
+
+Para produção, é necessário: (a) corrigir RLS, (b) eliminar error swallowing, (c) eliminar new Date() fallbacks, (d) corrigir rounding de correção monetária, (e) envolver persistência em transação.
