@@ -348,6 +348,7 @@ function toEngineCsConfig(cfg: PjecalcCsConfigRow | null): PjeCSConfig {
     periodos_simples: Array.isArray(cfg?.periodos_simples) ? cfg!.periodos_simples as PjeCSConfig['periodos_simples'] : [],
     contribuicao_sindical: cfg?.contribuicao_sindical ?? false,
     contribuicao_sindical_pos2017: cfg?.contribuicao_sindical_pos2017 ?? false,
+    fpas_code: (cfg as Record<string, unknown> | null)?.fpas_code as string | undefined,
   };
 }
 
@@ -495,8 +496,8 @@ async function loadINSSFaixas(): Promise<PjeINSSFaixaRow[]> {
       aliquota: Number(r.aliquota || 0),
     }));
   } catch (e) {
-    console.warn('[ORCHESTRATOR] Failed to load INSS faixas:', e);
-    return [];
+    console.error('[ORCHESTRATOR] Failed to load INSS faixas:', e);
+    throw e; // MUST throw — empty faixas silently causes wrong CS calculations
   }
 }
 
@@ -518,8 +519,8 @@ async function loadIRFaixas(): Promise<PjeIRFaixaRow[]> {
       deducao_dependente: Number(r.deducao_dependente || 0),
     }));
   } catch (e) {
-    console.warn('[ORCHESTRATOR] Failed to load IR faixas:', e);
-    return [];
+    console.error('[ORCHESTRATOR] Failed to load IR faixas:', e);
+    throw e; // MUST throw — empty faixas silently causes wrong IR calculations
   }
 }
 
@@ -536,8 +537,8 @@ async function loadFeriados(): Promise<PjeFeriadoDB[]> {
       municipio: r.municipio ? String(r.municipio) : undefined,
     }));
   } catch (e) {
-    console.warn('[ORCHESTRATOR] Failed to load feriados:', e);
-    return [];
+    console.error('[ORCHESTRATOR] Failed to load feriados:', e);
+    throw e; // MUST throw — missing feriados causes wrong dias_uteis calculations
   }
 }
 
@@ -551,7 +552,14 @@ async function loadPensaoConfig(caseId: string): Promise<PjePensaoConfig> {
       valor_fixo: cfg.valor_fixo ? Number(cfg.valor_fixo) : undefined,
       base: (cfg.base_incidencia as 'liquido' | 'bruto' | 'bruto_menos_inss') || 'liquido',
     };
-  } catch { return { apurar: false, percentual: 0, base: 'liquido' }; }
+  } catch (err: any) {
+    // "No rows" is expected — pensao may not be configured
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) {
+      return { apurar: false, percentual: 0, base: 'liquido' };
+    }
+    console.error('[ORCHESTRATOR] Erro inesperado em loadPensaoConfig:', err);
+    throw err;
+  }
 }
 
 async function loadPrevPrivadaConfig(caseId: string): Promise<PjePrevidenciaPrivadaConfig> {
@@ -564,7 +572,13 @@ async function loadPrevPrivadaConfig(caseId: string): Promise<PjePrevidenciaPriv
       base_calculo: (cfg.base_calculo as 'diferenca' | 'devido' | 'corrigido') || 'diferenca',
       deduzir_ir: !!cfg.deduzir_ir,
     };
-  } catch { return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false }; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) {
+      return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false };
+    }
+    console.error('[ORCHESTRATOR] Erro inesperado em loadPrevPrivadaConfig:', err);
+    throw err;
+  }
 }
 
 async function loadSalarioFamiliaConfig(caseId: string): Promise<PjeSalarioFamiliaConfig> {
@@ -575,7 +589,13 @@ async function loadSalarioFamiliaConfig(caseId: string): Promise<PjeSalarioFamil
       apurar: !!cfg.apurar,
       numero_filhos: Number(cfg.numero_filhos || 0),
     };
-  } catch { return { apurar: false, numero_filhos: 0 }; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) {
+      return { apurar: false, numero_filhos: 0 };
+    }
+    console.error('[ORCHESTRATOR] Erro inesperado em loadSalarioFamiliaConfig:', err);
+    throw err;
+  }
 }
 
 async function loadIndicesDB(): Promise<PjeIndiceRow[]> {
@@ -598,8 +618,8 @@ async function loadIndicesDB(): Promise<PjeIndiceRow[]> {
     console.warn('[ORCHESTRATOR] No correction indices found in DB — fallback rates will be used');
     return [];
   } catch (e) {
-    console.warn('[ORCHESTRATOR] Failed to load correction indices:', e);
-    return [];
+    console.error('[ORCHESTRATOR] Failed to load correction indices:', e);
+    throw e; // MUST throw — empty indices silently causes wrong monetary correction
   }
 }
 
@@ -613,7 +633,11 @@ async function loadSeguroConfig(caseId: string): Promise<{ apurar: boolean; parc
       recebeu: (data.recebeu as boolean) ?? false,
       valor_parcela: data.valor_parcela ? Number(data.valor_parcela) : undefined,
     };
-  } catch { return null; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
+    console.error('[ORCHESTRATOR] Erro inesperado em loadSeguroConfig:', err);
+    throw err;
+  }
 }
 
 async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeguroDesempregoDB[]> {
@@ -633,7 +657,11 @@ async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeg
       }));
     }
     return [];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[ORCHESTRATOR] Erro inesperado em loadSeguroDesempregoDB:', err);
+    throw err;
+  }
 }
 
 async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalarioMinimoRow[]> {
@@ -650,7 +678,11 @@ async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalari
       }));
     }
     return [];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[ORCHESTRATOR] Erro inesperado em loadSalarioMinimoDB:', err);
+    throw err;
+  }
 }
 
 async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types').PjeExcecaoCargaHoraria[]> {
@@ -668,7 +700,11 @@ async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types
       }));
     }
     return [];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[ORCHESTRATOR] Erro inesperado em loadExcecoesCarga:', err);
+    throw err;
+  }
 }
 
 async function loadExcecoesSabado(caseId: string): Promise<import('./engine-types').PjeExcecaoSabado[]> {
@@ -686,7 +722,11 @@ async function loadExcecoesSabado(caseId: string): Promise<import('./engine-type
       }));
     }
     return [];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[ORCHESTRATOR] Erro inesperado em loadExcecoesSabado:', err);
+    throw err;
+  }
 }
 
 async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeSalarioFamiliaDB[]> {
@@ -705,9 +745,207 @@ async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeS
       }));
     }
     return [];
-  } catch { return []; }
+  } catch (err: any) {
+    if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
+    console.error('[ORCHESTRATOR] Erro inesperado em loadSalarioFamiliaDBRows:', err);
+    throw err;
+  }
 }
 
+
+// =====================================================
+// MULTAS CONFIG → ENGINE VERBAS
+// =====================================================
+
+/**
+ * Converts multas_config (persisted by ModuloMultasCLT) into PjeVerba entries
+ * that the engine can process through its generic formula.
+ *
+ * Handles:
+ * - Art. 467 CLT: 50% of uncontested amounts not paid at termination
+ * - Art. 477 CLT: penalty for late payment of termination amounts (1 month salary)
+ * - Generic multas/indenizações: each entry from multas_indenizacoes array
+ */
+function multasConfigToVerbas(
+  multasConfig: import('./types').PjecalcMultasConfigRow | null,
+  params: PjeParametros,
+  historicos: PjeHistoricoSalarial[],
+): PjeVerba[] {
+  if (!multasConfig) return [];
+  const cfg = multasConfig as unknown as Record<string, unknown>;
+  const result: PjeVerba[] = [];
+
+  // Get base salary from first historico for Art. 477
+  const baseSalario = historicos.length > 0 ? (historicos[0].valor_informado || 0) : 0;
+  const periodoFim = params.data_demissao || params.data_final || params.data_ajuizamento;
+  const periodoInicio = params.data_admissao || params.data_inicial || '';
+
+  const defaultVerba = (id: string, nome: string): PjeVerba => ({
+    id,
+    nome,
+    tipo: 'principal',
+    valor: 'informado',
+    caracteristica: 'comum',
+    ocorrencia_pagamento: 'desligamento',
+    compor_principal: true,
+    zerar_valor_negativo: false,
+    dobrar_valor_devido: false,
+    periodo_inicio: periodoFim || periodoInicio,
+    periodo_fim: periodoFim || periodoInicio,
+    base_calculo: { historicos: [], verbas: [], tabelas: [], proporcionalizar: false, integralizar: false },
+    tipo_divisor: 'informado',
+    divisor_informado: 1,
+    multiplicador: 1,
+    tipo_quantidade: 'informada',
+    quantidade_informada: 1,
+    quantidade_proporcionalizar: false,
+    exclusoes: { faltas_justificadas: false, faltas_nao_justificadas: false, ferias_gozadas: false },
+    incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false },
+    juros_ajuizamento: 'ocorrencias_vencidas',
+    gerar_verba_reflexa: 'diferenca',
+    gerar_verba_principal: 'diferenca',
+    ordem: 9000,
+  });
+
+  // Art. 467 CLT
+  if (cfg.apurar_467) {
+    const valor467 = Number(cfg.valor_467 || 0);
+    if (valor467 > 0) {
+      const v = defaultVerba('multa_467_auto', 'Multa Art. 467 CLT');
+      v.valor_informado_devido = valor467;
+      v.ordem = 9001;
+      result.push(v);
+    }
+  }
+
+  // Art. 477 CLT — 1 month salary as penalty for late termination payment
+  if (cfg.apurar_477) {
+    const tipo477 = (cfg.valor_477_tipo as string) || 'salario';
+    let valor477 = 0;
+    if (tipo477 === 'informado') {
+      valor477 = Number(cfg.valor_477_informado || 0);
+    } else {
+      valor477 = baseSalario;
+    }
+    if (valor477 > 0) {
+      const v = defaultVerba('multa_477_auto', 'Multa Art. 477 CLT');
+      v.valor_informado_devido = valor477;
+      v.ordem = 9002;
+      result.push(v);
+    }
+  }
+
+  // Generic multas/indenizações
+  const multas = cfg.multas_indenizacoes;
+  if (Array.isArray(multas)) {
+    multas.forEach((m: Record<string, unknown>, idx: number) => {
+      const descricao = String(m.descricao || `Multa/Indenização ${idx + 1}`);
+      const valorTipo = String(m.valor_tipo || 'informado');
+      const v = defaultVerba(`multa_ind_${idx}`, descricao);
+      v.ordem = 9010 + idx;
+
+      if (valorTipo === 'informado') {
+        v.valor_informado_devido = Number(m.valor || 0);
+      } else {
+        // Calculated: use aliquota over base (principal)
+        v.valor = 'calculado';
+        v.multiplicador = Number(m.aliquota || 0) / 100;
+        v.tipo_divisor = 'informado';
+        v.divisor_informado = 1;
+        // Base from historicos
+        if (historicos.length > 0) {
+          v.base_calculo.historicos = [historicos[0].id];
+        }
+      }
+
+      // Incidence flags
+      v.incidencias.irpf = !!(m.apurar_ir);
+
+      if (m.vencimento) {
+        v.periodo_inicio = String(m.vencimento);
+        v.periodo_fim = String(m.vencimento);
+      }
+
+      result.push(v);
+    });
+  }
+
+  // ── Periculosidade (Art. 193 CLT) ──
+  if (cfg.periculosidade_config) {
+    const pc = cfg.periculosidade_config as { ativo: boolean; percentual: string; periodo_inicio: string; periodo_fim: string; base_calculo: string };
+    if (pc.ativo) {
+      const v = defaultVerba('periculosidade_auto', 'Adicional de Periculosidade');
+      v.valor = 'calculado';
+      v.multiplicador = Number(pc.percentual || 30) / 100;
+      v.periodo_inicio = pc.periodo_inicio || periodoInicio;
+      v.periodo_fim = pc.periodo_fim || periodoFim;
+      v.ocorrencia_pagamento = 'mensal';
+      v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+      if (historicos.length > 0) v.base_calculo.historicos = [historicos[0].id];
+      v.ordem = 9020;
+      result.push(v);
+    }
+  }
+
+  // ── Danos Morais (Art. 223-G CLT) ──
+  if (cfg.danos_morais_config) {
+    const dm = cfg.danos_morais_config as { ativo: boolean; valor: string; data_sentenca: string };
+    if (dm.ativo && Number(dm.valor) > 0) {
+      const v = defaultVerba('danos_morais_auto', 'Indenização por Danos Morais');
+      v.valor_informado_devido = Number(dm.valor);
+      v.periodo_inicio = dm.data_sentenca || periodoFim;
+      v.periodo_fim = dm.data_sentenca || periodoFim;
+      v.incidencias = { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false };
+      v.ordem = 9030;
+      result.push(v);
+    }
+  }
+
+  // ── Equiparação Salarial (Art. 461 CLT) ──
+  if (cfg.equiparacao_config) {
+    const eq = cfg.equiparacao_config as {
+      ativo: boolean;
+      paradigma_nome: string;
+      periodo_inicio: string;
+      periodo_fim: string;
+      salarios: Array<{ competencia: string; salario_paradigma: string; salario_empregado: string }>;
+    };
+    if (eq.ativo && Array.isArray(eq.salarios) && eq.salarios.length > 0) {
+      eq.salarios.forEach((s, idx) => {
+        const diferenca = Number(s.salario_paradigma || 0) - Number(s.salario_empregado || 0);
+        if (diferenca > 0) {
+          const v = defaultVerba(`equiparacao_auto_${idx}`, `Diferença Salarial - Equiparação ${eq.paradigma_nome || ''} (${s.competencia})`);
+          v.valor_informado_devido = diferenca;
+          v.periodo_inicio = s.competencia || eq.periodo_inicio || periodoInicio;
+          v.periodo_fim = s.competencia || eq.periodo_fim || periodoFim;
+          v.ocorrencia_pagamento = 'mensal';
+          v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+          v.ordem = 9040 + idx;
+          result.push(v);
+        }
+      });
+    }
+  }
+
+  // ── Estabilidade Provisória ──
+  if (cfg.estabilidade_config) {
+    const est = cfg.estabilidade_config as { ativo: boolean; tipo: string; periodo_inicio: string; periodo_fim: string };
+    if (est.ativo && est.periodo_inicio && est.periodo_fim) {
+      const v = defaultVerba('estabilidade_auto', `Indenização Estabilidade (${est.tipo || 'provisória'})`);
+      v.valor = 'calculado';
+      v.multiplicador = 1;
+      v.periodo_inicio = est.periodo_inicio;
+      v.periodo_fim = est.periodo_fim;
+      v.ocorrencia_pagamento = 'mensal';
+      v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+      if (historicos.length > 0) v.base_calculo.historicos = [historicos[0].id];
+      v.ordem = 9050;
+      result.push(v);
+    }
+  }
+
+  return result;
+}
 
 export async function executarLiquidacao(
   caseId: string,
@@ -861,6 +1099,17 @@ export async function executarLiquidacao(
   }));
 
   let engineVerbas = toEngineVerbas(caseData.verbas);
+
+  // ── Generate verbas from multas_config (multas/indenizações from ModuloMultasCLT) ──
+  const multasVerbas = multasConfigToVerbas(
+    caseData.multasConfig,
+    engineParams,
+    engineHistoricos,
+  );
+  if (multasVerbas.length > 0) {
+    engineVerbas = [...engineVerbas, ...multasVerbas];
+    console.log(`[ORCHESTRATOR] Generated ${multasVerbas.length} verbas from multas_config`);
+  }
 
   console.log(`[ORCHESTRATOR] Loaded ${engineVerbas.length} verbas from DB (principals: ${engineVerbas.filter(v => v.tipo === 'principal').length}, reflexas: ${engineVerbas.filter(v => v.tipo === 'reflexa').length})`);
 

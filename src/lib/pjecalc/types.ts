@@ -475,6 +475,7 @@ export interface PjecalcCsConfigRow {
   aliquota_sat_fixa?: number;
   aliquota_terceiros?: number;
   aliquota_terceiros_fixa?: number;
+  fpas_code?: string;
   periodos_simples?: unknown[];
   contribuicao_sindical?: boolean;
   contribuicao_sindical_pos2017?: boolean;
@@ -495,6 +496,7 @@ export interface PjecalcCsConfigInsert {
   aliquota_empresa_fixa?: number;
   aliquota_sat_fixa?: number;
   aliquota_terceiros_fixa?: number;
+  fpas_code?: string;
 }
 
 export interface PjecalcIrConfigRow {

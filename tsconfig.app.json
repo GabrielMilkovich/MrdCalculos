@@ -12,10 +12,12 @@
     "moduleDetection": "force",
     "moduleResolution": "bundler",
     "noEmit": true,
-    "noFallthroughCasesInSwitch": false,
+    "noFallthroughCasesInSwitch": true,
     "noImplicitAny": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
     "paths": {
       "@/*": [
         "./src/*"

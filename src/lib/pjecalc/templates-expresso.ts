@@ -449,6 +449,154 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
       { nome: 'Saldo de Salário', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: { ...EXC_NENHUMA, faltas_nao_justificadas: true } },
     ],
   },
+  {
+    // Estabilidade Acidentária — Art. 118, Lei 8.213/91 (12 meses após alta previdenciária)
+    id: 'estabilidade_acidentaria',
+    nome: 'Estabilidade Acidentária',
+    descricao: 'Salários do período estabilitário por acidente de trabalho (art. 118, Lei 8.213/91 — 12 meses)',
+    categoria: 'misto',
+    icone: 'HeartPulse',
+    verbas: [
+      { nome: 'Salários Período Estabilitário (Acidente)', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Aviso Prévio Proporcional — Lei 12.506/2011 (30d + 3d por ano de serviço, max 90d)
+    id: 'aviso_previo_proporcional',
+    nome: 'Aviso Prévio Proporcional',
+    descricao: 'Aviso prévio indenizado proporcional ao tempo de serviço (Lei 12.506/2011: 30d + 3d/ano, max 90d)',
+    categoria: 'rescisao',
+    icone: 'CalendarClock',
+    verbas: [
+      { nome: 'Aviso Prévio Proporcional', tipo: 'principal', caracteristica: 'aviso_previo', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 30, tipo_divisor: 'informado', tipo_quantidade: 'apurada', quantidade_informada: 30, compor_principal: true, incidencias: INC_AVISO, exclusoes: EXC_NENHUMA },
+      { nome: '13º Salário Proporcional (Aviso)', tipo: 'principal', caracteristica: '13_salario', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+      { nome: 'Férias Proporcionais + 1/3 (Aviso)', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'desligamento', multiplicador: 4 / 3, divisor_informado: 12, tipo_divisor: 'informado', tipo_quantidade: 'avos', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS_INDENIZADAS, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Danos Morais — Art. 223-G CLT (valor fixo arbitrado pelo juízo)
+    id: 'danos_morais',
+    nome: 'Danos Morais (Valor Fixo)',
+    descricao: 'Indenização por danos morais — valor fixo com correção monetária (art. 223-G CLT)',
+    categoria: 'misto',
+    icone: 'Heart',
+    verbas: [
+      { nome: 'Indenização por Danos Morais', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Cesta Básica / Vale-Alimentação não concedido — PAT, Lei 6.321/76
+    id: 'cesta_basica',
+    nome: 'Cesta Básica / Vale-Alimentação',
+    descricao: 'Indenização por cesta básica ou vale-alimentação não concedido (natureza indenizatória)',
+    categoria: 'misto',
+    icone: 'ShoppingBasket',
+    verbas: [
+      { nome: 'Cesta Básica / Vale-Alimentação', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Salário-Maternidade — Art. 392 CLT (120 dias)
+    id: 'salario_maternidade',
+    nome: 'Salário-Maternidade (Art. 392 CLT)',
+    descricao: 'Salário integral durante licença-maternidade (120 dias) — INSS patronal incide, sem FGTS do empregado',
+    categoria: 'misto',
+    icone: 'Baby',
+    verbas: [
+      { nome: 'Salário-Maternidade', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 4, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Indenização Adicional Pré-Database — Lei 7.238/84, Art. 9°
+    id: 'indenizacao_pre_database',
+    nome: 'Indenização Pré-Database (Lei 7.238/84)',
+    descricao: 'Indenização adicional por demissão 30 dias antes da data-base — 1 salário mensal (Súmula 314 TST)',
+    categoria: 'rescisao',
+    icone: 'CalendarX',
+    verbas: [
+      { nome: 'Indenização Adicional Pré-Database', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Multas Normativas — CCT/ACT (convenção/acordo coletivo)
+    id: 'multas_normativas',
+    nome: 'Multas Normativas (CCT/ACT)',
+    descricao: 'Multas de convenção coletiva — valor fixo ou valor diário × dias (natureza indenizatória)',
+    categoria: 'misto',
+    icone: 'FileWarning',
+    verbas: [
+      { nome: 'Multa Normativa (CCT/ACT)', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Gratificação de Função — Art. 468 CLT + Súmula 372 TST
+    // (already exists as template 'gratificacao_funcao' above — this is the module-backed version)
+    id: 'gratificacao_funcao_reflexos',
+    nome: 'Gratificação de Função + Reflexos',
+    descricao: 'Gratificação de função incorporada após 10+ anos (Art. 468 CLT, Súmula 372 TST) com reflexos',
+    categoria: 'misto',
+    icone: 'Award',
+    verbas: [
+      { nome: 'Gratificação de Função', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 0.30, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Reintegração — salários do período entre demissão e reintegração judicial
+    id: 'reintegracao',
+    nome: 'Reintegração Judicial',
+    descricao: 'Salários integrais do período entre demissão ilícita e reintegração judicial + reflexos',
+    categoria: 'misto',
+    icone: 'RotateCcw',
+    verbas: [
+      { nome: 'Salários Período Reintegração', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Expurgos Inflacionários do FGTS — Planos Verão, Collor I e II
+    id: 'expurgos_fgts',
+    nome: 'Expurgos Inflacionários FGTS',
+    descricao: 'Diferenças de correção monetária dos planos econômicos: Verão (42.72%), Collor I (44.80%), Collor II (21.87%)',
+    categoria: 'misto',
+    icone: 'Landmark',
+    verbas: [
+      { nome: 'Expurgo FGTS - Plano Verão', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 0.4272, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+      { nome: 'Expurgo FGTS - Collor I', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 0.4480, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+      { nome: 'Expurgo FGTS - Collor II', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 0.2187, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Trabalho Intermitente — Art. 443 §3° e 452-A CLT
+    id: 'trabalho_intermitente',
+    nome: 'Trabalho Intermitente (Art. 452-A CLT)',
+    descricao: 'Salário por período trabalhado + férias proporcionais + 1/3 + 13° proporcional + FGTS (Reforma Trabalhista)',
+    categoria: 'misto',
+    icone: 'CalendarRange',
+    verbas: [
+      { nome: 'Salário Intermitente', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 220, tipo_divisor: 'carga_horaria', tipo_quantidade: 'cartao_ponto', quantidade_informada: 0, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+      { nome: 'Férias Proporcionais Intermitente + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'mensal', multiplicador: 4 / 3 / 12, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS_INDENIZADAS, exclusoes: EXC_NENHUMA },
+      { nome: '13° Proporcional Intermitente', tipo: 'principal', caracteristica: '13_salario', ocorrencia_pagamento: 'mensal', multiplicador: 1 / 12, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Gorjetas — Art. 457 CLT
+    id: 'gorjetas',
+    nome: 'Gorjetas (Art. 457 CLT)',
+    descricao: 'Gorjetas integram salário para todos os fins — reflexos em 13°, férias, FGTS, DSR (art. 457 CLT)',
+    categoria: 'misto',
+    icone: 'HandCoins',
+    verbas: [
+      { nome: 'Gorjetas', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Grupo Econômico — Art. 2° §2° CLT (informacional)
+    id: 'grupo_economico',
+    nome: 'Grupo Econômico (Art. 2° §2° CLT)',
+    descricao: 'Solidariedade entre empresas do mesmo grupo econômico — distribuição do débito entre reclamados',
+    categoria: 'misto',
+    icone: 'Building2',
+    verbas: [],
+  },
 ];
 
 /**

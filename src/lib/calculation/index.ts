@@ -1,11 +1,21 @@
 // =====================================================
-// MOTOR DE CÁLCULO TRABALHISTA - EXPORTAÇÕES
+// MOTOR DE CÁLCULO — REDIRECIONAMENTO
+// =====================================================
+// O motor canônico é PjeCalcEngine em src/lib/pjecalc/engine.ts
+// Este barrel mantém apenas exports de utilidades ainda em uso:
+// - tipos compartilhados
+// - calendario-trabalhista
+// - premissas-juridicas
+// - ReportGenerator, SituationAnalyzer, TestScenarios
+//
+// A classe CalculationEngine (V1) está DEPRECATED.
+// Use PjeCalcEngine para todos os cálculos novos.
 // =====================================================
 
-// Tipos principais
+// Tipos compartilhados (ainda usados por componentes legados)
 export * from './types';
 
-// Engine e helpers
+// DEPRECATED: V1 engine class — manter temporariamente para evitar quebra de build
 export {
   CalculationEngine,
   registerCalculator,
@@ -15,12 +25,3 @@ export {
   getTaxTable,
   calcularImposto,
 } from './engine';
-
-// Calculadoras individuais
-export { createHorasExtrasCalculator } from './calculators/horas-extras';
-export { createReflexos13Calculator } from './calculators/reflexos-13';
-export { createReflexosFeriasCalculator } from './calculators/reflexos-ferias';
-export { createFGTSCalculator } from './calculators/fgts';
-export { createINSSCalculator } from './calculators/inss';
-export { createAtualizacaoMonetariaCalculator } from './calculators/atualizacao-monetaria';
-export { createIntrajornadaCalculator } from './calculators/intrajornada';

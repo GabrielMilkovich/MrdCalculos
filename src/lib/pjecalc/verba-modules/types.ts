@@ -2,10 +2,19 @@
  * =====================================================
  * VERBA MODULE SYSTEM — INTERFACE DE MÓDULOS PLUG-IN
  * =====================================================
- * 
- * Cada verba (HE, DSR, Comissões, Rescisórias, etc.) é um módulo
- * independente que implementa esta interface. O motor executa cada
- * módulo na ordem correta respeitando dependências.
+ *
+ * STATUS: NÃO INTEGRADO AO FLUXO DE PRODUÇÃO.
+ *
+ * O PjeCalcEngine (engine.ts) usa uma fórmula genérica parametrizada
+ * pela configuração da PjeVerba, e NÃO chama estes módulos.
+ * Estes módulos são usados apenas pelo domain-orchestrator.ts (V3,
+ * não o orchestrador de produção) e por testes unitários.
+ *
+ * Para que regras de negócio específicas de cada verba cheguem ao
+ * cálculo real, elas devem ser configuradas via PjeVerba (multiplicador,
+ * divisor, tipo_quantidade, incidências, etc.) — NÃO por este sistema.
+ *
+ * Mantido como referência de lógica jurídica e para testes.
  */
 
 import type { PjeVerba, PjeOcorrenciaResult, PjeHistoricoSalarial, PjeCartaoPonto, PjeFalta, PjeFerias } from '../engine-types';
