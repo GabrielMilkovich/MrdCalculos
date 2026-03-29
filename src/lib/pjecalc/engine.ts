@@ -2765,13 +2765,13 @@ export class PjeCalcEngine {
       if (isIndependent) {
         // P0-4: Independent mode — data_citacao is ALWAYS required, no heuristics allowed.
         const reason = isADC || isCombinacoesADC
-          ? 'ADC 58/59 (IPCA-E/SELIC) exige data_citacao para o split de correção'
+          ? 'Modo independente com ADC 58/59 exige data de citação. Preencha em Dados do Processo > Datas Processuais.'
           : jurosFromCitacao
-            ? 'juros_inicio=citacao exige data_citacao para base correta dos juros'
-            : 'data_citacao é obrigatória no modo independente para garantir determinismo';
+            ? 'juros_inicio=citacao exige data_citacao para base correta dos juros. Preencha em Dados do Processo > Datas Processuais.'
+            : 'data_citacao é obrigatória no modo independente para garantir determinismo. Preencha em Dados do Processo > Datas Processuais.';
         itens.push({
           tipo: 'erro', modulo: 'Parâmetros',
-          mensagem: `E_CITACAO_OBRIGATORIA: ${reason}. Preencha em Dados do Processo → Datas Processuais → Citação.`,
+          mensagem: `E_CITACAO_OBRIGATORIA: ${reason}`,
           detalhe: 'No modo independente não há estimativa de data_citacao. Informe a data real do mandado de citação.',
         });
       } else if (this.params.data_ajuizamento) {
@@ -3439,6 +3439,13 @@ export class PjeCalcEngine {
     // ── 0. Validação pré-liquidação ──
     const validacao = this.validarPreLiquidacao();
     audit('validacao', `Pré-validação: ${validacao.valido ? 'OK' : validacao.itens.length + ' issues'}`);
+
+    // GARGALO-1: Block calculation when validation has blocking errors (tipo === 'erro')
+    const blockingErrors = validacao.itens.filter(i => i.tipo === 'erro');
+    if (blockingErrors.length > 0) {
+      const errorMsgs = blockingErrors.map(e => e.mensagem).join('; ');
+      throw new Error(`Cálculo bloqueado por ${blockingErrors.length} erro(s) de validação: ${errorMsgs}`);
+    }
 
     // ── 1. Topological sort: principals first, then reflexas in dependency order ──
     // This supports reflex-on-reflex (e.g., HE → DSR → 13º s/ DSR)

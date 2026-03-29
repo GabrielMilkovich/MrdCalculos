@@ -13,3 +13,4 @@ export { renderFGTSDetail } from './fgts-detail';
 export { renderINSSDetail } from './inss-detail';
 export { renderIRDetail } from './ir-detail';
 export { renderTotals } from './totals';
+export { renderWarnings } from './warnings';

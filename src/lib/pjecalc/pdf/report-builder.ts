@@ -30,6 +30,7 @@ import {
   renderINSSDetail,
   renderIRDetail,
   renderTotals,
+  renderWarnings,
 } from './sections';
 
 /**
@@ -141,6 +142,14 @@ export function buildMemoriaDeCalculo(
       visible: result.imposto_renda.imposto_devido > 0,
       pageBreakBefore: true,
       render: (c) => renderPageHeader(c) + renderIRDetail(c),
+    },
+    {
+      id: 'warnings',
+      title: 'Avisos e Ressalvas',
+      type: 'custom',
+      visible: (result.calculation_warnings?.length ?? 0) > 0,
+      pageBreakBefore: true,
+      render: (c) => renderPageHeader(c) + renderWarnings(c),
     },
     {
       id: 'totals',

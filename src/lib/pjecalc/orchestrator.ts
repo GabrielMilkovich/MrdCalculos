@@ -601,12 +601,12 @@ async function loadSalarioFamiliaConfig(caseId: string): Promise<PjeSalarioFamil
 async function loadIndicesDB(): Promise<PjeIndiceRow[]> {
   try {
     const { data: indicesData } = await supabase
-      .from('pjecalc_correcao_monetaria' as any)
+      .from('pjecalc_correcao_monetaria')
       .select('indice, competencia, valor, acumulado')
       .order('indice')
       .order('competencia');
     if (indicesData && indicesData.length > 0) {
-      const result = (indicesData as any[]).map(r => ({
+      const result = indicesData.map(r => ({
         indice: r.indice,
         competencia: r.competencia,
         valor: Number(r.valor),
@@ -643,13 +643,13 @@ async function loadSeguroConfig(caseId: string): Promise<{ apurar: boolean; parc
 async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeguroDesempregoDB[]> {
   try {
     const { data } = await supabase
-      .from('pjecalc_seguro_desemprego' as any)
+      .from('pjecalc_seguro_desemprego')
       .select('competencia, faixa, valor_inicial, valor_final, percentual, valor_soma, valor_piso, valor_teto')
       .order('competencia', { ascending: false })
       .order('faixa');
     if (data && data.length > 0) {
       console.log(`[ORCHESTRATOR] Loaded ${data.length} seguro-desemprego faixas from DB`);
-      return (data as any[]).map(r => ({
+      return data.map(r => ({
         competencia: r.competencia, faixa: Number(r.faixa),
         valor_inicial: Number(r.valor_inicial), valor_final: Number(r.valor_final),
         percentual: Number(r.percentual), valor_soma: Number(r.valor_soma),
@@ -667,12 +667,12 @@ async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeg
 async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalarioMinimoRow[]> {
   try {
     const { data } = await supabase
-      .from('pjecalc_salario_minimo' as any)
+      .from('pjecalc_salario_minimo')
       .select('competencia, valor')
       .order('competencia', { ascending: true });
     if (data && data.length > 0) {
       console.log(`[ORCHESTRATOR] Loaded ${data.length} salário mínimo registros from DB`);
-      return (data as any[]).map(r => ({
+      return data.map(r => ({
         competencia: r.competencia,
         valor: Number(r.valor),
       }));
@@ -693,7 +693,7 @@ async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types
       .eq('case_id', caseId);
     if (data && data.length > 0) {
       console.log(`[ORCHESTRATOR] Loaded ${data.length} exceções de carga horária`);
-      return (data as any[]).map(r => ({
+      return (data as { periodo_inicio: string; periodo_fim: string; carga_horaria_mensal: number }[]).map(r => ({
         data_inicial: r.periodo_inicio,
         data_final: r.periodo_fim,
         carga_horaria: Number(r.carga_horaria_mensal),
@@ -715,7 +715,7 @@ async function loadExcecoesSabado(caseId: string): Promise<import('./engine-type
       .eq('case_id', caseId);
     if (data && data.length > 0) {
       console.log(`[ORCHESTRATOR] Loaded ${data.length} exceções de sábado`);
-      return (data as any[]).map(r => ({
+      return (data as { data_inicio: string; data_fim: string; sabado_dia_util: boolean }[]).map(r => ({
         data_inicial: r.data_inicio,
         data_final: r.data_fim,
         sabado_dia_util: Boolean(r.sabado_dia_util),
@@ -732,13 +732,13 @@ async function loadExcecoesSabado(caseId: string): Promise<import('./engine-type
 async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeSalarioFamiliaDB[]> {
   try {
     const { data } = await supabase
-      .from('pjecalc_salario_familia' as any)
+      .from('pjecalc_salario_familia')
       .select('competencia, faixa, valor_inicial, valor_final, valor_cota')
       .order('competencia', { ascending: false })
       .order('faixa');
     if (data && data.length > 0) {
       console.log(`[ORCHESTRATOR] Loaded ${data.length} salário-família faixas from DB`);
-      return (data as any[]).map(r => ({
+      return data.map(r => ({
         competencia: r.competencia, faixa: Number(r.faixa),
         valor_inicial: Number(r.valor_inicial), valor_final: Number(r.valor_final),
         valor_cota: Number(r.valor_cota),

@@ -216,3 +216,110 @@ export function listarTemplatesReflexo(): { sufixo: string; caracteristica: stri
     descricao: `${t.sufixo} — ${t.comportamento_reflexo}, div ${t.divisor_valor}, mult ${t.multiplicador}`,
   }));
 }
+
+// ── Cascade definitions ──
+// PJe-Calc cascade rules: DSR/RSR sobre HE → 13º sobre DSR → Férias sobre 13º
+interface CascadeRule {
+  /** Template sufixo that generates the source reflexo */
+  sourceSufixo: string;
+  /** Template sufixos to apply on top of that source reflexo */
+  targetSufixos: string[];
+}
+
+const CASCADE_RULES: CascadeRule[] = [
+  {
+    // DSR/RSR sobre HE → then 13º and Férias cascade on top of DSR
+    sourceSufixo: 'REPOUSO SEMANAL REMUNERADO',
+    targetSufixos: ['13º SALÁRIO', 'FÉRIAS + 1/3'],
+  },
+  {
+    // 13º sobre DSR → then Férias cascades on top of 13º
+    sourceSufixo: '13º SALÁRIO',
+    targetSufixos: ['FÉRIAS + 1/3'],
+  },
+];
+
+/**
+ * Gera reflexos com cascatas completas (reflexo-sobre-reflexo).
+ *
+ * PJe-Calc cascade: DSR sobre HE → 13º sobre DSR → Férias sobre 13º.
+ * The engine's DAG (processVerba topological sort) handles execution order;
+ * this function generates the cascade ENTRIES so the engine has them.
+ *
+ * @param verbasBase - verbas principais (e.g., Horas Extras)
+ * @param templates - reflexo templates to use (defaults to REFLEXO_TEMPLATES)
+ * @param excludeTemplates - template sufixos to skip
+ * @param enableCascade - whether to generate reflexo-on-reflexo entries (default true)
+ */
+export function gerarReflexosComCascata(
+  verbasBase: VerbaBase[],
+  templates: ReflexoTemplate[] = REFLEXO_TEMPLATES,
+  excludeTemplates: string[] = [],
+  enableCascade = true,
+): ReflexoGerado[] {
+  // Step 1: Generate direct reflexos (level 1)
+  const directReflexos = gerarReflexosPadrao(verbasBase, templates, excludeTemplates);
+
+  if (!enableCascade) return directReflexos;
+
+  // Step 2: Generate cascade reflexos (level 2+)
+  const cascadeReflexos: ReflexoGerado[] = [];
+  let nextOrdemOffset = 500; // cascade entries start after direct reflexos
+
+  for (const rule of CASCADE_RULES) {
+    // Find all level-1 reflexos that match the source template
+    const sourceReflexos = directReflexos.filter(r =>
+      r.nome.startsWith(rule.sourceSufixo + ' SOBRE'),
+    );
+
+    for (const sourceRef of sourceReflexos) {
+      // Skip if excluded
+      if (excludeTemplates.includes(rule.sourceSufixo)) continue;
+
+      for (const targetSufixo of rule.targetSufixos) {
+        if (excludeTemplates.includes(targetSufixo)) continue;
+
+        const targetTemplate = templates.find(t => t.sufixo === targetSufixo);
+        if (!targetTemplate) continue;
+
+        // Avoid generating duplicates (e.g., 13º SOBRE 13º SOBRE ...)
+        const cascadeName = `${targetSufixo} SOBRE ${sourceRef.nome}`;
+        if (cascadeReflexos.some(r => r.nome === cascadeName)) continue;
+        if (directReflexos.some(r => r.nome === cascadeName)) continue;
+
+        // Skip self-referential cascades
+        if (targetSufixo.includes('13º') && sourceRef.nome.includes('13º')) continue;
+        if (targetSufixo.includes('FÉRIAS') && sourceRef.nome.includes('FÉRIAS')) continue;
+        if (targetSufixo.includes('REPOUSO') && sourceRef.nome.includes('REPOUSO')) continue;
+
+        // Generate a virtual verba_principal_id for this cascade.
+        // The engine resolves this via verbaResultsMap keyed by verba.id.
+        const cascadeId = `cascade_${sourceRef.verba_principal_id}_${rule.sourceSufixo}_${targetSufixo}`.replace(/\s+/g, '_');
+
+        cascadeReflexos.push({
+          nome: cascadeName,
+          tipo: 'reflexa',
+          verba_principal_id: sourceRef.nome, // will be resolved by name in the engine DAG
+          verba_principal_nome: sourceRef.nome,
+          caracteristica: targetTemplate.caracteristica,
+          ocorrencia_pagamento: targetTemplate.ocorrencia_pagamento,
+          comportamento_reflexo: targetTemplate.comportamento_reflexo,
+          periodo_media_reflexo: targetTemplate.periodo_media_reflexo,
+          tratamento_fracao_mes: targetTemplate.tratamento_fracao_mes,
+          multiplicador: targetTemplate.multiplicador,
+          divisor_tipo: targetTemplate.divisor_tipo,
+          divisor_valor: targetTemplate.divisor_valor,
+          tipo_quantidade: targetTemplate.tipo_quantidade,
+          gerar_principal: targetTemplate.gerar_principal,
+          gerar_reflexo: targetTemplate.gerar_reflexo,
+          incidencias: { ...targetTemplate.incidencias },
+          ordem: sourceRef.ordem + nextOrdemOffset++,
+          base_verbas: [sourceRef.verba_principal_id],
+          integralizar_base: targetTemplate.integralizar_base,
+        });
+      }
+    }
+  }
+
+  return [...directReflexos, ...cascadeReflexos].sort((a, b) => a.ordem - b.ordem);
+}
