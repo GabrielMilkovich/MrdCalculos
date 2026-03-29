@@ -35,3 +35,5 @@ import './indenizacao-pre-database';
 import './multas-normativas';
 import './gratificacao-funcao';
 import './reintegracao';
+import './trabalho-intermitente';
+import './gorjetas';

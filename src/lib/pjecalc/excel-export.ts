@@ -1,6 +1,6 @@
 /**
  * PJe-Calc — Exportacao Excel/CSV
- * Generates XLSX (via JSZip multi-CSV bundle) and single CSV exports.
+ * Generates native XLSX (Office Open XML) and single CSV exports.
  */
 import type {
   PjeLiquidacaoResult,
@@ -9,7 +9,7 @@ import type {
   PjeOcorrenciaResult,
   PjeResumo,
 } from './engine-types';
-import JSZip from 'jszip';
+import { generateXlsx } from './xlsx-generator';
 
 // =====================================================
 // FORMATTERS
@@ -88,10 +88,10 @@ export const DEFAULT_SHEETS: ExcelSheetSelection = {
   memoria: true,
 };
 
-/** Sheet 1: Resumo Geral */
-function buildResumoSheet(result: PjeLiquidacaoResult, params?: PjeParametros): string {
+/** Sheet 1: Resumo Geral — returns [headers, ...rows] */
+function buildResumoData(result: PjeLiquidacaoResult, params?: PjeParametros): (string | number)[][] {
   const r = result.resumo;
-  const headers = ['Descrição', 'Valor (R$)'];
+  const headers: (string | number)[] = ['Descrição', 'Valor (R$)'];
   const rows: (string | number)[][] = [
     ['Principal Bruto', fmtBRL(r.principal_bruto)],
     ['Principal Corrigido', fmtBRL(r.principal_corrigido)],
@@ -137,12 +137,17 @@ function buildResumoSheet(result: PjeLiquidacaoResult, params?: PjeParametros): 
     );
   }
 
-  return buildCSV(headers, rows);
+  return [headers, ...rows];
 }
 
-/** Sheet 2: Verbas Detalhadas */
-function buildVerbasSheet(result: PjeLiquidacaoResult): string {
-  const headers = [
+function buildResumoSheet(result: PjeLiquidacaoResult, params?: PjeParametros): string {
+  const data = buildResumoData(result, params);
+  return buildCSV(data[0] as string[], data.slice(1));
+}
+
+/** Sheet 2: Verbas Detalhadas — returns [headers, ...rows] */
+function buildVerbasData(result: PjeLiquidacaoResult): (string | number)[][] {
+  const headers: (string | number)[] = [
     'Verba', 'Tipo', 'Característica', 'Competência',
     'Base', 'Divisor', 'Multiplicador', 'Quantidade', 'Dobra',
     'Devido', 'Pago', 'Diferença',
@@ -186,12 +191,17 @@ function buildVerbasSheet(result: PjeLiquidacaoResult): string {
     rows.push(new Array(16).fill(''));
   }
 
-  return buildCSV(headers, rows);
+  return [headers, ...rows];
 }
 
-/** Sheet 3: Correção Monetária (month by month across all verbas) */
-function buildCorrecaoSheet(result: PjeLiquidacaoResult): string {
-  const headers = [
+function buildVerbasSheet(result: PjeLiquidacaoResult): string {
+  const data = buildVerbasData(result);
+  return buildCSV(data[0] as string[], data.slice(1));
+}
+
+/** Sheet 3: Correção Monetária — returns [headers, ...rows] */
+function buildCorrecaoData(result: PjeLiquidacaoResult): (string | number)[][] {
+  const headers: (string | number)[] = [
     'Verba', 'Competência', 'Diferença', 'Índice Acumulado',
     'Valor Corrigido', 'Juros', 'Total com Juros',
   ];
@@ -212,13 +222,18 @@ function buildCorrecaoSheet(result: PjeLiquidacaoResult): string {
     }
   }
 
-  return buildCSV(headers, rows);
+  return [headers, ...rows];
 }
 
-/** Sheet 4: INSS/CS Detalhado */
-function buildINSSSheet(result: PjeLiquidacaoResult): string {
+function buildCorrecaoSheet(result: PjeLiquidacaoResult): string {
+  const data = buildCorrecaoData(result);
+  return buildCSV(data[0] as string[], data.slice(1));
+}
+
+/** Sheet 4: INSS/CS Detalhado — returns [headers, ...rows] */
+function buildINSSData(result: PjeLiquidacaoResult): (string | number)[][] {
   const cs = result.contribuicao_social;
-  const headers = ['Tipo', 'Competência', 'Base', 'Alíquota', 'Valor', 'Recolhido', 'Diferença'];
+  const headers: (string | number)[] = ['Tipo', 'Competência', 'Base', 'Alíquota', 'Valor', 'Recolhido', 'Diferença'];
   const rows: (string | number)[][] = [];
 
   for (const s of cs.segurado_devidos) {
@@ -269,13 +284,18 @@ function buildINSSSheet(result: PjeLiquidacaoResult): string {
   }
   rows.push(['TOTAL Empregador', '', '', '', '', fmtBRL(cs.total_empregador), '']);
 
-  return buildCSV(headers, rows);
+  return [headers, ...rows];
 }
 
-/** Sheet 5: IRRF Detalhado */
-function buildIRRFSheet(result: PjeLiquidacaoResult): string {
+function buildINSSSheet(result: PjeLiquidacaoResult): string {
+  const data = buildINSSData(result);
+  return buildCSV(data[0] as string[], data.slice(1));
+}
+
+/** Sheet 5: IRRF Detalhado — returns [headers, ...rows] */
+function buildIRRFData(result: PjeLiquidacaoResult): (string | number)[][] {
   const ir = result.imposto_renda;
-  const headers = ['Descrição', 'Valor'];
+  const headers: (string | number)[] = ['Descrição', 'Valor'];
   const rows: (string | number)[][] = [
     ['Método', ir.metodo === 'art_12a_rra' ? 'Art. 12-A (RRA)' : 'Tabela Mensal'],
     ['Base de Cálculo', fmtBRL(ir.base_calculo)],
@@ -294,13 +314,18 @@ function buildIRRFSheet(result: PjeLiquidacaoResult): string {
     ['IMPOSTO DEVIDO', fmtBRL(ir.imposto_devido)],
   ];
 
-  return buildCSV(headers, rows);
+  return [headers, ...rows];
 }
 
-/** Sheet 6: FGTS Detalhado */
-function buildFGTSSheet(result: PjeLiquidacaoResult): string {
+function buildIRRFSheet(result: PjeLiquidacaoResult): string {
+  const data = buildIRRFData(result);
+  return buildCSV(data[0] as string[], data.slice(1));
+}
+
+/** Sheet 6: FGTS Detalhado — returns [headers, ...rows] */
+function buildFGTSData(result: PjeLiquidacaoResult): (string | number)[][] {
   const fgts = result.fgts;
-  const headers = ['Competência', 'Base', 'Alíquota', 'Valor Depósito'];
+  const headers: (string | number)[] = ['Competência', 'Base', 'Alíquota', 'Valor Depósito'];
   const rows: (string | number)[][] = [];
 
   for (const d of fgts.depositos) {
@@ -320,13 +345,18 @@ function buildFGTSSheet(result: PjeLiquidacaoResult): string {
   if (fgts.saldo_deduzido > 0) rows.push(['(-) Saldo Deduzido', '', '', fmtBRL(fgts.saldo_deduzido)]);
   rows.push(['TOTAL FGTS', '', '', fmtBRL(fgts.total_fgts)]);
 
-  return buildCSV(headers, rows);
+  return [headers, ...rows];
 }
 
-/** Sheet 7: Honorários e Custas */
-function buildHonorariosSheet(result: PjeLiquidacaoResult): string {
+function buildFGTSSheet(result: PjeLiquidacaoResult): string {
+  const data = buildFGTSData(result);
+  return buildCSV(data[0] as string[], data.slice(1));
+}
+
+/** Sheet 7: Honorários e Custas — returns [headers, ...rows] */
+function buildHonorariosData(result: PjeLiquidacaoResult): (string | number)[][] {
   const r = result.resumo;
-  const headers = ['Descrição', 'Valor (R$)'];
+  const headers: (string | number)[] = ['Descrição', 'Valor (R$)'];
   const rows: (string | number)[][] = [
     ['--- Honorários ---', ''],
     ['Honorários Sucumbenciais', fmtBRL(r.honorarios_sucumbenciais)],
@@ -346,12 +376,17 @@ function buildHonorariosSheet(result: PjeLiquidacaoResult): string {
     }
   }
 
-  return buildCSV(headers, rows);
+  return [headers, ...rows];
 }
 
-/** Sheet 8: Memória de Cálculo (audit trail) */
-function buildMemoriaSheet(result: PjeLiquidacaoResult): string {
-  const headers = ['Verba', 'Tipo', 'Competência', 'Fórmula',
+function buildHonorariosSheet(result: PjeLiquidacaoResult): string {
+  const data = buildHonorariosData(result);
+  return buildCSV(data[0] as string[], data.slice(1));
+}
+
+/** Sheet 8: Memória de Cálculo (audit trail) — returns [headers, ...rows] */
+function buildMemoriaData(result: PjeLiquidacaoResult): (string | number)[][] {
+  const headers: (string | number)[] = ['Verba', 'Tipo', 'Competência', 'Fórmula',
     'Base', 'Divisor', 'Mult', 'Qtd', 'Dobra',
     'Devido', 'Pago', 'Diferença', 'Índice', 'Corrigido', 'Juros', 'Final'];
   const rows: (string | number)[][] = [];
@@ -396,7 +431,12 @@ function buildMemoriaSheet(result: PjeLiquidacaoResult): string {
     }
   }
 
-  return buildCSV(headers, rows);
+  return [headers, ...rows];
+}
+
+function buildMemoriaSheet(result: PjeLiquidacaoResult): string {
+  const data = buildMemoriaData(result);
+  return buildCSV(data[0] as string[], data.slice(1));
 }
 
 // =====================================================
@@ -404,42 +444,42 @@ function buildMemoriaSheet(result: PjeLiquidacaoResult): string {
 // =====================================================
 
 /**
- * Export full calculation to a ZIP file containing multiple CSV sheets.
- * Each CSV is semicolon-delimited with BOM for proper Excel pt-BR compatibility.
+ * Export full calculation to a native .xlsx file (Office Open XML).
+ * Each selected sheet becomes a separate worksheet in the workbook.
  */
 export async function exportToExcel(
   result: PjeLiquidacaoResult,
   params?: PjeParametros,
   sheets: ExcelSheetSelection = DEFAULT_SHEETS,
 ): Promise<Blob> {
-  const zip = new JSZip();
+  const xlsxSheets: { name: string; rows: (string | number)[][] }[] = [];
 
   if (sheets.resumo) {
-    zip.file('01_Resumo_Geral.csv', buildResumoSheet(result, params));
+    xlsxSheets.push({ name: 'Resumo Geral', rows: buildResumoData(result, params) });
   }
   if (sheets.verbas) {
-    zip.file('02_Verbas_Detalhadas.csv', buildVerbasSheet(result));
+    xlsxSheets.push({ name: 'Verbas Detalhadas', rows: buildVerbasData(result) });
   }
   if (sheets.correcao) {
-    zip.file('03_Correcao_Monetaria.csv', buildCorrecaoSheet(result));
+    xlsxSheets.push({ name: 'Correção Monetária', rows: buildCorrecaoData(result) });
   }
   if (sheets.inss) {
-    zip.file('04_INSS_CS_Detalhado.csv', buildINSSSheet(result));
+    xlsxSheets.push({ name: 'INSS CS Detalhado', rows: buildINSSData(result) });
   }
   if (sheets.irrf) {
-    zip.file('05_IRRF_Detalhado.csv', buildIRRFSheet(result));
+    xlsxSheets.push({ name: 'IRRF Detalhado', rows: buildIRRFData(result) });
   }
   if (sheets.fgts) {
-    zip.file('06_FGTS_Detalhado.csv', buildFGTSSheet(result));
+    xlsxSheets.push({ name: 'FGTS Detalhado', rows: buildFGTSData(result) });
   }
   if (sheets.honorarios) {
-    zip.file('07_Honorarios_Custas.csv', buildHonorariosSheet(result));
+    xlsxSheets.push({ name: 'Honorários Custas', rows: buildHonorariosData(result) });
   }
   if (sheets.memoria) {
-    zip.file('08_Memoria_Calculo.csv', buildMemoriaSheet(result));
+    xlsxSheets.push({ name: 'Memória Cálculo', rows: buildMemoriaData(result) });
   }
 
-  return zip.generateAsync({ type: 'blob' });
+  return generateXlsx(xlsxSheets);
 }
 
 /**

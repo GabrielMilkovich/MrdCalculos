@@ -551,6 +551,52 @@ export const TEMPLATES_EXPRESSO: TemplateExpresso[] = [
       { nome: 'Salários Período Reintegração', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
     ],
   },
+  {
+    // Expurgos Inflacionários do FGTS — Planos Verão, Collor I e II
+    id: 'expurgos_fgts',
+    nome: 'Expurgos Inflacionários FGTS',
+    descricao: 'Diferenças de correção monetária dos planos econômicos: Verão (42.72%), Collor I (44.80%), Collor II (21.87%)',
+    categoria: 'misto',
+    icone: 'Landmark',
+    verbas: [
+      { nome: 'Expurgo FGTS - Plano Verão', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 0.4272, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+      { nome: 'Expurgo FGTS - Collor I', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 0.4480, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+      { nome: 'Expurgo FGTS - Collor II', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'desligamento', multiplicador: 0.2187, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false }, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Trabalho Intermitente — Art. 443 §3° e 452-A CLT
+    id: 'trabalho_intermitente',
+    nome: 'Trabalho Intermitente (Art. 452-A CLT)',
+    descricao: 'Salário por período trabalhado + férias proporcionais + 1/3 + 13° proporcional + FGTS (Reforma Trabalhista)',
+    categoria: 'misto',
+    icone: 'CalendarRange',
+    verbas: [
+      { nome: 'Salário Intermitente', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 220, tipo_divisor: 'carga_horaria', tipo_quantidade: 'cartao_ponto', quantidade_informada: 0, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+      { nome: 'Férias Proporcionais Intermitente + 1/3', tipo: 'principal', caracteristica: 'ferias', ocorrencia_pagamento: 'mensal', multiplicador: 4 / 3 / 12, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_FERIAS_INDENIZADAS, exclusoes: EXC_NENHUMA },
+      { nome: '13° Proporcional Intermitente', tipo: 'principal', caracteristica: '13_salario', ocorrencia_pagamento: 'mensal', multiplicador: 1 / 12, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Gorjetas — Art. 457 CLT
+    id: 'gorjetas',
+    nome: 'Gorjetas (Art. 457 CLT)',
+    descricao: 'Gorjetas integram salário para todos os fins — reflexos em 13°, férias, FGTS, DSR (art. 457 CLT)',
+    categoria: 'misto',
+    icone: 'HandCoins',
+    verbas: [
+      { nome: 'Gorjetas', tipo: 'principal', caracteristica: 'comum', ocorrencia_pagamento: 'mensal', multiplicador: 1, divisor_informado: 1, tipo_divisor: 'informado', tipo_quantidade: 'informada', quantidade_informada: 1, compor_principal: true, incidencias: INC_PADRAO, exclusoes: EXC_NENHUMA },
+    ],
+  },
+  {
+    // Grupo Econômico — Art. 2° §2° CLT (informacional)
+    id: 'grupo_economico',
+    nome: 'Grupo Econômico (Art. 2° §2° CLT)',
+    descricao: 'Solidariedade entre empresas do mesmo grupo econômico — distribuição do débito entre reclamados',
+    categoria: 'misto',
+    icone: 'Building2',
+    verbas: [],
+  },
 ];
 
 /**

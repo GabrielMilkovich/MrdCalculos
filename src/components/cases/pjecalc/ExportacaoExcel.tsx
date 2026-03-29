@@ -55,7 +55,7 @@ export function ExportacaoExcel({ result, params, processo }: Props) {
     setExportingZip(true);
     try {
       const blob = await exportToExcel(result, params, sheets);
-      downloadBlob(blob, `${filePrefix}_planilhas.zip`);
+      downloadBlob(blob, `${filePrefix}_planilhas.xlsx`);
       toast.success(`${selectedCount} planilha(s) exportada(s) com sucesso!`);
     } catch (e) {
       toast.error("Erro ao gerar exportação: " + (e as Error).message);
@@ -89,7 +89,7 @@ export function ExportacaoExcel({ result, params, processo }: Props) {
         {/* Sheet selection */}
         <div>
           <p className="text-xs text-muted-foreground mb-2">
-            Selecione as planilhas a incluir no pacote ZIP:
+            Selecione as planilhas a incluir no arquivo XLSX:
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {(Object.keys(SHEET_LABELS) as (keyof ExcelSheetSelection)[]).map(key => (
@@ -114,7 +114,7 @@ export function ExportacaoExcel({ result, params, processo }: Props) {
               ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
               : <Download className="h-4 w-4 mr-1" />
             }
-            Exportar ZIP ({selectedCount} planilha{selectedCount !== 1 ? 's' : ''})
+            Exportar XLSX ({selectedCount} planilha{selectedCount !== 1 ? 's' : ''})
           </Button>
 
           <Button size="sm" variant="outline" onClick={handleExportCSV} disabled={exportingCsv}>
@@ -127,8 +127,8 @@ export function ExportacaoExcel({ result, params, processo }: Props) {
         </div>
 
         <p className="text-[10px] text-muted-foreground">
-          ZIP contém arquivos CSV (delimitador ponto-e-vírgula) compatíveis com Excel pt-BR.
-          O CSV simples exporta todas as verbas em um único arquivo.
+          XLSX é um arquivo Excel nativo com múltiplas abas.
+          O CSV simples exporta todas as verbas em um único arquivo (delimitador ponto-e-vírgula, pt-BR).
         </p>
       </CardContent>
     </Card>
