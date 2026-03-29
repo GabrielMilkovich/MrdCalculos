@@ -921,7 +921,7 @@ export class PjeCalcEngine {
 
     // Filtrar por índice — check both normalized name and common aliases
     const aliases: Record<string, string[]> = {
-      'IPCA-E': ['IPCA-E', 'IPCAE', 'IPCA_E'],
+      'IPCA-E': ['IPCA-E', 'IPCAE', 'IPCA_E', 'IPCA'],
       'IGP-M': ['IGP-M', 'IGPM', 'IGP_M'],
       'IGP-DI': ['IGP-DI', 'IGPDI', 'IGP_DI'],
       'IPC-FIPE': ['IPC-FIPE', 'IPCFIPE'],
@@ -978,6 +978,7 @@ export class PjeCalcEngine {
     const fallbackMap: Record<string, Record<string, number>> = {
       'IPCAE': IPCA_E_ACUMULADO,
       'IPCA-E': IPCA_E_ACUMULADO,
+      'IPCA': IPCA_E_ACUMULADO,
       'SELIC': SELIC_ACUMULADO,
     };
     const fallback = fallbackMap[nomeIndice];
