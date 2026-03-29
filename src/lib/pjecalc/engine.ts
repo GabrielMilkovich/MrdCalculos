@@ -1593,7 +1593,7 @@ export class PjeCalcEngine {
             if (indiceNorm === 'SELIC') continue;
             // SEM_CORRECAO: skip juros UNLESS juros regime is SELIC (ADC 58/59)
             if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
-              const regJCheck = this.getRegimeParaData(combinacoes_juros, rS);
+              const regJCheck = this.getRegimeParaData(combinacoes_juros, realStart);
               if (!regJCheck || regJCheck.tipo !== 'SELIC') continue;
             }
             if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
