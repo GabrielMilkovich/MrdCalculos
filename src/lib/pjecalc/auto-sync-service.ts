@@ -71,17 +71,30 @@ export async function checkSyncStatus(): Promise<AutoSyncState> {
       .select("*")
       .in("serie_id", ALL_SERIES_IDS);
 
-    if (error) throw error;
-
-    const rows = (data as any[]) || [];
-
-    if (rows.length === 0) {
+    // If the sync_status table doesn't exist or query fails, return up_to_date
+    // to prevent infinite retry loops. Sync is optional functionality.
+    if (error) {
+      console.warn('[AutoSync] sync_status query failed (table may not exist):', error.message);
       return {
-        status: "stale",
+        status: "up_to_date",
         lastSyncAt: null,
         lastRunId: null,
         seriesSummary: null,
         errorMessage: null,
+      };
+    }
+
+    const rows = (data as any[]) || [];
+
+    if (rows.length === 0) {
+      // No sync records — treat as up_to_date to avoid triggering auto-sync
+      // when the infrastructure isn't set up yet
+      return {
+        status: "up_to_date",
+        lastSyncAt: null,
+        lastRunId: null,
+        seriesSummary: null,
+        errorMessage: "Tabela sync_status vazia. Use o botao manual para sincronizar.",
       };
     }
 
@@ -220,7 +233,10 @@ export async function getDetailedSeriesStatus(): Promise<
     .select("*")
     .in("serie_id", ALL_SERIES_IDS);
 
-  if (error) throw error;
+  if (error) {
+    console.warn('[AutoSync] Failed to load series detail:', error.message);
+    return [];
+  }
 
   const rows = (data as any[]) || [];
 

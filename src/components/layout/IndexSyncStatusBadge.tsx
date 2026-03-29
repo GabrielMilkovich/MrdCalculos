@@ -81,13 +81,15 @@ export function IndexSyncStatusBadge() {
     if (showDetail) loadDetail();
   }, [showDetail, loadDetail]);
 
-  // Auto-sync if stale on mount
+  // Auto-sync if stale on FIRST mount only (not on every status change)
+  const [autoSyncAttempted, setAutoSyncAttempted] = useState(false);
   useEffect(() => {
-    if (state.status === "stale" && !syncing) {
+    if (state.status === "stale" && !syncing && !autoSyncAttempted) {
+      setAutoSyncAttempted(true);
       handleSync();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.status]);
+  }, [state.status, autoSyncAttempted]);
 
   const handleSync = async () => {
     setSyncing(true);
