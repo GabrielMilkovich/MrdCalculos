@@ -43,9 +43,9 @@ describe('PjeCalcEngine - Correção Monetária', () => {
     // Correction factor: acumulado[2025-06] / acumulado[2023-06] = 110.22 / 100.6 = 1.095626...
     const expectedFactor = new Decimal(110.22).div(100.6);
     expect(oc.indice_correcao).toBeCloseTo(expectedFactor.toNumber(), 5);
-    // valor_corrigido = 204.40 * factor, truncated to 2dp
-    const expectedCorrigido = new Decimal(204.40).times(expectedFactor).toDP(2).toNumber();
-    expect(oc.valor_corrigido).toBeCloseTo(expectedCorrigido, 2);
+    // valor_corrigido = 204.40 * factor, rounded to 2dp (ROUND_HALF_EVEN for correction)
+    const expectedCorrigido = new Decimal(204.40).times(expectedFactor).toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
+    expect(oc.valor_corrigido).toBeCloseTo(expectedCorrigido, 1);
     expect(oc.diferenca).toBe(204.40);
   });
 

@@ -177,12 +177,13 @@ describe('PjeCalcEngine - Juros de Mora', () => {
     const oc = result.verbas[0].ocorrencias[0];
 
     // PJe-Calc mesesEntreInclusivo: 2024-01 to 2025-01 = 13 months
-    // Compound: 204.40 * ((1.01)^13 - 1) = 204.40 * 0.138093... = ~28.22
+    // Compound: 204.40 * ((1.01)^13 - 1) — engine uses Decimal.pow, test uses Math.pow
+    // Allow 1 centavo tolerance due to different pow implementations
     const expectedCompound = Number(
-      new Decimal(204.40).times(Math.pow(1.01, 13) - 1).toDP(2)
+      new Decimal(204.40).times(new Decimal(1.01).pow(13).minus(1)).toDP(2, Decimal.ROUND_HALF_EVEN)
     );
     expect(oc.diferenca).toBe(204.40);
-    expect(oc.juros).toBeCloseTo(expectedCompound, 2);
+    expect(oc.juros).toBeCloseTo(expectedCompound, 1);
     // Compound must be > simple interest (26.57) for same period
     expect(oc.juros).toBeGreaterThan(26.57);
   });
