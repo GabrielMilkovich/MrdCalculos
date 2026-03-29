@@ -423,7 +423,7 @@ async function crossValidateExtraction(
       const existing = factMap.get(check.key);
       if (!existing) continue;
       
-      const existingVal = existing.valor?.toString().trim().toLowerCase();
+      const existingVal = (existing as any).valor?.toString().trim().toLowerCase();
       const newVal = check.newVal.toString().trim().toLowerCase();
       
       if (existingVal && newVal && existingVal !== newVal) {
@@ -444,11 +444,11 @@ async function crossValidateExtraction(
           }
         }
         
-        const warning = `CONFLITO: ${check.label} — anterior: "${existing.valor}" vs novo: "${check.newVal}"`;
+        const warning = `CONFLITO: ${check.label} — anterior: "${(existing as any).valor}" vs novo: "${check.newVal}"`;
         warnings.push(warning);
         conflicts.push({
           campo: check.key,
-          valor_anterior: existing.valor,
+          valor_anterior: (existing as any).valor,
           valor_novo: check.newVal,
           descricao: warning,
           document_id: documentId,
@@ -1946,9 +1946,9 @@ serve(async (req) => {
       error_message: null,
     }).eq("id", document_id);
 
-    EdgeRuntime.waitUntil(
+    (globalThis as any).EdgeRuntime?.waitUntil?.(
       processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, LOVABLE_API_KEY, supabase)
-    );
+    ) ?? processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, LOVABLE_API_KEY, supabase);
 
     return new Response(
       JSON.stringify({
