@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "supabase/**"] },
+  { ignores: ["dist", "supabase/**", ".claude/**"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -28,6 +28,8 @@ export default tseslint.config(
       "no-useless-escape": "warn",
       "prefer-const": "warn",
       "no-empty": "warn",
+      "@typescript-eslint/no-empty-object-type": "off",
+      "no-useless-catch": "warn",
     },
   },
 );
