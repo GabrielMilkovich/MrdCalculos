@@ -101,8 +101,19 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   const results: Record<string, any> = {};
+  
+  // Allow filtering to specific series via request body
+  let filterNames: string[] | null = null;
+  try {
+    const body = await req.json();
+    if (body?.series && Array.isArray(body.series)) filterNames = body.series;
+  } catch { /* no body or invalid JSON */ }
 
-  for (const serie of SERIES) {
+  const seriesToProcess = filterNames 
+    ? SERIES.filter(s => filterNames!.includes(s.name))
+    : SERIES;
+
+  for (const serie of seriesToProcess) {
     try {
       const data = await fetchBCBSeries(serie.id, serie.daily);
 
