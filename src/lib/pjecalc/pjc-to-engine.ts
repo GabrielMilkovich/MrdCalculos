@@ -99,7 +99,7 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     irConfig: buildDefaultIRConfig(analysis),
     correcaoConfig: buildCorrecaoConfig(analysis),
     honorariosConfig: buildHonorariosConfig(analysis),
-    custasConfig: buildCustasConfig(a),
+    custasConfig: buildCustasConfig(analysis),
     seguroConfig: buildSeguroConfig(analysis),
     excecoesCargas,
     excecoesSabado,
