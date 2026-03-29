@@ -81,14 +81,23 @@ O MRD Calc possui um motor de cálculo funcional com fórmula PJe-Calc correta (
 
 ## C. BUGS E FRAGILIDADES CONFIRMADOS
 
-### CRÍTICOS (afetam resultado final)
+### CRÍTICOS (afetam resultado final — divergência de centavos com PJe-Calc)
 
 | # | Bug | Arquivo:Linha | Evidência | Correção |
 |---|-----|---------------|-----------|----------|
-| 1 | **200x Number() perde precisão** | engine.ts (200 ocorrências) | `Number(new Decimal(...).toDP(2))` é seguro para 2 casas, mas `Number(base)` em variáveis intermediárias não é | Manter Decimal até o final, converter Number só na saída |
-| 2 | **Persistência não-atômica** | service.ts (0 transações) | Se `upsertResultado` funciona mas `upsertOcorrencias` falha, resultado fica sem detalhes | Envolver em transação Supabase RPC |
-| 3 | **Stale result sem flag** | orchestrator.ts | Se parâmetros mudam após cálculo, resultado antigo é exibido sem aviso | Adicionar hash de inputs no resultado, comparar na exibição |
-| 4 | **Timezone em Date** | engine.ts (118 ocorrências) | `new Date('2024-01-15')` pode ser interpretado como UTC ou local dependendo do ambiente | Usar parse ISO explícito ou date-fns/parseISO |
+| 1 | **Correção monetária usa ROUND_DOWN** | engine.ts:1226 | `.times(indiceCorrecao).toDP(2)` usa ROUND_DOWN global. PJe-Calc usa ROUND_HALF_EVEN para correção monetária | Passar `Decimal.ROUND_HALF_EVEN` explícito no .toDP() de correção |
+| 2 | **mesesEntreInclusivo retorna 0 para mesmo mês** | engine.ts:1600-1603 | `exclusive > 0 ? exclusive + 1 : 0`. Quando start e end são no mesmo mês, retorna 0. PJe-Calc conta 1 mês | Mudar para `exclusive + 1` (sem condicional em >0) ou `Math.max(1, exclusive + 1)` |
+| 3 | **GT path IR RRA usa Set.size** | engine.ts:2345 | No path GT, `mesesAnosAnteriores = compsAnteriores.size` (meses com renda). No path normal, usa span total. Inconsistência | Usar span total em ambos os paths |
+| 4 | **Honorários inclui FGTS na base** | engine.ts:2561 | `baseHon = principalCorrigido + juros + fgts`. PJe-Calc NÃO inclui FGTS na base de honorários | Remover fgts da base: `baseHon = principalCorrigido + juros` |
+| 5 | **INSS sobre 13º não é separado** | engine.ts:1871 | `totalBase = baseNormal + base13` junta bases. PJe-Calc calcula INSS do 13º em base separada com teto próprio | Separar cálculo INSS para base normal e base 13º, cada um com seu teto |
+| 6 | **200x Number() perde precisão** | engine.ts (200 ocorrências) | `Number(new Decimal(...).toDP(2))` é seguro para 2 casas, mas `Number(base)` em variáveis intermediárias não é | Manter Decimal até o final, converter Number só na saída |
+| 7 | **Persistência não-atômica** | service.ts (0 transações) | Se `upsertResultado` funciona mas `upsertOcorrencias` falha, resultado fica sem detalhes | Envolver em transação Supabase RPC |
+| 8 | **Stale result sem flag** | orchestrator.ts | Se parâmetros mudam após cálculo, resultado antigo é exibido sem aviso | Adicionar hash de inputs no resultado, comparar na exibição |
+| 9 | **Timezone em Date** | engine.ts (118 ocorrências) | `new Date('2024-01-15')` pode ser interpretado como UTC ou local dependendo do ambiente | Usar parse ISO explícito ou date-fns/parseISO |
+| 10 | **Múltiplos historicos somados** | engine.ts:695-709 | Quando vários históricos cobrem a mesma competência, valores são SOMADOS. PJe-Calc usa o mais recente | Usar último histórico aplicável, não soma |
+| 11 | **Fallback silencioso para ultima_remuneracao** | engine.ts:717-724 | Qualquer verba com base zero recebe ultima_remuneracao, mesmo sem solicitar | Só aplicar fallback quando explicitamente configurado |
+| 12 | **FGTS aprendiz 2% para TODAS as verbas** | engine.ts:1659 | Se UMA verba tem tipo_fgts='aprendiz', TODAS usam 2% | Deve ser por configuração global, não por verba |
+| 13 | **Média de reflexo usa float** | engine.ts:3908 | `valores.reduce((s,v) => s+v, 0) / valores.length` — JS float, não Decimal.js | Usar Decimal para média |
 
 ### ALTOS (afetam precisão)
 
