@@ -166,11 +166,11 @@ describe('Integration: Real DB indices vs PJe-Calc', { timeout: TEST_TIMEOUT }, 
       console.log(`  PJe-Calc: R$ ${gc.expected_liquido.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       console.log(`  MRD CALC: R$ ${liquido.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       console.log(`  Delta:    R$ ${delta.toLocaleString('pt-BR', {minimumFractionDigits: 2})} (${deltaPct.toFixed(2)}%)`);
-      console.log(`  Bruto:    R$ ${result.resumo.total_bruto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+      console.log(`  Bruto:    R$ ${result.resumo.principal_bruto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       console.log(`  INSS Rec: R$ ${result.resumo.cs_segurado.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       console.log(`  IR:       R$ ${result.resumo.ir_retido.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       console.log(`  Juros:    R$ ${result.resumo.juros_mora.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
-      console.log(`  Correção: R$ ${result.resumo.correcao_monetaria.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
+      console.log(`  Corrigido: R$ ${result.resumo.principal_corrigido.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`);
       console.log(`  Warnings: ${result.calculation_warnings?.length || 0}`);
       if (result.calculation_warnings?.length) {
         for (const w of result.calculation_warnings.slice(0, 10)) {
