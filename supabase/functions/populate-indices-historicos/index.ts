@@ -7,12 +7,12 @@ const corsHeaders = {
 };
 
 const SERIES = [
-  { id: 10764, name: 'IPCA-E', dbName: 'IPCAE' },
-  { id: 4390, name: 'SELIC', dbName: 'SELIC' },
-  { id: 188, name: 'INPC', dbName: 'INPC' },
-  { id: 226, name: 'TR', dbName: 'TR' },
-  { id: 433, name: 'IPCA', dbName: 'IPCA' },
-  { id: 189, name: 'IGP-M', dbName: 'IGPM' },
+  { id: 10764, name: 'IPCA-E', dbName: 'IPCAE', daily: false },
+  { id: 4390, name: 'SELIC', dbName: 'SELIC', daily: false },
+  { id: 188, name: 'INPC', dbName: 'INPC', daily: false },
+  { id: 226, name: 'TR', dbName: 'TR', daily: true },
+  { id: 433, name: 'IPCA', dbName: 'IPCA', daily: false },
+  { id: 189, name: 'IGP-M', dbName: 'IGPM', daily: false },
 ];
 
 /**
