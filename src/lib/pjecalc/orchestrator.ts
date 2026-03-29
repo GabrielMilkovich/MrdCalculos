@@ -1049,7 +1049,7 @@ export async function executarLiquidacao(
     console.log(`[ORCHESTRATOR] data_citacao set: ${dadosProcesso.data_citacao}`);
   }
   // P0-1: modo_calculo now has a real column — no more as any
-  const modoCalculo = dadosProcesso?.modo_calculo ?? 'assisted_from_pjc';
+  const modoCalculo = dadosProcesso?.modo_calculo ?? 'independent';
   engineParams.modo_calculo = modoCalculo;
   console.log(`[ORCHESTRATOR] modo_calculo set: ${modoCalculo}`);
 

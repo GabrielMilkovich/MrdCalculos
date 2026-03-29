@@ -36,13 +36,13 @@ export function ModuloDadosProcesso({ caseId }: Props) {
     },
   });
 
-  const [citacaoEnabled, setCitacaoEnabled] = useState(true);
+  const [citacaoEnabled, setCitacaoEnabled] = useState(false);
 
   // Persist citação toggle state via modo_calculo field
   useEffect(() => {
     if (data) {
-      // If modo_calculo is 'independent', ADC 58 was explicitly disabled
-      setCitacaoEnabled(data.modo_calculo !== 'independent');
+      // Default is independent; only enable assisted when explicitly set
+      setCitacaoEnabled(data.modo_calculo === 'assisted_from_pjc');
     }
   }, [data]);
   const [buscandoCitacao, setBuscandoCitacao] = useState(false);

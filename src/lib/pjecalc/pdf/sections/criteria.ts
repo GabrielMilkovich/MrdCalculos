@@ -29,7 +29,7 @@ function describeDataCitacao(ctx: PDFRenderContext): string {
 }
 
 function describeModo(ctx: PDFRenderContext): string {
-  const modo = ctx.params.modo_calculo ?? 'assisted_from_pjc';
+  const modo = ctx.params.modo_calculo ?? 'independent';
   return modo === 'independent' ? 'Independente' : 'Assistido por PJC';
 }
 

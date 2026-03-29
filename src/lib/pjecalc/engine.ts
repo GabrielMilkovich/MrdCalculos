@@ -979,8 +979,8 @@ export class PjeCalcEngine {
   // =====================================================
 
   calcularVerba(verba: PjeVerba): PjeVerbaResult {
-    // ═══ PRE-COMPUTED MODE: use PJC ground truth directly ═══
-    if (verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
+    // ═══ PRE-COMPUTED MODE: use PJC ground truth directly (assisted mode only) ═══
+    if (this.params.modo_calculo === 'assisted_from_pjc' && verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
       return this.calcularVerbaPrecomputada(verba);
     }
 
@@ -1148,7 +1148,7 @@ export class PjeCalcEngine {
     const dataLiq = new Date(this.correcaoConfig.data_liquidacao);
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const dataAjuiz = this.params.data_ajuizamento ? new Date(this.params.data_ajuizamento) : null;
-    const modoCalculo = this.params.modo_calculo ?? 'assisted_from_pjc';
+    const modoCalculo = this.params.modo_calculo ?? 'independent';
     const usarADC5859Check = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
     let dataCitacao: Date | null;
     if (this.params.data_citacao) {
@@ -1183,7 +1183,7 @@ export class PjeCalcEngine {
         let juros = 0;
 
         // ═══ PJC Ground Truth: use precomputed correction factor when available ═══
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        if (this.params.modo_calculo === 'assisted_from_pjc' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
 
@@ -1353,7 +1353,7 @@ export class PjeCalcEngine {
         // Interest is always calculated separately by PJe-Calc.
         // For SELIC regime: the correction factor already includes interest → skip separate interest.
         // For IPCA-E/other: apply interest separately after correction.
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        if (this.params.modo_calculo === 'assisted_from_pjc' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
           const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
           const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
@@ -1537,7 +1537,7 @@ export class PjeCalcEngine {
 
   private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, _totalCSDescontado: number = 0): void {
     // BLOCKED in independent mode: GT calibration must not run.
-    if ((this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent') return;
+    if ((this.params.modo_calculo ?? 'independent') === 'independent') return;
     const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
     if (!correcaoGT || correcaoGT.length === 0) return;
     // NOTE: We no longer skip for SELIC combinations. The GT data handles SELIC semantics:
@@ -1899,9 +1899,9 @@ export class PjeCalcEngine {
       return { segurado_devidos: [], segurado_pagos: [], empregador, total_segurado_devidos: 0, total_segurado_pagos: 0, total_segurado: 0, total_empregador: 0 };
     }
 
-    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact CS bases/values ═══
+    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact CS bases/values (assisted mode only) ═══
     const gt = this.csConfig.apuracao_juros_gt;
-    if (gt && gt.length > 0 && useCorrigido) {
+    if (this.params.modo_calculo === 'assisted_from_pjc' && gt && gt.length > 0 && useCorrigido) {
       // Aggregate GT bases AND pre-computed CS amounts by competência (YYYY-MM format)
       const gtBasesByComp: Record<string, number> = {};
       const gtBase13ByComp: Record<string, number> = {};
@@ -2217,9 +2217,9 @@ export class PjeCalcEngine {
         ir_anos_anteriores: 0, ir_ano_liquidacao: 0, ir_13_exclusivo: 0, ir_ferias_separado: 0, meses_anos_anteriores: 0, meses_ano_liquidacao: 0 };
     }
 
-    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact IR bases ═══
+    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact IR bases (assisted mode only) ═══
     const gt = this.irConfig.apuracao_juros_gt;
-    if (gt && gt.length > 0) {
+    if (this.params.modo_calculo === 'assisted_from_pjc' && gt && gt.length > 0) {
       return this.calcularIRFromGT(gt, csResult);
     }
 
@@ -2757,7 +2757,7 @@ export class PjeCalcEngine {
       itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'Data de ajuizamento não informada — campo obrigatório para aplicação da ADC 58' });
     }
     if (!this.params.data_citacao) {
-      const isIndependent = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent';
+      const isIndependent = (this.params.modo_calculo ?? 'independent') === 'independent';
       const isADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
       const isCombinacoesADC = (this.correcaoConfig as unknown as { combinacoes_indice?: Array<{ indice: string }> })
         .combinacoes_indice?.some(c => c.indice === 'SELIC' || c.indice === 'IPCA-E') ?? false;
@@ -2943,7 +2943,7 @@ export class PjeCalcEngine {
     // ── Correção sem data de citação para ADC 58/59 ──
     // (independent mode error already emitted above; only add warning here for assisted_from_pjc)
     if ((this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC') && !this.params.data_citacao) {
-      if ((this.params.modo_calculo ?? 'assisted_from_pjc') === 'assisted_from_pjc') {
+      if ((this.params.modo_calculo ?? 'independent') === 'assisted_from_pjc') {
         itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Usando índice ADC 58/59 sem data de citação — será estimada a partir do ajuizamento + 60 dias' });
       }
       // independent mode: error already emitted in Parâmetros section above
@@ -3102,7 +3102,7 @@ export class PjeCalcEngine {
     // Legacy single-index correction only
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const dataAjuiz = this.params.data_ajuizamento ? new Date(this.params.data_ajuizamento) : null;
-    const modoCalculo = this.params.modo_calculo ?? 'assisted_from_pjc';
+    const modoCalculo = this.params.modo_calculo ?? 'independent';
     const usarADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
     let dataCitacaoSomente: Date | null = null;
     if (this.params.data_citacao) {
@@ -3122,8 +3122,8 @@ export class PjeCalcEngine {
 
         let indiceCorrecao = 1;
 
-        // Use PJC ground truth correction factor when available
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // Use PJC ground truth correction factor when available (assisted mode only)
+        if (this.params.modo_calculo === 'assisted_from_pjc' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
           oc.pjc_ground_truth_regime = this.correcaoConfig.indice || 'SELIC';
@@ -3183,8 +3183,8 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
         
-        // Use PJC ground truth correction factor when available
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // Use PJC ground truth correction factor when available (assisted mode only)
+        if (this.params.modo_calculo === 'assisted_from_pjc' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           // Determine regime for this occurrence
           const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
           const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
@@ -3436,7 +3436,10 @@ export class PjeCalcEngine {
       auditTrail.push({ step: ++stepCounter, module, description, ...extra });
     };
 
-    // ── 0. Validação pré-liquidação ──
+    // ── 0. Modo de cálculo ──
+    audit('mode', `Modo de cálculo: ${this.params.modo_calculo ?? 'independent'}`);
+
+    // ── 0b. Validação pré-liquidação ──
     const validacao = this.validarPreLiquidacao();
     audit('validacao', `Pré-validação: ${validacao.valido ? 'OK' : validacao.itens.length + ' issues'}`);
 
@@ -3550,17 +3553,25 @@ export class PjeCalcEngine {
       audit('correcao', 'Correção monetária aplicada (sem juros)');
       
       if (hasGT) {
-        this.calibrarCorrecaoComGT(verbaResults, false);
-        audit('gt_calibracao', 'Calibração GT (correção only)');
+        if ((this.params.modo_calculo ?? 'independent') === 'independent') {
+          audit('gt_blocked', 'Calibração GT bloqueada — modo independente');
+        } else {
+          this.calibrarCorrecaoComGT(verbaResults, false);
+          audit('gt_calibracao', 'Calibração GT (correção only)');
+        }
       }
-      
+
       csPreComputed = this.calcularCS(verbaResults, true);
       const csDescontadoPreJuros = this.csConfig.cobrar_reclamante ? csPreComputed.total_segurado : 0;
       audit('cs', `CS pré-juros: segurado=${csPreComputed.total_segurado.toFixed(2)}, empregador=${csPreComputed.total_empregador.toFixed(2)}`);
-      
+
       if (hasGT) {
-        this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
-        audit('gt_juros', 'Calibração GT (juros + CS deduzida)');
+        if ((this.params.modo_calculo ?? 'independent') === 'independent') {
+          audit('gt_blocked', 'Calibração GT juros bloqueada — modo independente');
+        } else {
+          this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
+          audit('gt_juros', 'Calibração GT (juros + CS deduzida)');
+        }
       } else {
         this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
         audit('juros', 'Juros aplicados após dedução CS');
@@ -3569,8 +3580,12 @@ export class PjeCalcEngine {
       this.aplicarCorrecaoJuros(verbaResults);
       audit('correcao_juros', 'Correção + juros aplicados');
       if (hasGT) {
-        this.calibrarCorrecaoComGT(verbaResults, true);
-        audit('gt_calibracao', 'Calibração GT (full)');
+        if ((this.params.modo_calculo ?? 'independent') === 'independent') {
+          audit('gt_blocked', 'Calibração GT bloqueada — modo independente');
+        } else {
+          this.calibrarCorrecaoComGT(verbaResults, true);
+          audit('gt_calibracao', 'Calibração GT (full)');
+        }
       }
     }
 
@@ -3590,7 +3605,7 @@ export class PjeCalcEngine {
     // When gt_closure is available, the PJC resultado is the authoritative source.
     // Engine-computed CS/IR serve as fallback only.
     // BLOCKED in independent mode: gt_closure must not alter engine output.
-    const closure = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent'
+    const closure = (this.params.modo_calculo ?? 'independent') === 'independent'
       ? undefined
       : this.correcaoConfig.gt_closure;
     if (closure && (closure.liquido_exequente > 0 || closure.inss_reclamante > 0)) {
@@ -3687,7 +3702,7 @@ export class PjeCalcEngine {
     // Only applies when residual is < 5% of bruto (prevents masking large errors).
     let jurosMoraAjustado = jurosMora;
     // BLOCKED in independent mode: gt_closure bruto reconciliation must not run.
-    const closureForBruto = (this.params.modo_calculo ?? 'assisted_from_pjc') === 'independent'
+    const closureForBruto = (this.params.modo_calculo ?? 'independent') === 'independent'
       ? undefined
       : this.correcaoConfig.gt_closure;
     if (closureForBruto && (closureForBruto.liquido_exequente > 0 || closureForBruto.inss_reclamante > 0)) {
