@@ -1,0 +1,29 @@
+name: Update BCB Indices
+
+on:
+  schedule:
+    # Run on the 5th of every month at 08:00 UTC (after BCB publishes monthly data)
+    - cron: '0 8 5 * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-indices:
+    name: Fetch BCB indices and update Supabase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger populate-bcb-indices Edge Function
+        run: |
+          echo "Calling populate-bcb-indices..."
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/populate-bcb-indices" \
+            -H "Content-Type: application/json" \
+            -d '{"ano_inicio": 2000, "ano_fim": 2026}')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Status: $HTTP_CODE"
+          echo "Response: $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::BCB indices update failed with status $HTTP_CODE"
+            exit 1
+          fi
+          echo "BCB indices updated successfully"
