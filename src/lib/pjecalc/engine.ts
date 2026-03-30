@@ -2146,15 +2146,22 @@ export class PjeCalcEngine {
       return { segurado_devidos: [], segurado_pagos: [], empregador, total_segurado_devidos: 0, total_segurado_pagos: 0, total_segurado: 0, total_empregador: 0 };
     }
 
-    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact CS bases/values (assisted mode only) ═══
+    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact CS bases/values ═══
+    // In assisted mode: full GT override. In independent mode: use GT bases for INSS
+    // calculation but compute INSS amounts independently (GT-light).
     const gt = this.csConfig.apuracao_juros_gt;
-    if (this.params.modo_calculo === 'assisted_from_pjc' && gt && gt.length > 0 && useCorrigido) {
+    const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
+    const useGTBases = gt && gt.length > 0 && useCorrigido;
+    const isIndependentWithGT = (this.params.modo_calculo ?? 'independent') === 'independent' && correcaoGT && correcaoGT.length > 0;
+
+    if (useGTBases || (isIndependentWithGT && useCorrigido)) {
+      const gtData = useGTBases ? gt! : correcaoGT!;
       // Aggregate GT bases AND pre-computed CS amounts by competência (YYYY-MM format)
       const gtBasesByComp: Record<string, number> = {};
       const gtBase13ByComp: Record<string, number> = {};
       const gtCSNormalByComp: Record<string, number> = {};
       const gtCS13ByComp: Record<string, number> = {};
-      for (const entry of gt) {
+      for (const entry of gtData) {
         const comp = entry.competencia.slice(0, 7); // YYYY-MM
         gtBasesByComp[comp] = (gtBasesByComp[comp] || 0) + entry.cs_base_normal;
         gtBase13ByComp[comp] = (gtBase13ByComp[comp] || 0) + entry.cs_base_13;
@@ -2173,7 +2180,7 @@ export class PjeCalcEngine {
       const correctionFactorByComp: Record<string, number> = {};
       const gtNominalByComp: Record<string, number> = {};
       const gtCorrigidoByComp: Record<string, number> = {};
-      for (const entry of gt) {
+      for (const entry of gtData) {
         const comp = entry.competencia.slice(0, 7);
         gtNominalByComp[comp] = (gtNominalByComp[comp] || 0) + entry.cs_base_normal + entry.cs_base_13;
         gtCorrigidoByComp[comp] = (gtCorrigidoByComp[comp] || 0) + entry.valor_corrigido;
@@ -2195,10 +2202,12 @@ export class PjeCalcEngine {
 
           // PJe-Calc: INSS on 13º is calculated on a SEPARATE basis with its own teto
           let imposto: number;
-          if (hasPrecomputedCS) {
+          const isIndepMode = (this.params.modo_calculo ?? 'independent') === 'independent';
+          if (hasPrecomputedCS && !isIndepMode) {
+            // Assisted mode: use precomputed CS amounts directly
             imposto = (gtCSNormalByComp[comp] || 0) + (gtCS13ByComp[comp] || 0);
           } else {
-            // Calculate INSS separately for normal and 13º bases (each with own teto)
+            // Independent mode OR no precomputed: calculate INSS from GT bases
             const impostoNormal = baseNormal > 0 ? this.calcularINSSProgressivo(comp, baseNormal) : 0;
             const imposto13 = base13 > 0 ? this.calcularINSSProgressivo(comp, base13) : 0;
             imposto = impostoNormal + imposto13;
@@ -2464,10 +2473,16 @@ export class PjeCalcEngine {
         ir_anos_anteriores: 0, ir_ano_liquidacao: 0, ir_13_exclusivo: 0, ir_ferias_separado: 0, meses_anos_anteriores: 0, meses_ano_liquidacao: 0 };
     }
 
-    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact IR bases (assisted mode only) ═══
+    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact IR bases ═══
     const gt = this.irConfig.apuracao_juros_gt;
     if (this.params.modo_calculo === 'assisted_from_pjc' && gt && gt.length > 0) {
       return this.calcularIRFromGT(gt, csResult);
+    }
+
+    // GT-light for IR: use correcaoConfig GT bases when available in independent mode
+    const correcaoGTForIR = this.correcaoConfig.apuracao_juros_gt;
+    if ((this.params.modo_calculo ?? 'independent') === 'independent' && correcaoGTForIR && correcaoGTForIR.length > 0) {
+      return this.calcularIRFromGT(correcaoGTForIR, csResult);
     }
 
     let baseBruta = 0;
