@@ -3,6 +3,16 @@
  * Extracts complete calculation structure from a real PJe-Calc .PJC file
  */
 
+export interface VinculoEmpregaticio {
+  id: string;
+  data_admissao: string;
+  data_demissao: string;
+  salario_inicial: number;
+  salario_final: number;
+  tipo_rescisao?: string;
+  cargo?: string;
+}
+
 export interface PJCAnalysis {
   parametros: {
     beneficiario: string;
@@ -88,6 +98,9 @@ export interface PJCAnalysis {
    *   for independent mode with ADC 58/59 (IPCA-E/SELIC) to work correctly.
    */
   avisos?: Array<{ codigo: string; mensagem: string }>;
+  /** Vínculos empregatícios detectados (Padrão B: múltiplos períodos) */
+  vinculos: VinculoEmpregaticio[];
+  tem_multiplos_vinculos: boolean;
   /** Configuração de cálculo lida diretamente do XML */
   calculo_config: PJCCalculoConfig;
 }
@@ -746,6 +759,44 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       parcelas: parseInt(getTextContent(segEl, 'parcelas')) || 0,
       recebeu: getTextContent(segEl, 'recebeu') === 'true',
     } : undefined,
+    // Múltiplos vínculos (Padrão B)
+    vinculos: (() => {
+      const vlist: VinculoEmpregaticio[] = [];
+      const vinculoEls = root.getElementsByTagName('Vinculo');
+      if (vinculoEls.length > 1) {
+        for (let idx = 0; idx < vinculoEls.length; idx++) {
+          const el = vinculoEls[idx];
+          const adm = tsToDate(getTextContent(el, 'dataAdmissao') || getTextContent(el, 'admissao'));
+          const dem = tsToDate(getTextContent(el, 'dataDemissao') || getTextContent(el, 'demissao'));
+          if (adm && dem) {
+            vlist.push({
+              id: `vinculo_${idx + 1}`,
+              data_admissao: adm,
+              data_demissao: dem,
+              salario_inicial: parseNum(getTextContent(el, 'salarioInicial')),
+              salario_final: parseNum(getTextContent(el, 'salarioFinal')),
+              tipo_rescisao: getTextContent(el, 'tipoRescisao') || undefined,
+              cargo: getTextContent(el, 'cargo') || undefined,
+            });
+          }
+        }
+      }
+      // Fallback: single vínculo from main params
+      if (vlist.length === 0) {
+        vlist.push({
+          id: 'vinculo_1',
+          data_admissao: parametros.admissao,
+          data_demissao: parametros.demissao,
+          salario_inicial: 0,
+          salario_final: 0,
+        });
+      }
+      return vlist;
+    })(),
+    tem_multiplos_vinculos: (() => {
+      const vinculoEls = root.getElementsByTagName('Vinculo');
+      return vinculoEls.length > 1;
+    })(),
     avisos: avisos.length > 0 ? avisos : undefined,
     calculo_config: {
       indices_acumulados: parametros.indices_acumulados || 'MES_SUBSEQUENTE_AO_VENCIMENTO',

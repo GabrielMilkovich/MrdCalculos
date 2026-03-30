@@ -64,5 +64,10 @@ export { gerarReflexosPadrao, gerarReflexosComCascata } from './reflexo-engine';
 export { buildRegimeTemporalADC58 } from './regime-temporal';
 export type { RegimeTemporal } from './regime-temporal';
 
+// Múltiplos vínculos (Padrão B)
+export { calcularAvosMultiplosVinculos, calcularFGTSPorVinculo } from './multiplos-vinculos';
+export type { SaldoFGTSVinculo } from './multiplos-vinculos';
+export type { VinculoEmpregaticio } from './pjc-analyzer';
+
 // Constants
 export { INSS_TETO_2025, SALARIO_MINIMO_2025 } from './engine-constants';
