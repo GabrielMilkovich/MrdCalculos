@@ -2415,7 +2415,7 @@ export class PjeCalcEngine {
 
   // Helper: calcular INSS progressivo para uma competência
   // PJe-Calc usa ROUND_HALF_EVEN (Banker's rounding) para CS e IR
-  private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_UP; // PJe-Calc standard
+  private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_EVEN; // Java BigDecimal padrão (PJe-Calc)
 
   // INSS pré-EC 103/2019: alíquota única aplicada sobre o salário total
   // (o salário cai numa das 3 faixas e toda a base é tributada nessa alíquota)

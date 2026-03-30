@@ -231,6 +231,20 @@ function calcularFatorCorrecao(
   return Number(idxDest.acumulado) / Number(idxOrigem.acumulado);
 }
 
+/**
+ * Calcula fator de juros simples pro-rata die entre duas datas.
+ * PJe-Calc usa dias exatos / 30, não meses inteiros.
+ * Ex: 1 mês e 15 dias = 1.5%, não 1% nem 2%.
+ */
+function calcularFatorJurosProRata(d1: string, d2: string, taxaMensal: number): number {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const inicio = new Date(d1 + (d1.length === 7 ? '-01' : '') + 'T00:00:00');
+  const fim    = new Date(d2 + (d2.length === 7 ? '-01' : '') + 'T00:00:00');
+  const dias   = Math.max(0, Math.round((fim.getTime() - inicio.getTime()) / msPerDay));
+  return new Decimal(dias).times(taxaMensal).div(100).div(30).toNumber();
+}
+
+// Legacy month counting for compatibility
 function mesesEntre(d1: string, d2: string): number {
   const a = new Date(d1);
   const b = new Date(d2);
@@ -408,10 +422,10 @@ export function aplicarCorrecaoPorData(
         });
       }
     } else {
-      // Simple monthly interest (TRD_SIMPLES 1% a.m. default)
-      const meses = mesesEntre(realStart, segFim);
-      const taxa = (regimeJuros.percentual || 1) / 100;
-      const jurosSegmento = interestBase.times(taxa).times(meses);
+      // Pro-rata die: dias exatos / 30 × taxa mensal (padrão PJe-Calc)
+      const taxaMensal = regimeJuros.percentual ?? 1;
+      const fatorJuros = calcularFatorJurosProRata(realStart, segFim, taxaMensal);
+      const jurosSegmento = interestBase.times(fatorJuros);
       jurosTotal = jurosTotal.plus(jurosSegmento);
       regimes_aplicados.push({ tipo: 'juros', indice: regimeJuros.tipo, de: realStart, ate: segFim, fator: 1 + taxa * meses });
     }
