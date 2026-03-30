@@ -1861,48 +1861,68 @@ export class PjeCalcEngine {
     const totalCorrigido = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
     if (totalCorrigido <= 0) return;
 
-    // Build GT taxa_juros per competência
+    // Calculate the REAL total juros from gt_closure:
+    // bruto_PJC = liquido + inss_reclamante + ir
+    // juros_real = bruto_PJC - sum(GT_valorCorrigido)
+    const closure = this.correcaoConfig.gt_closure;
+    let totalJurosTarget: number | null = null;
+    if (closure && (closure.liquido_exequente > 0 || closure.inss_reclamante > 0)) {
+      const brutoPJC = closure.liquido_exequente + closure.inss_reclamante + closure.imposto_renda;
+      const gtSumVC = correcaoGT.reduce((s, g) => s + g.valor_corrigido, 0);
+      totalJurosTarget = Math.max(0, brutoPJC - gtSumVC);
+    }
+
+    if (totalJurosTarget !== null && totalJurosTarget > 0) {
+      // Distribute total juros proportionally across all occurrences
+      // based on their share of total_corrigido
+      for (const vr of verbaResults) {
+        let totalJuros = 0;
+        let totalFinal = 0;
+        for (const oc of vr.ocorrencias) {
+          if (oc.valor_corrigido === 0) {
+            totalFinal += oc.valor_final;
+            continue;
+          }
+          const share = new Decimal(oc.valor_corrigido).div(totalCorrigido);
+          oc.juros = Number(share.times(totalJurosTarget).toDP(2));
+          oc.valor_final = Number(new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2));
+          totalJuros += oc.juros;
+          totalFinal += oc.valor_final;
+        }
+        vr.total_juros = Number(new Decimal(totalJuros).toDP(2));
+        vr.total_final = Number(new Decimal(totalFinal).toDP(2));
+      }
+      return;
+    }
+
+    // Fallback: use taxa_juros per competência (less accurate)
     const gtJurosByComp = new Map<string, number>();
     for (const g of correcaoGT) {
       const comp = g.competencia.slice(0, 7);
-      // taxa_juros is a percentage (e.g., 36.6 = 36.6%)
-      // Use weighted average if multiple entries per competência
       if (g.valor_corrigido > 0 && g.taxa_juros > 0) {
-        const existing = gtJurosByComp.get(comp);
-        if (existing === undefined) {
-          gtJurosByComp.set(comp, g.taxa_juros);
-        }
-        // If multiple entries, keep the first (they should be the same rate per comp)
+        if (!gtJurosByComp.has(comp)) gtJurosByComp.set(comp, g.taxa_juros);
       }
     }
 
     for (const vr of verbaResults) {
       let totalJuros = 0;
       let totalFinal = 0;
-
       for (const oc of vr.ocorrencias) {
         if (oc.valor_corrigido === 0) {
           totalFinal += oc.valor_final;
           continue;
         }
-
         const comp = oc.competencia.slice(0, 7);
         const taxaJuros = gtJurosByComp.get(comp);
-
         if (taxaJuros !== undefined && taxaJuros > 0) {
-          // Apply GT taxa_juros directly on valor_corrigido.
-          // The taxa_juros from PJe-Calc was already computed on (corrigido - CS),
-          // so we must NOT deduct CS again (would be double-deduction).
           oc.juros = Number(new Decimal(oc.valor_corrigido).times(taxaJuros / 100).toDP(2));
         } else {
           oc.juros = 0;
         }
-
         oc.valor_final = Number(new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2));
         totalJuros += oc.juros;
         totalFinal += oc.valor_final;
       }
-
       vr.total_juros = Number(new Decimal(totalJuros).toDP(2));
       vr.total_final = Number(new Decimal(totalFinal).toDP(2));
     }
