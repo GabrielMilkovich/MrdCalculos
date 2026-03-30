@@ -18,6 +18,11 @@
  */
 
 import Decimal from 'decimal.js';
+import {
+  IPCA_E_ACUMULADO,
+  SELIC_ACUMULADO,
+  TR_ACUMULADO,
+} from './indices-fallback';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP });
 
@@ -79,6 +84,43 @@ export interface CorrecaoResultado {
 }
 
 // =====================================================
+// INDEX NAME NORMALIZER
+// =====================================================
+const INDEX_ALIASES: Record<string, string> = {
+  'IPCAE': 'IPCAE', 'IPCA-E': 'IPCAE', 'IPCA_E': 'IPCAE',
+  'IPCA': 'IPCA', 'INPC': 'INPC',
+  'IGP-M': 'IGPM', 'IGPM': 'IGPM',
+  'TR': 'TR', 'TRD': 'TR', 'TRD_SIMPLES': 'TR', 'TR/TRD': 'TR',
+  'SELIC': 'SELIC', 'TAXA_LEGAL': 'TAXA_LEGAL',
+};
+
+function normalizeIndiceName(raw: string): string {
+  return INDEX_ALIASES[raw] ?? INDEX_ALIASES[raw.toUpperCase()] ?? raw;
+}
+
+// =====================================================
+// FALLBACK INDICES DB BUILDER
+// =====================================================
+function buildFallbackDB(): IndiceDB[] {
+  const entries: IndiceDB[] = [];
+  const push = (indice: string, rec: Record<string, number>) => {
+    for (const [ym, acumulado] of Object.entries(rec)) {
+      entries.push({ indice, competencia: ym + '-01', valor: 0, acumulado });
+    }
+  };
+  push('IPCAE', IPCA_E_ACUMULADO);
+  push('SELIC', SELIC_ACUMULADO);
+  push('TR', TR_ACUMULADO);
+  return entries;
+}
+
+let _fallbackDB: IndiceDB[] | null = null;
+function getFallbackDB(): IndiceDB[] {
+  if (!_fallbackDB) _fallbackDB = buildFallbackDB();
+  return _fallbackDB;
+}
+
+// =====================================================
 // REGIME RESOLVER
 // =====================================================
 
@@ -129,39 +171,57 @@ function calcularFatorCorrecao(
 ): number | null {
   if (ZERO_CORRECTION_INDICES.has(indice)) return 1;
 
-  const dados = indicesDB
-    .filter(i => i.indice === indice)
+  // Normalize index name (TR, TRD, TRD_SIMPLES etc → canonical)
+  const canonicalIndice = normalizeIndiceName(indice);
+
+  // Merge caller-supplied DB with fallback (fallback fills gaps)
+  const fallback = getFallbackDB();
+  const merged = indicesDB.length > 0
+    ? [...indicesDB, ...fallback.filter(f =>
+        !indicesDB.some(d =>
+          normalizeIndiceName(d.indice) === f.indice &&
+          d.competencia.slice(0, 7) === f.competencia.slice(0, 7)
+        )
+      )]
+    : fallback;
+
+  const dados = merged
+    .filter(i => normalizeIndiceName(i.indice) === canonicalIndice)
     .sort((a, b) => a.competencia.localeCompare(b.competencia));
 
   if (dados.length === 0) {
     warnings.push({
       code: 'E003',
       module: 'correcao',
-      message: `BLOQUEIO: Índice ${indice} sem dados para ${compOrigem}→${compDestino}. Série histórica ausente.`,
+      message: `BLOQUEIO: Índice ${indice} (canonical: ${canonicalIndice}) sem dados para ${compOrigem}→${compDestino}. Série histórica ausente.`,
       competencia: compOrigem,
       blocking: true,
     });
     return null;
   }
 
-  // PJe-Calc rule: only use indices from CLOSED months
+  // Cap destination at last PUBLISHED month
+  // Fix: use proper prev-month calc (getMonth() is 0-based, Jan=0 would give '00')
   const hoje = new Date();
-  const ultimoMesFechado = `${hoje.getFullYear()}-${String(hoje.getMonth()).padStart(2, '0')}`;
-  const compDestinoEfetivo = compDestino.slice(0, 7) > ultimoMesFechado
-    ? ultimoMesFechado + '-01'
-    : compDestino;
+  const prevMonth = hoje.getMonth() === 0
+    ? `${hoje.getFullYear() - 1}-12`
+    : `${hoje.getFullYear()}-${String(hoje.getMonth()).padStart(2, '0')}`;
+  const compDestinoEfetivo =
+    compDestino.slice(0, 7) > prevMonth
+      ? prevMonth + '-01'
+      : compDestino;
 
-  // Súmula 381 TST: correction starts from month SUBSEQUENT to vencimento
+  // Súmula 381 TST: origin = vencimento month index
   const origemArr = dados.filter(i => i.competencia.slice(0, 7) >= compOrigem.slice(0, 7));
   const destArr = dados.filter(i => i.competencia.slice(0, 7) <= compDestinoEfetivo.slice(0, 7));
-  const idxOrigem = origemArr[0] || dados[0];
-  const idxDest = destArr[destArr.length - 1] || dados[dados.length - 1];
+  const idxOrigem = origemArr[0] ?? dados[0];
+  const idxDest = destArr[destArr.length - 1] ?? dados[dados.length - 1];
 
   if (!idxOrigem?.acumulado || !idxDest?.acumulado || Number(idxOrigem.acumulado) === 0) {
     warnings.push({
       code: 'E003',
       module: 'correcao',
-      message: `BLOQUEIO: Índice ${indice} sem acumulado válido para ${compOrigem}→${compDestinoEfetivo}.`,
+      message: `BLOQUEIO: Índice ${canonicalIndice} sem acumulado válido para ${compOrigem}→${compDestinoEfetivo}.`,
       competencia: compOrigem,
       blocking: true,
     });
@@ -234,7 +294,7 @@ export function aplicarCorrecaoPorData(
     const segInicio = datas[i];
     const segFim = datas[i + 1];
     const regime = getRegimeParaData(config.combinacoes_indice, segInicio);
-    const indice = regime?.indice || 'SEM_CORRECAO';
+    const indice = normalizeIndiceName(regime?.indice || 'SEM_CORRECAO');
 
     if (ZERO_CORRECTION_INDICES.has(indice)) {
       regimes_aplicados.push({ tipo: 'correcao', indice: `${indice} (suspenso)`, de: segInicio, ate: segFim, fator: 1 });
@@ -292,7 +352,7 @@ export function aplicarCorrecaoPorData(
     const segFim = datas[i + 1];
     const regimeIndice = getRegimeParaData(config.combinacoes_indice, segInicio);
     const regimeJuros = getRegimeParaData(config.combinacoes_juros, segInicio);
-    const indice = regimeIndice?.indice || 'SEM_CORRECAO';
+    const indice = normalizeIndiceName(regimeIndice?.indice || 'SEM_CORRECAO');
 
     // ══ ANTI-CUMULATION RULES ══
     // 1. SELIC as correction → skip ALL separate interest (already included)
@@ -322,21 +382,22 @@ export function aplicarCorrecaoPorData(
       interestBase = valorCorrigido;
     }
 
-    if (regimeJuros.tipo === 'SELIC') {
+    const tipoJuros = normalizeIndiceName(regimeJuros.tipo);
+    if (tipoJuros === 'SELIC') {
       // SELIC as interest type (with non-SELIC correction)
       const fatorSelic = calcularFatorCorrecao('SELIC', realStart, segFim, indicesDB, warnings);
       if (fatorSelic !== null) {
         const jurosSegmento = interestBase.times(fatorSelic - 1);
         jurosTotal = jurosTotal.plus(jurosSegmento);
-        regimes_aplicados.push({ tipo: 'juros', indice: 'SELIC', de: realStart, ate: segFim, fator: fatorSelic });
+        regimes_aplicados.push({ tipo: 'juros', indice: tipoJuros, de: realStart, ate: segFim, fator: fatorSelic });
       }
-    } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
+    } else if (tipoJuros === 'TAXA_LEGAL') {
       // TAXA_LEGAL: proper lookup from TAXA_LEGAL series
       const fatorTL = calcularFatorCorrecao('TAXA_LEGAL', realStart, segFim, indicesDB, warnings);
       if (fatorTL !== null) {
         const jurosSegmento = interestBase.times(fatorTL - 1);
         jurosTotal = jurosTotal.plus(jurosSegmento);
-        regimes_aplicados.push({ tipo: 'juros', indice: 'TAXA_LEGAL', de: realStart, ate: segFim, fator: fatorTL });
+        regimes_aplicados.push({ tipo: 'juros', indice: tipoJuros, de: realStart, ate: segFim, fator: fatorTL });
       } else {
         // TAXA_LEGAL series missing — warn but don't silently skip
         warnings.push({
