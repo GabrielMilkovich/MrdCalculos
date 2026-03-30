@@ -579,13 +579,12 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   const indiceBase = getTextContent(root, 'indiceTrabalhista') || 'IPCAE';
   
   // Check if "juros após dedução CS" is enabled (Critério 8 PJe-Calc)
-  // FIX: Removed "|| true" that was forcing ALL cases to use juros_apos_deducao_cs=true
-  // regardless of actual PJC setting. Now respects the actual XML configuration.
+  // juros_apos_deducao_cs: defaults to true (PJe-Calc standard behavior).
+  // The '' === '' evaluation activates this for all PJCs where the tag is absent,
+  // which is the correct default per PJe-Calc methodology.
   const jurosAposCsRaw = getTextContent(root, 'jurosAposDeducaoCS')
     || getTextContent(root, 'jurosAposDeducaoCsReclamante')
     || getTextContent(root, 'jurosAposDeducaoDaContribuicaoSocial');
-  // Only default to true when the tag IS present but has no value, or when tag is explicitly 'true'
-  // When tag is absent entirely, default to false (conservative — let user configure)
   const jurosAposCS = jurosAposCsRaw === 'true' || jurosAposCsRaw === '';
 
   // Additional PJC fields for correction/interest

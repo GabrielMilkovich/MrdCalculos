@@ -3650,7 +3650,8 @@ export class PjeCalcEngine {
                 if (!regJCheck2 || regJCheck2.tipo !== 'SELIC') continue;
               }
             }
-            if (indiceNorm === 'SELIC' && !this.correcaoConfig.juros_apos_deducao_cs) continue;
+            // SELIC = correction + interest (ADC 58/59) — NEVER add separate juros
+            if (indiceNorm === 'SELIC') continue;
 
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
             if (!regimeJ || regimeJ.tipo === 'NENHUM') continue;
@@ -3706,7 +3707,8 @@ export class PjeCalcEngine {
                 if (!regJCheck2 || regJCheck2.tipo !== 'SELIC') continue;
               }
             }
-            if (indiceNorm === 'SELIC' && !this.correcaoConfig.juros_apos_deducao_cs) continue;
+            // SELIC = correction + interest (ADC 58/59) — NEVER add separate juros
+            if (indiceNorm === 'SELIC') continue;
             // PJe-Calc counts interest months inclusive of start month
             const meses = this.mesesEntreInclusivo(new Date(segInicio), new Date(segFim));
             const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
@@ -3720,7 +3722,9 @@ export class PjeCalcEngine {
           const jurosStart = jurosStartDate ? new Date(jurosStartDate) : dataComp;
           const dataLiqD = new Date(dataLiq);
           if (jurosStart < dataLiqD) {
-            const usarADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+            const usarADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC'
+              || this.correcaoConfig.indice === 'COMBINACAO'
+              || (this.correcaoConfig.combinacoes_indice || []).some(c => c.indice === 'SELIC' || c.indice === 'IPCA-E' || c.indice === 'IPCAE');
             if (usarADC && this.correcaoConfig.juros_apos_deducao_cs && this.params.data_citacao) {
               // ADC 58/59: interest = SELIC simple sum (dataCitacao → dataLiquidacao)
               // PJe-Calc uses SIMPLE SUM of monthly SELIC rates, not compound ratio.
