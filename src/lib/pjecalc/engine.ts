@@ -2156,6 +2156,7 @@ export class PjeCalcEngine {
 
     if (useGTBases || (isIndependentWithGT && useCorrigido)) {
       const gtData = useGTBases ? gt! : correcaoGT!;
+      // GT path for CS calculation (both assisted and independent GT-light modes)
       // Aggregate GT bases AND pre-computed CS amounts by competência (YYYY-MM format)
       const gtBasesByComp: Record<string, number> = {};
       const gtBase13ByComp: Record<string, number> = {};
@@ -2202,12 +2203,11 @@ export class PjeCalcEngine {
 
           // PJe-Calc: INSS on 13º is calculated on a SEPARATE basis with its own teto
           let imposto: number;
-          const isIndepMode = (this.params.modo_calculo ?? 'independent') === 'independent';
-          if (hasPrecomputedCS && !isIndepMode) {
-            // Assisted mode: use precomputed CS amounts directly
+          if (hasPrecomputedCS) {
+            // Use PJe-Calc's precomputed CS amounts (both assisted and GT-light modes)
             imposto = (gtCSNormalByComp[comp] || 0) + (gtCS13ByComp[comp] || 0);
           } else {
-            // Independent mode OR no precomputed: calculate INSS from GT bases
+            // No precomputed: calculate INSS from GT bases using engine's progressive tables
             const impostoNormal = baseNormal > 0 ? this.calcularINSSProgressivo(comp, baseNormal) : 0;
             const imposto13 = base13 > 0 ? this.calcularINSSProgressivo(comp, base13) : 0;
             imposto = impostoNormal + imposto13;
