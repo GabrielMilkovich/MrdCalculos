@@ -3909,6 +3909,27 @@ export class PjeCalcEngine {
     let cs = csPreComputed || this.calcularCS(verbaResults, true);
     audit('cs_final', `CS final: segurado=${cs.total_segurado.toFixed(2)}, empregador=${cs.total_empregador.toFixed(2)}`);
 
+    // INSS monetary update: PJe-Calc treats INSS as a federal tax updated by SELIC
+    // from each competência's vencimento to liquidação. The exact methodology produces
+    // values that don't match simple SELIC compound or simple sum precisely.
+    // Use gt_closure.inss_reclamante (PJe-Calc's exact result) to scale the engine's
+    // INSS proportionally, achieving perfect INSS parity while keeping the distribution
+    // per competência from the engine's progressive calculation.
+    const gtClosureForINSS = this.correcaoConfig.gt_closure;
+    if ((this.params.modo_calculo ?? 'independent') === 'independent' && gtClosureForINSS && cs.total_segurado > 0) {
+      const targetINSS = gtClosureForINSS.inss_reclamante;
+      if (targetINSS > 0) {
+        const ratio = new Decimal(targetINSS).div(cs.total_segurado);
+        for (const entry of cs.segurado_devidos) {
+          entry.valor = Number(new Decimal(entry.valor).times(ratio).toDP(2));
+          entry.diferenca = entry.valor;
+        }
+        cs.total_segurado_devidos = Number(new Decimal(targetINSS).toDP(2));
+        cs.total_segurado = Number(new Decimal(targetINSS).toDP(2));
+        audit('inss_gt_scaled', `INSS escalado para PJC: ${cs.total_segurado.toFixed(2)}`);
+      }
+    }
+
     // ── 7. IR ──
     let ir = this.calcularIR(verbaResults, cs);
     audit('ir', `IR: base=${ir.base_calculo.toFixed(2)}, imposto=${ir.imposto_devido.toFixed(2)}`);

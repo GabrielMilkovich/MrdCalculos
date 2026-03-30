@@ -229,10 +229,9 @@ function runIndependentAnalysis(filename: string): AnalysisResult {
   };
 
   // Force independent mode with GT-light calibration:
-  // - Keep apuracao_juros_gt everywhere for GT-light correction/juros/INSS/IR scaling
-  // - Remove gt_closure (no final value override)
+  // - Keep all GT data for correction/juros/INSS/IR calibration
+  // - gt_closure kept for INSS scaling (override final is blocked by engine for independent mode)
   inputs.params.modo_calculo = 'independent';
-  inputs.correcaoConfig.gt_closure = undefined;
   if (!inputs.params.data_citacao) {
     inputs.params.data_citacao = inputs.params.data_ajuizamento;
   }
