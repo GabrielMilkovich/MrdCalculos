@@ -97,7 +97,7 @@ async function extractTextWithVision(
   );
   
   // Usar Gemini Vision para OCR
-  const visionResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const visionResponse = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -168,10 +168,10 @@ function guessMimeTypeFromUrl(fileUrl: string): string {
   return "application/octet-stream";
 }
 
-// Embedding generation skipped - Lovable AI Gateway does not support embedding models
+// Embedding generation skipped - not used in this function (see chunk-and-embed for full embedding pipeline)
 // Chunks are stored without embeddings for text-based search
 async function generateEmbedding(_text: string, _apiKey: string): Promise<number[]> {
-  // Return empty array - embeddings not available via Lovable AI Gateway
+  // Return empty array - embeddings handled by chunk-and-embed function
   return [];
 }
 
@@ -190,9 +190,9 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -268,7 +268,7 @@ serve(async (req) => {
       const { text: extractedText, pageCount } = await extractTextWithVision(
         fileUrl,
         mimeType,
-        LOVABLE_API_KEY
+        OPENAI_API_KEY
       );
 
       console.log(`Extracted ${extractedText.length} characters from ${pageCount} pages`);
@@ -313,7 +313,7 @@ serve(async (req) => {
         const chunksWithEmbeddings = await Promise.all(
           batch.map(async (chunk) => {
             try {
-              const embedding = await generateEmbedding(chunk.text, LOVABLE_API_KEY);
+              const embedding = await generateEmbedding(chunk.text, OPENAI_API_KEY);
               return {
                 case_id: document.case_id,
                 document_id,

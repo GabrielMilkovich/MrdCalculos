@@ -1,4 +1,6 @@
-project_id = "guozwjosshsmcgzstroe"
+# Replace with your own Supabase project ID:
+# Run: supabase link --project-ref YOUR_PROJECT_ID
+project_id = ""
 
 [functions.extract-facts]
 verify_jwt = false

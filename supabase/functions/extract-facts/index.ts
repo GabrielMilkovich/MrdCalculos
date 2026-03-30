@@ -93,9 +93,9 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -156,12 +156,12 @@ Exemplo: Se o texto diz "admitido em 10 de maio de 2015", copie exatamente isso.
 ## FORMATO DE SAÍDA ##
 Retorne os fatos usando a função extract_facts com citação obrigatória para cada item.`;
 
-    console.log("Calling Lovable AI for fact extraction with tool calling...");
+    console.log("Calling OpenAI for fact extraction with tool calling...");
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

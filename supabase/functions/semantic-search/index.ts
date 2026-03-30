@@ -13,7 +13,7 @@ const corsHeaders = {
 
 // Função para gerar embeddings
 async function generateEmbedding(text: string, apiKey: string): Promise<number[]> {
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -67,9 +67,9 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -88,7 +88,7 @@ serve(async (req) => {
     console.log(`Semantic search: "${query}" (case: ${case_id || 'any'}, threshold: ${threshold})`);
 
     // Gerar embedding da query
-    const queryEmbedding = await generateEmbedding(query, LOVABLE_API_KEY);
+    const queryEmbedding = await generateEmbedding(query, OPENAI_API_KEY);
     
     if (queryEmbedding.length === 0) {
       return new Response(
@@ -149,7 +149,7 @@ serve(async (req) => {
       console.log(`Searching for specific topics: ${topics.join(', ')}`);
       
       for (const topic of topics) {
-        const topicEmbedding = await generateEmbedding(topic, LOVABLE_API_KEY);
+        const topicEmbedding = await generateEmbedding(topic, OPENAI_API_KEY);
         
         const { data: topicChunks } = await supabase.rpc('match_chunks', {
           query_embedding: `[${topicEmbedding.join(',')}]`,

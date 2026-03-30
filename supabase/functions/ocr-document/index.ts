@@ -217,7 +217,7 @@ async function extractTextWithVision(
       console.log(`[OCR] Attempt ${totalAttempts}: model=${model}, retry=${attempt}/${MAX_RETRIES}`);
       
       try {
-        const visionResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const visionResponse = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${apiKey}`,
@@ -327,9 +327,9 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -428,7 +428,7 @@ serve(async (req) => {
       }
 
       // Executar OCR blindado
-      const result = await extractTextWithVision(fileUrl, mimeType, LOVABLE_API_KEY);
+      const result = await extractTextWithVision(fileUrl, mimeType, OPENAI_API_KEY);
 
       console.log(`[OCR] COMPLETED: ${result.text.length} chars, ${result.pageCount} pages, confidence=${result.confidence}, model=${result.modelUsed}, attempts=${result.attempts}`);
 
