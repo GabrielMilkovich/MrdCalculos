@@ -56,9 +56,13 @@ export { convertPjcToEngineInputs } from './pjc-to-engine';
 export { calcularCorrecaoPorData } from './correction-by-date';
 
 // Reflexo DAG engine
-export { calcularReflexos } from './reflexo-engine';
+export { gerarReflexosPadrao, gerarReflexosComCascata } from './reflexo-engine';
 
 // Offset engine — removed (offset-engine deleted)
+
+// Regime temporal ADC 58/59
+export { buildRegimeTemporalADC58 } from './regime-temporal';
+export type { RegimeTemporal } from './regime-temporal';
 
 // Constants
 export { INSS_TETO_2025, SALARIO_MINIMO_2025 } from './engine-constants';
