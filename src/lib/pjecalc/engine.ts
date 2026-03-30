@@ -1892,12 +1892,10 @@ export class PjeCalcEngine {
         const taxaJuros = gtJurosByComp.get(comp);
 
         if (taxaJuros !== undefined && taxaJuros > 0) {
-          // Pro-rata CS share for this occurrence
-          const csShare = totalCorrigido > 0
-            ? Number(new Decimal(totalCSDescontado).times(oc.valor_corrigido).div(totalCorrigido).toDP(2))
-            : 0;
-          const baseJuros = new Decimal(oc.valor_corrigido).minus(csShare);
-          oc.juros = Number(baseJuros.times(taxaJuros / 100).toDP(2));
+          // Apply GT taxa_juros directly on valor_corrigido.
+          // The taxa_juros from PJe-Calc was already computed on (corrigido - CS),
+          // so we must NOT deduct CS again (would be double-deduction).
+          oc.juros = Number(new Decimal(oc.valor_corrigido).times(taxaJuros / 100).toDP(2));
         } else {
           oc.juros = 0;
         }
