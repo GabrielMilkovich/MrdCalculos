@@ -359,7 +359,7 @@ Responda APENAS com o JSON no formato especificado.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -486,7 +486,7 @@ ${memoriaCalculoHtml}
           not_found_facts: notFoundFacts,
         },
         generation_time_ms: Date.now() - startTime,
-        ai_model_used: "openai/gpt-5",
+        ai_model_used: "gpt-4o",
         created_by: user.id,
       })
       .select()

@@ -208,7 +208,7 @@ Produza o roteiro completo, exaustivo e detalhado para o advogado. Não omita NE
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

@@ -14,9 +14,9 @@ const corsHeaders = {
 
 // Modelos em ordem de prioridade (fallback automático)
 const AI_MODELS = [
-  "openai/gpt-5-mini",
-  "openai/gpt-5",
-  "openai/gpt-5-nano",
+  "gpt-4o-mini",
+  "gpt-4o",
+  "gpt-4o-mini",
 ];
 
 const MAX_RETRIES = 3;

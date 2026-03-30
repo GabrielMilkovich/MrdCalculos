@@ -165,7 +165,7 @@ Retorne os fatos usando a função extract_facts com citação obrigatória para
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5-mini",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Analise os seguintes documentos trabalhistas e extraia todos os fatos relevantes:\n\n${combinedText.substring(0, 50000)}` },

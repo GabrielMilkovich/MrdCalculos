@@ -183,7 +183,7 @@ Regras:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Analise os fatos do caso e sugira o plano de cálculo:\n\n${factsText}` },

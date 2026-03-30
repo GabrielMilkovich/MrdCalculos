@@ -1,6 +1,7 @@
-# Replace with your own Supabase project ID:
-# Run: supabase link --project-ref YOUR_PROJECT_ID
-project_id = ""
+project_id = "cbtabmvplmkslwabpvqf"
+
+[functions.populate-bcb-indices]
+verify_jwt = false
 
 [functions.extract-facts]
 verify_jwt = false

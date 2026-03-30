@@ -212,7 +212,7 @@ Considere:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Revise criticamente o seguinte caso:\n\nFatos:\n${factsText}${calculatorsText}${resultText}` },

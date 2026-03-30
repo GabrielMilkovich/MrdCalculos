@@ -71,7 +71,7 @@ O ano de referência provável é ${ano_referencia || "indicado no documento"}.`
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5-mini",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Analise o seguinte documento e extraia TODAS as rubricas de pagamento com seus valores mensais.\n\nDOCUMENTO:\n${texto_documento.slice(0, 50000)}` },
