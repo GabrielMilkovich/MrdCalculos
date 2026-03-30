@@ -54,6 +54,8 @@ export interface CorrecaoPorDataConfig {
   base_de_juros_das_verbas?: string; // 'DIFERENCA' | 'DEVIDO' | 'CORRIGIDO'
   /** Interest start date (ajuizamento or citação) */
   juros_inicio_data?: string;
+  /** Súmula 381: shift +1 month for correction origin. Default: true (MES_SUBSEQUENTE) */
+  sumula_381_shift?: boolean;
 }
 
 export interface IndiceDB {
@@ -156,6 +158,9 @@ const ZERO_CORRECTION_INDICES = new Set([
   'SEM_CORRECAO', 'NENHUM', 'Sem Correção', 'Sem Correcao', 'Isento',
 ]);
 
+// Module-level flag set by aplicarCorrecaoPorData before calling calcularFatorCorrecao
+let _sumula381Shift: boolean = true;
+
 /**
  * Calculates correction factor between two dates using accumulated index data.
  * 
@@ -211,14 +216,18 @@ function calcularFatorCorrecao(
       ? prevMonth + '-01'
       : compDestino;
 
-  // Súmula 381 TST: correção incide a partir do MÊS SUBSEQUENTE ao vencimento.
-  // Fator = acumulado[destino] / acumulado[mês_subsequente_à_origem]
-  const [anoOrig, mesOrig] = compOrigem.slice(0, 7).split('-').map(Number);
-  const mesSubsequente = mesOrig === 12
-    ? `${anoOrig + 1}-01`
-    : `${anoOrig}-${String(mesOrig + 1).padStart(2, '0')}`;
+  // Súmula 381 TST: quando ativo, correção incide a partir do MÊS SUBSEQUENTE.
+  // Controlado por `indicesAcumulados` do PJC XML:
+  //   MES_SUBSEQUENTE_AO_VENCIMENTO → shift +1 (padrão trabalhista)
+  //   MES_DO_VENCIMENTO → sem shift
+  const mesOrigem = (() => {
+    // _sumula381Shift is set by the caller before invoking
+    if (_sumula381Shift === false) return compOrigem.slice(0, 7);
+    const [ano, mes] = compOrigem.slice(0, 7).split('-').map(Number);
+    return mes === 12 ? `${ano + 1}-01` : `${ano}-${String(mes + 1).padStart(2, '0')}`;
+  })();
 
-  const origemArr = dados.filter(i => i.competencia.slice(0, 7) >= mesSubsequente);
+  const origemArr = dados.filter(i => i.competencia.slice(0, 7) >= mesOrigem);
   if (!origemArr[0]) {
     warnings.push({
       code: 'W381',
@@ -287,6 +296,9 @@ export function aplicarCorrecaoPorData(
   indicesDB: IndiceDB[] = [],
 ): CorrecaoResultado {
   const warnings: CorrecaoWarning[] = [];
+
+  // Set Súmula 381 behavior from config (read from PJC XML indicesAcumulados)
+  _sumula381Shift = config.sumula_381_shift !== false;
 
   if (valor === 0) {
     return {

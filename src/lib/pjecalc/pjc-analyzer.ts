@@ -88,6 +88,25 @@ export interface PJCAnalysis {
    *   for independent mode with ADC 58/59 (IPCA-E/SELIC) to work correctly.
    */
   avisos?: Array<{ codigo: string; mensagem: string }>;
+  /** Configuração de cálculo lida diretamente do XML */
+  calculo_config: PJCCalculoConfig;
+}
+
+export interface PJCCalculoConfig {
+  /** Súmula 381: como usar os índices de correção */
+  indices_acumulados: 'MES_SUBSEQUENTE_AO_VENCIMENTO' | 'MES_DO_VENCIMENTO' | string;
+  /** Como calcular a média dos reflexos */
+  comportamento_reflexo: string;
+  /** Gabarito de dadosEstruturados do PJe-Calc */
+  gabarito: {
+    imposto_renda: number;
+    inss_reclamante: number;
+    inss_reclamado: number;
+    valor_principal: number;
+    fgts_deposito: number;
+  };
+  /** Número de meses para RRA */
+  nm_rra?: number;
 }
 
 /** Entry from PJe-Calc's <ApuracaoDeJuros> — consolidated corrected values per competência */
@@ -728,6 +747,36 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       recebeu: getTextContent(segEl, 'recebeu') === 'true',
     } : undefined,
     avisos: avisos.length > 0 ? avisos : undefined,
+    calculo_config: {
+      indices_acumulados: parametros.indices_acumulados || 'MES_SUBSEQUENTE_AO_VENCIMENTO',
+      comportamento_reflexo: (() => {
+        // Read from first reflexo verba, or default
+        const reflexoEl = root.getElementsByTagName('Reflexo')[0];
+        if (reflexoEl) {
+          const comp = getTextContent(reflexoEl, 'comportamentoDoReflexo');
+          if (comp) return comp;
+        }
+        return 'MEDIA_PELO_VALOR_CORRIGIDO';
+      })(),
+      gabarito: {
+        imposto_renda: resultado.imposto_renda,
+        inss_reclamante: resultado.inss_reclamante,
+        inss_reclamado: resultado.inss_reclamado,
+        valor_principal: resultado.liquido_exequente,
+        fgts_deposito: resultado.fgts_deposito,
+      },
+      nm_rra: (() => {
+        const nmEl = root.getElementsByTagName('ImpostoRenda')[0]
+          || root.getElementsByTagName('impostoDeRenda')[0];
+        if (nmEl) {
+          const nm = parseNum(getTextContent(nmEl, 'numeroMeses')
+            || getTextContent(nmEl, 'mesesRRA')
+            || getTextContent(nmEl, 'quantidadeDeMeses'));
+          if (nm > 0) return nm;
+        }
+        return undefined;
+      })(),
+    },
   };
 }
 
