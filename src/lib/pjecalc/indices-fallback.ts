@@ -407,3 +407,60 @@ export const TR_ACUMULADO: Record<string, number> = {
   '2025-10': 104.70404600, '2025-11': 104.70404600, '2025-12': 104.70404600,
   '2026-01': 104.70404600, '2026-02': 104.70404600,
 };
+
+// =====================================================
+// SISTEMA DE ALERTA DE DESATUALIZAÇÃO
+// =====================================================
+
+export function getUltimoMesDisponivel(): {
+  ipca_e: string;
+  selic: string;
+  tr: string;
+  mais_antigo: string;
+} {
+  const ultimoIPCAE = Object.keys(IPCA_E_ACUMULADO).sort().pop() ?? '2015-01';
+  const ultimoSELIC = Object.keys(SELIC_ACUMULADO).sort().pop() ?? '2015-01';
+  const ultimoTR = Object.keys(TR_ACUMULADO).sort().pop() ?? '2015-01';
+  const maisAntigo = [ultimoIPCAE, ultimoSELIC, ultimoTR].sort()[0];
+  return { ipca_e: ultimoIPCAE, selic: ultimoSELIC, tr: ultimoTR, mais_antigo: maisAntigo };
+}
+
+export function verificarDesatualizacaoIndices(dataLiquidacao: string): {
+  desatualizado: boolean;
+  meses_de_atraso: number;
+  warnings: string[];
+  bloqueante: boolean;
+} {
+  const disponivel = getUltimoMesDisponivel();
+  const mesLiquidacao = dataLiquidacao.slice(0, 7);
+  const [anoDisp, mesDisp] = disponivel.mais_antigo.split('-').map(Number);
+  const [anoLiq, mesLiq] = mesLiquidacao.split('-').map(Number);
+  const mesesAtraso = (anoLiq - anoDisp) * 12 + (mesLiq - mesDisp);
+
+  const warnings: string[] = [];
+  let bloqueante = false;
+
+  if (mesesAtraso > 0) {
+    warnings.push(
+      `⚠️ ÍNDICES DESATUALIZADOS: dados até ${disponivel.mais_antigo}, liquidação em ${mesLiquidacao}. Atraso: ${mesesAtraso} mês(es). Execute 'npm run update-indices'.`
+    );
+  }
+  if (mesesAtraso > 3) {
+    warnings.push(
+      `🔴 ATENÇÃO: índices com mais de 3 meses de atraso. Correção monetária e juros podem estar incorretos.`
+    );
+  }
+  if (mesesAtraso > 6) {
+    bloqueante = true;
+    warnings.push(
+      `🚫 BLOQUEIO: índices com mais de 6 meses de atraso. Atualize antes de prosseguir.`
+    );
+  }
+
+  return {
+    desatualizado: mesesAtraso > 0,
+    meses_de_atraso: Math.max(0, mesesAtraso),
+    warnings,
+    bloqueante,
+  };
+}

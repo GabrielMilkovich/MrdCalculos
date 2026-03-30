@@ -50,6 +50,7 @@ import {
   type PjeSalarioFamiliaConfig,
 } from './engine';
 import * as svc from './service';
+import { verificarDesatualizacaoIndices, getUltimoMesDisponivel } from './indices-fallback';
 import type {
   EngineExecutionFingerprint,
   PjecalcParametrosRow,
@@ -959,6 +960,14 @@ export async function executarLiquidacao(
 
   if (!caseData.params) {
     throw new Error('Parâmetros do cálculo não encontrados. Preencha primeiro.');
+  }
+
+  // ── Verificar desatualização dos índices ──
+  const statusIndices = verificarDesatualizacaoIndices(
+    caseData.params.data_liquidacao || new Date().toISOString().slice(0, 10)
+  );
+  if (statusIndices.bloqueante) {
+    throw new Error(`[INDICES_DESATUALIZADOS] ${statusIndices.warnings.join(' | ')}`);
   }
 
   // 2. Load historico ocorrencias + reference tables IN PARALLEL
