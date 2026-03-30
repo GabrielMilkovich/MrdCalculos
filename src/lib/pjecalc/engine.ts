@@ -1291,11 +1291,8 @@ export class PjeCalcEngine {
         let indiceCorrecao = 1;
         let juros = 0;
 
-        // ═══ PJC Ground Truth: use precomputed correction factor when available ═══
-        // Use PJC correction factor as reference data when available.
-        // This is NOT GT calibration — it's using the same BCB reference data
-        // that PJe-Calc used. INSS, IR, juros are still calculated by our engine.
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // PJC correction factor: only use in assisted mode, not independent
+        if (modoCalculo !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
 
@@ -1465,8 +1462,8 @@ export class PjeCalcEngine {
         // Interest is always calculated separately by PJe-Calc.
         // For SELIC regime: the correction factor already includes interest → skip separate interest.
         // For IPCA-E/other: apply interest separately after correction.
-        // Use PJC correction factor as BCB reference data (both modes)
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // PJC correction factor: only in assisted mode, independent calculates from DB
+        if ((this.params.modo_calculo ?? 'independent') !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
           const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
           const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
@@ -2184,15 +2181,12 @@ export class PjeCalcEngine {
     }
 
     // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact CS bases/values ═══
-    // In assisted mode: full GT override. In independent mode: use GT bases for INSS
-    // calculation but compute INSS amounts independently (GT-light).
+    // Only in assisted mode — independent mode calculates from engine data
     const gt = this.csConfig.apuracao_juros_gt;
-    const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
-    const useGTBases = gt && gt.length > 0 && useCorrigido;
-    const isIndependentWithGT = (this.params.modo_calculo ?? 'independent') === 'independent' && correcaoGT && correcaoGT.length > 0;
+    const useGTBases = (this.params.modo_calculo ?? 'independent') !== 'independent' && gt && gt.length > 0 && useCorrigido;
 
-    if (useGTBases || (isIndependentWithGT && useCorrigido)) {
-      const gtData = useGTBases ? gt! : correcaoGT!;
+    if (useGTBases) {
+      const gtData = gt!;
       // GT path for CS calculation (both assisted and independent GT-light modes)
       // Aggregate GT bases AND pre-computed CS amounts by competência (YYYY-MM format)
       const gtBasesByComp: Record<string, number> = {};
@@ -2524,11 +2518,7 @@ export class PjeCalcEngine {
       return this.calcularIRFromGT(gt, csResult);
     }
 
-    // GT-light for IR: use correcaoConfig GT bases when available in independent mode
-    const correcaoGTForIR = this.correcaoConfig.apuracao_juros_gt;
-    if ((this.params.modo_calculo ?? 'independent') === 'independent' && correcaoGTForIR && correcaoGTForIR.length > 0) {
-      return this.calcularIRFromGT(correcaoGTForIR, csResult);
-    }
+    // Independent mode: calculate IR from engine data, not GT bases
 
     let baseBruta = 0;
     let base13 = 0;
@@ -3432,10 +3422,8 @@ export class PjeCalcEngine {
         let indiceCorrecao = 1;
 
         // Use PJC ground truth correction factor when available (assisted mode only)
-        // Use PJC correction factor as reference data when available.
-        // This is NOT GT calibration — it's using the same BCB reference data
-        // that PJe-Calc used. INSS, IR, juros are still calculated by our engine.
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // PJC correction factor: only in assisted mode
+        if ((this.params.modo_calculo ?? 'independent') !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
           oc.pjc_ground_truth_regime = this.correcaoConfig.indice || 'SELIC';
@@ -3496,8 +3484,8 @@ export class PjeCalcEngine {
         if (oc.diferenca === 0) continue;
         
         // Use PJC ground truth correction factor when available (assisted mode only)
-        // Use PJC correction factor as BCB reference data (both modes)
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // PJC correction factor: only in assisted mode, independent calculates from DB
+        if ((this.params.modo_calculo ?? 'independent') !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           // Determine regime for this occurrence
           const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
           const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
@@ -3904,11 +3892,7 @@ export class PjeCalcEngine {
 
       if (hasGT) {
         if ((this.params.modo_calculo ?? 'independent') === 'independent') {
-          // GT-light calibration: scale correction to match GT valorCorrigido per competência
-          // but DON'T use gt_closure to override final values.
-          // This uses PJe-Calc's exact correction as reference while keeping INSS/IR independent.
-          this.calibrarCorrecaoGTLeve(verbaResults);
-          audit('gt_light', 'Calibração GT leve (correção per competência, sem override)');
+          audit('gt_blocked', 'Calibração GT bloqueada — modo independente calcula do zero');
         } else {
           this.calibrarCorrecaoComGT(verbaResults, false);
           audit('gt_calibracao', 'Calibração GT (correção only)');
@@ -3921,9 +3905,9 @@ export class PjeCalcEngine {
 
       if (hasGT) {
         if ((this.params.modo_calculo ?? 'independent') === 'independent') {
-          // GT-light: apply juros using GT taxa_juros rates per competência
-          this.aplicarJurosGTLeve(verbaResults, csDescontadoPreJuros);
-          audit('gt_light_juros', 'Juros via GT taxa_juros (calibração leve)');
+          // Independent: calculate juros from engine logic, not GT
+          this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
+          audit('juros_independent', 'Juros calculados independentemente (sem GT)');
         } else {
           this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
           audit('gt_juros', 'Calibração GT (juros + CS deduzida)');
@@ -3956,46 +3940,13 @@ export class PjeCalcEngine {
     // INSS monetary update: PJe-Calc treats INSS as a federal tax updated by SELIC
     // from each competência's vencimento to liquidação. The exact methodology produces
     // values that don't match simple SELIC compound or simple sum precisely.
-    // Use gt_closure.inss_reclamante (PJe-Calc's exact result) to scale the engine's
-    // INSS proportionally, achieving perfect INSS parity while keeping the distribution
-    // per competência from the engine's progressive calculation.
-    const gtClosureForINSS = this.correcaoConfig.gt_closure;
-    if ((this.params.modo_calculo ?? 'independent') === 'independent' && gtClosureForINSS && cs.total_segurado > 0) {
-      const targetINSS = gtClosureForINSS.inss_reclamante;
-      if (targetINSS > 0) {
-        const ratio = new Decimal(targetINSS).div(cs.total_segurado);
-        for (const entry of cs.segurado_devidos) {
-          entry.valor = Number(new Decimal(entry.valor).times(ratio).toDP(2));
-          entry.diferenca = entry.valor;
-        }
-        cs.total_segurado_devidos = Number(new Decimal(targetINSS).toDP(2));
-        cs.total_segurado = Number(new Decimal(targetINSS).toDP(2));
-        audit('inss_gt_scaled', `INSS escalado para PJC: ${cs.total_segurado.toFixed(2)}`);
-      }
-      // Also scale empregador to match gt_closure.inss_reclamado
-      const targetEmp = gtClosureForINSS.inss_reclamado;
-      if (targetEmp > 0 && cs.total_empregador > 0) {
-        const ratioEmp = new Decimal(targetEmp).div(cs.total_empregador);
-        for (const entry of cs.empregador) {
-          entry.empresa = Number(new Decimal(entry.empresa).times(ratioEmp).toDP(2));
-          entry.sat = Number(new Decimal(entry.sat).times(ratioEmp).toDP(2));
-          entry.terceiros = Number(new Decimal(entry.terceiros).times(ratioEmp).toDP(2));
-        }
-        cs.total_empregador = Number(new Decimal(targetEmp).toDP(2));
-        audit('inss_emp_gt_scaled', `INSS empregador escalado: ${cs.total_empregador.toFixed(2)}`);
-      }
-    }
+    // INSS calculated independently — no GT scaling in independent mode
 
     // ── 7. IR ──
     let ir = this.calcularIR(verbaResults, cs);
     audit('ir', `IR: base=${ir.base_calculo.toFixed(2)}, imposto=${ir.imposto_devido.toFixed(2)}`);
 
-    // GT-light IR scaling: use gt_closure.imposto_renda as target
-    const gtClosureForIR = this.correcaoConfig.gt_closure;
-    if ((this.params.modo_calculo ?? 'independent') === 'independent' && gtClosureForIR && gtClosureForIR.imposto_renda > 0) {
-      ir.imposto_devido = gtClosureForIR.imposto_renda;
-      audit('ir_gt_scaled', `IR escalado para PJC: ${ir.imposto_devido.toFixed(2)}`);
-    }
+    // IR calculated independently — no GT scaling in independent mode
 
     // ── 7b. GT Closure Override: Inject exact PJC values for CS & IR ──
     // When gt_closure is available, the PJC resultado is the authoritative source.
