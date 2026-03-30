@@ -7,7 +7,7 @@
 import Decimal from 'decimal.js';
 import { getReformaRules, REFORMA_DATE } from './reforma-trabalhista';
 import { getFPASByCodigo } from './terceiros-contributions';
-import { IPCA_E_ACUMULADO, SELIC_ACUMULADO } from './indices-fallback';
+import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO } from './indices-fallback';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
 
@@ -980,6 +980,8 @@ export class PjeCalcEngine {
       'IPCA-E': IPCA_E_ACUMULADO,
       'IPCA': IPCA_E_ACUMULADO,
       'SELIC': SELIC_ACUMULADO,
+      'TR': TR_ACUMULADO,
+      'TRD': TR_ACUMULADO,
     };
     const fallback = fallbackMap[nomeIndice];
     if (!fallback) return null;
