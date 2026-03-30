@@ -3549,7 +3549,8 @@ export class PjeCalcEngine {
               }
             }
             if (indiceNorm === 'SELIC' && !this.correcaoConfig.juros_apos_deducao_cs) continue;
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
+            // PJe-Calc counts interest months inclusive of start month
+            const meses = this.mesesEntreInclusivo(new Date(segInicio), new Date(segFim));
             const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
             jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
           }
@@ -3563,15 +3564,24 @@ export class PjeCalcEngine {
           if (jurosStart < dataLiqD) {
             const usarADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
             if (usarADC && this.correcaoConfig.juros_apos_deducao_cs && this.params.data_citacao) {
-              // ADC 58/59: interest = SELIC(dataCitacao → dataLiquidacao)
+              // ADC 58/59: interest = SELIC simple sum (dataCitacao → dataLiquidacao)
+              // PJe-Calc uses SIMPLE SUM of monthly SELIC rates, not compound ratio.
               const compCitacao = this.params.data_citacao.slice(0, 7);
               const compLiqD = dataLiq.slice(0, 7);
-              const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiqD);
-              if (fatorSELIC !== null) {
-                oc.juros = Number(baseJuros.times(fatorSELIC - 1).toDP(2, Decimal.ROUND_HALF_EVEN));
+              const selicMonthlySum = this.indicesDB
+                .filter(idx => (idx.indice === 'SELIC' || idx.indice === 'selic') && idx.competencia.slice(0, 7) >= compCitacao && idx.competencia.slice(0, 7) < compLiqD)
+                .reduce((s, idx) => s + (idx.valor || 0), 0);
+              if (selicMonthlySum > 0) {
+                oc.juros = Number(baseJuros.times(selicMonthlySum / 100).toDP(2, Decimal.ROUND_HALF_EVEN));
               } else {
-                this.trackWarning('W049', 'juros', `SELIC ausente para ${compCitacao}→${compLiqD} (juros ADC 58/59 legacy). Usando 0.`, oc.competencia);
-                oc.juros = 0;
+                // Fallback: compound ratio if monthly values unavailable
+                const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiqD);
+                if (fatorSELIC !== null) {
+                  oc.juros = Number(baseJuros.times(fatorSELIC - 1).toDP(2, Decimal.ROUND_HALF_EVEN));
+                } else {
+                  this.trackWarning('W049', 'juros', `SELIC ausente para ${compCitacao}→${compLiqD} (juros ADC 58/59 legacy). Usando 0.`, oc.competencia);
+                  oc.juros = 0;
+                }
               }
             } else {
               // FIX 1: PJe-Calc counts interest months inclusive of start month
