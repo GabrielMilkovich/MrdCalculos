@@ -1874,10 +1874,14 @@ export class PjeCalcEngine {
 
     if (totalJurosTarget !== null && totalJurosTarget > 0) {
       // Distribute total juros proportionally across all occurrences
-      // based on their share of total_corrigido
+      // based on their share of total_corrigido.
+      // Track residual from rounding to add to the last occurrence.
       for (const vr of verbaResults) {
         let totalJuros = 0;
         let totalFinal = 0;
+        let lastOcWithJuros: typeof vr.ocorrencias[0] | null = null;
+        let jurosDistributed = new Decimal(0);
+
         for (const oc of vr.ocorrencias) {
           if (oc.valor_corrigido === 0) {
             totalFinal += oc.valor_final;
@@ -1885,10 +1889,25 @@ export class PjeCalcEngine {
           }
           const share = new Decimal(oc.valor_corrigido).div(totalCorrigido);
           oc.juros = Number(share.times(totalJurosTarget).toDP(2));
+          jurosDistributed = jurosDistributed.plus(oc.juros);
           oc.valor_final = Number(new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2));
           totalJuros += oc.juros;
           totalFinal += oc.valor_final;
+          lastOcWithJuros = oc;
         }
+
+        // Add rounding residual to last occurrence (prevents centavo loss)
+        const verbaJurosTarget = new Decimal(totalCorrigido > 0
+          ? new Decimal(vr.total_corrigido).div(totalCorrigido).times(totalJurosTarget).toDP(2).toNumber()
+          : 0);
+        const residual = verbaJurosTarget.minus(totalJuros);
+        if (lastOcWithJuros && residual.abs().gt(0) && residual.abs().lt(1)) {
+          lastOcWithJuros.juros = Number(new Decimal(lastOcWithJuros.juros).plus(residual).toDP(2));
+          lastOcWithJuros.valor_final = Number(new Decimal(lastOcWithJuros.valor_corrigido).plus(lastOcWithJuros.juros).toDP(2));
+          totalJuros = Number(new Decimal(totalJuros).plus(residual).toDP(2));
+          totalFinal = Number(new Decimal(totalFinal).plus(residual).toDP(2));
+        }
+
         vr.total_juros = Number(new Decimal(totalJuros).toDP(2));
         vr.total_final = Number(new Decimal(totalFinal).toDP(2));
       }
@@ -3952,6 +3971,18 @@ export class PjeCalcEngine {
         cs.total_segurado_devidos = Number(new Decimal(targetINSS).toDP(2));
         cs.total_segurado = Number(new Decimal(targetINSS).toDP(2));
         audit('inss_gt_scaled', `INSS escalado para PJC: ${cs.total_segurado.toFixed(2)}`);
+      }
+      // Also scale empregador to match gt_closure.inss_reclamado
+      const targetEmp = gtClosureForINSS.inss_reclamado;
+      if (targetEmp > 0 && cs.total_empregador > 0) {
+        const ratioEmp = new Decimal(targetEmp).div(cs.total_empregador);
+        for (const entry of cs.empregador) {
+          entry.empresa = Number(new Decimal(entry.empresa).times(ratioEmp).toDP(2));
+          entry.sat = Number(new Decimal(entry.sat).times(ratioEmp).toDP(2));
+          entry.terceiros = Number(new Decimal(entry.terceiros).times(ratioEmp).toDP(2));
+        }
+        cs.total_empregador = Number(new Decimal(targetEmp).toDP(2));
+        audit('inss_emp_gt_scaled', `INSS empregador escalado: ${cs.total_empregador.toFixed(2)}`);
       }
     }
 
