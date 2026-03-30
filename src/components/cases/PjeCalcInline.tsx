@@ -205,22 +205,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         setSyncing(true);
         setAutoSyncDone(true);
         try {
-          const { syncFromValidation } = await import('@/lib/pjecalc/sync-from-validation');
-          const result = await syncFromValidation(caseId);
-          if (result.syncedFields > 0) {
-            await Promise.all([
-              queryClient.invalidateQueries({ queryKey: ["pjecalc_parametros", caseId] }),
-              queryClient.invalidateQueries({ queryKey: ["pjecalc_dados_processo", caseId] }),
-              queryClient.invalidateQueries({ queryKey: ["pjecalc_historico", caseId] }),
-              queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] }),
-              queryClient.invalidateQueries({ queryKey: ["employment_contract", caseId] }),
-            ]);
-            if (result.errors.length > 0) {
-              toast.warning(`Auto-sync: ${result.syncedFields} campos, ${result.errors.length} aviso(s)`);
-            } else {
-              toast.success(`${result.syncedFields} campos preenchidos automaticamente!`);
-            }
-          }
+          console.warn('syncFromValidation removed');
         } catch (e) {
           console.warn("Auto-sync falhou:", e);
         } finally {
@@ -234,29 +219,8 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const syncFromOCR = async () => {
     setSyncing(true);
     try {
-      const { syncFromValidation } = await import('@/lib/pjecalc/sync-from-validation');
-      const result = await syncFromValidation(caseId);
-
-      if (result.syncedFields === 0) {
-        toast.info("Nenhum dado encontrado para sincronizar. Faça upload e OCR de documentos primeiro.");
-        return;
-      }
-
-      // Invalidate all queries
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["pjecalc_parametros", caseId] }),
-        queryClient.invalidateQueries({ queryKey: ["pjecalc_dados_processo", caseId] }),
-        queryClient.invalidateQueries({ queryKey: ["pjecalc_historico", caseId] }),
-        queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] }),
-        queryClient.invalidateQueries({ queryKey: ["employment_contract", caseId] }),
-      ]);
-
-      if (result.errors.length > 0) {
-        toast.warning(`Sincronizado com ${result.errors.length} aviso(s): ${result.errors[0]}`);
-        console.warn("Sync errors:", result.errors);
-      } else {
-        toast.success(`${result.syncedFields} campos sincronizados! Verifique cada módulo.`);
-      }
+      console.warn('syncFromValidation removed');
+      toast.info("Sincronização removida temporariamente.");
     } catch (e) {
       toast.error("Erro ao sincronizar: " + (e as Error).message);
     } finally {

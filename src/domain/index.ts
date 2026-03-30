@@ -4,4 +4,5 @@ export * from './judicial-title-resolver';
 export * from './incidence-engine';
 export * from './rubric-classifier';
 export * from './reflection-engine';
-export * from './offset-engine';
+// offset-engine: lib dependency deleted, exports moved to local stubs
+export { applyDomainOffsets, type DomainOffsetContext, type DomainPaidItem, type DomainOffsetResult } from './offset-engine';

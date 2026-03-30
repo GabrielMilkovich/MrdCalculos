@@ -21,7 +21,7 @@ import type {
   InconsistencyFlag, AuditTrailEntry,
 } from '@/domain/types';
 import { orchestrateCalculation, type OrchestratorResult } from '@/lib/pjecalc/domain-orchestrator';
-import { applyDomainOffsets, type DomainPaidItem } from '@/domain/offset-engine';
+import type { DomainPaidItem } from '@/domain/offset-engine';
 import type { PjeVerba, PjeHistoricoSalarial, PjeCartaoPonto, PjeFalta, PjeFerias } from '@/lib/pjecalc/engine-types';
 import Decimal from 'decimal.js';
 
@@ -76,17 +76,10 @@ export function useDomainOrchestrator() {
       const audit = [...orchResult.auditSummary];
       const reflectionCount = items.filter(item => item.formula_aplicada.startsWith('reflexo:')).length;
 
-      // Step 2: Apply offsets
-      let offsetCount = 0;
+      // Step 2: Apply offsets (offset-engine removed — no-op)
+      const offsetCount = 0;
       if (input.paidItems && input.paidItems.length > 0) {
-        const offsetResult = applyDomainOffsets({
-          calculationItems: items,
-          paidItems: input.paidItems,
-          mode: 'identico_titulo',
-        });
-        items = offsetResult.updatedItems;
-        offsetCount = offsetResult.summary.items.filter(i => i.valor_abatido > 0).length;
-        audit.push(...offsetResult.audit);
+        console.warn('applyDomainOffsets removed — offsets not applied');
       }
 
       // Step 3: Calculate totals

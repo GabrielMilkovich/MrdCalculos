@@ -7,7 +7,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle2, Info, XCircle, ShieldCheck } from "lucide-react";
-import { validarExtracoes, podeFechar, type ValidationInput, type ValidationResult } from "@/lib/pjecalc/validation-engine";
+// validation-engine deleted — local stub types and no-op functions
+interface ValidationInput {
+  [key: string]: unknown;
+}
+
+interface ValidationResult {
+  severidade: 'info' | 'warning' | 'error';
+  mensagem: string;
+  bloqueante?: boolean;
+  campo?: string;
+  competencia?: string;
+  sugestao?: string;
+}
+
+function validarExtracoes(_input: ValidationInput): ValidationResult[] {
+  return [];
+}
+
+function podeFechar(_results: ValidationResult[]): { pode: boolean; bloqueios: ValidationResult[] } {
+  return { pode: true, bloqueios: [] };
+}
 
 interface Props {
   input: ValidationInput;

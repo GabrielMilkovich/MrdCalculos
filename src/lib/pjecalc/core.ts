@@ -58,8 +58,7 @@ export { calcularCorrecaoPorData } from './correction-by-date';
 // Reflexo DAG engine
 export { calcularReflexos } from './reflexo-engine';
 
-// Offset engine
-export { calcularOffsets } from './offset-engine';
+// Offset engine — removed (offset-engine deleted)
 
 // Constants
 export { INSS_TETO_2025, SALARIO_MINIMO_2025 } from './engine-constants';

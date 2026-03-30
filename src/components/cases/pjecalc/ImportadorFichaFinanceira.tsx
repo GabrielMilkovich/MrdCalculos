@@ -250,20 +250,8 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
         qc.invalidateQueries({ queryKey: ["pjecalc_historico_ocorrencias"] }),
       ]);
 
-      // Auto-sync: preencher parâmetros/dados processo/verbas a partir dos dados importados
-      try {
-        const { syncFromValidation } = await import('@/lib/pjecalc/sync-from-validation');
-        const syncResult = await syncFromValidation(caseId);
-        if (syncResult.syncedFields > 0) {
-          await Promise.all([
-            qc.invalidateQueries({ queryKey: ["pjecalc_parametros", caseId] }),
-            qc.invalidateQueries({ queryKey: ["pjecalc_dados_processo", caseId] }),
-            qc.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] }),
-          ]);
-        }
-      } catch (syncErr) {
-        console.warn("Auto-sync após importação falhou:", syncErr);
-      }
+      // Auto-sync removed (sync-from-validation deleted)
+      console.warn('syncFromValidation removed');
 
       if (errorCount > 0) {
         toast.warning(`${importedCount} rubrica(s) importada(s), ${errorCount} com erro. Verifique o console.`);
