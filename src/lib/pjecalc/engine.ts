@@ -2417,24 +2417,32 @@ export class PjeCalcEngine {
 
   // Helper: calcular INSS progressivo para uma competência
   // PJe-Calc usa ROUND_HALF_EVEN (Banker's rounding) para CS e IR
-  private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_EVEN;
+  private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_UP; // PJe-Calc standard
 
   // INSS pré-EC 103/2019: alíquota única aplicada sobre o salário total
   // (o salário cai numa das 3 faixas e toda a base é tributada nessa alíquota)
   private calcularINSSAliquotaUnica(comp: string, base: number): number {
     const faixas = this.getFaixasINSSParaCompetencia(comp);
+    if (!faixas || faixas.length === 0) return 0;
+
+    const baseD = new Decimal(base);
+
     for (const faixa of faixas) {
-      if (base <= faixa.ate) {
-        return new Decimal(base).times(faixa.aliquota)
-          .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+      if (baseD.lte(faixa.ate)) {
+        return baseD
+          .times(faixa.aliquota)
+          .toDP(2, PjeCalcEngine.ROUND_CS_IR)
+          .toNumber();
       }
     }
-    // Acima de todas as faixas: usa alíquota da última, base limitada ao teto
-    // (pré-2020 flat-rate: não há progressividade acima do teto — contribuição máxima)
+
+    // Base excede todas as faixas: teto = last faixa.ate, alíquota = last faixa.aliquota
     const ultima = faixas[faixas.length - 1];
-    const baseCapped = Math.min(base, ultima.ate);
-    return new Decimal(baseCapped).times(ultima.aliquota)
-      .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+    const baseCapped = new Decimal(ultima.ate);
+    return baseCapped
+      .times(ultima.aliquota)
+      .toDP(2, PjeCalcEngine.ROUND_CS_IR)
+      .toNumber();
   }
 
   private calcularINSSProgressivo(comp: string, base: number): number {
