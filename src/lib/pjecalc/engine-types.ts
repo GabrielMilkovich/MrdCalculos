@@ -541,6 +541,8 @@ export interface PjeLiquidacaoResult {
   audit_trail?: PjeAuditTrailEntry[];
   /** Structured warnings collected during calculation (fallbacks, missing tables, etc.) */
   calculation_warnings?: { code: string; module: string; message: string; competencia?: string }[];
+  /** Memória de cálculo completa (auditoria linha a linha) */
+  memoria_calculo?: MemoriaCalculo;
 }
 
 export interface PjeVerbaResult {
@@ -736,4 +738,66 @@ export interface PjeValidationResult {
   erros: number;
   alertas: number;
   observacoes: number;
+}
+
+// =====================================================
+// MEMÓRIA DE CÁLCULO — Auditoria linha a linha
+// Compatível com formato PJe-Calc para comparação direta
+// =====================================================
+
+export interface LinhaMemoriaCalculo {
+  verba_id: string;
+  verba_nome: string;
+  competencia: string;
+  base: number;
+  divisor: number;
+  multiplicador: number;
+  quantidade: number;
+  dobra: number;
+  devido: number;
+  pago: number;
+  diferenca: number;
+  indice_correcao: string;
+  fator_correcao: number;
+  valor_corrigido: number;
+  data_inicio_juros: string;
+  dias_juros: number;
+  taxa_juros: number;
+  valor_juros: number;
+  valor_final: number;
+  inss_segurado: number;
+  ir_retido: number;
+  regime_correcao: string;
+  era_temporal: string;
+}
+
+export interface MemoriaCalculo {
+  processo: string;
+  data_liquidacao: string;
+  data_geracao: string;
+  reclamante: string;
+  reclamado: string;
+  data_admissao: string;
+  data_demissao: string;
+  linhas: LinhaMemoriaCalculo[];
+  totais: {
+    valor_principal: number;
+    correcao_monetaria: number;
+    juros_moratorios: number;
+    total_bruto: number;
+    inss_segurado: number;
+    inss_empregador: number;
+    ir_retido: number;
+    fgts_devido: number;
+    multa_fgts: number;
+    custas: number;
+    honorarios: number;
+    liquido_exequente: number;
+  };
+  indices_status: {
+    ultimo_mes_disponivel: string;
+    meses_de_atraso: number;
+    desatualizado: boolean;
+  };
+  warnings: string[];
 }

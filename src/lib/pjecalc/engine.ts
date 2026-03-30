@@ -4196,12 +4196,77 @@ export class PjeCalcEngine {
 
     audit('resumo', `Bruto=${resumo.principal_corrigido.toFixed(2)}, Juros=${resumo.juros_mora.toFixed(2)}, Líquido=${resumo.liquido_reclamante.toFixed(2)}, Total_Reclamada=${resumo.total_reclamada.toFixed(2)}`);
 
+    // ── Build memória de cálculo (audit trail line by line) ──
+    const memoriaLinhas: import('./engine-types').LinhaMemoriaCalculo[] = [];
+    for (const vr of verbaResults) {
+      for (const oc of vr.ocorrencias) {
+        if (oc.diferenca === 0) continue;
+        memoriaLinhas.push({
+          verba_id: vr.verba_id,
+          verba_nome: vr.nome,
+          competencia: oc.competencia.slice(0, 7),
+          base: oc.base,
+          divisor: oc.divisor ?? 0,
+          multiplicador: oc.multiplicador ?? 1,
+          quantidade: oc.quantidade ?? 0,
+          dobra: oc.dobra ?? 1,
+          devido: oc.devido,
+          pago: oc.pago,
+          diferenca: oc.diferenca,
+          indice_correcao: oc.pjc_ground_truth_regime || this.correcaoConfig.indice || 'N/A',
+          fator_correcao: oc.indice_correcao ?? 1,
+          valor_corrigido: oc.valor_corrigido,
+          data_inicio_juros: this.params.data_ajuizamento || '',
+          dias_juros: 0,
+          taxa_juros: oc.valor_corrigido > 0 && oc.juros > 0 ? Number(new Decimal(oc.juros).div(oc.valor_corrigido).times(100).toDP(2)) : 0,
+          valor_juros: oc.juros,
+          valor_final: oc.valor_final,
+          inss_segurado: 0,
+          ir_retido: 0,
+          regime_correcao: oc.pjc_ground_truth_regime || 'engine',
+          era_temporal: '',
+        });
+      }
+    }
+
+    const memoriaCalculo: import('./engine-types').MemoriaCalculo = {
+      processo: this.params.case_id,
+      data_liquidacao: this.correcaoConfig.data_liquidacao,
+      data_geracao: new Date().toISOString().slice(0, 10),
+      reclamante: '',
+      reclamado: '',
+      data_admissao: this.params.data_admissao,
+      data_demissao: this.params.data_demissao || '',
+      linhas: memoriaLinhas,
+      totais: {
+        valor_principal: resumo.principal_bruto,
+        correcao_monetaria: Number(new Decimal(resumo.principal_corrigido).minus(resumo.principal_bruto).toDP(2)),
+        juros_moratorios: resumo.juros_mora,
+        total_bruto: Number(new Decimal(resumo.principal_corrigido).plus(resumo.juros_mora).toDP(2)),
+        inss_segurado: resumo.cs_segurado,
+        inss_empregador: resumo.cs_empregador,
+        ir_retido: resumo.ir_retido,
+        fgts_devido: resumo.fgts_total,
+        multa_fgts: 0,
+        custas: resumo.custas,
+        honorarios: resumo.honorarios_sucumbenciais + resumo.honorarios_contratuais,
+        liquido_exequente: resumo.liquido_reclamante,
+      },
+      indices_status: {
+        ultimo_mes_disponivel: '',
+        meses_de_atraso: 0,
+        desatualizado: false,
+      },
+      warnings: this.calculationWarnings.map(w => w.mensagem || w.codigo || String(w)),
+    };
+
     return {
       data_liquidacao: this.correcaoConfig.data_liquidacao,
       verbas: verbaResults, fgts, contribuicao_social: cs, imposto_renda: ir,
       seguro_desemprego: seguro, previdencia_privada: prevPrivada, salario_familia: salarioFamilia, resumo, validacao,
       audit_trail: auditTrail,
       calculation_warnings: this.calculationWarnings.length > 0 ? [...this.calculationWarnings] : undefined,
+      memoria_calculo: memoriaCalculo,
     };
   }
 

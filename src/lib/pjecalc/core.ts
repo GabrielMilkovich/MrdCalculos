@@ -73,5 +73,9 @@ export type { VinculoEmpregaticio } from './pjc-analyzer';
 export { calcularFGTSIntermitente, calcularFeriasIntermitente, calcularDecimoTerceiroIntermitente } from './contrato-intermitente';
 export type { ConvocacaoIntermitente } from './pjc-analyzer';
 
+// Memória de cálculo (auditoria)
+export { exportarMemoriaJSON } from './memoria-export';
+export type { MemoriaCalculo, LinhaMemoriaCalculo } from './engine-types';
+
 // Constants
 export { INSS_TETO_2025, SALARIO_MINIMO_2025 } from './engine-constants';
