@@ -69,5 +69,9 @@ export { calcularAvosMultiplosVinculos, calcularFGTSPorVinculo } from './multipl
 export type { SaldoFGTSVinculo } from './multiplos-vinculos';
 export type { VinculoEmpregaticio } from './pjc-analyzer';
 
+// Contrato intermitente (Lei 13.467/2017)
+export { calcularFGTSIntermitente, calcularFeriasIntermitente, calcularDecimoTerceiroIntermitente } from './contrato-intermitente';
+export type { ConvocacaoIntermitente } from './pjc-analyzer';
+
 // Constants
 export { INSS_TETO_2025, SALARIO_MINIMO_2025 } from './engine-constants';

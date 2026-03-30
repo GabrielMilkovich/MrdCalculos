@@ -13,6 +13,14 @@ export interface VinculoEmpregaticio {
   cargo?: string;
 }
 
+export interface ConvocacaoIntermitente {
+  data_inicio: string;
+  data_fim: string;
+  horas_trabalhadas: number;
+  valor_recebido: number;
+  competencia: string;
+}
+
 export interface PJCAnalysis {
   parametros: {
     beneficiario: string;
@@ -101,6 +109,9 @@ export interface PJCAnalysis {
   /** Vínculos empregatícios detectados (Padrão B: múltiplos períodos) */
   vinculos: VinculoEmpregaticio[];
   tem_multiplos_vinculos: boolean;
+  /** Contrato intermitente (Lei 13.467/2017) */
+  contrato_intermitente: boolean;
+  convocacoes?: ConvocacaoIntermitente[];
   /** Configuração de cálculo lida diretamente do XML */
   calculo_config: PJCCalculoConfig;
 }
@@ -796,6 +807,32 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     tem_multiplos_vinculos: (() => {
       const vinculoEls = root.getElementsByTagName('Vinculo');
       return vinculoEls.length > 1;
+    })(),
+    // Contrato intermitente (Lei 13.467/2017)
+    contrato_intermitente: (() => {
+      const tipo = getTextContent(root, 'tipoContrato') || getTextContent(root, 'modalidadeContrato') || getTextContent(root, 'tipoVinculo') || '';
+      return tipo.toUpperCase().includes('INTERMITENTE')
+        || root.getElementsByTagName('ContratoIntermitente').length > 0
+        || root.getElementsByTagName('contratoIntermitente').length > 0
+        || root.getElementsByTagName('Convocacao').length > 0;
+    })(),
+    convocacoes: (() => {
+      const convs: ConvocacaoIntermitente[] = [];
+      const convEls = root.getElementsByTagName('Convocacao');
+      for (const el of Array.from(convEls)) {
+        const inicio = tsToDate(getTextContent(el, 'dataInicio') || getTextContent(el, 'dtInicio'));
+        const fim = tsToDate(getTextContent(el, 'dataFim') || getTextContent(el, 'dtFim'));
+        if (inicio && fim) {
+          convs.push({
+            data_inicio: inicio,
+            data_fim: fim,
+            horas_trabalhadas: parseNum(getTextContent(el, 'horasTrabalhadas') || getTextContent(el, 'horas')),
+            valor_recebido: parseNum(getTextContent(el, 'valorRecebido') || getTextContent(el, 'valor')),
+            competencia: inicio.slice(0, 7),
+          });
+        }
+      }
+      return convs.length > 0 ? convs : undefined;
     })(),
     avisos: avisos.length > 0 ? avisos : undefined,
     calculo_config: {
