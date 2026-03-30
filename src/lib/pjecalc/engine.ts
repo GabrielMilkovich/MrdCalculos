@@ -3518,10 +3518,26 @@ export class PjeCalcEngine {
           const segFim = datas[i + 1];
           const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
           const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
-          // In juros_apos_deducao_cs mode, SELIC = interest portion — applied later by aplicarJurosAposCS.
-          // Only apply inflation indices (IPCA-E, TR, etc.) as correction base for CS calculation.
-          if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
-          if (indice === 'SELIC') continue; // SELIC is interest, not correction — handled in aplicarJurosAposCS
+          // In juros_apos_deducao_cs mode:
+          // - SEM_CORRECAO with SELIC juros (ADC 58/59): apply SELIC as correction factor here
+          //   (it replaces BOTH correction and interest — no separate juros needed)
+          // - Pure SEM_CORRECAO without SELIC: skip
+          // - SELIC as direct index: skip (handled in juros phase)
+          if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') {
+            // Check if juros regime is SELIC → apply SELIC as correction (ADC 58/59)
+            const regJ = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
+            if (regJ && regJ.tipo === 'SELIC') {
+              // SELIC replaces both correction and interest for this segment
+              const selicSum = this.indicesDB
+                .filter(idx => (idx.indice === 'SELIC' || idx.indice === 'selic') && idx.competencia.slice(0, 7) >= segInicio.slice(0, 7) && idx.competencia.slice(0, 7) < segFim.slice(0, 7))
+                .reduce((s, idx) => s + (idx.valor || 0), 0);
+              if (selicSum > 0) {
+                fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicSum).div(100)));
+              }
+            }
+            continue;
+          }
+          if (indice === 'SELIC') continue;
           const fatorDB = this.getIndiceCorrecaoDB(indice, this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
@@ -3555,6 +3571,8 @@ export class PjeCalcEngine {
     const combinacoes_juros = this.correcaoConfig.combinacoes_juros || [];
     const combinacoes_indice = this.correcaoConfig.combinacoes_indice || [];
     const dataLiq = this.correcaoConfig.data_liquidacao;
+
+    // Combinations are populated (either from PJC or auto-built ADC 58/59)
 
     // Determine interest start date
     let jurosStartDate: string | null = null;
@@ -3647,7 +3665,8 @@ export class PjeCalcEngine {
             {
               const regJCheck2 = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
               if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
-                if (!regJCheck2 || regJCheck2.tipo !== 'SELIC') continue;
+                // SEM_CORRECAO: SELIC was already applied as correction — skip ALL juros
+                continue;
               }
             }
             // SELIC = correction + interest (ADC 58/59) — NEVER add separate juros
@@ -3704,7 +3723,8 @@ export class PjeCalcEngine {
             {
               const regJCheck2 = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
               if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
-                if (!regJCheck2 || regJCheck2.tipo !== 'SELIC') continue;
+                // SEM_CORRECAO: SELIC was already applied as correction — skip ALL juros
+                continue;
               }
             }
             // SELIC = correction + interest (ADC 58/59) — NEVER add separate juros
