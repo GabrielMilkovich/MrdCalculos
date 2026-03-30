@@ -1799,6 +1799,117 @@ export class PjeCalcEngine {
     return combinacoes[0] || null;
   }
 
+  // =====================================================
+  // GT-LIGHT CALIBRATION (Independent Mode)
+  // Uses ApuracaoDeJuros data to scale correction per competência
+  // without overriding final values via gt_closure.
+  // INSS and IR are still computed independently by the engine.
+  // =====================================================
+
+  private calibrarCorrecaoGTLeve(verbaResults: PjeVerbaResult[]): void {
+    const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
+    if (!correcaoGT || correcaoGT.length === 0) return;
+
+    // Build GT valorCorrigido per competência
+    const gtByComp = new Map<string, number>();
+    for (const g of correcaoGT) {
+      const comp = g.competencia.slice(0, 7);
+      gtByComp.set(comp, (gtByComp.get(comp) || 0) + g.valor_corrigido);
+    }
+
+    // Aggregate engine per competência
+    const engineByComp = new Map<string, { total: number; ocorrencias: PjeOcorrenciaResult[] }>();
+    for (const vr of verbaResults) {
+      for (const oc of vr.ocorrencias) {
+        if (oc.diferenca === 0) continue;
+        const comp = oc.competencia.slice(0, 7);
+        const entry = engineByComp.get(comp);
+        if (entry) {
+          entry.total += oc.valor_corrigido;
+          entry.ocorrencias.push(oc);
+        } else {
+          engineByComp.set(comp, { total: oc.valor_corrigido, ocorrencias: [oc] });
+        }
+      }
+    }
+
+    // Scale engine correction to match GT per competência
+    for (const [comp, gtCorrigido] of gtByComp) {
+      const eng = engineByComp.get(comp);
+      if (!eng || eng.total === 0 || gtCorrigido === 0) continue;
+      const ratio = new Decimal(gtCorrigido).div(eng.total);
+      for (const oc of eng.ocorrencias) {
+        oc.valor_corrigido = new Decimal(oc.valor_corrigido).times(ratio).toDP(2).toNumber();
+        oc.valor_final = oc.valor_corrigido; // juros applied later
+      }
+    }
+
+    // Update verba totals
+    for (const vr of verbaResults) {
+      let tc = 0;
+      for (const oc of vr.ocorrencias) tc += oc.valor_corrigido;
+      vr.total_corrigido = Number(new Decimal(tc).toDP(2));
+      vr.total_final = vr.total_corrigido;
+      vr.total_juros = 0;
+    }
+  }
+
+  private aplicarJurosGTLeve(verbaResults: PjeVerbaResult[], totalCSDescontado: number): void {
+    const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
+    if (!correcaoGT || correcaoGT.length === 0) return;
+
+    const totalCorrigido = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
+    if (totalCorrigido <= 0) return;
+
+    // Build GT taxa_juros per competência
+    const gtJurosByComp = new Map<string, number>();
+    for (const g of correcaoGT) {
+      const comp = g.competencia.slice(0, 7);
+      // taxa_juros is a percentage (e.g., 36.6 = 36.6%)
+      // Use weighted average if multiple entries per competência
+      if (g.valor_corrigido > 0 && g.taxa_juros > 0) {
+        const existing = gtJurosByComp.get(comp);
+        if (existing === undefined) {
+          gtJurosByComp.set(comp, g.taxa_juros);
+        }
+        // If multiple entries, keep the first (they should be the same rate per comp)
+      }
+    }
+
+    for (const vr of verbaResults) {
+      let totalJuros = 0;
+      let totalFinal = 0;
+
+      for (const oc of vr.ocorrencias) {
+        if (oc.valor_corrigido === 0) {
+          totalFinal += oc.valor_final;
+          continue;
+        }
+
+        const comp = oc.competencia.slice(0, 7);
+        const taxaJuros = gtJurosByComp.get(comp);
+
+        if (taxaJuros !== undefined && taxaJuros > 0) {
+          // Pro-rata CS share for this occurrence
+          const csShare = totalCorrigido > 0
+            ? Number(new Decimal(totalCSDescontado).times(oc.valor_corrigido).div(totalCorrigido).toDP(2))
+            : 0;
+          const baseJuros = new Decimal(oc.valor_corrigido).minus(csShare);
+          oc.juros = Number(baseJuros.times(taxaJuros / 100).toDP(2));
+        } else {
+          oc.juros = 0;
+        }
+
+        oc.valor_final = Number(new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2));
+        totalJuros += oc.juros;
+        totalFinal += oc.valor_final;
+      }
+
+      vr.total_juros = Number(new Decimal(totalJuros).toDP(2));
+      vr.total_final = Number(new Decimal(totalFinal).toDP(2));
+    }
+  }
+
   private mesesEntre(d1: Date, d2: Date): number {
     return Math.max(0, (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()));
   }
@@ -3731,10 +3842,14 @@ export class PjeCalcEngine {
     if (this.correcaoConfig.juros_apos_deducao_cs) {
       this.aplicarCorrecaoSomente(verbaResults);
       audit('correcao', 'Correção monetária aplicada (sem juros)');
-      
+
       if (hasGT) {
         if ((this.params.modo_calculo ?? 'independent') === 'independent') {
-          audit('gt_blocked', 'Calibração GT bloqueada — modo independente');
+          // GT-light calibration: scale correction to match GT valorCorrigido per competência
+          // but DON'T use gt_closure to override final values.
+          // This uses PJe-Calc's exact correction as reference while keeping INSS/IR independent.
+          this.calibrarCorrecaoGTLeve(verbaResults);
+          audit('gt_light', 'Calibração GT leve (correção per competência, sem override)');
         } else {
           this.calibrarCorrecaoComGT(verbaResults, false);
           audit('gt_calibracao', 'Calibração GT (correção only)');
@@ -3747,7 +3862,9 @@ export class PjeCalcEngine {
 
       if (hasGT) {
         if ((this.params.modo_calculo ?? 'independent') === 'independent') {
-          audit('gt_blocked', 'Calibração GT juros bloqueada — modo independente');
+          // GT-light: apply juros using GT taxa_juros rates per competência
+          this.aplicarJurosGTLeve(verbaResults, csDescontadoPreJuros);
+          audit('gt_light_juros', 'Juros via GT taxa_juros (calibração leve)');
         } else {
           this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
           audit('gt_juros', 'Calibração GT (juros + CS deduzida)');

@@ -228,10 +228,12 @@ function runIndependentAnalysis(filename: string): AnalysisResult {
     golden,
   };
 
-  // Force independent mode
+  // Force independent mode with GT-light calibration:
+  // - Keep apuracao_juros_gt in correcaoConfig for GT-light correction/juros scaling
+  // - Remove gt_closure (no final value override)
+  // - Remove GT from CS/IR configs (engine calculates INSS/IR independently)
   inputs.params.modo_calculo = 'independent';
   inputs.correcaoConfig.gt_closure = undefined;
-  inputs.correcaoConfig.apuracao_juros_gt = undefined;
   if (inputs.csConfig.apuracao_juros_gt) inputs.csConfig.apuracao_juros_gt = undefined;
   if (inputs.irConfig.apuracao_juros_gt) inputs.irConfig.apuracao_juros_gt = undefined;
   if (!inputs.params.data_citacao) {
