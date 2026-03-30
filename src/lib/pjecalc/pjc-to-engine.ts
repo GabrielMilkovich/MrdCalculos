@@ -535,12 +535,14 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
     aliquota_segurado_fixa: csConf?.aliquota_segurado || undefined,
     limitar_teto: true,
     apurar_empresa: csConf?.apurar_empresa ?? (a.resultado.inss_reclamado > 0),
-    apurar_sat: (csConf?.aliquota_sat ?? 0) > 0,
+    // SAT/RAT: enable if PJC has SAT > 0, or default to true when empregador active
+    apurar_sat: (csConf?.aliquota_sat ?? 0) > 0 || (csConf?.apurar_empresa ?? (a.resultado.inss_reclamado > 0)),
+    // Terceiros: only enable if PJC explicitly sets aliquota > 0
     apurar_terceiros: (csConf?.aliquota_terceiros ?? 0) > 0,
     aliquota_empregador_tipo: 'atividade',
     aliquota_empresa_fixa: csConf?.aliquota_empresa ?? 20,
-    aliquota_sat_fixa: csConf?.aliquota_sat ?? 0,
-    aliquota_terceiros_fixa: csConf?.aliquota_terceiros ?? 0,
+    aliquota_sat_fixa: csConf?.aliquota_sat ?? 2, // Default SAT/RAT grau leve
+    aliquota_terceiros_fixa: csConf?.aliquota_terceiros ?? 0, // 0 when PJC doesn't specify
     periodos_simples: [],
     apuracao_juros_gt: gt,
   };
