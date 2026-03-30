@@ -536,14 +536,12 @@ export class PjeCalcEngine {
       // Súmula 340 TST: comissionista puro — HE = apenas adicional
       // Ex: mult=1.5 → efetivo=0.5 (apenas o adicional de 50%, não a hora cheia)
       const multEfetivo = verba.sumula_340_comissionista ? mult.minus(1) : mult;
-      // Etapa 1: valor_hora = Base / Divisor (truncado)
-      const valorHora = base.div(div).toDP(2);
-      // Etapa 2: valor_hora_com_mult = valor_hora × Multiplicador (truncado)
-      const valorHoraComMult = valorHora.times(multEfetivo).toDP(2);
-      // Etapa 3: subtotal = valor_hora_com_mult × Quantidade (truncado)
-      const subtotal = valorHoraComMult.times(qtd).toDP(2);
-      // Etapa 4: devido = subtotal × Dobra (truncado)
-      devido = subtotal.times(dobra).toDP(2);
+      // PJe-Calc: trunca (ROUND_DOWN) em cada etapa intermediária
+      // Java BigDecimal.setScale(2, ROUND_DOWN) em cada multiply
+      const valorHora = base.div(div).toDP(2, Decimal.ROUND_DOWN);
+      const valorHoraComMult = valorHora.times(multEfetivo).toDP(2, Decimal.ROUND_DOWN);
+      const subtotal = valorHoraComMult.times(qtd).toDP(2, Decimal.ROUND_DOWN);
+      devido = subtotal.times(dobra).toDP(2, Decimal.ROUND_DOWN);
     }
 
     // Proporcionalizar DEVIDO separadamente (Fase 6 - PJe-Calc)

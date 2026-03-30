@@ -211,8 +211,23 @@ function calcularFatorCorrecao(
       ? prevMonth + '-01'
       : compDestino;
 
-  // Súmula 381 TST: origin = vencimento month index
-  const origemArr = dados.filter(i => i.competencia.slice(0, 7) >= compOrigem.slice(0, 7));
+  // Súmula 381 TST: correção incide a partir do MÊS SUBSEQUENTE ao vencimento.
+  // Fator = acumulado[destino] / acumulado[mês_subsequente_à_origem]
+  const [anoOrig, mesOrig] = compOrigem.slice(0, 7).split('-').map(Number);
+  const mesSubsequente = mesOrig === 12
+    ? `${anoOrig + 1}-01`
+    : `${anoOrig}-${String(mesOrig + 1).padStart(2, '0')}`;
+
+  const origemArr = dados.filter(i => i.competencia.slice(0, 7) >= mesSubsequente);
+  if (!origemArr[0]) {
+    warnings.push({
+      code: 'W381',
+      module: 'correcao',
+      message: `Súmula 381: índice do mês subsequente (${mesSubsequente}) ausente para ${canonicalIndice}. Usando dado mais próximo.`,
+      competencia: compOrigem,
+      blocking: false,
+    });
+  }
   const destArr = dados.filter(i => i.competencia.slice(0, 7) <= compDestinoEfetivo.slice(0, 7));
   const idxOrigem = origemArr[0] ?? dados[0];
   const idxDest = destArr[destArr.length - 1] ?? dados[dados.length - 1];
