@@ -102,14 +102,14 @@ async function extractTextWithVision(
     new Uint8Array(fileBuffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
   );
 
-  const visionResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const visionResponse = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "openai/gpt-5-mini",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "user",
@@ -171,7 +171,7 @@ async function generateEmbeddingsBatch(
     const embeddings = await Promise.all(
       batch.map(async (text) => {
         try {
-          const response = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+          const response = await fetch("https://api.openai.com/v1/embeddings", {
             method: "POST",
             headers: {
               Authorization: `Bearer ${apiKey}`,
@@ -237,9 +237,9 @@ serve(async (req) => {
   try {
     const { document_id, case_id, mode = "single" } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -287,7 +287,7 @@ serve(async (req) => {
 
          for (const doc of pendingDocs) {
           try {
-             await processDocumentInternal(supabase, doc.id, LOVABLE_API_KEY);
+             await processDocumentInternal(supabase, doc.id, OPENAI_API_KEY);
             processed++;
           } catch (error) {
             console.error(`[QUEUE] Failed to process ${doc.id}:`, error);
@@ -321,7 +321,7 @@ serve(async (req) => {
     }
 
     const startTime = Date.now();
-    const result = await processDocumentInternal(supabase, document_id, LOVABLE_API_KEY);
+    const result = await processDocumentInternal(supabase, document_id, OPENAI_API_KEY);
     const processingTime = Date.now() - startTime;
 
     return new Response(

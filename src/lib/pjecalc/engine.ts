@@ -7,7 +7,7 @@
 import Decimal from 'decimal.js';
 import { getReformaRules, REFORMA_DATE } from './reforma-trabalhista';
 import { getFPASByCodigo } from './terceiros-contributions';
-import { IPCA_E_ACUMULADO, SELIC_ACUMULADO } from './indices-fallback';
+import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO } from './indices-fallback';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
 
@@ -536,14 +536,12 @@ export class PjeCalcEngine {
       // Súmula 340 TST: comissionista puro — HE = apenas adicional
       // Ex: mult=1.5 → efetivo=0.5 (apenas o adicional de 50%, não a hora cheia)
       const multEfetivo = verba.sumula_340_comissionista ? mult.minus(1) : mult;
-      // Etapa 1: valor_hora = Base / Divisor (truncado)
-      const valorHora = base.div(div).toDP(2);
-      // Etapa 2: valor_hora_com_mult = valor_hora × Multiplicador (truncado)
-      const valorHoraComMult = valorHora.times(multEfetivo).toDP(2);
-      // Etapa 3: subtotal = valor_hora_com_mult × Quantidade (truncado)
-      const subtotal = valorHoraComMult.times(qtd).toDP(2);
-      // Etapa 4: devido = subtotal × Dobra (truncado)
-      devido = subtotal.times(dobra).toDP(2);
+      // PJe-Calc: trunca (ROUND_DOWN) em cada etapa intermediária
+      // Java BigDecimal.setScale(2, ROUND_DOWN) em cada multiply
+      const valorHora = base.div(div).toDP(2, Decimal.ROUND_DOWN);
+      const valorHoraComMult = valorHora.times(multEfetivo).toDP(2, Decimal.ROUND_DOWN);
+      const subtotal = valorHoraComMult.times(qtd).toDP(2, Decimal.ROUND_DOWN);
+      devido = subtotal.times(dobra).toDP(2, Decimal.ROUND_DOWN);
     }
 
     // Proporcionalizar DEVIDO separadamente (Fase 6 - PJe-Calc)
@@ -980,6 +978,8 @@ export class PjeCalcEngine {
       'IPCA-E': IPCA_E_ACUMULADO,
       'IPCA': IPCA_E_ACUMULADO,
       'SELIC': SELIC_ACUMULADO,
+      'TR': TR_ACUMULADO,
+      'TRD': TR_ACUMULADO,
     };
     const fallback = fallbackMap[nomeIndice];
     if (!fallback) return null;
@@ -1291,11 +1291,8 @@ export class PjeCalcEngine {
         let indiceCorrecao = 1;
         let juros = 0;
 
-        // ═══ PJC Ground Truth: use precomputed correction factor when available ═══
-        // Use PJC correction factor as reference data when available.
-        // This is NOT GT calibration — it's using the same BCB reference data
-        // that PJe-Calc used. INSS, IR, juros are still calculated by our engine.
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // PJC correction factor: only use in assisted mode, not independent
+        if (modoCalculo !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
 
@@ -1465,8 +1462,8 @@ export class PjeCalcEngine {
         // Interest is always calculated separately by PJe-Calc.
         // For SELIC regime: the correction factor already includes interest → skip separate interest.
         // For IPCA-E/other: apply interest separately after correction.
-        // Use PJC correction factor as BCB reference data (both modes)
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // PJC correction factor: only in assisted mode, independent calculates from DB
+        if ((this.params.modo_calculo ?? 'independent') !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
           const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
           const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
@@ -2035,15 +2032,20 @@ export class PjeCalcEngine {
       return { segurado_devidos: [], segurado_pagos: [], empregador, total_segurado_devidos: 0, total_segurado_pagos: 0, total_segurado: 0, total_empregador: 0 };
     }
 
-    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact CS bases/values (assisted mode only) ═══
+    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact CS bases/values ═══
+    // Only in assisted mode — independent mode calculates from engine data
     const gt = this.csConfig.apuracao_juros_gt;
-    if (this.params.modo_calculo === 'assisted_from_pjc' && gt && gt.length > 0 && useCorrigido) {
+    const useGTBases = (this.params.modo_calculo ?? 'independent') !== 'independent' && gt && gt.length > 0 && useCorrigido;
+
+    if (useGTBases) {
+      const gtData = gt!;
+      // GT path for CS calculation (both assisted and independent GT-light modes)
       // Aggregate GT bases AND pre-computed CS amounts by competência (YYYY-MM format)
       const gtBasesByComp: Record<string, number> = {};
       const gtBase13ByComp: Record<string, number> = {};
       const gtCSNormalByComp: Record<string, number> = {};
       const gtCS13ByComp: Record<string, number> = {};
-      for (const entry of gt) {
+      for (const entry of gtData) {
         const comp = entry.competencia.slice(0, 7); // YYYY-MM
         gtBasesByComp[comp] = (gtBasesByComp[comp] || 0) + entry.cs_base_normal;
         gtBase13ByComp[comp] = (gtBase13ByComp[comp] || 0) + entry.cs_base_13;
@@ -2062,7 +2064,7 @@ export class PjeCalcEngine {
       const correctionFactorByComp: Record<string, number> = {};
       const gtNominalByComp: Record<string, number> = {};
       const gtCorrigidoByComp: Record<string, number> = {};
-      for (const entry of gt) {
+      for (const entry of gtData) {
         const comp = entry.competencia.slice(0, 7);
         gtNominalByComp[comp] = (gtNominalByComp[comp] || 0) + entry.cs_base_normal + entry.cs_base_13;
         gtCorrigidoByComp[comp] = (gtCorrigidoByComp[comp] || 0) + entry.valor_corrigido;
@@ -2085,9 +2087,10 @@ export class PjeCalcEngine {
           // PJe-Calc: INSS on 13º is calculated on a SEPARATE basis with its own teto
           let imposto: number;
           if (hasPrecomputedCS) {
+            // Use PJe-Calc's precomputed CS amounts (both assisted and GT-light modes)
             imposto = (gtCSNormalByComp[comp] || 0) + (gtCS13ByComp[comp] || 0);
           } else {
-            // Calculate INSS separately for normal and 13º bases (each with own teto)
+            // No precomputed: calculate INSS from GT bases using engine's progressive tables
             const impostoNormal = baseNormal > 0 ? this.calcularINSSProgressivo(comp, baseNormal) : 0;
             const imposto13 = base13 > 0 ? this.calcularINSSProgressivo(comp, base13) : 0;
             imposto = impostoNormal + imposto13;
@@ -2295,24 +2298,32 @@ export class PjeCalcEngine {
 
   // Helper: calcular INSS progressivo para uma competência
   // PJe-Calc usa ROUND_HALF_EVEN (Banker's rounding) para CS e IR
-  private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_EVEN;
+  private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_EVEN; // Java BigDecimal padrão (PJe-Calc)
 
   // INSS pré-EC 103/2019: alíquota única aplicada sobre o salário total
   // (o salário cai numa das 3 faixas e toda a base é tributada nessa alíquota)
   private calcularINSSAliquotaUnica(comp: string, base: number): number {
     const faixas = this.getFaixasINSSParaCompetencia(comp);
+    if (!faixas || faixas.length === 0) return 0;
+
+    const baseD = new Decimal(base);
+
     for (const faixa of faixas) {
-      if (base <= faixa.ate) {
-        return new Decimal(base).times(faixa.aliquota)
-          .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+      if (baseD.lte(faixa.ate)) {
+        return baseD
+          .times(faixa.aliquota)
+          .toDP(2, PjeCalcEngine.ROUND_CS_IR)
+          .toNumber();
       }
     }
-    // Acima de todas as faixas: usa alíquota da última, base limitada ao teto
-    // (pré-2020 flat-rate: não há progressividade acima do teto — contribuição máxima)
+
+    // Base excede todas as faixas: teto = last faixa.ate, alíquota = last faixa.aliquota
     const ultima = faixas[faixas.length - 1];
-    const baseCapped = Math.min(base, ultima.ate);
-    return new Decimal(baseCapped).times(ultima.aliquota)
-      .toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
+    const baseCapped = new Decimal(ultima.ate);
+    return baseCapped
+      .times(ultima.aliquota)
+      .toDP(2, PjeCalcEngine.ROUND_CS_IR)
+      .toNumber();
   }
 
   private calcularINSSProgressivo(comp: string, base: number): number {
@@ -2353,11 +2364,13 @@ export class PjeCalcEngine {
         ir_anos_anteriores: 0, ir_ano_liquidacao: 0, ir_13_exclusivo: 0, ir_ferias_separado: 0, meses_anos_anteriores: 0, meses_ano_liquidacao: 0 };
     }
 
-    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact IR bases (assisted mode only) ═══
+    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact IR bases ═══
     const gt = this.irConfig.apuracao_juros_gt;
     if (this.params.modo_calculo === 'assisted_from_pjc' && gt && gt.length > 0) {
       return this.calcularIRFromGT(gt, csResult);
     }
+
+    // Independent mode: calculate IR from engine data, not GT bases
 
     let baseBruta = 0;
     let base13 = 0;
@@ -2376,7 +2389,8 @@ export class PjeCalcEngine {
 
     // When incidir_sobre_juros = false (PJe-Calc default), IR base uses
     // valor_corrigido (without juros). When true, uses valor_final (with juros).
-    const irUsarValorFinal = this.irConfig.incidir_sobre_juros !== false;
+    // Use strict === true so undefined/null defaults to excluding juros from IR base
+    const irUsarValorFinal = this.irConfig.incidir_sobre_juros === true;
 
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
@@ -2555,84 +2569,83 @@ export class PjeCalcEngine {
     const tabelaIR = this.getFaixasIRParaCompetencia(compLiq);
 
     let baseDemais = 0, base13 = 0, baseFerias = 0;
-    let baseAnosAnteriores = 0, baseAnoLiquidacao = 0;
-    const compsAnteriores = new Set<string>();
-    const compsLiquidacao = new Set<string>();
+    const allTributaveisComps: string[] = [];
 
     for (const entry of gt) {
       const comp = entry.competencia.slice(0, 7);
-      const anoComp = parseInt(comp.slice(0, 4));
       baseDemais += entry.ir_base_demais;
       base13 += entry.ir_base_13;
       baseFerias += entry.ir_base_ferias;
       if (entry.ir_base_demais > 0) {
-        if (anoComp < anoLiq) { baseAnosAnteriores += entry.ir_base_demais; compsAnteriores.add(comp); }
-        else { baseAnoLiquidacao += entry.ir_base_demais; compsLiquidacao.add(comp); }
+        allTributaveisComps.push(comp);
       }
     }
 
-    // FIX: PJe-Calc counts TOTAL months in the period (first to last),
-    // not just the count of distinct months with income.
-    let mesesAnosAnteriores: number;
-    if (compsAnteriores.size > 0) {
-      const sortedAnts = [...compsAnteriores].sort();
-      mesesAnosAnteriores = this.getCompetencias(sortedAnts[0], sortedAnts[sortedAnts.length - 1]).length;
+    // NM: use XML value if available, otherwise calculate from competências
+    let meses: number;
+    const nmFromConfig = (this.correcaoConfig as unknown as { calculo_config?: { nm_rra?: number } }).calculo_config?.nm_rra;
+    if (nmFromConfig && nmFromConfig > 0) {
+      meses = nmFromConfig;
+    } else if (allTributaveisComps.length > 0) {
+      const sorted = [...allTributaveisComps].sort();
+      meses = this.getCompetencias(sorted[0], sorted[sorted.length - 1]).length;
     } else {
-      mesesAnosAnteriores = 0;
+      const periodo = this.getPeriodoCalculo();
+      meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
     }
-    let mesesAnoLiquidacao: number;
-    if (compsLiquidacao.size > 0) {
-      const sortedLiqs = [...compsLiquidacao].sort();
-      mesesAnoLiquidacao = this.getCompetencias(sortedLiqs[0], sortedLiqs[sortedLiqs.length - 1]).length;
-    } else {
-      mesesAnoLiquidacao = 0;
-    }
+    meses = Math.max(1, meses);
+
+    // Deductions
     let deducoes = 0;
     if (this.irConfig.deduzir_cs && this.csConfig.cobrar_reclamante) deducoes += csResult.total_segurado;
-    const periodo = this.getPeriodoCalculo();
-    const meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
     if (this.irConfig.aposentado_65 && tabelaIR.faixas.length > 0) {
       deducoes += tabelaIR.faixas[0].ate * meses;
     }
 
-    let irAnosAnteriores = new Decimal(0), irAnoLiquidacao = new Decimal(0);
-    let ir13Exclusivo = new Decimal(0), irFeriasSeparado = new Decimal(0);
+    // PJe-Calc RRA: apply progressive table with NM-scaled brackets over TOTAL base
+    // (not split by years — the split reduces IR incorrectly)
+    let irDemais = new Decimal(0);
+    let ir13Exclusivo = new Decimal(0);
+    let irFeriasSeparado = new Decimal(0);
 
-    if (mesesAnosAnteriores > 0 && baseAnosAnteriores > 0) {
-      const propDed = new Decimal(deducoes).times(baseAnosAnteriores).div(Math.max(baseDemais, 1)).toDP(2, R).toNumber();
-      const dedDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(mesesAnosAnteriores).toDP(2, R).toNumber();
-      const bt = Math.max(0, baseAnosAnteriores - propDed - dedDep);
-      for (const f of tabelaIR.faixas) { if (bt <= f.ate * mesesAnosAnteriores) { irAnosAnteriores = new Decimal(bt).times(f.aliquota).minus(new Decimal(f.deducao).times(mesesAnosAnteriores)).toDP(2, R); break; } }
-      if (irAnosAnteriores.lt(0)) irAnosAnteriores = new Decimal(0);
-    }
-
-    if (mesesAnoLiquidacao > 0 && baseAnoLiquidacao > 0) {
-      const propDed = new Decimal(deducoes).times(baseAnoLiquidacao).div(Math.max(baseDemais, 1)).toDP(2, R).toNumber();
-      const dedDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(mesesAnoLiquidacao).toDP(2, R).toNumber();
-      const bt = Math.max(0, baseAnoLiquidacao - propDed - dedDep);
-      for (const f of tabelaIR.faixas) { if (bt <= f.ate * mesesAnoLiquidacao) { irAnoLiquidacao = new Decimal(bt).times(f.aliquota).minus(new Decimal(f.deducao).times(mesesAnoLiquidacao)).toDP(2, R); break; } }
-      if (irAnoLiquidacao.lt(0)) irAnoLiquidacao = new Decimal(0);
-    }
-
-    if (mesesAnosAnteriores === 0 && mesesAnoLiquidacao === 0 && baseDemais > 0) {
-      const dedDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
+    if (baseDemais > 0) {
+      const dedDep = new Decimal(this.irConfig.dependentes)
+        .times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
       const bt = Math.max(0, baseDemais - deducoes - dedDep);
-      for (const f of tabelaIR.faixas) { if (bt <= f.ate * meses) { irAnoLiquidacao = new Decimal(bt).times(f.aliquota).minus(new Decimal(f.deducao).times(meses)).toDP(2, R); break; } }
-      if (irAnoLiquidacao.lt(0)) irAnoLiquidacao = new Decimal(0);
+      for (const f of tabelaIR.faixas) {
+        if (bt <= f.ate * meses) {
+          irDemais = new Decimal(bt).times(f.aliquota)
+            .minus(new Decimal(f.deducao).times(meses)).toDP(2, R);
+          break;
+        }
+      }
+      if (irDemais.lt(0)) irDemais = new Decimal(0);
     }
 
     if (this.irConfig.tributacao_exclusiva_13 && base13 > 0) {
-      for (const f of tabelaIR.faixas) { if (base13 <= f.ate) { ir13Exclusivo = new Decimal(base13).times(f.aliquota).minus(f.deducao).toDP(2, R); break; } }
+      for (const f of tabelaIR.faixas) {
+        if (base13 <= f.ate) {
+          ir13Exclusivo = new Decimal(base13).times(f.aliquota).minus(f.deducao).toDP(2, R);
+          break;
+        }
+      }
       if (ir13Exclusivo.lt(0)) ir13Exclusivo = new Decimal(0);
     }
 
     if (this.irConfig.tributacao_separada_ferias && baseFerias > 0) {
-      for (const f of tabelaIR.faixas) { if (baseFerias <= f.ate * meses) { irFeriasSeparado = new Decimal(baseFerias).times(f.aliquota).minus(new Decimal(f.deducao).times(meses)).toDP(2, R); break; } }
+      for (const f of tabelaIR.faixas) {
+        if (baseFerias <= f.ate * meses) {
+          irFeriasSeparado = new Decimal(baseFerias).times(f.aliquota)
+            .minus(new Decimal(f.deducao).times(meses)).toDP(2, R);
+          break;
+        }
+      }
       if (irFeriasSeparado.lt(0)) irFeriasSeparado = new Decimal(0);
     }
 
-    const imposto = irAnosAnteriores.plus(irAnoLiquidacao).plus(ir13Exclusivo).plus(irFeriasSeparado);
-    const dedDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
+    const imposto = irDemais.plus(ir13Exclusivo).plus(irFeriasSeparado);
+    const dedDep = new Decimal(this.irConfig.dependentes)
+      .times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
     const baseTributavel = Math.max(0, baseDemais - deducoes - dedDep);
 
     return {
@@ -2641,12 +2654,12 @@ export class PjeCalcEngine {
       base_tributavel: Number(new Decimal(baseTributavel + base13 + baseFerias).toDP(2, R)),
       imposto_devido: imposto.toDP(2, R).toNumber(),
       meses_rra: meses, metodo: meses > 1 ? 'art_12a_rra' : 'tabela_mensal',
-      ir_anos_anteriores: irAnosAnteriores.toDP(2, R).toNumber(),
-      ir_ano_liquidacao: irAnoLiquidacao.toDP(2, R).toNumber(),
+      ir_anos_anteriores: irDemais.toDP(2, R).toNumber(),
+      ir_ano_liquidacao: 0,
       ir_13_exclusivo: ir13Exclusivo.toDP(2, R).toNumber(),
       ir_ferias_separado: irFeriasSeparado.toDP(2, R).toNumber(),
-      meses_anos_anteriores: mesesAnosAnteriores,
-      meses_ano_liquidacao: mesesAnoLiquidacao || meses,
+      meses_anos_anteriores: meses,
+      meses_ano_liquidacao: 0,
     };
   }
 
@@ -3261,10 +3274,8 @@ export class PjeCalcEngine {
         let indiceCorrecao = 1;
 
         // Use PJC ground truth correction factor when available (assisted mode only)
-        // Use PJC correction factor as reference data when available.
-        // This is NOT GT calibration — it's using the same BCB reference data
-        // that PJe-Calc used. INSS, IR, juros are still calculated by our engine.
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // PJC correction factor: only in assisted mode
+        if ((this.params.modo_calculo ?? 'independent') !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           indiceCorrecao = oc.pjc_indice_acumulado;
           oc.pjc_ground_truth_applied = true;
           oc.pjc_ground_truth_regime = this.correcaoConfig.indice || 'SELIC';
@@ -3325,8 +3336,8 @@ export class PjeCalcEngine {
         if (oc.diferenca === 0) continue;
         
         // Use PJC ground truth correction factor when available (assisted mode only)
-        // Use PJC correction factor as BCB reference data (both modes)
-        if (oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
+        // PJC correction factor: only in assisted mode, independent calculates from DB
+        if ((this.params.modo_calculo ?? 'independent') !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
           // Determine regime for this occurrence
           const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
           const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
@@ -3359,10 +3370,26 @@ export class PjeCalcEngine {
           const segFim = datas[i + 1];
           const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
           const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
-          // In juros_apos_deducao_cs mode, SELIC = interest portion — applied later by aplicarJurosAposCS.
-          // Only apply inflation indices (IPCA-E, TR, etc.) as correction base for CS calculation.
-          if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
-          if (indice === 'SELIC') continue; // SELIC is interest, not correction — handled in aplicarJurosAposCS
+          // In juros_apos_deducao_cs mode:
+          // - SEM_CORRECAO with SELIC juros (ADC 58/59): apply SELIC as correction factor here
+          //   (it replaces BOTH correction and interest — no separate juros needed)
+          // - Pure SEM_CORRECAO without SELIC: skip
+          // - SELIC as direct index: skip (handled in juros phase)
+          if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') {
+            // Check if juros regime is SELIC → apply SELIC as correction (ADC 58/59)
+            const regJ = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
+            if (regJ && regJ.tipo === 'SELIC') {
+              // SELIC replaces both correction and interest for this segment
+              const selicSum = this.indicesDB
+                .filter(idx => (idx.indice === 'SELIC' || idx.indice === 'selic') && idx.competencia.slice(0, 7) >= segInicio.slice(0, 7) && idx.competencia.slice(0, 7) < segFim.slice(0, 7))
+                .reduce((s, idx) => s + (idx.valor || 0), 0);
+              if (selicSum > 0) {
+                fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicSum).div(100)));
+              }
+            }
+            continue;
+          }
+          if (indice === 'SELIC') continue;
           const fatorDB = this.getIndiceCorrecaoDB(indice, this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
@@ -3396,6 +3423,8 @@ export class PjeCalcEngine {
     const combinacoes_juros = this.correcaoConfig.combinacoes_juros || [];
     const combinacoes_indice = this.correcaoConfig.combinacoes_indice || [];
     const dataLiq = this.correcaoConfig.data_liquidacao;
+
+    // Combinations are populated (either from PJC or auto-built ADC 58/59)
 
     // Determine interest start date
     let jurosStartDate: string | null = null;
@@ -3488,10 +3517,12 @@ export class PjeCalcEngine {
             {
               const regJCheck2 = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
               if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
-                if (!regJCheck2 || regJCheck2.tipo !== 'SELIC') continue;
+                // SEM_CORRECAO: SELIC was already applied as correction — skip ALL juros
+                continue;
               }
             }
-            if (indiceNorm === 'SELIC' && !this.correcaoConfig.juros_apos_deducao_cs) continue;
+            // SELIC = correction + interest (ADC 58/59) — NEVER add separate juros
+            if (indiceNorm === 'SELIC') continue;
 
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
             if (!regimeJ || regimeJ.tipo === 'NENHUM') continue;
@@ -3544,11 +3575,14 @@ export class PjeCalcEngine {
             {
               const regJCheck2 = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
               if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
-                if (!regJCheck2 || regJCheck2.tipo !== 'SELIC') continue;
+                // SEM_CORRECAO: SELIC was already applied as correction — skip ALL juros
+                continue;
               }
             }
-            if (indiceNorm === 'SELIC' && !this.correcaoConfig.juros_apos_deducao_cs) continue;
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
+            // SELIC = correction + interest (ADC 58/59) — NEVER add separate juros
+            if (indiceNorm === 'SELIC') continue;
+            // PJe-Calc counts interest months inclusive of start month
+            const meses = this.mesesEntreInclusivo(new Date(segInicio), new Date(segFim));
             const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
             jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
           }
@@ -3560,17 +3594,28 @@ export class PjeCalcEngine {
           const jurosStart = jurosStartDate ? new Date(jurosStartDate) : dataComp;
           const dataLiqD = new Date(dataLiq);
           if (jurosStart < dataLiqD) {
-            const usarADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+            const usarADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC'
+              || this.correcaoConfig.indice === 'COMBINACAO'
+              || (this.correcaoConfig.combinacoes_indice || []).some(c => c.indice === 'SELIC' || c.indice === 'IPCA-E' || c.indice === 'IPCAE');
             if (usarADC && this.correcaoConfig.juros_apos_deducao_cs && this.params.data_citacao) {
-              // ADC 58/59: interest = SELIC(dataCitacao → dataLiquidacao)
+              // ADC 58/59: interest = SELIC simple sum (dataCitacao → dataLiquidacao)
+              // PJe-Calc uses SIMPLE SUM of monthly SELIC rates, not compound ratio.
               const compCitacao = this.params.data_citacao.slice(0, 7);
               const compLiqD = dataLiq.slice(0, 7);
-              const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiqD);
-              if (fatorSELIC !== null) {
-                oc.juros = Number(baseJuros.times(fatorSELIC - 1).toDP(2, Decimal.ROUND_HALF_EVEN));
+              const selicMonthlySum = this.indicesDB
+                .filter(idx => (idx.indice === 'SELIC' || idx.indice === 'selic') && idx.competencia.slice(0, 7) >= compCitacao && idx.competencia.slice(0, 7) < compLiqD)
+                .reduce((s, idx) => s + (idx.valor || 0), 0);
+              if (selicMonthlySum > 0) {
+                oc.juros = Number(baseJuros.times(selicMonthlySum / 100).toDP(2, Decimal.ROUND_HALF_EVEN));
               } else {
-                this.trackWarning('W049', 'juros', `SELIC ausente para ${compCitacao}→${compLiqD} (juros ADC 58/59 legacy). Usando 0.`, oc.competencia);
-                oc.juros = 0;
+                // Fallback: compound ratio if monthly values unavailable
+                const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiqD);
+                if (fatorSELIC !== null) {
+                  oc.juros = Number(baseJuros.times(fatorSELIC - 1).toDP(2, Decimal.ROUND_HALF_EVEN));
+                } else {
+                  this.trackWarning('W049', 'juros', `SELIC ausente para ${compCitacao}→${compLiqD} (juros ADC 58/59 legacy). Usando 0.`, oc.competencia);
+                  oc.juros = 0;
+                }
               }
             } else {
               // FIX 1: PJe-Calc counts interest months inclusive of start month
@@ -3720,10 +3765,10 @@ export class PjeCalcEngine {
     if (this.correcaoConfig.juros_apos_deducao_cs) {
       this.aplicarCorrecaoSomente(verbaResults);
       audit('correcao', 'Correção monetária aplicada (sem juros)');
-      
+
       if (hasGT) {
         if ((this.params.modo_calculo ?? 'independent') === 'independent') {
-          audit('gt_blocked', 'Calibração GT bloqueada — modo independente');
+          audit('gt_blocked', 'Calibração GT bloqueada — modo independente calcula do zero');
         } else {
           this.calibrarCorrecaoComGT(verbaResults, false);
           audit('gt_calibracao', 'Calibração GT (correção only)');
@@ -3736,7 +3781,9 @@ export class PjeCalcEngine {
 
       if (hasGT) {
         if ((this.params.modo_calculo ?? 'independent') === 'independent') {
-          audit('gt_blocked', 'Calibração GT juros bloqueada — modo independente');
+          // Independent: calculate juros from engine logic, not GT
+          this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
+          audit('juros_independent', 'Juros calculados independentemente (sem GT)');
         } else {
           this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
           audit('gt_juros', 'Calibração GT (juros + CS deduzida)');
@@ -3766,9 +3813,16 @@ export class PjeCalcEngine {
     let cs = csPreComputed || this.calcularCS(verbaResults, true);
     audit('cs_final', `CS final: segurado=${cs.total_segurado.toFixed(2)}, empregador=${cs.total_empregador.toFixed(2)}`);
 
+    // INSS monetary update: PJe-Calc treats INSS as a federal tax updated by SELIC
+    // from each competência's vencimento to liquidação. The exact methodology produces
+    // values that don't match simple SELIC compound or simple sum precisely.
+    // INSS calculated independently — no GT scaling in independent mode
+
     // ── 7. IR ──
     let ir = this.calcularIR(verbaResults, cs);
     audit('ir', `IR: base=${ir.base_calculo.toFixed(2)}, imposto=${ir.imposto_devido.toFixed(2)}`);
+
+    // IR calculated independently — no GT scaling in independent mode
 
     // ── 7b. GT Closure Override: Inject exact PJC values for CS & IR ──
     // When gt_closure is available, the PJC resultado is the authoritative source.
@@ -3969,12 +4023,77 @@ export class PjeCalcEngine {
 
     audit('resumo', `Bruto=${resumo.principal_corrigido.toFixed(2)}, Juros=${resumo.juros_mora.toFixed(2)}, Líquido=${resumo.liquido_reclamante.toFixed(2)}, Total_Reclamada=${resumo.total_reclamada.toFixed(2)}`);
 
+    // ── Build memória de cálculo (audit trail line by line) ──
+    const memoriaLinhas: import('./engine-types').LinhaMemoriaCalculo[] = [];
+    for (const vr of verbaResults) {
+      for (const oc of vr.ocorrencias) {
+        if (oc.diferenca === 0) continue;
+        memoriaLinhas.push({
+          verba_id: vr.verba_id,
+          verba_nome: vr.nome,
+          competencia: oc.competencia.slice(0, 7),
+          base: oc.base,
+          divisor: oc.divisor ?? 0,
+          multiplicador: oc.multiplicador ?? 1,
+          quantidade: oc.quantidade ?? 0,
+          dobra: oc.dobra ?? 1,
+          devido: oc.devido,
+          pago: oc.pago,
+          diferenca: oc.diferenca,
+          indice_correcao: oc.pjc_ground_truth_regime || this.correcaoConfig.indice || 'N/A',
+          fator_correcao: oc.indice_correcao ?? 1,
+          valor_corrigido: oc.valor_corrigido,
+          data_inicio_juros: this.params.data_ajuizamento || '',
+          dias_juros: 0,
+          taxa_juros: oc.valor_corrigido > 0 && oc.juros > 0 ? Number(new Decimal(oc.juros).div(oc.valor_corrigido).times(100).toDP(2)) : 0,
+          valor_juros: oc.juros,
+          valor_final: oc.valor_final,
+          inss_segurado: 0,
+          ir_retido: 0,
+          regime_correcao: oc.pjc_ground_truth_regime || 'engine',
+          era_temporal: '',
+        });
+      }
+    }
+
+    const memoriaCalculo: import('./engine-types').MemoriaCalculo = {
+      processo: this.params.case_id,
+      data_liquidacao: this.correcaoConfig.data_liquidacao,
+      data_geracao: new Date().toISOString().slice(0, 10),
+      reclamante: '',
+      reclamado: '',
+      data_admissao: this.params.data_admissao,
+      data_demissao: this.params.data_demissao || '',
+      linhas: memoriaLinhas,
+      totais: {
+        valor_principal: resumo.principal_bruto,
+        correcao_monetaria: Number(new Decimal(resumo.principal_corrigido).minus(resumo.principal_bruto).toDP(2)),
+        juros_moratorios: resumo.juros_mora,
+        total_bruto: Number(new Decimal(resumo.principal_corrigido).plus(resumo.juros_mora).toDP(2)),
+        inss_segurado: resumo.cs_segurado,
+        inss_empregador: resumo.cs_empregador,
+        ir_retido: resumo.ir_retido,
+        fgts_devido: resumo.fgts_total,
+        multa_fgts: 0,
+        custas: resumo.custas,
+        honorarios: resumo.honorarios_sucumbenciais + resumo.honorarios_contratuais,
+        liquido_exequente: resumo.liquido_reclamante,
+      },
+      indices_status: {
+        ultimo_mes_disponivel: '',
+        meses_de_atraso: 0,
+        desatualizado: false,
+      },
+      warnings: this.calculationWarnings.map(w => w.mensagem || w.codigo || String(w)),
+    };
+
     return {
       data_liquidacao: this.correcaoConfig.data_liquidacao,
       verbas: verbaResults, fgts, contribuicao_social: cs, imposto_renda: ir,
       seguro_desemprego: seguro, previdencia_privada: prevPrivada, salario_familia: salarioFamilia, resumo, validacao,
       audit_trail: auditTrail,
       calculation_warnings: this.calculationWarnings.length > 0 ? [...this.calculationWarnings] : undefined,
+      memoria_calculo: memoriaCalculo,
     };
   }
 

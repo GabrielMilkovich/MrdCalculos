@@ -158,7 +158,7 @@ async function callAI(
 ): Promise<any> {
   const systemPrompt = SYSTEM_PROMPTS[agentName] || SYSTEM_PROMPTS.ai_case_input_auditor;
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -215,8 +215,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -296,7 +296,7 @@ serve(async (req) => {
       const agentStart = Date.now();
       try {
         const prompt = `Analise os seguintes dados do caso trabalhista e produza sua auditoria:\n\n${contextStr}`;
-        const result = await callAI(agentName, prompt, LOVABLE_API_KEY);
+        const result = await callAI(agentName, prompt, OPENAI_API_KEY);
 
         // Store agent log
         await supabase.from("ai_agent_logs").insert({

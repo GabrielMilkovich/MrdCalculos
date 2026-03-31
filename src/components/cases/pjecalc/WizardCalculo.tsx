@@ -38,7 +38,8 @@ import { MRDStatePanel } from "./MRDStatePanel";
 import { LiquidationPipelineDialog } from "./LiquidationPipelineDialog";
 import { calcularCompletude, type ModuleStatus } from "@/lib/pjecalc/completude";
 import { useIntelligentLiquidation } from "@/hooks/useIntelligentLiquidation";
-import type { ValidationInput } from "@/lib/pjecalc/validation-engine";
+// ValidationInput stub (validation-engine deleted)
+type ValidationInput = unknown;
 
 interface WizardProps {
   caseId: string;
@@ -232,7 +233,7 @@ export function WizardCalculo({ caseId, onComplete, onExit }: WizardProps) {
           </div>
         );
       case 'revisao': {
-        const valInput: ValidationInput = {
+        const valInput = {
           admissao: params?.data_admissao,
           demissao: params?.data_demissao,
           ajuizamento: params?.data_ajuizamento,

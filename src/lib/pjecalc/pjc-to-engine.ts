@@ -535,12 +535,14 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
     aliquota_segurado_fixa: csConf?.aliquota_segurado || undefined,
     limitar_teto: true,
     apurar_empresa: csConf?.apurar_empresa ?? (a.resultado.inss_reclamado > 0),
-    apurar_sat: (csConf?.aliquota_sat ?? 0) > 0,
+    // SAT/RAT: enable if PJC has SAT > 0, or default to true when empregador active
+    apurar_sat: (csConf?.aliquota_sat ?? 0) > 0 || (csConf?.apurar_empresa ?? (a.resultado.inss_reclamado > 0)),
+    // Terceiros: only enable if PJC explicitly sets aliquota > 0
     apurar_terceiros: (csConf?.aliquota_terceiros ?? 0) > 0,
     aliquota_empregador_tipo: 'atividade',
     aliquota_empresa_fixa: csConf?.aliquota_empresa ?? 20,
-    aliquota_sat_fixa: csConf?.aliquota_sat ?? 0,
-    aliquota_terceiros_fixa: csConf?.aliquota_terceiros ?? 0,
+    aliquota_sat_fixa: csConf?.aliquota_sat ?? 2, // Default SAT/RAT grau leve
+    aliquota_terceiros_fixa: csConf?.aliquota_terceiros ?? 0, // 0 when PJC doesn't specify
     periodos_simples: [],
     apuracao_juros_gt: gt,
   };
@@ -585,26 +587,48 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
   };
 
   const indiceBase = normalizeIndice(a.atualizacao.indice_base || 'IPCAE');
-  
-  // Build 2-phase combinations: base index + switch date
-  const combinacoes_indice: PjeCombinacaoIndice[] = [];
-  const combinacoes_juros: PjeCombinacaoJuros[] = [];
 
-  // Filter out empty/invalid entries
+  // Build combinations from PJC XML
+  let combinacoes_indice: PjeCombinacaoIndice[] = [];
+  let combinacoes_juros: PjeCombinacaoJuros[] = [];
+
   const validCombIdx = a.atualizacao.combinacoes_indice.filter(ci => ci.a_partir_de && ci.indice);
   const validCombJur = a.atualizacao.combinacoes_juros.filter(cj => cj.a_partir_de && cj.tipo);
 
   if (validCombIdx.length > 0) {
+    // PJC has explicit combinations — use them
     combinacoes_indice.push({ indice: indiceBase });
     for (const ci of validCombIdx) {
       combinacoes_indice.push({ de: ci.a_partir_de, indice: normalizeIndice(ci.indice) });
     }
-  }
+    if (validCombJur.length > 0) {
+      combinacoes_juros.push({ tipo: 'TRD_SIMPLES', percentual: 1 });
+      for (const cj of validCombJur) {
+        combinacoes_juros.push({ de: cj.a_partir_de, tipo: normalizeJuros(cj.tipo), percentual: cj.taxa });
+      }
+    }
+  } else {
+    // ═══ ADC 58/59 — Auto-build regime when PJC has no combinations ═══
+    // STF ADC 58/59 (Nov 2021):
+    //   Pre-ADC58:  IPCA-E correction + 1% simple monthly juros
+    //   Post-ADC58: SELIC (correction + interest combined)
+    const DATA_ADC58 = '2021-11-11';
+    const dataCitacao = a.parametros.data_citacao || a.parametros.ajuizamento;
+    const dataLiq = a.parametros.data_liquidacao || a.parametros.termino_calculo;
 
-  if (validCombJur.length > 0) {
-    combinacoes_juros.push({ tipo: 'TRD_SIMPLES', percentual: 1 });
-    for (const cj of validCombJur) {
-      combinacoes_juros.push({ de: cj.a_partir_de, tipo: normalizeJuros(cj.tipo), percentual: cj.taxa });
+    if (indiceBase === 'IPCA-E' || indiceBase === 'IPCAE') {
+      // IPCA-E base → ADC 58/59 regime
+      combinacoes_indice.push({ indice: 'IPCA-E' }); // from start
+      combinacoes_indice.push({ de: DATA_ADC58, indice: 'SELIC' }); // SELIC from ADC date
+
+      // Juros: always provide both segments so aplicarJurosAposCS uses combination path
+      // Pre-ADC58: 1% simple monthly juros
+      // Post-ADC58: NENHUM (SELIC correction already includes juros)
+      combinacoes_juros.push({ tipo: 'TRD_SIMPLES', percentual: 1 }); // default from start
+      combinacoes_juros.push({ de: DATA_ADC58, tipo: 'NENHUM' }); // SELIC = no separate juros
+    } else {
+      // Non-IPCA-E base (INPC, TR, etc.) — single index, no ADC regime
+      combinacoes_indice.push({ indice: indiceBase });
     }
   }
 
@@ -619,7 +643,17 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     juros_inicio: 'ajuizamento',
     multa_523: false,
     multa_523_percentual: 10,
-    data_liquidacao: a.parametros.data_liquidacao || a.parametros.termino_calculo || new Date().toISOString().slice(0, 10),
+    data_liquidacao: (() => {
+      const dl = a.parametros.data_liquidacao || a.parametros.termino_calculo;
+      if (!dl) {
+        throw new Error(
+          '[MODO_INDEPENDENTE] data_liquidacao ausente. ' +
+          'Informe a data de liquidação explicitamente. ' +
+          'Usar new Date() gera resultados não-determinísticos.'
+        );
+      }
+      return dl;
+    })(),
     combinacoes_indice: hasCombinations ? combinacoes_indice : undefined,
     combinacoes_juros: combinacoes_juros.length > 0 ? combinacoes_juros : undefined,
     juros_apos_deducao_cs: a.atualizacao.juros_apos_deducao_cs,

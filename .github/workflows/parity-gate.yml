@@ -1,0 +1,31 @@
+name: Parity Gate — Modo Independente
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    name: Paridade com PJe-Calc (≤±1% por caso)
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Rodar testes de paridade golden
+        run: npx vitest run src/lib/pjecalc/__tests__/golden-pjc-cases.test.ts --reporter=verbose
+        env:
+          PARITY_STRICT: 'true'
+
+      - name: Rodar análise de paridade independente
+        run: npx vitest run src/lib/pjecalc/__tests__/independent-parity-analysis.test.ts --reporter=verbose

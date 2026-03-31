@@ -44,7 +44,7 @@ interface ExtractionResult {
 
 // Função para gerar embedding
 async function generateEmbedding(text: string, apiKey: string): Promise<number[]> {
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/embeddings", {
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -214,14 +214,14 @@ INSTRUÇÕES:
 
 Responda APENAS com o JSON no formato especificado.`;
 
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "openai/gpt-5-mini",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPrompt }
@@ -289,9 +289,9 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -362,7 +362,7 @@ serve(async (req) => {
       console.log(`[EXTRACTION] Config: top_k=${topK}, threshold=${similarityThreshold}, doc_types=${JSON.stringify(docTypes)}`);
       
       // 1. Gerar embedding da query
-      const queryEmbedding = await generateEmbedding(task.query, LOVABLE_API_KEY);
+      const queryEmbedding = await generateEmbedding(task.query, OPENAI_API_KEY);
       console.log(`Generated query embedding for query: "${task.query.substring(0, 50)}..."`);
 
       // 2. Buscar chunks relevantes usando a função de match
@@ -432,7 +432,7 @@ serve(async (req) => {
           similarity: c.similarity,
         })),
         task.task_type,
-        LOVABLE_API_KEY
+        OPENAI_API_KEY
       );
 
       console.log(`Extracted ${extractionResult.facts.length} facts, ${extractionResult.not_found.length} not found`);

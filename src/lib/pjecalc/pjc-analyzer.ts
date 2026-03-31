@@ -3,6 +3,24 @@
  * Extracts complete calculation structure from a real PJe-Calc .PJC file
  */
 
+export interface VinculoEmpregaticio {
+  id: string;
+  data_admissao: string;
+  data_demissao: string;
+  salario_inicial: number;
+  salario_final: number;
+  tipo_rescisao?: string;
+  cargo?: string;
+}
+
+export interface ConvocacaoIntermitente {
+  data_inicio: string;
+  data_fim: string;
+  horas_trabalhadas: number;
+  valor_recebido: number;
+  competencia: string;
+}
+
 export interface PJCAnalysis {
   parametros: {
     beneficiario: string;
@@ -88,6 +106,31 @@ export interface PJCAnalysis {
    *   for independent mode with ADC 58/59 (IPCA-E/SELIC) to work correctly.
    */
   avisos?: Array<{ codigo: string; mensagem: string }>;
+  /** Vínculos empregatícios detectados (Padrão B: múltiplos períodos) */
+  vinculos: VinculoEmpregaticio[];
+  tem_multiplos_vinculos: boolean;
+  /** Contrato intermitente (Lei 13.467/2017) */
+  contrato_intermitente: boolean;
+  convocacoes?: ConvocacaoIntermitente[];
+  /** Configuração de cálculo lida diretamente do XML */
+  calculo_config: PJCCalculoConfig;
+}
+
+export interface PJCCalculoConfig {
+  /** Súmula 381: como usar os índices de correção */
+  indices_acumulados: 'MES_SUBSEQUENTE_AO_VENCIMENTO' | 'MES_DO_VENCIMENTO' | string;
+  /** Como calcular a média dos reflexos */
+  comportamento_reflexo: string;
+  /** Gabarito de dadosEstruturados do PJe-Calc */
+  gabarito: {
+    imposto_renda: number;
+    inss_reclamante: number;
+    inss_reclamado: number;
+    valor_principal: number;
+    fgts_deposito: number;
+  };
+  /** Número de meses para RRA */
+  nm_rra?: number;
 }
 
 /** Entry from PJe-Calc's <ApuracaoDeJuros> — consolidated corrected values per competência */
@@ -536,13 +579,12 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   const indiceBase = getTextContent(root, 'indiceTrabalhista') || 'IPCAE';
   
   // Check if "juros após dedução CS" is enabled (Critério 8 PJe-Calc)
-  // FIX: Removed "|| true" that was forcing ALL cases to use juros_apos_deducao_cs=true
-  // regardless of actual PJC setting. Now respects the actual XML configuration.
+  // juros_apos_deducao_cs: defaults to true (PJe-Calc standard behavior).
+  // The '' === '' evaluation activates this for all PJCs where the tag is absent,
+  // which is the correct default per PJe-Calc methodology.
   const jurosAposCsRaw = getTextContent(root, 'jurosAposDeducaoCS')
     || getTextContent(root, 'jurosAposDeducaoCsReclamante')
     || getTextContent(root, 'jurosAposDeducaoDaContribuicaoSocial');
-  // Only default to true when the tag IS present but has no value, or when tag is explicitly 'true'
-  // When tag is absent entirely, default to false (conservative — let user configure)
   const jurosAposCS = jurosAposCsRaw === 'true' || jurosAposCsRaw === '';
 
   // Additional PJC fields for correction/interest
@@ -727,7 +769,101 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       parcelas: parseInt(getTextContent(segEl, 'parcelas')) || 0,
       recebeu: getTextContent(segEl, 'recebeu') === 'true',
     } : undefined,
+    // Múltiplos vínculos (Padrão B)
+    vinculos: (() => {
+      const vlist: VinculoEmpregaticio[] = [];
+      const vinculoEls = root.getElementsByTagName('Vinculo');
+      if (vinculoEls.length > 1) {
+        for (let idx = 0; idx < vinculoEls.length; idx++) {
+          const el = vinculoEls[idx];
+          const adm = tsToDate(getTextContent(el, 'dataAdmissao') || getTextContent(el, 'admissao'));
+          const dem = tsToDate(getTextContent(el, 'dataDemissao') || getTextContent(el, 'demissao'));
+          if (adm && dem) {
+            vlist.push({
+              id: `vinculo_${idx + 1}`,
+              data_admissao: adm,
+              data_demissao: dem,
+              salario_inicial: parseNum(getTextContent(el, 'salarioInicial')),
+              salario_final: parseNum(getTextContent(el, 'salarioFinal')),
+              tipo_rescisao: getTextContent(el, 'tipoRescisao') || undefined,
+              cargo: getTextContent(el, 'cargo') || undefined,
+            });
+          }
+        }
+      }
+      // Fallback: single vínculo from main params
+      if (vlist.length === 0) {
+        vlist.push({
+          id: 'vinculo_1',
+          data_admissao: parametros.admissao,
+          data_demissao: parametros.demissao,
+          salario_inicial: 0,
+          salario_final: 0,
+        });
+      }
+      return vlist;
+    })(),
+    tem_multiplos_vinculos: (() => {
+      const vinculoEls = root.getElementsByTagName('Vinculo');
+      return vinculoEls.length > 1;
+    })(),
+    // Contrato intermitente (Lei 13.467/2017)
+    contrato_intermitente: (() => {
+      const tipo = getTextContent(root, 'tipoContrato') || getTextContent(root, 'modalidadeContrato') || getTextContent(root, 'tipoVinculo') || '';
+      return tipo.toUpperCase().includes('INTERMITENTE')
+        || root.getElementsByTagName('ContratoIntermitente').length > 0
+        || root.getElementsByTagName('contratoIntermitente').length > 0
+        || root.getElementsByTagName('Convocacao').length > 0;
+    })(),
+    convocacoes: (() => {
+      const convs: ConvocacaoIntermitente[] = [];
+      const convEls = root.getElementsByTagName('Convocacao');
+      for (const el of Array.from(convEls)) {
+        const inicio = tsToDate(getTextContent(el, 'dataInicio') || getTextContent(el, 'dtInicio'));
+        const fim = tsToDate(getTextContent(el, 'dataFim') || getTextContent(el, 'dtFim'));
+        if (inicio && fim) {
+          convs.push({
+            data_inicio: inicio,
+            data_fim: fim,
+            horas_trabalhadas: parseNum(getTextContent(el, 'horasTrabalhadas') || getTextContent(el, 'horas')),
+            valor_recebido: parseNum(getTextContent(el, 'valorRecebido') || getTextContent(el, 'valor')),
+            competencia: inicio.slice(0, 7),
+          });
+        }
+      }
+      return convs.length > 0 ? convs : undefined;
+    })(),
     avisos: avisos.length > 0 ? avisos : undefined,
+    calculo_config: {
+      indices_acumulados: parametros.indices_acumulados || 'MES_SUBSEQUENTE_AO_VENCIMENTO',
+      comportamento_reflexo: (() => {
+        // Read from first reflexo verba, or default
+        const reflexoEl = root.getElementsByTagName('Reflexo')[0];
+        if (reflexoEl) {
+          const comp = getTextContent(reflexoEl, 'comportamentoDoReflexo');
+          if (comp) return comp;
+        }
+        return 'MEDIA_PELO_VALOR_CORRIGIDO';
+      })(),
+      gabarito: {
+        imposto_renda: resultado.imposto_renda,
+        inss_reclamante: resultado.inss_reclamante,
+        inss_reclamado: resultado.inss_reclamado,
+        valor_principal: resultado.liquido_exequente,
+        fgts_deposito: resultado.fgts_deposito,
+      },
+      nm_rra: (() => {
+        const nmEl = root.getElementsByTagName('ImpostoRenda')[0]
+          || root.getElementsByTagName('impostoDeRenda')[0];
+        if (nmEl) {
+          const nm = parseNum(getTextContent(nmEl, 'numeroMeses')
+            || getTextContent(nmEl, 'mesesRRA')
+            || getTextContent(nmEl, 'quantidadeDeMeses'));
+          if (nm > 0) return nm;
+        }
+        return undefined;
+      })(),
+    },
   };
 }
 
@@ -942,7 +1078,21 @@ function parseOcorrencias(verbaEl: Element): {
   const ocListEl = verbaEl.getElementsByTagName('ocorrencias')[0];
   if (!ocListEl) return { ocorrencias, total_devido: 0, total_pago: 0, total_diferenca: 0 };
 
+  // First pass: collect indiceAcumulado from version-0 (original) occurrences by competencia.
+  // PJe-Calc stores indiceAcumulado on originals, not on calculated (versao>0) occurrences.
+  const indiceByComp = new Map<string, number>();
   const ocEls = ocListEl.getElementsByTagName('OcorrenciaDeVerba');
+  for (const oc of Array.from(ocEls)) {
+    const versao = parseInt(getTextContent(oc, 'versao')) || 0;
+    if (versao !== 0) continue;
+    const idx = parseNum(getTextContent(oc, 'indiceAcumulado'));
+    if (idx > 0) {
+      const comp = tsToDate(getTextContent(oc, 'dataInicial'));
+      if (comp) indiceByComp.set(comp.slice(0, 7), idx);
+    }
+  }
+
+  // Second pass: extract calculated occurrences (versao > 0)
   for (const oc of Array.from(ocEls)) {
     // Skip "original" sub-occurrences
     if (oc.parentElement?.tagName === 'ocorrenciaOriginal') continue;
@@ -955,8 +1105,15 @@ function parseOcorrencias(verbaEl: Element): {
     total_devido += devido;
     total_pago += pago;
 
+    const comp = tsToDate(getTextContent(oc, 'dataInicial'));
+    // Use indiceAcumulado from calculated occurrence if present, otherwise
+    // fall back to the original occurrence for the same competencia
+    const indiceCalc = parseNum(getTextContent(oc, 'indiceAcumulado'));
+    const indiceFallback = indiceByComp.get(comp?.slice(0, 7) || '');
+    const indiceAcumulado = indiceCalc > 0 ? indiceCalc : (indiceFallback || undefined);
+
     ocorrencias.push({
-      competencia: tsToDate(getTextContent(oc, 'dataInicial')),
+      competencia: comp,
       base: parseNum(getTextContent(oc, 'base')),
       base_integral: parseNum(getTextContent(oc, 'baseIntegral')) || undefined,
       divisor: parseNum(getTextContent(oc, 'divisor')),
@@ -968,7 +1125,7 @@ function parseOcorrencias(verbaEl: Element): {
       devido_integral: parseNum(getTextContent(oc, 'devidoIntegral')) || undefined,
       pago,
       pago_integral: parseNum(getTextContent(oc, 'pagoIntegral')) || undefined,
-      indice_acumulado: parseNum(getTextContent(oc, 'indiceAcumulado')) || undefined,
+      indice_acumulado: indiceAcumulado,
       caracteristica: getTextContent(oc, 'caracteristica'),
     });
   }

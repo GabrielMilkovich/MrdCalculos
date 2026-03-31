@@ -17,8 +17,8 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
 
     const tipoLabel = tipo_documento === "contracheque" ? "Demonstrativo de Pagamento (Contracheque)" : "Ficha Financeira";
 
@@ -64,14 +64,14 @@ Se uma rubrica tem valores em 12 meses, retorne os 12 valores.
 
 O ano de referência provável é ${ano_referencia || "indicado no documento"}.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openai/gpt-5-mini",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Analise o seguinte documento e extraia TODAS as rubricas de pagamento com seus valores mensais.\n\nDOCUMENTO:\n${texto_documento.slice(0, 50000)}` },

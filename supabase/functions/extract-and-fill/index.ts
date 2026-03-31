@@ -1,6 +1,6 @@
 // =====================================================
 // EDGE FUNCTION: EXTRACT-AND-FILL
-// OCR via Mistral API + Extração Estruturada via OpenAI (Lovable AI)
+// OCR via Mistral API + Extração Estruturada via OpenAI
 // Auto-Preenchimento PJe-Calc
 // =====================================================
 // IMPROVEMENTS v2:
@@ -1009,7 +1009,7 @@ async function mistralOcrImage(
 
 async function extractStructured(
   ocrText: string,
-  lovableApiKey: string
+  openaiApiKey: string
 ): Promise<any> {
   let lastError: Error | null = null;
   const models = [
@@ -1027,10 +1027,10 @@ async function extractStructured(
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       console.log(`[EXTRACT] ${model} attempt ${attempt}`);
       try {
-        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${lovableApiKey}`,
+            Authorization: `Bearer ${openaiApiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -1668,7 +1668,7 @@ async function processDocumentInBackground(
   fileUrl: string,
   doc: any,
   MISTRAL_API_KEY: string,
-  LOVABLE_API_KEY: string,
+  OPENAI_API_KEY: string,
   supabase: any
 ) {
   try {
@@ -1735,7 +1735,7 @@ async function processDocumentInBackground(
 
     // Stage 2: AI structured extraction (always run for complete data)
     const fullOcrText = ocrText;
-    const extracted = await extractStructured(ocrText, LOVABLE_API_KEY);
+    const extracted = await extractStructured(ocrText, OPENAI_API_KEY);
     extracted.texto_ocr_completo = fullOcrText;
     ocrText = "";
 
@@ -1894,8 +1894,8 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
 
     const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
     if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY not configured");
@@ -1947,8 +1947,8 @@ serve(async (req) => {
     }).eq("id", document_id);
 
     (globalThis as any).EdgeRuntime?.waitUntil?.(
-      processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, LOVABLE_API_KEY, supabase)
-    ) ?? processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, LOVABLE_API_KEY, supabase);
+      processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase)
+    ) ?? processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase);
 
     return new Response(
       JSON.stringify({
