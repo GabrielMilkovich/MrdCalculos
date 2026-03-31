@@ -1,13 +1,15 @@
 /**
  * @vitest-environment jsdom
  *
- * AUDITORIA CEGA — Modo Independente PURO
+ * MOTOR INDEPENDENTE — Teste Principal de Paridade
  *
- * Este teste executa o engine sem NENHUMA contaminação do PJe-Calc:
- * - gt_closure: REMOVIDO
- * - apuracao_juros_gt: REMOVIDO de correcaoConfig, csConfig, irConfig
- * - pjc_indice_acumulado: mantido (é dado de entrada, não resultado)
- * - ocorrencias_precomputadas: mantido (são inputs nominais)
+ * O .PJC é usado APENAS para:
+ * (1) Extrair dados de entrada: datas, salários, verbas (os "ingredientes")
+ * (2) Extrair gabarito: <dadosEstruturados> para comparação
+ *
+ * O motor calcula TUDO de forma independente.
+ * O gabarito só serve para medir o delta.
+ * Nenhum resultado do PJe-Calc entra no cálculo.
  *
  * O resultado é comparado com o PJe-Calc golden APENAS no final.
  * ZERO dados do resultado PJC entram no cálculo.
