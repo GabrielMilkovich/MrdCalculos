@@ -12,7 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "update-indices": "npx tsx scripts/update-indices.ts"
+    "update-indices": "npx tsx scripts/update-indices.ts",
+    "calibrate": "npx tsx scripts/calibration-pipeline.ts",
+    "calibrate:dir": "npx tsx scripts/calibration-pipeline.ts --dir"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

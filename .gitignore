@@ -34,3 +34,9 @@ dist-ssr
 # Bun lockfiles (project standardized on npm)
 bun.lock
 bun.lockb
+
+# Calibration corpus (real PJC files — never commit)
+pjc-corpus/*.PJC
+pjc-corpus/*.pjc
+pjc-corpus/calibration-*.json
+calibration-*.json
