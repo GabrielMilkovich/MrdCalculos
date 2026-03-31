@@ -15,6 +15,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
+import { JSDOM } from 'jsdom';
+
+// Node.js polyfill — DOMParser via jsdom (required for pjc-analyzer.ts)
+{
+  const { window: w } = new JSDOM('');
+  (globalThis as Record<string, unknown>)['DOMParser'] = w.DOMParser;
+  (globalThis as Record<string, unknown>)['document'] = w.document;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
