@@ -57,3 +57,29 @@ jobs:
           name: dist
           path: dist/
           retention-days: 3
+
+  calibrate:
+    name: Calibration Pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm install
+
+      - name: Run calibration pipeline
+        run: npm run calibrate
+
+      - name: Upload calibration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibration-report
+          path: calibration-*.json
+          retention-days: 30
