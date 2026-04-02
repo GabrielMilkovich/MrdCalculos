@@ -177,7 +177,33 @@ async function main() {
       const [aD, mD] = (dem.slice(0, 7) || '2024-01').split('-').map(Number);
       const periodo = (aD - aA) * 12 + (mD - mA) + 1;
       const regime = dem.slice(0, 7) <= '2021-11' ? 'PRE_ADC58' : adm.slice(0, 7) >= '2021-11' ? 'POS_ADC58' : 'TRANSICAO';
-      console.log(`${badge} ${dl > 0 ? '+' : ''}${dl.toFixed(2)}% | IR:${calcDelta(r.ir_retido, pjc_ir) > 0 ? '+' : ''}${calcDelta(r.ir_retido, pjc_ir).toFixed(1)}% | INSS:${calcDelta(r.cs_segurado, pjc_inss) > 0 ? '+' : ''}${calcDelta(r.cs_segurado, pjc_inss).toFixed(1)}% | ${regime} | ${periodo}m | PJC:R\${pjc_liq.toFixed(0)}`);
+      console.log(`${badge} ${dl > 0 ? '+' : ''}${dl.toFixed(2)}% | IR:${calcDelta(r.ir_retido, pjc_ir) > 0 ? '+' : ''}${calcDelta(r.ir_retido, pjc_ir).toFixed(1)}% | INSS:${calcDelta(r.cs_segurado, pjc_inss) > 0 ? '+' : ''}${calcDelta(r.cs_segurado, pjc_inss).toFixed(1)}% | ${regime} | ${periodo}m | PJC:R${pjc_liq.toFixed(0)}`);
+
+      // === DIAGNOSTIC BLOCK (Prompt 17) ===
+      const irDelta = calcDelta(r.ir_retido, pjc_ir);
+      const inssDelta = calcDelta(r.cs_segurado, pjc_inss);
+      const isDebugCase = Math.abs(irDelta) > 100 || Math.abs(dl) > 30 || Math.abs(inssDelta) > 30;
+      if (isDebugCase) {
+        const verbaResults = result.detalhes?.verbaResults || result.verbas || [];
+        const totalOcs = verbaResults.reduce((s: number, vr: any) => s + (vr.ocorrencias?.length || 0), 0);
+        const ocsComDiferenca = verbaResults.reduce((s: number, vr: any) => s + (vr.ocorrencias?.filter((oc: any) => oc.diferenca > 0).length || 0), 0);
+        console.log('[DIAG] caso:', nome.slice(0, 40));
+        console.log('[DIAG]   regime:', regime, 'periodo:', periodo, 'meses');
+        console.log('[DIAG]   liq: PJC=R$' + pjc_liq.toFixed(0) + ' ENG=R$' + r.liquido_reclamante.toFixed(0) + ' delta=' + dl.toFixed(2) + '%');
+        console.log('[DIAG]   inss: PJC=R$' + pjc_inss.toFixed(0) + ' ENG=R$' + r.cs_segurado.toFixed(0) + ' delta=' + inssDelta.toFixed(1) + '%');
+        console.log('[DIAG]   ir: PJC=R$' + pjc_ir.toFixed(0) + ' ENG=R$' + r.ir_retido.toFixed(0) + ' delta=' + irDelta.toFixed(1) + '%');
+        console.log('[DIAG]   bruto: PJC=R$' + pjc_bruto.toFixed(0) + ' ENG=R$' + (r.liquido_reclamante + r.cs_segurado + r.ir_retido).toFixed(0));
+        console.log('[DIAG]   irConfig.apurar:', inputs.irConfig.apurar, 'csConfig.apurar:', inputs.csConfig.apurar_segurado);
+        console.log('[DIAG]   irConfig.incidir_sobre_juros:', inputs.irConfig.incidir_sobre_juros);
+        console.log('[DIAG]   irConfig.dependentes:', inputs.irConfig.dependentes);
+        console.log('[DIAG]   csConfig.base_cs_segurado:', inputs.csConfig.base_cs_segurado);
+        console.log('[DIAG]   total ocorrencias:', totalOcs, '| com diferenca>0:', ocsComDiferenca);
+        console.log('[DIAG]   mesesRRA from result:', result.ir?.meses_rra, 'irMetodo:', result.ir?.metodo);
+        console.log('[DIAG]   admissao:', analysis.parametros?.admissao, 'demissao:', analysis.parametros?.demissao);
+        console.log('[DIAG]   data_liquidacao:', inputs.correcaoConfig.data_liquidacao);
+        console.log('[DIAG]   combinacoes_indice:', JSON.stringify(inputs.correcaoConfig.combinacoes_indice?.slice(0,3)));
+      }
+      // === END DIAGNOSTIC ===
 
       casos.push({
         arquivo: nome, nome: analysis.parametros?.beneficiario || nome,
