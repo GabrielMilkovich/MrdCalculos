@@ -597,9 +597,23 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
 
   if (validCombIdx.length > 0) {
     // PJC has explicit combinations — use them
+    // FIX: SEM_CORRECAO in combinacoes_indice from PJC XML means "stop juros remuneratórios"
+    // NOT "stop monetary correction". IPCA-E correction continues until liquidation.
+    // SEM_CORRECAO → maps to combinacoes_juros: NENHUM (not to combinacoes_indice)
     combinacoes_indice.push({ indice: indiceBase });
     for (const ci of validCombIdx) {
-      combinacoes_indice.push({ de: ci.a_partir_de, indice: normalizeIndice(ci.indice) });
+      const indiceNorm = normalizeIndice(ci.indice);
+      if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'NENHUM') {
+        // SEM_CORRECAO = stop juros at this date; monetary correction continues
+        combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+      } else if (indiceNorm === 'SELIC') {
+        // SELIC substitutes IPCA-E as correction index (already includes interest)
+        combinacoes_indice.push({ de: ci.a_partir_de, indice: 'SELIC' });
+        combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+      } else {
+        // Other explicit index (INPC, IGPM, TR, etc.)
+        combinacoes_indice.push({ de: ci.a_partir_de, indice: indiceNorm });
+      }
     }
     if (validCombJur.length > 0) {
       combinacoes_juros.push({ tipo: 'TRD_SIMPLES', percentual: 1 });
