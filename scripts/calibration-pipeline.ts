@@ -170,7 +170,7 @@ async function main() {
 
       const dl = calcDelta(r.liquido_reclamante, pjc_liq);
       const badge = Math.abs(dl) <= 5 ? '✅' : Math.abs(dl) <= 10 ? '⚠️' : '❌';
-      console.log(`${badge} ${dl > 0 ? '+' : ''}${dl.toFixed(2)}%`);
+      console.log(`${badge} ${dl > 0 ? '+' : ''}${dl.toFixed(2)}% | IR:${calcDelta(r.ir_retido, pjc_ir) > 0 ? '+' : ''}${calcDelta(r.ir_retido, pjc_ir).toFixed(1)}% | INSS:${calcDelta(r.cs_segurado, pjc_inss) > 0 ? '+' : ''}${calcDelta(r.cs_segurado, pjc_inss).toFixed(1)}% | ${regime} | ${periodo}m | PJC:R\${pjc_liq.toFixed(0)}`);
 
       const adm = analysis.parametros?.admissao || '';
       const dem = analysis.parametros?.demissao || '';
