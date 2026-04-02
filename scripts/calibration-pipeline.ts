@@ -193,6 +193,12 @@ async function main() {
         console.log('[DIAG]   inss: PJC=R$' + pjc_inss.toFixed(0) + ' ENG=R$' + r.cs_segurado.toFixed(0) + ' delta=' + inssDelta.toFixed(1) + '%');
         console.log('[DIAG]   ir: PJC=R$' + pjc_ir.toFixed(0) + ' ENG=R$' + r.ir_retido.toFixed(0) + ' delta=' + irDelta.toFixed(1) + '%');
         console.log('[DIAG]   bruto: PJC=R$' + pjc_bruto.toFixed(0) + ' ENG=R$' + (r.liquido_reclamante + r.cs_segurado + r.ir_retido).toFixed(0));
+        // INSS-DEBUG: Show GT data for INSS diagnosis
+        const gtEntries = a.apuracao_juros || [];
+        const gtCSNormalTotal = gtEntries.reduce((s, e) => s + (e.cs_normal || 0), 0);
+        const gtCSBaseTotal = gtEntries.reduce((s, e) => s + (e.cs_base_normal || 0), 0);
+        const hasPrecomputedCS = gtEntries.some(e => (e.cs_normal || 0) > 0);
+        console.log('[INSS-DEBUG] hasPrecomputed=' + hasPrecomputedCS + ' cs_normal_total=' + gtCSNormalTotal.toFixed(0) + ' cs_base_normal_total=' + gtCSBaseTotal.toFixed(0) + ' eng_inss=' + r.cs_segurado.toFixed(0));
         console.log('[DIAG]   irConfig.apurar:', inputs.irConfig.apurar, 'csConfig.apurar:', inputs.csConfig.apurar_segurado);
         console.log('[DIAG]   irConfig.incidir_sobre_juros:', inputs.irConfig.incidir_sobre_juros);
         console.log('[DIAG]   irConfig.dependentes:', inputs.irConfig.dependentes);
