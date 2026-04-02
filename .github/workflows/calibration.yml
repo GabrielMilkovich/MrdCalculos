@@ -1,0 +1,46 @@
+name: Pipeline de Calibração
+
+on:
+  workflow_dispatch: # Roda manualmente pelo botão no GitHub
+
+jobs:
+  calibrate:
+    runs-on: ubuntu-latest
+    name: Calibração Modo Independente
+
+    steps:
+      - name: Checkout MrdCalculos
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Clonar repositório de documentos
+        run: |
+          git clone https://github.com/GabrielMilkovich/Documentos.git /tmp/Documentos
+          echo "PJCs encontrados:"
+          ls /tmp/Documentos/*.PJC | wc -l
+
+      - name: Copiar PJCs para pjc-corpus
+        run: |
+          mkdir -p pjc-corpus
+          cp /tmp/Documentos/*.PJC pjc-corpus/
+          echo "PJCs copiados:"
+          ls pjc-corpus/*.PJC
+
+      - name: Rodar pipeline de calibração
+        run: npm run calibrate
+        # Salva o output no log do Actions
+
+      - name: Salvar relatório JSON como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibration-report
+          path: calibration-*.json
+          retention-days: 30
