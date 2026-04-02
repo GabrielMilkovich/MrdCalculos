@@ -2096,11 +2096,8 @@ export class PjeCalcEngine {
             imposto = impostoNormal + imposto13;
           }
 
-          // Apply monetary correction: derive factor from GT valorCorrigido / cs_base
-          const cf = correctionFactorByComp[comp];
-          if (cf && cf > 1) {
-            imposto = Number(new Decimal(imposto).times(cf).toDP(2, PjeCalcEngine.ROUND_CS_IR));
-          }
+          // NOTE: INSS is calculated on nominal historical salary — do NOT apply monetary correction factor
+          // PJe-Calc: INSS base = salário histórico nominal, not corrected value
 
           segurado_devidos.push({
             competencia: comp, base: totalBase,
