@@ -170,7 +170,6 @@ async function main() {
 
       const dl = calcDelta(r.liquido_reclamante, pjc_liq);
       const badge = Math.abs(dl) <= 5 ? '✅' : Math.abs(dl) <= 10 ? '⚠️' : '❌';
-      console.log(`${badge} ${dl > 0 ? '+' : ''}${dl.toFixed(2)}% | IR:${calcDelta(r.ir_retido, pjc_ir) > 0 ? '+' : ''}${calcDelta(r.ir_retido, pjc_ir).toFixed(1)}% | INSS:${calcDelta(r.cs_segurado, pjc_inss) > 0 ? '+' : ''}${calcDelta(r.cs_segurado, pjc_inss).toFixed(1)}% | ${regime} | ${periodo}m | PJC:R\${pjc_liq.toFixed(0)}`);
 
       const adm = analysis.parametros?.admissao || '';
       const dem = analysis.parametros?.demissao || '';
@@ -178,6 +177,7 @@ async function main() {
       const [aD, mD] = (dem.slice(0, 7) || '2024-01').split('-').map(Number);
       const periodo = (aD - aA) * 12 + (mD - mA) + 1;
       const regime = dem.slice(0, 7) <= '2021-11' ? 'PRE_ADC58' : adm.slice(0, 7) >= '2021-11' ? 'POS_ADC58' : 'TRANSICAO';
+      console.log(`${badge} ${dl > 0 ? '+' : ''}${dl.toFixed(2)}% | IR:${calcDelta(r.ir_retido, pjc_ir) > 0 ? '+' : ''}${calcDelta(r.ir_retido, pjc_ir).toFixed(1)}% | INSS:${calcDelta(r.cs_segurado, pjc_inss) > 0 ? '+' : ''}${calcDelta(r.cs_segurado, pjc_inss).toFixed(1)}% | ${regime} | ${periodo}m | PJC:R\${pjc_liq.toFixed(0)}`);
 
       casos.push({
         arquivo: nome, nome: analysis.parametros?.beneficiario || nome,
