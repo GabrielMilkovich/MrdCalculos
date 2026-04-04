@@ -616,10 +616,15 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
       }
     }
     if (validCombJur.length > 0) {
-      combinacoes_juros.push({ tipo: 'TRD_SIMPLES', percentual: 1 });
+      combinacoes_juros.unshift({ tipo: 'TRD_SIMPLES', percentual: 1 });
       for (const cj of validCombJur) {
         combinacoes_juros.push({ de: cj.a_partir_de, tipo: normalizeJuros(cj.tipo), percentual: cj.taxa });
       }
+    } else if (combinacoes_juros.length > 0) {
+      // SEM_CORRECAO/SELIC generated juros entries but PJC has no explicit juros combinations.
+      // Prepend the default juros so interest applies BEFORE the stop date.
+      const jurosTipo = normalizeJuros(a.atualizacao.juros_padrao || 'TRD_SIMPLES');
+      combinacoes_juros.unshift({ tipo: jurosTipo, percentual: 1 });
     }
   } else {
     // ═══ ADC 58/59 — Auto-build regime when PJC has no combinations ═══
