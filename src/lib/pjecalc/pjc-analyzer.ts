@@ -60,6 +60,8 @@ export interface PJCAnalysis {
     limitar_avos: boolean;
     /** Data de citação extraída do PJC */
     data_citacao?: string;
+    /** Código IBGE do município (extraído de <municipio><Municipio><externalRef>) */
+    municipio_ibge?: string;
   };
   resultado: {
     liquido_exequente: number;
@@ -381,17 +383,31 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     prescricao_quinquenal: getTextContent(root, 'prescricaoQuinquenal') === 'true',
     prescricao_fgts: getTextContent(root, 'prescricaoFgts') === 'true',
     limitar_avos: getTextContent(root, 'limitarAvosAoPeriodoDoCalculo') === 'true',
-    data_citacao: tsToDate(getTextContent(root, 'dataCitacao') || getTextContent(root, 'dataDaCitacao')) || undefined,
+    data_citacao: extractDataCitacao(root),
+    municipio_ibge: extractMunicipioIBGE(root) || undefined,
   };
 
   // --- Parser-level warnings ---
   const avisos: Array<{ codigo: string; mensagem: string }> = [];
   if (!parametros.data_citacao) {
-    avisos.push({
-      codigo: 'W_CITACAO_AUSENTE',
-      mensagem: 'data_citacao não encontrada no arquivo PJC — ausente nos campos dataCitacao e dataDaCitacao. ' +
-        'Para cálculo independente com ADC 58/59 (IPCA-E/SELIC) é obrigatório informar manualmente em Dados do Processo.',
-    });
+    // dataCitacao is structurally absent from PJe-Calc PJC exports.
+    // Estimate as ajuizamento + 60 days (common JT heuristic).
+    if (parametros.ajuizamento) {
+      const ajuiz = new Date(parametros.ajuizamento);
+      ajuiz.setDate(ajuiz.getDate() + 60);
+      parametros.data_citacao = ajuiz.toISOString().slice(0, 10);
+      avisos.push({
+        codigo: 'W_CITACAO_ESTIMADA',
+        mensagem: `data_citacao ausente no PJC — estimada como ajuizamento + 60 dias (${parametros.data_citacao}). ` +
+          'Para maior precisão no cálculo independente com ADC 58/59 (IPCA-E/SELIC), informe a data real em Dados do Processo.',
+      });
+    } else {
+      avisos.push({
+        codigo: 'W_CITACAO_AUSENTE',
+        mensagem: 'data_citacao não encontrada no arquivo PJC e ajuizamento ausente — impossível estimar. ' +
+          'Informe manualmente em Dados do Processo para cálculo independente.',
+      });
+    }
   }
 
   // --- Resultado ---
@@ -1159,6 +1175,43 @@ function getTextContent(parent: Element | undefined | null, tagName: string): st
   const els = parent.getElementsByTagName(tagName);
   if (els.length === 0) return '';
   return els[0].textContent?.trim() || '';
+}
+
+/**
+ * Tenta extrair dataCitacao do PJC XML usando múltiplas tags alternativas.
+ * PJe-Calc não exporta dataCitacao diretamente — buscamos variantes conhecidas.
+ */
+function extractDataCitacao(root: Element): string | undefined {
+  // Tags conhecidas em diferentes versões do PJe-Calc
+  const tagCandidates = [
+    'dataCitacao', 'dataDaCitacao', 'dataDeCitacao',
+    'citacaoData', 'dataOrdemDeServico',
+  ];
+  for (const tag of tagCandidates) {
+    const val = tsToDate(getTextContent(root, tag));
+    if (val) return val;
+  }
+  // Buscar dentro de <DadosProcessuais> se existir
+  const dp = root.getElementsByTagName('DadosProcessuais')[0];
+  if (dp) {
+    for (const tag of tagCandidates) {
+      const val = tsToDate(getTextContent(dp, tag));
+      if (val) return val;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Extrai código IBGE do município a partir de <municipio><Municipio><externalRef>.
+ * Retorna string numérica ou vazio.
+ */
+function extractMunicipioIBGE(root: Element): string {
+  const munEl = root.getElementsByTagName('municipio')[0];
+  if (!munEl) return '';
+  const munObj = munEl.getElementsByTagName('Municipio')[0];
+  if (!munObj) return '';
+  return getTextContent(munObj, 'externalRef');
 }
 
 function extractReclamado(root: Element): string {

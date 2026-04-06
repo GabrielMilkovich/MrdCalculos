@@ -3,12 +3,12 @@ import Decimal from 'decimal.js';
 import { createEngine, makeVerba, makeHistoricoWithOcorrencias, makeINSSFaixas } from './helpers';
 
 describe('PjeCalcEngine - INSS (Contribuição Social)', () => {
-  it('calculates progressive INSS with 2025 default bands', () => {
-    // Using default bands:
-    // 0-1518.00: 7.5%
-    // 1518.01-2793.88: 9%
-    // 2793.89-5839.45: 12%
-    // 5839.46-8157.41: 14%
+  it('calculates progressive INSS with historical 2023 bands', () => {
+    // Using historical 2023 bands (Portaria MPS nº 26/2023):
+    // 0-1320.00: 7.5%
+    // 1320.01-2571.29: 9%
+    // 2571.30-3856.94: 12%
+    // 3856.95-7507.49: 14%
 
     const hist = makeHistoricoWithOcorrencias(3000, ['2023-06']);
     const verba = makeVerba({
@@ -42,12 +42,12 @@ describe('PjeCalcEngine - INSS (Contribuição Social)', () => {
     const result = engine.liquidar();
     const cs = result.contribuicao_social;
 
-    // Progressive calculation on R$ 3000 (ROUND_HALF_EVEN per etapa):
-    // Band 1: 1518.00 * 0.075 = 113.85 (exact)
-    // Band 2: (2793.88 - 1518.00) = 1275.88 * 0.09 = 114.8292 → ROUND_HALF_EVEN → 114.83
-    // Band 3: (3000.00 - 2793.88) = 206.12 * 0.12 = 24.7344 → ROUND_HALF_EVEN → 24.73
-    // Total = 113.85 + 114.83 + 24.73 = 253.41
-    expect(cs.total_segurado).toBeCloseTo(253.41, 2);
+    // Progressive calculation on R$ 3000 with 2023 table:
+    // Band 1: 1320.00 × 0.075 = 99.00
+    // Band 2: (2571.29 - 1320.00) × 0.09 = 112.62
+    // Band 3: (3000.00 - 2571.29) × 0.12 = 51.45
+    // Total ≈ 263.07
+    expect(cs.total_segurado).toBeCloseTo(263.07, 1);
     expect(cs.segurado_devidos.length).toBe(1);
   });
 
@@ -163,13 +163,13 @@ describe('PjeCalcEngine - INSS (Contribuição Social)', () => {
     const result = engine.liquidar();
     const cs = result.contribuicao_social;
 
-    // With teto=8157.41, progressive INSS (ROUND_HALF_EVEN per etapa):
-    // Band 1: 1518.00 * 0.075 = 113.85
-    // Band 2: (2793.88 - 1518.00) = 1275.88 * 0.09 = 114.8292 → 114.83
-    // Band 3: (5839.45 - 2793.88) = 3045.57 * 0.12 = 365.4684 → 365.47
-    // Band 4: (8157.41 - 5839.45) = 2317.96 * 0.14 = 324.5144 → 324.51
-    // Total = 113.85 + 114.83 + 365.47 + 324.51 = 918.66
-    expect(cs.total_segurado).toBeCloseTo(918.66, 2);
+    // Uses 2023 table (teto=7507.49), base capped from 10000:
+    // Band 1: 1320.00 × 0.075 = 99.00
+    // Band 2: (2571.29 - 1320.00) × 0.09 = 112.62
+    // Band 3: (3856.94 - 2571.29) × 0.12 = 154.28
+    // Band 4: (7507.49 - 3856.94) × 0.14 = 511.08
+    // Total ≈ 876.98
+    expect(cs.total_segurado).toBeCloseTo(876.98, 1);
   });
 
   it('handles base exactly at band boundary (1518.00)', () => {
@@ -202,8 +202,11 @@ describe('PjeCalcEngine - INSS (Contribuição Social)', () => {
     });
 
     const result = engine.liquidar();
-    // Exactly at first band: 1518.00 * 0.075 = 113.85 (exact, no rounding needed)
-    expect(result.contribuicao_social.total_segurado).toBe(113.85);
+    // 2023 table: 1518.00 spans 2 bands (band 1 ends at 1320.00):
+    // Band 1: 1320.00 × 0.075 = 99.00
+    // Band 2: (1518.00 - 1320.00) × 0.09 = 17.82
+    // Total = 116.82
+    expect(result.contribuicao_social.total_segurado).toBeCloseTo(116.82, 1);
   });
 
   it('returns zero when apurar_segurado is false', () => {

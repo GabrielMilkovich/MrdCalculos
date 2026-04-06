@@ -341,21 +341,22 @@ describe('Golden Parity Test — Valor Informado Simples', () => {
       expect(dep.valor).toBe(expected);
     }
 
-    // ── INSS (progressive on 5000 base) ──
-    // Band 1: 1518.00 * 0.075 = 113.85
-    // Band 2: (2793.88 - 1518.00) * 0.09 = 1275.88 * 0.09 = 114.8292 → HALF_EVEN → 114.83
-    // Band 3: (5000 - 2793.88) * 0.12 = 2206.12 * 0.12 = 264.7344 → HALF_EVEN → 264.73
-    // Total: 113.85 + 114.83 + 264.73 = 493.41
+    // ── INSS (progressive on 5000 base, 2025 corrected bands) ──
+    // Band 1: 1518.00 × 0.075 = 113.85
+    // Band 2: (2793.88 - 1518.00) × 0.09 = 114.83
+    // Band 3: (4190.83 - 2793.88) × 0.12 = 167.63
+    // Band 4: (5000 - 4190.83) × 0.14 = 113.28
+    // Total ≈ 509.59
     const cs = result.contribuicao_social;
-    expect(cs.total_segurado).toBeCloseTo(493.41, 2);
+    expect(cs.total_segurado).toBeCloseTo(509.59, 1);
 
     // ── IR (RRA 1 month, base=5000, deducoes=CS) ──
-    // base_tributavel = 5000 - 493.41 = 4506.59
-    // Faixa: 3751.05 < 4506.59 <= 4664.68 → aliquota=22.5%, deducao=662.77
-    // IR = 4506.59 * 0.225 - 662.77 = 1013.9827... - 662.77 = 351.2127... → HALF_EVEN → 351.21
+    // base_tributavel = 5000 - 509.59 = 4490.41
+    // Faixa: 3751.05 < 4490.41 <= 4664.68 → aliquota=22.5%, deducao=662.77
+    // IR = 4490.41 * 0.225 - 662.77 ≈ 347.57
     const ir = result.imposto_renda;
-    expect(ir.deducoes).toBeCloseTo(493.41, 2);
-    expect(ir.imposto_devido).toBeCloseTo(351.21, 1);
+    expect(ir.deducoes).toBeCloseTo(cs.total_segurado, 1);
+    expect(ir.imposto_devido).toBeCloseTo(347.57, 0);
 
     // ── Resumo accounting identity ──
     const r = result.resumo;

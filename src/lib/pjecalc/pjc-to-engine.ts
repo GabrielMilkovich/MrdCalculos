@@ -164,6 +164,19 @@ function synthesizeHistoricosFromVerbas(
 // PARAMETROS
 // =====================================================
 
+/** Deriva UF (sigla) a partir do código IBGE do município (primeiros 2 dígitos = código UF) */
+function deriveUFFromIBGE(ibge?: string): string {
+  if (!ibge || ibge.length < 2) return '';
+  const ufMap: Record<string, string> = {
+    '11': 'RO', '12': 'AC', '13': 'AM', '14': 'RR', '15': 'PA', '16': 'AP', '17': 'TO',
+    '21': 'MA', '22': 'PI', '23': 'CE', '24': 'RN', '25': 'PB', '26': 'PE', '27': 'AL', '28': 'SE', '29': 'BA',
+    '31': 'MG', '32': 'ES', '33': 'RJ', '35': 'SP',
+    '41': 'PR', '42': 'SC', '43': 'RS',
+    '50': 'MS', '51': 'MT', '52': 'GO', '53': 'DF',
+  };
+  return ufMap[ibge.slice(0, 2)] || '';
+}
+
 function convertParametros(a: PJCAnalysis, caseId: string): PjeParametros {
   return {
     case_id: caseId,
@@ -173,8 +186,8 @@ function convertParametros(a: PJCAnalysis, caseId: string): PjeParametros {
     data_citacao: a.parametros.data_citacao || undefined,
     data_inicial: a.parametros.inicio_calculo || undefined,
     data_final: a.parametros.termino_calculo || undefined,
-    estado: '',
-    municipio: '',
+    estado: deriveUFFromIBGE(a.parametros.municipio_ibge),
+    municipio: a.parametros.municipio_ibge || '',
     regime_trabalho: 'tempo_integral',
     carga_horaria_padrao: a.parametros.carga_horaria || 220,
     prescricao_quinquenal: a.parametros.prescricao_quinquenal,

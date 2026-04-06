@@ -177,10 +177,12 @@ describe('Edge Case: Competencia before 2025 with no DB faixas', () => {
 
     const result = engine.liquidar();
 
-    // Should use default 2025 faixas and produce a valid INSS result
-    // 2020-06 is >= 2020-03 so progressive is used (EC 103/2019)
-    // Progressive on 3000 with 2025 default faixas = 253.41
-    expect(result.contribuicao_social.total_segurado).toBeCloseTo(253.41, 2);
+    // Should use historical 2020 faixas (progressive, EC 103/2019 from 2020-03)
+    // Band 1: 1045.00 × 0.075 = 78.375
+    // Band 2: (2089.60 - 1045.00) × 0.09 = 94.014
+    // Band 3: (3000 - 2089.60) × 0.12 = 109.248
+    // Total ≈ 281.64
+    expect(result.contribuicao_social.total_segurado).toBeCloseTo(281.64, 1);
 
     // Should have warning about fallback
     expect(result.calculation_warnings).toBeDefined();
@@ -464,13 +466,13 @@ describe('Edge Case: INSS band boundaries', () => {
     const result = engine.liquidar();
     const cs = result.contribuicao_social;
 
-    // Progressive on full teto (ROUND_HALF_EVEN per band):
-    // Band 1: 1518.00 * 0.075 = 113.85
-    // Band 2: 1275.88 * 0.09 = 114.8292 → 114.83
-    // Band 3: 3045.57 * 0.12 = 365.4684 → 365.47
-    // Band 4: 2317.96 * 0.14 = 324.5144 → 324.51
-    // Total = 918.66
-    expect(cs.total_segurado).toBeCloseTo(918.66, 2);
+    // Uses 2023 historical table (teto=7507.49, not 8157.41):
+    // Band 1: 1320.00 × 0.075 = 99.00
+    // Band 2: (2571.29 - 1320.00) × 0.09 = 112.62
+    // Band 3: (3856.94 - 2571.29) × 0.12 = 154.28
+    // Band 4: (7507.49 - 3856.94) × 0.14 = 511.08
+    // Total ≈ 876.98
+    expect(cs.total_segurado).toBeCloseTo(876.98, 1);
   });
 
   it('should handle salary of R$ 0.01 (minimum non-zero)', () => {

@@ -33,7 +33,7 @@ import type {
 
 import {
   DEFAULT_FAIXAS_INSS, DEFAULT_FAIXAS_IR, DEFAULT_DEDUCAO_DEPENDENTE,
-  SEGURO_DESEMP_2025, SALARIO_FAMILIA_2025,
+  SEGURO_DESEMP_2025, SALARIO_FAMILIA_2025, HISTORICAL_FAIXAS_INSS,
 } from './engine-constants';
 
 // =====================================================
@@ -815,14 +815,8 @@ export class PjeCalcEngine {
 
   private getFaixasINSSParaCompetencia(competencia: string): { ate: number; aliquota: number }[] {
     if (this.faixasINSSDB.length === 0) {
-      // AUDIT: Track fallback to DEFAULT_FAIXAS_INSS
-      // FIX 5: Emit explicit warning when falling back to 2025 tables for pre-2025 competencias
-      if (competencia < '2025-01') {
-        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
-      } else {
-        this.trackWarning('W032', 'cs', `INSS: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
-      }
-      return DEFAULT_FAIXAS_INSS;
+      // Sem banco: usar tabelas históricas embarcadas (2015-2025+)
+      return this.getFaixasINSSHistorical(competencia);
     }
 
     const compDate = new Date(competencia + '-01');
@@ -837,16 +831,25 @@ export class PjeCalcEngine {
       .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota) }));
 
     if (faixas.length === 0) {
-      // AUDIT: Track fallback for specific competência
-      // FIX 5: Emit explicit warning when falling back to 2025 tables for pre-2025 competencias
-      if (competencia < '2025-01') {
-        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
-      } else {
-        this.trackWarning('W032', 'cs', `INSS: Sem faixas para ${competencia} — usando padrão 2025`);
-      }
-      return DEFAULT_FAIXAS_INSS;
+      // Banco não tem faixas para esta competência: fallback histórico
+      return this.getFaixasINSSHistorical(competencia);
     }
     return faixas;
+  }
+
+  /** Fallback estruturado: usa tabelas históricas INSS 2015-2025+ embarcadas no código */
+  private getFaixasINSSHistorical(competencia: string): { ate: number; aliquota: number }[] {
+    const comp = competencia.slice(0, 7); // YYYY-MM
+    const match = HISTORICAL_FAIXAS_INSS.find(h => comp >= h.inicio && comp <= h.fim);
+    if (match) {
+      if (comp < '2025-01') {
+        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia}: usando tabela histórica embarcada (sem banco).`);
+      }
+      return match.faixas;
+    }
+    // Competência fora do range histórico (antes de 2015): fallback final para 2025
+    this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não cobertas pelo histórico embarcado (pré-2015). Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR.`);
+    return DEFAULT_FAIXAS_INSS;
   }
 
   private getFaixasIRParaCompetencia(competencia: string): { faixas: { ate: number; aliquota: number; deducao: number }[]; deducao_dependente: number } {
@@ -1520,10 +1523,10 @@ export class PjeCalcEngine {
               const regJ = this.getRegimeParaData(combinacoes_juros, rS);
               if (!regJ || regJ.tipo === 'NENHUM') continue;
               if (regJ.tipo === 'SELIC') {
-                const fS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(rS.slice(0, 7)), sF.slice(0, 7));
+                const fS = this.getIndiceCorrecaoDB('SELIC', rS.slice(0, 7), sF.slice(0, 7));
                 if (fS !== null) jurosOc = jurosOc.plus(valorCorrigido.times(fS - 1));
               } else if (regJ.tipo === 'TAXA_LEGAL') {
-                const fTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(rS.slice(0, 7)), sF.slice(0, 7));
+                const fTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', rS.slice(0, 7), sF.slice(0, 7));
                 if (fTL !== null) jurosOc = jurosOc.plus(valorCorrigido.times(fTL - 1));
               } else {
                 const m = this.mesesEntre(new Date(rS), new Date(sF));
@@ -1563,10 +1566,13 @@ export class PjeCalcEngine {
           const regime = this.getRegimeParaData(combinacoes_indice, segInicio);
           const indice = normalizeIndice(regime?.indice || 'SEM_CORRECAO');
           if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') continue;
-          // Passar mesAnterior(segInicio) pois getIndiceCorrecaoDB já aplica o shift
-          // de Súmula 381 internamente (mesSubsequente), e segInicio já é o mês correto
-          // de início do segmento — sem mesAnterior haveria double-shift.
-          const fatorDB = this.getIndiceCorrecaoDB(indice, this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
+          // Súmula 381: getIndiceCorrecaoDB aplica mesSubsequente internamente.
+          // Passar segInicio diretamente — o shift interno garante que a correção
+          // acumula a partir do mês subsequente. Com mesAnterior, o shift se anulava
+          // (mesAnterior + mesSubsequente = identidade), eliminando o efeito da Súmula 381.
+          // Para segmentos intermediários, a propriedade telescópica dos acumulados
+          // (acum[t1]/acum[s0] × acum[t2]/acum[t1] = acum[t2]/acum[s0]) garante continuidade.
+          const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
@@ -1612,13 +1618,13 @@ export class PjeCalcEngine {
                 jurosTotal = jurosTotal.plus(valorCorrigido.times(selicMonthly / 100));
               } else {
                 // Fallback: use accumulated ratio if monthly values not available
-                const fatorSelic = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(startComp), endComp);
+                const fatorSelic = this.getIndiceCorrecaoDB('SELIC', startComp, endComp);
                 if (fatorSelic !== null) {
                   jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
                 }
               }
             } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
-              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(realStart.slice(0, 7)), segFim.slice(0, 7));
+              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', realStart.slice(0, 7), segFim.slice(0, 7));
               if (fatorTL !== null) {
                 jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
               }
@@ -3387,7 +3393,8 @@ export class PjeCalcEngine {
             continue;
           }
           if (indice === 'SELIC') continue;
-          const fatorDB = this.getIndiceCorrecaoDB(indice, this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
+          // Súmula 381: pass segInicio directly — getIndiceCorrecaoDB applies mesSubsequente internally
+          const fatorDB = this.getIndiceCorrecaoDB(indice, segInicio.slice(0, 7), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
@@ -3535,11 +3542,11 @@ export class PjeCalcEngine {
               if (selicSum > 0) {
                 jurosAcc = jurosAcc.plus(baseJuros.times(selicSum / 100));
               } else {
-                const fatorS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(startC), endC);
+                const fatorS = this.getIndiceCorrecaoDB('SELIC', startC, endC);
                 if (fatorS !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
               }
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
-              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
+              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
               if (fatorTL !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
             } else {
               const taxa = ((regimeJ as any).percentual ?? 1) / 100;

@@ -8,8 +8,41 @@ import type { PjeCNAEAliquotas } from './engine-types';
 export const DEFAULT_FAIXAS_INSS = [
   { ate: 1518.00, aliquota: 0.075 },
   { ate: 2793.88, aliquota: 0.09 },
-  { ate: 5839.45, aliquota: 0.12 },
+  { ate: 4190.83, aliquota: 0.12 },
   { ate: 8157.41, aliquota: 0.14 },
+];
+
+// Tabelas históricas INSS 2015-2025 para fallback estruturado
+// Pré-EC 103/2019 (até fev/2020): alíquota única (flat)
+// Pós-EC 103/2019 (mar/2020+): alíquota progressiva
+export const HISTORICAL_FAIXAS_INSS: {
+  inicio: string; fim: string;
+  faixas: { ate: number; aliquota: number }[];
+}[] = [
+  // 2015 - Portaria MPS/MF nº 13/2015
+  { inicio: '2015-01', fim: '2015-12', faixas: [{ ate: 1399.12, aliquota: 0.08 }, { ate: 2331.88, aliquota: 0.09 }, { ate: 4663.75, aliquota: 0.11 }] },
+  // 2016 - Portaria MPS/MF nº 1/2016
+  { inicio: '2016-01', fim: '2016-12', faixas: [{ ate: 1556.94, aliquota: 0.08 }, { ate: 2594.92, aliquota: 0.09 }, { ate: 5189.82, aliquota: 0.11 }] },
+  // 2017 - Portaria MF nº 8/2017
+  { inicio: '2017-01', fim: '2017-12', faixas: [{ ate: 1659.38, aliquota: 0.08 }, { ate: 2765.66, aliquota: 0.09 }, { ate: 5531.31, aliquota: 0.11 }] },
+  // 2018 - Portaria MF nº 15/2018
+  { inicio: '2018-01', fim: '2018-12', faixas: [{ ate: 1693.72, aliquota: 0.08 }, { ate: 2822.90, aliquota: 0.09 }, { ate: 5645.80, aliquota: 0.11 }] },
+  // 2019 - Portaria SEPRT nº 9/2019
+  { inicio: '2019-01', fim: '2019-12', faixas: [{ ate: 1751.81, aliquota: 0.08 }, { ate: 2919.72, aliquota: 0.09 }, { ate: 5839.45, aliquota: 0.11 }] },
+  // 2020 jan-fev (flat, pré-EC 103) - Portaria SEPRT nº 914/2020
+  { inicio: '2020-01', fim: '2020-02', faixas: [{ ate: 1830.29, aliquota: 0.08 }, { ate: 3050.52, aliquota: 0.09 }, { ate: 6101.06, aliquota: 0.11 }] },
+  // 2020 mar-dez (progressivo, EC 103/2019) - Portaria SEPRT nº 914/2020
+  { inicio: '2020-03', fim: '2020-12', faixas: [{ ate: 1045.00, aliquota: 0.075 }, { ate: 2089.60, aliquota: 0.09 }, { ate: 3134.40, aliquota: 0.12 }, { ate: 6101.06, aliquota: 0.14 }] },
+  // 2021 - Portaria SEPRT nº 477/2021
+  { inicio: '2021-01', fim: '2021-12', faixas: [{ ate: 1100.00, aliquota: 0.075 }, { ate: 2203.48, aliquota: 0.09 }, { ate: 3305.22, aliquota: 0.12 }, { ate: 6433.57, aliquota: 0.14 }] },
+  // 2022 - Portaria MTP nº 12/2022
+  { inicio: '2022-01', fim: '2022-12', faixas: [{ ate: 1212.00, aliquota: 0.075 }, { ate: 2427.35, aliquota: 0.09 }, { ate: 3641.03, aliquota: 0.12 }, { ate: 7087.22, aliquota: 0.14 }] },
+  // 2023 - Portaria MPS nº 26/2023
+  { inicio: '2023-01', fim: '2023-12', faixas: [{ ate: 1320.00, aliquota: 0.075 }, { ate: 2571.29, aliquota: 0.09 }, { ate: 3856.94, aliquota: 0.12 }, { ate: 7507.49, aliquota: 0.14 }] },
+  // 2024 - Portaria MPS nº 2/2024
+  { inicio: '2024-01', fim: '2024-12', faixas: [{ ate: 1412.00, aliquota: 0.075 }, { ate: 2666.68, aliquota: 0.09 }, { ate: 4000.03, aliquota: 0.12 }, { ate: 7786.02, aliquota: 0.14 }] },
+  // 2025+ - Portaria MPS/MF nº 6/2025
+  { inicio: '2025-01', fim: '2099-12', faixas: [{ ate: 1518.00, aliquota: 0.075 }, { ate: 2793.88, aliquota: 0.09 }, { ate: 4190.83, aliquota: 0.12 }, { ate: 8157.41, aliquota: 0.14 }] },
 ];
 
 // IRRF 2025 - Tabela mensal
