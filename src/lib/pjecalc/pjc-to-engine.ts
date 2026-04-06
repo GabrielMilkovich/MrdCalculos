@@ -610,14 +610,15 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
 
   if (validCombIdx.length > 0) {
     // PJC has explicit combinations — use them
-    // FIX: SEM_CORRECAO in combinacoes_indice from PJC XML means "stop juros remuneratórios"
-    // NOT "stop monetary correction". IPCA-E correction continues until liquidation.
-    // SEM_CORRECAO → maps to combinacoes_juros: NENHUM (not to combinacoes_indice)
+    // SEM_CORRECAO in PJC means "this index regime segment has no separate correction".
+    // IPCA-E correction continues for the full period via the base indice.
+    // SEM_CORRECAO maps to juros:NENHUM to stop separate interest at that date,
+    // since SELIC (from CombinacaoDeJuros) will be handled by the correction phase.
     combinacoes_indice.push({ indice: indiceBase });
     for (const ci of validCombIdx) {
       const indiceNorm = normalizeIndice(ci.indice);
       if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'NENHUM') {
-        // SEM_CORRECAO = stop juros at this date; monetary correction continues
+        // SEM_CORRECAO = stop separate juros at this date; correction continues
         combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
       } else if (indiceNorm === 'SELIC') {
         // SELIC substitutes IPCA-E as correction index (already includes interest)
@@ -696,7 +697,9 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     base_de_juros_das_verbas: a.atualizacao.base_de_juros_das_verbas,
     ente_publico: a.atualizacao.ente_publico,
     aplicar_juros_fase_pre_judicial: a.atualizacao.aplicar_juros_fase_pre_judicial,
-  };
+    // NM RRA for Art. 12-A IR calculation
+    ...(a.calculo_config?.nm_rra ? { calculo_config: { nm_rra: a.calculo_config.nm_rra } } : {}),
+  } as PjeCorrecaoConfig;
 }
 
 function buildHonorariosConfig(a: PJCAnalysis): PjeHonorariosConfig {

@@ -3380,9 +3380,10 @@ export class PjeCalcEngine {
           // - SELIC as direct index: skip (handled in juros phase)
           if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'Sem Correção') {
             // Check if juros regime is SELIC → apply SELIC as correction (ADC 58/59)
+            // SELIC replaces both correction and interest for this segment.
+            // aplicarJurosAposCS skips SEM_CORRECAO segments to avoid double-counting.
             const regJ = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
             if (regJ && regJ.tipo === 'SELIC') {
-              // SELIC replaces both correction and interest for this segment
               const selicSum = this.indicesDB
                 .filter(idx => (idx.indice === 'SELIC' || idx.indice === 'selic') && idx.competencia.slice(0, 7) >= segInicio.slice(0, 7) && idx.competencia.slice(0, 7) < segFim.slice(0, 7))
                 .reduce((s, idx) => s + (idx.valor || 0), 0);
@@ -3514,18 +3515,12 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            // SEM_CORRECAO/NENHUM = suspended period → no interest.
-            // SELIC: when juros_apos_deducao_cs=true, SELIC IS the interest (correction phase already ran via aplicarCorrecaoCombinacaoSomente).
-            //        when juros_apos_deducao_cs=false, SELIC already includes interest in the correction factor → skip to avoid double-counting.
-            // SEM_CORRECAO: skip juros UNLESS juros regime is SELIC (ADC 58/59 post-ajuizamento)
-            {
-              const regJCheck2 = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
-              if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
-                // SEM_CORRECAO: SELIC was already applied as correction — skip ALL juros
-                continue;
-              }
+            // SEM_CORRECAO: SELIC was already applied as correction in aplicarCorrecaoCombinacaoSomente.
+            // Skip to avoid double-counting — SELIC as correction already includes interest.
+            if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
+              continue;
             }
-            // SELIC = correction + interest (ADC 58/59) — NEVER add separate juros
+            // SELIC as direct correction index already includes interest — skip separate juros
             if (indiceNorm === 'SELIC') continue;
 
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
@@ -3572,18 +3567,11 @@ export class PjeCalcEngine {
             const segFim = datas[i + 1];
             const regimeI = this.getRegimeParaData(combinacoes_indice, segInicio);
             const indiceNorm = normalizeIndice(regimeI?.indice || 'SEM_CORRECAO');
-            // SEM_CORRECAO/NENHUM = suspended period → no interest.
-            // SELIC: when juros_apos_deducao_cs=true, SELIC IS the interest (correction phase already ran).
-            //        when juros_apos_deducao_cs=false, SELIC already includes interest → skip.
-            // SEM_CORRECAO: skip juros UNLESS juros regime is SELIC (ADC 58/59 post-ajuizamento)
-            {
-              const regJCheck2 = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
-              if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
-                // SEM_CORRECAO: SELIC was already applied as correction — skip ALL juros
-                continue;
-              }
+            // SEM_CORRECAO: SELIC was already applied as correction — skip to avoid double-counting.
+            if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'Sem Correção' || indiceNorm === 'NENHUM') {
+              continue;
             }
-            // SELIC = correction + interest (ADC 58/59) — NEVER add separate juros
+            // SELIC as direct correction index already includes interest — skip separate juros
             if (indiceNorm === 'SELIC') continue;
             // PJe-Calc counts interest months inclusive of start month
             const meses = this.mesesEntreInclusivo(new Date(segInicio), new Date(segFim));

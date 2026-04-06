@@ -880,6 +880,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
         fgts_deposito: resultado.fgts_deposito,
       },
       nm_rra: (() => {
+        // Try explicit NM from ImpostoRenda config
         const nmEl = root.getElementsByTagName('ImpostoRenda')[0]
           || root.getElementsByTagName('impostoDeRenda')[0];
         if (nmEl) {
@@ -888,7 +889,19 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
             || getTextContent(nmEl, 'quantidadeDeMeses'));
           if (nm > 0) return nm;
         }
-        return undefined;
+        // Fallback: count competências with IR base > 0 from ApuracaoDeJuros
+        const irEntries = root.getElementsByTagName('ApuracaoDeJuros');
+        const irComps = new Set<string>();
+        for (let i = 0; i < irEntries.length; i++) {
+          const irBase = parseFloat(
+            getTextContent(irEntries[i], 'valorCorrigidoParaIrpfDemaisVerbas') || '0'
+          );
+          if (irBase > 0) {
+            const comp = getTextContent(irEntries[i], 'competencia');
+            if (comp) irComps.add(comp.slice(0, 7));
+          }
+        }
+        return irComps.size > 0 ? irComps.size : undefined;
       })(),
     },
   };
