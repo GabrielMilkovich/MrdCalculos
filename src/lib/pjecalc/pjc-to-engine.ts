@@ -609,31 +609,38 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
   const validCombJur = a.atualizacao.combinacoes_juros.filter(cj => cj.a_partir_de && cj.tipo);
 
   if (validCombIdx.length > 0) {
-    // PJC has explicit combinations — use them
-    // SEM_CORRECAO in PJC means "this index regime segment has no separate correction".
-    // IPCA-E correction continues for the full period via the base indice.
-    // SEM_CORRECAO maps to juros:NENHUM to stop separate interest at that date,
-    // since SELIC (from CombinacaoDeJuros) will be handled by the correction phase.
+    // Base index runs from the start of the period
     combinacoes_indice.push({ indice: indiceBase });
+
+    // Default: NO interest unless PJC explicitly configures it
+    // (ADC 58/59 has NO pre-ajuizamento interest for labor debts)
+    combinacoes_juros.push({ tipo: 'NENHUM' });
+
     for (const ci of validCombIdx) {
       const indiceNorm = normalizeIndice(ci.indice);
       if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'NENHUM') {
-        // SEM_CORRECAO = stop separate juros at this date; correction continues
-        combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+        // ADC 58/59: IPCA-E correction STOPS at ajuizamento.
+        // SELIC juros (from CombinacaoDeJuros) cover everything after this.
+        // aplicarCorrecaoCombinacaoSomente detects SEM_CORRECAO + SELIC juros
+        // and applies SELIC simple-sum as a correction factor automatically.
+        combinacoes_indice.push({ de: ci.a_partir_de, indice: 'SEM_CORRECAO' });
+        // Do NOT push NENHUM to juros here — CombinacaoDeJuros will provide SELIC.
       } else if (indiceNorm === 'SELIC') {
-        // SELIC substitutes IPCA-E as correction index (already includes interest)
+        // SELIC as direct correction index (already embeds interest)
         combinacoes_indice.push({ de: ci.a_partir_de, indice: 'SELIC' });
         combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
       } else {
-        // Other explicit index (INPC, IGPM, TR, etc.)
         combinacoes_indice.push({ de: ci.a_partir_de, indice: indiceNorm });
       }
     }
-    if (validCombJur.length > 0) {
-      combinacoes_juros.push({ tipo: 'TRD_SIMPLES', percentual: 1 });
-      for (const cj of validCombJur) {
-        combinacoes_juros.push({ de: cj.a_partir_de, tipo: normalizeJuros(cj.tipo), percentual: cj.taxa });
-      }
+
+    // Apply explicit juros from PJC CombinacaoDeJuros (these override the NENHUM default)
+    for (const cj of validCombJur) {
+      combinacoes_juros.push({
+        de: cj.a_partir_de,
+        tipo: normalizeJuros(cj.tipo),
+        percentual: cj.taxa,
+      });
     }
   } else {
     // ═══ ADC 58/59 — Auto-build regime when PJC has no combinations ═══
