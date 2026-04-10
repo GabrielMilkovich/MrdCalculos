@@ -397,6 +397,14 @@ export interface PjeCSConfig {
   contribuicao_sindical_pos2017?: boolean;
   /** Código FPAS para cálculo de terceiros */
   fpas_code?: string;
+  /**
+   * "Com Correção Trabalhista" — quando true, antes de calcular INSS aplica o
+   * fator de correção monetária da competência sobre a base salarial (base_cs
+   * = base_nominal × fator_correcao). Faz o INSS incidir sobre o valor já
+   * atualizado monetariamente. Default false = INSS sobre nominal histórico
+   * (comportamento PJe-Calc padrão). Checkbox na tela CS do PJe-Calc.
+   */
+  com_correcao_trabalhista?: boolean;
 }
 
 export interface PjeIRConfig {

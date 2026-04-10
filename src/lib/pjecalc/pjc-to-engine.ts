@@ -559,7 +559,9 @@ function buildDefaultIRConfig(a: PJCAnalysis): PjeIRConfig {
     deduzir_cs: true,
     deduzir_prev_privada: false,
     deduzir_pensao: false,
-    deduzir_honorarios: false,
+    // PJe-Calc default: "Honorários devidos pelo Reclamante" marcado por padrão
+    // na tela "Deduzir da Base do Imposto de Renda".
+    deduzir_honorarios: true,
     aposentado_65: false,
     dependentes: 0,
     apuracao_juros_gt: gt,

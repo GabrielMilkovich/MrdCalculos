@@ -996,7 +996,52 @@ export class PjeCalcEngine {
     if (!idxOrigem || !idxDestino || !idxOrigem.acumulado || !idxDestino.acumulado) return null;
     if (Number(idxOrigem.acumulado) === 0) return null;
 
+    // PJC ignorarTaxaNegativa: when enabled, walk month-by-month and clamp
+    // monthly factors < 1 (deflation) to 1. PJe-Calc default behavior — protege
+    // o reclamante contra meses de IPCA-E negativo (ex: jul/2017, ago/2017).
+    if (this.correcaoConfig.ignorar_taxa_negativa) {
+      return this.getIndiceClampedFromAcumulado(indices, idxOrigem, origemSubsequente, idxDestino.competencia.slice(0, 7));
+    }
+
     return Number(idxDestino.acumulado) / Number(idxOrigem.acumulado);
+  }
+
+  /**
+   * Acumula o índice mês a mês entre `origemSubsequente` e `compDestino`,
+   * derivando o fator mensal a partir do delta dos `acumulado` consecutivos.
+   * Quando o fator mensal for < 1 (deflação), trata como 1 (não aplica a queda)
+   * E não atualiza o baseline — assim a recuperação não compensa indevidamente
+   * a queda ignorada. Implementa "ignorarTaxaNegativa" do PJe-Calc.
+   */
+  private getIndiceClampedFromAcumulado(
+    indices: PjeIndiceRow[],
+    idxOrigem: PjeIndiceRow,
+    origemSubsequente: string,
+    compDestino: string,
+  ): number {
+    const inRange = indices.filter(i => {
+      const c = i.competencia.slice(0, 7);
+      return c >= origemSubsequente && c <= compDestino;
+    });
+    if (inRange.length === 0) return 1;
+
+    // synthBaseline mantém o "último acumulado válido" — não é alterado em meses
+    // deflacionários. Isso garante que a recuperação posterior calcule o fator
+    // mensal contra o pico anterior, não contra o vale da deflação.
+    let synthBaseline = Number(idxOrigem.acumulado);
+    if (!synthBaseline || synthBaseline <= 0) return 1;
+    let acumulado = new Decimal(1);
+    for (const idx of inRange) {
+      const cur = Number(idx.acumulado);
+      if (!cur || cur <= 0) continue;
+      const monthly = cur / synthBaseline;
+      if (monthly >= 1) {
+        acumulado = acumulado.times(monthly);
+        synthBaseline = cur;
+      }
+      // monthly < 1 → ignorar mês deflacionário, synthBaseline NÃO atualiza
+    }
+    return acumulado.toNumber();
   }
 
   /** Returns YYYY-MM for the month after the given competência */
@@ -1667,6 +1712,16 @@ export class PjeCalcEngine {
               if (fatorTL !== null) {
                 jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTL - 1));
               }
+            } else if (regimeJuros.tipo === 'TRD_SIMPLES' || regimeJuros.tipo === 'TR' || regimeJuros.tipo === 'TRD') {
+              // TRD Juros Simples (PJe-Calc): usa a Taxa Referencial Diária
+              // como juros simples. Lógica: juros = valor_corrigido × (fator_TR - 1).
+              // Pós-2017 a TR é praticamente nula (Lei 12.703/2012 → TR=0 a partir de
+              // set/2017), então o juros tende a zero — propositalmente. Esta é a
+              // diferença entre TR como ÍNDICE de correção e TRD como TABELA de juros.
+              const fatorTR = this.getIndiceCorrecaoDB('TR', this.mesAnterior(realStart.slice(0, 7)), segFim.slice(0, 7));
+              if (fatorTR !== null && fatorTR > 1) {
+                jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTR - 1));
+              }
             } else {
               const meses = this.mesesEntre(new Date(realStart), new Date(segFim));
               const taxa = (regimeJuros.percentual ?? 1) / 100;
@@ -2204,6 +2259,9 @@ export class PjeCalcEngine {
     // ═══ Track 1: CS sobre salários DEVIDOS ═══
     // base_cs_segurado: 'bruto' usa oc.devido, 'liquido' (default) usa oc.diferenca
     const usarBruto = this.csConfig.base_cs_segurado === 'bruto';
+    // "Com Correção Trabalhista": quando marcado na tela CS do PJe-Calc, INSS
+    // incide sobre base corrigida monetariamente em vez do valor nominal.
+    const comCorrecaoTrabalhista = this.csConfig.com_correcao_trabalhista === true;
     const basesDevidos: Record<string, number> = {};
     const bases13Devidos: Record<string, number> = {};
     for (const vr of verbaResults) {
@@ -2214,17 +2272,22 @@ export class PjeCalcEngine {
       const is13 = verba.caracteristica === '13_salario';
       for (const oc of vr.ocorrencias) {
         // ═══ CS Base Rule (PJe-Calc):
-        // PJe-Calc calculates CS on NOMINAL diferença, not corrected values.
-        // This applies to ALL regimes (SELIC, IPCA-E, etc.)
-        // Interest and correction are separate from the CS base.
+        // Por padrão, PJe-Calc calculates CS on NOMINAL diferença, not corrected values.
+        // Quando "Com Correção Trabalhista" está marcado na tela de CS, a base passa a
+        // ser corrigida pelo índice monetário antes de aplicar as faixas INSS.
         let val: number;
         if (useCorrigido) {
-          // PJe-Calc: CS base = nominal diferença (not corrected)
           val = Math.abs(oc.diferenca);
         } else {
           val = usarBruto ? oc.devido : oc.diferenca;
         }
         if (val <= 0) continue;
+        if (comCorrecaoTrabalhista) {
+          const fator = oc.indice_correcao ?? 1;
+          if (fator > 1) {
+            val = Number(new Decimal(val).times(fator).toDP(2));
+          }
+        }
         // PJe-Calc: INSS on 13º uses a SEPARATE basis with its own teto
         const target = is13 ? bases13Devidos : basesDevidos;
         target[oc.competencia] = (target[oc.competencia] || 0) + val;
@@ -2497,6 +2560,44 @@ export class PjeCalcEngine {
     let deducoes = 0;
     if (this.irConfig.deduzir_cs && this.csConfig.cobrar_reclamante) {
       deducoes += csResult.total_segurado;
+    }
+
+    // Honorários contratuais devidos pelo reclamante — deduzem da base do IR
+    // (Lei 13.467/2017 Art. 791-A CLT: honorários contratuais são ônus do
+    // reclamante e, quando pagos, reduzem o rendimento tributável).
+    // Honorários sucumbenciais NÃO deduzem — estes são pagos pelo reclamado
+    // ao advogado do reclamante, não oneram o trabalhador.
+    if (this.irConfig.deduzir_honorarios && this.honorariosConfig.apurar_contratuais) {
+      const principalCorrigidoIR = Number(
+        verbaResults
+          .filter(v => {
+            const verba = this.verbas.find(vb => vb.id === v.verba_id);
+            return verba?.compor_principal !== false;
+          })
+          .reduce((s, v) => s.plus(v.total_corrigido), new Decimal(0))
+          .toDP(2),
+      );
+      const jurosMoraIR = Number(
+        verbaResults
+          .filter(v => {
+            const verba = this.verbas.find(vb => vb.id === v.verba_id);
+            return verba?.compor_principal !== false;
+          })
+          .reduce((s, v) => s.plus(v.total_juros), new Decimal(0))
+          .toDP(2),
+      );
+      let contratuaisIR: number;
+      if (this.honorariosConfig.valor_fixo !== undefined) {
+        contratuaisIR = this.honorariosConfig.valor_fixo;
+      } else {
+        const baseHonIR = principalCorrigidoIR + jurosMoraIR;
+        contratuaisIR = Number(
+          new Decimal(baseHonIR)
+            .times(this.honorariosConfig.percentual_contratuais / 100)
+            .toDP(2),
+        );
+      }
+      deducoes += contratuaisIR;
     }
 
     const periodo = this.getPeriodoCalculo();
@@ -3586,6 +3687,12 @@ export class PjeCalcEngine {
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
               if (fatorTL !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorTL - 1));
+            } else if (regimeJ.tipo === 'TRD_SIMPLES' || regimeJ.tipo === 'TR' || regimeJ.tipo === 'TRD') {
+              // TRD Juros Simples — usa série TR (zerada pós-2017 por Lei 12.703/2012)
+              const fatorTR = this.getIndiceCorrecaoDB('TR', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
+              if (fatorTR !== null && fatorTR > 1) {
+                jurosAcc = jurosAcc.plus(baseJuros.times(fatorTR - 1));
+              }
             } else {
               const taxa = ((regimeJ as any).percentual ?? 1) / 100;
               jurosAcc = jurosAcc.plus(baseJuros.times(taxa).times(meses));
