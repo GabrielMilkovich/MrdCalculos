@@ -10,14 +10,15 @@ describe('PjeCalcEngine - INSS (Contribuição Social)', () => {
     // 2793.89-5839.45: 12%
     // 5839.46-8157.41: 14%
 
-    const hist = makeHistoricoWithOcorrencias(3000, ['2023-06']);
+    // Uses 2025-06 so the 2025 default fallback faixas apply (historical fallback only hits pre-2025)
+    const hist = makeHistoricoWithOcorrencias(3000, ['2025-06']);
     const verba = makeVerba({
       base_calculo: { historicos: ['hist-001'], verbas: [], tabelas: [], proporcionalizar: false, integralizar: false },
       valor: 'informado',
       valor_informado_devido: 3000,
       valor_informado_pago: 0,
-      periodo_inicio: '2023-06-01',
-      periodo_fim: '2023-06-30',
+      periodo_inicio: '2025-06-01',
+      periodo_fim: '2025-06-30',
     });
 
     const engine = createEngine({
@@ -132,13 +133,14 @@ describe('PjeCalcEngine - INSS (Contribuição Social)', () => {
   });
 
   it('limits base to teto INSS', () => {
-    const hist = makeHistoricoWithOcorrencias(10000, ['2023-06']);
+    // Uses 2025-06 so the 2025 teto (8157.41) from DEFAULT faixas applies
+    const hist = makeHistoricoWithOcorrencias(10000, ['2025-06']);
     const verba = makeVerba({
       valor: 'informado',
       valor_informado_devido: 10000,
       valor_informado_pago: 0,
-      periodo_inicio: '2023-06-01',
-      periodo_fim: '2023-06-30',
+      periodo_inicio: '2025-06-01',
+      periodo_fim: '2025-06-30',
     });
 
     const engine = createEngine({
@@ -173,13 +175,14 @@ describe('PjeCalcEngine - INSS (Contribuição Social)', () => {
   });
 
   it('handles base exactly at band boundary (1518.00)', () => {
-    const hist = makeHistoricoWithOcorrencias(1518, ['2023-06']);
+    // 1518.00 é o boundary exato da 1ª faixa 2025 — usa 2025-06 para bater com o DEFAULT
+    const hist = makeHistoricoWithOcorrencias(1518, ['2025-06']);
     const verba = makeVerba({
       valor: 'informado',
       valor_informado_devido: 1518,
       valor_informado_pago: 0,
-      periodo_inicio: '2023-06-01',
-      periodo_fim: '2023-06-30',
+      periodo_inicio: '2025-06-01',
+      periodo_fim: '2025-06-30',
     });
 
     const engine = createEngine({

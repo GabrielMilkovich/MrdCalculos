@@ -149,7 +149,7 @@ describe('Edge Case: Empty salary history', () => {
 });
 
 describe('Edge Case: Competencia before 2025 with no DB faixas', () => {
-  it('should use default 2025 INSS faixas as fallback with warning', () => {
+  it('should use historical hardcoded INSS faixas (2020) as fallback with warning', () => {
     const hist = makeHistoricoWithOcorrencias(3000, ['2020-06']);
     const verba = makeVerba({
       valor: 'informado',
@@ -177,10 +177,15 @@ describe('Edge Case: Competencia before 2025 with no DB faixas', () => {
 
     const result = engine.liquidar();
 
-    // Should use default 2025 faixas and produce a valid INSS result
-    // 2020-06 is >= 2020-03 so progressive is used (EC 103/2019)
-    // Progressive on 3000 with 2025 default faixas = 253.41
-    expect(result.contribuicao_social.total_segurado).toBeCloseTo(253.41, 2);
+    // With historical fallback: competência 2020-06 uses the 2020 hardcoded faixas
+    // (EC 103/2019, progressive as of Mar/2020):
+    //   [1518.00 @7.5%, 2594.92 @9%, 5189.82 @12%, 6433.57 @14%]
+    // Base = 3000:
+    //   Band 1: 1518.00 × 0.075                     = 113.85
+    //   Band 2: (2594.92 - 1518.00) × 0.09 = 1076.92 × 0.09 = 96.92
+    //   Band 3: (3000.00 - 2594.92) × 0.12 =  405.08 × 0.12 = 48.61
+    //   Total  = 259.38
+    expect(result.contribuicao_social.total_segurado).toBeCloseTo(259.38, 2);
 
     // Should have warning about fallback
     expect(result.calculation_warnings).toBeDefined();
@@ -437,13 +442,14 @@ describe('Edge Case: Ente publico (SELIC-only interest)', () => {
 
 describe('Edge Case: INSS band boundaries', () => {
   it('should handle salary exactly at teto INSS (8157.41)', () => {
-    const hist = makeHistoricoWithOcorrencias(8157.41, ['2023-06']);
+    // Uses 2025-06 so the 2025 teto (8157.41) from DEFAULT faixas applies
+    const hist = makeHistoricoWithOcorrencias(8157.41, ['2025-06']);
     const verba = makeVerba({
       valor: 'informado',
       valor_informado_devido: 8157.41,
       valor_informado_pago: 0,
-      periodo_inicio: '2023-06-01',
-      periodo_fim: '2023-06-30',
+      periodo_inicio: '2025-06-01',
+      periodo_fim: '2025-06-30',
       incidencias: { fgts: false, irpf: false, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false },
     });
 

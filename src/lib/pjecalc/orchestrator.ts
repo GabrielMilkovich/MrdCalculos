@@ -194,7 +194,10 @@ function normalizeFracaoMes(raw: string | null | undefined): PjeVerba['fracao_me
   return map[(raw || '').toUpperCase()] ?? 'manter_fracao';
 }
 
-function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
+function toEngineVerbas(
+  verbas: PjecalcVerbaRow[],
+  historicosDisponiveis: PjecalcHistoricoSalarialRow[] = [],
+): PjeVerba[] {
   return verbas.map(v => {
     let bcHistoricos: string[] = [];
     let bcVerbas: string[] = [];
@@ -212,7 +215,25 @@ function toEngineVerbas(verbas: PjecalcVerbaRow[]): PjeVerba[] {
     }
 
     if (bcHistoricos.length === 0 && v.hist_salarial_nome) {
-      bcHistoricos = [v.hist_salarial_nome];
+      const alvo = v.hist_salarial_nome.trim().toLowerCase();
+      // 1) Match exato (case-insensitive)
+      let resolved = historicosDisponiveis.find(
+        h => (h.nome || '').trim().toLowerCase() === alvo,
+      );
+      // 2) Match parcial (startsWith) como fallback
+      if (!resolved) {
+        resolved = historicosDisponiveis.find(
+          h => (h.nome || '').trim().toLowerCase().startsWith(alvo),
+        );
+      }
+      if (resolved) {
+        bcHistoricos = [resolved.id];
+      } else {
+        console.warn(
+          `[ORCHESTRATOR] hist_salarial_nome "${v.hist_salarial_nome}" não encontrado em historicos disponíveis — usando fallback por nome (pode resultar em base 0).`,
+        );
+        bcHistoricos = [v.hist_salarial_nome];
+      }
     }
 
     const caracteristicaMap: Record<string, string> = {
@@ -475,6 +496,8 @@ export interface OrchestratorResult {
   confidenceReport?: ConfidenceReport;
   /** Resolved canonical input (for audit/comparison) */
   canonicalInput?: CanonicalCaseInput;
+  /** Orchestrator-level warnings (non-blocking) emitted during the run */
+  warnings?: Array<{ code: string; message: string }>;
 }
 
 // =====================================================
@@ -1050,6 +1073,9 @@ export async function executarLiquidacao(
   // 3. Convert to engine types
   const engineParams = toEngineParams(caseData.params);
 
+  // Accumulator for orchestrator-level warnings (non-blocking, surfaced in the result)
+  const orchestratorWarnings: Array<{ code: string; message: string }> = [];
+
   // P0-1/P0-4: propagate data_citacao and modo_calculo from dadosProcesso → engine params
   // (pjecalc_parametros VIEW does not expose these; they live in pjecalc_dados_processo)
   const dadosProcesso = caseData.dadosProcesso as PjecalcDadosProcessoRow | null;
@@ -1062,22 +1088,30 @@ export async function executarLiquidacao(
   engineParams.modo_calculo = modoCalculo;
   console.log(`[ORCHESTRATOR] modo_calculo set: ${modoCalculo}`);
 
-  // P0-4: Pre-flight — independent mode ALWAYS requires data_citacao (no fallback, no heuristics)
-  if (engineParams.modo_calculo === 'independent' && !engineParams.data_citacao) {
-    const correcaoIndice = (caseData.correcaoConfig as { indice?: string } | null)?.indice ?? '';
-    const jurosInicio = (caseData.correcaoConfig as { juros_inicio?: string } | null)?.juros_inicio ?? '';
-    const combinacoes = (caseData.correcaoConfig as { combinacoes_indice?: Array<{ indice: string }> } | null)?.combinacoes_indice ?? [];
-    const isADC = correcaoIndice === 'IPCA-E' || correcaoIndice === 'SELIC'
-      || combinacoes.some(c => c.indice === 'SELIC' || c.indice === 'IPCA-E');
-    const reason = isADC
-      ? 'ADC 58/59 (IPCA-E/SELIC) exige data_citacao para o split de correção'
-      : jurosInicio === 'citacao'
-        ? 'juros_inicio=citacao exige data_citacao para base correta dos juros'
-        : 'data_citacao é obrigatória no modo independente para garantir determinismo';
-    throw new Error(
-      `E_CITACAO_OBRIGATORIA: ${reason}. ` +
-      'Preencha em Dados do Processo → Datas Processuais → Citação antes de calcular.'
-    );
+  // FIX UX: Quando data_citacao não for informada, não bloqueia — tenta fallback a partir de
+  // data_ajuizamento + 60 dias; se também não houver ajuizamento, segue sem split IPCA-E/SELIC.
+  if (!engineParams.data_citacao) {
+    if (engineParams.data_ajuizamento) {
+      const ajuiz = new Date(engineParams.data_ajuizamento);
+      if (!isNaN(ajuiz.getTime())) {
+        const estimada = new Date(ajuiz);
+        estimada.setDate(estimada.getDate() + 60);
+        engineParams.data_citacao = estimada.toISOString().slice(0, 10);
+        const warn = {
+          code: 'W_CITACAO_ESTIMADA',
+          message: `data_citacao não informada — usando ajuizamento + 60 dias (${engineParams.data_citacao}) como estimativa. Preencha a data real para precisão máxima.`,
+        };
+        orchestratorWarnings.push(warn);
+        console.warn(`[ORCHESTRATOR] ${warn.code}: ${warn.message}`);
+      }
+    } else {
+      const warn = {
+        code: 'W_CITACAO_E_AJUIZAMENTO_AUSENTES',
+        message: 'Datas processuais não informadas — correção monetária calculada sem split IPCA-E/SELIC. Preencha em Dados do Processo.',
+      };
+      orchestratorWarnings.push(warn);
+      console.warn(`[ORCHESTRATOR] ${warn.code}: ${warn.message}`);
+    }
   }
 
   const engineFaltas = toEngineFaltas(caseData.faltas);
@@ -1107,7 +1141,7 @@ export async function executarLiquidacao(
       })),
   }));
 
-  let engineVerbas = toEngineVerbas(caseData.verbas);
+  let engineVerbas = toEngineVerbas(caseData.verbas, caseData.historicos);
 
   // ── Generate verbas from multas_config (multas/indenizações from ModuloMultasCLT) ──
   const multasVerbas = multasConfigToVerbas(
@@ -1360,5 +1394,6 @@ export async function executarLiquidacao(
     inputValidation,
     confidenceReport,
     canonicalInput,
+    warnings: orchestratorWarnings.length > 0 ? orchestratorWarnings : undefined,
   };
 }

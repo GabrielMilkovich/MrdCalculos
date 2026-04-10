@@ -33,6 +33,7 @@ import type {
 
 import {
   DEFAULT_FAIXAS_INSS, DEFAULT_FAIXAS_IR, DEFAULT_DEDUCAO_DEPENDENTE,
+  HISTORICO_FAIXAS_INSS, HISTORICO_FAIXAS_IR,
   SEGURO_DESEMP_2025, SALARIO_FAMILIA_2025,
 } from './engine-constants';
 
@@ -445,12 +446,26 @@ export class PjeCalcEngine {
     let div: Decimal;
     if (verba.tipo_divisor === 'cartao_ponto') {
       div = new Decimal(this.getCartaoPontoDivisor(competencia, verba.divisor_cartao_colunas) || 30);
-    } else if (verba.tipo_divisor === 'carga_horaria') {
+    } else if (verba.tipo_divisor === 'carga_horaria' || verba.tipo_divisor === 'jornada') {
+      // 'jornada' é alias de 'carga_horaria' — ambos usam a carga horária vigente na competência
       div = new Decimal(this.getCargaHorariaParaCompetencia(competencia));
     } else if (verba.tipo_divisor === 'dias_uteis') {
       div = new Decimal(this.getDivisorComFeriados(competencia));
     } else if (verba.tipo_divisor === 'calendario') {
       div = new Decimal(this.calcularQuantidadeCalendario(competencia, 'dias_uteis') || 22);
+    } else if (verba.tipo_divisor === 'mensal') {
+      // Mês comercial CLT = 30
+      div = new Decimal(30);
+    } else if (verba.tipo_divisor === 'diario') {
+      // Dias reais do mês (calendário civil)
+      const [anoDiv, mesDiv] = competencia.split('-').map(Number);
+      div = new Decimal(new Date(anoDiv, mesDiv, 0).getDate());
+    } else if (verba.tipo_divisor === 'hora') {
+      // Valor já está expresso em horas — divisor unitário
+      div = new Decimal(1);
+    } else if (verba.tipo_divisor === 'minuto') {
+      // Converte minutos em horas: 1/60
+      div = new Decimal(1).div(60).toDP(4);
     } else {
       div = new Decimal(verba.divisor_informado || 30);
     }
@@ -463,16 +478,22 @@ export class PjeCalcEngine {
 
     // Quantidade resolution (with calendario + apurada support)
     let qtd: Decimal;
-    if (verba.tipo_quantidade === 'cartao_ponto') {
+    if (verba.tipo_quantidade === 'cartao_ponto' || verba.tipo_quantidade === 'cartao_horas') {
+      // 'cartao_horas' é alias de 'cartao_ponto' — soma as colunas de horas do cartão
       qtd = new Decimal(this.getCartaoPontoQuantidade(competencia, verba.quantidade_cartao_colunas) || 0);
+    } else if (verba.tipo_quantidade === 'cartao_dias') {
+      // Dias trabalhados da competência segundo o cartão de ponto
+      const regCartao = this.cartaoPonto.find(r => r.competencia === competencia);
+      qtd = new Decimal(regCartao?.dias_trabalhados ?? (verba.quantidade_informada || 0));
     } else if (verba.tipo_quantidade === 'avos') {
       qtd = new Decimal(this.calcularAvos(competencia, verba.caracteristica));
     } else if (verba.tipo_quantidade === 'repousos') {
       qtd = new Decimal(this.calcularQuantidadeCalendario(competencia, 'repousos'));
     } else if (verba.tipo_quantidade === 'calendario') {
       qtd = new Decimal(this.calcularQuantidadeCalendario(competencia, 'dias_uteis'));
-    } else if (verba.tipo_quantidade === 'apurada') {
+    } else if (verba.tipo_quantidade === 'apurada' || verba.tipo_quantidade === 'media_apurada') {
       // Média apurada: usa a média da quantidade de todas as competências do cartão de ponto
+      // 'media_apurada' é alias de 'apurada'
       qtd = new Decimal(this.calcularQuantidadeMediaApurada(verba));
     } else {
       qtd = new Decimal(verba.quantidade_informada || 1);
@@ -815,10 +836,16 @@ export class PjeCalcEngine {
 
   private getFaixasINSSParaCompetencia(competencia: string): { ate: number; aliquota: number }[] {
     if (this.faixasINSSDB.length === 0) {
+      // FIX: Quando banco sem seed, tentar tabela histórica do ano antes de cair no DEFAULT 2025
+      const anoHist = competencia.slice(0, 4);
+      const hist = HISTORICO_FAIXAS_INSS[anoHist];
+      if (hist && competencia < '2025-01') {
+        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco. Usando tabela histórica hardcoded do ano ${anoHist} — precisão aproximada.`);
+        return hist;
+      }
       // AUDIT: Track fallback to DEFAULT_FAIXAS_INSS
-      // FIX 5: Emit explicit warning when falling back to 2025 tables for pre-2025 competencias
       if (competencia < '2025-01') {
-        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
+        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco nem no histórico hardcoded. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
       } else {
         this.trackWarning('W032', 'cs', `INSS: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
       }
@@ -837,10 +864,16 @@ export class PjeCalcEngine {
       .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota) }));
 
     if (faixas.length === 0) {
+      // FIX: Tentar tabela histórica hardcoded antes de cair no DEFAULT 2025
+      const anoHist = competencia.slice(0, 4);
+      const hist = HISTORICO_FAIXAS_INSS[anoHist];
+      if (hist && competencia < '2025-01') {
+        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} ausentes no banco. Usando tabela histórica hardcoded do ano ${anoHist}.`);
+        return hist;
+      }
       // AUDIT: Track fallback for specific competência
-      // FIX 5: Emit explicit warning when falling back to 2025 tables for pre-2025 competencias
       if (competencia < '2025-01') {
-        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
+        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco nem no histórico hardcoded. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
       } else {
         this.trackWarning('W032', 'cs', `INSS: Sem faixas para ${competencia} — usando padrão 2025`);
       }
@@ -851,10 +884,16 @@ export class PjeCalcEngine {
 
   private getFaixasIRParaCompetencia(competencia: string): { faixas: { ate: number; aliquota: number; deducao: number }[]; deducao_dependente: number } {
     if (this.faixasIRDB.length === 0) {
+      // FIX: Quando banco sem seed, tentar tabela histórica do ano antes de cair no DEFAULT 2025
+      const anoHist = competencia.slice(0, 4);
+      const hist = HISTORICO_FAIXAS_IR[anoHist];
+      if (hist && competencia < '2025-01') {
+        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} não encontradas no banco. Usando tabela histórica hardcoded do ano ${anoHist} — precisão aproximada.`);
+        return { faixas: hist.faixas, deducao_dependente: hist.deducao_dependente };
+      }
       // AUDIT: Track fallback to DEFAULT_FAIXAS_IR
-      // FIX 5: Emit explicit warning when falling back to 2025 tables for pre-2025 competencias
       if (competencia < '2025-01') {
-        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} não encontradas no banco. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
+        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} não encontradas no banco nem no histórico hardcoded. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
       } else {
         this.trackWarning('W033', 'ir', `IR: Usando tabela padrão 2025 para ${competencia} — sem dados versionados disponíveis`);
       }
@@ -872,10 +911,16 @@ export class PjeCalcEngine {
       .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota), deducao: Number(f.deducao) }));
 
     if (faixas.length === 0) {
+      // FIX: Tentar tabela histórica hardcoded antes de cair no DEFAULT 2025
+      const anoHist = competencia.slice(0, 4);
+      const hist = HISTORICO_FAIXAS_IR[anoHist];
+      if (hist && competencia < '2025-01') {
+        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} ausentes no banco. Usando tabela histórica hardcoded do ano ${anoHist}.`);
+        return { faixas: hist.faixas, deducao_dependente: hist.deducao_dependente };
+      }
       // AUDIT: Track fallback for specific competência
-      // FIX 5: Emit explicit warning when falling back to 2025 tables for pre-2025 competencias
       if (competencia < '2025-01') {
-        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} não encontradas no banco. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
+        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} não encontradas no banco nem no histórico hardcoded. Usando tabela 2025 como fallback — VALORES PODEM DIVERGIR DO PJE-CALC.`);
       } else {
         this.trackWarning('W033', 'ir', `IR: Sem faixas para ${competencia} — usando padrão 2025`);
       }
