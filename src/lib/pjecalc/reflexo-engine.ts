@@ -69,7 +69,13 @@ export const REFLEXO_TEMPLATES: ReflexoTemplate[] = [
     tipo_quantidade: 'avos',
     gerar_principal: 'diferenca',
     gerar_reflexo: 'diferenca',
-    incidencias: { fgts: true, irpf: true, cs: true },
+    // Aviso prévio indenizado é isento de IR (STJ REsp 1.230.957/RS),
+    // isento de INSS (STJ REsp 1.123.005/PR c/c Súmula 215 STF) e o
+    // FGTS segue o principal (depósito FGTS já tratado à parte).
+    // Reflexos auto-gerados sobre aviso prévio são SEMPRE indenizatórios,
+    // pois são computados como média ponderada — o empregado nunca "gozou"
+    // esse aviso. Por isso todas as incidências são false aqui.
+    incidencias: { fgts: false, irpf: false, cs: false },
     ordem_offset: 300,
   },
   {

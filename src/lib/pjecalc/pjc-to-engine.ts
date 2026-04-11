@@ -429,7 +429,9 @@ function mapQuantidadeTipo(tipo: string): PjeVerba['tipo_quantidade'] {
 
 function mapCaracteristica(car: string): PjeVerba['caracteristica'] {
   const upper = (car || '').toUpperCase();
-  if (upper.includes('13')) return '13_salario';
+  // PJC XML emite 'DECIMO_TERCEIRO_SALARIO' — o check por '13' sozinho nunca casa.
+  // Inclui aliases para cobrir variações (DECIMO, DÉCIMO, 13º, 13_SALARIO).
+  if (upper.includes('DECIMO') || upper.includes('DÉCIMO') || upper.includes('13')) return '13_salario';
   if (upper.includes('AVISO')) return 'aviso_previo';
   if (upper.includes('FERIAS') || upper.includes('FÉRIAS')) return 'ferias';
   return 'comum';

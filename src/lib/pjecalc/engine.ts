@@ -2340,8 +2340,15 @@ export class PjeCalcEngine {
       }
     }
 
-    // Empregador (sobre devidos + pagos combinados)
+    // Empregador (sobre devidos + 13º + pagos combinados).
+    // Para o empregador, 13º integra a mesma base patronal (20%+SAT+terceiros)
+    // que os salários normais — não há teto separado no patronal. Sem incluir
+    // bases13Devidos aqui, o INSS patronal subestima o total após o bridge
+    // passar a classificar as verbas de 13º como caracteristica='13_salario'.
     const basesEmpregador: Record<string, number> = { ...basesDevidos };
+    for (const [comp, val] of Object.entries(bases13Devidos)) {
+      basesEmpregador[comp] = (basesEmpregador[comp] || 0) + val;
+    }
     for (const [comp, val] of Object.entries(basesPagos)) {
       basesEmpregador[comp] = (basesEmpregador[comp] || 0) + val;
     }
@@ -2480,6 +2487,11 @@ export class PjeCalcEngine {
     let baseBruta = 0;
     let base13 = 0;
     let baseFerias = 0;
+    // base13 por ano civil — para tributação exclusiva do 13º aplicada
+    // separadamente em cada ano (IN RFB 1500/2014 Art. 14 c/c Lei 7.713/88
+    // Art. 26 §1º). Sem isso, o 13º acumulado de vários anos é tratado como
+    // um único rendimento mensal e cai na alíquota máxima.
+    const base13PorAno: Record<number, number> = {};
 
     // Art. 12-A: Separar rendimentos por ano para tributação correta
     // PJe-Calc: IR base is on CORRECTED values (valor_corrigido), not nominal
@@ -2521,6 +2533,19 @@ export class PjeCalcEngine {
       }
       if (verba.caracteristica === '13_salario' && this.irConfig.tributacao_exclusiva_13) {
         base13 += vrBaseIR;
+        // Distribuir o 13º por ano da competência, para tributação exclusiva
+        // correta (tabela mensal aplicada por ano, não soma total). Se a verba
+        // não tem ocorrências granulares, joga tudo no ano de liquidação.
+        if (vr.ocorrencias.length === 0) {
+          base13PorAno[anoLiq] = (base13PorAno[anoLiq] || 0) + vrBaseIR;
+        } else {
+          for (const oc of vr.ocorrencias) {
+            if (oc.diferenca <= 0) continue;
+            const anoComp = parseInt(oc.competencia.slice(0, 4));
+            const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : (oc.valor_corrigido || oc.diferenca);
+            base13PorAno[anoComp] = (base13PorAno[anoComp] || 0) + valorIR;
+          }
+        }
       } else {
         baseBruta += vrBaseIR;
         for (const oc of vr.ocorrencias) {
@@ -2661,14 +2686,38 @@ export class PjeCalcEngine {
       mesesAnoLiquidacao = meses;
     }
 
-    // 13º tributação exclusiva (tabela mensal simples - sem acumular)
+    // 13º tributação exclusiva (tabela mensal, APLICADA POR ANO)
+    // IN RFB 1500/2014 Art. 14 c/c Lei 7.713/88 Art. 26 §1º:
+    // o 13º de cada ano é tributado separadamente, como rendimento único mensal.
+    // Para reclamações com 13º de múltiplos anos, somar os impostos calculados
+    // por ano — NÃO aplicar a tabela sobre o somatório total (que cairia na
+    // faixa máxima).
     if (this.irConfig.tributacao_exclusiva_13 && base13 > 0) {
-      for (const faixa of tabelaIR.faixas) {
-        if (base13 <= faixa.ate) {
-          ir13Exclusivo = new Decimal(base13).times(faixa.aliquota).minus(faixa.deducao).toDP(2, R);
-          break;
-        }
+      let ir13Acumulado = new Decimal(0);
+      const anos13 = Object.keys(base13PorAno)
+        .map(Number)
+        .filter(ano => (base13PorAno[ano] || 0) > 0)
+        .sort();
+      // Fallback: se nenhum ano foi coletado (vr.ocorrencias vazio), cair no
+      // comportamento antigo usando o total base13 em um único pagamento
+      const anosParaTributar = anos13.length > 0 ? anos13 : [anoLiq];
+      if (anos13.length === 0) {
+        base13PorAno[anoLiq] = base13;
       }
+      for (const ano of anosParaTributar) {
+        const baseAno = base13PorAno[ano] || 0;
+        if (baseAno <= 0) continue;
+        let ir13Ano = new Decimal(0);
+        for (const faixa of tabelaIR.faixas) {
+          if (baseAno <= faixa.ate) {
+            ir13Ano = new Decimal(baseAno).times(faixa.aliquota).minus(faixa.deducao);
+            break;
+          }
+        }
+        if (ir13Ano.lt(0)) ir13Ano = new Decimal(0);
+        ir13Acumulado = ir13Acumulado.plus(ir13Ano);
+      }
+      ir13Exclusivo = ir13Acumulado.toDP(2, R);
       if (ir13Exclusivo.lt(0)) ir13Exclusivo = new Decimal(0);
     }
 
