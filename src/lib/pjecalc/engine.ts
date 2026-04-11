@@ -2505,14 +2505,19 @@ export class PjeCalcEngine {
     const competenciasFerias = new Set<string>(); // For tributação separada de férias
 
     // When incidir_sobre_juros = false (PJe-Calc default), IR base uses
-    // valor_corrigido (without juros). When true, uses valor_final (with juros).
-    // Use strict === true so undefined/null defaults to excluding juros from IR base
+    // NOMINAL difference (valor_diferenca), NOT total_corrigido.
+    // PJe-Calc stores "valorCorrigidoParaIrpfDemaisVerbas" no XML, mas o
+    // valor numérico efetivamente registrado é nominal (sem IPCA-E aplicado
+    // até liquidação). Investigação forense em joseli-silva: MRD base IR era
+    // 1,89× o PJC quando usava total_corrigido; cai para ~1,0× ao usar
+    // total_diferenca/oc.diferenca. Campo total_final mantido quando
+    // incidir_sobre_juros=true.
     const irUsarValorFinal = this.irConfig.incidir_sobre_juros === true;
 
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
       if (!verba?.incidencias.irpf) continue;
-      const vrBaseIR = irUsarValorFinal ? vr.total_final : vr.total_corrigido;
+      const vrBaseIR = irUsarValorFinal ? vr.total_final : vr.total_diferenca;
       if (verba.caracteristica === 'ferias') {
         if (this.irConfig.tributacao_separada_ferias) {
           baseFerias += vrBaseIR;
@@ -2524,7 +2529,7 @@ export class PjeCalcEngine {
           for (const oc of vr.ocorrencias) {
             if (oc.diferenca <= 0) continue;
             const anoComp = parseInt(oc.competencia.slice(0, 4));
-            const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : (oc.valor_corrigido || oc.diferenca);
+            const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : oc.diferenca;
             if (anoComp < anoLiq) { baseAnosAnteriores += valorIR; competenciasAnosAnteriores.add(oc.competencia); }
             else { baseAnoLiquidacao += valorIR; competenciasAnoLiquidacao.add(oc.competencia); }
           }
@@ -2542,7 +2547,7 @@ export class PjeCalcEngine {
           for (const oc of vr.ocorrencias) {
             if (oc.diferenca <= 0) continue;
             const anoComp = parseInt(oc.competencia.slice(0, 4));
-            const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : (oc.valor_corrigido || oc.diferenca);
+            const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : oc.diferenca;
             base13PorAno[anoComp] = (base13PorAno[anoComp] || 0) + valorIR;
           }
         }
@@ -2551,7 +2556,7 @@ export class PjeCalcEngine {
         for (const oc of vr.ocorrencias) {
           if (oc.diferenca <= 0) continue;
           const anoComp = parseInt(oc.competencia.slice(0, 4));
-          const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : (oc.valor_corrigido || oc.diferenca);
+          const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : oc.diferenca;
           if (anoComp < anoLiq) {
             baseAnosAnteriores += valorIR;
             competenciasAnosAnteriores.add(oc.competencia);
