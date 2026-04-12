@@ -5,13 +5,36 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  // Show visible error instead of blank screen when .env is missing
+  document.addEventListener('DOMContentLoaded', () => {
+    const root = document.getElementById('root');
+    if (root) {
+      root.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;padding:2rem;text-align:center">
+          <h1 style="color:#dc2626;font-size:1.5rem;margin-bottom:1rem">⚠️ Configuração ausente</h1>
+          <p style="color:#374151;max-width:500px;line-height:1.6">
+            As variáveis <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> não estão definidas.
+          </p>
+          <p style="color:#6b7280;margin-top:0.5rem;max-width:500px;line-height:1.6">
+            Copie <code>.env.example</code> para <code>.env</code> e preencha com suas credenciais do Supabase.
+          </p>
+        </div>`;
+    }
+  });
+}
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
-});
+export const supabase = createClient<Database>(
+  SUPABASE_URL || 'https://placeholder.supabase.co',
+  SUPABASE_PUBLISHABLE_KEY || 'placeholder-key',
+  {
+    auth: {
+      storage: localStorage,
+      persistSession: true,
+      autoRefreshToken: true,
+    }
+  },
+);
