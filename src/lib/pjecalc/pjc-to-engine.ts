@@ -608,7 +608,14 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     for (const ci of validCombIdx) {
       const indiceNorm = normalizeIndice(ci.indice);
       if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'NENHUM') {
-        // SEM_CORRECAO = stop juros at this date; monetary correction continues
+        // H2 (ADC 58/59): quando o PJC emite {SEM_CORRECAO, a partir de citação}
+        // em combinacoes_indice, o efeito real é "parar de acumular IPCA-E a
+        // partir da citação". Registrar a transição também em combinacoes_indice
+        // (engine interpreta SEM_CORRECAO como "suspende o índice" via
+        // aplicarCorrecaoCombinacao loop). Sem este push, IPCA-E continua
+        // crescendo o valor_corrigido até a liquidação, inflacionando o bruto
+        // em ~20-40% nos casos pós-ADC58 (validado em investigação forense).
+        combinacoes_indice.push({ de: ci.a_partir_de, indice: 'SEM_CORRECAO' });
         combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
       } else if (indiceNorm === 'SELIC') {
         // SELIC substitutes IPCA-E as correction index (already includes interest)
