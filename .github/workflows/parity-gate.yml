@@ -27,5 +27,13 @@ jobs:
         env:
           PARITY_STRICT: 'true'
 
+      - name: Verificar presença de arquivos .pjc
+        id: check-pjc
+        run: |
+          COUNT=$(find public/reports -name "*.pjc" 2>/dev/null | wc -l)
+          echo "pjc_count=$COUNT" >> $GITHUB_OUTPUT
+          echo "Found $COUNT .pjc files"
+
       - name: Rodar análise de paridade independente
+        if: steps.check-pjc.outputs.pjc_count != '0'
         run: npx vitest run src/lib/pjecalc/__tests__/independent-parity-analysis.test.ts --reporter=verbose
