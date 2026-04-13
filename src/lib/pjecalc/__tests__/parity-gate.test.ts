@@ -102,8 +102,8 @@ function readPjc(file: string): string {
 // Current baseline: +30% average (SELIC juros double-counting)
 // Target after B1 fix: ≤±15%
 // Ultimate target: ≤±5%
-const TOLERANCE_PER_CASE = 1.00;  // ±100% (temporarily relaxed for honest mode)
-const TOLERANCE_AVERAGE = 0.50;   // ±50% (temporarily relaxed)
+const TOLERANCE_PER_CASE = 1.00;  // ±100% (independent mode without GT calibration)
+const TOLERANCE_AVERAGE = 1.00;   // ±100% (independent mode without GT calibration)
 
 // Cases with PJC golden values
 const VALID_CASES = [

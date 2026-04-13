@@ -588,14 +588,6 @@ export interface PjeOcorrenciaResult {
   devido_integral?: number;
   /** Rastreabilidade de arredondamento por etapa (Método PJe-Calc) */
   arredondamento_trace?: { etapa: string; valor_cheio: string; valor_truncado: string }[];
-  /** PJC ground truth correction factor — when present, engine uses this instead of recalculating */
-  pjc_indice_acumulado?: number;
-  /** Flag: true when pjc_indice_acumulado was applied as the correction factor */
-  pjc_ground_truth_applied?: boolean;
-  /** The correction regime active for this occurrence (e.g. 'SELIC', 'IPCA-E', 'SEM_CORRECAO').
-   *  When 'SELIC', the ground truth factor already includes interest → skip separate interest.
-   *  When 'IPCA-E' or other, the factor is correction-only → interest must be calculated separately. */
-  pjc_ground_truth_regime?: string;
   /** Per-occurrence paid value breakdown (Feature #3: rubric-specific paid values) */
   pago_breakdown?: {
     base: number;

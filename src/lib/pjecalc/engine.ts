@@ -1148,20 +1148,6 @@ export class PjeCalcEngine {
   // =====================================================
 
   calcularVerba(verba: PjeVerba): PjeVerbaResult {
-    // ═══ PRE-COMPUTED MODE: use PJC ground truth directly (assisted mode only) ═══
-    if (this.params.modo_calculo === 'assisted_from_pjc' && verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
-      return this.calcularVerbaPrecomputada(verba);
-    }
-
-    // ═══ INDEPENDENT WITH PJC INPUTS: use PJC base/div/mult/qty but recalculate formula ═══
-    // When running independently but PJC data exists, use the PJC occurrence inputs
-    // (base, divisor, multiplicador, quantidade) to compute the formula from scratch.
-    // This ensures we have the correct granular data (comissões, HE por mês) while
-    // still proving our formula/correction/juros are independently correct.
-    if (this.params.modo_calculo === 'independent' && verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
-      return this.calcularVerbaFromPjcInputs(verba);
-    }
-
     const periodo = { inicio: verba.periodo_inicio, fim: verba.periodo_fim };
     let competencias: string[];
 
@@ -1246,120 +1232,6 @@ export class PjeCalcEngine {
     };
   }
 
-  /**
-   * Process a verba using pre-computed PJC occurrence data.
-   * This injects the exact base/div/mult/qtd/pago from the PJC ground truth,
-   * but still runs through calcularOcorrencia for consistent formula/rounding.
-   */
-  private calcularVerbaPrecomputada(verba: PjeVerba): PjeVerbaResult {
-    const ocorrencias: PjeOcorrenciaResult[] = [];
-    let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
-
-    for (const pre of verba.ocorrencias_precomputadas!) {
-      const base = new Decimal(pre.base);
-      const div = new Decimal(pre.divisor || 1);
-      const mult = new Decimal(pre.multiplicador || 1);
-      const qtd = new Decimal(pre.quantidade || 1);
-      const dobra = new Decimal(pre.dobra ? 2 : 1);
-
-      // Use PJC ground-truth devido/pago directly (avoids re-truncation drift)
-      const devido = new Decimal(pre.devido);
-      const pago = new Decimal(pre.pago || 0);
-      const diferenca = devido.minus(pago);
-
-      const formula = `(${base.toFixed(2)} ÷ ${div.toFixed(2)}) × ${mult.toFixed(4)} × ${qtd.toFixed(4)} × ${dobra.toFixed(0)} = ${devido.toFixed(2)} [PJC]`;
-
-      ocorrencias.push({
-        competencia: pre.competencia,
-        base: base.toDP(2).toNumber(),
-        divisor: div.toDP(2).toNumber(),
-        multiplicador: mult.toDP(8).toNumber(),
-        quantidade: qtd.toDP(4).toNumber(),
-        dobra: dobra.toNumber(),
-        devido: devido.toDP(2).toNumber(),
-        pago: pago.toDP(2).toNumber(),
-        diferenca: diferenca.toDP(2).toNumber(),
-        indice_correcao: 1,
-        valor_corrigido: diferenca.toDP(2).toNumber(),
-        juros: 0,
-        valor_final: diferenca.toDP(2).toNumber(),
-        formula,
-        pjc_indice_acumulado: pre.indice_acumulado,
-      });
-
-      totalDevido = totalDevido.plus(devido);
-      totalPago = totalPago.plus(pago);
-      totalDiferenca = totalDiferenca.plus(diferenca);
-    }
-
-    return {
-      verba_id: verba.id,
-      nome: verba.nome,
-      tipo: verba.tipo,
-      caracteristica: verba.caracteristica,
-      ocorrencias,
-      total_devido: totalDevido.toDP(2).toNumber(),
-      total_pago: totalPago.toDP(2).toNumber(),
-      total_diferenca: totalDiferenca.toDP(2).toNumber(),
-      total_corrigido: totalDiferenca.toDP(2).toNumber(),
-      total_juros: 0,
-      total_final: totalDiferenca.toDP(2).toNumber(),
-    };
-  }
-
-  /**
-   * INDEPENDENT WITH PJC INPUTS: Uses the PJC's own devido/pago values
-   * (which are the NOMINAL verba amounts, not GT-corrected).
-   * Correction, juros, INSS, IR are recalculated independently by our engine.
-   * This gives us the correct nominal base while proving our correction/juros logic.
-   */
-  private calcularVerbaFromPjcInputs(verba: PjeVerba): PjeVerbaResult {
-    const ocorrencias: PjeOcorrenciaResult[] = [];
-    let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
-
-    for (const pre of verba.ocorrencias_precomputadas!) {
-      // Use PJC devido/pago directly — these are NOMINAL values (the verba's own calculation)
-      // NOT corrected/GT values. They represent what the employee is owed vs what was paid.
-      const devido = new Decimal(pre.devido).toDP(2);
-      const pago = new Decimal(pre.pago || 0).toDP(2);
-      let diferenca = devido.minus(pago);
-      if (verba.zerar_valor_negativo && diferenca.isNegative()) diferenca = new Decimal(0);
-
-      const base = new Decimal(pre.base);
-      const div = new Decimal(pre.divisor || 1);
-      const mult = new Decimal(pre.multiplicador || 1);
-      const qtd = new Decimal(pre.quantidade || 1);
-      const dobra = new Decimal(pre.dobra ? 2 : 1);
-
-      ocorrencias.push({
-        competencia: pre.competencia,
-        base: base.toDP(2).toNumber(), divisor: div.toDP(2).toNumber(),
-        multiplicador: mult.toDP(8).toNumber(), quantidade: qtd.toDP(4).toNumber(),
-        dobra: dobra.toNumber(), devido: devido.toDP(2).toNumber(),
-        pago: pago.toDP(2).toNumber(), diferenca: diferenca.toDP(2).toNumber(),
-        indice_correcao: 1, valor_corrigido: diferenca.toDP(2).toNumber(),
-        juros: 0, valor_final: diferenca.toDP(2).toNumber(),
-        formula: `devido=${devido.toFixed(2)} pago=${pago.toFixed(2)} [PJC-NOMINAL]`,
-        // Preserve PJC correction factor for optional use
-        pjc_indice_acumulado: pre.indice_acumulado,
-      });
-
-      totalDevido = totalDevido.plus(devido);
-      totalPago = totalPago.plus(pago);
-      totalDiferenca = totalDiferenca.plus(diferenca);
-    }
-
-    return {
-      verba_id: verba.id, nome: verba.nome, tipo: verba.tipo,
-      caracteristica: verba.caracteristica, ocorrencias,
-      total_devido: totalDevido.toDP(2).toNumber(),
-      total_pago: totalPago.toDP(2).toNumber(),
-      total_diferenca: totalDiferenca.toDP(2).toNumber(),
-      total_corrigido: totalDiferenca.toDP(2).toNumber(),
-      total_juros: 0, total_final: totalDiferenca.toDP(2).toNumber(),
-    };
-  }
-
   // =====================================================
   // CORREÇÃO MONETÁRIA + JUROS DE MORA
   // ADC 58/59 STF: IPCA-E pré-judicial + SELIC pós-citação
@@ -1379,22 +1251,16 @@ export class PjeCalcEngine {
     const dataLiq = new Date(this.correcaoConfig.data_liquidacao);
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const dataAjuiz = this.params.data_ajuizamento ? new Date(this.params.data_ajuizamento) : null;
-    const modoCalculo = this.params.modo_calculo ?? 'independent';
-    const usarADC5859Check = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
+    const usarADC5859 = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
     let dataCitacao: Date | null;
     if (this.params.data_citacao) {
       dataCitacao = new Date(this.params.data_citacao);
-    } else if (modoCalculo === 'independent') {
+    } else {
       // P0-4: In independent mode data_citacao is NEVER estimated — zero tolerance for heuristics.
       // The error is reported in validarPreLiquidacao(); here we set null so downstream code
       // skips the ADC/juros path without silent fallback.
       dataCitacao = null;
-    } else {
-      // assisted_from_pjc: estimation allowed (W_CITACAO_ESTIMADA warning emitted by validarPreLiquidacao)
-      dataCitacao = dataAjuiz ? new Date(dataAjuiz.getTime() + 60 * 24 * 60 * 60 * 1000) : null;
     }
-
-    const usarADC5859 = usarADC5859Check;
 
     for (const vr of verbaResults) {
       let totalCorrigido = new Decimal(0);
@@ -1413,35 +1279,7 @@ export class PjeCalcEngine {
         let indiceCorrecao = 1;
         let juros = 0;
 
-        // PJC correction factor: only use in assisted mode, not independent
-        if (modoCalculo !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
-          indiceCorrecao = oc.pjc_indice_acumulado;
-          oc.pjc_ground_truth_applied = true;
-
-          // Determine if SELIC regime (already includes interest)
-          const isSelic = this.correcaoConfig.indice === 'SELIC';
-          oc.pjc_ground_truth_regime = isSelic ? 'SELIC' : this.correcaoConfig.indice;
-
-          if (!isSelic) {
-            // Calculate interest separately for non-SELIC regimes
-            const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2, Decimal.ROUND_HALF_EVEN));
-            // Fazenda Pública (EC 113/2021): juros limitados à SELIC; não aplicar juros simples de 1% a.m.
-            if (this.correcaoConfig.juros_tipo === 'simples_mensal' && dataAjuiz && !this.correcaoConfig.ente_publico) {
-              let dataInicioJuros: Date;
-              if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
-              else if (this.correcaoConfig.juros_inicio === 'citacao' && dataCitacao) dataInicioJuros = dataCitacao;
-              else dataInicioJuros = dataAjuiz;
-              // Súmula 439 TST: danos morais — juros desde o ajuizamento
-              if (verbaOriginal?.sumula_439_tst && this.params.data_ajuizamento) {
-                dataInicioJuros = new Date(this.params.data_ajuizamento);
-              }
-              // FIX 1: PJe-Calc counts interest months inclusive of start month
-              const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
-              const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
-              juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2, Decimal.ROUND_HALF_EVEN));
-            }
-          }
-        } else if (usarADC5859 && dataCitacao) {
+        if (usarADC5859 && dataCitacao) {
           if (dataComp >= dataCitacao) {
             const fatorDB = this.getIndiceCorrecaoDB('SELIC', oc.competencia, compLiq);
             if (fatorDB !== null) {
@@ -1576,89 +1414,6 @@ export class PjeCalcEngine {
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
 
-        // ═══ PJC Ground Truth: indiceAcumulado is the CORRECTION-ONLY factor.
-        // It represents monetary correction (inflation) but NOT interest.
-        // Interest is always calculated separately by PJe-Calc.
-        // For SELIC regime: the correction factor already includes interest → skip separate interest.
-        // For IPCA-E/other: apply interest separately after correction.
-        // PJC correction factor: only in assisted mode, independent calculates from DB
-        if ((this.params.modo_calculo ?? 'independent') !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
-          const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
-          const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
-          const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
-
-          const fatorCorrecao = new Decimal(oc.pjc_indice_acumulado);
-          const valorCorrigido = new Decimal(oc.diferenca).times(fatorCorrecao);
-          oc.indice_correcao = fatorCorrecao.toDP(6).toNumber();
-          oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
-          oc.pjc_ground_truth_applied = true;
-          oc.pjc_ground_truth_regime = regimeIndice;
-
-          // For SELIC: factor already includes interest, valor_final = valor_corrigido
-          if (regimeIndice === 'SELIC') {
-            oc.juros = 0;
-            oc.valor_final = valorCorrigido.toDP(2).toNumber();
-            totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
-            totalFinal = totalFinal.plus(oc.valor_final);
-            continue;
-          }
-
-          // For non-SELIC: calculate interest separately (below in the interest section)
-          // Set juros=0 for now, will be computed in the interest block
-          totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
-
-          // Calculate interest for this GT occurrence using the same logic as non-GT
-          let jurosOc = new Decimal(0);
-          const jurosEffectiveStartGT = effectiveJurosStart || compDateGT;
-          if (!jurosDisabled) {
-            const bpGT = new Set<string>();
-            bpGT.add(compDateGT);
-            bpGT.add(dataLiq);
-            for (const ci of combinacoes_indice) {
-              if (ci.de && ci.de > compDateGT && ci.de <= dataLiq) bpGT.add(ci.de);
-            }
-            for (const cj of combinacoes_juros) {
-              if (cj.de && cj.de > compDateGT && cj.de <= dataLiq) bpGT.add(cj.de);
-            }
-            const datasGT = Array.from(bpGT).sort();
-            for (let j = 0; j < datasGT.length - 1; j++) {
-              const sI = datasGT[j];
-              const sF = datasGT[j + 1];
-              if (sF <= jurosEffectiveStartGT) continue;
-              const rS = sI < jurosEffectiveStartGT ? jurosEffectiveStartGT : sI;
-              const regI = this.getRegimeParaData(combinacoes_indice, rS);
-              const iN = normalizeIndice(regI?.indice || 'SEM_CORRECAO');
-              // Skip interest during SELIC index regime (already includes interest).
-              if (iN === 'SELIC') continue;
-              // SEM_CORRECAO: skip juros UNLESS the juros regime for this segment is SELIC
-              // (ADC 58/59: post-ajuizamento has SEM_CORRECAO index + SELIC juros)
-              if (iN === 'SEM_CORRECAO' || iN === 'Sem Correção' || iN === 'NENHUM') {
-                const regJCheck = this.getRegimeParaData(combinacoes_juros, rS);
-                if (!regJCheck || regJCheck.tipo !== 'SELIC') continue;
-              }
-              const regJ = this.getRegimeParaData(combinacoes_juros, rS);
-              if (!regJ || regJ.tipo === 'NENHUM') continue;
-              if (regJ.tipo === 'SELIC') {
-                const fS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(rS.slice(0, 7)), sF.slice(0, 7));
-                if (fS !== null) jurosOc = jurosOc.plus(valorCorrigido.times(fS - 1));
-              } else if (regJ.tipo === 'TAXA_LEGAL') {
-                const fTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(rS.slice(0, 7)), sF.slice(0, 7));
-                if (fTL !== null) jurosOc = jurosOc.plus(valorCorrigido.times(fTL - 1));
-              } else {
-                const m = this.mesesEntre(new Date(rS), new Date(sF));
-                const t = (regJ.percentual ?? 1) / 100;
-                jurosOc = jurosOc.plus(valorCorrigido.times(t).times(m));
-              }
-            }
-          }
-
-          oc.juros = jurosOc.toDP(2).toNumber();
-          oc.valor_final = valorCorrigido.plus(jurosOc).toDP(2).toNumber();
-          totalJuros = totalJuros.plus(oc.juros);
-          totalFinal = totalFinal.plus(oc.valor_final);
-          continue;
-        }
-
         // Súmula 381: correction starts from mês subsequente ao vencimento
         const compDateJuros = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
         const compDateCorrecao = this.mesSubsequente(oc.competencia) + '-01';
@@ -1774,137 +1529,6 @@ export class PjeCalcEngine {
       vr.total_corrigido = totalCorrigido.toDP(2).toNumber();
       vr.total_juros = totalJuros.toDP(2).toNumber();
       vr.total_final = totalFinal.toDP(2).toNumber();
-    }
-  }
-
-  // =====================================================
-  // GT CALIBRATION: Use ApuracaoDeJuros valorCorrigido + taxaDeJuros
-  // 
-  // Phase 1 (includeInterest=false): Scale correction to match GT per competência
-  // Phase 2 (includeInterest=true): Apply interest using GT taxaDeJuros percentage
-  //   - taxaDeJuros in PJC XML is a PERCENTAGE (e.g. 33.14 = 33.14%)
-  //   - For juros_apos_deducao_cs: interest base = corrected - CS_share
-  //   - SELIC correction cases: GT valorCorrigido is TAX BASIS only — skip correction scaling
-  // =====================================================
-
-  private isSELICCorrection(): boolean {
-    if (this.correcaoConfig.indice === 'SELIC' || this.correcaoConfig.indice === 'selic') return true;
-    // Combination that includes SELIC as any active correction index
-    const combIdx = this.correcaoConfig.combinacoes_indice;
-    if (combIdx && combIdx.length > 0) {
-      return combIdx.some(c => c.indice === 'SELIC');
-    }
-    return false;
-  }
-
-  private calibrarCorrecaoComGT(verbaResults: PjeVerbaResult[], includeInterest: boolean = false, _totalCSDescontado: number = 0): void {
-    // BLOCKED in independent mode: GT calibration must not run.
-    if ((this.params.modo_calculo ?? 'independent') === 'independent') return;
-    const correcaoGT = this.correcaoConfig.apuracao_juros_gt;
-    if (!correcaoGT || correcaoGT.length === 0) return;
-    // NOTE: We no longer skip for SELIC combinations. The GT data handles SELIC semantics:
-    // - GT valorCorrigido for SELIC-phase occ = inflation-only base (CS/IR base)
-    // - Phase 2 distributes totalJurosTarget which accounts for embedded SELIC interest
-    // Only skip for pure SELIC WITHOUT gt_closure (no reference to calibrate against)
-    if (this.isSELICCorrection() && !this.correcaoConfig.gt_closure) return;
-
-    // Build GT data per competência
-    const gtByComp = new Map<string, { valor_corrigido: number }>();
-    let gtTotalCorrigido = 0;
-    for (const g of correcaoGT) {
-      const comp = g.competencia.slice(0, 7);
-      gtTotalCorrigido += g.valor_corrigido;
-      const existing = gtByComp.get(comp);
-      if (existing) {
-        existing.valor_corrigido += g.valor_corrigido;
-      } else {
-        gtByComp.set(comp, { valor_corrigido: g.valor_corrigido });
-      }
-    }
-
-    // Aggregate engine per competência
-    const engineByComp = new Map<string, { total_corrigido: number; ocorrencias: PjeOcorrenciaResult[] }>();
-    for (const vr of verbaResults) {
-      for (const oc of vr.ocorrencias) {
-        if (oc.diferenca === 0) continue;
-        const comp = oc.competencia.slice(0, 7);
-        const entry = engineByComp.get(comp);
-        if (entry) {
-          entry.total_corrigido += oc.valor_corrigido;
-          entry.ocorrencias.push(oc);
-        } else {
-          engineByComp.set(comp, { total_corrigido: oc.valor_corrigido, ocorrencias: [oc] });
-        }
-      }
-    }
-
-    // Phase 1: Calibrate correction to match GT valorCorrigido per competência
-    const allOcs: PjeOcorrenciaResult[] = [];
-    for (const [comp, gt] of gtByComp) {
-      const eng = engineByComp.get(comp);
-      if (!eng || eng.total_corrigido === 0 || gt.valor_corrigido === 0) continue;
-      const ratio = new Decimal(gt.valor_corrigido).div(eng.total_corrigido);
-      for (const oc of eng.ocorrencias) {
-        oc.valor_corrigido = new Decimal(oc.valor_corrigido).times(ratio).toDP(2).toNumber();
-        oc.pjc_ground_truth_applied = true;
-        allOcs.push(oc);
-      }
-    }
-
-    // Phase 2: Apply interest
-    if (includeInterest && allOcs.length > 0) {
-      // ═══ GT Closure Mode: Compute exact total juros from PJC resultado ═══
-      // PJC bruto = liquido + inss_reclamante + ir
-      // Total juros = bruto - GT_sum(valorCorrigido)
-      const closure = this.correcaoConfig.gt_closure;
-      let totalJurosTarget: number;
-      
-      if (closure && (closure.liquido_exequente > 0 || closure.inss_reclamante > 0)) {
-        const brutoTarget = closure.liquido_exequente + closure.inss_reclamante + closure.imposto_renda;
-        totalJurosTarget = Math.max(0, brutoTarget - gtTotalCorrigido);
-      } else {
-        // Fallback: compute from GT taxaDeJuros rates
-        totalJurosTarget = 0;
-        for (const g of correcaoGT) {
-          if (g.valor_corrigido > 0 && g.taxa_juros > 0) {
-            totalJurosTarget += g.valor_corrigido * g.taxa_juros / 100;
-          }
-        }
-      }
-
-      // Distribute total juros proportionally across all calibrated occurrences
-      const totalCorr = allOcs.reduce((s, oc) => s + oc.valor_corrigido, 0);
-      if (totalCorr > 0 && totalJurosTarget > 0) {
-        for (const oc of allOcs) {
-          const share = new Decimal(oc.valor_corrigido).div(totalCorr);
-          oc.juros = share.times(totalJurosTarget).toDP(2).toNumber();
-          oc.valor_final = new Decimal(oc.valor_corrigido).plus(oc.juros).toDP(2).toNumber();
-        }
-      } else {
-        for (const oc of allOcs) {
-          oc.juros = 0;
-          oc.valor_final = oc.valor_corrigido;
-        }
-      }
-    } else {
-      // Phase 1 only — set juros=0
-      for (const oc of allOcs) {
-        oc.juros = 0;
-        oc.valor_final = oc.valor_corrigido;
-      }
-    }
-
-    // Recalculate verba totals
-    for (const vr of verbaResults) {
-      let tc = new Decimal(0), tj = new Decimal(0), tf = new Decimal(0);
-      for (const oc of vr.ocorrencias) {
-        tc = tc.plus(oc.valor_corrigido);
-        tj = tj.plus(oc.juros);
-        tf = tf.plus(oc.valor_final);
-      }
-      vr.total_corrigido = tc.toDP(2).toNumber();
-      vr.total_juros = tj.toDP(2).toNumber();
-      vr.total_final = tf.toDP(2).toNumber();
     }
   }
 
@@ -2188,130 +1812,7 @@ export class PjeCalcEngine {
       return { segurado_devidos: [], segurado_pagos: [], empregador, total_segurado_devidos: 0, total_segurado_pagos: 0, total_segurado: 0, total_empregador: 0 };
     }
 
-    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact CS bases/values ═══
-    // Only in assisted mode — independent mode calculates from engine data
-    const gt = this.csConfig.apuracao_juros_gt;
-    const useGTBases = (this.params.modo_calculo ?? 'independent') !== 'independent' && gt && gt.length > 0 && useCorrigido;
-
-    if (useGTBases) {
-      const gtData = gt!;
-      // GT path for CS calculation (both assisted and independent GT-light modes)
-      // Aggregate GT bases AND pre-computed CS amounts by competência (YYYY-MM format)
-      const gtBasesByComp: Record<string, number> = {};
-      const gtBase13ByComp: Record<string, number> = {};
-      const gtCSNormalByComp: Record<string, number> = {};
-      const gtCS13ByComp: Record<string, number> = {};
-      for (const entry of gtData) {
-        const comp = entry.competencia.slice(0, 7); // YYYY-MM
-        gtBasesByComp[comp] = (gtBasesByComp[comp] || 0) + entry.cs_base_normal;
-        gtBase13ByComp[comp] = (gtBase13ByComp[comp] || 0) + entry.cs_base_13;
-        gtCSNormalByComp[comp] = (gtCSNormalByComp[comp] || 0) + entry.cs_normal;
-        gtCS13ByComp[comp] = (gtCS13ByComp[comp] || 0) + entry.cs_13;
-      }
-
-      const allComps = new Set([...Object.keys(gtBasesByComp), ...Object.keys(gtBase13ByComp)]);
-      
-      // Check if GT provides pre-computed CS amounts (contribuicaoSocialNormal > 0)
-      const hasPrecomputedCS = Object.values(gtCSNormalByComp).some(v => v > 0) || Object.values(gtCS13ByComp).some(v => v > 0);
-
-      // ═══ PJe-Calc CS Monetary Update (correcaoTrabalhistaDosSalariosDevidosDoINSS) ═══
-      // Derive correction factor from GT: valorCorrigido / cs_base_normal per competência
-      // This captures multi-phase correction accurately without needing index lookups
-      const correctionFactorByComp: Record<string, number> = {};
-      const gtNominalByComp: Record<string, number> = {};
-      const gtCorrigidoByComp: Record<string, number> = {};
-      for (const entry of gtData) {
-        const comp = entry.competencia.slice(0, 7);
-        gtNominalByComp[comp] = (gtNominalByComp[comp] || 0) + entry.cs_base_normal + entry.cs_base_13;
-        gtCorrigidoByComp[comp] = (gtCorrigidoByComp[comp] || 0) + entry.valor_corrigido;
-      }
-      for (const comp of allComps) {
-        const nominal = gtNominalByComp[comp];
-        const corrigido = gtCorrigidoByComp[comp];
-        if (nominal && nominal > 0 && corrigido && corrigido > nominal) {
-          correctionFactorByComp[comp] = corrigido / nominal;
-        }
-      }
-      
-      if (this.csConfig.apurar_segurado) {
-        for (const comp of allComps) {
-          const baseNormal = gtBasesByComp[comp] || 0;
-          const base13 = gtBase13ByComp[comp] || 0;
-          const totalBase = baseNormal + base13;
-          if (totalBase <= 0) continue;
-
-          // PJe-Calc: INSS on 13º is calculated on a SEPARATE basis with its own teto
-          let imposto: number;
-          if (hasPrecomputedCS) {
-            // Use PJe-Calc's precomputed CS amounts (both assisted and GT-light modes)
-            imposto = (gtCSNormalByComp[comp] || 0) + (gtCS13ByComp[comp] || 0);
-          } else {
-            // No precomputed: calculate INSS from GT bases using engine's progressive tables
-            const impostoNormal = baseNormal > 0 ? this.calcularINSSProgressivo(comp, baseNormal) : 0;
-            const imposto13 = base13 > 0 ? this.calcularINSSProgressivo(comp, base13) : 0;
-            imposto = impostoNormal + imposto13;
-          }
-
-          // NOTE: INSS is calculated on nominal historical salary — do NOT apply monetary correction factor
-          // PJe-Calc: INSS base = salário histórico nominal, not corrected value
-
-          segurado_devidos.push({
-            competencia: comp, base: totalBase,
-            aliquota: totalBase > 0 ? imposto / totalBase : 0,
-            valor: Number(new Decimal(imposto).toDP(2)),
-            recolhido: 0,
-            diferenca: Number(new Decimal(imposto).toDP(2)),
-          });
-        }
-      }
-
-      // Empregador with GT bases (also apply monetary correction)
-      if (this.csConfig.apurar_empresa || this.csConfig.apurar_sat || this.csConfig.apurar_terceiros) {
-        for (const comp of allComps) {
-          const baseNormal = gtBasesByComp[comp] || 0;
-          const base13 = gtBase13ByComp[comp] || 0;
-          const totalBase = baseNormal + base13;
-          if (totalBase <= 0) continue;
-          const compDate = new Date(comp + '-01');
-          const isSimples = this.csConfig.periodos_simples?.some(p => {
-            const pInicio = new Date(p.inicio);
-            const pFim = new Date(p.fim);
-            return compDate >= pInicio && compDate <= pFim;
-          }) || false;
-          
-          if (isSimples) {
-            empregador.push({ competencia: comp, empresa: 0, sat: 0, terceiros: 0 });
-          } else {
-            // LC 150/2015: Empregado doméstico — alíquota patronal de 8% (não 20%)
-            const isDomesticoCS = this.csConfig.aliquota_segurado_tipo === 'domestico';
-            const aliqEmp = isDomesticoCS ? 0.08 : (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
-            const aliqSat = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
-            // FPAS-based terceiros: use real rate by FPAS code when available
-            const fpas = this.csConfig.fpas_code ? getFPASByCodigo(this.csConfig.fpas_code) : undefined;
-            const aliqTerc = fpas ? fpas.entidades.reduce((s, e) => s + e.aliquota, 0) / 100 : (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
-            // Apply correction factor from GT for employer CS
-            const cf = correctionFactorByComp[comp] ?? 1;
-            const correctedBase = cf > 1 ? Number(new Decimal(totalBase).times(cf).toDP(2)) : totalBase;
-            const empresa = this.csConfig.apurar_empresa ? Number(new Decimal(correctedBase).times(aliqEmp).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
-            const sat = this.csConfig.apurar_sat ? Number(new Decimal(correctedBase).times(aliqSat).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
-            // LC 150/2015: doméstico não recolhe terceiros
-            const terceiros = (this.csConfig.apurar_terceiros && !isDomesticoCS) ? Number(new Decimal(correctedBase).times(aliqTerc).toDP(2, PjeCalcEngine.ROUND_CS_IR)) : 0;
-            empregador.push({ competencia: comp, empresa, sat, terceiros });
-          }
-        }
-      }
-
-      const totalDevidos = segurado_devidos.reduce((s, x) => new Decimal(s).plus(x.diferenca), new Decimal(0)).toDP(2, PjeCalcEngine.ROUND_CS_IR).toNumber();
-      return {
-        segurado_devidos, segurado_pagos: [], empregador,
-        total_segurado_devidos: totalDevidos,
-        total_segurado_pagos: 0,
-        total_segurado: totalDevidos,
-        total_empregador: empregador.reduce((s, x) => s + x.empresa + x.sat + x.terceiros, 0),
-      };
-    }
-
-    // ═══ Standard Mode: Compute CS from verba results ═══
+    // ═══ Compute CS from verba results ═══
     // ═══ Track 1: CS sobre salários DEVIDOS ═══
     // base_cs_segurado: 'bruto' usa oc.devido, 'liquido' (default) usa oc.diferenca
     const usarBruto = this.csConfig.base_cs_segurado === 'bruto';
@@ -2552,14 +2053,6 @@ export class PjeCalcEngine {
       return { base_calculo: 0, deducoes: 0, base_tributavel: 0, imposto_devido: 0, meses_rra: 0, metodo: 'tabela_mensal',
         ir_anos_anteriores: 0, ir_ano_liquidacao: 0, ir_13_exclusivo: 0, ir_ferias_separado: 0, meses_anos_anteriores: 0, meses_ano_liquidacao: 0 };
     }
-
-    // ═══ Ground Truth Mode: Use ApuracaoDeJuros exact IR bases ═══
-    const gt = this.irConfig.apuracao_juros_gt;
-    if (this.params.modo_calculo === 'assisted_from_pjc' && gt && gt.length > 0) {
-      return this.calcularIRFromGT(gt, csResult);
-    }
-
-    // Independent mode: calculate IR from engine data, not GT bases
 
     let baseBruta = 0;
     let base13 = 0;
@@ -2835,108 +2328,6 @@ export class PjeCalcEngine {
     };
   }
 
-  // ═══ IR from ApuracaoDeJuros Ground Truth ═══
-  private calcularIRFromGT(gt: import('./engine-types').PjeApuracaoJurosGT[], csResult: PjeCSResult): PjeIRResult {
-    const R = PjeCalcEngine.ROUND_CS_IR;
-    const anoLiq = parseInt(this.correcaoConfig.data_liquidacao.slice(0, 4));
-    const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
-    const tabelaIR = this.getFaixasIRParaCompetencia(compLiq);
-
-    let baseDemais = 0, base13 = 0, baseFerias = 0;
-    const allTributaveisComps: string[] = [];
-
-    for (const entry of gt) {
-      const comp = entry.competencia.slice(0, 7);
-      baseDemais += entry.ir_base_demais;
-      base13 += entry.ir_base_13;
-      baseFerias += entry.ir_base_ferias;
-      if (entry.ir_base_demais > 0) {
-        allTributaveisComps.push(comp);
-      }
-    }
-
-    // NM: use XML value if available, otherwise calculate from competências
-    let meses: number;
-    const nmFromConfig = (this.correcaoConfig as unknown as { calculo_config?: { nm_rra?: number } }).calculo_config?.nm_rra;
-    if (nmFromConfig && nmFromConfig > 0) {
-      meses = nmFromConfig;
-    } else if (allTributaveisComps.length > 0) {
-      const sorted = [...allTributaveisComps].sort();
-      meses = this.getCompetencias(sorted[0], sorted[sorted.length - 1]).length;
-    } else {
-      const periodo = this.getPeriodoCalculo();
-      meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
-    }
-    meses = Math.max(1, meses);
-
-    // Deductions
-    let deducoes = 0;
-    if (this.irConfig.deduzir_cs && this.csConfig.cobrar_reclamante) deducoes += csResult.total_segurado;
-    if (this.irConfig.aposentado_65 && tabelaIR.faixas.length > 0) {
-      deducoes += tabelaIR.faixas[0].ate * meses;
-    }
-
-    // PJe-Calc RRA: apply progressive table with NM-scaled brackets over TOTAL base
-    // (not split by years — the split reduces IR incorrectly)
-    let irDemais = new Decimal(0);
-    let ir13Exclusivo = new Decimal(0);
-    let irFeriasSeparado = new Decimal(0);
-
-    if (baseDemais > 0) {
-      const dedDep = new Decimal(this.irConfig.dependentes)
-        .times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
-      const bt = Math.max(0, baseDemais - deducoes - dedDep);
-      for (const f of tabelaIR.faixas) {
-        if (bt <= f.ate * meses) {
-          irDemais = new Decimal(bt).times(f.aliquota)
-            .minus(new Decimal(f.deducao).times(meses)).toDP(2, R);
-          break;
-        }
-      }
-      if (irDemais.lt(0)) irDemais = new Decimal(0);
-    }
-
-    if (this.irConfig.tributacao_exclusiva_13 && base13 > 0) {
-      for (const f of tabelaIR.faixas) {
-        if (base13 <= f.ate) {
-          ir13Exclusivo = new Decimal(base13).times(f.aliquota).minus(f.deducao).toDP(2, R);
-          break;
-        }
-      }
-      if (ir13Exclusivo.lt(0)) ir13Exclusivo = new Decimal(0);
-    }
-
-    if (this.irConfig.tributacao_separada_ferias && baseFerias > 0) {
-      for (const f of tabelaIR.faixas) {
-        if (baseFerias <= f.ate * meses) {
-          irFeriasSeparado = new Decimal(baseFerias).times(f.aliquota)
-            .minus(new Decimal(f.deducao).times(meses)).toDP(2, R);
-          break;
-        }
-      }
-      if (irFeriasSeparado.lt(0)) irFeriasSeparado = new Decimal(0);
-    }
-
-    const imposto = irDemais.plus(ir13Exclusivo).plus(irFeriasSeparado);
-    const dedDep = new Decimal(this.irConfig.dependentes)
-      .times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
-    const baseTributavel = Math.max(0, baseDemais - deducoes - dedDep);
-
-    return {
-      base_calculo: Number(new Decimal(baseDemais + base13 + baseFerias).toDP(2, R)),
-      deducoes: Number(new Decimal(deducoes + dedDep).toDP(2, R)),
-      base_tributavel: Number(new Decimal(baseTributavel + base13 + baseFerias).toDP(2, R)),
-      imposto_devido: imposto.toDP(2, R).toNumber(),
-      meses_rra: meses, metodo: meses > 1 ? 'art_12a_rra' : 'tabela_mensal',
-      ir_anos_anteriores: irDemais.toDP(2, R).toNumber(),
-      ir_ano_liquidacao: 0,
-      ir_13_exclusivo: ir13Exclusivo.toDP(2, R).toNumber(),
-      ir_ferias_separado: irFeriasSeparado.toDP(2, R).toNumber(),
-      meses_anos_anteriores: meses,
-      meses_ano_liquidacao: 0,
-    };
-  }
-
   // =====================================================
   // CALCULAR CONTRIBUIÇÃO SINDICAL (art. 578-579 CLT)
   // 1 dia de salário, descontado em março de cada ano.
@@ -3182,38 +2573,21 @@ export class PjeCalcEngine {
       itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'Data de ajuizamento não informada — campo obrigatório para aplicação da ADC 58' });
     }
     if (!this.params.data_citacao) {
-      const isIndependent = (this.params.modo_calculo ?? 'independent') === 'independent';
       const isADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
       const isCombinacoesADC = (this.correcaoConfig as unknown as { combinacoes_indice?: Array<{ indice: string }> })
         .combinacoes_indice?.some(c => c.indice === 'SELIC' || c.indice === 'IPCA-E') ?? false;
       const jurosFromCitacao = this.correcaoConfig.juros_inicio === 'citacao';
-      if (isIndependent) {
-        // P0-4: Independent mode — data_citacao is ALWAYS required, no heuristics allowed.
-        const reason = isADC || isCombinacoesADC
-          ? 'Modo independente com ADC 58/59 exige data de citação. Preencha em Dados do Processo > Datas Processuais.'
-          : jurosFromCitacao
-            ? 'juros_inicio=citacao exige data_citacao para base correta dos juros. Preencha em Dados do Processo > Datas Processuais.'
-            : 'data_citacao é obrigatória no modo independente para garantir determinismo. Preencha em Dados do Processo > Datas Processuais.';
-        itens.push({
-          tipo: 'erro', modulo: 'Parâmetros',
-          mensagem: `E_CITACAO_OBRIGATORIA: ${reason}`,
-          detalhe: 'No modo independente não há estimativa de data_citacao. Informe a data real do mandado de citação.',
-        });
-      } else if (this.params.data_ajuizamento) {
-        // P0-2: assisted_from_pjc — show explicit estimated date so user sees what's being assumed
-        const estimada = new Date(new Date(this.params.data_ajuizamento).getTime() + 60 * 24 * 60 * 60 * 1000);
-        itens.push({
-          tipo: 'alerta', modulo: 'Parâmetros',
-          mensagem: `W_CITACAO_ESTIMADA: Data de citação não informada — estimada em ${estimada.toISOString().slice(0, 10)} (ajuizamento + 60 dias). Impacta o split IPCA-E/SELIC (ADC 58/59).`,
-          detalhe: 'Para precisão máxima, preencha a data real do mandado de citação em Dados do Processo → Datas Processuais → Citação.',
-        });
-      } else {
-        itens.push({
-          tipo: 'alerta', modulo: 'Parâmetros',
-          mensagem: 'W_CITACAO_AUSENTE: Data de citação não informada — cálculo de juros ADC 58/STF pode ficar impreciso.',
-          detalhe: 'Preencha em Dados do Processo → Datas Processuais → Citação.',
-        });
-      }
+      // Independent mode — data_citacao is ALWAYS required, no heuristics allowed.
+      const reason = isADC || isCombinacoesADC
+        ? 'Modo independente com ADC 58/59 exige data de citação. Preencha em Dados do Processo > Datas Processuais.'
+        : jurosFromCitacao
+          ? 'juros_inicio=citacao exige data_citacao para base correta dos juros. Preencha em Dados do Processo > Datas Processuais.'
+          : 'data_citacao é obrigatória no modo independente para garantir determinismo. Preencha em Dados do Processo > Datas Processuais.';
+      itens.push({
+        tipo: 'erro', modulo: 'Parâmetros',
+        mensagem: `E_CITACAO_OBRIGATORIA: ${reason}`,
+        detalhe: 'No modo independente não há estimativa de data_citacao. Informe a data real do mandado de citação.',
+      });
     }
     if (!this.params.estado || !this.params.municipio) {
       itens.push({ tipo: 'alerta', modulo: 'Parâmetros', mensagem: 'Estado ou município não informado' });
@@ -3363,15 +2737,6 @@ export class PjeCalcEngine {
     // ── IRRF sem CS dedutível ──
     if (this.irConfig.apurar && this.irConfig.deduzir_cs && !this.csConfig.apurar_segurado) {
       itens.push({ tipo: 'alerta', modulo: 'Imposto de Renda', mensagem: 'IR configurado para deduzir CS, mas CS do segurado não está ativada' });
-    }
-
-    // ── Correção sem data de citação para ADC 58/59 ──
-    // (independent mode error already emitted above; only add warning here for assisted_from_pjc)
-    if ((this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC') && !this.params.data_citacao) {
-      if ((this.params.modo_calculo ?? 'independent') === 'assisted_from_pjc') {
-        itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Usando índice ADC 58/59 sem data de citação — será estimada a partir do ajuizamento + 60 dias' });
-      }
-      // independent mode: error already emitted in Parâmetros section above
     }
 
     // ── Validações adicionais PJe-Calc ──
@@ -3526,18 +2891,13 @@ export class PjeCalcEngine {
 
     // Legacy single-index correction only
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
-    const dataAjuiz = this.params.data_ajuizamento ? new Date(this.params.data_ajuizamento) : null;
-    const modoCalculo = this.params.modo_calculo ?? 'independent';
     const usarADC = this.correcaoConfig.indice === 'IPCA-E' || this.correcaoConfig.indice === 'SELIC';
     let dataCitacaoSomente: Date | null = null;
     if (this.params.data_citacao) {
       dataCitacaoSomente = new Date(this.params.data_citacao);
-    } else if (modoCalculo === 'independent') {
+    } else {
       // P0-4: no fallback in independent mode — ever.
       dataCitacaoSomente = null;
-    } else {
-      // assisted_from_pjc: estimation ajuizamento+60d
-      dataCitacaoSomente = dataAjuiz ? new Date(dataAjuiz.getTime() + 60 * 24 * 60 * 60 * 1000) : null;
     }
 
     for (const vr of verbaResults) {
@@ -3547,13 +2907,7 @@ export class PjeCalcEngine {
 
         let indiceCorrecao = 1;
 
-        // Use PJC ground truth correction factor when available (assisted mode only)
-        // PJC correction factor: only in assisted mode
-        if ((this.params.modo_calculo ?? 'independent') !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
-          indiceCorrecao = oc.pjc_indice_acumulado;
-          oc.pjc_ground_truth_applied = true;
-          oc.pjc_ground_truth_regime = this.correcaoConfig.indice || 'SELIC';
-        } else if (usarADC && dataCitacaoSomente) {
+        if (usarADC && dataCitacaoSomente) {
           // ADC 58/59 split: in juros_apos_deducao_cs mode, "correction only" = IPCA-E up to citação.
           // SELIC (citação → liquidação) is the interest portion → applied later by aplicarJurosAposCS.
           const [ano, mes] = oc.competencia.split('-').map(Number);
@@ -3605,26 +2959,6 @@ export class PjeCalcEngine {
       let totalCorrigido = new Decimal(0);
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
-        
-        // Use PJC ground truth correction factor when available (assisted mode only)
-        // PJC correction factor: only in assisted mode, independent calculates from DB
-        if ((this.params.modo_calculo ?? 'independent') !== 'independent' && oc.pjc_indice_acumulado && oc.pjc_indice_acumulado > 0) {
-          // Determine regime for this occurrence
-          const compDateGT = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
-          const regimeGT = this.getRegimeParaData(combinacoes_indice, compDateGT);
-          const regimeIndice = normalizeIndice(regimeGT?.indice || 'SEM_CORRECAO');
-
-          const fatorTotal = new Decimal(oc.pjc_indice_acumulado);
-          const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
-          oc.indice_correcao = fatorTotal.toDP(6).toNumber();
-          oc.valor_corrigido = valorCorrigido.toDP(2).toNumber();
-          oc.juros = 0;
-          oc.valor_final = valorCorrigido.toDP(2).toNumber();
-          oc.pjc_ground_truth_applied = true;
-          oc.pjc_ground_truth_regime = regimeIndice;
-          totalCorrigido = totalCorrigido.plus(oc.valor_corrigido);
-          continue;
-        }
         
         // Súmula 381: correction starts from mês subsequente ao vencimento
         const compDate = this.mesSubsequente(oc.competencia) + '-01';
@@ -3740,15 +3074,6 @@ export class PjeCalcEngine {
 
       for (const oc of vr.ocorrencias) {
         if (oc.valor_corrigido === 0) { totalFinal += oc.valor_final; continue; }
-
-        // ═══ PJC Ground Truth: indiceAcumulado is CORRECTION-ONLY.
-        // For SELIC regime: skip separate interest (already baked into SELIC factor).
-        // For IPCA-E/other regimes: apply interest normally on corrected value.
-        if (oc.pjc_ground_truth_applied && oc.pjc_ground_truth_regime === 'SELIC') {
-          totalJuros += oc.juros;
-          totalFinal += oc.valor_final;
-          continue;
-        }
 
         // Pro-rata CS share for this occurrence
         const csShare = totalCorrigido > 0
@@ -3969,15 +3294,7 @@ export class PjeCalcEngine {
 
       processed.add(verba.id);
       processing.delete(verba.id);
-      
-      // Calculate — precomputed occurrences take priority (PJC ground truth)
-      if (verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
-        const result = this.calcularVerba(verba);
-        verbaResults.push(result);
-        this.verbaResultsMap.set(verba.id, result);
-        audit('verba', `Verba "${verba.nome}" (precomputada): ${result.ocorrencias.length} oc, total=${result.total_diferenca.toFixed(2)}`, { rubrica: verba.nome, resultado: result.total_diferenca });
-        return;
-      }
+
       if (verba.tipo === 'reflexa' && verba.verba_principal_id) {
         const principalResult = this.verbaResultsMap.get(verba.verba_principal_id);
         if (principalResult) {
@@ -4029,54 +3346,24 @@ export class PjeCalcEngine {
     // da contribuição social devida pelo reclamante"
     // When juros_apos_deducao_cs=true:
     //   Step A: Apply correction ONLY (no interest)
-    //   Step A.1: GT Calibration — scale correction to match ApuracaoDeJuros ground truth
-    //   Step B: Calculate CS on GT-calibrated corrected values
+    //   Step B: Calculate CS on corrected values
     //   Step C: Deduct CS share per occurrence
-    //   Step D: Apply interest (from GT taxaDeJuros or engine calculation)
-    const hasGT = (this.correcaoConfig.apuracao_juros_gt?.length ?? 0) > 0;
+    //   Step D: Apply interest
 
     let csPreComputed: PjeCSResult | null = null;
     if (this.correcaoConfig.juros_apos_deducao_cs) {
       this.aplicarCorrecaoSomente(verbaResults);
       audit('correcao', 'Correção monetária aplicada (sem juros)');
 
-      if (hasGT) {
-        if ((this.params.modo_calculo ?? 'independent') === 'independent') {
-          audit('gt_blocked', 'Calibração GT bloqueada — modo independente calcula do zero');
-        } else {
-          this.calibrarCorrecaoComGT(verbaResults, false);
-          audit('gt_calibracao', 'Calibração GT (correção only)');
-        }
-      }
-
       csPreComputed = this.calcularCS(verbaResults, true);
       const csDescontadoPreJuros = this.csConfig.cobrar_reclamante ? csPreComputed.total_segurado : 0;
       audit('cs', `CS pré-juros: segurado=${csPreComputed.total_segurado.toFixed(2)}, empregador=${csPreComputed.total_empregador.toFixed(2)}`);
 
-      if (hasGT) {
-        if ((this.params.modo_calculo ?? 'independent') === 'independent') {
-          // Independent: calculate juros from engine logic, not GT
-          this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
-          audit('juros_independent', 'Juros calculados independentemente (sem GT)');
-        } else {
-          this.calibrarCorrecaoComGT(verbaResults, true, csDescontadoPreJuros);
-          audit('gt_juros', 'Calibração GT (juros + CS deduzida)');
-        }
-      } else {
-        this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
-        audit('juros', 'Juros aplicados após dedução CS');
-      }
+      this.aplicarJurosAposCS(verbaResults, csDescontadoPreJuros);
+      audit('juros', 'Juros aplicados após dedução CS');
     } else {
       this.aplicarCorrecaoJuros(verbaResults);
       audit('correcao_juros', 'Correção + juros aplicados');
-      if (hasGT) {
-        if ((this.params.modo_calculo ?? 'independent') === 'independent') {
-          audit('gt_blocked', 'Calibração GT bloqueada — modo independente');
-        } else {
-          this.calibrarCorrecaoComGT(verbaResults, true);
-          audit('gt_calibracao', 'Calibração GT (full)');
-        }
-      }
     }
 
     // ── 5. FGTS ──
@@ -4096,40 +3383,7 @@ export class PjeCalcEngine {
     let ir = this.calcularIR(verbaResults, cs);
     audit('ir', `IR: base=${ir.base_calculo.toFixed(2)}, imposto=${ir.imposto_devido.toFixed(2)}`);
 
-    // IR calculated independently — no GT scaling in independent mode
-
-    // ── 7b. GT Closure Override: Inject exact PJC values for CS & IR ──
-    // When gt_closure is available, the PJC resultado is the authoritative source.
-    // Engine-computed CS/IR serve as fallback only.
-    // BLOCKED in independent mode: gt_closure must not alter engine output.
-    const closure = (this.params.modo_calculo ?? 'independent') === 'independent'
-      ? undefined
-      : this.correcaoConfig.gt_closure;
-    if (closure && (closure.liquido_exequente > 0 || closure.inss_reclamante > 0)) {
-      if (closure.inss_reclamante >= 0 && this.csConfig.cobrar_reclamante) {
-        const csOverrideDelta = closure.inss_reclamante - cs.total_segurado;
-        if (Math.abs(csOverrideDelta) > 0.01) {
-          audit('gt_cs_override', `CS segurado override: engine=${cs.total_segurado.toFixed(2)} → PJC=${closure.inss_reclamante.toFixed(2)} (Δ=${csOverrideDelta.toFixed(2)})`);
-          cs = { ...cs, total_segurado_devidos: closure.inss_reclamante, total_segurado: closure.inss_reclamante };
-        }
-      }
-      if (closure.inss_reclamado >= 0 && cs.total_empregador > 0) {
-        const empOverrideDelta = closure.inss_reclamado - cs.total_empregador;
-        if (Math.abs(empOverrideDelta) > 0.01) {
-          audit('gt_cs_emp_override', `CS empregador override: engine=${cs.total_empregador.toFixed(2)} → PJC=${closure.inss_reclamado.toFixed(2)} (Δ=${empOverrideDelta.toFixed(2)})`);
-          cs = { ...cs, total_empregador: closure.inss_reclamado };
-        }
-      }
-      if (closure.imposto_renda >= 0) {
-        const irOverrideDelta = closure.imposto_renda - ir.imposto_devido;
-        if (Math.abs(irOverrideDelta) > 0.01) {
-          audit('gt_ir_override', `IR override: engine=${ir.imposto_devido.toFixed(2)} → PJC=${closure.imposto_renda.toFixed(2)} (Δ=${irOverrideDelta.toFixed(2)})`);
-          ir = { ...ir, imposto_devido: closure.imposto_renda };
-        }
-      }
-    }
-
-    // ── 7c. OJ 394 SDI-1 TST: Recalculate juros on post-IR base ──
+    // ── 7b. OJ 394 SDI-1 TST: Recalculate juros on post-IR base ──
     if (this.correcaoConfig.oj_394_juros_pos_ir && ir.imposto_devido > 0) {
       const totalFinal = verbaResults.reduce((s, v) => s + v.total_final, 0);
       for (const vr of verbaResults) {
@@ -4191,26 +3445,7 @@ export class PjeCalcEngine {
       .filter(v => { const verba = this.verbas.find(vb => vb.id === v.verba_id); return verba?.compor_principal !== false; })
       .reduce((s, v) => s.plus(v.total_juros), new Decimal(0)).toDP(2));
 
-    // GT Closure Bruto Reconciliation
-    // When the PJC resultado is available (gt_closure), use the authoritative PJC
-    // bruto (liquido + inss + ir) to reconcile any residual from calibration coverage
-    // gaps (e.g. verbas in GT months not covered by engine, rounding accumulation).
-    // This is the same override principle already applied to CS and IR above.
-    // Only applies when residual is < 5% of bruto (prevents masking large errors).
-    let jurosMoraAjustado = jurosMora;
-    // BLOCKED in independent mode: gt_closure bruto reconciliation must not run.
-    const closureForBruto = (this.params.modo_calculo ?? 'independent') === 'independent'
-      ? undefined
-      : this.correcaoConfig.gt_closure;
-    if (closureForBruto && (closureForBruto.liquido_exequente > 0 || closureForBruto.inss_reclamante > 0)) {
-      const brutoTarget = closureForBruto.liquido_exequente + closureForBruto.inss_reclamante + closureForBruto.imposto_renda;
-      const engineBruto = principalCorrigido + jurosMoraAjustado;
-      const residual = Number(new Decimal(brutoTarget).minus(engineBruto).toDP(2));
-      const residualPct = brutoTarget > 0 ? Math.abs(residual) / brutoTarget : 0;
-      if (Math.abs(residual) > 0.01 && residualPct < 0.05) {
-        jurosMoraAjustado = Number(new Decimal(jurosMoraAjustado).plus(residual).toDP(2));
-      }
-    }
+    const jurosMoraAjustado = jurosMora;
 
     const honorarios = this.calcularHonorarios(principalCorrigido, jurosMoraAjustado, fgts.total_fgts);
     const valorCondenacao = principalCorrigido + jurosMoraAjustado + fgts.total_fgts;
@@ -4314,7 +3549,7 @@ export class PjeCalcEngine {
           devido: oc.devido,
           pago: oc.pago,
           diferenca: oc.diferenca,
-          indice_correcao: oc.pjc_ground_truth_regime || this.correcaoConfig.indice || 'N/A',
+          indice_correcao: this.correcaoConfig.indice || 'N/A',
           fator_correcao: oc.indice_correcao ?? 1,
           valor_corrigido: oc.valor_corrigido,
           data_inicio_juros: this.params.data_ajuizamento || '',
@@ -4324,7 +3559,7 @@ export class PjeCalcEngine {
           valor_final: oc.valor_final,
           inss_segurado: 0,
           ir_retido: 0,
-          regime_correcao: oc.pjc_ground_truth_regime || 'engine',
+          regime_correcao: 'engine',
           era_temporal: '',
         });
       }
