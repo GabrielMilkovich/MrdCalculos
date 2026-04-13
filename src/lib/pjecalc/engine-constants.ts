@@ -34,6 +34,31 @@ export const DEFAULT_DEDUCAO_DEPENDENTE = 189.59;
 // Pré-EC 103/2019 (até fev/2020): alíquota única por faixa (3 faixas)
 // A partir de mar/2020: progressivo com 4 faixas
 export const HISTORICO_FAIXAS_INSS: Record<string, { ate: number; aliquota: number }[]> = {
+  '2010': [
+    { ate: 1040.22, aliquota: 0.08 },
+    { ate: 1733.70, aliquota: 0.09 },
+    { ate: 3467.40, aliquota: 0.11 },
+  ],
+  '2011': [
+    { ate: 1106.52, aliquota: 0.08 },
+    { ate: 1844.19, aliquota: 0.09 },
+    { ate: 3689.66, aliquota: 0.11 },
+  ],
+  '2012': [
+    { ate: 1174.86, aliquota: 0.08 },
+    { ate: 1958.10, aliquota: 0.09 },
+    { ate: 3916.20, aliquota: 0.11 },
+  ],
+  '2013': [
+    { ate: 1247.70, aliquota: 0.08 },
+    { ate: 2079.50, aliquota: 0.09 },
+    { ate: 4159.00, aliquota: 0.11 },
+  ],
+  '2014': [
+    { ate: 1317.07, aliquota: 0.08 },
+    { ate: 2195.12, aliquota: 0.09 },
+    { ate: 4390.24, aliquota: 0.11 },
+  ],
   '2015': [
     { ate: 1399.12, aliquota: 0.08 },
     { ate: 2331.88, aliquota: 0.09 },
@@ -109,6 +134,56 @@ export const HISTORICO_FAIXAS_IR: Record<
   string,
   { faixas: { ate: number; aliquota: number; deducao: number }[]; deducao_dependente: number }
 > = {
+  '2010': {
+    faixas: [
+      { ate: 1499.15, aliquota: 0, deducao: 0 },
+      { ate: 2246.75, aliquota: 0.075, deducao: 112.43 },
+      { ate: 2995.70, aliquota: 0.15, deducao: 280.94 },
+      { ate: 3743.19, aliquota: 0.225, deducao: 505.62 },
+      { ate: Infinity, aliquota: 0.275, deducao: 692.78 },
+    ],
+    deducao_dependente: 150.69,
+  },
+  '2011': {
+    faixas: [
+      { ate: 1566.61, aliquota: 0, deducao: 0 },
+      { ate: 2347.85, aliquota: 0.075, deducao: 117.49 },
+      { ate: 3130.51, aliquota: 0.15, deducao: 293.58 },
+      { ate: 3911.63, aliquota: 0.225, deducao: 528.37 },
+      { ate: Infinity, aliquota: 0.275, deducao: 723.95 },
+    ],
+    deducao_dependente: 157.47,
+  },
+  '2012': {
+    faixas: [
+      { ate: 1637.11, aliquota: 0, deducao: 0 },
+      { ate: 2453.50, aliquota: 0.075, deducao: 122.78 },
+      { ate: 3271.38, aliquota: 0.15, deducao: 306.80 },
+      { ate: 4087.65, aliquota: 0.225, deducao: 552.15 },
+      { ate: Infinity, aliquota: 0.275, deducao: 756.53 },
+    ],
+    deducao_dependente: 164.56,
+  },
+  '2013': {
+    faixas: [
+      { ate: 1710.78, aliquota: 0, deducao: 0 },
+      { ate: 2563.91, aliquota: 0.075, deducao: 128.31 },
+      { ate: 3418.59, aliquota: 0.15, deducao: 320.60 },
+      { ate: 4271.59, aliquota: 0.225, deducao: 577.00 },
+      { ate: Infinity, aliquota: 0.275, deducao: 790.58 },
+    ],
+    deducao_dependente: 171.97,
+  },
+  '2014': {
+    faixas: [
+      { ate: 1787.77, aliquota: 0, deducao: 0 },
+      { ate: 2679.29, aliquota: 0.075, deducao: 134.08 },
+      { ate: 3572.43, aliquota: 0.15, deducao: 335.03 },
+      { ate: 4463.81, aliquota: 0.225, deducao: 602.96 },
+      { ate: Infinity, aliquota: 0.275, deducao: 826.15 },
+    ],
+    deducao_dependente: 179.71,
+  },
   '2015': {
     faixas: [
       { ate: 1903.98, aliquota: 0, deducao: 0 },

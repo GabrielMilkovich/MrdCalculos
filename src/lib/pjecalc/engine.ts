@@ -2057,31 +2057,10 @@ export class PjeCalcEngine {
     let baseBruta = 0;
     let base13 = 0;
     let baseFerias = 0;
-    // base13 por ano civil — para tributação exclusiva do 13º aplicada
-    // separadamente em cada ano (IN RFB 1500/2014 Art. 14 c/c Lei 7.713/88
-    // Art. 26 §1º). Sem isso, o 13º acumulado de vários anos é tratado como
-    // um único rendimento mensal e cai na alíquota máxima.
     const base13PorAno: Record<number, number> = {};
+    const todasCompetencias = new Set<string>();
+    const competenciasFerias = new Set<string>();
 
-    // Art. 12-A: Separar rendimentos por ano para tributação correta
-    // PJe-Calc: IR base is on CORRECTED values (valor_corrigido), not nominal
-    const anoLiq = parseInt(this.correcaoConfig.data_liquidacao.slice(0, 4));
-    let baseAnosAnteriores = 0;
-    let baseAnoLiquidacao = 0;
-    let mesesAnosAnteriores = 0;
-    let mesesAnoLiquidacao = 0;
-    const competenciasAnosAnteriores = new Set<string>();
-    const competenciasAnoLiquidacao = new Set<string>();
-    const competenciasFerias = new Set<string>(); // For tributação separada de férias
-
-    // When incidir_sobre_juros = false (PJe-Calc default), IR base uses
-    // NOMINAL difference (valor_diferenca), NOT total_corrigido.
-    // PJe-Calc stores "valorCorrigidoParaIrpfDemaisVerbas" no XML, mas o
-    // valor numérico efetivamente registrado é nominal (sem IPCA-E aplicado
-    // até liquidação). Investigação forense em joseli-silva: MRD base IR era
-    // 1,89× o PJC quando usava total_corrigido; cai para ~1,0× ao usar
-    // total_diferenca/oc.diferenca. Campo total_final mantido quando
-    // incidir_sobre_juros=true.
     const irUsarValorFinal = this.irConfig.incidir_sobre_juros === true;
 
     for (const vr of verbaResults) {
@@ -2097,20 +2076,14 @@ export class PjeCalcEngine {
         } else {
           baseBruta += vrBaseIR;
           for (const oc of vr.ocorrencias) {
-            if (oc.diferenca <= 0) continue;
-            const anoComp = parseInt(oc.competencia.slice(0, 4));
-            const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : oc.diferenca;
-            if (anoComp < anoLiq) { baseAnosAnteriores += valorIR; competenciasAnosAnteriores.add(oc.competencia); }
-            else { baseAnoLiquidacao += valorIR; competenciasAnoLiquidacao.add(oc.competencia); }
+            if (oc.diferenca > 0) todasCompetencias.add(oc.competencia);
           }
         }
         continue;
       }
       if (verba.caracteristica === '13_salario' && this.irConfig.tributacao_exclusiva_13) {
         base13 += vrBaseIR;
-        // Distribuir o 13º por ano da competência, para tributação exclusiva
-        // correta (tabela mensal aplicada por ano, não soma total). Se a verba
-        // não tem ocorrências granulares, joga tudo no ano de liquidação.
+        const anoLiq = parseInt(this.correcaoConfig.data_liquidacao.slice(0, 4));
         if (vr.ocorrencias.length === 0) {
           base13PorAno[anoLiq] = (base13PorAno[anoLiq] || 0) + vrBaseIR;
         } else {
@@ -2124,37 +2097,16 @@ export class PjeCalcEngine {
       } else {
         baseBruta += vrBaseIR;
         for (const oc of vr.ocorrencias) {
-          if (oc.diferenca <= 0) continue;
-          const anoComp = parseInt(oc.competencia.slice(0, 4));
-          const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : oc.diferenca;
-          if (anoComp < anoLiq) {
-            baseAnosAnteriores += valorIR;
-            competenciasAnosAnteriores.add(oc.competencia);
-          } else {
-            baseAnoLiquidacao += valorIR;
-            competenciasAnoLiquidacao.add(oc.competencia);
-          }
+          if (oc.diferenca > 0) todasCompetencias.add(oc.competencia);
         }
       }
     }
 
-    // FIX 3: RRA Art. 12-A — PJe-Calc counts TOTAL months in the period,
-    // not just months with positive income. Count from first to last competencia.
-    if (competenciasAnosAnteriores.size > 0) {
-      const sortedComps = [...competenciasAnosAnteriores].sort();
-      const firstComp = sortedComps[0];
-      const lastComp = sortedComps[sortedComps.length - 1];
-      mesesAnosAnteriores = this.getCompetencias(firstComp, lastComp).length;
-    } else {
-      mesesAnosAnteriores = 0;
-    }
-    if (competenciasAnoLiquidacao.size > 0) {
-      const sortedComps = [...competenciasAnoLiquidacao].sort();
-      const firstComp = sortedComps[0];
-      const lastComp = sortedComps[sortedComps.length - 1];
-      mesesAnoLiquidacao = this.getCompetencias(firstComp, lastComp).length;
-    } else {
-      mesesAnoLiquidacao = 0;
+    // Art. 12-A Lei 7.713/88: NM = total de meses do período (first→last competência)
+    let mesesTotal = 1;
+    if (todasCompetencias.size > 0) {
+      const sorted = [...todasCompetencias].sort();
+      mesesTotal = Math.max(1, this.getCompetencias(sorted[0], sorted[sorted.length - 1]).length);
     }
 
     let deducoes = 0;
@@ -2200,65 +2152,33 @@ export class PjeCalcEngine {
       deducoes += contratuaisIR;
     }
 
-    const periodo = this.getPeriodoCalculo();
-    const meses = Math.max(1, this.getCompetencias(periodo.inicio, periodo.fim).length);
-
     const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
     const tabelaIR = this.getFaixasIRParaCompetencia(compLiq);
 
     // Art. 4° §2° Lei 7.713/88: aposentados com 65+ anos têm dedução adicional
-    // igual ao limite de isenção mensal (faixa 0) × número de meses
     if (this.irConfig.aposentado_65 && tabelaIR.faixas.length > 0) {
-      deducoes += tabelaIR.faixas[0].ate * meses;
+      deducoes += tabelaIR.faixas[0].ate * mesesTotal;
     }
-    
-    let irAnosAnteriores = new Decimal(0);
-    let irAnoLiquidacao = new Decimal(0);
+
+    let irTotal = new Decimal(0);
     let ir13Exclusivo = new Decimal(0);
     let irFeriasSeparado = new Decimal(0);
 
     const R = PjeCalcEngine.ROUND_CS_IR;
 
-    // ═══ Art. 12-A: Tabela acumulada para anos anteriores (RRA) ═══
-    if (mesesAnosAnteriores > 0 && baseAnosAnteriores > 0) {
-      const propDeducoes = new Decimal(deducoes).times(baseAnosAnteriores).div(Math.max(baseBruta, 1)).toDP(2, R).toNumber();
-      const deducaoDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(mesesAnosAnteriores).toDP(2, R).toNumber();
-      const baseTrib = Math.max(0, baseAnosAnteriores - propDeducoes - deducaoDep);
+    // ═══ Art. 12-A Lei 7.713/88: RRA — aplicação ÚNICA com NM total ═══
+    // Divide-se o rendimento total pelo NM, aplica-se a alíquota sobre essa
+    // fração, e multiplica-se pelo NM. Sem split por ano anterior vs liquidação.
+    if (baseBruta > 0) {
+      const deducaoDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(mesesTotal).toDP(2, R).toNumber();
+      const baseTrib = Math.max(0, baseBruta - deducoes - deducaoDep);
       for (const faixa of tabelaIR.faixas) {
-        if (baseTrib <= faixa.ate * mesesAnosAnteriores) {
-          irAnosAnteriores = new Decimal(baseTrib).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(mesesAnosAnteriores)).toDP(2, R);
+        if (baseTrib <= faixa.ate * mesesTotal) {
+          irTotal = new Decimal(baseTrib).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(mesesTotal)).toDP(2, R);
           break;
         }
       }
-      if (irAnosAnteriores.lt(0)) irAnosAnteriores = new Decimal(0);
-    }
-
-    // ═══ Ano de liquidação: tabela mensal simples ═══
-    if (mesesAnoLiquidacao > 0 && baseAnoLiquidacao > 0) {
-      const propDeducoes = new Decimal(deducoes).times(baseAnoLiquidacao).div(Math.max(baseBruta, 1)).toDP(2, R).toNumber();
-      const deducaoDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(mesesAnoLiquidacao).toDP(2, R).toNumber();
-      const baseTrib = Math.max(0, baseAnoLiquidacao - propDeducoes - deducaoDep);
-      for (const faixa of tabelaIR.faixas) {
-        if (baseTrib <= faixa.ate * mesesAnoLiquidacao) {
-          irAnoLiquidacao = new Decimal(baseTrib).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(mesesAnoLiquidacao)).toDP(2, R);
-          break;
-        }
-      }
-      if (irAnoLiquidacao.lt(0)) irAnoLiquidacao = new Decimal(0);
-    }
-
-    // Fallback: se não há separação por ano, aplicar tabela acumulada total
-    if (mesesAnosAnteriores === 0 && mesesAnoLiquidacao === 0 && baseBruta > 0) {
-      const deducaoDependentes = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
-      const baseTributavel = Math.max(0, baseBruta - deducoes - deducaoDependentes);
-      for (const faixa of tabelaIR.faixas) {
-        if (baseTributavel <= faixa.ate * meses) {
-          irAnoLiquidacao = new Decimal(baseTributavel).times(faixa.aliquota).minus(new Decimal(faixa.deducao).times(meses)).toDP(2, R);
-          break;
-        }
-      }
-      if (irAnoLiquidacao.lt(0)) irAnoLiquidacao = new Decimal(0);
-      mesesAnoLiquidacao = meses;
+      if (irTotal.lt(0)) irTotal = new Decimal(0);
     }
 
     // 13º tributação exclusiva (tabela mensal, APLICADA POR ANO)
@@ -2308,23 +2228,23 @@ export class PjeCalcEngine {
       if (irFeriasSeparado.lt(0)) irFeriasSeparado = new Decimal(0);
     }
 
-    const imposto = irAnosAnteriores.plus(irAnoLiquidacao).plus(ir13Exclusivo).plus(irFeriasSeparado);
-    const deducaoDependentes = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(meses).toDP(2, R).toNumber();
-    const baseTributavel = Math.max(0, baseBruta - deducoes - deducaoDependentes);
+    const imposto = irTotal.plus(ir13Exclusivo).plus(irFeriasSeparado);
+    const deducaoDep = new Decimal(this.irConfig.dependentes).times(tabelaIR.deducao_dependente).times(mesesTotal).toDP(2, R).toNumber();
+    const baseTributavel = Math.max(0, baseBruta - deducoes - deducaoDep);
 
     return {
       base_calculo: Number(new Decimal(baseBruta + base13 + baseFerias).toDP(2, R)),
-      deducoes: Number(new Decimal(deducoes + deducaoDependentes).toDP(2, R)),
+      deducoes: Number(new Decimal(deducoes + deducaoDep).toDP(2, R)),
       base_tributavel: Number(new Decimal(baseTributavel + base13 + baseFerias).toDP(2, R)),
       imposto_devido: imposto.toDP(2, R).toNumber(),
-      meses_rra: meses,
-      metodo: meses > 1 ? 'art_12a_rra' : 'tabela_mensal',
-      ir_anos_anteriores: irAnosAnteriores.toDP(2, R).toNumber(),
-      ir_ano_liquidacao: irAnoLiquidacao.toDP(2, R).toNumber(),
+      meses_rra: mesesTotal,
+      metodo: mesesTotal > 1 ? 'art_12a_rra' : 'tabela_mensal',
+      ir_anos_anteriores: 0,
+      ir_ano_liquidacao: irTotal.toDP(2, R).toNumber(),
       ir_13_exclusivo: ir13Exclusivo.toDP(2, R).toNumber(),
       ir_ferias_separado: irFeriasSeparado.toDP(2, R).toNumber(),
-      meses_anos_anteriores: mesesAnosAnteriores,
-      meses_ano_liquidacao: mesesAnoLiquidacao || meses,
+      meses_anos_anteriores: 0,
+      meses_ano_liquidacao: mesesTotal,
     };
   }
 
@@ -3593,7 +3513,9 @@ export class PjeCalcEngine {
         meses_de_atraso: 0,
         desatualizado: false,
       },
-      warnings: this.calculationWarnings.map(w => w.mensagem || w.codigo || String(w)),
+      warnings: this.calculationWarnings.map(w =>
+        `[${w.code}]${w.competencia ? ` ${w.competencia}` : ''} ${w.message}`
+      ),
     };
 
     return {
@@ -3826,10 +3748,17 @@ export class PjeCalcEngine {
     switch (comportamento) {
       case 'valor_mensal': {
         for (const oc of principalResult.ocorrencias) {
-          let baseValor = reflexa.gerar_verba_reflexa === 'devido' ? oc.devido : oc.diferenca;
-          // Integralization: se o mês principal teve fração, integralizar para mês completo
-          if (shouldIntegralizar && oc.quantidade > 0 && oc.quantidade < 1) {
-            baseValor = Number(new Decimal(baseValor).div(oc.quantidade).toDP(2));
+          let baseValor: number;
+          if (shouldIntegralizar && oc.devido_integral !== undefined) {
+            // devido_integral = valor do mês completo pré-calculado em calcularOcorrencia
+            const pagoIntegral = (oc.devido_integral > 0 && oc.devido > 0)
+              ? Number(new Decimal(oc.pago).times(oc.devido_integral).div(oc.devido).toDP(2))
+              : oc.pago;
+            baseValor = reflexa.gerar_verba_reflexa === 'devido'
+              ? oc.devido_integral
+              : Math.max(0, oc.devido_integral - pagoIntegral);
+          } else {
+            baseValor = reflexa.gerar_verba_reflexa === 'devido' ? oc.devido : oc.diferenca;
           }
           const result = this.calcularOcorrencia(reflexa, oc.competencia, baseValor);
           ocorrencias.push(result);
