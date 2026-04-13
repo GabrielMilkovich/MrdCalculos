@@ -511,7 +511,6 @@ async function loadINSSFaixas(): Promise<PjeINSSFaixaRow[]> {
       console.warn('[ORCHESTRATOR] No INSS faixas in DB — using default 2025 tables');
       return [];
     }
-    console.log(`[ORCHESTRATOR] Loaded ${rows.length} INSS faixas from DB`);
     return rows.map(r => ({
       competencia_inicio: String(r.competencia_inicio || ''),
       competencia_fim: r.competencia_fim ? String(r.competencia_fim) : null,
@@ -532,7 +531,6 @@ async function loadIRFaixas(): Promise<PjeIRFaixaRow[]> {
       console.warn('[ORCHESTRATOR] No IR faixas in DB — using default 2025 tables');
       return [];
     }
-    console.log(`[ORCHESTRATOR] Loaded ${rows.length} IR faixas from DB`);
     return rows.map(r => ({
       competencia_inicio: String(r.competencia_inicio || ''),
       competencia_fim: r.competencia_fim ? String(r.competencia_fim) : null,
@@ -552,7 +550,6 @@ async function loadFeriados(): Promise<PjeFeriadoDB[]> {
   try {
     const rows = await svc.getFeriados();
     if (rows.length === 0) return [];
-    console.log(`[ORCHESTRATOR] Loaded ${rows.length} feriados from DB`);
     return rows.map(r => ({
       data: String(r.data || ''),
       nome: String(r.nome || ''),
@@ -636,7 +633,6 @@ async function loadIndicesDB(): Promise<PjeIndiceRow[]> {
         valor: Number(r.valor),
         acumulado: Number(r.acumulado),
       }));
-      console.log(`[ORCHESTRATOR] Loaded ${result.length} correction indices from DB`);
       return result;
     }
     console.warn('[ORCHESTRATOR] No correction indices found in DB — fallback rates will be used');
@@ -672,7 +668,6 @@ async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeg
       .order('competencia', { ascending: false })
       .order('faixa');
     if (data && data.length > 0) {
-      console.log(`[ORCHESTRATOR] Loaded ${data.length} seguro-desemprego faixas from DB`);
       return data.map(r => ({
         competencia: r.competencia, faixa: Number(r.faixa),
         valor_inicial: Number(r.valor_inicial), valor_final: Number(r.valor_final),
@@ -695,7 +690,6 @@ async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalari
       .select('competencia, valor')
       .order('competencia', { ascending: true });
     if (data && data.length > 0) {
-      console.log(`[ORCHESTRATOR] Loaded ${data.length} salário mínimo registros from DB`);
       return data.map(r => ({
         competencia: r.competencia,
         valor: Number(r.valor),
@@ -716,7 +710,6 @@ async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types
       .select('id, periodo_inicio, periodo_fim, carga_horaria_mensal')
       .eq('case_id', caseId);
     if (data && data.length > 0) {
-      console.log(`[ORCHESTRATOR] Loaded ${data.length} exceções de carga horária`);
       return (data as unknown as { periodo_inicio: string; periodo_fim: string; carga_horaria_mensal: number }[]).map(r => ({
         data_inicial: r.periodo_inicio,
         data_final: r.periodo_fim,
@@ -738,7 +731,6 @@ async function loadExcecoesSabado(caseId: string): Promise<import('./engine-type
       .select('id, data_inicio, data_fim, sabado_dia_util')
       .eq('case_id', caseId);
     if (data && data.length > 0) {
-      console.log(`[ORCHESTRATOR] Loaded ${data.length} exceções de sábado`);
       return (data as unknown as { data_inicio: string; data_fim: string; sabado_dia_util: boolean }[]).map(r => ({
         data_inicial: r.data_inicio,
         data_final: r.data_fim,
@@ -761,7 +753,6 @@ async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeS
       .order('competencia', { ascending: false })
       .order('faixa');
     if (data && data.length > 0) {
-      console.log(`[ORCHESTRATOR] Loaded ${data.length} salário-família faixas from DB`);
       return data.map(r => ({
         competencia: r.competencia, faixa: Number(r.faixa),
         valor_inicial: Number(r.valor_inicial), valor_final: Number(r.valor_final),
@@ -1053,9 +1044,6 @@ export async function executarLiquidacao(
   const inputValidation = validateCanonicalInput(canonicalInput);
   const confidenceReport = generateConfidenceReport(canonicalInput);
 
-  console.log(`[ORCHESTRATOR] Canonical Input: completeness=${inputValidation.completenessScore}%, canProceed=${inputValidation.canProceed}, blockers=${inputValidation.blockers.length}, warnings=${inputValidation.warnings.length}`);
-  console.log(`[ORCHESTRATOR] Confidence: overall=${confidenceReport.overall}%, status=${confidenceReport.status}`);
-  
   for (const b of inputValidation.blockers) {
     console.error(`[ORCHESTRATOR] BLOCKER [${b.code}]: ${b.message}`);
   }
@@ -1076,17 +1064,15 @@ export async function executarLiquidacao(
   // Accumulator for orchestrator-level warnings (non-blocking, surfaced in the result)
   const orchestratorWarnings: Array<{ code: string; message: string }> = [];
 
-  // P0-1/P0-4: propagate data_citacao and modo_calculo from dadosProcesso → engine params
-  // (pjecalc_parametros VIEW does not expose these; they live in pjecalc_dados_processo)
+  // Propagar data_citacao e modo_calculo de dadosProcesso → engine params
+  // (a VIEW pjecalc_parametros não expõe esses campos; eles vivem em pjecalc_dados_processo)
   const dadosProcesso = caseData.dadosProcesso as PjecalcDadosProcessoRow | null;
   if (dadosProcesso?.data_citacao) {
     engineParams.data_citacao = dadosProcesso.data_citacao;
-    console.log(`[ORCHESTRATOR] data_citacao set: ${dadosProcesso.data_citacao}`);
   }
-  // P0-1: modo_calculo now has a real column — no more as any
+  // modo_calculo agora tem coluna real — sem necessidade de cast
   const modoCalculo = dadosProcesso?.modo_calculo ?? 'independent';
   engineParams.modo_calculo = modoCalculo;
-  console.log(`[ORCHESTRATOR] modo_calculo set: ${modoCalculo}`);
 
   // FIX UX: Quando data_citacao não for informada, não bloqueia — tenta fallback a partir de
   // data_ajuizamento + 60 dias; se também não houver ajuizamento, segue sem split IPCA-E/SELIC.
@@ -1151,10 +1137,7 @@ export async function executarLiquidacao(
   );
   if (multasVerbas.length > 0) {
     engineVerbas = [...engineVerbas, ...multasVerbas];
-    console.log(`[ORCHESTRATOR] Generated ${multasVerbas.length} verbas from multas_config`);
   }
-
-  console.log(`[ORCHESTRATOR] Loaded ${engineVerbas.length} verbas from DB (principals: ${engineVerbas.filter(v => v.tipo === 'principal').length}, reflexas: ${engineVerbas.filter(v => v.tipo === 'reflexa').length})`);
 
   // ── Auto-generate reflexes if not already present ──
   const principalVerbas = engineVerbas.filter(v => v.tipo === 'principal');
@@ -1164,7 +1147,6 @@ export async function executarLiquidacao(
   const principalsSemReflexo = principalVerbas.filter(v => !principalsWithReflexas.has(v.id));
 
   if (principalsSemReflexo.length > 0) {
-    console.log(`[ORCHESTRATOR] Auto-generating reflexes for ${principalsSemReflexo.length} principals without reflexes`);
     const verbasBase: VerbaBase[] = principalsSemReflexo.map(v => ({
       id: v.id,
       nome: v.nome,
@@ -1264,7 +1246,7 @@ export async function executarLiquidacao(
     apurar_fgts: engineFgts.apurar,
     data_liquidacao: engineCorrecao.data_liquidacao,
     modo_precomputado: hasPrecomputed,
-    // P0-3: pass combination indices for ADC 58/59 gap check
+    // Passar combinações de índices para verificação de lacuna ADC 58/59
     combinacoes_indice: (caseData.correcaoConfig as { combinacoes_indice?: Array<{ indice: string }> } | null)?.combinacoes_indice,
   });
 
@@ -1284,11 +1266,7 @@ export async function executarLiquidacao(
     throw new Error(`Cálculo bloqueado por falta de dados essenciais: ${blockReasons}`);
   }
 
-  console.log(`[ORCHESTRATOR] Table coverage: indices=${tableValidation.coverage.indices_coverage}%, INSS=${tableValidation.coverage.inss_coverage}%, IR=${tableValidation.coverage.ir_coverage}%`);
-
   // 4. Execute engine — ALL 21 constructor params populated
-  console.log(`[ORCHESTRATOR] Engine inputs: ${indicesDB.length} indices, ${faixasINSSDB.length} INSS faixas, ${faixasIRDB.length} IR faixas, ${feriadosDB.length} feriados`);
-  console.log(`[ORCHESTRATOR] CS config: apurar_segurado=${engineCs.apurar_segurado}, FGTS: apurar=${engineFgts.apurar}, data_liquidacao=${engineCorrecao.data_liquidacao}`);
   
   const engine = new PjeCalcEngine(
     engineParams, engineHistoricos, engineFaltas, engineFerias,
@@ -1309,9 +1287,6 @@ export async function executarLiquidacao(
   );
 
   const result = engine.liquidar();
-
-  // Log summary for debugging
-  console.log(`[ORCHESTRATOR] Result: Bruto=${result.resumo.principal_corrigido}, Juros=${result.resumo.juros_mora}, CS_seg=${result.resumo.cs_segurado}, CS_emp=${result.resumo.cs_empregador}, FGTS=${result.resumo.fgts_total}, IR=${result.resumo.ir_retido}, Líquido=${result.resumo.liquido_reclamante}, Total_Reclamada=${result.resumo.total_reclamada}`);
 
   // 5. Generate fingerprint
   const { data: sessionData } = await supabase.auth.getSession();

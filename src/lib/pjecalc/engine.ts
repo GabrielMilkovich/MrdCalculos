@@ -1276,9 +1276,9 @@ export class PjeCalcEngine {
     if (this.params.data_citacao) {
       dataCitacao = new Date(this.params.data_citacao);
     } else {
-      // P0-4: In independent mode data_citacao is NEVER estimated — zero tolerance for heuristics.
-      // The error is reported in validarPreLiquidacao(); here we set null so downstream code
-      // skips the ADC/juros path without silent fallback.
+      // No modo independente, data_citacao nunca é estimada — zero tolerância para heurísticas.
+      // O erro é reportado em validarPreLiquidacao(); aqui setamos null para que o código
+      // downstream pule o caminho ADC/juros sem fallback silencioso.
       dataCitacao = null;
     }
 
@@ -1325,7 +1325,7 @@ export class PjeCalcEngine {
             indiceCorrecao = fator1 * fator2;
 
             if (this.correcaoConfig.indice !== 'SELIC' && dataAjuiz && dataCitacao > dataAjuiz) {
-              // FIX 1: PJe-Calc counts interest months inclusive of start month
+              // PJe-Calc: meses de juros contados de forma inclusiva (mês inicial conta)
               const mesesJurosPreCitacao = this.mesesEntreInclusivo(dataAjuiz, dataCitacao);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               const valorCorrigidoParc = Number(new Decimal(oc.diferenca).times(fator1).toDP(2, Decimal.ROUND_HALF_EVEN));
@@ -1353,7 +1353,7 @@ export class PjeCalcEngine {
               if (verbaOriginal?.sumula_439_tst && this.params.data_ajuizamento) {
                 dataInicioJuros = new Date(this.params.data_ajuizamento);
               }
-              // FIX 1: PJe-Calc counts interest months inclusive of start month
+              // PJe-Calc: meses de juros contados de forma inclusiva (mês inicial conta)
               const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2, Decimal.ROUND_HALF_EVEN));
@@ -1367,10 +1367,10 @@ export class PjeCalcEngine {
               if (verbaOriginal?.sumula_439_tst && this.params.data_ajuizamento) {
                 dataInicioJuros = new Date(this.params.data_ajuizamento);
               }
-              // FIX 1: PJe-Calc counts interest months inclusive of start month
+              // PJe-Calc: meses de juros contados de forma inclusiva (mês inicial conta)
               const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
-              // FIX 2: Use Decimal.js instead of Math.pow for compound interest precision
+              // Usar Decimal.js em vez de Math.pow para precisão em juros compostos
               const fatorComposto = new Decimal(1).plus(taxaMensal).pow(mesesJuros);
               juros = Number(new Decimal(valorCorrigido).times(fatorComposto.minus(1)).toDP(2, Decimal.ROUND_HALF_EVEN));
             } else if (this.correcaoConfig.juros_tipo === 'selic') {
@@ -2611,8 +2611,8 @@ export class PjeCalcEngine {
       itens.push({ tipo: 'alerta', modulo: 'Correção', mensagem: 'Sem séries históricas de índices no banco — usando taxas aproximadas', detalhe: 'Popule a tabela de índices para resultados precisos' });
     }
 
-    // FIX 4: Validate that required correction indices exist BEFORE running calculation.
-    // Missing indices silently use factor=1 which produces catastrophically wrong results.
+    // Validar que os índices de correção necessários existem ANTES de rodar o cálculo.
+    // Índices ausentes usam fator=1 silenciosamente, produzindo resultados incorretos.
     if (this.indicesDB.length > 0 && this.correcaoConfig.data_liquidacao && this.params.data_admissao) {
       const requiredIndices: string[] = [];
       if (this.correcaoConfig.combinacoes_indice?.length) {
@@ -2856,7 +2856,7 @@ export class PjeCalcEngine {
     if (this.params.data_citacao) {
       dataCitacaoSomente = new Date(this.params.data_citacao);
     } else {
-      // P0-4: no fallback in independent mode — ever.
+      // Sem fallback no modo independente.
       dataCitacaoSomente = null;
     }
 
@@ -3177,7 +3177,7 @@ export class PjeCalcEngine {
                 }
               }
             } else {
-              // FIX 1: PJe-Calc counts interest months inclusive of start month
+              // PJe-Calc: meses de juros contados de forma inclusiva (mês inicial conta)
               const meses = this.mesesEntreInclusivo(jurosStart, dataLiqD);
               const taxa = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               oc.juros = Number(baseJuros.times(taxa).times(meses).toDP(2, Decimal.ROUND_HALF_EVEN));
@@ -3227,13 +3227,13 @@ export class PjeCalcEngine {
     // This supports reflex-on-reflex (e.g., HE → DSR → 13º s/ DSR)
     const verbaResults: PjeVerbaResult[] = [];
     const processed = new Set<string>();
-    // FIX 7: Track verbas currently being processed to detect circular dependencies
+    // Detectar dependências circulares entre verbas
     const processing = new Set<string>();
 
     const processVerba = (verba: PjeVerba) => {
       if (processed.has(verba.id)) return;
 
-      // FIX 7: Circular dependency detection — if verba is already in the call stack, skip
+      // Se a verba já está na pilha de processamento, há dependência circular — ignorar
       if (processing.has(verba.id)) {
         this.trackWarning('W070', 'verbas', `Dependência circular detectada na verba "${verba.nome}" (id=${verba.id}). Ignorando para evitar loop infinito.`);
         return;

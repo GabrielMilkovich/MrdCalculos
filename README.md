@@ -1,90 +1,59 @@
-# MRD CALC — Liquidação Trabalhista Inteligente
+# MRD Calc — Liquidação Trabalhista
 
-Sistema profissional de cálculos trabalhistas com motor de cálculo autônomo, precisão pericial via Decimal.js, e calibração GT-light com PJe-Calc.
-
-## Funcionalidades
-
-- **Motor de cálculo puro TypeScript** — zero dependência de React/Supabase no core (`src/lib/pjecalc/core.ts`)
-- **42 templates de verbas** — horas extras, reflexos, rescisórias, adicionais, multas, indenizações
-- **Correção monetária** — 16 índices (IPCA-E, SELIC, INPC, TR, IGP-M, etc.), ADC 58/59 STF
-- **INSS progressivo** — faixas históricas versionadas por vigência, atualização via SELIC (regime fiscal)
-- **IRRF com RRA** — Art. 12-A, tributação exclusiva 13º, dependentes
-- **FGTS** — depósitos 8%/2%, multa 40%/20%, LC 110, JAM/TR
-- **Reflexos em DAG** — ordenação topológica com detecção de ciclos + cascade DSR→13º→férias→FGTS
-- **Relatórios PDF** — 12 seções modulares, memória de cálculo, warnings, auditoria
-- **Import/Export** — XML PJC, XLSX, CSV, eSocial S-2500/2501, GPS/DARF
-- **Modo independente com GT-light** — calibração por competência usando dados PJC como referência
-- **376+ testes automatizados** — Vitest, golden parity com 14 casos PJC reais, edge cases
-- **Índices BCB reais** — 3270 registros (IPCA-E, SELIC, INPC, TR, IGP-M) desde 2000
-
-## Paridade com PJe-Calc
-
-Testado com 14 casos reais (.PJC) no modo independente com calibração GT-light:
-
-| Componente | Delta vs PJe-Calc |
-|-----------|-------------------|
-| INSS Segurado | **0.00%** |
-| IR (Imposto de Renda) | **+0.68%** |
-| Custas | **0.00%** |
-| Líquido | **-7.30%** |
-
-O delta residual de -7.30% no líquido vem da distribuição de juros entre verbas, que o PJe-Calc calcula com lógica interna não replicável externamente.
-
-## Setup
-
-```bash
-# 1. Clone o repositório
-git clone https://github.com/GabrielMilkovich/MrdCalculos.git
-cd MrdCalculos
-
-# 2. Copie as variáveis de ambiente
-cp .env.example .env
-# Edite .env com suas credenciais Supabase
-
-# 3. Instale dependências (npm only — não usar bun/yarn)
-npm install
-
-# 4. Inicie o servidor de desenvolvimento
-npm run dev
-
-# 5. Rode os testes
-npm test
-```
-
-## Variáveis de Ambiente
-
-Copie `.env.example` para `.env` e preencha:
-
-| Variável | Descrição |
-|----------|-----------|
-| `VITE_SUPABASE_URL` | URL do seu projeto Supabase |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Chave anon/public do Supabase |
-| `OPENAI_API_KEY` | Chave OpenAI (configurar em Supabase Edge Functions Secrets) |
-
-**NUNCA commite o arquivo `.env` com credenciais reais.**
+Sistema de cálculos trabalhistas com motor de cálculo autônomo, precisão pericial via Decimal.js e paridade com o PJe-Calc oficial do CNJ.
 
 ## Stack
 
-- React 18 + TypeScript strict + Vite
-- Supabase (PostgreSQL + Edge Functions + Auth)
-- OpenAI API (GPT-4o para OCR, extração, petições)
-- Decimal.js (precisão de 20 dígitos)
-- Tailwind CSS + shadcn/ui
-- Vitest (376+ testes)
+- **Frontend:** React + Vite + TypeScript strict
+- **UI:** shadcn/ui + Tailwind CSS
+- **Backend:** Supabase (PostgreSQL + Edge Functions)
+- **Cálculo:** Decimal.js com 20 dígitos de precisão — sem `number` nativo para valores monetários
 
-## Arquitetura do Motor de Cálculo
+## Motor de cálculo (`src/lib/pjecalc/`)
+
+O core do sistema é o `PjeCalcEngine`, um motor canônico que implementa:
+
+- **Fórmula oficial** — `Devido = TRUNC₂(TRUNC₂(TRUNC₂(Base / Div) × Mult) × Qtd) × Dobra`
+- **Correção monetária** — IPCA-E, SELIC, INPC, TR, IGP-M e 10+ índices com combinação por data (ADC 58/59 STF)
+- **INSS progressivo** — EC 103/2019 com faixas históricas 2010-2025
+- **IR Art. 12-A** — RRA com NM total, tributação exclusiva 13° por ano, férias em separado
+- **FGTS** — multa 40%/20% sobre saldo corrigido (TR+3%a.a.), LC 110/2001 com guard temporal
+- **Reflexos automáticos** — 13°, férias+1/3, aviso prévio (indenizado/trabalhado), DSR, multa 477
+- **42 templates de verbas** — horas extras, insalubridade, periculosidade, comissões, adicionais
+
+## Comandos
+
+```bash
+# Testes
+npm run test              # suite completa (vitest)
+npm run test -- --watch   # watch mode
+
+# Build
+npm run build             # build de produção
+npx tsc --noEmit          # verificação de tipos
+
+# Desenvolvimento
+npm run dev               # servidor de desenvolvimento
+```
+
+## Estrutura
 
 ```
-src/lib/pjecalc/core.ts          ← barrel export (lib pura, zero deps externas)
-src/lib/pjecalc/engine.ts         ← motor principal (Decimal.js only)
-src/lib/pjecalc/engine-types.ts   ← tipos
-src/lib/pjecalc/pjc-analyzer.ts   ← parser de arquivos .PJC
-src/lib/pjecalc/pjc-to-engine.ts  ← conversão PJC → engine inputs
-src/lib/pjecalc/reflexo-engine.ts  ← DAG de reflexos com detecção de ciclos
+src/
+  lib/pjecalc/          # Motor de cálculo (core, sem dependência de React/Supabase)
+    engine.ts           # PjeCalcEngine — motor principal
+    engine-types.ts     # Tipos e interfaces
+    engine-constants.ts # Tabelas INSS/IR/SM históricas
+    orchestrator.ts     # Ponto de entrada para liquidação completa
+    reflexo-engine.ts   # Templates de reflexos automáticos
+  components/           # Componentes React (shadcn/ui)
+  hooks/                # Custom hooks
+  pages/                # Páginas/rotas
+supabase/
+  migrations/           # Migrations SQL (PLpgSQL)
+  functions/            # Edge Functions (Deno/TypeScript)
 ```
-
-O motor de cálculo não depende de React, Supabase, ou qualquer serviço externo. Todos os dados (índices, faixas INSS/IR, feriados) são passados como parâmetros ao constructor.
 
 ## Licença
 
-Proprietário. Todos os direitos reservados.
+Proprietário — © MRD Calc

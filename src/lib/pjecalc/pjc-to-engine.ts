@@ -614,7 +614,7 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
         // (engine interpreta SEM_CORRECAO como "suspende o índice" via
         // aplicarCorrecaoCombinacao loop). Sem este push, IPCA-E continua
         // crescendo o valor_corrigido até a liquidação, inflacionando o bruto
-        // em ~20-40% nos casos pós-ADC58 (validado em investigação forense).
+        // em ~20-40% nos casos pós-ADC58.
         combinacoes_indice.push({ de: ci.a_partir_de, indice: 'SEM_CORRECAO' });
         combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
       } else if (indiceNorm === 'SELIC') {
