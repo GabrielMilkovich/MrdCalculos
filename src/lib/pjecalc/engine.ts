@@ -1349,6 +1349,13 @@ export class PjeCalcEngine {
 
           if (this.correcaoConfig.indice !== 'SELIC') {
             const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2, Decimal.ROUND_HALF_EVEN));
+            // FIX CICLO-9 #1: base de juros conforme PJe-Calc (default = DIFERENCA)
+            const baseJurosLegacy: number = (() => {
+              const cfg = this.correcaoConfig.base_de_juros_das_verbas;
+              if (cfg === 'CORRIGIDO') return valorCorrigido;
+              if (cfg === 'DEVIDO') return oc.devido;
+              return oc.diferenca;
+            })();
             if (this.correcaoConfig.juros_tipo === 'simples_mensal') {
               let dataInicioJuros: Date;
               if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
@@ -1362,7 +1369,7 @@ export class PjeCalcEngine {
               // PJe-Calc: meses de juros contados de forma inclusiva (mês inicial conta)
               const mesesJuros = this.mesesEntreInclusivo(dataInicioJuros, dataLiq);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
-              juros = Number(new Decimal(valorCorrigido).times(taxaMensal).times(mesesJuros).toDP(2, Decimal.ROUND_HALF_EVEN));
+              juros = Number(new Decimal(baseJurosLegacy).times(taxaMensal).times(mesesJuros).toDP(2, Decimal.ROUND_HALF_EVEN));
             } else if ((this.correcaoConfig.juros_tipo as string) === 'composto') {
               let dataInicioJuros: Date;
               if (this.correcaoConfig.juros_inicio === 'vencimento') dataInicioJuros = dataComp;
@@ -1378,7 +1385,7 @@ export class PjeCalcEngine {
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               // Usar Decimal.js em vez de Math.pow para precisão em juros compostos
               const fatorComposto = new Decimal(1).plus(taxaMensal).pow(mesesJuros);
-              juros = Number(new Decimal(valorCorrigido).times(fatorComposto.minus(1)).toDP(2, Decimal.ROUND_HALF_EVEN));
+              juros = Number(new Decimal(baseJurosLegacy).times(fatorComposto.minus(1)).toDP(2, Decimal.ROUND_HALF_EVEN));
             } else if (this.correcaoConfig.juros_tipo === 'selic') {
               juros = 0;
             }
@@ -1476,6 +1483,16 @@ export class PjeCalcEngine {
 
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
 
+        // FIX CICLO-9 #1: Resolver base de juros conforme PJe-Calc (baseDeJurosDasVerbas).
+        // PJe-Calc default = 'DIFERENCA': juros incidem sobre o valor nominal da diferença,
+        // NÃO sobre o valor corrigido.
+        const baseJuros: Decimal = (() => {
+          const cfg = this.correcaoConfig.base_de_juros_das_verbas;
+          if (cfg === 'CORRIGIDO') return valorCorrigido;
+          if (cfg === 'DEVIDO') return new Decimal(oc.devido);
+          return new Decimal(oc.diferenca); // 'DIFERENCA' = default PJe-Calc
+        })();
+
         // Calculate interest segment-by-segment
         let jurosTotal = new Decimal(0);
         const jurosEffectiveStart = effectiveJurosStart || compDateJuros;
@@ -1509,13 +1526,13 @@ export class PjeCalcEngine {
                 .filter(i => (i.indice === 'SELIC' || i.indice === 'selic') && i.competencia.slice(0, 7) >= startComp && i.competencia.slice(0, 7) < endComp)
                 .reduce((sum, i) => sum + (i.valor || 0), 0);
               if (selicMonthly > 0) {
-                jurosTotal = jurosTotal.plus(valorCorrigido.times(selicMonthly / 100));
+                jurosTotal = jurosTotal.plus(baseJuros.times(selicMonthly / 100));
               } else {
                 this.trackWarning('W_SELIC_MENSAL_AUSENTE', 'juros',
                   `SELIC: taxas mensais ausentes para ${startComp}→${endComp}. Usando ratio acumulado como fallback.`, startComp);
                 const fatorSelic = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(startComp), endComp);
                 if (fatorSelic !== null) {
-                  jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
+                  jurosTotal = jurosTotal.plus(baseJuros.times(fatorSelic - 1));
                 }
               }
             } else if (regimeJuros.tipo === 'TAXA_LEGAL') {
@@ -1531,12 +1548,12 @@ export class PjeCalcEngine {
               // diferença entre TR como ÍNDICE de correção e TRD como TABELA de juros.
               const fatorTR = this.getIndiceCorrecaoDB('TR', this.mesAnterior(realStart.slice(0, 7)), segFim.slice(0, 7));
               if (fatorTR !== null && fatorTR > 1) {
-                jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorTR - 1));
+                jurosTotal = jurosTotal.plus(baseJuros.times(fatorTR - 1));
               }
             } else {
-              const meses = this.mesesEntre(new Date(realStart), new Date(segFim));
+              const meses = this.mesesEntreInclusivo(new Date(realStart), new Date(segFim));
               const taxa = (regimeJuros.percentual ?? 1) / 100;
-              jurosTotal = jurosTotal.plus(valorCorrigido.times(taxa).times(meses));
+              jurosTotal = jurosTotal.plus(baseJuros.times(taxa).times(meses));
             }
           }
         }
@@ -1696,7 +1713,8 @@ export class PjeCalcEngine {
           const indice = regime?.indice || 'SEM_CORRECAO';
           if (indice === 'SEM_CORRECAO' || indice === 'Sem Correção' || indice === 'NENHUM') continue;
           const indiceNorm = this.normalizeIndice(indice);
-          const fatorDB = this.getIndiceCorrecaoDB(indiceNorm, segInicio.slice(0, 7), segFim.slice(0, 7));
+          // FIX CICLO-9 #2: mesAnterior cancela double-shift Súmula 381 (contrato documentado)
+          const fatorDB = this.getIndiceCorrecaoDB(indiceNorm, this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
           } else {
@@ -1717,13 +1735,13 @@ export class PjeCalcEngine {
             const regimeI = this.getRegimeParaData(this.correcaoConfig.combinacoes_indice!, segInicio);
             const indiceI = regimeI?.indice || '';
             if (indiceI === 'SELIC') continue; // SELIC already includes interest
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
+            const meses = this.mesesEntreInclusivo(new Date(segInicio), new Date(segFim));
             if (regimeJ.tipo === 'SELIC') {
-              const fatorS = this.getIndiceCorrecaoDB('SELIC', segInicio.slice(0, 7), segFim.slice(0, 7));
+              const fatorS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
               if (fatorS !== null) jurosAcc = jurosAcc.plus(valorCorrigido.times(fatorS - 1));
               else { this.trackWarning('W046', 'fgts', `SELIC (juros FGTS) ausente para ${segInicio}→${segFim}.`, segInicio.slice(0, 7)); }
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
-              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', segInicio.slice(0, 7), segFim.slice(0, 7));
+              const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
               if (fatorTL !== null) jurosAcc = jurosAcc.plus(valorCorrigido.times(fatorTL - 1));
               else { this.trackWarning('W047', 'fgts', `TAXA_LEGAL (juros FGTS) ausente para ${segInicio}→${segFim}.`, segInicio.slice(0, 7)); }
             } else {
@@ -3058,8 +3076,14 @@ export class PjeCalcEngine {
           ? Number(new Decimal(totalCSDescontado).times(oc.valor_corrigido).div(totalCorrigido).toDP(2))
           : 0;
 
-        // Base for interest = corrected - CS share
-        const baseJuros = new Decimal(oc.valor_corrigido).minus(csShare);
+        // FIX CICLO-9 #1: base de juros conforme PJe-Calc (default = DIFERENCA)
+        const baseJurosRaw: Decimal = (() => {
+          const cfg = this.correcaoConfig.base_de_juros_das_verbas;
+          if (cfg === 'CORRIGIDO') return new Decimal(oc.valor_corrigido);
+          if (cfg === 'DEVIDO') return new Decimal(oc.devido);
+          return new Decimal(oc.diferenca);
+        })();
+        const baseJuros = baseJurosRaw.minus(csShare);
 
         if (!jurosDisabled && combinacoes_juros.length > 0 && combinacoes_indice.length > 0) {
           const compDate = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
@@ -3098,7 +3122,7 @@ export class PjeCalcEngine {
             const regimeJ = this.getRegimeParaData(combinacoes_juros, segInicio);
             if (!regimeJ || regimeJ.tipo === 'NENHUM') continue;
 
-            const meses = this.mesesEntre(new Date(segInicio), new Date(segFim));
+            const meses = this.mesesEntreInclusivo(new Date(segInicio), new Date(segFim));
             if (regimeJ.tipo === 'SELIC') {
               // PJe-Calc uses SIMPLE SUM of monthly SELIC rates
               const startC = segInicio.slice(0, 7);
