@@ -5,6 +5,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -504,7 +505,7 @@ export function PetitionGenerator({
                         <ScrollArea className="h-[400px]">
                           <div
                             className="p-4"
-                            dangerouslySetInnerHTML={{ __html: petition.memoria_calculo_html }}
+                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(petition.memoria_calculo_html) }}
                           />
                         </ScrollArea>
                       </AccordionContent>

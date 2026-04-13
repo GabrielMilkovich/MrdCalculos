@@ -5,6 +5,7 @@
 
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -213,16 +214,17 @@ export function SemanticSearchView({ caseId, onFactCreated }: SemanticSearchView
 
   // Highlight matching terms in content
   const highlightContent = useCallback((content: string, searchQuery: string) => {
-    if (!searchQuery.trim()) return content;
-    
+    if (!searchQuery.trim()) return sanitizeHtml(content);
+
+    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const terms = searchQuery.toLowerCase().split(/\s+/).filter(t => t.length > 2);
-    let result = content;
-    
+    let result = sanitizeHtml(content);
+
     terms.forEach(term => {
-      const regex = new RegExp(`(${term})`, 'gi');
+      const regex = new RegExp(`(${escapeRegex(term)})`, 'gi');
       result = result.replace(regex, '<mark class="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">$1</mark>');
     });
-    
+
     return result;
   }, []);
 

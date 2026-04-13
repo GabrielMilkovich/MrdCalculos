@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -414,7 +415,7 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
             <ScrollArea className="h-[65vh]">
               <div className="p-6 prose prose-sm max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground/90 prose-li:text-foreground/90 prose-strong:text-foreground">
                 {briefing ? (
-                  <div dangerouslySetInnerHTML={{ __html: markdownToHtml(briefing) }} />
+                  <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(markdownToHtml(briefing)) }} />
                 ) : (
                   <div className="flex items-center gap-3 text-muted-foreground py-8 justify-center">
                     <Loader2 className="h-5 w-5 animate-spin" />
