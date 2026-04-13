@@ -1056,7 +1056,7 @@ export class PjeCalcEngine {
       return this.getIndiceClampedFromAcumulado(indices, idxOrigem, origemSubsequente, idxDestino.competencia.slice(0, 7));
     }
 
-    return Number(idxDestino.acumulado) / Number(idxOrigem.acumulado);
+    return new Decimal(String(idxDestino.acumulado)).div(new Decimal(String(idxOrigem.acumulado))).toDP(10).toNumber();
   }
 
   /**
@@ -1087,7 +1087,7 @@ export class PjeCalcEngine {
     for (const idx of inRange) {
       const cur = Number(idx.acumulado);
       if (!cur || cur <= 0) continue;
-      const monthly = cur / synthBaseline;
+      const monthly = new Decimal(String(cur)).div(new Decimal(String(synthBaseline))).toNumber();
       if (monthly >= 1) {
         acumulado = acumulado.times(monthly);
         synthBaseline = cur;
@@ -1141,7 +1141,7 @@ export class PjeCalcEngine {
         `Usando índice ${nomeIndice} do fallback hardcoded (não do banco). Valores podem ter precisão limitada.`,
         compOrigem,
       );
-      return acumDestino / acumOrigem;
+      return new Decimal(String(acumDestino)).div(new Decimal(String(acumOrigem))).toDP(10).toNumber();
     }
     return null;
   }
@@ -1511,7 +1511,8 @@ export class PjeCalcEngine {
               if (selicMonthly > 0) {
                 jurosTotal = jurosTotal.plus(valorCorrigido.times(selicMonthly / 100));
               } else {
-                // Fallback: use accumulated ratio if monthly values not available
+                this.trackWarning('W_SELIC_MENSAL_AUSENTE', 'juros',
+                  `SELIC: taxas mensais ausentes para ${startComp}→${endComp}. Usando ratio acumulado como fallback.`, startComp);
                 const fatorSelic = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(startComp), endComp);
                 if (fatorSelic !== null) {
                   jurosTotal = jurosTotal.plus(valorCorrigido.times(fatorSelic - 1));
@@ -2126,6 +2127,12 @@ export class PjeCalcEngine {
           if (oc.diferenca > 0) todasCompetencias.add(oc.competencia);
         }
       }
+    }
+
+    // Abono pecuniário: tributável (STJ RE 592.079), isento INSS (art. 28 §9°'d' Lei 8.212)
+    const abonoPecuniarioIR = this.calcularAbonoPecuniario();
+    if (abonoPecuniarioIR > 0) {
+      baseBruta += abonoPecuniarioIR;
     }
 
     // Art. 12-A Lei 7.713/88: NM = total de meses do período (first→last competência)
@@ -3102,6 +3109,8 @@ export class PjeCalcEngine {
               if (selicSum > 0) {
                 jurosAcc = jurosAcc.plus(baseJuros.times(selicSum / 100));
               } else {
+                this.trackWarning('W_SELIC_MENSAL_AUSENTE', 'juros',
+                  `SELIC: taxas mensais ausentes para ${startC}→${endC}. Usando ratio acumulado.`, startC);
                 const fatorS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(startC), endC);
                 if (fatorS !== null) jurosAcc = jurosAcc.plus(baseJuros.times(fatorS - 1));
               }
@@ -4101,6 +4110,19 @@ export function liquidarMultiVinculo(
     if (allWarnings.length > 0) {
       consolidado.calculation_warnings = allWarnings;
     }
+  }
+
+  // Warning: INSS e IR calculados separadamente por vínculo, sem consolidação
+  if (resultados.length > 1) {
+    if (!consolidado.calculation_warnings) consolidado.calculation_warnings = [];
+    consolidado.calculation_warnings.unshift({
+      code: 'W_MULTIVINCULO_CONSOLIDACAO',
+      module: 'multi_vinculo',
+      message: 'Múltiplos vínculos: INSS e IR foram apurados separadamente por vínculo. '
+        + 'O teto previdenciário (art. 33 §2° Decreto 3.048/99) e a base acumulada de IR '
+        + 'podem precisar de ajuste manual quando o total dos vínculos simultâneos '
+        + 'ultrapassa os limites individuais.',
+    });
   }
 
   return { vinculos: resultados, consolidado };
