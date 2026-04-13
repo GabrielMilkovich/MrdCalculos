@@ -33,7 +33,8 @@ import type {
 
 import {
   DEFAULT_FAIXAS_INSS, DEFAULT_FAIXAS_IR, DEFAULT_DEDUCAO_DEPENDENTE,
-  HISTORICO_FAIXAS_INSS, HISTORICO_FAIXAS_IR,
+  HISTORICO_FAIXAS_INSS, HISTORICO_FAIXAS_IR, HISTORICO_SALARIO_MINIMO,
+  getFeriadosNacionaisDoAno,
   SEGURO_DESEMP_2025, SALARIO_FAMILIA_2025,
 } from './engine-constants';
 
@@ -71,6 +72,7 @@ export class PjeCalcEngine {
   private verbaResultsMap: Map<string, PjeVerbaResult> = new Map();
   // Structured warnings collected during calculation
   private calculationWarnings: { code: string; module: string; message: string; competencia?: string }[] = [];
+  private _feriadosFallbackWarned = false;
   // Set of already-emitted warning keys to prevent duplicates
   private emittedWarningKeys = new Set<string>();
 
@@ -325,7 +327,7 @@ export class PjeCalcEngine {
     const diasNoMes = this.params.tipo_mes === 'comercial' ? 30 : new Date(ano, mes, 0).getDate();
     
     // Contar feriados no mês para o estado/município do cálculo
-    const feriadosNoMes = this.feriadosDB.filter(f => {
+    let feriadosNoMes = this.feriadosDB.filter(f => {
       const fd = new Date(f.data);
       if (fd.getFullYear() !== ano || fd.getMonth() + 1 !== mes) return false;
       if (f.tipo === 'nacional') return true;
@@ -333,6 +335,19 @@ export class PjeCalcEngine {
       if (f.tipo === 'municipal' && this.params.considerar_feriado_municipal && f.municipio === this.params.municipio) return true;
       return false;
     });
+
+    // Fallback: feriados nacionais hardcoded quando banco vazio
+    if (this.feriadosDB.length === 0) {
+      if (!this._feriadosFallbackWarned) {
+        this.trackWarning('W_FERIADOS_FALLBACK', 'calendario',
+          'Banco de feriados vazio — usando apenas feriados nacionais fixos (sem feriados estaduais/municipais).');
+        this._feriadosFallbackWarned = true;
+      }
+      const nacionais = getFeriadosNacionaisDoAno(ano);
+      feriadosNoMes = nacionais
+        .filter(d => { const [, m] = d.split('-').map(Number); return m === mes; })
+        .map(d => ({ data: d, tipo: 'nacional' as const, uf: '', municipio: '', nome: '' }));
+    }
 
     let diasUteis = 0;
     let repousos = 0;
@@ -1131,15 +1146,20 @@ export class PjeCalcEngine {
   // =====================================================
 
   getSalarioMinimoParaCompetencia(comp: string): number {
+    const compDate = comp.slice(0, 7);
+    // 1. Banco de dados (fonte primária)
     if (this.salarioMinimoDB.length > 0) {
-      // Pegar o último SM com competência <= comp
-      const compDate = comp.slice(0, 7);
       const candidatos = this.salarioMinimoDB
         .filter(r => r.competencia.slice(0, 7) <= compDate)
         .sort((a, b) => b.competencia.localeCompare(a.competencia));
       if (candidatos.length > 0) return Number(candidatos[0].valor);
     }
-    // Fallback: params.salario_minimo (informado pelo usuário) ou valor fixo 2025
+    // 2. Tabela hardcoded (fallback 2009–2025)
+    const candidatos = HISTORICO_SALARIO_MINIMO
+      .filter(r => r.vigencia <= compDate)
+      .sort((a, b) => b.vigencia.localeCompare(a.vigencia));
+    if (candidatos.length > 0) return candidatos[0].valor;
+    // 3. Último recurso: params ou valor fixo 2025
     return this.params.salario_minimo ?? 1518.00;
   }
 
@@ -2563,6 +2583,9 @@ export class PjeCalcEngine {
       if (v.caracteristica === 'ferias' && v.incidencias.contribuicao_social) {
         itens.push({ tipo: 'observacao', modulo: 'Verbas', mensagem: `Férias "${v.nome}" com CS ativa — verifique: férias indenizadas são isentas (Decreto 3.048/99 §9°IV); férias gozadas incidem INSS` });
       }
+      if (v.caracteristica === 'ferias' && v.tipo_quantidade === 'avos' && v.ocorrencia_pagamento === 'mensal') {
+        itens.push({ tipo: 'alerta', modulo: 'Verbas', mensagem: `Verba "${v.nome}": tipo_quantidade=avos com ocorrencia_pagamento=mensal para férias pode gerar super-contagem (12 avos repetidos por competência). Recomendado: ocorrencia_pagamento=periodo_aquisitivo.` });
+      }
     }
 
     // ── Histórico salarial ──
@@ -2782,6 +2805,23 @@ export class PjeCalcEngine {
               detalhe: 'Considere dividir a verba em dois períodos com incidências distintas para cada natureza jurídica.',
             });
           }
+        }
+      }
+    }
+
+    // ── Seguro-Desemprego: parcelas vs. tempo de serviço (Lei 7.998/90 art. 4°) ──
+    if (this.seguroConfig.apurar && this.params.data_admissao) {
+      const refDem = this.params.data_demissao || this.params.data_final || this.correcaoConfig?.data_liquidacao;
+      if (refDem) {
+        const adm = new Date(this.params.data_admissao);
+        const dem = new Date(refDem);
+        const mesesServico = (dem.getFullYear() - adm.getFullYear()) * 12 + (dem.getMonth() - adm.getMonth());
+        const parcelasMaximas = mesesServico >= 24 ? 5 : mesesServico >= 12 ? 4 : 3;
+        if (this.seguroConfig.parcelas > parcelasMaximas) {
+          itens.push({
+            tipo: 'alerta', modulo: 'Seguro-Desemprego',
+            mensagem: `Seguro-desemprego: ${this.seguroConfig.parcelas} parcelas informadas, mas o tempo de serviço (${mesesServico} meses) autoriza no máximo ${parcelasMaximas} parcelas (Lei 7.998/90 art. 4°). Verifique se há vínculos anteriores que ampliam o direito.`,
+          });
         }
       }
     }

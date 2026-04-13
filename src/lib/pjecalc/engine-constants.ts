@@ -333,3 +333,84 @@ export const CNAE_ALIQUOTAS_COMUNS: PjeCNAEAliquotas[] = [
   { cnae: '4781-4', descricao: 'Comércio de artigos do vestuário', sat_rat: 1, terceiros: 5.8 },
   { cnae: '4761-0', descricao: 'Papelarias e livrarias', sat_rat: 1, terceiros: 5.8 },
 ];
+
+// =====================================================
+// SALÁRIO MÍNIMO HISTÓRICO — fallback quando banco sem seed
+// Fonte: Portarias MTE/MPS anuais (Decretos presidenciais)
+// =====================================================
+
+export const HISTORICO_SALARIO_MINIMO: { vigencia: string; valor: number }[] = [
+  { vigencia: '2009-02', valor: 465.00 },
+  { vigencia: '2010-01', valor: 510.00 },
+  { vigencia: '2011-01', valor: 545.00 },
+  { vigencia: '2012-01', valor: 622.00 },
+  { vigencia: '2013-01', valor: 678.00 },
+  { vigencia: '2014-01', valor: 724.00 },
+  { vigencia: '2015-01', valor: 788.00 },
+  { vigencia: '2016-01', valor: 880.00 },
+  { vigencia: '2017-01', valor: 937.00 },
+  { vigencia: '2018-01', valor: 954.00 },
+  { vigencia: '2019-01', valor: 998.00 },
+  { vigencia: '2020-02', valor: 1045.00 },
+  { vigencia: '2021-01', valor: 1100.00 },
+  { vigencia: '2022-01', valor: 1212.00 },
+  { vigencia: '2023-01', valor: 1320.00 },
+  { vigencia: '2024-01', valor: 1412.00 },
+  { vigencia: '2025-01', valor: 1518.00 },
+];
+
+// =====================================================
+// FERIADOS NACIONAIS — fallback quando banco sem seed
+// =====================================================
+
+/** Algoritmo de Meeus/Jones/Butcher para data da Páscoa */
+export function calcularPascoa(ano: number): Date {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31);
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(ano, mes - 1, dia);
+}
+
+/** Retorna os feriados nacionais fixos + móveis do ano (formato YYYY-MM-DD) */
+export function getFeriadosNacionaisDoAno(ano: number): string[] {
+  const pascoa = calcularPascoa(ano);
+  const add = (d: Date, n: number): Date => {
+    const r = new Date(d);
+    r.setDate(r.getDate() + n);
+    return r;
+  };
+  const fmt = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
+  const feriados = [
+    `${ano}-01-01`,        // Confraternização Universal
+    fmt(add(pascoa, -48)), // Segunda de Carnaval
+    fmt(add(pascoa, -47)), // Terça de Carnaval
+    fmt(add(pascoa, -2)),  // Sexta-Feira da Paixão
+    `${ano}-04-21`,        // Tiradentes
+    `${ano}-05-01`,        // Dia do Trabalho
+    fmt(add(pascoa, 60)),  // Corpus Christi
+    `${ano}-09-07`,        // Independência
+    `${ano}-10-12`,        // N.S. Aparecida
+    `${ano}-11-02`,        // Finados
+    `${ano}-11-15`,        // Proclamação da República
+    `${ano}-12-25`,        // Natal
+  ];
+  // Consciência Negra: nacional a partir de 2024 (Lei 14.759/2023)
+  if (ano >= 2024) feriados.push(`${ano}-11-20`);
+  return feriados.sort();
+}
