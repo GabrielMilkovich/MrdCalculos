@@ -834,13 +834,32 @@ export class PjeCalcEngine {
   // HELPERS: TABELAS VERSIONADAS POR COMPETÊNCIA
   // =====================================================
 
+  /**
+   * Busca a melhor chave em um Record<string, T> para a competência dada.
+   * Tenta primeiro 'YYYY-MM' (mais específico), depois chaves 'YYYY-MM' ≤ comp
+   * dentro do mesmo ano (para splits como 2020-01/2020-03), e finalmente 'YYYY'.
+   */
+  private static findBestHistKey<T>(table: Record<string, T>, competencia: string): T | undefined {
+    const comp = competencia.slice(0, 7); // YYYY-MM
+    const ano = competencia.slice(0, 4);  // YYYY
+    // 1) Exact YYYY-MM match
+    if (table[comp]) return table[comp];
+    // 2) Find the latest YYYY-MM key ≤ comp within the same year
+    const keysForYear = Object.keys(table)
+      .filter(k => k.startsWith(ano + '-') && k <= comp)
+      .sort();
+    if (keysForYear.length > 0) return table[keysForYear[keysForYear.length - 1]];
+    // 3) Fallback to YYYY key
+    if (table[ano]) return table[ano];
+    return undefined;
+  }
+
   private getFaixasINSSParaCompetencia(competencia: string): { ate: number; aliquota: number }[] {
     if (this.faixasINSSDB.length === 0) {
-      // FIX: Quando banco sem seed, tentar tabela histórica do ano antes de cair no DEFAULT 2025
-      const anoHist = competencia.slice(0, 4);
-      const hist = HISTORICO_FAIXAS_INSS[anoHist];
+      // FIX: Quando banco sem seed, tentar tabela histórica com lookup YYYY-MM → YYYY
+      const hist = PjeCalcEngine.findBestHistKey(HISTORICO_FAIXAS_INSS, competencia);
       if (hist && competencia < '2025-01') {
-        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco. Usando tabela histórica hardcoded do ano ${anoHist} — precisão aproximada.`);
+        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} não encontradas no banco. Usando tabela histórica hardcoded — precisão aproximada.`);
         return hist;
       }
       // AUDIT: Track fallback to DEFAULT_FAIXAS_INSS
@@ -864,11 +883,10 @@ export class PjeCalcEngine {
       .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota) }));
 
     if (faixas.length === 0) {
-      // FIX: Tentar tabela histórica hardcoded antes de cair no DEFAULT 2025
-      const anoHist = competencia.slice(0, 4);
-      const hist = HISTORICO_FAIXAS_INSS[anoHist];
+      // FIX: Tentar tabela histórica hardcoded (YYYY-MM → YYYY) antes de cair no DEFAULT 2025
+      const hist = PjeCalcEngine.findBestHistKey(HISTORICO_FAIXAS_INSS, competencia);
       if (hist && competencia < '2025-01') {
-        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} ausentes no banco. Usando tabela histórica hardcoded do ano ${anoHist}.`);
+        this.trackWarning('W062', 'inss', `Faixas INSS para ${competencia} ausentes no banco. Usando tabela histórica hardcoded.`);
         return hist;
       }
       // AUDIT: Track fallback for specific competência
@@ -884,11 +902,10 @@ export class PjeCalcEngine {
 
   private getFaixasIRParaCompetencia(competencia: string): { faixas: { ate: number; aliquota: number; deducao: number }[]; deducao_dependente: number } {
     if (this.faixasIRDB.length === 0) {
-      // FIX: Quando banco sem seed, tentar tabela histórica do ano antes de cair no DEFAULT 2025
-      const anoHist = competencia.slice(0, 4);
-      const hist = HISTORICO_FAIXAS_IR[anoHist];
+      // FIX: Quando banco sem seed, tentar tabela histórica com lookup YYYY-MM → YYYY
+      const hist = PjeCalcEngine.findBestHistKey(HISTORICO_FAIXAS_IR, competencia);
       if (hist && competencia < '2025-01') {
-        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} não encontradas no banco. Usando tabela histórica hardcoded do ano ${anoHist} — precisão aproximada.`);
+        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} não encontradas no banco. Usando tabela histórica hardcoded — precisão aproximada.`);
         return { faixas: hist.faixas, deducao_dependente: hist.deducao_dependente };
       }
       // AUDIT: Track fallback to DEFAULT_FAIXAS_IR
@@ -911,11 +928,10 @@ export class PjeCalcEngine {
       .map(f => ({ ate: Number(f.valor_ate), aliquota: Number(f.aliquota), deducao: Number(f.deducao) }));
 
     if (faixas.length === 0) {
-      // FIX: Tentar tabela histórica hardcoded antes de cair no DEFAULT 2025
-      const anoHist = competencia.slice(0, 4);
-      const hist = HISTORICO_FAIXAS_IR[anoHist];
+      // FIX: Tentar tabela histórica hardcoded (YYYY-MM → YYYY) antes de cair no DEFAULT 2025
+      const hist = PjeCalcEngine.findBestHistKey(HISTORICO_FAIXAS_IR, competencia);
       if (hist && competencia < '2025-01') {
-        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} ausentes no banco. Usando tabela histórica hardcoded do ano ${anoHist}.`);
+        this.trackWarning('W061', 'ir', `Faixas IR para ${competencia} ausentes no banco. Usando tabela histórica hardcoded.`);
         return { faixas: hist.faixas, deducao_dependente: hist.deducao_dependente };
       }
       // AUDIT: Track fallback for specific competência
@@ -1526,10 +1542,7 @@ export class PjeCalcEngine {
     const jurosDisabled = jurosStartDate != null && jurosStartDate > dataLiq;
 
     // Map IPCA-E → IPCAE for index lookup compatibility
-    const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'SELIC_SIMPLES': 'SELIC', 'SELIC_COMPOSTA': 'SELIC', 'SELIC_RF': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE', 'IPC': 'IPC', 'IPCA-E_TR': 'IPCA-E', 'TUACDT': 'FACDT', 'DEVEDOR_FP': 'SELIC', 'REPETICAO_INDEBITO': 'SELIC', 'TABELA_JT_MENSAL': 'INPC', 'TABELA_JT_DIARIA': 'INPC' };
-      return map[ind] || ind;
-    };
+    const normalizeIndice = (ind: string) => this.normalizeIndice(ind);
 
     for (const vr of verbaResults) {
       let totalCorrigido = new Decimal(0);
@@ -2015,8 +2028,7 @@ export class PjeCalcEngine {
           const regime = this.getRegimeParaData(this.correcaoConfig.combinacoes_indice, segInicio);
           const indice = regime?.indice || 'SEM_CORRECAO';
           if (indice === 'SEM_CORRECAO' || indice === 'Sem Correção' || indice === 'NENHUM') continue;
-          const normalMap: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'SELIC_SIMPLES': 'SELIC', 'SELIC_COMPOSTA': 'SELIC', 'SELIC_RF': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE', 'IPC': 'IPC', 'IPCA-E_TR': 'IPCA-E', 'TUACDT': 'FACDT', 'DEVEDOR_FP': 'SELIC', 'REPETICAO_INDEBITO': 'SELIC', 'TABELA_JT_MENSAL': 'INPC', 'TABELA_JT_DIARIA': 'INPC' };
-          const indiceNorm = normalMap[indice] || indice;
+          const indiceNorm = this.normalizeIndice(indice);
           const fatorDB = this.getIndiceCorrecaoDB(indiceNorm, segInicio.slice(0, 7), segFim.slice(0, 7));
           if (fatorDB !== null && fatorDB > 0) {
             fatorTotal = fatorTotal.times(fatorDB);
@@ -2102,8 +2114,26 @@ export class PjeCalcEngine {
     }
 
     // LC 110/2001: contribuição social incide sobre saldo CORRIGIDO do FGTS (não nominal)
-    const lc110_10 = this.fgtsConfig.lc110_10 ? Number(new Decimal(totalDepositosCorrigido).times(0.10).toDP(2)) : 0;
-    const lc110_05 = this.fgtsConfig.lc110_05 ? Number(new Decimal(totalDepositosCorrigido).times(0.005).toDP(2)) : 0;
+    // LC 110/2001: contribuições com guard de vigência
+    // Art. 1° (10%): extinta pela LC 142/2013 a partir de jun/2013
+    // Art. 2° (0.5%): extinta pela Portaria MTE 3.665/2023 a partir de abr/2024
+    const compLiqLC110 = this.correcaoConfig.data_liquidacao.slice(0, 7);
+    let lc110_10 = 0;
+    if (this.fgtsConfig.lc110_10) {
+      if (compLiqLC110 >= '2013-06') {
+        this.trackWarning('W_LC110_EXTINTA', 'fgts', 'LC 110/2001 Art. 1° (10%) extinta pela LC 142/2013 a partir de jun/2013. Contribuição zerada.');
+      } else {
+        lc110_10 = Number(new Decimal(totalDepositosCorrigido).times(0.10).toDP(2));
+      }
+    }
+    let lc110_05 = 0;
+    if (this.fgtsConfig.lc110_05) {
+      if (compLiqLC110 >= '2024-04') {
+        this.trackWarning('W_LC110_EXTINTA', 'fgts', 'LC 110/2001 Art. 2° (0.5%) extinta pela Portaria MTE 3.665/2023 a partir de abr/2024. Contribuição zerada.');
+      } else {
+        lc110_05 = Number(new Decimal(totalDepositosCorrigido).times(0.005).toDP(2));
+      }
+    }
 
     // Total FGTS = corrected deposits + interest + fine - deductions
     const totalFgts = totalDepositosCorrigido + totalDepositosJuros + multaValor + lc110_10 + lc110_05 - saldoDeduzido;
@@ -2412,6 +2442,21 @@ export class PjeCalcEngine {
   // PJe-Calc usa ROUND_HALF_EVEN (Banker's rounding) para CS e IR
   private static readonly ROUND_CS_IR = Decimal.ROUND_HALF_EVEN; // Java BigDecimal padrão (PJe-Calc)
 
+  /** Mapa de aliases de índice — centralizado para evitar cópias inline (4 métodos usavam). */
+  private static readonly INDICE_ALIASES: Record<string, string> = {
+    'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA',
+    'SELIC': 'SELIC', 'SELIC_SIMPLES': 'SELIC', 'SELIC_COMPOSTA': 'SELIC', 'SELIC_RF': 'SELIC',
+    'TR': 'TR', 'TRD': 'TR',
+    'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE', 'IPC': 'IPC',
+    'IPCA-E_TR': 'IPCA-E', 'TUACDT': 'FACDT',
+    'DEVEDOR_FP': 'SELIC', 'REPETICAO_INDEBITO': 'SELIC',
+    'TABELA_JT_MENSAL': 'INPC', 'TABELA_JT_DIARIA': 'INPC',
+  };
+
+  private normalizeIndice(ind: string): string {
+    return PjeCalcEngine.INDICE_ALIASES[ind] || ind;
+  }
+
   // INSS pré-EC 103/2019: alíquota única aplicada sobre o salário total
   // (o salário cai numa das 3 faixas e toda a base é tributada nessa alíquota)
   private calcularINSSAliquotaUnica(comp: string, base: number): number {
@@ -2450,7 +2495,13 @@ export class PjeCalcEngine {
     }
     const faixas = this.getFaixasINSSParaCompetencia(comp);
     const teto = faixas[faixas.length - 1].ate;
-    let baseRestante = new Decimal(this.csConfig.limitar_teto ? Math.min(base, teto) : base);
+    // Teto previdenciário é limite constitucional (art. 201 §2° CF/88).
+    // Exceção: alíquota fixa informada pelo usuário opera sobre base arbitrária.
+    const aplicarTeto = this.csConfig.aliquota_segurado_tipo !== 'fixa';
+    if (!aplicarTeto && base > teto) {
+      this.trackWarning('W_INSS_SEM_TETO', 'inss', `INSS calculado sem teto (alíquota fixa configurada). Base ${base.toFixed(2)} > teto ${teto.toFixed(2)}.`);
+    }
+    let baseRestante = new Decimal(aplicarTeto ? Math.min(base, teto) : base);
     let imposto = new Decimal(0);
     let faixaAnterior = new Decimal(0);
     for (const faixa of faixas) {
@@ -3522,10 +3573,7 @@ export class PjeCalcEngine {
     const combinacoes_indice = this.correcaoConfig.combinacoes_indice!;
     const dataLiq = this.correcaoConfig.data_liquidacao;
 
-    const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'SELIC_SIMPLES': 'SELIC', 'SELIC_COMPOSTA': 'SELIC', 'SELIC_RF': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE', 'IPC': 'IPC', 'IPCA-E_TR': 'IPCA-E', 'TUACDT': 'FACDT', 'DEVEDOR_FP': 'SELIC', 'REPETICAO_INDEBITO': 'SELIC', 'TABELA_JT_MENSAL': 'INPC', 'TABELA_JT_DIARIA': 'INPC' };
-      return map[ind] || ind;
-    };
+    const normalizeIndice = (ind: string) => this.normalizeIndice(ind);
 
     for (const vr of verbaResults) {
       let totalCorrigido = new Decimal(0);
@@ -3632,10 +3680,7 @@ export class PjeCalcEngine {
     }
     const jurosDisabled = jurosStartDate != null && jurosStartDate > dataLiq;
 
-    const normalizeIndice = (ind: string): string => {
-      const map: Record<string, string> = { 'IPCA-E': 'IPCA-E', 'IPCAE': 'IPCA-E', 'IPCA': 'IPCA', 'SELIC': 'SELIC', 'SELIC_SIMPLES': 'SELIC', 'SELIC_COMPOSTA': 'SELIC', 'SELIC_RF': 'SELIC', 'TR': 'TR', 'TRD': 'TR', 'INPC': 'INPC', 'IGP-M': 'IGP-M', 'IGP-DI': 'IGP-DI', 'IPC-FIPE': 'IPC-FIPE', 'IPC': 'IPC', 'IPCA-E_TR': 'IPCA-E', 'TUACDT': 'FACDT', 'DEVEDOR_FP': 'SELIC', 'REPETICAO_INDEBITO': 'SELIC', 'TABELA_JT_MENSAL': 'INPC', 'TABELA_JT_DIARIA': 'INPC' };
-      return map[ind] || ind;
-    };
+    const normalizeIndice = (ind: string) => this.normalizeIndice(ind);
 
     // ADC 58/59 regime: check if any combination uses IPCA-E or SELIC
     const combIndices = this.correcaoConfig.combinacoes_indice || [];

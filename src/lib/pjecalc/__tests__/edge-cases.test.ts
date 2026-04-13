@@ -177,15 +177,15 @@ describe('Edge Case: Competencia before 2025 with no DB faixas', () => {
 
     const result = engine.liquidar();
 
-    // With historical fallback: competência 2020-06 uses the 2020 hardcoded faixas
-    // (EC 103/2019, progressive as of Mar/2020):
-    //   [1518.00 @7.5%, 2594.92 @9%, 5189.82 @12%, 6433.57 @14%]
+    // With historical fallback: competência 2020-06 uses the 2020-03 hardcoded faixas
+    // (EC 103/2019, progressive as of Mar/2020 — Portaria 3.659/2020 Anexo II):
+    //   [1045.00 @7.5%, 2089.60 @9%, 3134.40 @12%, 6101.06 @14%]
     // Base = 3000:
-    //   Band 1: 1518.00 × 0.075                     = 113.85
-    //   Band 2: (2594.92 - 1518.00) × 0.09 = 1076.92 × 0.09 = 96.92
-    //   Band 3: (3000.00 - 2594.92) × 0.12 =  405.08 × 0.12 = 48.61
-    //   Total  = 259.38
-    expect(result.contribuicao_social.total_segurado).toBeCloseTo(259.38, 2);
+    //   Band 1: 1045.00 × 0.075                     = 78.38
+    //   Band 2: (2089.60 - 1045.00) × 0.09 = 1044.60 × 0.09 = 94.01
+    //   Band 3: (3000.00 - 2089.60) × 0.12 =  910.40 × 0.12 = 109.25
+    //   Total  = 281.64
+    expect(result.contribuicao_social.total_segurado).toBeCloseTo(281.64, 2);
 
     // Should have warning about fallback
     expect(result.calculation_warnings).toBeDefined();

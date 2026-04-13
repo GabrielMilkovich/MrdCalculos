@@ -59,30 +59,42 @@ export const HISTORICO_FAIXAS_INSS: Record<string, { ate: number; aliquota: numb
     { ate: 2919.72, aliquota: 0.09 },
     { ate: 5839.45, aliquota: 0.11 },
   ],
-  '2020': [
-    { ate: 1518.00, aliquota: 0.075 },
-    { ate: 2594.92, aliquota: 0.09 },
-    { ate: 5189.82, aliquota: 0.12 },
+  // EC 103/2019 só entra em vigor em 01/03/2020 (art. 28 EC 103).
+  // Jan-Fev 2020: sistema antigo continuado (Portaria 3.659/2020 Anexo I).
+  '2020-01': [
+    { ate: 1830.29, aliquota: 0.08 },
+    { ate: 3050.52, aliquota: 0.09 },
+    { ate: 6101.06, aliquota: 0.11 },
+  ],
+  // Mar/2020 em diante: EC 103/2019 progressivo (Portaria 3.659/2020 Anexo II)
+  '2020-03': [
+    { ate: 1045.00, aliquota: 0.075 },
+    { ate: 2089.60, aliquota: 0.09 },
+    { ate: 3134.40, aliquota: 0.12 },
+    { ate: 6101.06, aliquota: 0.14 },
+  ],
+  // 2021: Portaria SEPRT 477/2021
+  '2021': [
+    { ate: 1100.00, aliquota: 0.075 },
+    { ate: 2203.48, aliquota: 0.09 },
+    { ate: 3305.22, aliquota: 0.12 },
     { ate: 6433.57, aliquota: 0.14 },
   ],
-  '2021': [
-    { ate: 1320.00, aliquota: 0.075 },
-    { ate: 2571.29, aliquota: 0.09 },
-    { ate: 3856.94, aliquota: 0.12 },
-    { ate: 7507.49, aliquota: 0.14 },
-  ],
+  // 2022: Portaria MTP 12/2022 (reajuste INPC)
   '2022': [
-    { ate: 1320.00, aliquota: 0.075 },
-    { ate: 2571.29, aliquota: 0.09 },
-    { ate: 3856.94, aliquota: 0.12 },
-    { ate: 7507.49, aliquota: 0.14 },
+    { ate: 1212.00, aliquota: 0.075 },
+    { ate: 2427.35, aliquota: 0.09 },
+    { ate: 3641.03, aliquota: 0.12 },
+    { ate: 7087.22, aliquota: 0.14 },
   ],
+  // 2023: Portaria MPS 26/2023 (jan) + Decreto 11.491/2023 (mai — novo SM)
   '2023': [
     { ate: 1320.00, aliquota: 0.075 },
     { ate: 2571.29, aliquota: 0.09 },
     { ate: 3856.94, aliquota: 0.12 },
     { ate: 7507.49, aliquota: 0.14 },
   ],
+  // 2024: Portaria MPS 12/2024
   '2024': [
     { ate: 1412.00, aliquota: 0.075 },
     { ate: 2666.68, aliquota: 0.09 },
@@ -177,8 +189,19 @@ export const HISTORICO_FAIXAS_IR: Record<
     ],
     deducao_dependente: 189.59,
   },
-  '2023': {
-    // Mudança em mai/2023 (Lei 14.663/2023) — simplificada para tabela vigente maior parte do ano
+  // 2023 jan–abr: tabela inalterada desde 2015 (IN RFB vigente)
+  '2023-01': {
+    faixas: [
+      { ate: 1903.98, aliquota: 0, deducao: 0 },
+      { ate: 2826.65, aliquota: 0.075, deducao: 142.80 },
+      { ate: 3751.05, aliquota: 0.15, deducao: 354.80 },
+      { ate: 4664.68, aliquota: 0.225, deducao: 636.13 },
+      { ate: Infinity, aliquota: 0.275, deducao: 869.36 },
+    ],
+    deducao_dependente: 189.59,
+  },
+  // 2023 mai–dez: Lei 14.663/2023 (nova faixa de isenção R$ 2.112)
+  '2023-05': {
     faixas: [
       { ate: 2112.00, aliquota: 0, deducao: 0 },
       { ate: 2826.65, aliquota: 0.075, deducao: 158.40 },
