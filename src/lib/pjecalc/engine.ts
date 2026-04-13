@@ -773,11 +773,13 @@ export class PjeCalcEngine {
     }
 
     // Somar bases de verbas principais já calculadas (para reflexas)
+    // Respeitar gerar_verba_reflexa: 'devido' → base = oc.devido; 'diferenca' → base = oc.diferenca
+    const useDevido = verba.gerar_verba_reflexa === 'devido';
     for (const verbaBaseId of verba.base_calculo.verbas) {
       const vbResult = this.verbaResultsMap.get(verbaBaseId);
       if (vbResult) {
         const oc = vbResult.ocorrencias.find(o => o.competencia === competencia);
-        if (oc) base += oc.diferenca;
+        if (oc) base += useDevido ? oc.devido : oc.diferenca;
       }
     }
 
@@ -971,6 +973,20 @@ export class PjeCalcEngine {
    *
    * The config field is persisted via correcaoConfig.acumular_indices_correcao and
    * defaults to 'mensal' when absent.
+   */
+  /**
+   * Retorna o fator de correção acumulado entre compOrigem e compDestino.
+   *
+   * **CONTRATO DE CHAMADA (Súmula 381 TST):** Este método aplica internamente
+   * o shift para o mês subsequente: `origemSubsequente = mesSubsequente(compOrigem)`.
+   *
+   * - **Callers em MODO LEGADO** (oc.competencia direto): passam a competência raw
+   *   e o shift é aplicado automaticamente.
+   * - **Callers em MODO COMBINAÇÃO** (segmentos): passam `mesAnterior(segInicio)`
+   *   para que `mesSubsequente(mesAnterior(segInicio)) = segInicio`, cancelando o
+   *   double-shift. Esse padrão é intencional e testado.
+   *
+   * NÃO alterar este contrato sem atualizar TODOS os callers.
    */
   private getIndiceCorrecaoDB(nomeIndice: string, compOrigem: string, compDestino: string): number | null {
     if (this.indicesDB.length === 0) {
@@ -2099,16 +2115,26 @@ export class PjeCalcEngine {
       if (this.fgtsConfig.multa_tipo === 'informada') {
         multaValor = this.fgtsConfig.multa_valor_informado || 0;
       } else {
-        // PJe-Calc: multa incide sobre depósitos nominais (não corrigidos)
-        let baseMulta = totalDepositos; // 'devido' (default)
+        // Lei 8.036/90 art. 18 §1°: multa sobre "montante de todos os depósitos
+        // realizados na conta vinculada" — jurisprudência e PJe-Calc interpretam
+        // como saldo CORRIGIDO (depósitos + rendimentos TR+3%a.a.).
+        let baseMulta = totalDepositosCorrigido; // 'devido' (default PJe-Calc)
+        if (totalDepositosCorrigido === 0 && totalDepositos > 0) {
+          // Fallback: se correção não disponível (sem índices), usar nominal com warning
+          baseMulta = totalDepositos;
+          this.trackWarning('W_FGTS_MULTA_SEM_CORRECAO', 'fgts',
+            'Multa FGTS calculada sobre depósitos nominais (sem correção TR+3%a.a. disponível).');
+        }
         if (this.fgtsConfig.multa_base === 'saldo_saque') {
           baseMulta = saldoDeduzido;
         } else if (this.fgtsConfig.multa_base === 'devido_menos_saldo') {
-          baseMulta = Math.max(0, totalDepositos - saldoDeduzido);
+          baseMulta = Math.max(0, totalDepositosCorrigido - saldoDeduzido);
         } else if (this.fgtsConfig.multa_base === 'devido_mais_saldo') {
-          baseMulta = totalDepositos + saldoDeduzido;
+          baseMulta = totalDepositosCorrigido + saldoDeduzido;
+        } else if (this.fgtsConfig.multa_base === 'nominal') {
+          // Modo explícito para TRTs com entendimento divergente
+          baseMulta = totalDepositos;
         }
-        // 'devido' and 'diferenca' both use totalDepositos (o valor apurado já é a diferença devida)
         multaValor = Number(new Decimal(baseMulta).times(this.fgtsConfig.multa_percentual / 100).toDP(2));
       }
     }

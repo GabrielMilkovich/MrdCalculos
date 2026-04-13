@@ -333,7 +333,7 @@ export interface PjeFGTSConfig {
   multa_apurar: boolean;
   multa_tipo: 'calculada' | 'informada';
   multa_percentual: number;
-  multa_base: 'devido' | 'diferenca' | 'saldo_saque' | 'devido_menos_saldo' | 'devido_mais_saldo';
+  multa_base: 'devido' | 'diferenca' | 'saldo_saque' | 'devido_menos_saldo' | 'devido_mais_saldo' | 'nominal';
   multa_valor_informado?: number;
   saldos_saques: { data: string; valor: number }[];
   deduzir_saldo: boolean;

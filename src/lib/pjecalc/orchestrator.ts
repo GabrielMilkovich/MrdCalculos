@@ -1176,7 +1176,9 @@ export async function executarLiquidacao(
       },
     }));
 
-    const reflexosGerados = gerarReflexosPadrao(verbasBase);
+    // Default: aviso prévio indenizado (caso mais comum em reclamatórias).
+    // Quando aviso trabalhado, o usuário deve configurar explicitamente.
+    const reflexosGerados = gerarReflexosPadrao(verbasBase, undefined, ['AVISO PRÉVIO TRABALHADO']);
 
     for (const rg of reflexosGerados) {
       const principalVerba = engineVerbas.find(v => v.id === rg.verba_principal_id);

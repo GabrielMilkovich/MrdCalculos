@@ -58,7 +58,7 @@ export const REFLEXO_TEMPLATES: ReflexoTemplate[] = [
     ordem_offset: 200,
   },
   {
-    sufixo: 'AVISO PRÉVIO',
+    sufixo: 'AVISO PRÉVIO INDENIZADO',
     caracteristica: 'aviso_previo',
     ocorrencia_pagamento: 'desligamento',
     comportamento_reflexo: 'media_pela_quantidade',
@@ -69,14 +69,27 @@ export const REFLEXO_TEMPLATES: ReflexoTemplate[] = [
     tipo_quantidade: 'avos',
     gerar_principal: 'diferenca',
     gerar_reflexo: 'diferenca',
-    // Aviso prévio indenizado é isento de IR (STJ REsp 1.230.957/RS),
-    // isento de INSS (STJ REsp 1.123.005/PR c/c Súmula 215 STF) e o
-    // FGTS segue o principal (depósito FGTS já tratado à parte).
-    // Reflexos auto-gerados sobre aviso prévio são SEMPRE indenizatórios,
-    // pois são computados como média ponderada — o empregado nunca "gozou"
-    // esse aviso. Por isso todas as incidências são false aqui.
-    incidencias: { fgts: false, irpf: false, cs: false },
+    // Indenizado: FGTS sim (Lei 8.036/90 art. 15 — PJe-Calc inclui),
+    // INSS não (Súmula 305 TST + art. 28 §9°'e' Lei 8.212/91),
+    // IR não (STJ REsp 1.230.957/RS).
+    incidencias: { fgts: true, irpf: false, cs: false },
     ordem_offset: 300,
+  },
+  {
+    sufixo: 'AVISO PRÉVIO TRABALHADO',
+    caracteristica: 'aviso_previo',
+    ocorrencia_pagamento: 'desligamento',
+    comportamento_reflexo: 'media_pela_quantidade',
+    tratamento_fracao_mes: 'integralizar',
+    multiplicador: 1,
+    divisor_tipo: 'informado',
+    divisor_valor: 12,
+    tipo_quantidade: 'avos',
+    gerar_principal: 'diferenca',
+    gerar_reflexo: 'diferenca',
+    // Trabalhado: remuneração normal (art. 487 CLT) — incide INSS, IR e FGTS.
+    incidencias: { fgts: true, irpf: true, cs: true },
+    ordem_offset: 301,
   },
   {
     sufixo: 'REPOUSO SEMANAL REMUNERADO',

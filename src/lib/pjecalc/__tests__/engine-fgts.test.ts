@@ -85,9 +85,9 @@ describe('PjeCalcEngine - FGTS', () => {
     const fgts = result.fgts;
 
     // Deposito = 2000 * 8% = 160
-    // Multa = 160 * 40% = 64
+    // Multa = totalDepositosCorrigido × 40% (Lei 8.036/90 art. 18 §1° — saldo atualizado)
     expect(fgts.depositos[0].valor).toBe(160);
-    expect(fgts.multa_valor).toBe(64);
+    expect(fgts.multa_valor).toBeCloseTo(67.89, 1);
   });
 
   it('calculates 20% multa (culpa reciproca)', () => {
@@ -122,8 +122,8 @@ describe('PjeCalcEngine - FGTS', () => {
     });
 
     const result = engine.liquidar();
-    // Deposito = 160, Multa = 160 * 20% = 32
-    expect(result.fgts.multa_valor).toBe(32);
+    // Multa = totalDepositosCorrigido × 20% (saldo atualizado)
+    expect(result.fgts.multa_valor).toBeCloseTo(33.94, 1);
   });
 
   it('returns zero when apurar is false', () => {
