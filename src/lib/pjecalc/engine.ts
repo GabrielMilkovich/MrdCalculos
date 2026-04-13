@@ -266,14 +266,20 @@ export class PjeCalcEngine {
         const periodo = this.getPeriodoCalculo();
         const periodoInicio = new Date(periodo.inicio);
         const periodoFim = new Date(periodo.fim);
-        let efetInicio = admDate > periodoInicio ? admDate : periodoInicio;
-        let efetFim = demDate < periodoFim ? demDate : periodoFim;
+        const efetInicio = admDate > periodoInicio ? admDate : periodoInicio;
+        const efetFim = demDate < periodoFim ? demDate : periodoFim;
         if (efetInicio > efetFim) return 0;
         let avos = 0;
-        for (let m = efetInicio.getMonth(); m <= efetFim.getMonth(); m++) {
-          const diaInicio = (m === efetInicio.getMonth()) ? efetInicio.getDate() : 1;
-          const diaFim = (m === efetFim.getMonth()) ? efetFim.getDate() : new Date(efetFim.getFullYear(), m + 1, 0).getDate();
+        // Iterar mês a mês com cursor (suporta períodos que cruzam anos civis)
+        const cursor = new Date(efetInicio.getFullYear(), efetInicio.getMonth(), 1);
+        const fimRef = new Date(efetFim.getFullYear(), efetFim.getMonth(), 1);
+        while (cursor <= fimRef) {
+          const isInicio = cursor.getFullYear() === efetInicio.getFullYear() && cursor.getMonth() === efetInicio.getMonth();
+          const isFim = cursor.getFullYear() === efetFim.getFullYear() && cursor.getMonth() === efetFim.getMonth();
+          const diaInicio = isInicio ? efetInicio.getDate() : 1;
+          const diaFim = isFim ? efetFim.getDate() : new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
           if (diaFim - diaInicio + 1 >= 15) avos++;
+          cursor.setMonth(cursor.getMonth() + 1);
         }
         return Math.min(avos, 12);
       }
@@ -2565,8 +2571,13 @@ export class PjeCalcEngine {
       if (v.periodo_inicio && v.periodo_fim && new Date(v.periodo_fim) < new Date(v.periodo_inicio)) {
         itens.push({ tipo: 'erro', modulo: 'Verbas', mensagem: `Verba "${v.nome}" com período inválido (fim < início)` });
       }
-      if (v.tipo === 'reflexa' && !v.verba_principal_id && v.base_calculo.verbas.length === 0) {
-        itens.push({ tipo: 'alerta', modulo: 'Verbas', mensagem: `Verba reflexa "${v.nome}" sem verba principal vinculada` });
+      if (v.tipo === 'reflexa') {
+        if (!v.verba_principal_id && v.base_calculo.verbas.length === 0) {
+          itens.push({ tipo: 'alerta', modulo: 'Verbas', mensagem: `Verba reflexa "${v.nome}" sem verba principal vinculada — será calculada como principal.` });
+        }
+        if (v.verba_principal_id && !this.verbas.some(vb => vb.id === v.verba_principal_id)) {
+          itens.push({ tipo: 'erro', modulo: 'Verbas', mensagem: `Verba reflexa "${v.nome}": verba_principal_id="${v.verba_principal_id}" não encontrada. O reflexo será calculado incorretamente.` });
+        }
       }
       if (v.valor === 'calculado' && v.base_calculo.historicos.length === 0 && v.base_calculo.verbas.length === 0 && !this.params.ultima_remuneracao && !this.params.maior_remuneracao) {
         itens.push({ tipo: 'alerta', modulo: 'Verbas', mensagem: `Verba "${v.nome}" sem base de cálculo identificável` });
@@ -3243,7 +3254,12 @@ export class PjeCalcEngine {
       // Process dependencies first (reflex-on-reflex)
       if (verba.verba_principal_id && !processed.has(verba.verba_principal_id)) {
         const dep = this.verbas.find(v => v.id === verba.verba_principal_id);
-        if (dep) processVerba(dep);
+        if (dep) {
+          processVerba(dep);
+        } else {
+          this.trackWarning('W_REFLEXA_PRINCIPAL_INVALIDA', 'verbas',
+            `Verba "${verba.nome}": verba_principal_id="${verba.verba_principal_id}" não existe. Calculando como principal.`);
+        }
       }
       for (const depId of (verba.base_calculo?.verbas || [])) {
         if (!processed.has(depId)) {
@@ -3493,10 +3509,27 @@ export class PjeCalcEngine {
     audit('resumo', `Bruto=${resumo.principal_corrigido.toFixed(2)}, Juros=${resumo.juros_mora.toFixed(2)}, Líquido=${resumo.liquido_reclamante.toFixed(2)}, Total_Reclamada=${resumo.total_reclamada.toFixed(2)}`);
 
     // ── Build memória de cálculo (audit trail line by line) ──
+    // Distribuir INSS e IR proporcionalmente por linha para auditabilidade
+    const totalBaseINSS = verbaResults
+      .filter(vr => this.verbas.find(v => v.id === vr.verba_id)?.incidencias.contribuicao_social)
+      .reduce((s, vr) => s + vr.total_diferenca, 0);
+    const totalBaseIR = verbaResults
+      .filter(vr => this.verbas.find(v => v.id === vr.verba_id)?.incidencias.irpf)
+      .reduce((s, vr) => s + vr.total_diferenca, 0);
+    const inssTotal = cs.total_segurado;
+    const irTotal = ir.imposto_devido;
+
     const memoriaLinhas: import('./engine-types').LinhaMemoriaCalculo[] = [];
     for (const vr of verbaResults) {
+      const verbaDaLinha = this.verbas.find(v => v.id === vr.verba_id);
       for (const oc of vr.ocorrencias) {
         if (oc.diferenca === 0) continue;
+        const inssLinha = (verbaDaLinha?.incidencias.contribuicao_social && totalBaseINSS > 0 && inssTotal > 0)
+          ? Number(new Decimal(inssTotal).times(oc.diferenca).div(totalBaseINSS).toDP(2))
+          : 0;
+        const irLinha = (verbaDaLinha?.incidencias.irpf && totalBaseIR > 0 && irTotal > 0)
+          ? Number(new Decimal(irTotal).times(oc.diferenca).div(totalBaseIR).toDP(2))
+          : 0;
         memoriaLinhas.push({
           verba_id: vr.verba_id,
           verba_nome: vr.nome,
@@ -3517,8 +3550,8 @@ export class PjeCalcEngine {
           taxa_juros: oc.valor_corrigido > 0 && oc.juros > 0 ? Number(new Decimal(oc.juros).div(oc.valor_corrigido).times(100).toDP(2)) : 0,
           valor_juros: oc.juros,
           valor_final: oc.valor_final,
-          inss_segurado: 0,
-          ir_retido: 0,
+          inss_segurado: inssLinha,
+          ir_retido: irLinha,
           regime_correcao: 'engine',
           era_temporal: '',
         });
@@ -3536,7 +3569,9 @@ export class PjeCalcEngine {
       linhas: memoriaLinhas,
       totais: {
         valor_principal: resumo.principal_bruto,
-        correcao_monetaria: Number(new Decimal(resumo.principal_corrigido).minus(resumo.principal_bruto).toDP(2)),
+        correcao_monetaria: Number(
+          verbaResults.reduce((s, vr) => s.plus(vr.total_corrigido).minus(vr.total_diferenca), new Decimal(0)).toDP(2)
+        ),
         juros_moratorios: resumo.juros_mora,
         total_bruto: Number(new Decimal(resumo.principal_corrigido).plus(resumo.juros_mora).toDP(2)),
         inss_segurado: resumo.cs_segurado,
