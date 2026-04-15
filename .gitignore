@@ -46,3 +46,7 @@ calibration-*.json
 *.pjc
 docs/*.PJC
 public/reports/*.pjc
+
+# PJe-Calc 2.15.1 source (6.7MB, 802 Java files) — referência externa
+# Clonar de https://github.com/GabrielMilkovich/PJECALC-ORIGINAL para vendor/pjecalc-source/
+vendor/pjecalc-source/

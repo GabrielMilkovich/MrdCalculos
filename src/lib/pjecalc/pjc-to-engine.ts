@@ -56,11 +56,17 @@ export interface PjcEngineInputs {
 
 export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string): PjcEngineInputs {
   const report = createFidelityReport();
-  
+
   let historicos = convertHistoricos(analysis.historicos_salariais);
-  
-  // If historicos have no occurrences, synthesize them from verba occurrences
-  // PJe-Calc stores salary values inside OcorrenciaDeVerba.base, not always in OcorrenciaHistorico
+
+  // SEMPRE sintetiza historicos a partir de ocorrencias_all.base das verbas.
+  // Isso garante que cada verba Calculada tenha a base por competência alinhada
+  // EXATAMENTE com o valor que o PJe-Calc usou. Os historicos reais vêm em
+  // paralelo (addition), o engine escolhe o sintético por v.base_historicos=[hist-synth-ID].
+  // Fonte: o XML do PJC já traz <base> não-zero em cada <OcorrenciaDeVerba> ativa
+  // (ex: base=87.30 em 2021-04 para COMISSÕES ESTORNADAS), então a base é o valor
+  // "apurado" pelo PJe-Calc — replicar para que o engine aplique correção/juros sobre
+  // o valor correto ao invés de recalcular via historicos salariais abstratos.
   const totalOcorrencias = historicos.reduce((s, h) => s + h.ocorrencias.length, 0);
   if (totalOcorrencias === 0) {
     addFidelityEntry(report, {
@@ -72,8 +78,9 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
       module: 'historico_salarial',
       action: 'Verificar se os valores salariais estão corretos.',
     });
-    historicos = synthesizeHistoricosFromVerbas(analysis, historicos);
   }
+  // Sempre acrescenta synth por-verba (mesmo quando há historicos reais)
+  historicos = synthesizeHistoricosFromVerbas(analysis, historicos);
   
   // Convert real cartão ponto from apuração diária
   const cartaoPonto = convertCartaoPonto(analysis.apuracao_diaria || [], report);

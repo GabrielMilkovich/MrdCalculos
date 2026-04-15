@@ -9,7 +9,14 @@ import { getReformaRules, REFORMA_DATE } from './reforma-trabalhista';
 import { getFPASByCodigo } from './terceiros-contributions';
 import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO, SELIC_MENSAL, TR_MENSAL } from './indices-fallback';
 
-Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
+// Espelha o Utils.CONTEXTO_MATEMATICO = new MathContext(38) do PJe-Calc oficial
+// para precisão intermediária (antes do arredondamento). Mantemos rounding DOWN
+// como default (preservando os goldens existentes); chamadas que devem usar
+// HALF_EVEN (banker's rounding — arredondamento monetário do PJe-Calc) passam o
+// modo explicitamente via `.toDP(2, Decimal.ROUND_HALF_EVEN)`.
+// Ref: vendor/pjecalc-source/base/br/jus/trt8/pjecalc/base/comum/Utils.java:59 (MathContext 38),
+//      Utils.arredondarValor (setScale(2, HALF_EVEN) — linha 177).
+Decimal.set({ precision: 38, rounding: Decimal.ROUND_DOWN });
 
 // Re-export all types and constants for backward compatibility
 export * from './engine-types';
@@ -1824,6 +1831,54 @@ export class PjeCalcEngine {
   private mesesEntreInclusivo(d1: Date, d2: Date): number {
     const exclusive = this.mesesEntre(d1, d2);
     return exclusive + 1; // Always at least 1 month (same-month = 1)
+  }
+
+  /**
+   * Port fiel de `PeriodoDeJuros.getMeses()` do PJe-Calc 2.15.1
+   * (vendor/pjecalc-source/.../comum/PeriodoDeJuros.java:98-125).
+   *
+   * Contagem de meses com FRAÇÃO pro-rata die (TipoDeQuantidadeDeJurosBaseEnum.FRACAO,
+   * padrão do JurosBase). Algoritmo:
+   *
+   * ```
+   * meses = countMonths(dataInicial, dataFinal)
+   * diasRestantesNoMesInicial = countDays(dataInicial, lastDayOfMonth(dataInicial)) + 1
+   * if diasRestantesNoMesInicial < diasNoMesInicial:
+   *     meses = meses - 1 + (diasRestantes / diasNoMes)
+   * if diaFinal < diasNoMesFinal:
+   *     meses = meses - 1 + (diaFinal / diasNoMesFinal)
+   * ```
+   *
+   * Ex: 2024-01-15 → 2025-01-31
+   *   countMonths = 12
+   *   diasRestantes_jan24 = 17 (15→31 inclusive), diasNoMes=31, 17<31 → meses = 12 - 1 + 17/31 ≈ 11.5484
+   *   diaFinal = 31, diasNoMes = 31, 31>=31 → sem ajuste final
+   *   Resultado: 11.5484 meses
+   */
+  private mesesFracionadosPJeCalc(dataInicial: Date, dataFinal: Date): Decimal {
+    if (dataInicial >= dataFinal) return new Decimal(0);
+    const countMonths = (d1: Date, d2: Date): number => {
+      return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+    };
+    const diasNoMes = (d: Date): number => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const countDaysInclusive = (d1: Date, d2: Date): number =>
+      Math.floor((d2.getTime() - d1.getTime()) / 86400000) + 1;
+    const lastDayOfMonth = (d: Date): Date => new Date(d.getFullYear(), d.getMonth() + 1, 0);
+
+    let meses = new Decimal(countMonths(dataInicial, dataFinal));
+    const diasRestantesInicial = countDaysInclusive(dataInicial, lastDayOfMonth(dataInicial));
+    const totalDiasMesInicial = diasNoMes(dataInicial);
+    if (diasRestantesInicial < totalDiasMesInicial) {
+      const fracao = new Decimal(diasRestantesInicial).div(totalDiasMesInicial);
+      meses = meses.minus(1).plus(fracao);
+    }
+    const diaFinal = dataFinal.getDate();
+    const totalDiasMesFinal = diasNoMes(dataFinal);
+    if (diaFinal < totalDiasMesFinal) {
+      const fracao = new Decimal(diaFinal).div(totalDiasMesFinal);
+      meses = meses.minus(1).plus(fracao);
+    }
+    return Decimal.max(meses, new Decimal(0));
   }
 
   // =====================================================
