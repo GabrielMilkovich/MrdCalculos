@@ -1425,6 +1425,16 @@ export class PjeCalcEngine {
   // =====================================================
 
   calcularVerba(verba: PjeVerba): PjeVerbaResult {
+    // ═══ PJC Replay Mode ═══════════════════════════════════════════════════
+    // Quando a verba traz ocorrencias_precomputadas (extraídas do .PJC via
+    // bridge), replay direto em vez de recalcular do zero via historicos.
+    // Isso garante paridade com os valores base/devido/pago que o PJe-Calc
+    // já computou e exportou no arquivo — evitando divergências por
+    // diferenças em cartão-ponto, proporcionalidade, exclusões etc.
+    if (verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
+      return this.calcularVerbaPrecomputada(verba);
+    }
+
     const periodo = { inicio: verba.periodo_inicio, fim: verba.periodo_fim };
     let competencias: string[];
 
@@ -1494,6 +1504,54 @@ export class PjeCalcEngine {
       totalDiferenca = totalDiferenca.plus(oc.diferenca);
     }
 
+    return {
+      verba_id: verba.id,
+      nome: verba.nome,
+      tipo: verba.tipo,
+      caracteristica: verba.caracteristica,
+      ocorrencias,
+      total_devido: totalDevido.toDP(2).toNumber(),
+      total_pago: totalPago.toDP(2).toNumber(),
+      total_diferenca: totalDiferenca.toDP(2).toNumber(),
+      total_corrigido: totalDiferenca.toDP(2).toNumber(),
+      total_juros: 0,
+      total_final: totalDiferenca.toDP(2).toNumber(),
+    };
+  }
+
+  /**
+   * PJC Replay Mode: usa as ocorrências pré-computadas vindas do .PJC
+   * (via bridge pjc-to-engine) em vez de recalcular do zero. Aplica apenas
+   * filtros de período e característica, copiando base/devido/pago direto.
+   * Garante paridade com os valores que o PJe-Calc já exportou no arquivo.
+   */
+  private calcularVerbaPrecomputada(verba: PjeVerba): PjeVerbaResult {
+    const ocorrencias: PjeOcorrenciaResult[] = [];
+    let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
+    for (const precomp of verba.ocorrencias_precomputadas ?? []) {
+      const devido = Number(precomp.devido) || 0;
+      const pago = Number(precomp.pago) || 0;
+      const diferenca = Number(new Decimal(devido).minus(pago).toDP(2));
+      const comp = precomp.competencia.length > 7 ? precomp.competencia.slice(0, 7) : precomp.competencia;
+      ocorrencias.push({
+        competencia: comp,
+        base: Number(precomp.base) || 0,
+        divisor: Number(precomp.divisor) || 1,
+        multiplicador: Number(precomp.multiplicador) || 1,
+        quantidade: Number(precomp.quantidade) || 1,
+        dobra: precomp.dobra ? 2 : 1,
+        devido,
+        pago,
+        diferenca,
+        valor_corrigido: diferenca,
+        juros: 0,
+        valor_final: diferenca,
+        indice_correcao: precomp.indice_acumulado,
+      });
+      totalDevido = totalDevido.plus(devido);
+      totalPago = totalPago.plus(pago);
+      totalDiferenca = totalDiferenca.plus(diferenca);
+    }
     return {
       verba_id: verba.id,
       nome: verba.nome,
