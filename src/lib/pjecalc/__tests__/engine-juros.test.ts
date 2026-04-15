@@ -16,6 +16,8 @@ describe('PjeCalcEngine - Juros de Mora', () => {
     });
 
     // Use INPC (not IPCA-E/SELIC) to avoid ADC 58/59 logic
+    // base_de_juros_das_verbas: 'DIFERENCA' — isola a fórmula pura de juros sem
+    // dedução de INSS (VERBA_INSS é o default empírico, mas aqui testamos mecânica).
     const engine = createEngine({
       historicos: [hist],
       verbas: [verba],
@@ -28,6 +30,7 @@ describe('PjeCalcEngine - Juros de Mora', () => {
         juros_percentual: 1,
         juros_inicio: 'ajuizamento',
         data_liquidacao: '2025-01-01',
+        base_de_juros_das_verbas: 'DIFERENCA',
       },
     });
 
@@ -56,6 +59,7 @@ describe('PjeCalcEngine - Juros de Mora', () => {
     });
 
     // Use INPC to avoid ADC 58/59 path
+    // base_de_juros_das_verbas: 'DIFERENCA' — testa mecânica pura.
     const engine = createEngine({
       historicos: [hist],
       verbas: [verba],
@@ -69,6 +73,7 @@ describe('PjeCalcEngine - Juros de Mora', () => {
         juros_percentual: 1,
         juros_inicio: 'citacao',
         data_liquidacao: '2025-01-01',
+        base_de_juros_das_verbas: 'DIFERENCA',
       },
     });
 
@@ -158,6 +163,7 @@ describe('PjeCalcEngine - Juros de Mora', () => {
     });
 
     // Use INPC to avoid ADC 58/59 SELIC/IPCA-E detection
+    // base_de_juros_das_verbas: 'DIFERENCA' — testa mecânica de composição pura.
     const engine = createEngine({
       historicos: [hist],
       verbas: [verba],
@@ -170,6 +176,7 @@ describe('PjeCalcEngine - Juros de Mora', () => {
         juros_percentual: 1,
         juros_inicio: 'ajuizamento',
         data_liquidacao: '2025-01-01',
+        base_de_juros_das_verbas: 'DIFERENCA',
       },
     });
 

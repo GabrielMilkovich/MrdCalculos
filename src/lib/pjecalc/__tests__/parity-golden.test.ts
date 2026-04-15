@@ -110,6 +110,10 @@ describe('Golden Parity Test — Rescisão Sem Justa Causa', () => {
         juros_percentual: 1,
         juros_inicio: 'ajuizamento',
         data_liquidacao: '2025-01-01',
+        // Este cenário golden calcula juros pela fórmula pura (1% × meses) para
+        // documentar a mecânica — mantém DIFERENCA explícito ao invés do default
+        // empírico VERBA_INSS (que deduz INSS proporcional da base).
+        base_de_juros_das_verbas: 'DIFERENCA',
       },
     });
   }

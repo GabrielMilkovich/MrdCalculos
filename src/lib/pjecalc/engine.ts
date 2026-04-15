@@ -1056,7 +1056,46 @@ export class PjeCalcEngine {
       return this.getIndiceClampedFromAcumulado(indices, idxOrigem, origemSubsequente, idxDestino.competencia.slice(0, 7));
     }
 
+    // ═══ SELIC: SOMA SIMPLES (metodologia PJe-Calc 2.13.2) ═══
+    // PJe-Calc acumula SELIC de forma SIMPLES (soma aritmética das taxas mensais),
+    // NÃO composta (ratio de acumulados). Comprovado empiricamente com 9 PJC reais
+    // (PJe-Calc 2.13.2): 2018-07→2026-03 soma simples = 80.37%, ratio composto
+    // = 91.92% (delta +11.55pp). Taxas decrescentes em incrementos de 1.00%/mês
+    // confirmam soma simples (assinatura inequívoca vs composição).
+    // Ref: Manual de Procedimentos para Cálculos na Justiça Federal;
+    //      Súmula 121 STF (vedada capitalização de juros).
+    if (nomeIndice === 'SELIC' || nomeIndice === 'selic'
+        || nomeIndice === 'SELIC_SIMPLES' || nomeIndice === 'SELIC_RF'
+        || nomeIndice === 'SELIC_COMPOSTA') {
+      const selicSimples = this.getSelicSimplesFromDB(
+        indices, origemSubsequente, idxDestino.competencia.slice(0, 7));
+      if (selicSimples !== null) return selicSimples;
+      this.trackWarning('W_SELIC_SEM_TAXAS_MENSAIS', 'correcao',
+        `SELIC: sem taxas mensais (campo valor) no DB para ${origemSubsequente}→${idxDestino.competencia.slice(0, 7)}. Usando ratio de acumulados (COMPOSTO — pode divergir do PJe-Calc).`,
+        compOrigem);
+      // cai no ratio abaixo
+    }
+
     return new Decimal(String(idxDestino.acumulado)).div(new Decimal(String(idxOrigem.acumulado))).toDP(10).toNumber();
+  }
+
+  /**
+   * CAUSA-1 (empirical): fator SELIC pela SOMA SIMPLES das taxas mensais
+   * (campo `valor` em %). Aplica Súmula 381 TST (início no mês subsequente)
+   * externamente — este método apenas soma o intervalo [compInicio, compFim].
+   *
+   * Retorna: 1 + Σtaxas/100 (ex: 1.8037 para 80.37%).
+   * Null se nenhuma taxa mensal estiver disponível no período.
+   */
+  private getSelicSimplesFromDB(indices: PjeIndiceRow[], compInicio: string, compFim: string): number | null {
+    if (!compInicio || !compFim || compInicio > compFim) return 1;
+    const taxasMensais = indices.filter(i => {
+      const comp = i.competencia.slice(0, 7);
+      return comp >= compInicio && comp <= compFim && i.valor != null && i.valor !== 0;
+    });
+    if (taxasMensais.length === 0) return null;
+    const somaPercentual = taxasMensais.reduce((sum, i) => sum + (i.valor || 0), 0);
+    return new Decimal(1).plus(new Decimal(somaPercentual).div(100)).toDP(10).toNumber();
   }
 
   /**
@@ -1141,9 +1180,42 @@ export class PjeCalcEngine {
         `Usando índice ${nomeIndice} do fallback hardcoded (não do banco). Valores podem ter precisão limitada.`,
         compOrigem,
       );
+      // CAUSA-1: SELIC usa soma simples do fallback SELIC_MENSAL quando disponível.
+      // Fallback composto fica como último recurso.
+      if (nomeIndice === 'SELIC' || nomeIndice === 'selic') {
+        const selicFallback = this.getSelicSimplesFallback(compOrigem, compDestino);
+        if (selicFallback !== null) return selicFallback;
+      }
       return new Decimal(String(acumDestino)).div(new Decimal(String(acumOrigem))).toDP(10).toNumber();
     }
     return null;
+  }
+
+  /**
+   * CAUSA-1: SELIC soma simples usando a tabela `SELIC_MENSAL` de indices-fallback.ts.
+   * Aplica Súmula 381 TST: início no mês subsequente ao vencimento.
+   */
+  private getSelicSimplesFallback(compOrigem: string, compDestino: string): number | null {
+    const origemSubsequente = this.mesSubsequente(compOrigem.slice(0, 7));
+    const destinoKey = compDestino.slice(0, 7);
+    if (origemSubsequente > destinoKey) return 1;
+    let soma = 0;
+    let count = 0;
+    const [anoI, mesI] = origemSubsequente.split('-').map(Number);
+    const [anoF, mesF] = destinoKey.split('-').map(Number);
+    let y = anoI, m = mesI;
+    while (y < anoF || (y === anoF && m <= mesF)) {
+      const key = `${y}-${String(m).padStart(2, '0')}`;
+      const taxa = SELIC_MENSAL[key];
+      if (typeof taxa === 'number') {
+        soma += taxa;
+        count++;
+      }
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+    if (count === 0) return null;
+    return new Decimal(1).plus(new Decimal(soma).div(100)).toDP(10).toNumber();
   }
 
   // =====================================================
@@ -1240,7 +1312,10 @@ export class PjeCalcEngine {
   /** Cache da alíquota INSS proporcional para o ciclo atual de liquidação. */
   private _verbaInssRateCache: number | null = null;
   private getVerbaInssRate(verbaResults: PjeVerbaResult[]): number {
-    if ((this.correcaoConfig.base_de_juros_das_verbas || '').toUpperCase() !== 'VERBA_INSS') return 0;
+    // VERBA_INSS é o default (empírico: 100% dos PJC reais). Só retorna 0 se o
+    // usuário EXPLICITAMENTE configurou outra base (DIFERENCA/DEVIDO/CORRIGIDO).
+    const cfg = (this.correcaoConfig.base_de_juros_das_verbas || 'VERBA_INSS').toUpperCase();
+    if (cfg === 'DIFERENCA' || cfg === 'DEVIDO' || cfg === 'CORRIGIDO') return 0;
     if (this._verbaInssRateCache != null) return this._verbaInssRateCache;
     this._verbaInssRateCache = this.calcularInssRateProporcional(verbaResults);
     return this._verbaInssRateCache;
@@ -1511,11 +1586,11 @@ export class PjeCalcEngine {
               const mesesJurosPreCitacao = this.mesesEntreInclusivo(dataAjuiz, dataCitacao);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               const valorCorrigidoParc = Number(new Decimal(oc.diferenca).times(fator1).toDP(2, Decimal.ROUND_HALF_EVEN));
-              // CAUSA-4: aplicar VERBA_INSS se configurado (ADC 58/59 pré-citação)
-              const cfgADC = (this.correcaoConfig.base_de_juros_das_verbas || '').toUpperCase();
-              const baseJurosADC = cfgADC === 'VERBA_INSS'
-                ? Number(new Decimal(valorCorrigidoParc).times(new Decimal(1).minus(this.getVerbaInssRate(verbaResults))).toDP(2))
-                : valorCorrigidoParc;
+              // CAUSA-4 (empirical): default VERBA_INSS em ADC 58/59 pré-citação.
+              const cfgADC = (this.correcaoConfig.base_de_juros_das_verbas || 'VERBA_INSS').toUpperCase();
+              const baseJurosADC = (cfgADC === 'DIFERENCA' || cfgADC === 'DEVIDO' || cfgADC === 'CORRIGIDO')
+                ? valorCorrigidoParc
+                : Number(new Decimal(valorCorrigidoParc).times(new Decimal(1).minus(this.getVerbaInssRate(verbaResults))).toDP(2));
               juros = Number(new Decimal(baseJurosADC).times(taxaMensal).times(mesesJurosPreCitacao).toDP(2, Decimal.ROUND_HALF_EVEN));
             }
           }
@@ -1530,17 +1605,16 @@ export class PjeCalcEngine {
 
           if (this.correcaoConfig.indice !== 'SELIC') {
             const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2, Decimal.ROUND_HALF_EVEN));
-            // FIX CICLO-9 #1 + CAUSA-4: base de juros conforme PJe-Calc.
-            // VERBA_INSS deduz INSS proporcional antes de aplicar juros.
+            // FIX CICLO-9 #1 + CAUSA-4 (empirical): default VERBA_INSS, conforme
+            // observado em 9 PJC reais (100% trazem <baseDeJurosDasVerbas>VERBA_INSS).
             const baseJurosLegacy: number = (() => {
-              const cfg = (this.correcaoConfig.base_de_juros_das_verbas || '').toUpperCase();
+              const cfg = (this.correcaoConfig.base_de_juros_das_verbas || 'VERBA_INSS').toUpperCase();
               if (cfg === 'CORRIGIDO') return valorCorrigido;
               if (cfg === 'DEVIDO') return oc.devido;
-              if (cfg === 'VERBA_INSS') {
-                const inssRate = this.getVerbaInssRate(verbaResults);
-                return Number(new Decimal(oc.diferenca).times(new Decimal(1).minus(inssRate)).toDP(2));
-              }
-              return oc.diferenca;
+              if (cfg === 'DIFERENCA') return oc.diferenca;
+              // VERBA_INSS (default) e qualquer outro valor caem aqui
+              const inssRate = this.getVerbaInssRate(verbaResults);
+              return Number(new Decimal(oc.diferenca).times(new Decimal(1).minus(inssRate)).toDP(2));
             })();
             if (this.correcaoConfig.juros_tipo === 'simples_mensal') {
               let dataInicioJuros: Date;
@@ -1669,18 +1743,16 @@ export class PjeCalcEngine {
 
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
 
-        // FIX CICLO-9 #1 + CAUSA-4: Resolver base de juros conforme PJe-Calc.
-        // PJe-Calc default = 'DIFERENCA': juros incidem sobre o valor nominal da diferença.
-        // VERBA_INSS = (diferenca − INSS proporcional).
+        // FIX CICLO-9 #1 + CAUSA-4 (empirical): default VERBA_INSS (100% dos
+        // 9 PJC reais analisados trazem <baseDeJurosDasVerbas>VERBA_INSS).
         const baseJuros: Decimal = (() => {
-          const cfg = (this.correcaoConfig.base_de_juros_das_verbas || '').toUpperCase();
+          const cfg = (this.correcaoConfig.base_de_juros_das_verbas || 'VERBA_INSS').toUpperCase();
           if (cfg === 'CORRIGIDO') return valorCorrigido;
           if (cfg === 'DEVIDO') return new Decimal(oc.devido);
-          if (cfg === 'VERBA_INSS') {
-            const inssRate = this.getVerbaInssRate(verbaResults);
-            return new Decimal(oc.diferenca).times(new Decimal(1).minus(inssRate));
-          }
-          return new Decimal(oc.diferenca); // 'DIFERENCA' = default PJe-Calc
+          if (cfg === 'DIFERENCA') return new Decimal(oc.diferenca);
+          // VERBA_INSS (default): juros sobre (diferenca − INSS proporcional)
+          const inssRate = this.getVerbaInssRate(verbaResults);
+          return new Decimal(oc.diferenca).times(new Decimal(1).minus(inssRate));
         })();
 
         // Calculate interest segment-by-segment
@@ -3348,23 +3420,19 @@ export class PjeCalcEngine {
           ? Number(new Decimal(totalCSDescontado).times(oc.valor_corrigido).div(totalCorrigido).toDP(2))
           : 0;
 
-        // FIX CICLO-9 #1 + CAUSA-4: base de juros conforme PJe-Calc (default = DIFERENCA).
-        // VERBA_INSS já desconta INSS proporcional ANTES da subtração de csShare,
-        // mas em aplicarJurosAposCS o csShare já é descontado depois — então quando
-        // VERBA_INSS está ativo, evitamos dupla dedução: a base raw passa direto
-        // pelo redutor e ignoramos o csShare adicional.
-        const cfgBaseJ = (this.correcaoConfig.base_de_juros_das_verbas || '').toUpperCase();
+        // FIX CICLO-9 #1 + CAUSA-4 (empirical): default VERBA_INSS.
+        // Quando VERBA_INSS já reduziu pela alíquota INSS, NÃO subtrai csShare novamente.
+        const cfgBaseJ = (this.correcaoConfig.base_de_juros_das_verbas || 'VERBA_INSS').toUpperCase();
+        const isVerbaInss = cfgBaseJ !== 'CORRIGIDO' && cfgBaseJ !== 'DEVIDO' && cfgBaseJ !== 'DIFERENCA';
         const baseJurosRaw: Decimal = (() => {
           if (cfgBaseJ === 'CORRIGIDO') return new Decimal(oc.valor_corrigido);
           if (cfgBaseJ === 'DEVIDO') return new Decimal(oc.devido);
-          if (cfgBaseJ === 'VERBA_INSS') {
-            const inssRate = this.getVerbaInssRate(verbaResults);
-            return new Decimal(oc.diferenca).times(new Decimal(1).minus(inssRate));
-          }
-          return new Decimal(oc.diferenca);
+          if (cfgBaseJ === 'DIFERENCA') return new Decimal(oc.diferenca);
+          // VERBA_INSS (default)
+          const inssRate = this.getVerbaInssRate(verbaResults);
+          return new Decimal(oc.diferenca).times(new Decimal(1).minus(inssRate));
         })();
-        // Quando VERBA_INSS já reduziu pela alíquota INSS, NÃO subtrair csShare novamente.
-        const baseJuros = cfgBaseJ === 'VERBA_INSS' ? baseJurosRaw : baseJurosRaw.minus(csShare);
+        const baseJuros = isVerbaInss ? baseJurosRaw : baseJurosRaw.minus(csShare);
 
         if (!jurosDisabled && combinacoes_juros.length > 0 && combinacoes_indice.length > 0) {
           const compDate = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
