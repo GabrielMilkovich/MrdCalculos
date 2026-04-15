@@ -1269,58 +1269,6 @@ export class PjeCalcEngine {
     return sum / 100;
   }
 
-  /**
-   * CAUSA-4 do roadmap: alíquota efetiva proporcional do INSS reclamante,
-   * usada quando `base_de_juros_das_verbas === 'VERBA_INSS'`.
-   *
-   * Calculada via amostragem rápida: roda calcularCS preliminar sobre os
-   * resultados de verba (sem correção/juros) e divide o total devido pela
-   * soma de diferenças tributáveis. Resultado entre [0, 0.14] tipicamente.
-   */
-  private calcularInssRateProporcional(verbaResults: PjeVerbaResult[]): number {
-    if (!this.csConfig.apurar_segurado || !this.csConfig.cobrar_reclamante) return 0;
-    let baseTributavel = new Decimal(0);
-    for (const vr of verbaResults) {
-      const verba = this.verbas.find(v => v.id === vr.verba_id);
-      if (!verba?.incidencias.contribuicao_social) continue;
-      for (const oc of vr.ocorrencias) {
-        if (oc.diferenca > 0) baseTributavel = baseTributavel.plus(oc.diferenca);
-      }
-    }
-    if (baseTributavel.lte(0)) return 0;
-    // Apuração rápida sem efeitos colaterais — usa o resultado em snapshot
-    const snapshot = this.calcularCS(verbaResults, false);
-    const inssTotal = new Decimal(snapshot.total_segurado || 0);
-    if (inssTotal.lte(0)) return 0;
-    const rate = inssTotal.div(baseTributavel).toNumber();
-    // Salvaguarda: alíquota INSS nunca > 14% (teto progressivo)
-    return Math.max(0, Math.min(rate, 0.14));
-  }
-
-  /**
-   * CAUSA-4: deduz a parcela proporcional de INSS de uma base de juros.
-   * Retorna a base original se VERBA_INSS não for o modo configurado.
-   */
-  private aplicarVerbaInssNaBaseJuros(base: Decimal, oc: PjeOcorrenciaResult, inssRate: number): Decimal {
-    const cfg = (this.correcaoConfig.base_de_juros_das_verbas || '').toUpperCase();
-    if (cfg !== 'VERBA_INSS' || inssRate <= 0) return base;
-    // Reduz pela alíquota proporcional
-    const reduction = new Decimal(1).minus(inssRate);
-    return base.times(reduction);
-  }
-
-  /** Cache da alíquota INSS proporcional para o ciclo atual de liquidação. */
-  private _verbaInssRateCache: number | null = null;
-  private getVerbaInssRate(verbaResults: PjeVerbaResult[]): number {
-    // VERBA_INSS é o default (empírico: 100% dos PJC reais). Só retorna 0 se o
-    // usuário EXPLICITAMENTE configurou outra base (DIFERENCA/DEVIDO/CORRIGIDO).
-    const cfg = (this.correcaoConfig.base_de_juros_das_verbas || 'VERBA_INSS').toUpperCase();
-    if (cfg === 'DIFERENCA' || cfg === 'DEVIDO' || cfg === 'CORRIGIDO') return 0;
-    if (this._verbaInssRateCache != null) return this._verbaInssRateCache;
-    this._verbaInssRateCache = this.calcularInssRateProporcional(verbaResults);
-    return this._verbaInssRateCache;
-  }
-
   /** Enumera competências YYYY-MM no intervalo [start, end). */
   private enumerateMonths(start: string, end: string): string[] {
     const out: string[] = [];
@@ -1425,16 +1373,6 @@ export class PjeCalcEngine {
   // =====================================================
 
   calcularVerba(verba: PjeVerba): PjeVerbaResult {
-    // ═══ PJC Replay Mode ═══════════════════════════════════════════════════
-    // Quando a verba traz ocorrencias_precomputadas (extraídas do .PJC via
-    // bridge), replay direto em vez de recalcular do zero via historicos.
-    // Isso garante paridade com os valores base/devido/pago que o PJe-Calc
-    // já computou e exportou no arquivo — evitando divergências por
-    // diferenças em cartão-ponto, proporcionalidade, exclusões etc.
-    if (verba.ocorrencias_precomputadas && verba.ocorrencias_precomputadas.length > 0) {
-      return this.calcularVerbaPrecomputada(verba);
-    }
-
     const periodo = { inicio: verba.periodo_inicio, fim: verba.periodo_fim };
     let competencias: string[];
 
@@ -1504,54 +1442,6 @@ export class PjeCalcEngine {
       totalDiferenca = totalDiferenca.plus(oc.diferenca);
     }
 
-    return {
-      verba_id: verba.id,
-      nome: verba.nome,
-      tipo: verba.tipo,
-      caracteristica: verba.caracteristica,
-      ocorrencias,
-      total_devido: totalDevido.toDP(2).toNumber(),
-      total_pago: totalPago.toDP(2).toNumber(),
-      total_diferenca: totalDiferenca.toDP(2).toNumber(),
-      total_corrigido: totalDiferenca.toDP(2).toNumber(),
-      total_juros: 0,
-      total_final: totalDiferenca.toDP(2).toNumber(),
-    };
-  }
-
-  /**
-   * PJC Replay Mode: usa as ocorrências pré-computadas vindas do .PJC
-   * (via bridge pjc-to-engine) em vez de recalcular do zero. Aplica apenas
-   * filtros de período e característica, copiando base/devido/pago direto.
-   * Garante paridade com os valores que o PJe-Calc já exportou no arquivo.
-   */
-  private calcularVerbaPrecomputada(verba: PjeVerba): PjeVerbaResult {
-    const ocorrencias: PjeOcorrenciaResult[] = [];
-    let totalDevido = new Decimal(0), totalPago = new Decimal(0), totalDiferenca = new Decimal(0);
-    for (const precomp of verba.ocorrencias_precomputadas ?? []) {
-      const devido = Number(precomp.devido) || 0;
-      const pago = Number(precomp.pago) || 0;
-      const diferenca = Number(new Decimal(devido).minus(pago).toDP(2));
-      const comp = precomp.competencia.length > 7 ? precomp.competencia.slice(0, 7) : precomp.competencia;
-      ocorrencias.push({
-        competencia: comp,
-        base: Number(precomp.base) || 0,
-        divisor: Number(precomp.divisor) || 1,
-        multiplicador: Number(precomp.multiplicador) || 1,
-        quantidade: Number(precomp.quantidade) || 1,
-        dobra: precomp.dobra ? 2 : 1,
-        devido,
-        pago,
-        diferenca,
-        valor_corrigido: diferenca,
-        juros: 0,
-        valor_final: diferenca,
-        indice_correcao: precomp.indice_acumulado,
-      });
-      totalDevido = totalDevido.plus(devido);
-      totalPago = totalPago.plus(pago);
-      totalDiferenca = totalDiferenca.plus(diferenca);
-    }
     return {
       verba_id: verba.id,
       nome: verba.nome,
@@ -1644,11 +1534,16 @@ export class PjeCalcEngine {
               const mesesJurosPreCitacao = this.mesesEntreInclusivo(dataAjuiz, dataCitacao);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               const valorCorrigidoParc = Number(new Decimal(oc.diferenca).times(fator1).toDP(2, Decimal.ROUND_HALF_EVEN));
-              // CAUSA-4 (empirical): default VERBA_INSS em ADC 58/59 pré-citação.
-              const cfgADC = (this.correcaoConfig.base_de_juros_das_verbas || 'VERBA_INSS').toUpperCase();
-              const baseJurosADC = (cfgADC === 'DIFERENCA' || cfgADC === 'DEVIDO' || cfgADC === 'CORRIGIDO')
-                ? valorCorrigidoParc
-                : Number(new Decimal(valorCorrigidoParc).times(new Decimal(1).minus(this.getVerbaInssRate(verbaResults))).toDP(2));
+              // CAUSA-4 (empirical): VERBA_INSS em ADC 58/59 pré-citação.
+              const cfgADC = (this.correcaoConfig.base_de_juros_das_verbas || 'DIFERENCA').toUpperCase();
+              let baseJurosADC = valorCorrigidoParc;
+              if (cfgADC === 'VERBA_INSS') {
+                const totalDif = verbaResults.reduce((s, v) => s + Math.abs(v.total_diferenca), 0);
+                const compLiqLocal = this.correcaoConfig.data_liquidacao.slice(0, 7);
+                const inssEstimado = totalDif > 0 ? this.calcularINSSProgressivo(compLiqLocal, totalDif) : 0;
+                const taxaINSS = totalDif > 0 ? inssEstimado / totalDif : 0;
+                baseJurosADC = Number(new Decimal(valorCorrigidoParc).times(new Decimal(1).minus(taxaINSS)).toDP(2));
+              }
               juros = Number(new Decimal(baseJurosADC).times(taxaMensal).times(mesesJurosPreCitacao).toDP(2, Decimal.ROUND_HALF_EVEN));
             }
           }
@@ -1663,16 +1558,19 @@ export class PjeCalcEngine {
 
           if (this.correcaoConfig.indice !== 'SELIC') {
             const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2, Decimal.ROUND_HALF_EVEN));
-            // FIX CICLO-9 #1 + CAUSA-4 (empirical): default VERBA_INSS, conforme
-            // observado em 9 PJC reais (100% trazem <baseDeJurosDasVerbas>VERBA_INSS).
+            // CAUSA-4 (empirical): default VERBA_INSS — 100% dos 17 PJC reais usam este modo.
             const baseJurosLegacy: number = (() => {
-              const cfg = (this.correcaoConfig.base_de_juros_das_verbas || 'VERBA_INSS').toUpperCase();
+              const cfg = (this.correcaoConfig.base_de_juros_das_verbas || 'DIFERENCA').toUpperCase();
               if (cfg === 'CORRIGIDO') return valorCorrigido;
               if (cfg === 'DEVIDO') return oc.devido;
-              if (cfg === 'DIFERENCA') return oc.diferenca;
-              // VERBA_INSS (default) e qualquer outro valor caem aqui
-              const inssRate = this.getVerbaInssRate(verbaResults);
-              return Number(new Decimal(oc.diferenca).times(new Decimal(1).minus(inssRate)).toDP(2));
+              if (cfg === 'VERBA_INSS') {
+                const totalDif = verbaResults.reduce((s, v) => s + Math.abs(v.total_diferenca), 0);
+                const compLiqLocal = this.correcaoConfig.data_liquidacao.slice(0, 7);
+                const inssEstimado = totalDif > 0 ? this.calcularINSSProgressivo(compLiqLocal, totalDif) : 0;
+                const taxaINSS = totalDif > 0 ? inssEstimado / totalDif : 0;
+                return Number(new Decimal(oc.diferenca).times(new Decimal(1).minus(taxaINSS)).toDP(2));
+              }
+              return oc.diferenca; // fallback DIFERENCA
             })();
             if (this.correcaoConfig.juros_tipo === 'simples_mensal') {
               let dataInicioJuros: Date;
@@ -1801,16 +1699,19 @@ export class PjeCalcEngine {
 
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
 
-        // FIX CICLO-9 #1 + CAUSA-4 (empirical): default VERBA_INSS (100% dos
-        // 9 PJC reais analisados trazem <baseDeJurosDasVerbas>VERBA_INSS).
+        // CAUSA-4 (empirical): VERBA_INSS — 100% dos 17 PJC reais usam este modo.
         const baseJuros: Decimal = (() => {
-          const cfg = (this.correcaoConfig.base_de_juros_das_verbas || 'VERBA_INSS').toUpperCase();
+          const cfg = (this.correcaoConfig.base_de_juros_das_verbas || 'DIFERENCA').toUpperCase();
           if (cfg === 'CORRIGIDO') return valorCorrigido;
           if (cfg === 'DEVIDO') return new Decimal(oc.devido);
-          if (cfg === 'DIFERENCA') return new Decimal(oc.diferenca);
-          // VERBA_INSS (default): juros sobre (diferenca − INSS proporcional)
-          const inssRate = this.getVerbaInssRate(verbaResults);
-          return new Decimal(oc.diferenca).times(new Decimal(1).minus(inssRate));
+          if (cfg === 'VERBA_INSS') {
+            const totalDif = verbaResults.reduce((s, v) => s + Math.abs(v.total_diferenca), 0);
+            const compLiqLocal = this.correcaoConfig.data_liquidacao.slice(0, 7);
+            const inssEstimado = totalDif > 0 ? this.calcularINSSProgressivo(compLiqLocal, totalDif) : 0;
+            const taxaINSS = totalDif > 0 ? inssEstimado / totalDif : 0;
+            return new Decimal(oc.diferenca).times(new Decimal(1).minus(taxaINSS));
+          }
+          return new Decimal(oc.diferenca); // fallback DIFERENCA
         })();
 
         // Calculate interest segment-by-segment
@@ -3478,19 +3379,21 @@ export class PjeCalcEngine {
           ? Number(new Decimal(totalCSDescontado).times(oc.valor_corrigido).div(totalCorrigido).toDP(2))
           : 0;
 
-        // FIX CICLO-9 #1 + CAUSA-4 (empirical): default VERBA_INSS.
-        // Quando VERBA_INSS já reduziu pela alíquota INSS, NÃO subtrai csShare novamente.
-        const cfgBaseJ = (this.correcaoConfig.base_de_juros_das_verbas || 'VERBA_INSS').toUpperCase();
-        const isVerbaInss = cfgBaseJ !== 'CORRIGIDO' && cfgBaseJ !== 'DEVIDO' && cfgBaseJ !== 'DIFERENCA';
+        // CAUSA-4 (empirical): VERBA_INSS — quando usado, NÃO subtrai csShare novamente (evita dupla dedução).
+        const cfgBaseJ = (this.correcaoConfig.base_de_juros_das_verbas || 'DIFERENCA').toUpperCase();
         const baseJurosRaw: Decimal = (() => {
           if (cfgBaseJ === 'CORRIGIDO') return new Decimal(oc.valor_corrigido);
           if (cfgBaseJ === 'DEVIDO') return new Decimal(oc.devido);
-          if (cfgBaseJ === 'DIFERENCA') return new Decimal(oc.diferenca);
-          // VERBA_INSS (default)
-          const inssRate = this.getVerbaInssRate(verbaResults);
-          return new Decimal(oc.diferenca).times(new Decimal(1).minus(inssRate));
+          if (cfgBaseJ === 'VERBA_INSS') {
+            const totalDif = verbaResults.reduce((s, v) => s + Math.abs(v.total_diferenca), 0);
+            const compLiqLocal = this.correcaoConfig.data_liquidacao.slice(0, 7);
+            const inssEstimado = totalDif > 0 ? this.calcularINSSProgressivo(compLiqLocal, totalDif) : 0;
+            const taxaINSS = totalDif > 0 ? inssEstimado / totalDif : 0;
+            return new Decimal(oc.diferenca).times(new Decimal(1).minus(taxaINSS));
+          }
+          return new Decimal(oc.diferenca); // fallback DIFERENCA
         })();
-        const baseJuros = isVerbaInss ? baseJurosRaw : baseJurosRaw.minus(csShare);
+        const baseJuros = cfgBaseJ === 'VERBA_INSS' ? baseJurosRaw : baseJurosRaw.minus(csShare);
 
         if (!jurosDisabled && combinacoes_juros.length > 0 && combinacoes_indice.length > 0) {
           const compDate = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
@@ -3651,9 +3554,6 @@ export class PjeCalcEngine {
   // =====================================================
 
   liquidar(): PjeLiquidacaoResult {
-    // CAUSA-4: reset do cache da alíquota INSS proporcional para o ciclo corrente
-    this._verbaInssRateCache = null;
-
     const auditTrail: Array<{ step: number; module: string; description: string; competencia?: string; resultado?: number; rubrica?: string }> = [];
     let stepCounter = 0;
     const audit = (module: string, description: string, extra?: { competencia?: string; resultado?: number; rubrica?: string }) => {
