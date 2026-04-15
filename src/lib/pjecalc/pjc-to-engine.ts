@@ -547,6 +547,8 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
     aliquota_terceiros_fixa: csConf?.aliquota_terceiros ?? 0, // 0 when PJC doesn't specify
     periodos_simples: [],
     apuracao_juros_gt: gt,
+    // CAUSA-6: respeita o checkbox "Com Correção Trabalhista" do PJe-Calc
+    com_correcao_trabalhista: csConf?.com_correcao_trabalhista,
   };
 }
 
@@ -691,7 +693,9 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     } : undefined,
     // New PJC fields
     ignorar_taxa_negativa: a.atualizacao.ignorar_taxa_negativa,
-    base_de_juros_das_verbas: a.atualizacao.base_de_juros_das_verbas,
+    // CAUSA-4: normalizar para UPPER (PJe-Calc emite 'DIFERENCA','DEVIDO',
+    // 'CORRIGIDO','VERBA_INSS' / às vezes em camelCase: VerbaInss). Sempre uppercase.
+    base_de_juros_das_verbas: (a.atualizacao.base_de_juros_das_verbas || '').toUpperCase().replace(/-/g, '_') || undefined,
     ente_publico: a.atualizacao.ente_publico,
     aplicar_juros_fase_pre_judicial: a.atualizacao.aplicar_juros_fase_pre_judicial,
   };
