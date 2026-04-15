@@ -1511,7 +1511,12 @@ export class PjeCalcEngine {
               const mesesJurosPreCitacao = this.mesesEntreInclusivo(dataAjuiz, dataCitacao);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               const valorCorrigidoParc = Number(new Decimal(oc.diferenca).times(fator1).toDP(2, Decimal.ROUND_HALF_EVEN));
-              juros = Number(new Decimal(valorCorrigidoParc).times(taxaMensal).times(mesesJurosPreCitacao).toDP(2, Decimal.ROUND_HALF_EVEN));
+              // CAUSA-4: aplicar VERBA_INSS se configurado (ADC 58/59 pré-citação)
+              const cfgADC = (this.correcaoConfig.base_de_juros_das_verbas || '').toUpperCase();
+              const baseJurosADC = cfgADC === 'VERBA_INSS'
+                ? Number(new Decimal(valorCorrigidoParc).times(new Decimal(1).minus(this.getVerbaInssRate(verbaResults))).toDP(2))
+                : valorCorrigidoParc;
+              juros = Number(new Decimal(baseJurosADC).times(taxaMensal).times(mesesJurosPreCitacao).toDP(2, Decimal.ROUND_HALF_EVEN));
             }
           }
         } else {
