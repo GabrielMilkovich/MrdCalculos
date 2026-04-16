@@ -191,18 +191,95 @@ export class PjeCalcEngineV3 {
       calculo.adicionarVerba(vc);
     }
 
-    // ── 4. Liquidar correção monetária ──
-    calculo.liquidar();
-
-    // ── 5. Preparar cálculo de juros por ocorrência ──
-    // Respeita combinacoes_juros do PJC (TRD_SIMPLES, SELIC, TAXA_LEGAL, etc.)
+    // ── 4. Liquidar correção monetária por SEGMENTOS ──
+    // Quando há combinações de índice (ADC 58/59), cada ocorrência precisa
+    // ser corrigida com o fator COMPOSTO dos segmentos que ela atravessa:
+    //   Ex: IPCA-E(comp→citação) × SELIC(citação→liquidação)
+    // A TabelaDeCorrecaoMonetaria do core/ não implementa combinações completas,
+    // então calculamos aqui diretamente por ocorrência.
     const dataLiq = new Date(this.correcaoConfig.data_liquidacao);
     const dataAjuiz = new Date(this.params.data_ajuizamento);
     const jurosPercentualMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
-
-    // Monta breakpoints de juros a partir das combinações
     const combJuros = this.correcaoConfig.combinacoes_juros ?? [];
     const combIndice = this.correcaoConfig.combinacoes_indice ?? [];
+
+    if (combIndice.length > 0) {
+      // Calcula correção segmentada por ocorrência
+      for (const vc of verbasCore) {
+        for (const oc of vc.getOcorrenciasAtivas()) {
+          const dataIni = oc.getDataInicial();
+          if (!dataIni) continue;
+          if (oc.getDiferenca().isZero()) continue;
+
+          // Súmula 381: correção começa no mês SUBSEQUENTE ao vencimento
+          const compOc = `${dataIni.getFullYear()}-${String(dataIni.getMonth() + 1).padStart(2, '0')}`;
+          const mesSubsequente = (comp: string) => {
+            const [y, m] = comp.split('-').map(Number);
+            return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+          };
+          const compCorrecaoInicio = mesSubsequente(compOc) + '-01';
+          const compLiqStr = this.correcaoConfig.data_liquidacao;
+
+          // Montar breakpoints de índice
+          const breakpoints = new Set<string>();
+          breakpoints.add(compCorrecaoInicio);
+          breakpoints.add(compLiqStr);
+          for (const ci of combIndice) {
+            if (ci.de && ci.de > compCorrecaoInicio && ci.de <= compLiqStr) breakpoints.add(ci.de);
+          }
+          const datas = [...breakpoints].sort();
+
+          // Compor fator total multiplicando segmentos
+          let fatorTotal = new Decimal(1);
+          for (let i = 0; i < datas.length - 1; i++) {
+            const segInicio = datas[i].slice(0, 7);
+            const segFim = datas[i + 1].slice(0, 7);
+            const regime = this.getRegimeParaData(combIndice, datas[i]);
+            const indice = (regime?.indice || '').toUpperCase().replace(/-/g, '_');
+
+            if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'SEM CORREÇÃO') {
+              // Verificar se juros=SELIC nesta fase (ADC 58/59)
+              const regimeJ = this.getRegimeParaData(combJuros, datas[i]);
+              if (regimeJ && regimeJ.tipo.toUpperCase() === 'SELIC') {
+                // SELIC soma simples como fator unificado
+                const selicTaxas = this.indicesDB
+                  .filter(idx => idx.indice === 'SELIC' && idx.competencia.slice(0, 7) >= segInicio && idx.competencia.slice(0, 7) < segFim)
+                  .reduce((s, idx) => s + (Number(idx.valor) || 0), 0);
+                if (selicTaxas > 0) fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicTaxas).div(100)));
+              }
+              // SEM_CORRECAO sem SELIC → fator = 1 (nada a multiplicar)
+            } else if (indice === 'SELIC') {
+              // SELIC como índice direto → soma simples
+              const selicTaxas = this.indicesDB
+                .filter(idx => idx.indice === 'SELIC' && idx.competencia.slice(0, 7) >= segInicio && idx.competencia.slice(0, 7) < segFim)
+                .reduce((s, idx) => s + (Number(idx.valor) || 0), 0);
+              if (selicTaxas > 0) fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicTaxas).div(100)));
+            } else {
+              // IPCA-E, IPCA, INPC, etc. → ratio de acumulados para este segmento
+              const aliases = ['IPCA-E', 'IPCAE', 'IPCA', 'INPC', 'IGPM', 'TR'];
+              const normIndice = regime?.indice?.replace(/-/g, '') || '';
+              const searchNames = aliases.filter(a => a.replace(/-/g, '') === normIndice || a === regime?.indice);
+              if (searchNames.length === 0) searchNames.push(regime?.indice || 'IPCA-E', 'IPCA-E');
+
+              const idxO = this.indicesDB
+                .filter(idx => searchNames.includes(idx.indice) && idx.competencia.slice(0, 7) < segInicio && idx.acumulado)
+                .sort((a, b) => b.competencia.localeCompare(a.competencia))[0];
+              const idxD = this.indicesDB
+                .filter(idx => searchNames.includes(idx.indice) && idx.competencia.slice(0, 7) <= segFim && idx.acumulado)
+                .sort((a, b) => b.competencia.localeCompare(a.competencia))[0];
+
+              if (idxO && idxD && idxO.acumulado > 0) {
+                fatorTotal = fatorTotal.times(new Decimal(idxD.acumulado).div(new Decimal(idxO.acumulado)));
+              }
+            }
+          }
+          oc.setIndiceAcumulado(fatorTotal);
+        }
+      }
+    } else {
+      // Sem combinações — usa calculo.liquidar() padrão
+      calculo.liquidar();
+    }
 
     // ── 6. FGTS ──
     const fgtsDepositos: { competencia: string; base: number; aliquota: number; valor: number }[] = [];
