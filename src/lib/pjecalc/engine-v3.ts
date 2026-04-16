@@ -487,18 +487,33 @@ export class PjeCalcEngineV3 {
     }
     const csDescontado = this.csConfig.cobrar_reclamante ? +totalSegurado.toFixed(2) : 0;
 
-    // ── 8. IRPF ──
+    // ── 8. IRPF — Port simplificado de MaquinaDeCalculoDeIrpf.liquidar() ──
+    //
+    // Diferenças cruciais vs versão anterior:
+    //  - Usa VALOR CORRIGIDO (getDiferencaCorrigida), não diferença bruta.
+    //    Ref: MaquinaDeCalculoDeIrpf.java:941 (Utils.arredondarValorMonetario(ocorrencia.getDiferencaCorrigida()))
+    //  - Separa 13º do resto (demais verbas) — cada um tem sua tabela RRA.
+    //    Ref: MaquinaDeCalculoDeIrpf.java:944-976 (switch por caracteristica)
+    //  - Deduz CS proporcionalmente entre 13º e demais verbas.
+    //    Ref: MaquinaDeCalculoDeIrpf.java:990-1015
     let irDevido = 0;
     let irMeses = 1;
     if (this.irConfig.apurar) {
-      let baseBrutaIR = 0;
+      let base13Corrigido = 0;
+      let baseFeriasCorrigido = 0;
+      let baseDemaisCorrigido = 0;
       const todasComp = new Set<string>();
-      for (const vc of verbasCore) {
+      for (let vi = 0; vi < verbasCore.length; vi++) {
+        const vc = verbasCore[vi];
         if (!vc.getIncidenciaIRPF()) continue;
+        const vUI = this.verbas[vi];
+        const caract = vUI?.caracteristica;
         for (const oc of vc.getOcorrenciasAtivas()) {
-          const dif = oc.getDiferenca().toNumber();
-          if (dif <= 0) continue;
-          baseBrutaIR += dif;
+          const corrigido = oc.getDiferencaCorrigida()?.toNumber() ?? oc.getDiferenca().toNumber();
+          if (corrigido <= 0) continue;
+          if (caract === '13_salario') base13Corrigido += corrigido;
+          else if (caract === 'ferias') baseFeriasCorrigido += corrigido;
+          else baseDemaisCorrigido += corrigido;
           const d = oc.getDataInicial();
           if (d) todasComp.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
         }
@@ -509,11 +524,18 @@ export class PjeCalcEngineV3 {
         const [y2, m2] = sorted[sorted.length - 1].split('-').map(Number);
         irMeses = Math.max(1, (y2 - y1) * 12 + (m2 - m1) + 1);
       }
-      let deducoes = 0;
-      if (this.irConfig.deduzir_cs) deducoes += csDescontado;
-      deducoes += (this.irConfig.dependentes ?? 0) * 189.59 * irMeses;
-      const baseTributavel = Math.max(0, (baseBrutaIR - deducoes) / irMeses);
-      // Tabela IRPF 2025
+
+      // Proporção para distribuir dedução de CS entre os grupos:
+      const baseTotal = base13Corrigido + baseFeriasCorrigido + baseDemaisCorrigido;
+      const propCS13 = baseTotal > 0 ? base13Corrigido / baseTotal : 0;
+      const propCSFerias = baseTotal > 0 ? baseFeriasCorrigido / baseTotal : 0;
+      const propCSDemais = baseTotal > 0 ? baseDemaisCorrigido / baseTotal : 0;
+      const cs13 = this.irConfig.deduzir_cs ? csDescontado * propCS13 : 0;
+      const csFerias = this.irConfig.deduzir_cs ? csDescontado * propCSFerias : 0;
+      const csDemais = this.irConfig.deduzir_cs ? csDescontado * propCSDemais : 0;
+      const dedDependentes = (this.irConfig.dependentes ?? 0) * 189.59 * irMeses;
+
+      // Tabela IRPF 2025 (aplicada à data de liquidação, 2026-03 usa tabela atual)
       const faixasIR = [
         { ate: 2259.20, aliq: 0, ded: 0 },
         { ate: 2826.65, aliq: 0.075, ded: 169.44 },
@@ -521,14 +543,23 @@ export class PjeCalcEngineV3 {
         { ate: 4664.68, aliq: 0.225, ded: 662.77 },
         { ate: Infinity, aliq: 0.275, ded: 896.00 },
       ];
-      let impostoMensal = 0;
-      for (const f of faixasIR) {
-        if (baseTributavel <= f.ate) {
-          impostoMensal = Math.max(0, baseTributavel * f.aliq - f.ded);
-          break;
+      const calcImpostoRRA = (baseBruta: number, deducoesTotal: number): number => {
+        if (baseBruta <= 0) return 0;
+        const baseTributavel = Math.max(0, (baseBruta - deducoesTotal) / irMeses);
+        for (const f of faixasIR) {
+          if (baseTributavel <= f.ate) {
+            const impMensal = Math.max(0, baseTributavel * f.aliq - f.ded);
+            return +(impMensal * irMeses).toFixed(2);
+          }
         }
-      }
-      irDevido = +(impostoMensal * irMeses).toFixed(2);
+        return 0;
+      };
+
+      // IR sobre cada grupo separadamente (método RRA exclusivo)
+      const ir13 = calcImpostoRRA(base13Corrigido, cs13 + dedDependentes * propCS13);
+      const irFerias = calcImpostoRRA(baseFeriasCorrigido, csFerias + dedDependentes * propCSFerias);
+      const irDemais = calcImpostoRRA(baseDemaisCorrigido, csDemais + dedDependentes * propCSDemais);
+      irDevido = +(ir13 + irFerias + irDemais).toFixed(2);
     }
 
     // ── 9. Converter resultados Core → UI ──
