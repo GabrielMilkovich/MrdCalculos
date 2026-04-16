@@ -405,6 +405,14 @@ export interface PjeCSConfig {
    * (comportamento PJe-Calc padrão). Checkbox na tela CS do PJe-Calc.
    */
   com_correcao_trabalhista?: boolean;
+  /**
+   * CAUSA-7 do roadmap: aplica atualização monetária pela SELIC (soma simples
+   * RFB/SICALC) sobre os valores de INSS apurados, da competência de cada guia
+   * até a data de liquidação. PJe-Calc trata o INSS como tributo federal
+   * (Lei 8.212/91 + Lei 9.430/96) e adiciona SELIC sobre cada parcela.
+   * Default false (compatibilidade) — quando true, totais de INSS retornam atualizados.
+   */
+  atualizar_inss_selic?: boolean;
 }
 
 export interface PjeIRConfig {
@@ -465,7 +473,17 @@ export interface PjeCorrecaoConfig {
   };
   /** PJC: ignorarTaxaNegativa — when true, negative correction factors are clamped to 1 */
   ignorar_taxa_negativa?: boolean;
-  /** PJC: baseDeJurosDasVerbas — 'DIFERENCA' | 'DEVIDO' | 'CORRIGIDO' */
+  /**
+   * PJC: baseDeJurosDasVerbas — base de cálculo para juros sobre verbas.
+   * Valores aceitos:
+   * - 'DIFERENCA' (default PJe-Calc): juros sobre `oc.diferenca` (devido - pago).
+   * - 'DEVIDO':    juros sobre `oc.devido` (valor bruto antes de descontos).
+   * - 'CORRIGIDO': juros sobre `oc.valor_corrigido` (diferença após correção monetária).
+   * - 'VERBA_INSS' (CAUSA-4 do roadmap): juros sobre `(diferenca − INSS_proporcional)`.
+   *   Reflete a opção do PJe-Calc onde o INSS proporcional é deduzido da base de
+   *   juros antes do cálculo. Quando ativado, o engine aplica a alíquota efetiva
+   *   de INSS reclamante (cs_segurado / principal_bruto) sobre cada ocorrência.
+   */
   base_de_juros_das_verbas?: string;
   /** PJC: entePublico — affects interest calculation rules */
   ente_publico?: boolean;
@@ -476,6 +494,14 @@ export interface PjeCorrecaoConfig {
   /** OJ 394 SDI-1 TST: juros calculados sobre base após dedução de IR.
    *  When true, interest should be recalculated on the post-IR base. */
   oj_394_juros_pos_ir?: boolean;
+  /**
+   * CAUSA-2 do roadmap de paridade: aplica SELIC pro rata die no 1° mês (data
+   * de citação) e fixa 1.00% no mês de liquidação (convenção RFB/SICALC).
+   * Default false = comportamento atual (meses cheios).
+   * Recomenda-se ativar quando os dados de citação/liquidação são confiáveis
+   * para alinhar com PJe-Calc oficial.
+   */
+  selic_pro_rata_die?: boolean;
 }
 
 export interface PjeHonorariosConfig {

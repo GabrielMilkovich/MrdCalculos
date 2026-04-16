@@ -56,11 +56,17 @@ export interface PjcEngineInputs {
 
 export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string): PjcEngineInputs {
   const report = createFidelityReport();
-  
+
   let historicos = convertHistoricos(analysis.historicos_salariais);
-  
-  // If historicos have no occurrences, synthesize them from verba occurrences
-  // PJe-Calc stores salary values inside OcorrenciaDeVerba.base, not always in OcorrenciaHistorico
+
+  // SEMPRE sintetiza historicos a partir de ocorrencias_all.base das verbas.
+  // Isso garante que cada verba Calculada tenha a base por competência alinhada
+  // EXATAMENTE com o valor que o PJe-Calc usou. Os historicos reais vêm em
+  // paralelo (addition), o engine escolhe o sintético por v.base_historicos=[hist-synth-ID].
+  // Fonte: o XML do PJC já traz <base> não-zero em cada <OcorrenciaDeVerba> ativa
+  // (ex: base=87.30 em 2021-04 para COMISSÕES ESTORNADAS), então a base é o valor
+  // "apurado" pelo PJe-Calc — replicar para que o engine aplique correção/juros sobre
+  // o valor correto ao invés de recalcular via historicos salariais abstratos.
   const totalOcorrencias = historicos.reduce((s, h) => s + h.ocorrencias.length, 0);
   if (totalOcorrencias === 0) {
     addFidelityEntry(report, {
@@ -72,8 +78,9 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
       module: 'historico_salarial',
       action: 'Verificar se os valores salariais estão corretos.',
     });
-    historicos = synthesizeHistoricosFromVerbas(analysis, historicos);
   }
+  // Sempre acrescenta synth por-verba (mesmo quando há historicos reais)
+  historicos = synthesizeHistoricosFromVerbas(analysis, historicos);
   
   // Convert real cartão ponto from apuração diária
   const cartaoPonto = convertCartaoPonto(analysis.apuracao_diaria || [], report);
@@ -547,6 +554,8 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
     aliquota_terceiros_fixa: csConf?.aliquota_terceiros ?? 0, // 0 when PJC doesn't specify
     periodos_simples: [],
     apuracao_juros_gt: gt,
+    // CAUSA-6: respeita o checkbox "Com Correção Trabalhista" do PJe-Calc
+    com_correcao_trabalhista: csConf?.com_correcao_trabalhista,
   };
 }
 
@@ -691,7 +700,9 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     } : undefined,
     // New PJC fields
     ignorar_taxa_negativa: a.atualizacao.ignorar_taxa_negativa,
-    base_de_juros_das_verbas: a.atualizacao.base_de_juros_das_verbas,
+    // CAUSA-4: normalizar para UPPER (PJe-Calc emite 'DIFERENCA','DEVIDO',
+    // 'CORRIGIDO','VERBA_INSS' / às vezes em camelCase: VerbaInss). Sempre uppercase.
+    base_de_juros_das_verbas: (a.atualizacao.base_de_juros_das_verbas || '').toUpperCase().replace(/-/g, '_') || undefined,
     ente_publico: a.atualizacao.ente_publico,
     aplicar_juros_fase_pre_judicial: a.atualizacao.aplicar_juros_fase_pre_judicial,
   };

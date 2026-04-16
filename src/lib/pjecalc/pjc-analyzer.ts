@@ -77,6 +77,8 @@ export interface PJCAnalysis {
     aliquota_empresa: number;
     aliquota_sat: number;
     aliquota_terceiros: number;
+    /** CAUSA-6: PJe-Calc "Com Correção Trabalhista" — INSS sobre base corrigida */
+    com_correcao_trabalhista?: boolean;
   };
   verbas: VerbaAnalysis[];
   historicos_salariais: HistoricoAnalysis[];
@@ -671,6 +673,10 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       aliquota_empresa: parseNum(getTextContent(csConfigEl, 'aliquotaEmpresa') || getTextContent(csConfigEl, 'aliquotaPatronal')) || 20,
       aliquota_sat: parseNum(getTextContent(csConfigEl, 'aliquotaSAT') || getTextContent(csConfigEl, 'aliquotaRat')) || 0,
       aliquota_terceiros: parseNum(getTextContent(csConfigEl, 'aliquotaTerceiros')) || 0,
+      // CAUSA-6: PJe-Calc emite "comCorrecaoTrabalhista" quando o checkbox está ativo
+      com_correcao_trabalhista: getTextContent(csConfigEl, 'comCorrecaoTrabalhista') === 'true'
+        || getTextContent(root, 'comCorrecaoTrabalhista') === 'true'
+        || undefined,
     };
   }
   // If PJC resultado shows zero CS, disable it

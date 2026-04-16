@@ -1,0 +1,9 @@
+Summary for /home/claude/pjecalc/pjecalc-windows64-2.15.1/tomcat/webapps/pjecalc/WEB-INF/lib/pjecalc-base-2.15.1.jar
+Decompiled with CFR 0.152
+
+
+br.jus.trt8.pjecalc.base.comum.Utils
+----------------------------
+
+descompactarGZIP(byte[] )
+  Exception : org.benf.cfr.reader.util.ConfusedCFRException: Started 2 blocks at once

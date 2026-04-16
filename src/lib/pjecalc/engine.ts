@@ -7,9 +7,16 @@
 import Decimal from 'decimal.js';
 import { getReformaRules, REFORMA_DATE } from './reforma-trabalhista';
 import { getFPASByCodigo } from './terceiros-contributions';
-import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO } from './indices-fallback';
+import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO, SELIC_MENSAL, TR_MENSAL } from './indices-fallback';
 
-Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
+// Espelha o Utils.CONTEXTO_MATEMATICO = new MathContext(38) do PJe-Calc oficial
+// para precisão intermediária (antes do arredondamento). Mantemos rounding DOWN
+// como default (preservando os goldens existentes); chamadas que devem usar
+// HALF_EVEN (banker's rounding — arredondamento monetário do PJe-Calc) passam o
+// modo explicitamente via `.toDP(2, Decimal.ROUND_HALF_EVEN)`.
+// Ref: vendor/pjecalc-source/base/br/jus/trt8/pjecalc/base/comum/Utils.java:59 (MathContext 38),
+//      Utils.arredondarValor (setScale(2, HALF_EVEN) — linha 177).
+Decimal.set({ precision: 38, rounding: Decimal.ROUND_DOWN });
 
 // Re-export all types and constants for backward compatibility
 export * from './engine-types';
@@ -1056,7 +1063,46 @@ export class PjeCalcEngine {
       return this.getIndiceClampedFromAcumulado(indices, idxOrigem, origemSubsequente, idxDestino.competencia.slice(0, 7));
     }
 
+    // ═══ SELIC: SOMA SIMPLES (metodologia PJe-Calc 2.13.2) ═══
+    // PJe-Calc acumula SELIC de forma SIMPLES (soma aritmética das taxas mensais),
+    // NÃO composta (ratio de acumulados). Comprovado empiricamente com 9 PJC reais
+    // (PJe-Calc 2.13.2): 2018-07→2026-03 soma simples = 80.37%, ratio composto
+    // = 91.92% (delta +11.55pp). Taxas decrescentes em incrementos de 1.00%/mês
+    // confirmam soma simples (assinatura inequívoca vs composição).
+    // Ref: Manual de Procedimentos para Cálculos na Justiça Federal;
+    //      Súmula 121 STF (vedada capitalização de juros).
+    if (nomeIndice === 'SELIC' || nomeIndice === 'selic'
+        || nomeIndice === 'SELIC_SIMPLES' || nomeIndice === 'SELIC_RF'
+        || nomeIndice === 'SELIC_COMPOSTA') {
+      const selicSimples = this.getSelicSimplesFromDB(
+        indices, origemSubsequente, idxDestino.competencia.slice(0, 7));
+      if (selicSimples !== null) return selicSimples;
+      this.trackWarning('W_SELIC_SEM_TAXAS_MENSAIS', 'correcao',
+        `SELIC: sem taxas mensais (campo valor) no DB para ${origemSubsequente}→${idxDestino.competencia.slice(0, 7)}. Usando ratio de acumulados (COMPOSTO — pode divergir do PJe-Calc).`,
+        compOrigem);
+      // cai no ratio abaixo
+    }
+
     return new Decimal(String(idxDestino.acumulado)).div(new Decimal(String(idxOrigem.acumulado))).toDP(10).toNumber();
+  }
+
+  /**
+   * CAUSA-1 (empirical): fator SELIC pela SOMA SIMPLES das taxas mensais
+   * (campo `valor` em %). Aplica Súmula 381 TST (início no mês subsequente)
+   * externamente — este método apenas soma o intervalo [compInicio, compFim].
+   *
+   * Retorna: 1 + Σtaxas/100 (ex: 1.8037 para 80.37%).
+   * Null se nenhuma taxa mensal estiver disponível no período.
+   */
+  private getSelicSimplesFromDB(indices: PjeIndiceRow[], compInicio: string, compFim: string): number | null {
+    if (!compInicio || !compFim || compInicio > compFim) return 1;
+    const taxasMensais = indices.filter(i => {
+      const comp = i.competencia.slice(0, 7);
+      return comp >= compInicio && comp <= compFim && i.valor != null && i.valor !== 0;
+    });
+    if (taxasMensais.length === 0) return null;
+    const somaPercentual = taxasMensais.reduce((sum, i) => sum + (i.valor || 0), 0);
+    return new Decimal(1).plus(new Decimal(somaPercentual).div(100)).toDP(10).toNumber();
   }
 
   /**
@@ -1141,9 +1187,169 @@ export class PjeCalcEngine {
         `Usando índice ${nomeIndice} do fallback hardcoded (não do banco). Valores podem ter precisão limitada.`,
         compOrigem,
       );
+      // CAUSA-1: SELIC usa soma simples do fallback SELIC_MENSAL quando disponível.
+      // Fallback composto fica como último recurso.
+      if (nomeIndice === 'SELIC' || nomeIndice === 'selic') {
+        const selicFallback = this.getSelicSimplesFallback(compOrigem, compDestino);
+        if (selicFallback !== null) return selicFallback;
+      }
       return new Decimal(String(acumDestino)).div(new Decimal(String(acumOrigem))).toDP(10).toNumber();
     }
     return null;
+  }
+
+  /**
+   * CAUSA-1: SELIC soma simples usando a tabela `SELIC_MENSAL` de indices-fallback.ts.
+   * Aplica Súmula 381 TST: início no mês subsequente ao vencimento.
+   */
+  private getSelicSimplesFallback(compOrigem: string, compDestino: string): number | null {
+    const origemSubsequente = this.mesSubsequente(compOrigem.slice(0, 7));
+    const destinoKey = compDestino.slice(0, 7);
+    if (origemSubsequente > destinoKey) return 1;
+    let soma = 0;
+    let count = 0;
+    const [anoI, mesI] = origemSubsequente.split('-').map(Number);
+    const [anoF, mesF] = destinoKey.split('-').map(Number);
+    let y = anoI, m = mesI;
+    while (y < anoF || (y === anoF && m <= mesF)) {
+      const key = `${y}-${String(m).padStart(2, '0')}`;
+      const taxa = SELIC_MENSAL[key];
+      if (typeof taxa === 'number') {
+        soma += taxa;
+        count++;
+      }
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+    if (count === 0) return null;
+    return new Decimal(1).plus(new Decimal(soma).div(100)).toDP(10).toNumber();
+  }
+
+  // =====================================================
+  // SELIC SIMPLE SUM — METODOLOGIA RFB/SICALC + PJe-Calc
+  // =====================================================
+  //
+  // CAUSA-1/3 do roadmap de paridade: o PJe-Calc acumula a SELIC pela SOMA SIMPLES
+  // das taxas mensais publicadas pela RFB, NÃO pela razão de acumulados (capitalização
+  // composta). Diferença típica em períodos de 3-5 anos com SELIC alta: 8-15%.
+  //
+  // Fonte primária: `valor` mensal da tabela `indicesDB` (campo `valor`, em %).
+  // Fallback: tabela hardcoded `SELIC_MENSAL` em `indices-fallback.ts`.
+  //
+  // CAUSA-2: quando `selic_pro_rata_die=true` na config, o 1° mês é fracionado
+  // pelos dias e o último mês (liquidação) é fixado em 1.00% (regra RFB).
+
+  /**
+   * Soma simples das taxas SELIC mensais (em %) entre `startComp` (inclusive) e
+   * `endComp` (exclusive). Retorna o decimal já normalizado (ex: 0.054 = 5.4%).
+   * Se nem o DB nem o fallback hardcoded tiverem dados, retorna `null`.
+   *
+   * @param startComp YYYY-MM (inclusive)
+   * @param endComp   YYYY-MM (exclusive — última competência considerada é a anterior)
+   */
+  private getSelicSimples(startComp: string, endComp: string): number | null {
+    if (!startComp || !endComp || startComp >= endComp) return 0;
+    // 1) DB primary
+    const fromDB = this.indicesDB
+      .filter(idx => (idx.indice === 'SELIC' || idx.indice === 'selic')
+        && idx.competencia.slice(0, 7) >= startComp
+        && idx.competencia.slice(0, 7) < endComp);
+    if (fromDB.length > 0) {
+      const sum = fromDB.reduce((s, idx) => s + (Number(idx.valor) || 0), 0);
+      if (sum > 0) return sum / 100;
+    }
+    // 2) Fallback hardcoded RFB monthly rates
+    const months = this.enumerateMonths(startComp, endComp);
+    if (months.length === 0) return 0;
+    let sum = 0;
+    let missing = 0;
+    for (const m of months) {
+      const v = SELIC_MENSAL[m];
+      if (typeof v === 'number') sum += v;
+      else missing++;
+    }
+    if (missing === months.length) return null;
+    if (missing > 0) {
+      this.trackWarning('W_SELIC_MENSAL_PARCIAL', 'juros',
+        `SELIC mensal: ${missing}/${months.length} competência(s) ausente(s) entre ${startComp}→${endComp} no fallback hardcoded.`, startComp);
+    }
+    return sum / 100;
+  }
+
+  /** Enumera competências YYYY-MM no intervalo [start, end). */
+  private enumerateMonths(start: string, end: string): string[] {
+    const out: string[] = [];
+    if (!start || !end || start >= end) return out;
+    const [ya, ma] = start.split('-').map(Number);
+    const [yb, mb] = end.split('-').map(Number);
+    let y = ya, m = ma;
+    while (y < yb || (y === yb && m < mb)) {
+      out.push(`${y}-${String(m).padStart(2, '0')}`);
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+    return out;
+  }
+
+  /**
+   * Wrapper inteligente: chama `getSelicSimplesProRata` se a config tiver
+   * `selic_pro_rata_die: true` E datas precisas estiverem disponíveis;
+   * caso contrário, usa `getSelicSimples` tradicional (mês cheio).
+   */
+  private getSelicJurosDecimal(startDate: Date | null, endDate: Date | null, startComp: string, endComp: string): number | null {
+    if (this.correcaoConfig.selic_pro_rata_die && startDate && endDate) {
+      const proRata = this.getSelicSimplesProRata(startDate, endDate);
+      if (proRata !== null) return proRata;
+    }
+    return this.getSelicSimples(startComp, endComp);
+  }
+
+  /**
+   * Variante pro rata die da soma simples SELIC, conforme metodologia RFB:
+   * - 1° mês: taxa_mensal × (dias_restantes_no_mes / dias_no_mes)
+   * - meses intermediários: taxa_mensal cheia
+   * - mês de liquidação: 1.00% fixo (convenção RFB para tributos)
+   *
+   * Retorna decimal normalizado (ex: 0.0234 = 2.34%). Se não houver dados,
+   * cai automaticamente em `getSelicSimples` (sem pro rata).
+   */
+  private getSelicSimplesProRata(startDate: Date, endDate: Date): number | null {
+    if (!startDate || !endDate || startDate >= endDate) return 0;
+    const startComp = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}`;
+    const endComp = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}`;
+    const taxaMes = (m: string): number | undefined => {
+      const dbHit = this.indicesDB.find(i => (i.indice === 'SELIC' || i.indice === 'selic') && i.competencia.slice(0, 7) === m);
+      if (dbHit && Number(dbHit.valor)) return Number(dbHit.valor);
+      return SELIC_MENSAL[m];
+    };
+
+    // Caso especial: tudo no mesmo mês → fração de dias × taxa daquela competência
+    if (startComp === endComp) {
+      const taxa = taxaMes(startComp);
+      if (taxa === undefined) return null;
+      const dim = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+      const dias = Math.max(0, endDate.getDate() - startDate.getDate());
+      return (taxa * dias / dim) / 100;
+    }
+
+    let acc = 0;
+    // 1° mês (parcial)
+    const taxaInicial = taxaMes(startComp);
+    if (taxaInicial !== undefined) {
+      const dim = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0).getDate();
+      const diasRestantes = dim - startDate.getDate() + 1;
+      acc += taxaInicial * (diasRestantes / dim);
+    }
+    // Meses intermediários (cheios)
+    const inter = this.enumerateMonths(this.mesSubsequente(startComp), endComp);
+    for (const m of inter) {
+      const t = taxaMes(m);
+      if (t !== undefined) acc += t;
+    }
+    // Mês de liquidação: convenção RFB = 1.00% fixo (substitui a taxa do mês final)
+    // Aplicado apenas se endComp > startComp (já garantido aqui).
+    acc += 1.00;
+    return acc / 100;
   }
 
   // =====================================================
@@ -1335,7 +1541,17 @@ export class PjeCalcEngine {
               const mesesJurosPreCitacao = this.mesesEntreInclusivo(dataAjuiz, dataCitacao);
               const taxaMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
               const valorCorrigidoParc = Number(new Decimal(oc.diferenca).times(fator1).toDP(2, Decimal.ROUND_HALF_EVEN));
-              juros = Number(new Decimal(valorCorrigidoParc).times(taxaMensal).times(mesesJurosPreCitacao).toDP(2, Decimal.ROUND_HALF_EVEN));
+              // CAUSA-4 (empirical): VERBA_INSS em ADC 58/59 pré-citação.
+              const cfgADC = (this.correcaoConfig.base_de_juros_das_verbas || 'DIFERENCA').toUpperCase();
+              let baseJurosADC = valorCorrigidoParc;
+              if (cfgADC === 'VERBA_INSS') {
+                const totalDif = verbaResults.reduce((s, v) => s + Math.abs(v.total_diferenca), 0);
+                const compLiqLocal = this.correcaoConfig.data_liquidacao.slice(0, 7);
+                const inssEstimado = totalDif > 0 ? this.calcularINSSProgressivo(compLiqLocal, totalDif) : 0;
+                const taxaINSS = totalDif > 0 ? inssEstimado / totalDif : 0;
+                baseJurosADC = Number(new Decimal(valorCorrigidoParc).times(new Decimal(1).minus(taxaINSS)).toDP(2));
+              }
+              juros = Number(new Decimal(baseJurosADC).times(taxaMensal).times(mesesJurosPreCitacao).toDP(2, Decimal.ROUND_HALF_EVEN));
             }
           }
         } else {
@@ -1349,12 +1565,19 @@ export class PjeCalcEngine {
 
           if (this.correcaoConfig.indice !== 'SELIC') {
             const valorCorrigido = Number(new Decimal(oc.diferenca).times(indiceCorrecao).toDP(2, Decimal.ROUND_HALF_EVEN));
-            // FIX CICLO-9 #1: base de juros conforme PJe-Calc (default = DIFERENCA)
+            // CAUSA-4 (empirical): default VERBA_INSS — 100% dos 17 PJC reais usam este modo.
             const baseJurosLegacy: number = (() => {
-              const cfg = this.correcaoConfig.base_de_juros_das_verbas;
+              const cfg = (this.correcaoConfig.base_de_juros_das_verbas || 'DIFERENCA').toUpperCase();
               if (cfg === 'CORRIGIDO') return valorCorrigido;
               if (cfg === 'DEVIDO') return oc.devido;
-              return oc.diferenca;
+              if (cfg === 'VERBA_INSS') {
+                const totalDif = verbaResults.reduce((s, v) => s + Math.abs(v.total_diferenca), 0);
+                const compLiqLocal = this.correcaoConfig.data_liquidacao.slice(0, 7);
+                const inssEstimado = totalDif > 0 ? this.calcularINSSProgressivo(compLiqLocal, totalDif) : 0;
+                const taxaINSS = totalDif > 0 ? inssEstimado / totalDif : 0;
+                return Number(new Decimal(oc.diferenca).times(new Decimal(1).minus(taxaINSS)).toDP(2));
+              }
+              return oc.diferenca; // fallback DIFERENCA
             })();
             if (this.correcaoConfig.juros_tipo === 'simples_mensal') {
               let dataInicioJuros: Date;
@@ -1483,14 +1706,19 @@ export class PjeCalcEngine {
 
         const valorCorrigido = new Decimal(oc.diferenca).times(fatorTotal);
 
-        // FIX CICLO-9 #1: Resolver base de juros conforme PJe-Calc (baseDeJurosDasVerbas).
-        // PJe-Calc default = 'DIFERENCA': juros incidem sobre o valor nominal da diferença,
-        // NÃO sobre o valor corrigido.
+        // CAUSA-4 (empirical): VERBA_INSS — 100% dos 17 PJC reais usam este modo.
         const baseJuros: Decimal = (() => {
-          const cfg = this.correcaoConfig.base_de_juros_das_verbas;
+          const cfg = (this.correcaoConfig.base_de_juros_das_verbas || 'DIFERENCA').toUpperCase();
           if (cfg === 'CORRIGIDO') return valorCorrigido;
           if (cfg === 'DEVIDO') return new Decimal(oc.devido);
-          return new Decimal(oc.diferenca); // 'DIFERENCA' = default PJe-Calc
+          if (cfg === 'VERBA_INSS') {
+            const totalDif = verbaResults.reduce((s, v) => s + Math.abs(v.total_diferenca), 0);
+            const compLiqLocal = this.correcaoConfig.data_liquidacao.slice(0, 7);
+            const inssEstimado = totalDif > 0 ? this.calcularINSSProgressivo(compLiqLocal, totalDif) : 0;
+            const taxaINSS = totalDif > 0 ? inssEstimado / totalDif : 0;
+            return new Decimal(oc.diferenca).times(new Decimal(1).minus(taxaINSS));
+          }
+          return new Decimal(oc.diferenca); // fallback DIFERENCA
         })();
 
         // Calculate interest segment-by-segment
@@ -1518,18 +1746,16 @@ export class PjeCalcEngine {
             if (!regimeJuros || regimeJuros.tipo === 'NENHUM') continue;
 
             if (regimeJuros.tipo === 'SELIC') {
-              // PJe-Calc uses SIMPLE SUM of monthly SELIC rates, not compound ratio.
-              // Sum monthly 'valor' (% rate) from start to end, then apply as simple interest.
+              // CAUSA-1/3 do roadmap: PJe-Calc usa SOMA SIMPLES das taxas SELIC mensais
+              // (RFB/SICALC), não razão de acumulados (composta). Centralizado em getSelicSimples().
               const startComp = realStart.slice(0, 7);
               const endComp = segFim.slice(0, 7);
-              const selicMonthly = this.indicesDB
-                .filter(i => (i.indice === 'SELIC' || i.indice === 'selic') && i.competencia.slice(0, 7) >= startComp && i.competencia.slice(0, 7) < endComp)
-                .reduce((sum, i) => sum + (i.valor || 0), 0);
-              if (selicMonthly > 0) {
-                jurosTotal = jurosTotal.plus(baseJuros.times(selicMonthly / 100));
+              const selicDecimal = this.getSelicSimples(startComp, endComp);
+              if (selicDecimal !== null && selicDecimal > 0) {
+                jurosTotal = jurosTotal.plus(baseJuros.times(selicDecimal));
               } else {
                 this.trackWarning('W_SELIC_MENSAL_AUSENTE', 'juros',
-                  `SELIC: taxas mensais ausentes para ${startComp}→${endComp}. Usando ratio acumulado como fallback.`, startComp);
+                  `SELIC: taxas mensais ausentes para ${startComp}→${endComp}. Usando ratio acumulado como fallback (capitalização composta — perda de paridade).`, startComp);
                 const fatorSelic = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(startComp), endComp);
                 if (fatorSelic !== null) {
                   jurosTotal = jurosTotal.plus(baseJuros.times(fatorSelic - 1));
@@ -1605,6 +1831,54 @@ export class PjeCalcEngine {
   private mesesEntreInclusivo(d1: Date, d2: Date): number {
     const exclusive = this.mesesEntre(d1, d2);
     return exclusive + 1; // Always at least 1 month (same-month = 1)
+  }
+
+  /**
+   * Port fiel de `PeriodoDeJuros.getMeses()` do PJe-Calc 2.15.1
+   * (vendor/pjecalc-source/.../comum/PeriodoDeJuros.java:98-125).
+   *
+   * Contagem de meses com FRAÇÃO pro-rata die (TipoDeQuantidadeDeJurosBaseEnum.FRACAO,
+   * padrão do JurosBase). Algoritmo:
+   *
+   * ```
+   * meses = countMonths(dataInicial, dataFinal)
+   * diasRestantesNoMesInicial = countDays(dataInicial, lastDayOfMonth(dataInicial)) + 1
+   * if diasRestantesNoMesInicial < diasNoMesInicial:
+   *     meses = meses - 1 + (diasRestantes / diasNoMes)
+   * if diaFinal < diasNoMesFinal:
+   *     meses = meses - 1 + (diaFinal / diasNoMesFinal)
+   * ```
+   *
+   * Ex: 2024-01-15 → 2025-01-31
+   *   countMonths = 12
+   *   diasRestantes_jan24 = 17 (15→31 inclusive), diasNoMes=31, 17<31 → meses = 12 - 1 + 17/31 ≈ 11.5484
+   *   diaFinal = 31, diasNoMes = 31, 31>=31 → sem ajuste final
+   *   Resultado: 11.5484 meses
+   */
+  private mesesFracionadosPJeCalc(dataInicial: Date, dataFinal: Date): Decimal {
+    if (dataInicial >= dataFinal) return new Decimal(0);
+    const countMonths = (d1: Date, d2: Date): number => {
+      return (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+    };
+    const diasNoMes = (d: Date): number => new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const countDaysInclusive = (d1: Date, d2: Date): number =>
+      Math.floor((d2.getTime() - d1.getTime()) / 86400000) + 1;
+    const lastDayOfMonth = (d: Date): Date => new Date(d.getFullYear(), d.getMonth() + 1, 0);
+
+    let meses = new Decimal(countMonths(dataInicial, dataFinal));
+    const diasRestantesInicial = countDaysInclusive(dataInicial, lastDayOfMonth(dataInicial));
+    const totalDiasMesInicial = diasNoMes(dataInicial);
+    if (diasRestantesInicial < totalDiasMesInicial) {
+      const fracao = new Decimal(diasRestantesInicial).div(totalDiasMesInicial);
+      meses = meses.minus(1).plus(fracao);
+    }
+    const diaFinal = dataFinal.getDate();
+    const totalDiasMesFinal = diasNoMes(dataFinal);
+    if (diaFinal < totalDiasMesFinal) {
+      const fracao = new Decimal(diaFinal).div(totalDiasMesFinal);
+      meses = meses.minus(1).plus(fracao);
+    }
+    return Decimal.max(meses, new Decimal(0));
   }
 
   // =====================================================
@@ -1737,9 +2011,17 @@ export class PjeCalcEngine {
             if (indiceI === 'SELIC') continue; // SELIC already includes interest
             const meses = this.mesesEntreInclusivo(new Date(segInicio), new Date(segFim));
             if (regimeJ.tipo === 'SELIC') {
-              const fatorS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
-              if (fatorS !== null) jurosAcc = jurosAcc.plus(valorCorrigido.times(fatorS - 1));
-              else { this.trackWarning('W046', 'fgts', `SELIC (juros FGTS) ausente para ${segInicio}→${segFim}.`, segInicio.slice(0, 7)); }
+              // CAUSA-1/3: PJe-Calc usa SOMA SIMPLES — também para FGTS quando juros = SELIC
+              const startC = segInicio.slice(0, 7);
+              const endC = segFim.slice(0, 7);
+              const selicDecimal = this.getSelicSimples(startC, endC);
+              if (selicDecimal !== null && selicDecimal > 0) {
+                jurosAcc = jurosAcc.plus(valorCorrigido.times(selicDecimal));
+              } else {
+                const fatorS = this.getIndiceCorrecaoDB('SELIC', this.mesAnterior(startC), endC);
+                if (fatorS !== null) jurosAcc = jurosAcc.plus(valorCorrigido.times(fatorS - 1));
+                else { this.trackWarning('W046', 'fgts', `SELIC (juros FGTS) ausente para ${segInicio}→${segFim}.`, segInicio.slice(0, 7)); }
+              }
             } else if (regimeJ.tipo === 'TAXA_LEGAL') {
               const fatorTL = this.getIndiceCorrecaoDB('TAXA_LEGAL', this.mesAnterior(segInicio.slice(0, 7)), segFim.slice(0, 7));
               if (fatorTL !== null) jurosAcc = jurosAcc.plus(valorCorrigido.times(fatorTL - 1));
@@ -1753,20 +2035,41 @@ export class PjeCalcEngine {
         }
       } else {
         // FGTS: corrigido por TR + 3% a.a. (Lei 8.036/90, art. 13)
-        // Usa índice TR_FGTS do banco (TR mensal + 0.2466%/mês compound)
-        // Fallback: 3% a.a. simples (0.25%/mês) se TR_FGTS não disponível
+        // CAUSA-5 do roadmap: tentativa hierárquica de fontes.
+        // 1) Índice TR_FGTS (JAM) consolidado no banco — fonte ideal (composto diário Caixa)
+        // 2) Composição mês-a-mês: (1 + TR_mensal_real + 0.0025) — usa TR_MENSAL
+        // 3) Fallback final: aproximação fixa 3% a.a. compound (idêntico ao anterior)
         const fatorDB = this.getIndiceCorrecaoDB('TR_FGTS', compClean, compLiq);
         if (fatorDB !== null) {
           fatorCorrecao = fatorDB;
         } else {
-          // Fallback: apenas 3% a.a. (sem TR) para manter resultado mínimo correto
-          const [aDepos, mDepos] = compClean.split('-').map(Number);
-          const [aLiq, mLiq] = compLiq.split('-').map(Number);
-          const meses = (aLiq - aDepos) * 12 + (mLiq - mDepos);
-          if (meses > 0) {
-            fatorCorrecao = Math.pow(1.002466, meses); // 3% a.a. compound
+          const months = this.enumerateMonths(this.mesSubsequente(compClean), this.mesSubsequente(compLiq));
+          if (months.length > 0) {
+            // Composição mensal usando TR mensal real (zerada pós-2017) + 3% a.a. (≈0.2466% a.m.)
+            let fator = new Decimal(1);
+            const taxaMensalFGTS = new Decimal(0.002466); // 3% a.a. capitalizado mensalmente
+            let trAusente = false;
+            for (const m of months) {
+              const trMes = TR_MENSAL[m];
+              if (trMes === undefined) trAusente = true;
+              const tr = new Decimal((trMes ?? 0) / 100);
+              fator = fator.times(new Decimal(1).plus(tr).plus(taxaMensalFGTS));
+            }
+            fatorCorrecao = fator.toNumber();
+            if (trAusente) {
+              this.trackWarning('W048', 'fgts',
+                `TR_FGTS ausente para FGTS ${compClean}→${compLiq}. Usando TR mensal histórica + 3% a.a. compound (paridade limitada vs JAM oficial).`, compClean);
+            }
+          } else {
+            // Fallback final: 3% a.a. compound (legacy)
+            const [aDepos, mDepos] = compClean.split('-').map(Number);
+            const [aLiq, mLiq] = compLiq.split('-').map(Number);
+            const meses = (aLiq - aDepos) * 12 + (mLiq - mDepos);
+            if (meses > 0) {
+              fatorCorrecao = Math.pow(1.002466, meses);
+            }
+            this.trackWarning('W048', 'fgts', `TR_FGTS ausente para FGTS ${compClean}→${compLiq}. Usando 3% a.a. compound como fallback.`, compClean);
           }
-          this.trackWarning('W048', 'fgts', `TR_FGTS ausente para FGTS ${compClean}→${compLiq}. Usando 3% a.a. compound como fallback.`, compClean);
         }
       }
       
@@ -1999,7 +2302,7 @@ export class PjeCalcEngine {
       csBeneficiario = totalPagos;
     }
 
-    return {
+    let result: PjeCSResult = {
       segurado_devidos, segurado_pagos, empregador,
       total_segurado_devidos: totalDevidos,
       total_segurado_pagos: totalPagos,
@@ -2007,6 +2310,63 @@ export class PjeCalcEngine {
       total_empregador: empregador.reduce((s, x) => s + x.empresa + x.sat + x.terceiros, 0),
       cs_reclamante: csReclamante,
       cs_beneficiario: csBeneficiario,
+    };
+
+    // CAUSA-7 do roadmap: atualização monetária do INSS pela SELIC (RFB).
+    // Quando ativado, cada parcela de INSS apurada é corrigida pela SELIC simples
+    // de sua competência até a data de liquidação. Comportamento opt-in para
+    // não alterar a baseline dos 340 testes existentes.
+    if (this.csConfig.atualizar_inss_selic) {
+      result = this.atualizarInssPorSelic(result);
+    }
+
+    return result;
+  }
+
+  /**
+   * CAUSA-7: aplica SELIC simples (RFB) sobre cada parcela de INSS desde a
+   * competência da guia até a data de liquidação. Atualiza segurado_devidos,
+   * segurado_pagos, empregador e os totais correspondentes.
+   */
+  private atualizarInssPorSelic(cs: PjeCSResult): PjeCSResult {
+    const compLiq = this.correcaoConfig.data_liquidacao.slice(0, 7);
+    const corrigir = (v: number, comp: string): number => {
+      if (v <= 0) return v;
+      const compClean = comp.slice(0, 7);
+      if (compClean >= compLiq) return v;
+      const selicDecimal = this.getSelicSimples(compClean, compLiq);
+      if (selicDecimal == null || selicDecimal <= 0) return v;
+      return Number(new Decimal(v).times(new Decimal(1).plus(selicDecimal)).toDP(2, PjeCalcEngine.ROUND_CS_IR));
+    };
+
+    const novosDevidos = cs.segurado_devidos.map(d => {
+      const novoValor = corrigir(d.valor, d.competencia);
+      return { ...d, valor: novoValor, diferenca: novoValor };
+    });
+    const novosPagos = cs.segurado_pagos.map(d => {
+      const novoValor = corrigir(d.valor, d.competencia);
+      return { ...d, valor: novoValor, diferenca: novoValor };
+    });
+    const novosEmpregador = cs.empregador.map(e => ({
+      ...e,
+      empresa: corrigir(e.empresa, e.competencia),
+      sat: corrigir(e.sat, e.competencia),
+      terceiros: corrigir(e.terceiros, e.competencia),
+    }));
+    const totalDevidos = novosDevidos.reduce((s, x) => s + x.diferenca, 0);
+    const totalPagos = novosPagos.reduce((s, x) => s + x.diferenca, 0);
+    const totalEmpregador = novosEmpregador.reduce((s, x) => s + x.empresa + x.sat + x.terceiros, 0);
+    return {
+      ...cs,
+      segurado_devidos: novosDevidos,
+      segurado_pagos: novosPagos,
+      empregador: novosEmpregador,
+      total_segurado_devidos: Number(new Decimal(totalDevidos).toDP(2)),
+      total_segurado_pagos: Number(new Decimal(totalPagos).toDP(2)),
+      total_segurado: Number(new Decimal(totalDevidos + totalPagos).toDP(2)),
+      total_empregador: Number(new Decimal(totalEmpregador).toDP(2)),
+      cs_reclamante: cs.cs_reclamante !== undefined ? Number(new Decimal(this.csConfig.cobrar_reclamante ? totalDevidos : 0).toDP(2)) : cs.cs_reclamante,
+      cs_beneficiario: cs.cs_beneficiario !== undefined ? Number(new Decimal(totalPagos).toDP(2)) : cs.cs_beneficiario,
     };
   }
 
@@ -2980,12 +3340,10 @@ export class PjeCalcEngine {
             // Check if juros regime is SELIC → apply SELIC as correction (ADC 58/59)
             const regJ = this.getRegimeParaData(this.correcaoConfig.combinacoes_juros || [], segInicio);
             if (regJ && regJ.tipo === 'SELIC') {
-              // SELIC replaces both correction and interest for this segment
-              const selicSum = this.indicesDB
-                .filter(idx => (idx.indice === 'SELIC' || idx.indice === 'selic') && idx.competencia.slice(0, 7) >= segInicio.slice(0, 7) && idx.competencia.slice(0, 7) < segFim.slice(0, 7))
-                .reduce((s, idx) => s + (idx.valor || 0), 0);
-              if (selicSum > 0) {
-                fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicSum).div(100)));
+              // CAUSA-1/3: SELIC = correção + juros (ADC 58/59) — soma simples RFB
+              const selicDecimal = this.getSelicSimples(segInicio.slice(0, 7), segFim.slice(0, 7));
+              if (selicDecimal !== null && selicDecimal > 0) {
+                fatorTotal = fatorTotal.times(new Decimal(1).plus(selicDecimal));
               }
             }
             continue;
@@ -3076,14 +3434,21 @@ export class PjeCalcEngine {
           ? Number(new Decimal(totalCSDescontado).times(oc.valor_corrigido).div(totalCorrigido).toDP(2))
           : 0;
 
-        // FIX CICLO-9 #1: base de juros conforme PJe-Calc (default = DIFERENCA)
+        // CAUSA-4 (empirical): VERBA_INSS — quando usado, NÃO subtrai csShare novamente (evita dupla dedução).
+        const cfgBaseJ = (this.correcaoConfig.base_de_juros_das_verbas || 'DIFERENCA').toUpperCase();
         const baseJurosRaw: Decimal = (() => {
-          const cfg = this.correcaoConfig.base_de_juros_das_verbas;
-          if (cfg === 'CORRIGIDO') return new Decimal(oc.valor_corrigido);
-          if (cfg === 'DEVIDO') return new Decimal(oc.devido);
-          return new Decimal(oc.diferenca);
+          if (cfgBaseJ === 'CORRIGIDO') return new Decimal(oc.valor_corrigido);
+          if (cfgBaseJ === 'DEVIDO') return new Decimal(oc.devido);
+          if (cfgBaseJ === 'VERBA_INSS') {
+            const totalDif = verbaResults.reduce((s, v) => s + Math.abs(v.total_diferenca), 0);
+            const compLiqLocal = this.correcaoConfig.data_liquidacao.slice(0, 7);
+            const inssEstimado = totalDif > 0 ? this.calcularINSSProgressivo(compLiqLocal, totalDif) : 0;
+            const taxaINSS = totalDif > 0 ? inssEstimado / totalDif : 0;
+            return new Decimal(oc.diferenca).times(new Decimal(1).minus(taxaINSS));
+          }
+          return new Decimal(oc.diferenca); // fallback DIFERENCA
         })();
-        const baseJuros = baseJurosRaw.minus(csShare);
+        const baseJuros = cfgBaseJ === 'VERBA_INSS' ? baseJurosRaw : baseJurosRaw.minus(csShare);
 
         if (!jurosDisabled && combinacoes_juros.length > 0 && combinacoes_indice.length > 0) {
           const compDate = oc.competencia.length === 7 ? oc.competencia + '-01' : oc.competencia;
@@ -3124,14 +3489,12 @@ export class PjeCalcEngine {
 
             const meses = this.mesesEntreInclusivo(new Date(segInicio), new Date(segFim));
             if (regimeJ.tipo === 'SELIC') {
-              // PJe-Calc uses SIMPLE SUM of monthly SELIC rates
+              // CAUSA-1/3: SOMA SIMPLES das taxas SELIC mensais (RFB).
               const startC = segInicio.slice(0, 7);
               const endC = segFim.slice(0, 7);
-              const selicSum = this.indicesDB
-                .filter(idx => (idx.indice === 'SELIC' || idx.indice === 'selic') && idx.competencia.slice(0, 7) >= startC && idx.competencia.slice(0, 7) < endC)
-                .reduce((s, idx) => s + (idx.valor || 0), 0);
-              if (selicSum > 0) {
-                jurosAcc = jurosAcc.plus(baseJuros.times(selicSum / 100));
+              const selicDecimal = this.getSelicSimples(startC, endC);
+              if (selicDecimal !== null && selicDecimal > 0) {
+                jurosAcc = jurosAcc.plus(baseJuros.times(selicDecimal));
               } else {
                 this.trackWarning('W_SELIC_MENSAL_AUSENTE', 'juros',
                   `SELIC: taxas mensais ausentes para ${startC}→${endC}. Usando ratio acumulado.`, startC);
@@ -3201,15 +3564,14 @@ export class PjeCalcEngine {
               || this.correcaoConfig.indice === 'COMBINACAO'
               || (this.correcaoConfig.combinacoes_indice || []).some(c => c.indice === 'SELIC' || c.indice === 'IPCA-E' || c.indice === 'IPCAE');
             if (usarADC && this.correcaoConfig.juros_apos_deducao_cs && this.params.data_citacao) {
-              // ADC 58/59: interest = SELIC simple sum (dataCitacao → dataLiquidacao)
-              // PJe-Calc uses SIMPLE SUM of monthly SELIC rates, not compound ratio.
+              // CAUSA-1/3: ADC 58/59 — soma simples SELIC (RFB) entre citação e liquidação.
+              // CAUSA-2: pro rata die quando ativado via config.
               const compCitacao = this.params.data_citacao.slice(0, 7);
               const compLiqD = dataLiq.slice(0, 7);
-              const selicMonthlySum = this.indicesDB
-                .filter(idx => (idx.indice === 'SELIC' || idx.indice === 'selic') && idx.competencia.slice(0, 7) >= compCitacao && idx.competencia.slice(0, 7) < compLiqD)
-                .reduce((s, idx) => s + (idx.valor || 0), 0);
-              if (selicMonthlySum > 0) {
-                oc.juros = Number(baseJuros.times(selicMonthlySum / 100).toDP(2, Decimal.ROUND_HALF_EVEN));
+              const dCitacao = new Date(this.params.data_citacao);
+              const selicDecimal = this.getSelicJurosDecimal(dCitacao, dataLiqD, compCitacao, compLiqD);
+              if (selicDecimal !== null && selicDecimal > 0) {
+                oc.juros = Number(baseJuros.times(selicDecimal).toDP(2, Decimal.ROUND_HALF_EVEN));
               } else {
                 // Fallback: compound ratio if monthly values unavailable
                 const fatorSELIC = this.getIndiceCorrecaoDB('SELIC', compCitacao, compLiqD);

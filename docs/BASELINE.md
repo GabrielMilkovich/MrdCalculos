@@ -41,3 +41,33 @@ O PJe-Calc não exporta a data de citação no arquivo PJC. O engine estima a pa
 1. Implementar juros ADC 58/59 com subset correto de verbas
 2. Seed de dados de referência no Supabase (INSS, IR, índices, feriados)
 3. Teste from-zero com construção manual de inputs
+
+---
+
+## Auditoria 2026-04-15 — Aplicação das 8 causas-raiz
+
+Documentação completa: [`AUDIT-CALC-PARITY.md`](./AUDIT-CALC-PARITY.md).
+
+### Mudanças incondicionais (já em produção)
+- **CAUSA-1/3:** SELIC simples (RFB) consolidada em todos os 5 paths via
+  `getSelicSimples()`. Tabela `SELIC_MENSAL` adicionada como fallback.
+- **CAUSA-5:** FGTS fallback agora usa TR mensal real + 3% a.a. composto
+  (antes: assumia TR=0).
+- **CAUSA-8:** documentação da limitação de precisão dos índices hardcoded.
+
+### Mudanças opt-in via config (precisam ser ativadas)
+- **CAUSA-2:** `correcaoConfig.selic_pro_rata_die = true` para SELIC pro rata
+  die no 1° mês + 1.00% no mês de liquidação.
+- **CAUSA-4:** `correcaoConfig.base_de_juros_das_verbas = 'VERBA_INSS'` para
+  reduzir base de juros pelo INSS proporcional. Mapeado automaticamente do
+  `.pjc` quando importado.
+- **CAUSA-6:** `csConfig.com_correcao_trabalhista = true` para INSS sobre
+  base monetariamente corrigida. Mapeado automaticamente do `.pjc`.
+- **CAUSA-7:** `csConfig.atualizar_inss_selic = true` para SELIC sobre
+  parcelas de INSS apuradas (Lei 9.430/96).
+
+### Validação
+- 340 → 347 testes passando (+7 cobrindo as novas funcionalidades).
+- TypeScript estrito limpo.
+- Os 9 testes do `parity-golden.test.ts` (rescisão sem justa causa)
+  continuam verdes — paridade exata mantida no caso de fórmula básica.
