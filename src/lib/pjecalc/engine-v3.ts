@@ -203,6 +203,49 @@ export class PjeCalcEngineV3 {
     const combJuros = this.correcaoConfig.combinacoes_juros ?? [];
     const combIndice = this.correcaoConfig.combinacoes_indice ?? [];
 
+    // Pré-calcula alíquota INSS efetiva REAL (para VERBA_INSS)
+    // VERBA_INSS: base = diferença − INSS proporcional. Todos 18 PJC usam isso.
+    const baseJurosVerbaInss = (this.correcaoConfig.base_de_juros_das_verbas || '').toUpperCase() === 'VERBA_INSS';
+    let taxaINSSEfetiva = 0;
+    if (baseJurosVerbaInss && this.csConfig.apurar_segurado && this.csConfig.cobrar_reclamante) {
+      // Calcula taxa INSS real: soma nominal de todas verbas com CS / INSS calculado
+      let totalBase = 0, totalINSS = 0;
+      for (const vc of verbasCore) {
+        if (!vc.getIncidenciaINSS()) continue;
+        for (const oc of vc.getOcorrenciasAtivas()) {
+          const dif = oc.getDiferenca().toNumber();
+          if (dif <= 0) continue;
+          totalBase += dif;
+          // Calcula INSS para esta base com faixas da competência
+          const dataIni = oc.getDataInicial();
+          if (!dataIni) continue;
+          const comp = `${dataIni.getFullYear()}-${String(dataIni.getMonth() + 1).padStart(2, '0')}-01`;
+          const faixas = this.faixasINSSDB
+            .filter(f => f.competencia_inicio <= comp && (!f.competencia_fim || f.competencia_fim >= comp))
+            .sort((a, b) => a.faixa - b.faixa);
+          if (faixas.length > 0) {
+            const isProgressivo = comp >= '2020-03-01';
+            const teto = faixas[faixas.length - 1].valor_ate;
+            const baseCapped = Math.min(dif, teto);
+            if (isProgressivo) {
+              let rest = baseCapped, ant = 0;
+              for (const f of faixas) {
+                const p = Math.min(rest, f.valor_ate - ant);
+                if (p > 0) totalINSS += p * f.aliquota;
+                rest -= p; ant = f.valor_ate;
+                if (rest <= 0) break;
+              }
+            } else {
+              let aliq = faixas[faixas.length - 1].aliquota;
+              for (const f of faixas) { if (baseCapped <= f.valor_ate) { aliq = f.aliquota; break; } }
+              totalINSS += baseCapped * aliq;
+            }
+          }
+        }
+      }
+      taxaINSSEfetiva = totalBase > 0 ? totalINSS / totalBase : 0;
+    }
+
     if (combIndice.length > 0) {
       // Calcula correção segmentada por ocorrência
       for (const vc of verbasCore) {
@@ -241,11 +284,16 @@ export class PjeCalcEngineV3 {
               // Verificar se juros=SELIC nesta fase (ADC 58/59)
               const regimeJ = this.getRegimeParaData(combJuros, datas[i]);
               if (regimeJ && regimeJ.tipo.toUpperCase() === 'SELIC') {
-                // SELIC soma simples como fator unificado
+                // SELIC soma simples como fator unificado (correção+juros)
                 const selicTaxas = this.indicesDB
                   .filter(idx => idx.indice === 'SELIC' && idx.competencia.slice(0, 7) >= segInicio && idx.competencia.slice(0, 7) < segFim)
                   .reduce((s, idx) => s + (Number(idx.valor) || 0), 0);
-                if (selicTaxas > 0) fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicTaxas).div(100)));
+                if (selicTaxas > 0) {
+                  // VERBA_INSS: a parte de "juros" da SELIC incide sobre (diferença - INSS)
+                  // Fator ajustado: 1 + selicTaxas/100 × (1 - taxaINSS)
+                  const reducao = baseJurosVerbaInss ? (1 - taxaINSSEfetiva) : 1;
+                  fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicTaxas).div(100).times(reducao)));
+                }
               }
               // SEM_CORRECAO sem SELIC → fator = 1 (nada a multiplicar)
             } else if (indice === 'SELIC') {
@@ -253,23 +301,46 @@ export class PjeCalcEngineV3 {
               const selicTaxas = this.indicesDB
                 .filter(idx => idx.indice === 'SELIC' && idx.competencia.slice(0, 7) >= segInicio && idx.competencia.slice(0, 7) < segFim)
                 .reduce((s, idx) => s + (Number(idx.valor) || 0), 0);
-              if (selicTaxas > 0) fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicTaxas).div(100)));
+              if (selicTaxas > 0) {
+                const reducao = baseJurosVerbaInss ? (1 - taxaINSSEfetiva) : 1;
+                fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicTaxas).div(100).times(reducao)));
+              }
             } else {
-              // IPCA-E, IPCA, INPC, etc. → ratio de acumulados para este segmento
+              // IPCA-E, IPCA, INPC, etc. → WALK mês a mês com ignorarTaxaNegativa
+              // PJe-Calc: CalculadorDeIndices.obterTabelaDeIndicesIgnorandoTaxasNegativas
+              // Quando um mês tem deflação (taxa < 0), o fator mensal é clampado a 1.
+              // Ref: pjecalc-fonte/.../rotinasdecalculo/CalculadorDeIndices.java:118-152
+              const ignorarNeg = this.correcaoConfig.ignorar_taxa_negativa ?? true;
               const aliases = ['IPCA-E', 'IPCAE', 'IPCA', 'INPC', 'IGPM', 'TR'];
               const normIndice = regime?.indice?.replace(/-/g, '') || '';
               const searchNames = aliases.filter(a => a.replace(/-/g, '') === normIndice || a === regime?.indice);
               if (searchNames.length === 0) searchNames.push(regime?.indice || 'IPCA-E', 'IPCA-E');
 
-              const idxO = this.indicesDB
-                .filter(idx => searchNames.includes(idx.indice) && idx.competencia.slice(0, 7) < segInicio && idx.acumulado)
-                .sort((a, b) => b.competencia.localeCompare(a.competencia))[0];
-              const idxD = this.indicesDB
-                .filter(idx => searchNames.includes(idx.indice) && idx.competencia.slice(0, 7) <= segFim && idx.acumulado)
-                .sort((a, b) => b.competencia.localeCompare(a.competencia))[0];
+              // Ordena registros por competência no intervalo [segInicio, segFim]
+              const inRange = this.indicesDB
+                .filter(idx => searchNames.includes(idx.indice) && idx.competencia.slice(0, 7) >= segInicio && idx.competencia.slice(0, 7) <= segFim && idx.acumulado)
+                .sort((a, b) => a.competencia.localeCompare(b.competencia));
 
-              if (idxO && idxD && idxO.acumulado > 0) {
-                fatorTotal = fatorTotal.times(new Decimal(idxD.acumulado).div(new Decimal(idxO.acumulado)));
+              if (inRange.length >= 2 && ignorarNeg) {
+                // Walk mês a mês com clamp de deflação
+                let synthBaseline = inRange[0].acumulado;
+                let acum = new Decimal(1);
+                for (let k = 1; k < inRange.length; k++) {
+                  const cur = inRange[k].acumulado;
+                  if (!cur || !synthBaseline || synthBaseline <= 0) continue;
+                  const monthly = cur / synthBaseline;
+                  if (monthly >= 1) {
+                    acum = acum.times(monthly);
+                    synthBaseline = cur;
+                  }
+                  // monthly < 1 = deflação → ignorar, synthBaseline NÃO atualiza
+                }
+                fatorTotal = fatorTotal.times(acum);
+              } else if (inRange.length >= 2) {
+                // Ratio simples (sem clamp)
+                const first = inRange[0].acumulado;
+                const last = inRange[inRange.length - 1].acumulado;
+                if (first > 0) fatorTotal = fatorTotal.times(new Decimal(last).div(new Decimal(first)));
               }
             }
           }
