@@ -534,3 +534,35 @@ export enum TipoDeAliquotaDoEmpregadorEnum {
   POR_PERIODO = 'PP',
   FIXA = 'F',
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Calculo (Fase 10) — Enums principais
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** TipoCalculoEnum.java */
+export enum TipoCalculoEnum {
+  ADVOGADO = 'A',
+  CREDOR = 'C',
+  DEVEDOR = 'D',
+  VARA = 'V',
+  GABINETE = 'G',
+}
+
+/** TipoDeApuracaoPrazoDoAvisoPrevioEnum.java */
+export enum TipoDeApuracaoPrazoDoAvisoPrevioEnum {
+  NAO_APURAR = 'N',
+  APURACAO_CALCULADA = 'C',
+  APURACAO_INFORMADA = 'I',
+}
+
+/** InstanciaSetorEnum.java */
+export enum InstanciaSetorEnum {
+  PRIMEIRA = '1',
+  SEGUNDA = '2',
+}
+
+/** TipoRegistroCalculoWS.java — usado por HistoricoValidacaoDoCalculo. */
+export enum TipoRegistroCalculoWS {
+  CALCULO = 'C',
+  ATUALIZACAO = 'A',
+}
