@@ -630,7 +630,9 @@ export enum SemanaEnum {
   QUINTA = 5,
   SEXTA = 6,
   SABADO = 7,
-=======
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Divisor de Verba — DivisorDeVerbaEnum
 // Porte de: negocio/constantes/DivisorDeVerbaEnum.java
 // ─────────────────────────────────────────────────────────────────────────────
