@@ -330,24 +330,47 @@ export class PjeCalcEngineV3 {
         }
       }
       // Calcula INSS por competência usando faixas do DB
+      // PJe-Calc: pré-EC103 (comp < 2020-03) = alíquota ÚNICA (flat)
+      //           pós-EC103 (comp >= 2020-03) = alíquota PROGRESSIVA
+      // Ref: MaquinaDeCalculoDoInss.java — TabelaPrevidenciariaSeguradoEmpregado
       for (const [comp, base] of basesPorComp) {
-        // INSS progressivo simples (usando faixas se disponíveis)
         let valorSegurado = 0;
         if (this.faixasINSSDB.length > 0) {
-          // Buscar faixas para esta competência
+          // Buscar faixas para ESTA competência (não para data_liquidacao)
           const compDate = comp + '-01';
           const faixas = this.faixasINSSDB
             .filter(f => f.competencia_inicio <= compDate && (!f.competencia_fim || f.competencia_fim >= compDate))
             .sort((a, b) => a.faixa - b.faixa);
+
           if (faixas.length > 0) {
-            let restante = base;
-            let anterior = 0;
-            for (const f of faixas) {
-              const faixaBase = Math.min(restante, f.valor_ate - anterior);
-              if (faixaBase > 0) valorSegurado += +(faixaBase * f.aliquota).toFixed(2);
-              restante -= faixaBase;
-              anterior = f.valor_ate;
-              if (restante <= 0) break;
+            // EC 103/2019 entrou em vigor em 01/03/2020
+            const isProgressivo = comp >= '2020-03';
+            const teto = faixas[faixas.length - 1].valor_ate;
+            const baseCapped = Math.min(base, teto);
+
+            if (isProgressivo) {
+              // PROGRESSIVO: cada faixa aplica sua alíquota sobre a parcela da base dentro dela
+              let restante = baseCapped;
+              let anterior = 0;
+              for (const f of faixas) {
+                const largura = f.valor_ate - anterior;
+                const parcela = Math.min(restante, largura);
+                if (parcela > 0) valorSegurado += +(parcela * f.aliquota).toFixed(2);
+                restante -= parcela;
+                anterior = f.valor_ate;
+                if (restante <= 0) break;
+              }
+            } else {
+              // PRÉ-EC103: alíquota FLAT — base inteira tributada na alíquota da faixa
+              // Encontra a faixa onde a base se encaixa
+              let aliquotaFlat = faixas[faixas.length - 1].aliquota;
+              for (const f of faixas) {
+                if (baseCapped <= f.valor_ate) {
+                  aliquotaFlat = f.aliquota;
+                  break;
+                }
+              }
+              valorSegurado = +(baseCapped * aliquotaFlat).toFixed(2);
             }
           }
         }
