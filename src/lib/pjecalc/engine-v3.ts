@@ -194,33 +194,15 @@ export class PjeCalcEngineV3 {
     // ── 4. Liquidar correção monetária ──
     calculo.liquidar();
 
-    // ── 5. Calcular juros por ocorrência ──
-    // Usa a taxa de juros do PJe-Calc (simples_mensal 1% por padrão, ou combinações)
+    // ── 5. Preparar cálculo de juros por ocorrência ──
+    // Respeita combinacoes_juros do PJC (TRD_SIMPLES, SELIC, TAXA_LEGAL, etc.)
     const dataLiq = new Date(this.correcaoConfig.data_liquidacao);
     const dataAjuiz = new Date(this.params.data_ajuizamento);
     const jurosPercentualMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
 
-    for (const vc of verbasCore) {
-      for (const oc of vc.getOcorrenciasAtivas()) {
-        const dataIni = oc.getDataInicial();
-        if (!dataIni) continue;
-        const dif = oc.getDiferenca();
-        if (dif.isZero()) continue;
-        // Calcular meses de juros (ajuizamento → liquidação, inclusivo)
-        const jurosStart = this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao
-          ? new Date(this.params.data_citacao)
-          : dataAjuiz;
-        const mesesJuros = Math.max(0,
-          (dataLiq.getFullYear() - jurosStart.getFullYear()) * 12
-          + (dataLiq.getMonth() - jurosStart.getMonth()) + 1
-        );
-        // juros = diferença × taxa × meses (simples)
-        const corrigida = oc.getDiferencaCorrigida();
-        const base = corrigida ?? dif;
-        // Aplica VERBA_INSS se configurado (deduz INSS proporcional da base de juros)
-        // TODO: integrar com calcularInssProgressivo para taxa INSS real
-      }
-    }
+    // Monta breakpoints de juros a partir das combinações
+    const combJuros = this.correcaoConfig.combinacoes_juros ?? [];
+    const combIndice = this.correcaoConfig.combinacoes_indice ?? [];
 
     // ── 6. FGTS ──
     const fgtsDepositos: { competencia: string; base: number; aliquota: number; valor: number }[] = [];
@@ -362,16 +344,28 @@ export class PjeCalcEngineV3 {
         const indice = oc.getIndiceAcumulado()?.toNumber() ?? 1;
         const corrigida = oc.getDiferencaCorrigida()?.toNumber() ?? diferenca;
         const valorCorrigido = arredondarValorMonetario(new Decimal(corrigida)).toNumber();
-        // Juros simples: diferença × taxa × meses (desde ajuizamento até liquidação)
+        // Juros respeitando combinações do PJC (TRD_SIMPLES, SELIC, TAXA_LEGAL, etc.)
+        // PJe-Calc calcula taxa de juros POR OCORRÊNCIA via TabelaDeJuros.calcularTaxaDeJuros()
+        // que percorre a cadeia de PeriodoDeJuros montada a partir das combinações.
         const dataIni = oc.getDataInicial();
         let juros = 0;
         if (dataIni && diferenca !== 0 && this.correcaoConfig.juros_tipo !== 'nenhum') {
           const jurosStart = this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao
             ? new Date(this.params.data_citacao) : dataAjuiz;
-          const meses = Math.max(0,
-            (dataLiq.getFullYear() - jurosStart.getFullYear()) * 12
-            + (dataLiq.getMonth() - jurosStart.getMonth()) + 1);
-          juros = +(diferenca * jurosPercentualMensal * meses).toFixed(2);
+
+          if (combJuros.length > 0) {
+            // Usa combinações do PJC — cada segmento tem seu tipo de juros
+            juros = this.calcularJurosComCombinacoes(diferenca, jurosStart, dataLiq, combJuros, combIndice);
+          } else if (this.correcaoConfig.juros_tipo === 'selic') {
+            // SELIC como juros (sem combinação) = 0 separado (já incluído na correção)
+            juros = 0;
+          } else {
+            // Juros simples padrão sem combinação
+            const meses = Math.max(0,
+              (dataLiq.getFullYear() - jurosStart.getFullYear()) * 12
+              + (dataLiq.getMonth() - jurosStart.getMonth()) + 1);
+            juros = +(diferenca * jurosPercentualMensal * meses).toFixed(2);
+          }
         }
         const valorFinal = +(valorCorrigido + juros).toFixed(2);
 
@@ -521,6 +515,103 @@ export class PjeCalcEngineV3 {
       'ferias': CaracteristicaDaVerbaEnum.FERIAS,
     };
     return map[c] ?? CaracteristicaDaVerbaEnum.COMUM;
+  }
+
+  /**
+   * Calcula juros respeitando as combinações de juros do PJC.
+   *
+   * Port funcional de Calculo.apurarJurosDasVerbasOperacoes (linhas 1894-1950):
+   * Para cada segmento (delimitado pelas combinações), aplica a taxa do regime:
+   *   - SEM_JUROS/NENHUM: 0
+   *   - TRD_SIMPLES: taxa TR diária × dias/mês (~0 pós-2017, TR zerada)
+   *   - SELIC: soma simples das taxas mensais SELIC no período (já incluída na correção → 0 separado)
+   *   - TAXA_LEGAL: taxa legal diária × dias (sem dados → 0)
+   *   - simples_mensal/1%: aliquota × meses fracionados
+   *   - Padrão: aliquota × meses
+   */
+  private calcularJurosComCombinacoes(
+    diferenca: number,
+    jurosStart: Date,
+    dataLiq: Date,
+    combJuros: { de?: string; ate?: string; tipo: string; percentual?: number }[],
+    combIndice: { de?: string; ate?: string; indice: string }[]
+  ): number {
+    if (jurosStart >= dataLiq) return 0;
+
+    // Montar breakpoints a partir das combinações
+    const breakpoints = new Set<string>();
+    breakpoints.add(jurosStart.toISOString().slice(0, 10));
+    breakpoints.add(dataLiq.toISOString().slice(0, 10));
+    for (const cj of combJuros) {
+      if (cj.de && cj.de > jurosStart.toISOString().slice(0, 10) && cj.de <= dataLiq.toISOString().slice(0, 10)) {
+        breakpoints.add(cj.de);
+      }
+    }
+    for (const ci of combIndice) {
+      if (ci.de && ci.de > jurosStart.toISOString().slice(0, 10) && ci.de <= dataLiq.toISOString().slice(0, 10)) {
+        breakpoints.add(ci.de);
+      }
+    }
+    const datas = [...breakpoints].sort();
+
+    let jurosTotal = 0;
+    for (let i = 0; i < datas.length - 1; i++) {
+      const segInicio = datas[i];
+      const segFim = datas[i + 1];
+
+      // Encontrar regime de juros para este segmento
+      const regimeJuros = this.getRegimeParaData(combJuros, segInicio);
+      const regimeIndice = this.getRegimeParaData(combIndice, segInicio);
+
+      const tipoJuros = (regimeJuros?.tipo || '').toUpperCase();
+      const indiceCorrecao = (regimeIndice?.indice || '').toUpperCase();
+
+      // SELIC como índice de correção = já inclui juros → skip
+      if (indiceCorrecao === 'SELIC' || indiceCorrecao === 'SELIC_RF') continue;
+      // SEM_CORRECAO com SELIC juros = SELIC já aplicada como correção → skip
+      if ((indiceCorrecao === 'SEM_CORRECAO' || indiceCorrecao === 'SEM CORREÇÃO') && tipoJuros === 'SELIC') continue;
+
+      // SEM_JUROS ou NENHUM
+      if (tipoJuros === 'NENHUM' || tipoJuros === 'SEM_JUROS' || tipoJuros === '') continue;
+
+      // SELIC como juros (não correção): soma simples = já tratado na correção
+      if (tipoJuros === 'SELIC') continue;
+
+      // TRD_SIMPLES: TR zerada pós-2017, juros ≈ 0
+      if (tipoJuros === 'TRD_SIMPLES' || tipoJuros === 'TRD' || tipoJuros === 'TR') {
+        // TR pós-2017 é zero → juros = 0
+        // Pré-2017 seria TR mensal × dias, mas sem tabela TR diária → 0
+        continue;
+      }
+
+      // TAXA_LEGAL: Lei 14.905/2024, sem dados disponíveis → 0
+      if (tipoJuros === 'TAXA_LEGAL') continue;
+
+      // TRD_COMPOSTOS, SELIC_BACEN: compostos → skip (raro)
+      if (tipoJuros === 'TRD_COMPOSTOS' || tipoJuros === 'SELIC_BACEN') continue;
+
+      // Juros simples (JUROS_UM_PORCENTO, JUROS_PADRAO, FAZENDA_PUBLICA, etc.)
+      const d1 = new Date(segInicio);
+      const d2 = new Date(segFim);
+      const meses = Math.max(0,
+        (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()));
+      const taxa = (regimeJuros?.percentual ?? 1) / 100;
+      jurosTotal += diferenca * taxa * meses;
+    }
+
+    return +jurosTotal.toFixed(2);
+  }
+
+  private getRegimeParaData<T extends { de?: string; ate?: string }>(combinacoes: T[], data: string): T | null {
+    const sorted = [...combinacoes].sort((a, b) => {
+      const aDate = a.de || '0000-01-01';
+      const bDate = b.de || '0000-01-01';
+      return bDate.localeCompare(aDate);
+    });
+    for (const c of sorted) {
+      if ((c.de || '0000-01-01') <= data) return c;
+    }
+    return combinacoes[0] || null;
   }
 
   private mapOcorrenciaPagamento(op: string): OcorrenciaDePagamentoEnum {
