@@ -40,6 +40,7 @@ export interface PjeParametros {
   projetar_aviso_indenizado: boolean;
   limitar_avos_periodo: boolean;
   zerar_valor_negativo: boolean;
+  valor_da_causa?: number;
   sabado_dia_util: boolean;
   considerar_feriado_estadual: boolean;
   considerar_feriado_municipal: boolean;

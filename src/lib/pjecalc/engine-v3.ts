@@ -536,6 +536,17 @@ export class PjeCalcEngineV3 {
       const csDemais = this.irConfig.deduzir_cs ? csDescontado * propCSDemais : 0;
       const dedDependentes = (this.irConfig.dependentes ?? 0) * 189.59 * irMeses;
 
+      // Deduções adicionais do IRPF (BUG-4: campos que UI salva mas engine ignorava)
+      const dedAposentado65 = this.irConfig.aposentado_65 ? 1903.98 * irMeses : 0;
+      // prev privada e pensão: descontados do bruto se habilitados
+      // (valores reais dependem de módulos PrevidenciaPrivada e PensaoAlimenticia)
+      // Por ora incorporamos como dedução do IR, com valor 0 se módulo não calculado.
+      // Honorários do reclamante como dedução do IR (Art. 27 OJ 305):
+      // Nota: honorários sucumbenciais são calculados DEPOIS do IR, então aqui
+      // usamos 0. A dedução real requer recálculo iterativo (PJe-Calc faz isso
+      // em MaquinaDeCalculoDeIrpf via proporções). Placeholder conservador.
+      const dedHonorariosReclamante = 0;
+
       // Tabela IRPF — delega para TabelaIrpf do core/ (mesmos dados,
       // fonte única — eliminando duplicação hardcoded).
       const tabelaIrpfCore = TabelaIrpf.obterTabelaDa(dataLiq);
@@ -556,18 +567,18 @@ export class PjeCalcEngineV3 {
         return 0;
       };
 
+      // Deduções extras proporcionalizadas
+      const dedExtras = dedAposentado65 + dedHonorariosReclamante;
+
       // IR sobre cada grupo separadamente (método RRA exclusivo)
-      const ir13 = calcImpostoRRA(base13Corrigido, cs13 + dedDependentes * propCS13);
-      const irFerias = calcImpostoRRA(baseFeriasCorrigido, csFerias + dedDependentes * propCSFerias);
-      const irDemais = calcImpostoRRA(baseDemaisCorrigido, csDemais + dedDependentes * propCSDemais);
+      const ir13 = calcImpostoRRA(base13Corrigido, cs13 + (dedDependentes + dedExtras) * propCS13);
+      const irFerias = calcImpostoRRA(baseFeriasCorrigido, csFerias + (dedDependentes + dedExtras) * propCSFerias);
+      const irDemais = calcImpostoRRA(baseDemaisCorrigido, csDemais + (dedDependentes + dedExtras) * propCSDemais);
       const irSeparado = ir13 + irFerias + irDemais;
 
       // Comparar com método agregado (soma tudo, divide por N_meses, aplica tabela)
-      // O PJe-Calc em alguns modos usa agregado. Usar o menor dos dois como
-      // aproximação conservadora — evita super-estimar IR em casos onde a
-      // separação artificialmente push algum grupo a faixa alta.
       const baseTotalCorrigido = base13Corrigido + baseFeriasCorrigido + baseDemaisCorrigido;
-      const dedTotal = (this.irConfig.deduzir_cs ? csDescontado : 0) + dedDependentes;
+      const dedTotal = (this.irConfig.deduzir_cs ? csDescontado : 0) + dedDependentes + dedExtras;
       const irAgregado = calcImpostoRRA(baseTotalCorrigido, dedTotal);
 
       irDevido = +Math.min(irSeparado, irAgregado).toFixed(2);
@@ -660,15 +671,38 @@ export class PjeCalcEngineV3 {
     const brutoTotal = +(principalCorrigido + jurosMora).toFixed(2);
     const liquidoReclamante = +(brutoTotal - csDescontado - irDevido).toFixed(2);
 
-    // Honorários
-    // Se o PJC forneceu valor_fixo (valor absoluto emitido no XML), usar
-    // esse valor direto. Senão, calcula com percentual default.
+    // Multas (BUG-1: antes hardcoded zero, agora usa correcaoConfig)
+    let multa523Valor = 0;
+    if (this.correcaoConfig.multa_523) {
+      const baseMulta523 = principalCorrigido + jurosMora;
+      const perc523 = this.correcaoConfig.multa_523_percentual ?? 10;
+      multa523Valor = +(baseMulta523 * perc523 / 100).toFixed(2);
+    }
+    let multa467Valor = 0;
+    if (this.correcaoConfig.multa_467) {
+      const perc467 = this.correcaoConfig.multa_467_percentual ?? 50;
+      multa467Valor = +(principalCorrigido * perc467 / 100).toFixed(2);
+    }
+
+    // Honorários — respeita base_sucumbenciais selecionada no UI.
     let honorariosSucumb = 0;
     if (this.honorariosConfig.apurar_sucumbenciais) {
       if (this.honorariosConfig.valor_fixo && this.honorariosConfig.valor_fixo > 0) {
         honorariosSucumb = +this.honorariosConfig.valor_fixo.toFixed(2);
       } else {
-        const baseHon = principalCorrigido + jurosMora;
+        let baseHon = 0;
+        switch (this.honorariosConfig.base_sucumbenciais) {
+          case 'causa':
+            baseHon = this.params.valor_da_causa ?? (principalCorrigido + jurosMora);
+            break;
+          case 'proveito':
+            baseHon = liquidoReclamante;
+            break;
+          case 'condenacao':
+          default:
+            baseHon = principalCorrigido + jurosMora;
+            break;
+        }
         honorariosSucumb = +(baseHon * (this.honorariosConfig.percentual_sucumbenciais / 100)).toFixed(2);
       }
     }
@@ -692,8 +726,8 @@ export class PjeCalcEngineV3 {
       seguro_desemprego: 0,
       previdencia_privada: 0,
       salario_familia: 0,
-      multa_523: 0,
-      multa_467: 0,
+      multa_523: multa523Valor,
+      multa_467: multa467Valor,
       honorarios_sucumbenciais: honorariosSucumb,
       honorarios_contratuais: 0,
       custas: custasValor,
@@ -703,7 +737,7 @@ export class PjeCalcEngineV3 {
       contribuicao_sindical: 0,
       abono_pecuniario: 0,
       liquido_reclamante: liquidoReclamante,
-      total_reclamada: +(liquidoReclamante + csDescontado + irDevido + +totalEmpregador.toFixed(2) + fgtsTotal + honorariosSucumb + custasValor).toFixed(2),
+      total_reclamada: +(liquidoReclamante + csDescontado + irDevido + +totalEmpregador.toFixed(2) + fgtsTotal + honorariosSucumb + custasValor + multa523Valor + multa467Valor).toFixed(2),
     };
 
     return {
