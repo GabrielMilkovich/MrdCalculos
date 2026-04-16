@@ -110,3 +110,22 @@ export { ParametrosDeAtualizacaoUtils } from './dominio/calculo/atualizacao/para
 // ────────────── comum/tabela-de-juros ──────────────
 export { construirPeriodosDeJuros, calcularTaxaDeJurosTotal } from './comum/tabela-de-juros';
 export type { ITabelaDeJurosContext } from './comum/tabela-de-juros';
+
+// ────────────── dominio/verbacalculo (VerbaDeCalculo) ──────────────
+export { VerbaDeCalculo } from './dominio/verbacalculo/verba-de-calculo';
+
+// ────────────── dominio/calculo (Calculo orquestrador) ──────────────
+export { Calculo } from './dominio/calculo/calculo';
+export type { IModuloLiquidavel } from './dominio/calculo/calculo';
+
+// ────────────── dominio/calculo/fgts ──────────────
+export { Fgts } from './dominio/calculo/fgts/fgts';
+export type { OcorrenciaDeFgts } from './dominio/calculo/fgts/fgts';
+
+// ────────────── dominio/calculo/inss ──────────────
+export { Inss } from './dominio/calculo/inss/inss';
+export type { OcorrenciaDeInss } from './dominio/calculo/inss/inss';
+
+// ────────────── dominio/calculo/irpf ──────────────
+export { Irpf } from './dominio/calculo/irpf/irpf';
+export type { FaixaDeIrpf } from './dominio/calculo/irpf/irpf';
