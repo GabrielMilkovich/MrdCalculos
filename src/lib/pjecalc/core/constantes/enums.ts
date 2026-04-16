@@ -184,3 +184,14 @@ export enum TipoDeBaseDoFgtsEnum {
   DEVIDO = 'D',
   CORRIGIDO = 'C',
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Divisor de Verba — DivisorDeVerbaEnum
+// Porte de: negocio/constantes/DivisorDeVerbaEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum DivisorDeVerbaEnum {
+  CARGA_HORARIA = 'CH',
+  DIAS_UTEIS = 'DU',
+  OUTRO_VALOR = 'OV',
+  IMPORTADA_DO_CARTAO = 'CP',
+}
