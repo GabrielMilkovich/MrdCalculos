@@ -264,15 +264,16 @@ export class OcorrenciaDeVerba {
   }
 
   /**
-   * integraliza — extrapola valor proporcional para valor integral.
-   * No Java usa CalculoDoIntegralizar; aqui implementação simplificada baseada
-   * no período/diasNoMes. Para casos plenos (período completo), retorna o mesmo valor.
+   * integraliza — extrapola valor proporcional para valor integral (mês completo).
+   * Delega para CalculoDoIntegralizar (já portado):
+   *   resultado = valor × diasNoMes / diasDoPeriodo
    */
   integraliza(valor: Decimal): Decimal {
-    // Implementação simplificada: se o período é o mês completo, valor integral = valor.
-    // Implementação completa requer CalculoDoIntegralizar (baseado em dias úteis/exclusões).
-    // Quando portada, esta função deve delegar para essa classe.
-    return valor;
+    if (!this.dataInicial || !this.dataFinal) return valor;
+    const { CalculoDoIntegralizar } = require('../../comum/rotinasdecalculo/calculo-do-integralizar');
+    const calc = new CalculoDoIntegralizar(this.getPeriodo(), valor, 0);
+    calc.executar();
+    return calc.getResultado();
   }
 
   /**

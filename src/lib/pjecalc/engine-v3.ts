@@ -191,10 +191,167 @@ export class PjeCalcEngineV3 {
       calculo.adicionarVerba(vc);
     }
 
-    // ── 4. Liquidar ──
+    // ── 4. Liquidar correção monetária ──
     calculo.liquidar();
 
-    // ── 5. Converter resultados Core → UI ──
+    // ── 5. Calcular juros por ocorrência ──
+    // Usa a taxa de juros do PJe-Calc (simples_mensal 1% por padrão, ou combinações)
+    const dataLiq = new Date(this.correcaoConfig.data_liquidacao);
+    const dataAjuiz = new Date(this.params.data_ajuizamento);
+    const jurosPercentualMensal = (this.correcaoConfig.juros_percentual ?? 1) / 100;
+
+    for (const vc of verbasCore) {
+      for (const oc of vc.getOcorrenciasAtivas()) {
+        const dataIni = oc.getDataInicial();
+        if (!dataIni) continue;
+        const dif = oc.getDiferenca();
+        if (dif.isZero()) continue;
+        // Calcular meses de juros (ajuizamento → liquidação, inclusivo)
+        const jurosStart = this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao
+          ? new Date(this.params.data_citacao)
+          : dataAjuiz;
+        const mesesJuros = Math.max(0,
+          (dataLiq.getFullYear() - jurosStart.getFullYear()) * 12
+          + (dataLiq.getMonth() - jurosStart.getMonth()) + 1
+        );
+        // juros = diferença × taxa × meses (simples)
+        const corrigida = oc.getDiferencaCorrigida();
+        const base = corrigida ?? dif;
+        // Aplica VERBA_INSS se configurado (deduz INSS proporcional da base de juros)
+        // TODO: integrar com calcularInssProgressivo para taxa INSS real
+      }
+    }
+
+    // ── 6. FGTS ──
+    const fgtsDepositos: { competencia: string; base: number; aliquota: number; valor: number }[] = [];
+    let fgtsTotal = 0;
+    let fgtsMulta = 0;
+    if (this.fgtsConfig.apurar) {
+      const aliqFgts = 0.08;
+      const basesPorComp = new Map<string, number>();
+      for (const vc of verbasCore) {
+        if (!vc.getIncidenciaFGTS()) continue;
+        for (const oc of vc.getOcorrenciasAtivas()) {
+          const dataIni = oc.getDataInicial();
+          if (!dataIni) continue;
+          const dif = oc.getDiferenca().toNumber();
+          if (dif <= 0) continue;
+          const comp = `${dataIni.getFullYear()}-${String(dataIni.getMonth() + 1).padStart(2, '0')}`;
+          basesPorComp.set(comp, (basesPorComp.get(comp) ?? 0) + dif);
+        }
+      }
+      let totalDep = 0;
+      for (const [comp, base] of basesPorComp) {
+        const valor = +(base * aliqFgts).toFixed(2);
+        fgtsDepositos.push({ competencia: comp, base: +base.toFixed(2), aliquota: aliqFgts, valor });
+        totalDep += valor;
+      }
+      if (this.fgtsConfig.multa_apurar) {
+        fgtsMulta = +(totalDep * (this.fgtsConfig.multa_percentual / 100)).toFixed(2);
+      }
+      fgtsTotal = +(totalDep + fgtsMulta).toFixed(2);
+    }
+
+    // ── 7. INSS ──
+    const csSeguradoDevidos: PjeCSResult['segurado_devidos'] = [];
+    let totalSegurado = 0;
+    let totalEmpregador = 0;
+    if (this.csConfig.apurar_segurado || this.csConfig.apurar_empresa) {
+      // Agrupa base por competência
+      const basesPorComp = new Map<string, number>();
+      for (const vc of verbasCore) {
+        if (!vc.getIncidenciaINSS()) continue;
+        for (const oc of vc.getOcorrenciasAtivas()) {
+          const dataIni = oc.getDataInicial();
+          if (!dataIni) continue;
+          const dif = oc.getDiferenca().toNumber();
+          if (dif <= 0) continue;
+          const comp = `${dataIni.getFullYear()}-${String(dataIni.getMonth() + 1).padStart(2, '0')}`;
+          basesPorComp.set(comp, (basesPorComp.get(comp) ?? 0) + dif);
+        }
+      }
+      // Calcula INSS por competência usando faixas do DB
+      for (const [comp, base] of basesPorComp) {
+        // INSS progressivo simples (usando faixas se disponíveis)
+        let valorSegurado = 0;
+        if (this.faixasINSSDB.length > 0) {
+          // Buscar faixas para esta competência
+          const compDate = comp + '-01';
+          const faixas = this.faixasINSSDB
+            .filter(f => f.competencia_inicio <= compDate && (!f.competencia_fim || f.competencia_fim >= compDate))
+            .sort((a, b) => a.faixa - b.faixa);
+          if (faixas.length > 0) {
+            let restante = base;
+            let anterior = 0;
+            for (const f of faixas) {
+              const faixaBase = Math.min(restante, f.valor_ate - anterior);
+              if (faixaBase > 0) valorSegurado += +(faixaBase * f.aliquota).toFixed(2);
+              restante -= faixaBase;
+              anterior = f.valor_ate;
+              if (restante <= 0) break;
+            }
+          }
+        }
+        // Empresa
+        const aliqEmpresa = (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
+        const aliqSAT = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
+        const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
+        const valorEmpresa = +(base * aliqEmpresa).toFixed(2);
+        const valorSAT = +(base * aliqSAT).toFixed(2);
+        const valorTerc = +(base * aliqTerc).toFixed(2);
+        const aliquotaEfetiva = base > 0 ? valorSegurado / base : 0;
+        csSeguradoDevidos.push({ competencia: comp, base: +base.toFixed(2), aliquota: +aliquotaEfetiva.toFixed(4), valor: +valorSegurado.toFixed(2), recolhido: 0, diferenca: +valorSegurado.toFixed(2) });
+        totalSegurado += valorSegurado;
+        totalEmpregador += valorEmpresa + valorSAT + valorTerc;
+      }
+    }
+    const csDescontado = this.csConfig.cobrar_reclamante ? +totalSegurado.toFixed(2) : 0;
+
+    // ── 8. IRPF ──
+    let irDevido = 0;
+    let irMeses = 1;
+    if (this.irConfig.apurar) {
+      let baseBrutaIR = 0;
+      const todasComp = new Set<string>();
+      for (const vc of verbasCore) {
+        if (!vc.getIncidenciaIRPF()) continue;
+        for (const oc of vc.getOcorrenciasAtivas()) {
+          const dif = oc.getDiferenca().toNumber();
+          if (dif <= 0) continue;
+          baseBrutaIR += dif;
+          const d = oc.getDataInicial();
+          if (d) todasComp.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+        }
+      }
+      if (todasComp.size > 0) {
+        const sorted = [...todasComp].sort();
+        const [y1, m1] = sorted[0].split('-').map(Number);
+        const [y2, m2] = sorted[sorted.length - 1].split('-').map(Number);
+        irMeses = Math.max(1, (y2 - y1) * 12 + (m2 - m1) + 1);
+      }
+      let deducoes = 0;
+      if (this.irConfig.deduzir_cs) deducoes += csDescontado;
+      deducoes += (this.irConfig.dependentes ?? 0) * 189.59 * irMeses;
+      const baseTributavel = Math.max(0, (baseBrutaIR - deducoes) / irMeses);
+      // Tabela IRPF 2025
+      const faixasIR = [
+        { ate: 2259.20, aliq: 0, ded: 0 },
+        { ate: 2826.65, aliq: 0.075, ded: 169.44 },
+        { ate: 3751.05, aliq: 0.15, ded: 381.44 },
+        { ate: 4664.68, aliq: 0.225, ded: 662.77 },
+        { ate: Infinity, aliq: 0.275, ded: 896.00 },
+      ];
+      let impostoMensal = 0;
+      for (const f of faixasIR) {
+        if (baseTributavel <= f.ate) {
+          impostoMensal = Math.max(0, baseTributavel * f.aliq - f.ded);
+          break;
+        }
+      }
+      irDevido = +(impostoMensal * irMeses).toFixed(2);
+    }
+
+    // ── 9. Converter resultados Core → UI ──
     const verbaResults: PjeVerbaResult[] = verbasCore.map((vc, idx) => {
       const vUI = this.verbas[idx];
       let totalDevido = 0, totalPago = 0, totalDiferenca = 0;
@@ -205,9 +362,18 @@ export class PjeCalcEngineV3 {
         const indice = oc.getIndiceAcumulado()?.toNumber() ?? 1;
         const corrigida = oc.getDiferencaCorrigida()?.toNumber() ?? diferenca;
         const valorCorrigido = arredondarValorMonetario(new Decimal(corrigida)).toNumber();
-        // Juros = 0 por agora (calculado via TabelaDeJuros no pipeline completo)
-        const juros = 0;
-        const valorFinal = valorCorrigido + juros;
+        // Juros simples: diferença × taxa × meses (desde ajuizamento até liquidação)
+        const dataIni = oc.getDataInicial();
+        let juros = 0;
+        if (dataIni && diferenca !== 0 && this.correcaoConfig.juros_tipo !== 'nenhum') {
+          const jurosStart = this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao
+            ? new Date(this.params.data_citacao) : dataAjuiz;
+          const meses = Math.max(0,
+            (dataLiq.getFullYear() - jurosStart.getFullYear()) * 12
+            + (dataLiq.getMonth() - jurosStart.getMonth()) + 1);
+          juros = +(diferenca * jurosPercentualMensal * meses).toFixed(2);
+        }
+        const valorFinal = +(valorCorrigido + juros).toFixed(2);
 
         totalDevido += oc.getDevido()?.toNumber() ?? 0;
         totalPago += oc.getPago()?.toNumber() ?? 0;
@@ -216,7 +382,6 @@ export class PjeCalcEngineV3 {
         totalJuros += juros;
         totalFinal += valorFinal;
 
-        const dataIni = oc.getDataInicial();
         const comp = dataIni
           ? `${dataIni.getFullYear()}-${String(dataIni.getMonth() + 1).padStart(2, '0')}`
           : '0000-00';
@@ -254,42 +419,59 @@ export class PjeCalcEngineV3 {
       } satisfies PjeVerbaResult;
     });
 
-    // Totais
+    // ── 10. Totalização ──
     const principalBruto = verbaResults.reduce((s, v) => s + v.total_diferenca, 0);
     const principalCorrigido = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
     const jurosMora = verbaResults.reduce((s, v) => s + v.total_juros, 0);
+    const brutoTotal = +(principalCorrigido + jurosMora).toFixed(2);
+    const liquidoReclamante = +(brutoTotal - csDescontado - irDevido).toFixed(2);
+
+    // Honorários
+    let honorariosSucumb = 0;
+    if (this.honorariosConfig.apurar_sucumbenciais) {
+      const baseHon = principalCorrigido + jurosMora;
+      honorariosSucumb = +(baseHon * (this.honorariosConfig.percentual_sucumbenciais / 100)).toFixed(2);
+    }
+
+    // Custas
+    let custasValor = 0;
+    if (this.custasConfig.apurar) {
+      const baseCustas = principalCorrigido + jurosMora + fgtsTotal;
+      custasValor = +(baseCustas * (this.custasConfig.percentual / 100)).toFixed(2);
+      if (custasValor < this.custasConfig.valor_minimo) custasValor = this.custasConfig.valor_minimo;
+    }
 
     const resumo: PjeResumo = {
       principal_bruto: +principalBruto.toFixed(2),
       principal_corrigido: +principalCorrigido.toFixed(2),
       juros_mora: +jurosMora.toFixed(2),
-      fgts_total: 0,
-      cs_segurado: 0,
-      cs_empregador: 0,
-      ir_retido: 0,
+      fgts_total: fgtsTotal,
+      cs_segurado: csDescontado,
+      cs_empregador: +totalEmpregador.toFixed(2),
+      ir_retido: irDevido,
       seguro_desemprego: 0,
       previdencia_privada: 0,
       salario_familia: 0,
       multa_523: 0,
       multa_467: 0,
-      honorarios_sucumbenciais: 0,
+      honorarios_sucumbenciais: honorariosSucumb,
       honorarios_contratuais: 0,
-      custas: 0,
+      custas: custasValor,
       custas_detalhadas: [],
       pensao_sobre_fgts: 0,
       pensao_total: 0,
       contribuicao_sindical: 0,
       abono_pecuniario: 0,
-      liquido_reclamante: +(principalCorrigido + jurosMora).toFixed(2),
-      total_reclamada: +(principalCorrigido + jurosMora).toFixed(2),
+      liquido_reclamante: liquidoReclamante,
+      total_reclamada: +(liquidoReclamante + csDescontado + irDevido + +totalEmpregador.toFixed(2) + fgtsTotal + honorariosSucumb + custasValor).toFixed(2),
     };
 
     return {
       data_liquidacao: this.correcaoConfig.data_liquidacao,
       verbas: verbaResults,
-      fgts: { depositos: [], total_depositos: 0, multa_valor: 0, lc110_10: 0, lc110_05: 0, saldo_deduzido: 0, total_fgts: 0 },
-      contribuicao_social: { segurado_devidos: [], segurado_pagos: [], empregador: [], total_segurado_devidos: 0, total_segurado_pagos: 0, total_segurado: 0, total_empregador: 0 },
-      imposto_renda: { base_calculo: 0, deducoes: 0, base_tributavel: 0, imposto_devido: 0, meses_rra: 0, metodo: 'art_12a_rra', ir_anos_anteriores: 0, ir_ano_liquidacao: 0, ir_13_exclusivo: 0, ir_ferias_separado: 0, meses_anos_anteriores: 0, meses_ano_liquidacao: 0 },
+      fgts: { depositos: fgtsDepositos, total_depositos: +(fgtsTotal - fgtsMulta).toFixed(2), multa_valor: fgtsMulta, lc110_10: 0, lc110_05: 0, saldo_deduzido: 0, total_fgts: fgtsTotal },
+      contribuicao_social: { segurado_devidos: csSeguradoDevidos, segurado_pagos: [], empregador: [], total_segurado_devidos: +totalSegurado.toFixed(2), total_segurado_pagos: 0, total_segurado: +totalSegurado.toFixed(2), total_empregador: +totalEmpregador.toFixed(2) },
+      imposto_renda: { base_calculo: +principalBruto.toFixed(2), deducoes: 0, base_tributavel: 0, imposto_devido: irDevido, meses_rra: irMeses, metodo: 'art_12a_rra', ir_anos_anteriores: 0, ir_ano_liquidacao: 0, ir_13_exclusivo: 0, ir_ferias_separado: 0, meses_anos_anteriores: 0, meses_ano_liquidacao: 0 },
       seguro_desemprego: { apurado: false, parcelas: 0, valor_parcela: 0, total: 0 },
       previdencia_privada: { apurado: false, base: 0, percentual: 0, valor: 0 },
       salario_familia: { apurado: false, total: 0, ocorrencias: [] },
