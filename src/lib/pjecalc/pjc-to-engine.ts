@@ -321,48 +321,56 @@ function consolidarReflexoMediaPelaQuantidade(
   const N = ocs.length;
   let sumQtdMult = 0;
   let sumBase = 0;
+  let sumDev = 0;
   let sumDivisor = 0;
   let divCount = 0;
+  let allDivisorOne = true;
   for (const oc of ocs) {
     const mult = oc.multiplicador || 1;
     const dobra = oc.dobra ? 2 : 1;
     sumQtdMult += (oc.quantidade || 0) * mult * dobra;
     sumBase += oc.base || 0;
+    sumDev += oc.devido || 0;
     if (oc.divisor && oc.divisor > 0) {
       sumDivisor += oc.divisor;
       divCount++;
     }
+    if ((oc.divisor || 0) !== 1) allDivisorOne = false;
   }
 
-  // PJe-Calc ComportamentoMediaPelaQuantidade.java:143-144 divide pela
-  // QUANTIDADE DE PERÍODOS ESPERADOS (normalmente 12 por ano), não por N.
-  // Isso converte "soma de avos mensais" em "avos médios por mês".
-  // Para multi-ano: sumQtdMult já acumula todos os meses; /12 dá o
-  // equivalente a "avos por ano × N_anos".
-  // Para contrato < 1 ano: N_esperados é min(12, meses_contrato_no_periodo)
-  // que o Java calcula via obterQuantidadeEsperadaDeOcorrenciasParaMediaDoReflexo.
-  // Aproximação: usamos min(12, N) — se tem menos de 12 meses de dados,
-  // usa N; senão, usa 12 (1 ano equivalente).
-  const NPeriodosEsperados = Math.min(12, N);
-  const mediaQuantidade = sumQtdMult / NPeriodosEsperados;
-  const baseMedia = sumBase / N;
-  // Divisor: última ocorrência ativa (ComportamentoMediaPelaQuantidade.java:183-202).
   const ultimaOc = ocs[ocs.length - 1];
-  const divisorMedio = (ultimaOc.divisor && ultimaOc.divisor > 0)
-    ? ultimaOc.divisor
-    : (divCount > 0 ? sumDivisor / divCount : 1);
+  const NPeriodosEsperados = Math.min(12, N);
+  let valor: number;
+  let baseMedia: number;
+  let mediaQuantidade: number;
+  let divisorMedio: number;
 
-  let valor = baseMedia * mediaQuantidade / divisorMedio;
+  if (allDivisorOne) {
+    // Caso especial: todas as ocorrências com divisor=1.
+    // `dev = base × mult × qtd` onde `base` é o valor da verba-pai naquele mês.
+    // Ex: 13º SOBRE DOMINGO no 4463 (base=1151 div=1 mult=0.3 qtd=1 dev=345).
+    // Consolidado real = Σdev / N_periodos_esperados (1 avo por mês efetivo).
+    valor = sumDev / NPeriodosEsperados;
+    baseMedia = sumBase / N;
+    mediaQuantidade = sumQtdMult / NPeriodosEsperados;
+    divisorMedio = 12;
+  } else {
+    // Caso geral: reflexo com divisor estruturado (ex: 12 para 13º, 220 para HE).
+    // Fórmula Java ComportamentoMediaPelaQuantidade.java:143-205.
+    mediaQuantidade = sumQtdMult / NPeriodosEsperados;
+    baseMedia = sumBase / N;
+    divisorMedio = (ultimaOc.divisor && ultimaOc.divisor > 0)
+      ? ultimaOc.divisor
+      : (divCount > 0 ? sumDivisor / divCount : 1);
 
-  // Para multi-ano (N > 12): o valor acima representa 1 ano equivalente.
-  // Multiplicar pelo número de anos (N/12) pra somar todos os 13º anuais.
-  if (N > 12) {
-    valor = valor * (N / 12);
+    valor = baseMedia * mediaQuantidade / divisorMedio;
   }
+
+  // Multi-ano: contrato > 12 meses → somar todos os 13º anuais.
+  if (N > 12) valor = valor * (N / 12);
 
   if (caracteristica === 'ferias') {
     // Férias + 1/3: multiplicar por 4/3 (30 dias + 10 dias do 1/3 = 40/30).
-    // Férias proporcionais: PJC já consolida em N meses do aquisitivo.
     valor = valor * (4 / 3);
   }
 

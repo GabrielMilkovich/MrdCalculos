@@ -727,8 +727,25 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   }
 
   // --- FGTS Config ---
-  const fgtsEl = root.getElementsByTagName('FGTS')[0] || root.getElementsByTagName('fgts')[0]
-    || root.getElementsByTagName('ModuloFGTS')[0] || root.getElementsByTagName('moduloFgts')[0];
+  // O JSDOM é case-insensitive em HTML mode, então `getElementsByTagName('FGTS')`
+  // retorna `<fgts>` lowercase — que é um CAMPO de outros blocos (tipo
+  // `<fgtsDepositoContaVinculada>`) e NÃO o módulo FGTS. O módulo real do PJe-Calc
+  // aparece como `<ModuloFGTS>` ou tem tag filha `<multaPercentual>`/`<percentualMulta>`.
+  // Só considera módulo FGTS se tiver essas tags características.
+  const fgtsCandidates = [
+    root.getElementsByTagName('ModuloFGTS')[0],
+    root.getElementsByTagName('moduloFgts')[0],
+    root.getElementsByTagName('FGTS')[0],
+  ];
+  const fgtsEl = fgtsCandidates.find(el => {
+    if (!el) return false;
+    // Valida: elemento precisa ter tag característica de módulo FGTS
+    return !!(getTextContent(el, 'percentualMulta')
+      || getTextContent(el, 'multaPercentual')
+      || getTextContent(el, 'apurar')
+      || getTextContent(el, 'baseMulta')
+      || getTextContent(el, 'multaBase'));
+  });
   let fgts_config: PJCAnalysis['fgts_config'] = undefined;
   if (fgtsEl) {
     const multa_pct_raw = getTextContent(fgtsEl, 'percentualMulta') || getTextContent(fgtsEl, 'multaPercentual');
