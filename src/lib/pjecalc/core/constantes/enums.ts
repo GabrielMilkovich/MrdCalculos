@@ -370,6 +370,16 @@ export enum GrupoEsferaPrecatorioEnum {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// IRPF (Fase 7) — TipoOcorrenciaIrpfEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoOcorrenciaIrpfEnum {
+  NORMAL = 'N',
+  TRIBUTACAO_EM_SEPARADO = 'S',
+  TRIBUTACAO_EXCLUSIVA = 'E',
+  RRA_ANOS_ANTERIORES = 'A',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // INSS (Fase 6) — TipoDeAliquotaDoSeguradoEnum.java
 // ─────────────────────────────────────────────────────────────────────────────
 export enum TipoDeAliquotaDoSeguradoEnum {
