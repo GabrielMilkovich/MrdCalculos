@@ -68,14 +68,6 @@ export { TABELA_UNICA_JT_DIARIO } from './dominio/indices/tabelaunica/tabela-uni
 export { IndiceTabelaUnicaDebitoTrabalhista } from './dominio/indices/tabelaunica/indice-tabela-unica-debito-trabalhista';
 export { TABELA_UNICA_DEBITO_TRABALHISTA } from './dominio/indices/tabelaunica/tabela-unica-debito-trabalhista';
 
-// ────────────── dominio/verbacalculo ──────────────
-export {
-  TabelaDeCorrecaoMonetaria,
-} from './dominio/verbacalculo/tabela-de-correcao-monetaria';
-export type {
-  ITabelaCorrecaoContext,
-} from './dominio/verbacalculo/tabela-de-correcao-monetaria';
-
 // ────────────── dominio/inss/faixas ──────────────
 export {
   FaixaPrevidenciaria,
@@ -95,3 +87,26 @@ export {
   ATRIBUTO_DEVIDO,
 } from './dominio/ocorrenciaverba/ocorrencia-de-verba';
 export type { IVerbaDeCalculoRef, IFeriasRef } from './dominio/ocorrenciaverba/ocorrencia-de-verba';
+
+// ────────────── dominio/formula ──────────────
+export {
+  Formula, FormulaCalculada, FormulaInformada, FormulaReflexo,
+} from './dominio/formula/formula';
+export type { BaseTabelada, BaseVerba, ItemBaseVerba, Divisor, Multiplicador, Quantidade, ValorPago } from './dominio/formula/formula';
+
+// ────────────── dominio/verbacalculo ──────────────
+export { TabelaDeCorrecaoMonetaria } from './dominio/verbacalculo/tabela-de-correcao-monetaria';
+export type { ITabelaCorrecaoContext } from './dominio/verbacalculo/tabela-de-correcao-monetaria';
+export { TabelaDeCorrecaoMonetariaUtils } from './dominio/verbacalculo/tabela-de-correcao-monetaria-utils';
+export { MaquinaDeCalculoDeCorrecaoMonetaria } from './dominio/verbacalculo/maquina-de-calculo-de-correcao-monetaria';
+export { calcularValorDevidoDaOcorrencia } from './dominio/verbacalculo/maquina-de-calculo';
+
+// ────────────── dominio/calculo/atualizacao ──────────────
+export { CombinacaoDeIndice } from './dominio/calculo/atualizacao/combinacao-de-indice';
+export { CombinacaoDeJuros } from './dominio/calculo/atualizacao/combinacao-de-juros';
+export { ParametrosDeAtualizacao } from './dominio/calculo/atualizacao/parametros-de-atualizacao';
+export { ParametrosDeAtualizacaoUtils } from './dominio/calculo/atualizacao/parametros-de-atualizacao-utils';
+
+// ────────────── comum/tabela-de-juros ──────────────
+export { construirPeriodosDeJuros, calcularTaxaDeJurosTotal } from './comum/tabela-de-juros';
+export type { ITabelaDeJurosContext } from './comum/tabela-de-juros';
