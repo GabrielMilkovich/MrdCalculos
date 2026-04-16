@@ -69,14 +69,78 @@ export class Inss implements IModuloLiquidavel {
   }
 
   /**
-   * liquidar (delega para RepositorioDeInss.gerarOcorrencias no Java)
-   * Implementação simplificada: calcula INSS progressivo por competência.
+   * liquidar — port funcional de MaquinaDeCalculoDoInss.liquidar()
+   * (pjecalc-fonte/.../inss/sobresalarios/MaquinaDeCalculoDoInss.java:146-200)
+   *
+   * Fluxo do PJe-Calc:
+   * 1. Para cada competência com verbas com incidência INSS:
+   *    a. Soma bases normais + bases 13° (teto separado para 13°)
+   *    b. Calcula INSS progressivo do segurado (alíquota fixa OU progressivo)
+   *    c. Calcula empresa (alíquota fixa, geralmente 20%)
+   *    d. Calcula SAT + terceiros
+   * 2. Totaliza segurado + empregador
+   *
+   * @param verbas lista de VerbaDeCalculo com incidência INSS definida
    */
-  liquidar(dataLiquidacao?: Date): void {
-    // A ser detalhada quando os dados de base salarial por competência
-    // estiverem disponíveis via OcorrenciaDeVerba → baseSalarial.
-    // A lógica progressiva (calcularInssProgressivo) já está portada
-    // em core/dominio/inss/faixas/.
+  liquidarComVerbas(verbas: { getIncidenciaINSS(): boolean; getOcorrenciasAtivas(): Array<{ getDataInicial(): Date | null; getDiferenca(): Decimal }> }[]): void {
+    this.ocorrenciasSalariosDevidos = [];
+
+    // Agrupa base por competência (YYYY-MM)
+    const basesPorComp = new Map<string, Decimal>();
+    for (const verba of verbas) {
+      if (!verba.getIncidenciaINSS()) continue;
+      for (const oc of verba.getOcorrenciasAtivas()) {
+        const dataIni = oc.getDataInicial();
+        if (!dataIni) continue;
+        const dif = oc.getDiferenca();
+        if (dif.isZero() || dif.isNegative()) continue;
+        const comp = `${dataIni.getFullYear()}-${String(dataIni.getMonth() + 1).padStart(2, '0')}`;
+        const current = basesPorComp.get(comp) ?? new Decimal(0);
+        basesPorComp.set(comp, current.plus(dif));
+      }
+    }
+
+    // Calcula INSS por competência
+    for (const [comp, base] of basesPorComp) {
+      const [ano, mes] = comp.split('-').map(Number);
+      const competencia = new Date(ano, mes - 1, 1);
+
+      // Segurado progressivo
+      let valorSegurado = new Decimal(0);
+      if (this.apurarSegurado && this.faixas.length > 0) {
+        valorSegurado = arredondarValorMonetario(calcularInssProgressivo(base, this.faixas));
+      }
+
+      // Empresa + SAT + terceiros
+      let valorEmpresa = new Decimal(0);
+      let valorSAT = new Decimal(0);
+      let valorTerceiros = new Decimal(0);
+      if (this.apurarEmpresa) {
+        valorEmpresa = arredondarValorMonetario(base.times(this.aliquotaEmpresa).div(100));
+        valorSAT = arredondarValorMonetario(base.times(this.aliquotaSAT).div(100));
+        valorTerceiros = arredondarValorMonetario(base.times(this.aliquotaTerceiros).div(100));
+      }
+
+      this.ocorrenciasSalariosDevidos.push({
+        competencia,
+        baseSalarial: base,
+        aliquotaSegurado: base.isZero() ? new Decimal(0) : valorSegurado.div(base).times(100),
+        valorSegurado,
+        aliquotaEmpresa: this.aliquotaEmpresa,
+        valorEmpresa,
+        aliquotaSAT: this.aliquotaSAT,
+        valorSAT,
+        aliquotaTerceiros: this.aliquotaTerceiros,
+        valorTerceiros,
+      });
+    }
+  }
+
+  /** liquidar via IModuloLiquidavel — stub sem acesso direto às verbas */
+  liquidar(_dataLiquidacao?: Date): void {
+    // Chamado pelo Calculo.liquidar() — sem verbas neste contexto.
+    // O calculo.liquidar() deve chamar liquidarComVerbas() diretamente
+    // passando as verbas ativas com incidência INSS.
   }
 
   limparJuros(): void {

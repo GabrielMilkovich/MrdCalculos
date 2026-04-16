@@ -129,3 +129,26 @@ export type { OcorrenciaDeInss } from './dominio/calculo/inss/inss';
 // ────────────── dominio/calculo/irpf ──────────────
 export { Irpf } from './dominio/calculo/irpf/irpf';
 export type { FaixaDeIrpf } from './dominio/calculo/irpf/irpf';
+
+// ────────────── dominio/calculo/ferias ──────────────
+export { Ferias, SituacaoDaFeriasEnum } from './dominio/calculo/ferias/ferias';
+
+// ────────────── dominio/calculo/faltas ──────────────
+export { Falta } from './dominio/calculo/faltas/falta';
+
+// ────────────── dominio/calculo/honorarios ──────────────
+export { Honorario } from './dominio/calculo/honorarios/honorario';
+
+// ────────────── dominio/calculo/custas ──────────────
+export { CustasJudiciais } from './dominio/calculo/custas/custas-judiciais';
+
+// ────────────── dominio/calculo/multa ──────────────
+export { Multa } from './dominio/calculo/multa/multa';
+
+// ────────────── dominio/historicosalarial ──────────────
+export { HistoricoSalarial } from './dominio/historicosalarial/historico-salarial';
+export type { OcorrenciaDoHistoricoSalarial } from './dominio/historicosalarial/historico-salarial';
+
+// ────────────── dominio/pagamento ──────────────
+export { totalizar } from './dominio/pagamento/pagamento';
+export type { ResultadoPagamento } from './dominio/pagamento/pagamento';
