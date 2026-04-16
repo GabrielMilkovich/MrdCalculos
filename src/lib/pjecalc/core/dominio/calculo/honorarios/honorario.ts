@@ -260,12 +260,13 @@ export class Honorario implements IModuloLiquidavel {
     }
   }
 
-  /** liquidar (Java linha 601) — delega para MaquinaDeCalculo. */
+  /** liquidar (Java linha 601) — delega para MaquinaDeCalculoDeHonorarios. */
   liquidar(_dataLiquidacao?: Date): void {
     if (this.valorFixoLegacy !== null && !this.valorFixoLegacy.isZero()) {
       this.valorCalculadoLegacy = this.valorFixoLegacy;
     }
-    // TODO(fase-8/9): delegar para MaquinaDeCalculoDeHonorarios.liquidar().
+    const { MaquinaDeCalculoDeHonorarios } = require('./maquina-de-calculo-de-honorarios') as typeof import('./maquina-de-calculo-de-honorarios');
+    new MaquinaDeCalculoDeHonorarios(this).liquidar();
   }
 
   // ─────────────────────────────────────────────────────────────────────

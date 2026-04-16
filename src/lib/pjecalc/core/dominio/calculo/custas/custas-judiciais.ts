@@ -324,7 +324,9 @@ export class CustasJudiciais implements IModuloLiquidavel {
     if (!this.valorCalculadoLegacy.isZero()) return;
     const base = this.valorBaseCustasCalculadas ?? ZERO;
     this.calcular(base);
-    // TODO(fase-8): delegar para MaquinaDeCalculoDeCustas.liquidar().
+    // Delega para máquina portada.
+    const { MaquinaDeCalculoDeCustas } = require('./maquina-de-calculo-de-custas') as typeof import('./maquina-de-calculo-de-custas');
+    new MaquinaDeCalculoDeCustas(this).liquidar();
   }
 
   // ─────────────────────────────────────────────────────────────────────

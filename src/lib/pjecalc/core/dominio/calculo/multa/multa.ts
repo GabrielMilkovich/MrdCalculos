@@ -189,7 +189,7 @@ export class Multa implements IModuloLiquidavel {
     }
   }
 
-  /** liquidar (Java linha 271) — delega para MaquinaDeCalculoDeMulta (TODO). */
+  /** liquidar (Java linha 271) — delega para MaquinaDeCalculoDeMulta. */
   liquidar(): void {
     // Caminho legacy V3 (pjc-to-engine): valorBase × percentual/100
     if (!this.valorBaseLegacy.isZero()) {
@@ -197,7 +197,9 @@ export class Multa implements IModuloLiquidavel {
         this.valorBaseLegacy.times(this.percentualLegacy).div(100),
       );
     }
-    // TODO(fase-8): MaquinaDeCalculoDeMulta.liquidar()
+    // Caminho core: delega para máquina portada.
+    const { MaquinaDeCalculoDeMulta } = require('./maquina-de-calculo-de-multa') as typeof import('./maquina-de-calculo-de-multa');
+    new MaquinaDeCalculoDeMulta(this).liquidar();
   }
 
   // ─────────────────────────────────────────────────────────────────────
