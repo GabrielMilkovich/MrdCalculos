@@ -572,3 +572,62 @@ export enum TipoRegistroCalculoWS {
   CALCULO = 'C',
   ATUALIZACAO = 'A',
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cartão de Ponto (Fase 13) — Enums de apuração
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** FormaDeApuracaoCartaoEnum.java */
+export enum FormaDeApuracaoCartaoEnum {
+  NAO_APURAR_HORAS_EXTRAS = 'NAP',
+  HORAS_EXTRAS_EXCEDENTES_DA_JORNADA_DIARIA = 'HJD',
+  HORAS_EXTRAS_PELO_CRITERIO_MAIS_FAVORAVEL = 'HMF',
+  HORAS_EXTRAS_CONFORME_SUMULA_85 = 'HST',
+  APURA_PRIMEIRAS_HORAS_EXTRAS_SEPARADO = 'APH',
+  HORAS_EXTRAS_EXCEDENTES_DA_JORNADA_SEMANAL = 'HJS',
+  HORAS_EXTRAS_EXCEDENTES_DA_JORNADA_MENSAL = 'HJM',
+}
+
+/** HorarioNoturnoApuracaroCartaoEnum.java (sic — typo do Java preservado) */
+export enum HorarioNoturnoApuracaroCartaoEnum {
+  ATIVIDADE_AGRICOLA = 'AAG',
+  ATIVIDADE_PECUARIA = 'APE',
+  ATIVIDADE_URBANA = 'AUR',
+}
+
+/** PreenchimentoJornadasCartaoEnum.java (sem o "s" do Java) — sinônimo. */
+export enum PreenchimentoJornadaCartaoEnum {
+  LIVRE = 'LIV',
+  PROGRAMACAO = 'PRO',
+  ESCALA = 'ESC',
+}
+
+/** TipoEscalaPreenchimentoJornadaCartaoEnum.java */
+export enum TipoEscalaPreenchimentoJornadaCartaoEnum {
+  OUTRA = 'O',
+  DOZE_POR_DOZE = 'Z',
+  DOZE_POR_VINTE_QUATRO = 'V',
+  DOZE_POR_TRINTA_E_SEIS = 'D',
+  DOZE_POR_QUARENTA_E_OITO = 'Q',
+  CINCO_POR_UM = 'C',
+  SEIS_POR_UM = 'S',
+  OITO_DOIS = 'T',
+}
+
+/** TipoPreenchimentoJornadaCartaoEnum.java */
+export enum TipoPreenchimentoJornadaCartaoEnum {
+  SEMANAL = 'S',
+  ESCALA = 'E',
+}
+
+/** SemanaEnum.java — numerais internos diferem dos getDay() nativos. */
+export enum SemanaEnum {
+  FERIADO = 0,
+  DOMINGO = 1,
+  SEGUNDA = 2,
+  TERCA = 3,
+  QUARTA = 4,
+  QUINTA = 5,
+  SEXTA = 6,
+  SABADO = 7,
+}
