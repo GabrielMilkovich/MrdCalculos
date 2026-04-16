@@ -327,3 +327,44 @@ export enum RegimeDoContratoEnum {
   INTERMITENTE = 'IM',
   PARCIAL = 'PA',
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums adicionais de Atualização (Fase 3) — ParametrosDeAtualizacao.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum IndiceDeCorrecaoDoFGTSEnum {
+  UTILIZAR_INDICE_TRABALHISTA = 'IT',
+  UTILIZAR_INDICE_FGTS = 'IF',
+  UTILIZAR_OUTRO_INDICE = 'OI',
+}
+
+export enum OpcaoDeIndiceDeCorrecaoEnum {
+  UTILIZAR_INDICE_TRABALHISTA = 'IT',
+  UTILIZAR_OUTRO_INDICE = 'OI',
+  SEM_CORRECAO = 'SC',
+}
+
+export enum TipoDaMultaDoINSSEnum {
+  URBANA = 'U',
+  RURAL = 'R',
+}
+
+export enum TipoPagamentoDaMultaDoINSSEnum {
+  INTEGRAL = 'I',
+  PARCELADA = 'P',
+}
+
+export enum FormaAplicacaoEnum {
+  MES_A_MES = 'MM',
+  ATE_DATA = 'AD',
+  SEM_APLICACAO = 'SA',
+}
+
+export enum TipoPrecatorioEnumAtualizacao {
+  PRE = 'PRE',
+  RPV = 'RPV',
+}
+
+export enum GrupoEsferaPrecatorioEnum {
+  FEDERAL = 'FED',
+  ESTADUAL_MUNICIPAL = 'EM',
+}
