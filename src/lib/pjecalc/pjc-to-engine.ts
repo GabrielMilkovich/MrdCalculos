@@ -625,11 +625,23 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
         // crescendo o valor_corrigido até a liquidação, inflacionando o bruto
         // em ~20-40% nos casos pós-ADC58.
         combinacoes_indice.push({ de: ci.a_partir_de, indice: 'SEM_CORRECAO' });
-        combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+        // FIX: não emitir NENHUM quando o PJC já tem uma combinação de juros
+        // explícita (e.g. SELIC) para a mesma data. Caso contrário, o seletor
+        // getRegimeParaData do engine-v3 (sort estável) pode devolver NENHUM
+        // em vez de SELIC, zerando juros e fator de correção pós-citação.
+        const hasJurosMesmaData = validCombJur.some(cj => cj.a_partir_de === ci.a_partir_de);
+        if (!hasJurosMesmaData) {
+          combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+        }
       } else if (indiceNorm === 'SELIC') {
         // SELIC substitutes IPCA-E as correction index (already includes interest)
         combinacoes_indice.push({ de: ci.a_partir_de, indice: 'SELIC' });
-        combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+        // Mesmo fix: só emite NENHUM se não houver combinação de juros do PJC
+        // para a mesma data — evita colisão com regime explícito.
+        const hasJurosMesmaData = validCombJur.some(cj => cj.a_partir_de === ci.a_partir_de);
+        if (!hasJurosMesmaData) {
+          combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+        }
       } else {
         // Other explicit index (INPC, IGPM, TR, etc.)
         combinacoes_indice.push({ de: ci.a_partir_de, indice: indiceNorm });
