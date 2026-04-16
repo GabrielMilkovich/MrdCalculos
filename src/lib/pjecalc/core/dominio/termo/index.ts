@@ -32,3 +32,13 @@ export { MaiorRemuneracaoProxy } from './maior-remuneracao-proxy';
 export { UltimaRemuneracaoProxy } from './ultima-remuneracao-proxy';
 export { HistoricoSalarialProxy } from './historico-salarial-proxy';
 export { SalarioDaCategoriaProxy } from './salario-da-categoria-proxy';
+
+// Comportamento do reflexo (Fase 1 completo)
+export {
+  ComportamentoDaBaseDoReflexo,
+  ComportamentoValorMensal,
+  ComportamentoMediaPelaQuantidade,
+  ComportamentoMediaPeloValor,
+  ComportamentoMediaPeloValorCorrigido,
+  criarProxyDoComportamentoDoReflexo,
+} from './comportamento';

@@ -17,10 +17,12 @@ import Decimal from 'decimal.js';
 import type { Termo } from './termo';
 import type { ParametroDoTermo } from './parametro-do-termo';
 import { TipoDeBaseTabeladaEnum } from '../../constantes/enums';
+import { SalarioMinimoProxy } from './salario-minimo-proxy';
 
 export class BaseTabelada implements Termo {
   private tipo: TipoDeBaseTabeladaEnum = TipoDeBaseTabeladaEnum.HISTORICO_SALARIAL;
   private aplicarProporcionalidade: boolean = false;
+  private readonly salarioMinimo = new SalarioMinimoProxy();
 
   resolverValor(parametro: ParametroDoTermo): Decimal {
     if (this.tipo === TipoDeBaseTabeladaEnum.MAIOR_REMUNERACAO) {
@@ -29,8 +31,13 @@ export class BaseTabelada implements Termo {
     if (this.tipo === TipoDeBaseTabeladaEnum.ULTIMA_REMUNERACAO) {
       return parametro.getValorUltimaRemuneracaoDoCalculo();
     }
-    // SALARIO_MINIMO, SALARIO_DA_CATEGORIA, TETO_INSS, HISTORICO_SALARIAL: stubs
-    // TODO: implementar via lookup nas tabelas Supabase respectivas.
+    if (this.tipo === TipoDeBaseTabeladaEnum.SALARIO_MINIMO) {
+      return this.salarioMinimo.resolverValor(parametro);
+    }
+    // SALARIO_DA_CATEGORIA, TETO_INSS, HISTORICO_SALARIAL: stubs pendentes
+    // TODO: TETO_INSS requer tabela histórica de tetos previdenciários
+    // TODO: SALARIO_DA_CATEGORIA requer lookup em pjecalc_salario_categoria_ocorrencia
+    // TODO: HISTORICO_SALARIAL requer lookup em pjecalc_hist_salarial_mes
     return new Decimal(0);
   }
 

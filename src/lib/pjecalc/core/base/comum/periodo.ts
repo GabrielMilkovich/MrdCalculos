@@ -47,6 +47,30 @@ export class Periodo {
     return naoNulos(this.inicial, this.fim);
   }
 
+  /** totalDeDiasUteis (Periodo.java:83-85) */
+  totalDeDiasUteis(logicoFuzzy: { isValido(d: Date): boolean } | null): number {
+    if (!naoNulos(this.inicial, this.fim)) return 0;
+    return HelperDate.getInstance(this.inicial!)!.totalWorkDays(HelperDate.getInstance(this.fim!)!, logicoFuzzy);
+  }
+
+  /** totalDeDiasNaoUteis (Periodo.java:87-89) */
+  totalDeDiasNaoUteis(logicoFuzzy: { isValido(d: Date): boolean } | null): number {
+    if (!naoNulos(this.inicial, this.fim)) return 0;
+    return HelperDate.getInstance(this.inicial!)!.totalNotWorkDays(HelperDate.getInstance(this.fim!)!, logicoFuzzy);
+  }
+
+  /** totalDeFeriados (Periodo.java:91-93) */
+  totalDeFeriados(): number {
+    if (!naoNulos(this.inicial, this.fim)) return 0;
+    return HelperDate.getInstance(this.inicial!)!.totalHolidays(HelperDate.getInstance(this.fim!)!);
+  }
+
+  /** totalDeRepousosEFeriados (Periodo.java:95-97) */
+  totalDeRepousosEFeriados(logicoFuzzy: { isValido(d: Date): boolean } | null): number {
+    if (!naoNulos(this.inicial, this.fim)) return 0;
+    return HelperDate.getInstance(this.inicial!)!.totalWeekendOrHolidays(HelperDate.getInstance(this.fim!)!, logicoFuzzy);
+  }
+
   /** formatInicial (linha 99) */
   formatInicial(formato: string): string {
     return HelperDate.getInstance(this.getInicial())!.format(formato);

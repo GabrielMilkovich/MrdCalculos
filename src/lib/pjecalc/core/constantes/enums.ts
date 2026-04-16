@@ -244,3 +244,51 @@ export enum TipoDeValorPagoEnum {
   ZERO = 'ZER',
   HISTORICO = 'HIS',
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Período da média do reflexo — PeriodoDaMediaDoReflexoEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum PeriodoDaMediaDoReflexoEnum {
+  PERIODO_AQUISITIVO = 'PA',
+  ANO_CIVIL = 'AC',
+  ULTIMOS_DOZE_MESES_DO_CONTRATO = 'DM',
+  DOZE_MESES_ANTERIORES_AO_VENCIMENTO_DA_PARCELA = 'DA',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tratamento da fração de mês no reflexo — TratamentoDaFracaoDeMesDoReflexoEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TratamentoDaFracaoDeMesDoReflexoEnum {
+  MANTER = 'M',
+  INTEGRALIZAR = 'I',
+  DESPREZAR = 'D',
+  DESPREZAR_MENOR_QUE_15_DIAS = 'DMQ',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Comportamento do reflexo (completo) — ComportamentoDoReflexoEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum ComportamentoDoReflexoEnumFull {
+  VALOR_MENSAL = 'VM',
+  MEDIA_PELA_QUANTIDADE = 'MQ',
+  MEDIA_PELO_VALOR = 'MV',
+  MEDIA_PELO_VALOR_CORRIGIDO = 'MC',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Situação de férias — SituacaoDaFeriasEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum SituacaoDaFeriasEnum {
+  GOZADAS = 'GOZ',
+  INDENIZADAS = 'IND',
+  GOZADAS_PARCIALMENTE = 'GP',
+  PERDIDAS = 'PER',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tipo de geração do reflexo — TipoDeGeracaoEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoDeGeracaoEnum {
+  DEVIDO = 'DEV',
+  DIFERENCA = 'DIF',
+}

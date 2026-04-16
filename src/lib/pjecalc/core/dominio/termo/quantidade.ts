@@ -29,8 +29,12 @@ import {
   TipoDeQuantidadeEnum,
   TipoDeQuantidadeImportadaDoCalendarioEnum,
   TipoDeQuantidadeImportadaDoCartaoDePontoEnum,
+  OcorrenciaDePagamentoEnum,
 } from '../../constantes/enums';
 import { CalculoDoProporcionalizar } from '../../comum/rotinasdecalculo/calculo-do-proporcionalizar';
+import { HelperDate } from '../../base/comum/helper-date';
+import { Periodo } from '../../base/comum/periodo';
+import { LogicoFuzzy } from '../../base/comum/logico-fuzzy';
 
 export class Quantidade implements Termo {
   private static readonly VENCIMENTO_DEZEMBRO = 20;
@@ -78,9 +82,185 @@ export class Quantidade implements Termo {
       return valor ?? new Decimal(0);
     }
 
-    // STUBS para outros tipos — devolvem o valor informado como fallback.
-    // TODO: implementar IMPORTADA_DO_CALENDARIO, APURADA, AVOS, IMPORTADA_DO_CARTAO
-    // (ver header do arquivo para lista de dependências necessárias).
+    // IMPORTADA_DO_CALENDARIO — Quantidade.java:100-191
+    if (this.tipo === TipoDeQuantidadeEnum.IMPORTADA_DO_CALENDARIO) {
+      const periodo = parametro.getPeriodo();
+      if (!periodo) return new Decimal(0);
+      const calculo = parametro.getCalculo() as unknown as {
+        getSabadoDiaUtilComExcecao?: () => { isValido(d: Date): boolean } | null;
+        obterPeriodosDeFaltasJustificadas?: (p: unknown) => Periodo[];
+        obterPeriodosDeFaltasNaoJustificadas?: (p: unknown) => Periodo[];
+        obterPeriodosDeFeriasGozadas?: (p: unknown) => Periodo[];
+      };
+      const verba = parametro.getVerbaDeCalculo() as unknown as {
+        getExcluirFaltaJustificada?: () => boolean;
+        getExcluirFaltaNaoJustificada?: () => boolean;
+        getExcluirFeriasGozadas?: () => boolean;
+      };
+      const sabadoDiaUtil = calculo.getSabadoDiaUtilComExcecao?.() ?? LogicoFuzzy.FALSO;
+      const per = periodo as unknown as Periodo;
+
+      // Seleciona método de totalização conforme o tipo importado
+      const totalizar = (p: Periodo): number => {
+        switch (this.tipoImportadaCalendarioEnum) {
+          case TipoDeQuantidadeImportadaDoCalendarioEnum.REPOUSOS:
+            return p.totalDeDiasNaoUteis(sabadoDiaUtil);
+          case TipoDeQuantidadeImportadaDoCalendarioEnum.DIAS_UTEIS:
+            return p.totalDeDiasUteis(sabadoDiaUtil);
+          case TipoDeQuantidadeImportadaDoCalendarioEnum.FERIADOS:
+            return p.totalDeFeriados();
+          case TipoDeQuantidadeImportadaDoCalendarioEnum.REPOUSOS_FERIADOS:
+            return p.totalDeRepousosEFeriados(sabadoDiaUtil);
+          default:
+            return 0;
+        }
+      };
+
+      let qtdDias = totalizar(per);
+      if (verba.getExcluirFaltaJustificada?.()) {
+        for (const pf of calculo.obterPeriodosDeFaltasJustificadas?.(per) ?? []) {
+          qtdDias -= totalizar(pf);
+        }
+      }
+      if (verba.getExcluirFaltaNaoJustificada?.()) {
+        for (const pf of calculo.obterPeriodosDeFaltasNaoJustificadas?.(per) ?? []) {
+          qtdDias -= totalizar(pf);
+        }
+      }
+      if (verba.getExcluirFeriasGozadas?.()) {
+        for (const pf of calculo.obterPeriodosDeFeriasGozadas?.(per) ?? []) {
+          qtdDias -= totalizar(pf);
+        }
+      }
+      return new Decimal(Math.max(0, qtdDias));
+    }
+
+    // APURADA — Quantidade.java:193-195 (avos adicional de aviso prévio)
+    if (this.tipo === TipoDeQuantidadeEnum.APURADA) {
+      const calculo = parametro.getCalculo() as unknown as {
+        obterQuantidadeAdicionalAvisoPrevio?: () => number;
+      };
+      return new Decimal(calculo.obterQuantidadeAdicionalAvisoPrevio?.() ?? 0);
+    }
+
+    // AVOS — Quantidade.java:196-261 (cálculo de avos 13º anual ou férias proporcional)
+    if (this.tipo === TipoDeQuantidadeEnum.AVOS) {
+      let avos = 0;
+      const verba = parametro.getVerbaDeCalculo() as unknown as {
+        getOcorrenciaDePagamento?: () => OcorrenciaDePagamentoEnum;
+        getPeriodoInicial?: () => Date | null;
+      };
+      const calculo = parametro.getCalculo() as unknown as {
+        getLimitarAvosAoPeriodoDoCalculo?: () => boolean;
+        getDataAdmissao?: () => Date | null;
+        getDataDemissao?: () => Date | null;
+        getProjetaAvisoIndenizado?: () => boolean;
+        obterQuantidadeAdicionalAvisoPrevio?: () => number;
+        obterFaltasNaoJustificadas?: (p: unknown) => number;
+      };
+      const periodo = parametro.getPeriodo();
+      const periodoAquisitivo = parametro.getPeriodoAquisitivo();
+      const ocorrenciaPag = verba.getOcorrenciaDePagamento?.();
+
+      if (ocorrenciaPag === OcorrenciaDePagamentoEnum.DEZEMBRO && periodo) {
+        // Quantidade.java:198-232 — 13º salário
+        const ano = HelperDate.getInstance(periodo.getInicial())!.getYear();
+        let dataInicial = HelperDate.getInstance(new Date(ano, 0, 1))!;
+        const limitarAvos = calculo.getLimitarAvosAoPeriodoDoCalculo?.() ?? false;
+        const admissao = calculo.getDataAdmissao?.();
+
+        if (limitarAvos) {
+          const verbaPeriodoIni = verba.getPeriodoInicial?.();
+          if (verbaPeriodoIni && HelperDate.dateAfter(verbaPeriodoIni, dataInicial.getDate())) {
+            const primeiroDiaMes = HelperDate.getInstance(verbaPeriodoIni)!.setDay(1).getDate();
+            if (admissao && HelperDate.dateAfter(admissao, primeiroDiaMes)) {
+              dataInicial = HelperDate.getInstance(admissao)!;
+            } else {
+              dataInicial = HelperDate.getInstance(primeiroDiaMes)!;
+            }
+          }
+        } else if (admissao && HelperDate.dateAfter(admissao, dataInicial.getDate())) {
+          dataInicial = HelperDate.getInstance(admissao)!;
+        }
+
+        let dataFinal = HelperDate.getInstance(new Date(ano, 11, 31))!;
+        const dataDemissaoRaw = calculo.getDataDemissao?.();
+        if (dataDemissaoRaw) {
+          let dataDemissao = HelperDate.getInstance(dataDemissaoRaw)!;
+          if (calculo.getProjetaAvisoIndenizado?.()) {
+            dataDemissao = dataDemissao.addDay(calculo.obterQuantidadeAdicionalAvisoPrevio?.() ?? 0);
+          }
+          if (HelperDate.dateAfter(dataFinal.getDate(), dataDemissao.getDate())) {
+            dataFinal = dataDemissao;
+          } else if (HelperDate.dateEquals(periodo.getFinal(), dataDemissaoRaw)) {
+            dataFinal = dataDemissao;
+            // Regra da Dezembro > 20: volta ao início do ano
+            if (HelperDate.getInstance(dataDemissaoRaw)!.getMonth() === 11
+                && HelperDate.getInstance(dataDemissaoRaw)!.getDay() > Quantidade.VENCIMENTO_DEZEMBRO) {
+              dataInicial = dataFinal.clone();
+              dataInicial.setDay(1);
+              dataInicial.setMonth(0);
+            }
+          }
+        }
+
+        const periodos = HelperDate.breakInMonths(dataInicial.getDate(), dataFinal.getDate());
+        for (const p of periodos) {
+          const ini = HelperDate.getInstance(p.getInicial())!.getDay();
+          const fim = HelperDate.getInstance(p.getFinal())!.getDay();
+          let quantidadeDias = fim - ini + 1;
+          quantidadeDias -= calculo.obterFaltasNaoJustificadas?.(p) ?? 0;
+          if (quantidadeDias < 15) continue;
+          avos++;
+        }
+      }
+
+      if (ocorrenciaPag === OcorrenciaDePagamentoEnum.PERIODO_AQUISITIVO && periodoAquisitivo) {
+        // Quantidade.java:233-259 — férias (avos do período aquisitivo)
+        let auxiliarDeAvo = 1;
+        let dataAuxiliarDeFimDoAvo = HelperDate.getInstance(periodoAquisitivo.getInicial())!
+          .addMonth(auxiliarDeAvo).addDay(-1);
+        const verbaPeriodoIni = verba.getPeriodoInicial?.();
+        const dataDeCorte = verbaPeriodoIni ? HelperDate.getInstance(verbaPeriodoIni)!.addYear(-1).getDate() : null;
+        const limitarAvos = calculo.getLimitarAvosAoPeriodoDoCalculo?.() ?? false;
+
+        while (HelperDate.dateAfter(periodoAquisitivo.getFinal(), dataAuxiliarDeFimDoAvo.getDate())) {
+          if (limitarAvos) {
+            if (dataDeCorte && HelperDate.dateBeforeOrEquals(dataDeCorte, dataAuxiliarDeFimDoAvo.getDate())) {
+              avos++;
+            }
+          } else {
+            avos++;
+          }
+          auxiliarDeAvo++;
+          dataAuxiliarDeFimDoAvo = HelperDate.getInstance(periodoAquisitivo.getInicial())!
+            .addMonth(auxiliarDeAvo).addDay(-1);
+        }
+
+        const dataAuxiliarDeInicioDoAvo = HelperDate.getInstance(periodoAquisitivo.getInicial())!
+          .addMonth(auxiliarDeAvo - 1);
+        if (limitarAvos) {
+          if (dataDeCorte && HelperDate.dateBeforeOrEquals(dataDeCorte, periodoAquisitivo.getFinal())) {
+            const quantidadeDias = HelperDate.getInstance(periodoAquisitivo.getFinal())!
+              .subtractDays(dataAuxiliarDeInicioDoAvo.getDate()) + 1;
+            if (quantidadeDias >= 15) avos++;
+          }
+        } else {
+          const quantidadeDias = HelperDate.getInstance(periodoAquisitivo.getFinal())!
+            .subtractDays(dataAuxiliarDeInicioDoAvo.getDate()) + 1;
+          if (quantidadeDias >= 15) avos++;
+        }
+      }
+
+      return new Decimal(avos);
+    }
+
+    // IMPORTADA_DO_CARTAO — Quantidade.java:262-271
+    // TODO: requer CartaoDePontoDaVerba + OcorrenciaDoCartaoDePonto. Stub = 0.
+    if (this.tipo === TipoDeQuantidadeEnum.IMPORTADA_DO_CARTAO) {
+      return new Decimal(0);
+    }
+
     return this.valorInformado ?? new Decimal(0);
   }
 
