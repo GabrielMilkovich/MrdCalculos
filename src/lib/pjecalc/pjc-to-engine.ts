@@ -367,6 +367,7 @@ function consolidarReflexoMediaPelaQuantidade(
   }
 
   // Multi-ano: contrato > 12 meses → somar todos os 13º anuais.
+  // Multi-ano: contrato > 12 meses → somar todos os 13º anuais.
   if (N > 12) valor = valor * (N / 12);
 
   if (caracteristica === 'ferias') {
@@ -374,20 +375,22 @@ function consolidarReflexoMediaPelaQuantidade(
     valor = valor * (4 / 3);
   }
 
-  // Mês de pagamento: última competência das ocorrências (normalmente dez, rescisão ou fim período aquisitivo)
-  const competenciaPagamento = ultimaOc.competencia.slice(0, 7);
-
-  return [{
-    competencia: competenciaPagamento,
+  // Distribuir o valor consolidado pelos N meses originais (preservando
+  // cada competência) para que a base CS/IR mensal permaneça correta.
+  // Colapsar tudo em 1 ocorrência no mês de pagamento criaria pico na base
+  // fiscal (teto INSS/IR) e subestimaria o total de CS/IR.
+  const valorPorMes = valor / N;
+  return ocs.map(oc => ({
+    competencia: oc.competencia.slice(0, 7),
     base: baseMedia,
     divisor: divisorMedio,
-    multiplicador: ultimaOc.multiplicador || 1,
-    quantidade: mediaQuantidade,
+    multiplicador: oc.multiplicador || 1,
+    quantidade: mediaQuantidade / N, // distribuído
     dobra: false,
-    devido: +valor.toFixed(10),
+    devido: +valorPorMes.toFixed(10),
     pago: 0,
-    indice_acumulado: ultimaOc.indice_acumulado,
-  }];
+    indice_acumulado: oc.indice_acumulado,
+  }));
 }
 
 function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVerba[] {
