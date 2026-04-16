@@ -559,7 +559,17 @@ export class PjeCalcEngineV3 {
       const ir13 = calcImpostoRRA(base13Corrigido, cs13 + dedDependentes * propCS13);
       const irFerias = calcImpostoRRA(baseFeriasCorrigido, csFerias + dedDependentes * propCSFerias);
       const irDemais = calcImpostoRRA(baseDemaisCorrigido, csDemais + dedDependentes * propCSDemais);
-      irDevido = +(ir13 + irFerias + irDemais).toFixed(2);
+      const irSeparado = ir13 + irFerias + irDemais;
+
+      // Comparar com método agregado (soma tudo, divide por N_meses, aplica tabela)
+      // O PJe-Calc em alguns modos usa agregado. Usar o menor dos dois como
+      // aproximação conservadora — evita super-estimar IR em casos onde a
+      // separação artificialmente push algum grupo a faixa alta.
+      const baseTotalCorrigido = base13Corrigido + baseFeriasCorrigido + baseDemaisCorrigido;
+      const dedTotal = (this.irConfig.deduzir_cs ? csDescontado : 0) + dedDependentes;
+      const irAgregado = calcImpostoRRA(baseTotalCorrigido, dedTotal);
+
+      irDevido = +Math.min(irSeparado, irAgregado).toFixed(2);
     }
 
     // ── 9. Converter resultados Core → UI ──
@@ -650,10 +660,16 @@ export class PjeCalcEngineV3 {
     const liquidoReclamante = +(brutoTotal - csDescontado - irDevido).toFixed(2);
 
     // Honorários
+    // Se o PJC forneceu valor_fixo (valor absoluto emitido no XML), usar
+    // esse valor direto. Senão, calcula com percentual default.
     let honorariosSucumb = 0;
     if (this.honorariosConfig.apurar_sucumbenciais) {
-      const baseHon = principalCorrigido + jurosMora;
-      honorariosSucumb = +(baseHon * (this.honorariosConfig.percentual_sucumbenciais / 100)).toFixed(2);
+      if (this.honorariosConfig.valor_fixo && this.honorariosConfig.valor_fixo > 0) {
+        honorariosSucumb = +this.honorariosConfig.valor_fixo.toFixed(2);
+      } else {
+        const baseHon = principalCorrigido + jurosMora;
+        honorariosSucumb = +(baseHon * (this.honorariosConfig.percentual_sucumbenciais / 100)).toFixed(2);
+      }
     }
 
     // Custas

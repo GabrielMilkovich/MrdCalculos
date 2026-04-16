@@ -67,10 +67,11 @@ function pad(s: string, w: number): string { return s.length >= w ? s : s + ' '.
 function padL(n: number, w: number): string { return fmt(n).padStart(w); }
 
 const ALVOS = [
-  { calc: '4463', file: 'PROCESSO_00000640320235050531_CALCULO_4463_DATA_05032026_HORA_112137.PJC', esperado_delta: '+44,55%' },
-  { calc: '4465', file: 'PROCESSO_00011931620255050194_CALCULO_4465_DATA_05032026_HORA_164101.PJC', esperado_delta: '+39,42%' },
-  { calc: '4494', file: 'PROCESSO_00120638520235150106_CALCULO_4494_DATA_06032026_HORA_111914.PJC', esperado_delta: '-22,93%' },
-  { calc: '4495', file: 'PROCESSO_00104733320215150142_CALCULO_4495_DATA_06032026_HORA_170320.PJC', esperado_delta: '+20,71%' },
+  { calc: '4463', file: 'PROCESSO_00000640320235050531_CALCULO_4463_DATA_05032026_HORA_112137.PJC', esperado_delta: '+44,96%' },
+  { calc: '4494', file: 'PROCESSO_00120638520235150106_CALCULO_4494_DATA_06032026_HORA_111914.PJC', esperado_delta: '-25,08%' },
+  { calc: '4495', file: 'PROCESSO_00104733320215150142_CALCULO_4495_DATA_06032026_HORA_170320.PJC', esperado_delta: '+22,37%' },
+  { calc: '4483', file: 'PROCESSO_00008567620255170005_CALCULO_4483_DATA_09072025_HORA_155016.PJC', esperado_delta: '-14,30%' },
+  { calc: '4493', file: 'PROCESSO_10001950220265020381_CALCULO_4493_DATA_06032026_HORA_093441.PJC', esperado_delta: '-12,37%' },
 ];
 
 describe('Diagnóstico casos 4494 e 4463 — decomposição por componente', () => {

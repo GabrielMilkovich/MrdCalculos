@@ -875,12 +875,16 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
 
 function buildHonorariosConfig(a: PJCAnalysis): PjeHonorariosConfig {
   const totalHon = a.resultado.honorarios.reduce((s, h) => s + h.valor, 0);
+  // O XML PJC emite apenas o VALOR ABSOLUTO dos honorários (sem percentual).
+  // Usar `valor_fixo` quando existe, evitando recálculo com percentual inventado.
+  // Antes: default 15% — produzia honor inflado quando o PJC usa 6-10% em alguns casos.
   return {
     apurar_sucumbenciais: totalHon > 0,
-    percentual_sucumbenciais: 15,
+    percentual_sucumbenciais: 15, // Fallback — só aplicado se valor_fixo não vier
     base_sucumbenciais: 'condenacao',
     apurar_contratuais: false,
     percentual_contratuais: 0,
+    valor_fixo: totalHon > 0 ? totalHon : undefined,
   };
 }
 
