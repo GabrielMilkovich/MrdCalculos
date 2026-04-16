@@ -1,0 +1,87 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package br.jus.trt8.pjecalc.negocio.constantes;
+
+public class TiposPersistidos {
+    public static final String INSTANCIA_SETOR_ENUM = "InstanciaSetorEnum";
+    public static final String TIPO_CALCULO_ENUM = "TipoCalculoEnum";
+    public static final String OCORRENCIA_DE_PAGAMENTO_ENUM = "OcorrenciaDePagamentoEnum";
+    public static final String CARACTERISTICA_DA_VERBA_ENUM = "CaracteristicaDaVerbaEnum";
+    public static final String VALOR_DA_VERBA_ENUM = "ValorDaVerbaEnum";
+    public static final String JUROS_DO_AJUIZAMENTO_ENUM = "JurosDoAjuizamentoEnum";
+    public static final String TIPO_DE_VERBA_ENUM = "TipoDeVerbaEnum";
+    public static final String BASE_DE_CALCULO_DO_PRINCIPAL_ENUM = "BaseDeCalculoDoPrincipalEnum";
+    public static final String DIVISOR_DE_VERBA_ENUM = "DivisorDeVerbaEnum";
+    public static final String MULTIPLICADOR_DE_VERBA_ENUM = "MultiplicadorDeVerbaEnum";
+    public static final String COMPORTAMENTO_DO_REFLEXO_ENUM = "ComportamentoDoReflexoEnum";
+    public static final String PERIODO_DA_MEDIA_DO_REFLEXO_ENUM = "PeriodoDaMediaDoReflexoEnum";
+    public static final String TRATAMENTO_DA_FRACAO_DE_MES_DO_REFLEXO_ENUM = "TratamentoDaFracaoDeMesDoReflexoEnum";
+    public static final String TIPO_DE_GERACAO_ENUM = "TipoDeGeracaoEnum";
+    public static final String LOGICO_ENUM = "LogicoEnum";
+    public static final String TIPO_DE_QUANTIDADE_ENUM = "TipoDeQuantidadeEnum";
+    public static final String TIPO_DE_QUANTIDADE_IMPORTADA_DO_CARTAO_DE_PONTO_ENUM = "TipoDeQuantidadeImportadaDoCartaoDePontoEnum";
+    public static final String TIPO_DE_QUANTIDADE_IMPORTADA_DO_CALENDARIO_ENUM = "TipoDeQuantidadeImportadaDoCalendarioEnum";
+    public static final String TIPO_VALOR_PAGO_ENUM = "TipoValorPagoEnum";
+    public static final String TIPO_VINCULO_DE_VERBA_ENUM = "TipoVinculoDeVerbaEnum";
+    public static final String TIPO_VINCULO_DE_CARTAO_DE_PONTO_DA_VERBA_ENUM = "TipoVinculoDeCartaoDePontoDaVerbaEnum";
+    public static final String REGIME_DO_CONTRATO_ENUM = "RegimeDoContratoEnum";
+    public static final String SITUACAO_DA_FERIAS_ENUM = "SituacaoDaFeriasEnum";
+    public static final String INDICE_MONETARIO_ENUM = "IndiceMonetarioEnum";
+    public static final String INDICES_ACUMULADOS_ENUM = "IndicesAcumuladosEnum";
+    public static final String TIPO_DE_OPERACAO_DO_FGTS_ENUM = "TipoDeOperacaoDoFgtsEnum";
+    public static final String TIPO_DE_BASE_DO_FGTS_ENUM = "TipoDeBaseDoFgtsEnum";
+    public static final String ALIQUOTA_DO_FGTS_ENUM = "AliquotaDoFgtsEnum";
+    public static final String TIPO_DE_DEPOSITADO_DO_FGTS_ENUM = "TipoDeDepositadoDoFgtsEnum";
+    public static final String VALOR_DA_MULTA_DO_FGTS_ENUM = "ValorDaMultaDoFgtsEnum";
+    public static final String INCIDENCIA_DE_MULTA_DO_FGTS_ENUM = "IncidenciaDeMultaDoFgtsEnum";
+    public static final String CORRECAO_MONETARIA_DO_FGTS_ENUM = "CorrecaoMonetariaDoFgtsEnum";
+    public static final String DESTINO_DO_FGTS_ENUM = "DestinoDoFgtsEnum";
+    public static final String TIPO_DE_ALIQUOTA_DO_EMPREGADOR_ENUM = "TipoDeAliquotaDoEmpregadorEnum";
+    public static final String TIPO_DE_ALIQUOTA_DO_SEGURADO_ENUM = "TipoDeAliquotaDoSeguradoEnum";
+    public static final String TIPO_DA_MULTA_DO_INSS_ENUM = "TipoDaMultaDoINSSEnum";
+    public static final String TIPO_PAGAMENTO_DA_MULTA_DO_INSS_ENUM = "TipoPagamentoDaMultaDoINSSEnum";
+    public static final String TIPO_VALOR_ENUM = "TipoValorEnum";
+    public static final String TIPO_VALOR_SEGURO_DESEMPREGO_ENUM = "TipoValorSeguroDesempregoEnum";
+    public static final String BASE_DE_JUROS_DAS_VERBAS_ENUM = "BaseDeJurosDasVerbasEnum";
+    public static final String INDICE_DE_CORRECAO_DO_FGTS_ENUM = "IndiceDeCorrecaoDoFGTSEnum";
+    public static final String OPCAO_DE_INDICE_DE_CORRECAO_ENUM = "OpcaoDeIndiceDeCorrecaoEnum";
+    public static final String TIPO_DE_JUROS_ENUM = "TipoDeJurosEnum";
+    public static final String TIPO_DE_QUANTIDADE_DE_JUROS_BASE_ENUM = "TipoDeQuantidadeDeJurosBaseEnum";
+    public static final String CREDOR_DEVEDOR_MULTA_ENUM = "CredorDevedorMultaEnum";
+    public static final String TIPO_DE_DEVEDOR_DO_HONORARIO_ENUM = "TipoDeDevedorDoHonorarioEnum";
+    public static final String BASE_PARA_APURACAO_DE_HONORARIO_ENUM = "BaseParaApuracaoDeHonorarioEnum";
+    public static final String BASE_PARA_APURACAO_DE_MULTA_ENUM = "BaseParaApuracaoDeMultaEnum";
+    public static final String BASE_PARA_CUSTAS_CALCULADAS_ENUM = "BaseParaCustasCalculadasEnum";
+    public static final String TIPO_DE_CUSTAS_DE_CONHECIMENTO_ENUM = "TipoDeCustasDeConhecimentoEnum";
+    public static final String TIPO_DE_CUSTAS_DE_LIQUIDACAO_ENUM = "TipoDeCustasDeLiquidacaoEnum";
+    public static final String TIPO_DE_AUTO_ENUM = "TipoDeAutoEnum";
+    public static final String TIPO_DE_PAGANTE_ENUM = "TipoDePaganteEnum";
+    public static final String TIPO_PERIODICIDADE_MULTA_PREVIDENCIARIA_ENUM = "TipoPeriodicidadeMultaPrevidenciariaEnum";
+    public static final String TIPO_OCORRENCIA_IRPF_ENUM = "TipoOcorrenciaIrpfEnum";
+    public static final String TIPO_SALARIO_PAGO_ENUM = "TipoSalarioPagoEnum";
+    public static final String TIPO_SOLICITACAO_SEGURO_DESEMPREGO_ENUM = "TipoSolicitacaoSeguroDesempregoEnum";
+    public static final String TIPO_DE_LINHA_ENUM = "TipoDeLinhaEnum";
+    public static final String TIPO_FERIADO_ENUM = "TipoFeriadoEnum";
+    public static final String ABRANGENCIA_DO_FERIADO_ENUM = "AbrangenciaDoFeriadoEnum";
+    public static final String TIPO_DE_APURACAO_PRAZO_DO_AVISO_PREVIO_ENUM = "TipoDeApuracaoPrazoDoAvisoPrevioEnum";
+    public static final String TIPO_DE_IMPOSTO_DE_RENDA_ENUM = "TipoDeImpostoDeRendaEnum";
+    public static final String TIPO_ADVOGADO_ENUM = "TipoAdvogadoEnum";
+    public static final String PAPEL_ENUM = "PapelEnum";
+    public static final String TIPO_DE_ACAO_DE_AUDITORIA_ENUM = "TipoDeAcaoDeAuditoriaEnum";
+    public static final String FORMA_APLICACAO_ENUM = "FormaAplicacaoEnum";
+    public static final String TIPO_ORIGEM_REGISTRO_ENUM = "TipoOrigemRegistroEnum";
+    public static final String TIPO_VINCULO_DE_HONORARIO_DE_PAGAMENTO = "TipoVinculoDeHonorarioDoPagamentoEnum";
+    public static final String TIPO_VINCULO_DE_MULTA_DE_PAGAMENTO = "TipoVinculoDeMultaDoPagamentoEnum";
+    public static final String FORMA_APURACAO_CARTAO_PONTO = "FormaDeApuracaoCartaoEnum";
+    public static final String HORARIO_NOTURNO_CARTAO_PONTO = "HorarioNoturnoApuracaroCartaoEnum";
+    public static final String PREENCHIMENTO_JORNADAS_CARTAO = "PreenchimentoJornadasCartaoEnum";
+    public static final String TIPO_PREENCHIMENTO_JORNADA = "TipoPreenchimentoJornadaCartaoEnum";
+    public static final String TIPO_ESCALA_PREENCHIMENTO_JORNADA = "TipoEscalaPreenchimentoJornadaCartaoEnum";
+    public static final String TIPO_COBRANCA_RECLAMANTE_ENUM = "TipoCobrancaReclamanteEnum";
+    public static final String TIPO_VARIACAO_PARCELA_ENUM = "TipoVariacaoDaParcelaEnum";
+    public static final String JUROS_ENUM = "JurosEnum";
+    public static final String GRUPO_ESFERA_PRECATORIO_ENUM = "GrupoEsferaPrecatorioEnum";
+    public static final String TIPO_PRECATORIO_ENUM = "TipoPrecatorioEnum";
+}
+
