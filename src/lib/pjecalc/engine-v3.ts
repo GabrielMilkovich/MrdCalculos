@@ -204,8 +204,10 @@ export class PjeCalcEngineV3 {
     const combJuros = this.correcaoConfig.combinacoes_juros ?? [];
     const combIndice = this.correcaoConfig.combinacoes_indice ?? [];
 
-    // Pré-calcula alíquota INSS efetiva REAL (para VERBA_INSS)
-    // VERBA_INSS: base = diferença − INSS proporcional. Todos 18 PJC usam isso.
+    // VERBA_INSS: taxa efetiva usada anteriormente para reduzir SELIC na correção.
+    // Com a separação SELIC (correção ≠ juros), essa redução não é mais necessária
+    // — SELIC é juros puro e incide sobre a diferença integral.
+    // Mantém cálculo para uso futuro (INSS base adjustment).
     const baseJurosVerbaInss = (this.correcaoConfig.base_de_juros_das_verbas || '').toUpperCase() === 'VERBA_INSS';
     let taxaINSSEfetiva = 0;
     if (baseJurosVerbaInss && this.csConfig.apurar_segurado && this.csConfig.cobrar_reclamante) {
@@ -282,30 +284,12 @@ export class PjeCalcEngineV3 {
             const indice = (regime?.indice || '').toUpperCase().replace(/-/g, '_');
 
             if (indice === 'SEM_CORRECAO' || indice === 'NENHUM' || indice === 'SEM CORREÇÃO') {
-              // Verificar se juros=SELIC nesta fase (ADC 58/59)
-              const regimeJ = this.getRegimeParaData(combJuros, datas[i]);
-              if (regimeJ && regimeJ.tipo.toUpperCase() === 'SELIC') {
-                // SELIC soma simples como fator unificado (correção+juros)
-                const selicTaxas = this.indicesDB
-                  .filter(idx => idx.indice === 'SELIC' && idx.competencia.slice(0, 7) >= segInicio && idx.competencia.slice(0, 7) < segFim)
-                  .reduce((s, idx) => s + (Number(idx.valor) || 0), 0);
-                if (selicTaxas > 0) {
-                  // VERBA_INSS: a parte de "juros" da SELIC incide sobre (diferença - INSS)
-                  // Fator ajustado: 1 + selicTaxas/100 × (1 - taxaINSS)
-                  const reducao = baseJurosVerbaInss ? (1 - taxaINSSEfetiva) : 1;
-                  fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicTaxas).div(100).times(reducao)));
-                }
-              }
-              // SEM_CORRECAO sem SELIC → fator = 1 (nada a multiplicar)
+              // ADC 58/59: SEM_CORRECAO = sem correção monetária neste segmento.
+              // SELIC no mesmo período é JUROS, não correção — computado separadamente
+              // em calcularJurosComCombinacoes(). fatorTotal fica inalterado.
             } else if (indice === 'SELIC') {
-              // SELIC como índice direto → soma simples
-              const selicTaxas = this.indicesDB
-                .filter(idx => idx.indice === 'SELIC' && idx.competencia.slice(0, 7) >= segInicio && idx.competencia.slice(0, 7) < segFim)
-                .reduce((s, idx) => s + (Number(idx.valor) || 0), 0);
-              if (selicTaxas > 0) {
-                const reducao = baseJurosVerbaInss ? (1 - taxaINSSEfetiva) : 1;
-                fatorTotal = fatorTotal.times(new Decimal(1).plus(new Decimal(selicTaxas).div(100).times(reducao)));
-              }
+              // SELIC como índice direto também é juros — não multiplica no fator de correção.
+              // Será computado como juros separado em calcularJurosComCombinacoes().
             } else {
               // IPCA-E, IPCA, INPC, etc. → WALK mês a mês com ignorarTaxaNegativa
               // PJe-Calc: CalculadorDeIndices.obterTabelaDeIndicesIgnorandoTaxasNegativas
@@ -612,7 +596,6 @@ export class PjeCalcEngineV3 {
           }
 
           if (combJuros.length > 0) {
-            // Usa combinações do PJC — cada segmento tem seu tipo de juros
             juros = this.calcularJurosComCombinacoes(diferenca, jurosStart, dataLiq, combJuros, combIndice);
           } else if (this.correcaoConfig.juros_tipo === 'selic') {
             // SELIC como juros (sem combinação) = 0 separado (já incluído na correção)
@@ -853,21 +836,11 @@ export class PjeCalcEngineV3 {
       const tipoJuros = (regimeJuros?.tipo || '').toUpperCase();
       const indiceCorrecao = (regimeIndice?.indice || '').toUpperCase();
 
-      // SELIC como índice de correção = já inclui juros → skip
-      if (indiceCorrecao === 'SELIC' || indiceCorrecao === 'SELIC_RF') continue;
-      // SEM_CORRECAO com SELIC juros = SELIC já aplicada como correção → skip
-      if ((indiceCorrecao === 'SEM_CORRECAO' || indiceCorrecao === 'SEM CORREÇÃO') && tipoJuros === 'SELIC') continue;
-
       // SEM_JUROS ou NENHUM
       if (tipoJuros === 'NENHUM' || tipoJuros === 'SEM_JUROS' || tipoJuros === '') continue;
 
-      // SELIC como juros (não correção): soma simples = já tratado na correção
-      if (tipoJuros === 'SELIC') continue;
-
       // TRD_SIMPLES: TR zerada pós-2017, juros ≈ 0
       if (tipoJuros === 'TRD_SIMPLES' || tipoJuros === 'TRD' || tipoJuros === 'TR') {
-        // TR pós-2017 é zero → juros = 0
-        // Pré-2017 seria TR mensal × dias, mas sem tabela TR diária → 0
         continue;
       }
 
@@ -876,6 +849,20 @@ export class PjeCalcEngineV3 {
 
       // TRD_COMPOSTOS, SELIC_BACEN: compostos → skip (raro)
       if (tipoJuros === 'TRD_COMPOSTOS' || tipoJuros === 'SELIC_BACEN') continue;
+
+      // SELIC como juros: soma simples das taxas mensais × diferença
+      // ADC 58/59: SELIC é juros separado da correção (não mais embutido no fator).
+      if (tipoJuros === 'SELIC' || indiceCorrecao === 'SELIC' || indiceCorrecao === 'SELIC_RF') {
+        const selicTaxas = this.indicesDB
+          .filter(idx => idx.indice === 'SELIC' &&
+            idx.competencia.slice(0, 7) >= segInicio.slice(0, 7) &&
+            idx.competencia.slice(0, 7) < segFim.slice(0, 7))
+          .reduce((s, idx) => s + (Number(idx.valor) || 0), 0);
+        if (selicTaxas > 0) {
+          jurosTotal += diferenca * selicTaxas / 100;
+        }
+        continue;
+      }
 
       // Juros simples (JUROS_UM_PORCENTO, JUROS_PADRAO, FAZENDA_PUBLICA, etc.)
       const d1 = new Date(segInicio);
