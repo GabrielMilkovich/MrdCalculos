@@ -342,49 +342,16 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     // Build pre-computed occurrences from PJC ground truth
     // This injects exact base/div/mult/qtd/pago values so the engine doesn't need
     // cartão ponto or complex historico resolution — achieving PJC parity
-    //
-    // FIX (reflexos MEDIA_PELA_QUANTIDADE pagos em dez/rescisão/aquisitivo):
-    // O PJe-Calc, para reflexos 13º/férias/aviso com `comportamentoDoReflexo =
-    // MEDIA_PELA_QUANTIDADE`, emite ocorrências mensais copiando os MESMOS
-    // parâmetros (base/div/mult/qtd) da verba-pai — isso É um dado intermediário
-    // para o cálculo da média anual, não o valor do reflexo. O valor real do
-    // reflexo é consolidado no mês de pagamento (dez/rescisão/aquisitivo) com
-    // o divisor de avos apropriado (≈ 1/12 para 13º, 1/9 p/ férias com 1/3).
-    //
-    // Evidência direta (caso 4463):
-    //   Calculada HORAS EXTRAS:     base=1496 div=220 mult=0.6 qtd=21.68 dev=88.49
-    //   Reflexo 13º SOBRE HORAS EX: base=1496 div=220 mult=0.6 qtd=21.68 dev=88.49  ← IDÊNTICO
-    //
-    // Sem atenuação, somar essas ocorrências dobra/triplica o principal.
-    // Aplicamos um divisor aproximado conforme ocorrencia_pagamento:
-    //   - DEZEMBRO/DESLIGAMENTO → /12 (avos anuais do 13º / média aviso)
-    //   - PERIODO_AQUISITIVO (férias + 1/3) → /9 (≈ 12/(4/3))
-    // Reflexos MEDIA_PELO_VALOR_CORRIGIDO ou MENSAL/VALOR_MENSAL ficam intactos
-    // — esses o XML já emite com valores proporcionais corretos.
-    //
-    // Tradeoff conhecido: /12 é uma aproximação. Em contratos longos (4483,
-    // ~7 anos) subestima levemente; em contratos curtos (4463, 9 meses)
-    // superestima levemente. Ainda assim, melhora deltas significativamente
-    // vs ignorar ou vs somar literal.
-    const comportamentoRaw = (v.comportamento_reflexo || '').toUpperCase();
-    const ocorrenciaPagRaw = (v.ocorrencia_pagamento || '').toUpperCase();
-    const isMediaPelaQtd = isReflexo && comportamentoRaw === 'MEDIA_PELA_QUANTIDADE';
-    const reflexoDivisor = !isMediaPelaQtd ? 1 : (
-      ocorrenciaPagRaw === 'PERIODO_AQUISITIVO' ? 9 :
-      (ocorrenciaPagRaw === 'DEZEMBRO' || ocorrenciaPagRaw === 'DESLIGAMENTO') ? 12 :
-      1
-    );
-
     const ocorrenciasPrecomputadas = (v.ocorrencias_all.length > 0)
       ? v.ocorrencias_all.map(oc => ({
           competencia: oc.competencia.slice(0, 7),
-          base: oc.base / reflexoDivisor,
+          base: oc.base,
           divisor: oc.divisor,
           multiplicador: oc.multiplicador,
           quantidade: oc.quantidade,
           dobra: oc.dobra,
-          devido: oc.devido / reflexoDivisor,
-          pago: oc.pago / reflexoDivisor,
+          devido: oc.devido,
+          pago: oc.pago,
           indice_acumulado: oc.indice_acumulado,
         }))
       : undefined;
