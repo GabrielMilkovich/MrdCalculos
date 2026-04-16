@@ -350,7 +350,13 @@ export enum TipoDaMultaDoINSSEnum {
 
 export enum TipoPagamentoDaMultaDoINSSEnum {
   INTEGRAL = 'I',
-  PARCELADA = 'P',
+  REDUZIDO = 'R',
+}
+
+// Periodicidade da multa previdenciaria — TipoPeriodicidadeMultaPrevidenciariaEnum.java
+export enum TipoPeriodicidadeMultaPrevidenciariaEnum {
+  TAXA_UNICA = 'U',
+  DIARIA = 'D',
 }
 
 export enum FormaAplicacaoEnum {
