@@ -601,8 +601,15 @@ export class PjeCalcEngineV3 {
         const dataIni = oc.getDataInicial();
         let juros = 0;
         if (dataIni && diferenca !== 0 && this.correcaoConfig.juros_tipo !== 'nenhum') {
-          const jurosStart = this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao
-            ? new Date(this.params.data_citacao) : dataAjuiz;
+          // jurosDoAjuizamento por verba: 'ocorrencias_vencidas_vincendas' → juros desde a
+          // ocorrência; 'ocorrencias_vencidas' (default) → juros desde ajuizamento/citação.
+          let jurosStart: Date;
+          if (vUI.juros_ajuizamento === 'ocorrencias_vencidas_vincendas') {
+            jurosStart = dataIni;
+          } else {
+            jurosStart = this.correcaoConfig.juros_inicio === 'citacao' && this.params.data_citacao
+              ? new Date(this.params.data_citacao) : dataAjuiz;
+          }
 
           if (combJuros.length > 0) {
             // Usa combinações do PJC — cada segmento tem seu tipo de juros

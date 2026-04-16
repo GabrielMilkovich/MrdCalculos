@@ -60,6 +60,7 @@ export interface PJCAnalysis {
     limitar_avos: boolean;
     /** Data de citação extraída do PJC */
     data_citacao?: string;
+    valor_da_causa?: number;
   };
   resultado: {
     liquido_exequente: number;
@@ -188,6 +189,7 @@ export interface VerbaAnalysis {
   excluir_falta_justificada?: boolean;
   excluir_falta_nao_justificada?: boolean;
   excluir_ferias_gozadas?: boolean;
+  juros_do_ajuizamento?: string;
   ordem: number;
   ativo: boolean;
   gerar_principal?: string;
@@ -384,6 +386,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     prescricao_fgts: getTextContent(root, 'prescricaoFgts') === 'true',
     limitar_avos: getTextContent(root, 'limitarAvosAoPeriodoDoCalculo') === 'true',
     data_citacao: tsToDate(getTextContent(root, 'dataCitacao') || getTextContent(root, 'dataDaCitacao')) || undefined,
+    valor_da_causa: parseNum(getTextContent(root, 'valorDaCausa')) || undefined,
   };
 
   // --- Parser-level warnings ---
@@ -995,6 +998,7 @@ function parseVerbaCalculada(el: Element): VerbaAnalysis | null {
     excluir_falta_justificada: getTextContent(el, 'excluirFaltaJustificada') === 'true',
     excluir_falta_nao_justificada: getTextContent(el, 'excluirFaltaNaoJustificada') === 'true',
     excluir_ferias_gozadas: getTextContent(el, 'excluirFeriasGozadas') === 'true',
+    juros_do_ajuizamento: getTextContent(el, 'jurosDoAjuizamento') || 'OCORRENCIAS_VENCIDAS',
     ordem: parseInt(getTextContent(el, 'ordem')) || 0,
     ativo: getTextContent(el, 'ativo') !== 'false',
     gerar_principal: getTextContent(el, 'gerarPrincipal'),
@@ -1084,6 +1088,7 @@ function parseVerbaReflexo(el: Element, verbaMap: Map<string, VerbaAnalysis>): V
     excluir_falta_justificada: getTextContent(el, 'excluirFaltaJustificada') === 'true',
     excluir_falta_nao_justificada: getTextContent(el, 'excluirFaltaNaoJustificada') === 'true',
     excluir_ferias_gozadas: getTextContent(el, 'excluirFeriasGozadas') === 'true',
+    juros_do_ajuizamento: getTextContent(el, 'jurosDoAjuizamento') || 'OCORRENCIAS_VENCIDAS',
     ordem: parseInt(getTextContent(el, 'ordem')) || 0,
     ativo: getTextContent(el, 'ativo') !== 'false',
     gerar_principal: getTextContent(el, 'gerarPrincipal'),

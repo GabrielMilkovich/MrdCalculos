@@ -190,6 +190,7 @@ function convertParametros(a: PJCAnalysis, caseId: string): PjeParametros {
     limitar_avos_periodo: a.parametros.limitar_avos,
     zerar_valor_negativo: a.parametros.zera_negativo,
     sabado_dia_util: a.parametros.sabado_dia_util,
+    valor_da_causa: a.parametros.valor_da_causa,
     considerar_feriado_estadual: a.parametros.feriado_estadual,
     considerar_feriado_municipal: a.parametros.feriado_municipal,
     prazo_aviso_previo: 'calculado',
@@ -576,7 +577,8 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
         previdencia_privada: false,
         pensao_alimenticia: false,
       },
-      juros_ajuizamento: 'ocorrencias_vencidas',
+      juros_ajuizamento: v.juros_do_ajuizamento === 'OCORRENCIAS_VENCIDAS_E_VINCENDAS'
+        ? 'ocorrencias_vencidas_vincendas' : 'ocorrencias_vencidas',
       verba_principal_id: isReflexo ? baseVerbaIds[0] : undefined,
       comportamento_reflexo: comportamentoReflexo,
       periodo_media_reflexo: periodoMedia,
