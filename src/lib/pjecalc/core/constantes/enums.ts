@@ -184,3 +184,63 @@ export enum TipoDeBaseDoFgtsEnum {
   DEVIDO = 'D',
   CORRIGIDO = 'C',
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quantidade — TipoDeQuantidadeEnum (Quantidade.java)
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoDeQuantidadeEnum {
+  INFORMADA = 'INF',
+  IMPORTADA_DO_CALENDARIO = 'CAL',
+  APURADA = 'APU',
+  AVOS = 'AVO',
+  IMPORTADA_DO_CARTAO = 'CDP',
+}
+
+export enum TipoDeQuantidadeImportadaDoCalendarioEnum {
+  REPOUSOS = 'REP',
+  DIAS_UTEIS = 'DUT',
+  FERIADOS = 'FER',
+  REPOUSOS_FERIADOS = 'REF',
+}
+
+export enum TipoDeQuantidadeImportadaDoCartaoDePontoEnum {
+  HORAS_EXTRAS = 'HE',
+  HORAS_NOTURNAS = 'HN',
+  ADICIONAL_NOTURNO = 'AN',
+  INTERVALO_INTRAJORNADA = 'II',
+  INTERVALO_INTERJORNADAS = 'IJ',
+  HORAS_DOMINGOS_FERIADOS = 'HDF',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Divisor — TipoDoDivisorEnum (Divisor.java)
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoDoDivisorEnum {
+  TRINTA = 'T30',
+  DUZENTOS_E_VINTE = 'D220',
+  CARGA_HORARIA = 'CH',
+  OUTRO_VALOR = 'OV',
+  HORAS_TRABALHADAS = 'HT',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BaseTabelada — TipoDeBaseTabeladaEnum
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoDeBaseTabeladaEnum {
+  HISTORICO_SALARIAL = 'HIS',
+  SALARIO_MINIMO = 'SM',
+  MAIOR_REMUNERACAO = 'MR',
+  ULTIMA_REMUNERACAO = 'UR',
+  SALARIO_DA_CATEGORIA = 'SC',
+  TETO_INSS = 'TI',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ValorPago — TipoDeValorPagoEnum
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoDeValorPagoEnum {
+  INFORMADO = 'INF',
+  PROPORCIONAL_DEVIDO = 'PD',
+  ZERO = 'ZER',
+  HISTORICO = 'HIS',
+}
