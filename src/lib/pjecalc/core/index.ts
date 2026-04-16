@@ -147,7 +147,8 @@ export { Multa } from './dominio/calculo/multa/multa';
 
 // ────────────── dominio/historicosalarial ──────────────
 export { HistoricoSalarial } from './dominio/historicosalarial/historico-salarial';
-export type { OcorrenciaDoHistoricoSalarial } from './dominio/historicosalarial/historico-salarial';
+export { OcorrenciaDoHistoricoSalarial } from './dominio/historicosalarial/ocorrencia-do-historico-salarial';
+export { OcorrenciaDoHistoricoSalarialOptimizerListSearch } from './dominio/historicosalarial/ocorrencia-do-historico-salarial-optimizer-list-search';
 
 // ────────────── dominio/pagamento ──────────────
 export { totalizar } from './dominio/pagamento/pagamento';

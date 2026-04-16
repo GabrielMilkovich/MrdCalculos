@@ -292,3 +292,38 @@ export enum TipoDeGeracaoEnum {
   DEVIDO = 'DEV',
   DIFERENCA = 'DIF',
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tipo variação da parcela — TipoVariacaoDaParcelaEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoVariacaoDaParcelaEnum {
+  FIXA = 'F',
+  VARIAVEL = 'V',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tipo de valor (HistoricoSalarial) — TipoValorEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoValorEnum {
+  INFORMADO = 'I',
+  CALCULADO = 'C',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Base de cálculo do principal — BaseDeCalculoDoPrincipalEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum BaseDeCalculoDoPrincipalEnum {
+  SALARIO_MINIMO = 'SM',
+  SALARIO_CATEGORIA = 'SC',
+  MAIOR_REMUNERACAO = 'MR',
+  ULTIMA_REMUNERACAO = 'UR',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Regime de contrato — RegimeDoContratoEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum RegimeDoContratoEnum {
+  TEMPO_INTEGRAL = 'TI',
+  INTERMITENTE = 'IM',
+  PARCIAL = 'PA',
+}
