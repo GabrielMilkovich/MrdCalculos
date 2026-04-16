@@ -561,6 +561,12 @@ export enum InstanciaSetorEnum {
   SEGUNDA = '2',
 }
 
+/** TipoVinculoDeVerbaEnum.java — VerbaDeCalculo → HistoricoSalarial/ValeTransporte */
+export enum TipoVinculoDeVerbaEnum {
+  BASE = 'B',
+  VALOR_PAGO = 'P',
+}
+
 /** TipoRegistroCalculoWS.java — usado por HistoricoValidacaoDoCalculo. */
 export enum TipoRegistroCalculoWS {
   CALCULO = 'C',
