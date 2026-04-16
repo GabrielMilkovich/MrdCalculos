@@ -469,9 +469,26 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     // correto conforme a fórmula específica deles.
     const comportamentoRaw = (v.comportamento_reflexo || '').toUpperCase();
     const ocorrenciaPagRaw = (v.ocorrencia_pagamento || '').toUpperCase();
-    const precisaConsolidar = isReflexo
-      && comportamentoRaw === 'MEDIA_PELA_QUANTIDADE'
-      && (ocorrenciaPagRaw === 'DEZEMBRO' || ocorrenciaPagRaw === 'DESLIGAMENTO' || ocorrenciaPagRaw === 'PERIODO_AQUISITIVO');
+    // Descoberta via análise do 4465: MEDIA_PELO_VALOR_CORRIGIDO também pode
+    // emitir ocorrências com `devido` idêntico à verba-pai quando divisor=1
+    // (cópia literal da principal sem fator de avos). Mesmo padrão para MPV.
+    // Regra:
+    //   - MEDIA_PELA_QUANTIDADE: sempre consolida (fórmula base×qtd/div do Java).
+    //   - MEDIA_PELO_VALOR / MEDIA_PELO_VALOR_CORRIGIDO: só consolida se todas
+    //     as ocorrências têm divisor=1 (sinal inequívoco de duplicação).
+    //     Caso divisor > 1 (ex: 12 para 13º normal), o XML já emite valor
+    //     proporcional correto e NÃO devemos mexer.
+    const isPagamentoAnualOuRescisao = ocorrenciaPagRaw === 'DEZEMBRO'
+      || ocorrenciaPagRaw === 'DESLIGAMENTO'
+      || ocorrenciaPagRaw === 'PERIODO_AQUISITIVO';
+    const todasComDivisorUm = v.ocorrencias_all.length > 0
+      && v.ocorrencias_all.every(oc => !oc.divisor || oc.divisor === 1);
+    const ehMpv = comportamentoRaw === 'MEDIA_PELO_VALOR'
+      || comportamentoRaw === 'MEDIA_PELO_VALOR_CORRIGIDO';
+    const precisaConsolidar = isReflexo && isPagamentoAnualOuRescisao && (
+      comportamentoRaw === 'MEDIA_PELA_QUANTIDADE'
+      || (ehMpv && todasComDivisorUm)
+    );
 
     let ocorrenciasPrecomputadas: PjeVerba['ocorrencias_precomputadas'] | undefined = undefined;
     if (v.ocorrencias_all.length > 0) {
