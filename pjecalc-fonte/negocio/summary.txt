@@ -1,0 +1,11 @@
+Summary for pjecalc/pjecalc-windows64-2.15.1/tomcat/webapps/pjecalc/WEB-INF/lib/pjecalc-negocio-2.15.1.jar
+Decompiled with CFR 0.152
+
+
+br.jus.trt8.pjecalc.negocio.dominio.calculo.inss.RepositorioDeInss
+----------------------------
+
+geraOcorrenciasSobreSalariosDevidos(br.jus.trt8.pjecalc.negocio.dominio.calculo.inss.Inss )
+  Could not resolve type clashes
+gerarOcorrencias(br.jus.trt8.pjecalc.negocio.dominio.calculo.inss.Inss boolean boolean )
+  Could not resolve type clashes

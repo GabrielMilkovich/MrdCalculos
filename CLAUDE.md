@@ -81,12 +81,54 @@ src/
   components/     # componentes React (shadcn/ui + custom)
   hooks/          # custom hooks
   lib/            # utilitários, supabase client, helpers Decimal.js
+    pjecalc/
+      core/       # porte 1:1 do PJe-Calc v2.15.1 (ver seção "Porte PJe-Calc")
+      engine.ts   # motor antigo (será substituído por core/)
   types/          # tipos TypeScript (incluindo supabase.ts gerado)
   pages/          # páginas/rotas
 supabase/
   migrations/     # migrations SQL — nunca editar as já aplicadas
   functions/      # Edge Functions (Deno/TypeScript)
+pjecalc-fonte/    # fonte Java descompilado do PJe-Calc v2.15.1 (SOMENTE LEITURA)
 ```
+
+---
+
+## Porte PJe-Calc v2.15.1 (Java → TypeScript)
+
+O motor de cálculo do MrdCalculos está sendo portado **1:1** a partir do código-fonte
+oficial do PJe-Calc v2.15.1 (descompilado com CFR 0.152, disponível em `pjecalc-fonte/`).
+Ver `pjecalc-fonte/README.md` para proveniência e licença.
+
+### Regras de porte
+1. **Fidelidade 1:1** — cada classe Java vira um arquivo TS com mesmos nomes de métodos (camelCase).
+2. **Cabeçalho obrigatório** no arquivo TS:
+   ```ts
+   /**
+    * PJe-Calc v2.15.1 — <NomeDaClasse>
+    * Porte 1:1 de: br.jus.trt8.pjecalc.negocio.dominio.<pacote>.<NomeDaClasse>
+    */
+   ```
+3. **Substituições técnicas**:
+   - `BigDecimal` → `Decimal` (decimal.js)
+   - `MathContext(38)` (= `Utils.CONTEXTO_MATEMATICO`) → `Decimal.set({ precision: 38, rounding: Decimal.ROUND_HALF_EVEN })`
+   - `Utils.arredondarValorMonetario(x)` → `x.toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN)`
+   - `Utils.nulo(x)` / `Utils.naoNulo(x)` → helpers em `src/lib/pjecalc/core/base/comum/utils.ts`
+   - JPA (`@Entity`, `@Column`, `.salvar()`, `.restaurar()`) → ignorar
+   - Seam (`@Name`, `@Scope`, `@In`) → ignorar
+4. **Não portar**: JPA/Hibernate, JasperReports (`calculo/relatorio/`), formatadores/validadores UI,
+   Seam session management.
+5. **Verificação por arquivo portado**:
+   ```bash
+   !npx tsc --noEmit --skipLibCheck src/lib/pjecalc/core/index.ts
+   ```
+6. **Contrato com a UI**: `src/lib/pjecalc/engine-types.ts` é congelado — **não modificar** sem revisão.
+   O adapter `engine-v3.ts` traduz entre os types da UI e o `core/`.
+
+### Falhas de descompilação (aceitar e reconstruir)
+- `Utils.descompactarGZIP(byte[])` — irrelevante (usar libs nativas de TS)
+- `RepositorioDeInss.geraOcorrenciasSobreSalariosDevidos()` e `gerarOcorrencias()` —
+  parcialmente descompilados; reconstruir via métodos adjacentes + comparação contra PJe-Calc oficial.
 
 ---
 

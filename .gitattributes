@@ -1,0 +1,5 @@
+# Código-fonte Java descompilado do PJe-Calc v2.15.1 — usado APENAS como referência
+# para o porte 1:1 em TypeScript (ver pjecalc-fonte/README.md).
+# Marcar como vendored para que o GitHub Linguist não classifique o repo como Java.
+pjecalc-fonte/** linguist-vendored=true
+pjecalc-fonte/** linguist-generated=true
