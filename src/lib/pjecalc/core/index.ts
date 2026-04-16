@@ -23,6 +23,18 @@ export { IndiceBase } from './dominio/indices/indice-base';
 export { IndiceIPCAE } from './dominio/indices/ipcae/indice-ipcae';
 export { TABELA_IPCAE } from './dominio/indices/ipcae/tabela-ipcae';
 export type { EntradaTabelaIPCAE } from './dominio/indices/ipcae/tabela-ipcae';
+export { IndiceSemCorrecao } from './dominio/indices/indice-sem-correcao';
+
+// ────────────── dominio/inss/faixas ──────────────
+export {
+  FaixaPrevidenciaria,
+  PrimeiraFaixaPrevidenciaria,
+  SegundaFaixaPrevidenciaria,
+  TerceiraFaixaPrevidenciaria,
+  QuartaFaixaPrevidenciaria,
+  QuintaFaixaPrevidenciaria,
+  calcularInssProgressivo,
+} from './dominio/inss/faixas/faixa-previdenciaria';
 
 // ────────────── dominio/ocorrenciaverba ──────────────
 export {

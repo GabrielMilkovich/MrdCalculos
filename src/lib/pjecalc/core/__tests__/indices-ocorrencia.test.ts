@@ -6,6 +6,7 @@ import Decimal from 'decimal.js';
 import {
   IndiceBase,
   IndiceIPCAE,
+  IndiceSemCorrecao,
   TABELA_IPCAE,
   calcularIndiceAcumulado,
   OcorrenciaDeVerba,
@@ -48,6 +49,17 @@ describe('IndiceIPCAE', () => {
     idx.setValorAcumulado(new Decimal('150.75'));
     const clone = idx.clonar();
     expect(clone.getValorAcumulado()!.toString()).toBe('150.75');
+  });
+
+  it('IndiceSemCorrecao.obterTabela sempre 1.0', () => {
+    const lista = IndiceSemCorrecao.obterTabela(
+      new Periodo(new Date(2023, 0, 1), new Date(2023, 2, 31))
+    );
+    expect(lista.length).toBe(3);
+    for (const i of lista) {
+      expect(i.getValorAcumulado()!.toNumber()).toBe(1);
+      expect(i.getTaxa().toNumber()).toBe(0);
+    }
   });
 
   it('calcularIndiceAcumulado produto integra com IndiceIPCAE', () => {

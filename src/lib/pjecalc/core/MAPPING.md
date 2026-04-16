@@ -73,6 +73,16 @@ Fonte Java: `pjecalc-fonte/` (decompilada com CFR 0.152).
 |---|---|---|
 | `ocorrenciaverba/OcorrenciaDeVerba.java` (786 linhas) | `core/dominio/ocorrenciaverba/ocorrencia-de-verba.ts` | ✅ | 23 métodos core: getters/setters + getDiferenca/DiferencaCorrigida/DiferencaIntegral + calcularFatorAbono + compareTo + clone. Usa IVerbaDeCalculoRef/IFeriasRef para evitar dep circular. Stubs: `integraliza` (placeholder identity — será delegado para CalculoDoIntegralizar quando portado). |
 
+## Domínio — INSS faixas
+
+| Arquivo Java | Arquivo TS | Status |
+|---|---|---|
+| `inss/faixas/FaixaPrevidenciaria.java` (114 linhas) | `core/dominio/inss/faixas/faixa-previdenciaria.ts` | ✅ | Classe abstract + 5 concretas (Primeira a Quinta) + utility `calcularInssProgressivo()`. |
+| `inss/faixas/PrimeiraFaixaPrevidenciaria.java` | idem (exportada junto) | ✅ |
+| `inss/faixas/SegundaFaixaPrevidenciaria.java` | idem | ✅ |
+| `inss/faixas/QuartaFaixaPrevidenciaria.java` | idem | ✅ |
+| `inss/faixas/QuintaFaixaPrevidenciaria.java` | idem | ✅ |
+
 ## Domínio — Verba (negocio/dominio/verbacalculo/ + formula/ + ocorrenciaverba/)
 
 | Arquivo Java | Arquivo TS | Status |
