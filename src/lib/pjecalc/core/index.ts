@@ -151,8 +151,8 @@ export { OcorrenciaDoHistoricoSalarial } from './dominio/historicosalarial/ocorr
 export { OcorrenciaDoHistoricoSalarialOptimizerListSearch } from './dominio/historicosalarial/ocorrencia-do-historico-salarial-optimizer-list-search';
 
 // ────────────── dominio/pagamento ──────────────
-export { totalizar } from './dominio/pagamento/pagamento';
-export type { ResultadoPagamento } from './dominio/pagamento/pagamento';
+export { totalizar } from './dominio/pagamento/pagamento-totalizador';
+export type { ResultadoPagamento } from './dominio/pagamento/pagamento-totalizador';
 
 // ────────────── comum/rotinasdecalculo (Integralizar/Proporcionalizar) ──────────────
 export { CalculoDoIntegralizar } from './comum/rotinasdecalculo/calculo-do-integralizar';

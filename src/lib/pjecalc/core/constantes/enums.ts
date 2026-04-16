@@ -490,6 +490,24 @@ export enum CustasDevidasFixasEnum {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Pagamento (Fase 9) — Enums de vínculo
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** TipoVinculoDeHonorarioDoPagamentoEnum.java */
+export enum TipoVinculoDeHonorarioDoPagamentoEnum {
+  DEBITOSRECLAMANTE = 'D',
+  OUTROSDEBITOSRECLAMADO = 'O',
+  DEBITOSCOBRARRECLAMANTE = 'C',
+}
+
+/** TipoVinculoDeMultaDoPagamentoEnum.java */
+export enum TipoVinculoDeMultaDoPagamentoEnum {
+  DEBITOSRECLAMANTE = 'D',
+  OUTROSDEBITOSRECLAMADO = 'O',
+  DEBITOSCOBRARRECLAMANTE = 'C',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // IRPF (Fase 7) — TipoOcorrenciaIrpfEnum.java
 // ─────────────────────────────────────────────────────────────────────────────
 export enum TipoOcorrenciaIrpfEnum {
