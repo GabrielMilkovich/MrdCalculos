@@ -152,3 +152,17 @@ export type { OcorrenciaDoHistoricoSalarial } from './dominio/historicosalarial/
 // ────────────── dominio/pagamento ──────────────
 export { totalizar } from './dominio/pagamento/pagamento';
 export type { ResultadoPagamento } from './dominio/pagamento/pagamento';
+
+// ────────────── comum/rotinasdecalculo (Integralizar/Proporcionalizar) ──────────────
+export { CalculoDoIntegralizar } from './comum/rotinasdecalculo/calculo-do-integralizar';
+export { CalculoDoProporcionalizar } from './comum/rotinasdecalculo/calculo-do-proporcionalizar';
+
+// ────────────── constantes (ConversaoDeMoedas) ──────────────
+export {
+  COMPETENCIAS_MENSAIS_PARA_CONVERSAO_DE_MOEDAS,
+  COMPETENCIAS_DIARIAS_PARA_CONVERSAO_DE_MOEDAS,
+  encontrarFatorConversaoParaMudancaDeMoedas,
+} from './constantes/conversao-de-moedas';
+
+// ────────────── servicos ──────────────
+export { ServicoDeCalculo } from './servicos/servico-de-calculo';
