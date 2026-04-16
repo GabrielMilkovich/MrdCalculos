@@ -383,69 +383,82 @@ export class PjeCalcEngineV3 {
     }
 
     // ── 7. INSS ──
+    // Port simplificado de MaquinaDeCalculoDoInss.java + Calculo.apurarJurosDasVerbasOperacoes.
+    //
+    // O Java calcula INSS separando a base por característica da verba:
+    //   - cs_base_normal: verbas COMUM + AVISO_PREVIO + FÉRIAS
+    //   - cs_base_13:     verbas DECIMO_TERCEIRO_SALARIO
+    //   Cada uma tem sua progressão de faixas SEPARADA (ambas com mesmo teto).
+    // Ref: Calculo.java:apurarVerbaIncideInssDecimoTerceiro vs apurarVerbaIncideInssAvisoOuComum
+    //
+    // Isso importa porque o 13º é pago em um único mês (dezembro/rescisão) e tributado
+    // PROPRIAMENTE naquela competência, não somado ao salário normal (que também é
+    // tributado naquela competência). Se somássemos tudo junto, a base normal + 13º
+    // estouraria o teto e o INSS total ficaria subestimado.
     const csSeguradoDevidos: PjeCSResult['segurado_devidos'] = [];
     let totalSegurado = 0;
     let totalEmpregador = 0;
     if (this.csConfig.apurar_segurado || this.csConfig.apurar_empresa) {
-      // Agrupa base por competência
-      const basesPorComp = new Map<string, number>();
-      for (const vc of verbasCore) {
+      // DUAS bases separadas por competência:
+      const basesNormalPorComp = new Map<string, number>();    // comum + aviso + férias
+      const bases13PorComp = new Map<string, number>();        // 13º salário
+      for (let vi = 0; vi < verbasCore.length; vi++) {
+        const vc = verbasCore[vi];
         if (!vc.getIncidenciaINSS()) continue;
+        const vUI = this.verbas[vi];
+        const is13 = vUI?.caracteristica === '13_salario';
+        const targetMap = is13 ? bases13PorComp : basesNormalPorComp;
         for (const oc of vc.getOcorrenciasAtivas()) {
           const dataIni = oc.getDataInicial();
           if (!dataIni) continue;
           const dif = oc.getDiferenca().toNumber();
           if (dif <= 0) continue;
           const comp = `${dataIni.getFullYear()}-${String(dataIni.getMonth() + 1).padStart(2, '0')}`;
-          basesPorComp.set(comp, (basesPorComp.get(comp) ?? 0) + dif);
+          targetMap.set(comp, (targetMap.get(comp) ?? 0) + dif);
         }
       }
-      // Calcula INSS por competência usando faixas do DB
-      // PJe-Calc: pré-EC103 (comp < 2020-03) = alíquota ÚNICA (flat)
-      //           pós-EC103 (comp >= 2020-03) = alíquota PROGRESSIVA
-      // Ref: MaquinaDeCalculoDoInss.java — TabelaPrevidenciariaSeguradoEmpregado
-      for (const [comp, base] of basesPorComp) {
+
+      // Helper: calcula INSS segurado sobre uma base numa competência
+      const calcularInssSobreBase = (comp: string, base: number): number => {
+        if (this.faixasINSSDB.length === 0) return 0;
+        const compDate = comp + '-01';
+        const faixas = this.faixasINSSDB
+          .filter(f => f.competencia_inicio <= compDate && (!f.competencia_fim || f.competencia_fim >= compDate))
+          .sort((a, b) => a.faixa - b.faixa);
+        if (faixas.length === 0) return 0;
+
+        const isProgressivo = comp >= '2020-03';
+        const teto = faixas[faixas.length - 1].valor_ate;
+        const baseCapped = Math.min(base, teto);
         let valorSegurado = 0;
-        if (this.faixasINSSDB.length > 0) {
-          // Buscar faixas para ESTA competência (não para data_liquidacao)
-          const compDate = comp + '-01';
-          const faixas = this.faixasINSSDB
-            .filter(f => f.competencia_inicio <= compDate && (!f.competencia_fim || f.competencia_fim >= compDate))
-            .sort((a, b) => a.faixa - b.faixa);
 
-          if (faixas.length > 0) {
-            // EC 103/2019 entrou em vigor em 01/03/2020
-            const isProgressivo = comp >= '2020-03';
-            const teto = faixas[faixas.length - 1].valor_ate;
-            const baseCapped = Math.min(base, teto);
-
-            if (isProgressivo) {
-              // PROGRESSIVO: cada faixa aplica sua alíquota sobre a parcela da base dentro dela
-              let restante = baseCapped;
-              let anterior = 0;
-              for (const f of faixas) {
-                const largura = f.valor_ate - anterior;
-                const parcela = Math.min(restante, largura);
-                if (parcela > 0) valorSegurado += +(parcela * f.aliquota).toFixed(2);
-                restante -= parcela;
-                anterior = f.valor_ate;
-                if (restante <= 0) break;
-              }
-            } else {
-              // PRÉ-EC103: alíquota FLAT — base inteira tributada na alíquota da faixa
-              // Encontra a faixa onde a base se encaixa
-              let aliquotaFlat = faixas[faixas.length - 1].aliquota;
-              for (const f of faixas) {
-                if (baseCapped <= f.valor_ate) {
-                  aliquotaFlat = f.aliquota;
-                  break;
-                }
-              }
-              valorSegurado = +(baseCapped * aliquotaFlat).toFixed(2);
+        if (isProgressivo) {
+          let restante = baseCapped;
+          let anterior = 0;
+          for (const f of faixas) {
+            const largura = f.valor_ate - anterior;
+            const parcela = Math.min(restante, largura);
+            if (parcela > 0) valorSegurado += +(parcela * f.aliquota).toFixed(2);
+            restante -= parcela;
+            anterior = f.valor_ate;
+            if (restante <= 0) break;
+          }
+        } else {
+          let aliquotaFlat = faixas[faixas.length - 1].aliquota;
+          for (const f of faixas) {
+            if (baseCapped <= f.valor_ate) {
+              aliquotaFlat = f.aliquota;
+              break;
             }
           }
+          valorSegurado = +(baseCapped * aliquotaFlat).toFixed(2);
         }
-        // Empresa
+        return valorSegurado;
+      };
+
+      // Processa base NORMAL por competência
+      for (const [comp, base] of basesNormalPorComp) {
+        const valorSegurado = calcularInssSobreBase(comp, base);
         const aliqEmpresa = (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
         const aliqSAT = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
         const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
@@ -454,6 +467,20 @@ export class PjeCalcEngineV3 {
         const valorTerc = +(base * aliqTerc).toFixed(2);
         const aliquotaEfetiva = base > 0 ? valorSegurado / base : 0;
         csSeguradoDevidos.push({ competencia: comp, base: +base.toFixed(2), aliquota: +aliquotaEfetiva.toFixed(4), valor: +valorSegurado.toFixed(2), recolhido: 0, diferenca: +valorSegurado.toFixed(2) });
+        totalSegurado += valorSegurado;
+        totalEmpregador += valorEmpresa + valorSAT + valorTerc;
+      }
+      // Processa base 13º por competência SEPARADAMENTE (fatura ao lado da normal)
+      for (const [comp, base] of bases13PorComp) {
+        const valorSegurado = calcularInssSobreBase(comp, base);
+        const aliqEmpresa = (this.csConfig.aliquota_empresa_fixa ?? 20) / 100;
+        const aliqSAT = (this.csConfig.aliquota_sat_fixa ?? 2) / 100;
+        const aliqTerc = (this.csConfig.aliquota_terceiros_fixa ?? 5.8) / 100;
+        const valorEmpresa = +(base * aliqEmpresa).toFixed(2);
+        const valorSAT = +(base * aliqSAT).toFixed(2);
+        const valorTerc = +(base * aliqTerc).toFixed(2);
+        const aliquotaEfetiva = base > 0 ? valorSegurado / base : 0;
+        csSeguradoDevidos.push({ competencia: comp + '-13', base: +base.toFixed(2), aliquota: +aliquotaEfetiva.toFixed(4), valor: +valorSegurado.toFixed(2), recolhido: 0, diferenca: +valorSegurado.toFixed(2) });
         totalSegurado += valorSegurado;
         totalEmpregador += valorEmpresa + valorSAT + valorTerc;
       }
