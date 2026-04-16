@@ -15,6 +15,7 @@ import Decimal from 'decimal.js';
 import { IndiceBase } from '../indice-base';
 import { HelperDate } from '../../../base/comum/helper-date';
 import type { Periodo } from '../../../base/comum/periodo';
+import { calcularIndiceAcumulado } from '../../../comum/rotinasdecalculo/calculador-de-indices';
 import { TABELA_IPCAE } from './tabela-ipcae';
 
 export class IndiceIPCAE extends IndiceBase {
@@ -39,7 +40,10 @@ export class IndiceIPCAE extends IndiceBase {
     }
     // Ordenação natural (ascendente por competência)
     lista.sort((a, b) => a.getCompetencia().getTime() - b.getCompetencia().getTime());
-    return lista;
+    // No PJe-Calc original o repositório JPA retorna índices com valorAcumulado
+    // pré-calculado. Aqui computamos ao carregar, aplicando PRODUTO (metodologia
+    // padrão dos índices multiplicativos como IPCA-E).
+    return calcularIndiceAcumulado(lista) as IndiceIPCAE[];
   }
 
   clonar(): IndiceIPCAE {

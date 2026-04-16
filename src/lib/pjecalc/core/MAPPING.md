@@ -60,12 +60,22 @@ Fonte Java: `pjecalc-fonte/` (decompilada com CFR 0.152).
 |---|---|---|
 | `api/IndiceDeCalculo.java` (interface) | `core/dominio/indices/indice-de-calculo.ts` | ✅ |
 | `IndiceBase.java` | `core/dominio/indices/indice-base.ts` | ✅ | Classe abstrata base. `getValorIndice()` = 1 + taxa/100 |
+| `IndiceSemCorrecao.java` | `core/dominio/indices/indice-sem-correcao.ts` | ✅ | Fator sempre 1 |
 | `ipcae/IndiceIPCAE.java` | `core/dominio/indices/ipcae/indice-ipcae.ts` + `tabela-ipcae.ts` | ✅ | 134 entradas (2015-01 a 2026-02) |
-| `ipca/IndiceIPCA.java` | — | ⬜ | |
-| `selic/IndiceSelicDiaria.java` | — | ⬜ | SELIC diária BCB |
-| `tr/IndiceTR.java` | — | ⬜ | |
-| `jam/IndiceJAM.java` | — | ⬜ | JAM diária Caixa |
-| `tabelaunica/IndiceTabelaUnicaJTMensal.java` | — | ⬜ | |
+| `ipca/IndiceIPCA.java` | `core/dominio/indices/ipca/indice-ipca.ts` | ✅ | Tabela vazia (seed a popular) |
+| `inpc/IndiceINPC.java` | `core/dominio/indices/inpc/indice-inpc.ts` | ✅ | Tabela vazia |
+| `ipc/IndiceIPC.java` | `core/dominio/indices/ipc/indice-ipc.ts` | ✅ | Tabela vazia |
+| `tr/IndiceTR.java` | `core/dominio/indices/tr/indice-tr.ts` + `tabela-tr.ts` | ✅ | 169 entradas (2012-2026) |
+| `igpm/IndiceIGPM.java` | `core/dominio/indices/igpm/indice-igpm.ts` | ✅ | Tabela vazia |
+| `selic/IndiceSelicDiaria.java` | `core/dominio/indices/selic/indice-selic-diaria.ts` | ✅ | Produto (SELIC_BACEN) |
+| `selic/IndiceSelicFazenda.java` | `core/dominio/indices/selic/indice-selic-fazenda.ts` | ✅ | Soma simples (SELIC Fazenda) |
+| `jam/IndiceJAM.java` | `core/dominio/indices/jam/indice-jam.ts` | ✅ | JAM diária Caixa |
+| `ipcatr/IndiceIPCAETR.java` | `core/dominio/indices/ipcatr/indice-ipcae-tr.ts` | ✅ | IPCA-E + TR combinado |
+| `dfp/IndiceDevedorFazenda.java` | `core/dominio/indices/dfp/indice-devedor-fazenda.ts` | ✅ | EC 113/2021 |
+| `it/IndiceIndebitoTributario.java` | `core/dominio/indices/it/indice-indebito-tributario.ts` | ✅ | Repetição indébito |
+| `tabelaunica/IndiceTabelaUnicaJTMensal.java` | `core/dominio/indices/tabelaunica/indice-tabela-unica-jt-mensal.ts` | ✅ | CNJ mensal |
+| `tabelaunica/IndiceTabelaUnicaJTDiario.java` | `core/dominio/indices/tabelaunica/indice-tabela-unica-jt-diario.ts` | ✅ | CNJ diária |
+| `tabelaunica/IndiceTabelaUnicaDebitoTrabalhista.java` | `core/dominio/indices/tabelaunica/indice-tabela-unica-debito-trabalhista.ts` | ✅ | TUACDT |
 
 ## Domínio — OcorrenciaVerba
 
@@ -87,10 +97,10 @@ Fonte Java: `pjecalc-fonte/` (decompilada com CFR 0.152).
 
 | Arquivo Java | Arquivo TS | Status |
 |---|---|---|
-| `TabelaDeCorrecaoMonetaria.java` (810 linhas) | — | ⬜ | Centro da correção; combinações de índices |
+| `TabelaDeCorrecaoMonetaria.java` (810 linhas) | `core/dominio/verbacalculo/tabela-de-correcao-monetaria.ts` | 🟡 | Dispatcher completo (17 índices) + ajustarData (Súmula 381) + obterIndice + carregarTabela simples. Injeção via `ITabelaCorrecaoContext`. ⬜ Combinação trabalhista (4 métodos combinar*) pendente. |
 | `MaquinaDeCalculo.java` (617 linhas) | — | 🟡 | calcularValorDevidoDaOcorrencia portado no engine.ts legado |
 | `VerbaDeCalculo.java` (1598 linhas) | — | ⬜ | Entidade raiz da verba |
-| `ocorrenciaverba/OcorrenciaDeVerba.java` (786 linhas) | — | 🟡 | Lógica chave no engine.ts legado |
+| `ocorrenciaverba/OcorrenciaDeVerba.java` (786 linhas) | `core/dominio/ocorrenciaverba/ocorrencia-de-verba.ts` | ✅ | 23 métodos core |
 | `formula/Formula.java` + `FormulaCalculada.java` + `FormulaReflexo.java` | — | ⬜ | |
 
 ## Domínio — Cálculo (negocio/dominio/calculo/)
@@ -115,19 +125,36 @@ Fonte Java: `pjecalc-fonte/` (decompilada com CFR 0.152).
 
 ## Progresso Global
 
-- **Portado (✅):** 10 arquivos
-  - base: Utils, HelperDate, Periodo
-  - enums críticos (16)
-  - interface IndiceDeCalculo
-  - CalculadorDeIndices (soma simples + produto)
-  - PeriodoDeJuros (meses fracionados)
-  - IndiceBase + IndiceIPCAE + TABELA_IPCAE (134 entradas 2015-2026)
-  - OcorrenciaDeVerba (23 métodos)
-- **Pendente crítico (⬜):** TabelaDeJuros, TabelaDeCorrecaoMonetaria, IndiceIPCA/IPC/TR/JAM/SELIC, MaquinaDeCalculo, VerbaDeCalculo, Calculo, INSS, IRPF, FGTS
-- **Legado (🟡):** lógica embutida em `engine.ts` (4600 linhas) a ser migrada para core/
+### Portado (✅) — 24 arquivos de código + 14 tabelas + 1 interface
+- **base/comum:** Utils, HelperDate, Periodo
+- **constantes:** 16 enums críticos (IndiceMonetario, IndicesAcumulados, OcorrenciaDePagamento, TipoDeJuros, TipoDeQuantidade, JurosEnum, BaseDeJurosDasVerbas, Logico, CaracteristicaVerba, ValorDaVerba, ModoDeCalculo, Fase, ComportamentoReflexo, AliquotaDoFgts, TipoBaseDoFgts, JurosDoAjuizamento)
+- **comum:** CalculadorDeIndices (soma simples + produto + ignorarTaxaNegativa), PeriodoDeJuros (meses fracionados pro-rata)
+- **dominio/indices:** interface IndiceDeCalculo + 13 classes de índice (Base, SemCorrecao, IPCAE, IPCA, INPC, IPC, TR, IGPM, JAM, SelicDiaria, SelicFazenda, IPCAETR, DevedorFazenda, IndebitoTributario, TabelaUnicaJTMensal/Diario/DebitoTrabalhista)
+- **dominio/ocorrenciaverba:** OcorrenciaDeVerba (23 métodos)
+- **dominio/verbacalculo:** TabelaDeCorrecaoMonetaria (🟡 sem combinação trabalhista)
+- **dominio/inss:** FaixaPrevidenciaria + 5 faixas concretas + calcularInssProgressivo
+
+### Tabelas populadas com dados reais
+- TABELA_IPCAE: 134 entradas (2015-01 a 2026-02, via IPCA_E_ACUMULADO)
+- TABELA_TR: 169 entradas (2012-2026, zero pós-2017)
+
+### Pendente crítico (⬜)
+- TabelaDeJuros.java (637 linhas) — combinações de regimes de juros
+- Combinação trabalhista em TabelaDeCorrecaoMonetaria (4 métodos combinar*)
+- MaquinaDeCalculo.java (617 linhas) — calcularValorDevidoDaOcorrencia
+- VerbaDeCalculo.java (1598 linhas) — entidade raiz
+- Calculo.java (3087 linhas) — orquestrador
+- INSS completo (Inss.java 1640 linhas), IRPF (1675 linhas), FGTS (870 linhas)
+- Tabelas históricas IPCA/INPC/IPC/IGPM/JAM/SELIC diária (seeds)
+
+### Legado (🟡)
+Motor `engine.ts` (4600 linhas) ainda contém a lógica antiga em produção.
+Porte do core acontece em paralelo; migração do engine será feita por último.
 
 ## Testes do core
 
-35 testes validam as primitivas portadas:
-- `core/__tests__/core-smoke.test.ts` (18 testes)
-- `core/__tests__/indices-ocorrencia.test.ts` (17 testes)
+54 testes validam os módulos portados:
+- `core/__tests__/core-smoke.test.ts` (18 testes) — Utils, HelperDate, Periodo, CalculadorDeIndices, PeriodoDeJuros, Enums
+- `core/__tests__/indices-ocorrencia.test.ts` (18 testes) — IndiceIPCAE, IndiceSemCorrecao, OcorrenciaDeVerba
+- `core/__tests__/inss-faixas.test.ts` (8 testes) — FaixaPrevidenciaria + calcularInssProgressivo
+- `core/__tests__/tabela-correcao.test.ts` (10 testes) — TabelaDeCorrecaoMonetaria (dispatcher + ajustarData + obterIndice)
