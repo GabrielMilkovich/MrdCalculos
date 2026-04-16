@@ -4,57 +4,101 @@
  *
  * Ref Java: pjecalc-fonte/negocio/br/jus/trt8/pjecalc/negocio/constantes/ConversaoDeMoedas.java
  *
- * Mapas de conversão de moedas brasileiras (1986-1994):
- * - Cruzeiro → Cruzado (1986)
- * - Cruzado → NCz$ (1989)
- * - NCz$ → Cruzeiro Real (1990)
- * - Cruzeiro Real → Real (1994)
+ * Mapas de conversão de moedas brasileiras (1967-1994):
+ *   1967-02: Cruzeiro antigo → Cruzeiro novo (÷1000)
+ *   1986-03: Cruzeiro → Cruzado (÷1000)
+ *   1989-01: Cruzado → NCz$ Cruzado Novo (÷1000)
+ *   1993-08: Cruzeiro Real → CR$ (÷1000)
+ *   1994-07: CR$ → Real (÷2750)
  *
- * Para casos MODERNOS (≥1995), todos os mapas estão VAZIOS — nenhuma conversão
- * é necessária. Quando casos pré-1995 precisarem ser calculados, popular os mapas
- * com os fatores de conversão oficiais do BCB.
- *
- * Funções helper retornam BigDecimal.ONE (fator neutro) quando não há conversão.
+ * Dados portados 1:1 do static initializer Java (linhas 58-73).
  */
 import Decimal from 'decimal.js';
 
-/** Competências mensais com conversão de moeda (1º dia do mês → fator) */
-export const COMPETENCIAS_MENSAIS_PARA_CONVERSAO_DE_MOEDAS = new Map<string, Decimal>();
-
-/** Competências diárias com conversão de moeda (dia exato → fator) */
-export const COMPETENCIAS_DIARIAS_PARA_CONVERSAO_DE_MOEDAS = new Map<string, Decimal>();
+function mkKey(y: number, m0: number, d: number): string {
+  return `${y}-${String(m0 + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function mkDate(y: number, m0: number, d: number): Date {
+  return new Date(y, m0, d, 0, 0, 0, 0);
+}
 
 /**
- * encontrarFatorConversaoParaMudancaDeMoedas (simplificado)
- * Retorna o produto de todos os fatores de conversão entre dataInicial e dataFinal.
- * Para casos modernos (mapas vazios), retorna 1.
+ * Competências MENSAIS (1º dia do mês → fator divisor).
+ * Java: HelperDate.getInstance(year, month0, day).getDate()
+ */
+export const COMPETENCIAS_MENSAIS_PARA_CONVERSAO_DE_MOEDAS = new Map<string, Decimal>([
+  [mkKey(1967, 1, 1),  new Decimal(1000)],   // Fev 1967
+  [mkKey(1986, 2, 1),  new Decimal(1000)],   // Mar 1986
+  [mkKey(1989, 0, 1),  new Decimal(1000)],   // Jan 1989
+  [mkKey(1993, 7, 1),  new Decimal(1000)],   // Ago 1993
+  [mkKey(1994, 6, 1),  new Decimal(2750)],   // Jul 1994
+]);
+
+/** Competências DIÁRIAS (dia exato da troca → fator divisor) */
+export const COMPETENCIAS_DIARIAS_PARA_CONVERSAO_DE_MOEDAS = new Map<string, Decimal>([
+  [mkKey(1967, 1, 13), new Decimal(1000)],   // 13 Fev 1967
+  [mkKey(1986, 2, 1),  new Decimal(1000)],   // 01 Mar 1986
+  [mkKey(1989, 0, 16), new Decimal(1000)],   // 16 Jan 1989
+  [mkKey(1993, 7, 1),  new Decimal(1000)],   // 01 Ago 1993
+  [mkKey(1994, 6, 1),  new Decimal(2750)],   // 01 Jul 1994
+]);
+
+/** Data da última conversão de moeda (01/07/1994 — Real) */
+export function obterDataUltimaConversaoDeMoeda(): Date {
+  return mkDate(1994, 6, 1);
+}
+
+/**
+ * encontrarFatorConversaoParaMudancaDeMoedas (linha 31)
+ * Para cada conversão diária cujo Date cai em [inicio, fim], divide fator por divisor.
  */
 export function encontrarFatorConversaoParaMudancaDeMoedas(
-  _dataInicial: Date,
-  _dataFinal: Date
+  inicio: Date,
+  fim: Date
 ): Decimal {
-  // Simplificação: sem conversões para casos pós-1995
-  return new Decimal(1);
+  let fator = new Decimal(1);
+  for (const [chave, divisor] of COMPETENCIAS_DIARIAS_PARA_CONVERSAO_DE_MOEDAS) {
+    const [y, m, d] = chave.split('-').map(Number);
+    const dataConversao = new Date(y, m - 1, d, 0, 0, 0, 0);
+    if (dataConversao.getTime() >= inicio.getTime() && dataConversao.getTime() <= fim.getTime()) {
+      fator = fator.div(divisor);
+    }
+  }
+  return fator;
 }
 
 /**
- * encontrarDataDeConversaoParaMudancaDeMoedas
- * Retorna null para casos modernos (sem conversão no período).
+ * encontrarDataDeConversaoParaMudancaDeMoedas (linha 40)
  */
 export function encontrarDataDeConversaoParaMudancaDeMoedas(
-  _dataInicial: Date,
-  _dataFinal: Date
+  inicio: Date,
+  fim: Date
 ): Date | null {
-  return null;
+  let data: Date | null = null;
+  for (const [chave] of COMPETENCIAS_DIARIAS_PARA_CONVERSAO_DE_MOEDAS) {
+    const [y, m, d] = chave.split('-').map(Number);
+    const dc = new Date(y, m - 1, d, 0, 0, 0, 0);
+    if (dc.getTime() >= inicio.getTime() && dc.getTime() <= fim.getTime()) {
+      data = dc;
+    }
+  }
+  return data;
 }
 
 /**
- * encontrarCompetenciasDeConversaoParaMudancaDeMoedas
- * Retorna mapa vazio para casos modernos.
+ * encontrarCompetenciasDeConversaoParaMudancaDeMoedas (linha 49)
  */
 export function encontrarCompetenciasDeConversaoParaMudancaDeMoedas(
-  _dataInicial: Date,
-  _dataFinal: Date
+  inicio: Date,
+  fim: Date
 ): Map<string, Decimal> {
-  return new Map();
+  const out = new Map<string, Decimal>();
+  for (const [chave, divisor] of COMPETENCIAS_MENSAIS_PARA_CONVERSAO_DE_MOEDAS) {
+    const [y, m, d] = chave.split('-').map(Number);
+    const dc = new Date(y, m - 1, d, 0, 0, 0, 0);
+    if (dc.getTime() >= inicio.getTime() && dc.getTime() <= fim.getTime()) {
+      out.set(chave, divisor);
+    }
+  }
+  return out;
 }
