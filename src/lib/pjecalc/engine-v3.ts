@@ -535,14 +535,46 @@ export class PjeCalcEngineV3 {
       const csDemais = this.irConfig.deduzir_cs ? csDescontado * propCSDemais : 0;
       const dedDependentes = (this.irConfig.dependentes ?? 0) * 189.59 * irMeses;
 
-      // Tabela IRPF 2025 (aplicada à data de liquidação, 2026-03 usa tabela atual)
-      const faixasIR = [
-        { ate: 2259.20, aliq: 0, ded: 0 },
-        { ate: 2826.65, aliq: 0.075, ded: 169.44 },
-        { ate: 3751.05, aliq: 0.15, ded: 381.44 },
-        { ate: 4664.68, aliq: 0.225, ded: 662.77 },
-        { ate: Infinity, aliq: 0.275, ded: 896.00 },
+      // Tabela IRPF histórica — usa tabela vigente na data de liquidação.
+      // Ref: Instrução Normativa RFB 1500/2014 + atualizações.
+      // Cada entry: { vigente_a_partir_de: 'YYYY-MM-DD', faixas: [...] }
+      const TABELAS_IRPF: { de: string; faixas: { ate: number; aliq: number; ded: number }[] }[] = [
+        // Tabela 2024-02 em diante (atual 2025)
+        { de: '2024-02-01', faixas: [
+          { ate: 2259.20, aliq: 0, ded: 0 },
+          { ate: 2826.65, aliq: 0.075, ded: 169.44 },
+          { ate: 3751.05, aliq: 0.15, ded: 381.44 },
+          { ate: 4664.68, aliq: 0.225, ded: 662.77 },
+          { ate: Infinity, aliq: 0.275, ded: 896.00 },
+        ]},
+        // Tabela 2023-05 a 2024-01 (Lei 14.663/2023)
+        { de: '2023-05-01', faixas: [
+          { ate: 2112.00, aliq: 0, ded: 0 },
+          { ate: 2826.65, aliq: 0.075, ded: 158.40 },
+          { ate: 3751.05, aliq: 0.15, ded: 370.40 },
+          { ate: 4664.68, aliq: 0.225, ded: 651.73 },
+          { ate: Infinity, aliq: 0.275, ded: 884.96 },
+        ]},
+        // Tabela 2015-04 até 2023-04 (vigente por anos)
+        { de: '2015-04-01', faixas: [
+          { ate: 1903.98, aliq: 0, ded: 0 },
+          { ate: 2826.65, aliq: 0.075, ded: 142.80 },
+          { ate: 3751.05, aliq: 0.15, ded: 354.80 },
+          { ate: 4664.68, aliq: 0.225, ded: 636.13 },
+          { ate: Infinity, aliq: 0.275, ded: 869.36 },
+        ]},
+        // Tabela 2014 (anterior — fallback)
+        { de: '2000-01-01', faixas: [
+          { ate: 1787.77, aliq: 0, ded: 0 },
+          { ate: 2679.29, aliq: 0.075, ded: 134.08 },
+          { ate: 3572.43, aliq: 0.15, ded: 335.03 },
+          { ate: 4463.81, aliq: 0.225, ded: 602.96 },
+          { ate: Infinity, aliq: 0.275, ded: 826.15 },
+        ]},
       ];
+      const dataLiqStr = this.correcaoConfig.data_liquidacao;
+      const tabelaSelecionada = TABELAS_IRPF.find(t => t.de <= dataLiqStr) || TABELAS_IRPF[TABELAS_IRPF.length - 1];
+      const faixasIR = tabelaSelecionada.faixas;
       const calcImpostoRRA = (baseBruta: number, deducoesTotal: number): number => {
         if (baseBruta <= 0) return 0;
         const baseTributavel = Math.max(0, (baseBruta - deducoesTotal) / irMeses);
