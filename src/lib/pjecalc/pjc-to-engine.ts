@@ -291,6 +291,97 @@ function mapSituacaoFerias(s: string): 'gozadas' | 'indenizadas' | 'perdidas' | 
 // VERBAS — Convert PJC Calculada/Reflexo → PjeVerba
 // =====================================================
 
+/**
+ * Port simplificado de ComportamentoMediaPelaQuantidade.resolverValor()
+ * (pjecalc-fonte/.../dominio/termo/comportamento/ComportamentoMediaPelaQuantidade.java:37-211).
+ *
+ * Substitui as N ocorrências mensais intermediárias de um reflexo 13º/férias/aviso
+ * (caracteristica MEDIA_PELA_QUANTIDADE + pagamento DEZEMBRO/DESLIGAMENTO/PERIODO_AQUISITIVO)
+ * por 1 única ocorrência consolidada no mês de pagamento, replicando a fórmula Java:
+ *
+ *   media_quantidade  = Σ(oc.quantidade × oc.multiplicador × dobra) / N_meses
+ *   base_media_mensal = Σ(oc.base) / N_meses
+ *   divisor_medio     = média dos divisores (descarta zeros e divisor==1 quando há opção)
+ *   valor_bruto       = base_media × media_quantidade / divisor_medio
+ *   se FERIAS:        × dias_periodo_reflexo / 30
+ *
+ * Observação: essa é uma simplificação em relação ao Java (que usa SimuladorDeBaseParaVerba
+ * pra recalcular a base da verba-pai a partir do histórico salarial). Aqui reaproveitamos
+ * `oc.base` das ocorrências mensais do reflexo — que já refletem a base ponderada que o
+ * PJe-Calc usou ao emitir o XML. Em casos com verba variável ou histórico complexo pode
+ * haver pequeno drift vs Java ideal.
+ */
+function consolidarReflexoMediaPelaQuantidade(
+  v: VerbaAnalysis,
+  caracteristica: string,
+): NonNullable<PjeVerba['ocorrencias_precomputadas']> {
+  const ocs = v.ocorrencias_all.filter(o => (o.devido ?? 0) !== 0 || (o.quantidade ?? 0) !== 0);
+  if (ocs.length === 0) return [];
+
+  const N = ocs.length;
+  let sumQtdMult = 0;
+  let sumBase = 0;
+  let sumDivisor = 0;
+  let divCount = 0;
+  for (const oc of ocs) {
+    const mult = oc.multiplicador || 1;
+    const dobra = oc.dobra ? 2 : 1;
+    sumQtdMult += (oc.quantidade || 0) * mult * dobra;
+    sumBase += oc.base || 0;
+    if (oc.divisor && oc.divisor > 0) {
+      sumDivisor += oc.divisor;
+      divCount++;
+    }
+  }
+
+  // PJe-Calc ComportamentoMediaPelaQuantidade.java:143-144 divide pela
+  // QUANTIDADE DE PERÍODOS ESPERADOS (normalmente 12 por ano), não por N.
+  // Isso converte "soma de avos mensais" em "avos médios por mês".
+  // Para multi-ano: sumQtdMult já acumula todos os meses; /12 dá o
+  // equivalente a "avos por ano × N_anos".
+  // Para contrato < 1 ano: N_esperados é min(12, meses_contrato_no_periodo)
+  // que o Java calcula via obterQuantidadeEsperadaDeOcorrenciasParaMediaDoReflexo.
+  // Aproximação: usamos min(12, N) — se tem menos de 12 meses de dados,
+  // usa N; senão, usa 12 (1 ano equivalente).
+  const NPeriodosEsperados = Math.min(12, N);
+  const mediaQuantidade = sumQtdMult / NPeriodosEsperados;
+  const baseMedia = sumBase / N;
+  // Divisor: última ocorrência ativa (ComportamentoMediaPelaQuantidade.java:183-202).
+  const ultimaOc = ocs[ocs.length - 1];
+  const divisorMedio = (ultimaOc.divisor && ultimaOc.divisor > 0)
+    ? ultimaOc.divisor
+    : (divCount > 0 ? sumDivisor / divCount : 1);
+
+  let valor = baseMedia * mediaQuantidade / divisorMedio;
+
+  // Para multi-ano (N > 12): o valor acima representa 1 ano equivalente.
+  // Multiplicar pelo número de anos (N/12) pra somar todos os 13º anuais.
+  if (N > 12) {
+    valor = valor * (N / 12);
+  }
+
+  if (caracteristica === 'ferias') {
+    // Férias + 1/3: multiplicar por 4/3 (30 dias + 10 dias do 1/3 = 40/30).
+    // Férias proporcionais: PJC já consolida em N meses do aquisitivo.
+    valor = valor * (4 / 3);
+  }
+
+  // Mês de pagamento: última competência das ocorrências (normalmente dez, rescisão ou fim período aquisitivo)
+  const competenciaPagamento = ultimaOc.competencia.slice(0, 7);
+
+  return [{
+    competencia: competenciaPagamento,
+    base: baseMedia,
+    divisor: divisorMedio,
+    multiplicador: ultimaOc.multiplicador || 1,
+    quantidade: mediaQuantidade,
+    dobra: false,
+    devido: +valor.toFixed(10),
+    pago: 0,
+    indice_acumulado: ultimaOc.indice_acumulado,
+  }];
+}
+
 function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVerba[] {
   return verbas.filter(v => v.ativo).map(v => {
     const isReflexo = v.tipo === 'Reflexo';
@@ -342,8 +433,41 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     // Build pre-computed occurrences from PJC ground truth
     // This injects exact base/div/mult/qtd/pago values so the engine doesn't need
     // cartão ponto or complex historico resolution — achieving PJC parity
-    const ocorrenciasPrecomputadas = (v.ocorrencias_all.length > 0)
-      ? v.ocorrencias_all.map(oc => ({
+    //
+    // FIX (port fiel de ComportamentoMediaPelaQuantidade, simplificado):
+    //
+    // O Java (ComportamentoMediaPelaQuantidade.resolverValor) para reflexos
+    // 13º/férias/aviso com `comportamentoDoReflexo = MEDIA_PELA_QUANTIDADE`
+    // consolida em UMA ocorrência no mês de pagamento, IGNORANDO o `valorDevido`
+    // das ocorrências mensais (que são dados intermediários para base CS/IR).
+    //
+    // Fórmula Java (PJe-Calc v2.15.1 ComportamentoMediaPelaQuantidade.java:143-205):
+    //   media_quantidade = Σ(oc.quantidade × oc.multiplicador) / N_periodos_esperados
+    //   base_media       = Σ(oc.base × dias_do_mes) / dias_totais_do_periodo_reflexo
+    //   divisor_medio    = divisor da última ocorrência ativa da VERBA-PAI
+    //                      (ou média se verba tem variação; fallback: divisor das oc do reflexo)
+    //   valor_consolidado = base_media × media_quantidade / divisor_medio
+    //   (+ ajuste de férias se caracteristica=FERIAS: × dias_periodo / 30)
+    //
+    // Aqui reproduzimos essa fórmula usando os dados já emitidos no XML para as
+    // ocorrências mensais do reflexo, substituindo as N ocorrências mensais por
+    // UMA única ocorrência consolidada no mês de pagamento (dez/rescisão/aquisitivo).
+    //
+    // Reflexos com MENSAL/VALOR_MENSAL ou MEDIA_PELO_VALOR_CORRIGIDO ficam com
+    // as ocorrências mensais intactas — esses já têm `valorDevido` proporcional
+    // correto conforme a fórmula específica deles.
+    const comportamentoRaw = (v.comportamento_reflexo || '').toUpperCase();
+    const ocorrenciaPagRaw = (v.ocorrencia_pagamento || '').toUpperCase();
+    const precisaConsolidar = isReflexo
+      && comportamentoRaw === 'MEDIA_PELA_QUANTIDADE'
+      && (ocorrenciaPagRaw === 'DEZEMBRO' || ocorrenciaPagRaw === 'DESLIGAMENTO' || ocorrenciaPagRaw === 'PERIODO_AQUISITIVO');
+
+    let ocorrenciasPrecomputadas: PjeVerba['ocorrencias_precomputadas'] | undefined = undefined;
+    if (v.ocorrencias_all.length > 0) {
+      if (precisaConsolidar) {
+        ocorrenciasPrecomputadas = consolidarReflexoMediaPelaQuantidade(v, caracteristica);
+      } else {
+        ocorrenciasPrecomputadas = v.ocorrencias_all.map(oc => ({
           competencia: oc.competencia.slice(0, 7),
           base: oc.base,
           divisor: oc.divisor,
@@ -353,8 +477,9 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
           devido: oc.devido,
           pago: oc.pago,
           indice_acumulado: oc.indice_acumulado,
-        }))
-      : undefined;
+        }));
+      }
+    }
 
     return {
       id: v.id,
