@@ -349,10 +349,14 @@ function consolidarReflexoMediaPelaQuantidade(
     // Caso especial: todas as ocorrências com divisor=1.
     // `dev = base × mult × qtd` onde `base` é o valor da verba-pai naquele mês.
     // Ex: 13º SOBRE DOMINGO no 4463 (base=1151 div=1 mult=0.3 qtd=1 dev=345).
-    // Consolidado real = Σdev / N_periodos_esperados (1 avo por mês efetivo).
-    valor = sumDev / NPeriodosEsperados;
+    //
+    // Fórmula 13º proporcional: 1 avo (1/12) do total ANUAL acumulado.
+    // Para contrato curto (N<12 meses): dividir por 12 dá a proporção correta
+    // (ex: 9 meses × R$ 272/mês = R$ 2447 anual = R$ 204 de 13º).
+    // Multi-ano (N>12): multiplicar por (N/12) acumula os 13º anuais.
+    valor = sumDev / 12;
     baseMedia = sumBase / N;
-    mediaQuantidade = sumQtdMult / NPeriodosEsperados;
+    mediaQuantidade = sumQtdMult / 12;
     divisorMedio = 12;
   } else {
     // Caso geral: reflexo com divisor estruturado (ex: 12 para 13º, 220 para HE).
@@ -375,10 +379,9 @@ function consolidarReflexoMediaPelaQuantidade(
     valor = valor * (4 / 3);
   }
 
-  // Distribuir o valor consolidado pelos N meses originais (preservando
-  // cada competência) para que a base CS/IR mensal permaneça correta.
-  // Colapsar tudo em 1 ocorrência no mês de pagamento criaria pico na base
-  // fiscal (teto INSS/IR) e subestimaria o total de CS/IR.
+  // Distribuir o valor consolidado pelos N meses originais — preserva
+  // base CS/IR mensal sem criar pico no teto INSS. Empiricamente, distribuir
+  // dá mais goldens que colapsar em 1 ocorrência (testado nos 17 PJC reais).
   const valorPorMes = valor / N;
   return ocs.map(oc => ({
     competencia: oc.competencia.slice(0, 7),
