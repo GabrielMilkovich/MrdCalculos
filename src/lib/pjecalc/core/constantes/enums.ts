@@ -368,3 +368,21 @@ export enum GrupoEsferaPrecatorioEnum {
   FEDERAL = 'FED',
   ESTADUAL_MUNICIPAL = 'EM',
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INSS (Fase 6) — TipoDeAliquotaDoSeguradoEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoDeAliquotaDoSeguradoEnum {
+  SEGURADO_EMPREGADO = 'SE',
+  EMPREGADO_DOMESTICO = 'ED',
+  FIXA = 'F',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INSS (Fase 6) — TipoDeAliquotaDoEmpregadorEnum.java
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoDeAliquotaDoEmpregadorEnum {
+  POR_ATIVIDADE_ECONOMICA = 'A',
+  POR_PERIODO = 'PP',
+  FIXA = 'F',
+}
