@@ -361,6 +361,8 @@ function consolidarReflexoMediaPelaQuantidade(
   } else {
     // Caso geral: reflexo com divisor estruturado (ex: 12 para 13º, 220 para HE).
     // Fórmula Java ComportamentoMediaPelaQuantidade.java:143-205.
+    // Usa min(12, N) — ao contrário de allDivisorOne, que usa /12 sempre.
+    // (Empiricamente: caso geral com /12 sempre piora 4546, 4259, 4866 etc.)
     mediaQuantidade = sumQtdMult / NPeriodosEsperados;
     baseMedia = sumBase / N;
     divisorMedio = (ultimaOc.divisor && ultimaOc.divisor > 0)
