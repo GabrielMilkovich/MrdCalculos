@@ -59,13 +59,19 @@ Fonte Java: `pjecalc-fonte/` (decompilada com CFR 0.152).
 | Arquivo Java | Arquivo TS | Status |
 |---|---|---|
 | `api/IndiceDeCalculo.java` (interface) | `core/dominio/indices/indice-de-calculo.ts` | ✅ |
-| `IndiceBase.java` | — | ⬜ | Classe base das tabelas mensais (IGPM, INPC, IPCA*, TR, IPC) |
-| `ipcae/IndiceIPCAE.java` | — | ⬜ | Tabela IPCA-E + valores 1985-2026 |
+| `IndiceBase.java` | `core/dominio/indices/indice-base.ts` | ✅ | Classe abstrata base. `getValorIndice()` = 1 + taxa/100 |
+| `ipcae/IndiceIPCAE.java` | `core/dominio/indices/ipcae/indice-ipcae.ts` + `tabela-ipcae.ts` | ✅ | 134 entradas (2015-01 a 2026-02) |
 | `ipca/IndiceIPCA.java` | — | ⬜ | |
 | `selic/IndiceSelicDiaria.java` | — | ⬜ | SELIC diária BCB |
 | `tr/IndiceTR.java` | — | ⬜ | |
 | `jam/IndiceJAM.java` | — | ⬜ | JAM diária Caixa |
 | `tabelaunica/IndiceTabelaUnicaJTMensal.java` | — | ⬜ | |
+
+## Domínio — OcorrenciaVerba
+
+| Arquivo Java | Arquivo TS | Status |
+|---|---|---|
+| `ocorrenciaverba/OcorrenciaDeVerba.java` (786 linhas) | `core/dominio/ocorrenciaverba/ocorrencia-de-verba.ts` | ✅ | 23 métodos core: getters/setters + getDiferenca/DiferencaCorrigida/DiferencaIntegral + calcularFatorAbono + compareTo + clone. Usa IVerbaDeCalculoRef/IFeriasRef para evitar dep circular. Stubs: `integraliza` (placeholder identity — será delegado para CalculoDoIntegralizar quando portado). |
 
 ## Domínio — Verba (negocio/dominio/verbacalculo/ + formula/ + ocorrenciaverba/)
 
@@ -99,6 +105,19 @@ Fonte Java: `pjecalc-fonte/` (decompilada com CFR 0.152).
 
 ## Progresso Global
 
-- **Portado (✅):** 6 arquivos (Utils, HelperDate, Periodo, Enums, CalculadorDeIndices, PeriodoDeJuros) + 1 interface (IndiceDeCalculo)
-- **Pendente crítico (⬜):** TabelaDeJuros, TabelaDeCorrecaoMonetaria, IndiceIPCAE, tabelas de índices, INSS, IRPF, FGTS
-- **Legado (🟡):** logica embutida em `engine.ts` (4600 linhas) a ser migrada para core/
+- **Portado (✅):** 10 arquivos
+  - base: Utils, HelperDate, Periodo
+  - enums críticos (16)
+  - interface IndiceDeCalculo
+  - CalculadorDeIndices (soma simples + produto)
+  - PeriodoDeJuros (meses fracionados)
+  - IndiceBase + IndiceIPCAE + TABELA_IPCAE (134 entradas 2015-2026)
+  - OcorrenciaDeVerba (23 métodos)
+- **Pendente crítico (⬜):** TabelaDeJuros, TabelaDeCorrecaoMonetaria, IndiceIPCA/IPC/TR/JAM/SELIC, MaquinaDeCalculo, VerbaDeCalculo, Calculo, INSS, IRPF, FGTS
+- **Legado (🟡):** lógica embutida em `engine.ts` (4600 linhas) a ser migrada para core/
+
+## Testes do core
+
+35 testes validam as primitivas portadas:
+- `core/__tests__/core-smoke.test.ts` (18 testes)
+- `core/__tests__/indices-ocorrencia.test.ts` (17 testes)
