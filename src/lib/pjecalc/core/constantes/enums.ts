@@ -370,6 +370,126 @@ export enum GrupoEsferaPrecatorioEnum {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Honorário/Custas/Multa (Fase 8) — Enums do módulo
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** TipoHonorarioEnum.java */
+export enum TipoHonorarioEnum {
+  ADVOCATICIOS = '0',
+  ASSISTENCIAIS = '1',
+  CONTRATUAIS = '2',
+  PERICIAIS_CONTADOR = '3',
+  PERICIAIS_DOCUMENTOSCOPIO = '4',
+  PERICIAIS_ENGENHEIRO = '5',
+  PERICIAIS_INTERPRETE = '6',
+  PERICIAIS_MEDICO = '7',
+  PERICIAIS_OUTROS = '8',
+  SUCUMBENCIAIS = '9',
+  LEILOEIRO = '10',
+}
+
+/** TipoDeDevedorDoHonorarioEnum.java */
+export enum TipoDeDevedorDoHonorarioEnum {
+  RECLAMANTE = 'RT',
+  RECLAMADO = 'RD',
+}
+
+/** TipoDocumentoFiscalEnum.java */
+export enum TipoDocumentoFiscalEnum {
+  CPF = 'CPF',
+  CNPJ = 'CNPJ',
+  CEI = 'CEI',
+}
+
+/** TipoDeImpostoDeRendaEnum.java */
+export enum TipoDeImpostoDeRendaEnum {
+  PESSOA_FISICA = 'PF',
+  PESSOA_JURIDICA = 'PJ',
+}
+
+/** BaseParaApuracaoDeHonorarioEnum.java */
+export enum BaseParaApuracaoDeHonorarioEnum {
+  BRUTO = 'B',
+  BRUTO_MENOS_CONTRIBUICAO_SOCIAL = 'BC',
+  BRUTO_MENOS_CONTRIBUICAO_SOCIAL_MENOS_PREVIDENCIA_PRIVADA = 'BCP',
+  VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL = 'VNP',
+}
+
+/** TipoCobrancaReclamanteEnum.java */
+export enum TipoCobrancaReclamanteEnum {
+  DESCONTAR_CREDITO = 'D',
+  COBRAR = 'C',
+}
+
+/** TipoOrigemRegistroEnum.java */
+export enum TipoOrigemRegistroEnum {
+  CALCULO = 'C',
+  ATUALIZACAO = 'A',
+}
+
+/** BaseParaApuracaoDeMultaEnum.java */
+export enum BaseParaApuracaoDeMultaEnum {
+  PRINCIPAL = 'P',
+  PRINCIPAL_MENOS_CONTRIBUICAO_SOCIAL = 'PC',
+  PRINCIPAL_MENOS_CONTRIBUICAO_SOCIAL_MENOS_PREVIDENCIA_PRIVADA = 'PCP',
+  VALOR_CAUSA = 'VC',
+}
+
+/** CredorDevedorMultaEnum.java */
+export enum CredorDevedorMultaEnum {
+  RECLAMANTE_RECLAMADO = 'RTRD',
+  RECLAMADO_RECLAMANTE = 'RDRT',
+  TERCEIRO_RECLAMANTE = 'TRT',
+  TERCEIRO_RECLAMADO = 'TRD',
+}
+
+/** BaseParaCustasCalculadasEnum.java */
+export enum BaseParaCustasCalculadasEnum {
+  BRUTO_DEVIDO_AO_RECLAMANTE = 'BR',
+  BRUTO_DEVIDO_AO_RECLAMANTE_MAIS_DEBITOS_RECLAMADO = 'BROR',
+}
+
+/** TipoDeCustasDeConhecimentoEnum.java */
+export enum TipoDeCustasDeConhecimentoEnum {
+  NAO_SE_APLICA = 'N',
+  CALCULADA_2_POR_CENTO = 'C',
+  INFORMADA = 'I',
+}
+
+/** TipoDeCustasDeLiquidacaoEnum.java */
+export enum TipoDeCustasDeLiquidacaoEnum {
+  NAO_SE_APLICA = 'N',
+  CALCULADA_MEIO_POR_CENTO = 'C',
+  INFORMADA = 'I',
+}
+
+/** TipoDePaganteEnum.java */
+export enum TipoDePaganteEnum {
+  RECLAMANTE = 'RT',
+  RECLAMADO = 'RD',
+}
+
+/** TipoDeAutoEnum.java */
+export enum TipoDeAutoEnum {
+  REMICAO = 'R',
+  ADJUDICACAO = 'AD',
+  ARREMATACAO = 'AR',
+}
+
+/** CustasDevidasFixasEnum.java */
+export enum CustasDevidasFixasEnum {
+  ATOS_URBANOS_DO_OFICIAL_DE_JUSTICA = 'ATOS_URBANOS_DO_OFICIAL_DE_JUSTICA',
+  ATOS_RURAIS_DO_OFICIAL_DE_JUSTICA = 'ATOS_RURAIS_DO_OFICIAL_DE_JUSTICA',
+  AGRAVO_DE_INSTRUMENTO = 'AGRAVO_DE_INSTRUMENTO',
+  AGRAVO_DE_PETICAO = 'AGRAVO_DE_PETICAO',
+  IMPUGNACAO_SENTENCA_DE_LIQUIDACAO = 'IMPUGNACAO_SENTENCA_DE_LIQUIDACAO',
+  EMBARGOS_A_ARREMATACAO = 'EMBARGOS_A_ARREMATACAO',
+  EMBARGOS_A_EXECUCAO = 'EMBARGOS_A_EXECUCAO',
+  EMBARGOS_DE_TERCEIROS = 'EMBARGOS_DE_TERCEIROS',
+  RECURSO_DE_REVISTA = 'RECURSO_DE_REVISTA',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // IRPF (Fase 7) — TipoOcorrenciaIrpfEnum.java
 // ─────────────────────────────────────────────────────────────────────────────
 export enum TipoOcorrenciaIrpfEnum {
