@@ -474,26 +474,51 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     // (cópia literal da principal sem fator de avos). Mesmo padrão para MPV.
     // Regra:
     //   - MEDIA_PELA_QUANTIDADE: sempre consolida (fórmula base×qtd/div do Java).
-    //   - MEDIA_PELO_VALOR / MEDIA_PELO_VALOR_CORRIGIDO: só consolida se todas
-    //     as ocorrências têm divisor=1 (sinal inequívoco de duplicação).
-    //     Caso divisor > 1 (ex: 12 para 13º normal), o XML já emite valor
-    //     proporcional correto e NÃO devemos mexer.
+    //   - MEDIA_PELO_VALOR / MEDIA_PELO_VALOR_CORRIGIDO: consolida se TODAS as
+    //     ocorrências têm divisor=1, OU consolida APENAS as ocorrências com
+    //     divisor=1 quando há mistura (caso visto no 4493 — algumas linhas com
+    //     divisor=1 = duplicadas, outras com divisor=12 = proporcionais corretas).
     const isPagamentoAnualOuRescisao = ocorrenciaPagRaw === 'DEZEMBRO'
       || ocorrenciaPagRaw === 'DESLIGAMENTO'
       || ocorrenciaPagRaw === 'PERIODO_AQUISITIVO';
     const todasComDivisorUm = v.ocorrencias_all.length > 0
       && v.ocorrencias_all.every(oc => !oc.divisor || oc.divisor === 1);
+    const algumasComDivisorUm = v.ocorrencias_all.some(oc => oc.divisor === 1);
     const ehMpv = comportamentoRaw === 'MEDIA_PELO_VALOR'
       || comportamentoRaw === 'MEDIA_PELO_VALOR_CORRIGIDO';
     const precisaConsolidar = isReflexo && isPagamentoAnualOuRescisao && (
       comportamentoRaw === 'MEDIA_PELA_QUANTIDADE'
       || (ehMpv && todasComDivisorUm)
     );
+    // Caso especial: MPV/MPVC com divisores MISTOS — separar ocorrências.
+    const consolidarParcial = isReflexo && isPagamentoAnualOuRescisao && ehMpv
+      && !todasComDivisorUm && algumasComDivisorUm;
 
     let ocorrenciasPrecomputadas: PjeVerba['ocorrencias_precomputadas'] | undefined = undefined;
     if (v.ocorrencias_all.length > 0) {
       if (precisaConsolidar) {
         ocorrenciasPrecomputadas = consolidarReflexoMediaPelaQuantidade(v, caracteristica);
+      } else if (consolidarParcial) {
+        // Aplica consolidação SÓ nas ocorrências com divisor=1 (duplicadas);
+        // mantém as com divisor>1 (proporcionalmente corretas) intactas.
+        const ocsComDiv1 = v.ocorrencias_all.filter(oc => oc.divisor === 1);
+        const ocsComDivOutro = v.ocorrencias_all.filter(oc => oc.divisor !== 1);
+        const consolidadas = consolidarReflexoMediaPelaQuantidade(
+          { ...v, ocorrencias_all: ocsComDiv1 } as VerbaAnalysis,
+          caracteristica,
+        );
+        const intactas = ocsComDivOutro.map(oc => ({
+          competencia: oc.competencia.slice(0, 7),
+          base: oc.base,
+          divisor: oc.divisor,
+          multiplicador: oc.multiplicador,
+          quantidade: oc.quantidade,
+          dobra: oc.dobra,
+          devido: oc.devido,
+          pago: oc.pago,
+          indice_acumulado: oc.indice_acumulado,
+        }));
+        ocorrenciasPrecomputadas = [...consolidadas, ...intactas];
       } else {
         ocorrenciasPrecomputadas = v.ocorrencias_all.map(oc => ({
           competencia: oc.competencia.slice(0, 7),
