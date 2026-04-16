@@ -3,18 +3,11 @@
  *
  * This module exports the core calculation engine and all supporting types.
  * It has ZERO dependencies on React, Supabase, or any external service.
- * All data (indices, faixas, feriados) is passed as parameters.
- *
- * Usage:
- *   import { PjeCalcEngine, analyzePJC, convertPjcToEngineInputs } from '@/lib/pjecalc/core';
- *   const analysis = analyzePJC(xmlString);
- *   const inputs = convertPjcToEngineInputs(analysis, caseId);
- *   const engine = new PjeCalcEngine(inputs.params, ...);
- *   const result = engine.liquidar();
  */
 
-// Core engine
+// Core engines
 export { PjeCalcEngine } from './engine';
+export { PjeCalcEngineV3 } from './engine-v3';
 
 // Types
 export type {
@@ -32,7 +25,6 @@ export type {
   PjeHonorariosConfig,
   PjeCustasConfig,
   PjeSeguroConfig,
-  PjePrevPrivadaConfig,
   PjePensaoConfig,
   PjeSalarioFamiliaConfig,
   PjeLiquidacaoResult,
@@ -43,6 +35,7 @@ export type {
   PjeIndiceRow,
   PjeINSSFaixaRow,
   PjeApuracaoJurosGT,
+  PjePrevidenciaPrivadaConfig,
 } from './engine-types';
 
 // PJC file parsing
@@ -53,29 +46,30 @@ export type { PJCAnalysis } from './pjc-analyzer';
 export { convertPjcToEngineInputs } from './pjc-to-engine';
 
 // Correction utilities
-export { calcularCorrecaoPorData } from './correction-by-date';
+export { aplicarCorrecaoPorData } from './correction-by-date';
 
 // Reflexo DAG engine
 export { gerarReflexosPadrao, gerarReflexosComCascata } from './reflexo-engine';
-
-// Offset engine — removed (offset-engine deleted)
 
 // Regime temporal ADC 58/59
 export { buildRegimeTemporalADC58 } from './regime-temporal';
 export type { RegimeTemporal } from './regime-temporal';
 
-// Múltiplos vínculos (Padrão B)
+// Múltiplos vínculos
 export { calcularAvosMultiplosVinculos, calcularFGTSPorVinculo } from './multiplos-vinculos';
 export type { SaldoFGTSVinculo } from './multiplos-vinculos';
 export type { VinculoEmpregaticio } from './pjc-analyzer';
 
-// Contrato intermitente (Lei 13.467/2017)
+// Contrato intermitente
 export { calcularFGTSIntermitente, calcularFeriasIntermitente, calcularDecimoTerceiroIntermitente } from './contrato-intermitente';
 export type { ConvocacaoIntermitente } from './pjc-analyzer';
 
-// Memória de cálculo (auditoria)
+// Memória de cálculo
 export { exportarMemoriaJSON } from './memoria-export';
 export type { MemoriaCalculo, LinhaMemoriaCalculo } from './engine-types';
 
 // Constants
-export { INSS_TETO_2025, SALARIO_MINIMO_2025 } from './engine-constants';
+export {
+  DEFAULT_FAIXAS_INSS, DEFAULT_FAIXAS_IR, DEFAULT_DEDUCAO_DEPENDENTE,
+  HISTORICO_FAIXAS_INSS, HISTORICO_FAIXAS_IR, HISTORICO_SALARIO_MINIMO,
+} from './engine-constants';

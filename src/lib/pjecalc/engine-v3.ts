@@ -54,7 +54,7 @@ import {
   TerceiraFaixaPrevidenciaria,
   QuartaFaixaPrevidenciaria,
   type FaixaPrevidenciaria,
-} from './core';
+} from './core/index';
 
 export class PjeCalcEngineV3 {
   private params: PjeParametros;
