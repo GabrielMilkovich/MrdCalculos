@@ -51,3 +51,7 @@ public/reports/*.pjc
 # Ver pjecalc-fonte/README.md para detalhes. Mantida no repo como ground-truth
 # para o porte 1:1 em src/lib/pjecalc/core/. Somente leitura.
 # (Removido do .gitignore — agora commitado)
+
+# Playwright
+playwright-report/
+test-results/
