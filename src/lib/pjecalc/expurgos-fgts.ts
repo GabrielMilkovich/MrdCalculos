@@ -1,6 +1,17 @@
 /**
+ * MÓDULO AUTÔNOMO — Não integrado ao PjeCalcEngine.
+ *
  * Expurgos inflacionários do FGTS — diferenças de correção monetária
  * dos planos econômicos que não foram repassadas aos saldos do FGTS.
+ *
+ * Os expurgos afetam apenas contratos com saldo FGTS nos períodos de 1989-1991.
+ * Em liquidações atuais raramente são pleiteados (prescrição e baixa frequência
+ * de contratos ativos nesses períodos ainda em litígio).
+ *
+ * Para usar: importar calcularExpurgosFGTS() separadamente e adicionar o valor
+ * ao resultado do calcularFGTS() quando aplicável ao caso.
+ *
+ * Fundamento: STF ARE 709.212 (2014) — prescrição trintenária extinta.
  *
  * Planos: Verão (jan/1989), Collor I (mar/1990), Collor II (fev/1991)
  *

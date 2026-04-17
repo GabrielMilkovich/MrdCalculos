@@ -1,28 +1,18 @@
 // =====================================================
 // MRD Calc — Service Worker for Offline Support (PWA)
+// VERSÃO 2: fix cache-first em HTML causando tela branca após deploy
 // =====================================================
 
-const CACHE_NAME = 'mrd-calc-v1';
-const STATIC_CACHE = 'mrd-calc-static-v1';
-const DATA_CACHE = 'mrd-calc-data-v1';
+const CACHE_VERSION = 'v3';
+const STATIC_CACHE = `mrd-calc-static-${CACHE_VERSION}`;
+const DATA_CACHE = `mrd-calc-data-${CACHE_VERSION}`;
 
-// Static assets to pre-cache on install
-const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-];
-
-// Install: pre-cache shell
+// Install: skip waiting to activate immediately
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
-    })
-  );
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: clean ALL old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -37,37 +27,39 @@ self.addEventListener('activate', (event) => {
 });
 
 // Fetch strategy:
-// - App shell (HTML/JS/CSS): Cache-first, fallback to network
-// - Supabase API calls: Network-first, fallback to cache
-// - Index/table data: Cache with background refresh (stale-while-revalidate)
+// - Navigation (HTML): ALWAYS network-first (never serve stale HTML)
+// - Hashed assets (/assets/*): cache-first (immutable, hash changes on deploy)
+// - Supabase API: network-first with cache fallback
+// - Everything else: network-first
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Skip non-GET requests
+  // Skip non-GET
   if (event.request.method !== 'GET') return;
 
-  // Supabase API calls — network first with cache fallback
-  if (url.hostname.includes('supabase.co')) {
-    // Cache reference table data for offline use
-    if (url.pathname.includes('reference_tables') ||
-        url.pathname.includes('pjecalc_indices') ||
-        url.pathname.includes('pjecalc_faixas')) {
-      event.respondWith(
-        staleWhileRevalidate(event.request, DATA_CACHE)
-      );
-      return;
-    }
-    // Other API calls — network first
+  // Navigation requests (HTML pages): ALWAYS network-first
+  // This is critical — cache-first on HTML causes blank screen after deploy
+  if (event.request.mode === 'navigate') {
     event.respondWith(
-      networkFirst(event.request, DATA_CACHE)
+      fetch(event.request).catch(() => caches.match('/index.html'))
     );
     return;
   }
 
-  // Static assets — cache first
-  event.respondWith(
-    cacheFirst(event.request, STATIC_CACHE)
-  );
+  // Hashed static assets (/assets/index-XXXX.js) — cache-first (immutable)
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(cacheFirst(event.request, STATIC_CACHE));
+    return;
+  }
+
+  // Supabase API — network-first
+  if (url.hostname.includes('supabase.co')) {
+    event.respondWith(networkFirst(event.request, DATA_CACHE));
+    return;
+  }
+
+  // Everything else — network-first
+  event.respondWith(networkFirst(event.request, STATIC_CACHE));
 });
 
 // ── Strategies ──
@@ -98,23 +90,6 @@ async function networkFirst(request, cacheName) {
   } catch {
     const cached = await caches.match(request);
     if (cached) return cached;
-    return new Response(JSON.stringify({ error: 'offline' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response('Offline', { status: 503 });
   }
-}
-
-async function staleWhileRevalidate(request, cacheName) {
-  const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
-
-  const fetchPromise = fetch(request).then((response) => {
-    if (response.ok) {
-      cache.put(request, response.clone());
-    }
-    return response;
-  }).catch(() => cached);
-
-  return cached || fetchPromise;
 }

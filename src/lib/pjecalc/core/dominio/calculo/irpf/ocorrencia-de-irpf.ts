@@ -1,0 +1,139 @@
+/**
+ * PJe-Calc v2.15.1 — OcorrenciaDeIrpf
+ * Porte 1:1 de: br.jus.trt8.pjecalc.negocio.dominio.calculo.irpf.OcorrenciaDeIrpf
+ *
+ * Ref Java: pjecalc-fonte/.../calculo/irpf/OcorrenciaDeIrpf.java (~320 linhas)
+ *
+ * Linha-mensal de IRPF. Guarda a base (verbas + juros − deduções) e o valor
+ * devido pela aplicação de uma faixa da tabela progressiva (por NM do
+ * período, inicial/final/aliquota/deducao).
+ *
+ * Campos derivados (lazy):
+ *   valorBase  = verbas + juros − CS − previdPriv − pensao − honorarios − dependentes − aposentado65
+ *   valorDevido = valorBase × aliquota% − deducao (clamp 0)
+ */
+import Decimal from 'decimal.js';
+import { TipoOcorrenciaIrpfEnum } from '../../../constantes/enums';
+import type { Irpf } from './irpf';
+
+const ZERO = new Decimal(0);
+
+function soma(a: Decimal, b: Decimal | null): Decimal { return b === null ? a : a.plus(b); }
+function sub(a: Decimal, b: Decimal | null): Decimal { return b === null ? a : a.minus(b); }
+
+export class OcorrenciaDeIrpf {
+  private id: number | null = null;
+  private versao: number = 0;
+  private irpf: Irpf | null = null;
+  private dataOcorrencia: Date | null = null;
+  private valorVerbas: Decimal | null = null;
+  private valorJuros: Decimal | null = null;
+  private valorContribuicaoSocial: Decimal | null = null;
+  private valorPrevidenciaPrivada: Decimal | null = null;
+  private valorPensaoAlimenticia: Decimal | null = null;
+  private valorHonorarios: Decimal | null = null;
+  private valorDependentes: Decimal | null = null;
+  private valorAposentadoMaiorQue65: Decimal | null = null;
+  private valorBase: Decimal = ZERO;
+  private quantidadeCompetencias: number | null = null;
+  private valorInicialFaixa: Decimal = ZERO;
+  private valorFinalFaixa: Decimal | null = null;
+  private valorAliquota: Decimal = ZERO;
+  private valorDeducao: Decimal = ZERO;
+  private valorDevido: Decimal = ZERO;
+  private readonly tipo: TipoOcorrenciaIrpfEnum;
+
+  // transient caches
+  private precisaAtualizarBase: boolean = true;
+  private precisaAtualizarDevido: boolean = true;
+
+  constructor(tipo: TipoOcorrenciaIrpfEnum = TipoOcorrenciaIrpfEnum.NORMAL) {
+    this.tipo = tipo;
+  }
+
+  getId(): number | null { return this.id; }
+  setId(id: number): void { this.id = id; }
+  getVersao(): number { return this.versao; }
+  setVersao(v: number): void { this.versao = v; }
+
+  getIrpf(): Irpf | null { return this.irpf; }
+  setIrpf(irpf: Irpf | null): void { this.irpf = irpf; }
+
+  getDataOcorrencia(): Date | null { return this.dataOcorrencia; }
+  setDataOcorrencia(d: Date | null): void { this.dataOcorrencia = d; }
+
+  getValorVerbas(): Decimal | null { return this.valorVerbas; }
+  setValorVerbas(v: Decimal | null): void { this.valorVerbas = v; this.precisaAtualizarBase = true; }
+
+  getValorJuros(): Decimal | null { return this.valorJuros; }
+  setValorJuros(v: Decimal | null): void { this.valorJuros = v; this.precisaAtualizarBase = true; }
+
+  getValorContribuicaoSocial(): Decimal | null { return this.valorContribuicaoSocial; }
+  setValorContribuicaoSocial(v: Decimal | null): void { this.valorContribuicaoSocial = v; this.precisaAtualizarBase = true; }
+
+  getValorPrevidenciaPrivada(): Decimal | null { return this.valorPrevidenciaPrivada; }
+  setValorPrevidenciaPrivada(v: Decimal | null): void { this.valorPrevidenciaPrivada = v; this.precisaAtualizarBase = true; }
+
+  getValorPensaoAlimenticia(): Decimal | null { return this.valorPensaoAlimenticia; }
+  setValorPensaoAlimenticia(v: Decimal | null): void { this.valorPensaoAlimenticia = v; this.precisaAtualizarBase = true; }
+
+  getValorHonorarios(): Decimal | null { return this.valorHonorarios; }
+  setValorHonorarios(v: Decimal | null): void { this.valorHonorarios = v; this.precisaAtualizarBase = true; }
+
+  getValorDependentes(): Decimal | null { return this.valorDependentes; }
+  setValorDependentes(v: Decimal | null): void { this.valorDependentes = v; this.precisaAtualizarBase = true; }
+
+  getValorAposentadoMaiorQue65(): Decimal | null { return this.valorAposentadoMaiorQue65; }
+  setValorAposentadoMaiorQue65(v: Decimal | null): void { this.valorAposentadoMaiorQue65 = v; this.precisaAtualizarBase = true; }
+
+  /** getValorBase (Java linha 233) — base tributável (ZERO-floored). */
+  getValorBase(): Decimal {
+    if (this.precisaAtualizarBase) {
+      let base: Decimal = ZERO;
+      base = soma(base, this.valorVerbas);
+      base = soma(base, this.valorJuros);
+      base = sub(base, this.valorContribuicaoSocial);
+      base = sub(base, this.valorPrevidenciaPrivada);
+      base = sub(base, this.valorPensaoAlimenticia);
+      base = sub(base, this.valorHonorarios);
+      base = sub(base, this.valorDependentes);
+      base = sub(base, this.valorAposentadoMaiorQue65);
+      if (base.isNegative()) base = ZERO;
+      this.valorBase = base;
+      this.precisaAtualizarBase = false;
+    }
+    return this.valorBase;
+  }
+
+  getQuantidadeCompetencias(): number | null { return this.quantidadeCompetencias; }
+  setQuantidadeCompetencias(v: number | null): void { this.quantidadeCompetencias = v; }
+
+  getValorInicialFaixa(): Decimal { return this.valorInicialFaixa; }
+  setValorInicialFaixa(v: Decimal): void { this.valorInicialFaixa = v; }
+
+  getValorFinalFaixa(): Decimal | null { return this.valorFinalFaixa; }
+  setValorFinalFaixa(v: Decimal | null): void { this.valorFinalFaixa = v; }
+
+  getValorAliquota(): Decimal { return this.valorAliquota; }
+  setValorAliquota(v: Decimal): void { this.valorAliquota = v; this.precisaAtualizarDevido = true; }
+
+  getValorDeducao(): Decimal { return this.valorDeducao; }
+  setValorDeducao(v: Decimal): void { this.valorDeducao = v; this.precisaAtualizarDevido = true; }
+
+  atualizaBase(): void { this.precisaAtualizarBase = true; this.getValorBase(); }
+  atualizaValorDevido(): void { this.precisaAtualizarDevido = true; this.getValorDevido(); }
+
+  /** getValorDevido (Java linha 304) — base × aliquota/100 − deducao (clamp 0). */
+  getValorDevido(): Decimal {
+    if (this.precisaAtualizarBase || this.precisaAtualizarDevido) {
+      let devido = this.getValorBase().times(this.valorAliquota).div(100);
+      devido = devido.minus(this.valorDeducao);
+      if (devido.isNegative()) devido = ZERO;
+      this.valorDevido = devido;
+      this.precisaAtualizarDevido = false;
+    }
+    return this.valorDevido;
+  }
+
+  getTipo(): TipoOcorrenciaIrpfEnum { return this.tipo; }
+}

@@ -14,6 +14,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 import type {
   PjecalcParametrosRow, PjecalcParametrosInsert,
   PjecalcDadosProcessoRow, PjecalcDadosProcessoInsert,
@@ -436,13 +437,13 @@ export async function getMultasConfig(caseId: string): Promise<PjecalcMultasConf
       .select('*').eq('case_id', caseId).maybeSingle();
     if (error) {
       if (error.code === 'PGRST116' || error.message?.includes('not found')) return null;
-      console.error('[PjeCalcService] Erro inesperado em getMultasConfig:', error);
+      logger.error('[PjeCalcService] Erro inesperado em getMultasConfig', error);
       throw error;
     }
     return data as PjecalcMultasConfigRow | null;
   } catch (err: any) {
     if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
-    console.error('[PjeCalcService] Erro inesperado em getMultasConfig:', err);
+    logger.error('[PjeCalcService] Erro inesperado em getMultasConfig', err);
     throw err;
   }
 }
@@ -467,13 +468,13 @@ export async function getPensaoConfig(caseId: string): Promise<Record<string, un
       .select('*').eq('case_id', caseId).maybeSingle();
     if (error) {
       if (error.code === 'PGRST116' || error.message?.includes('not found')) return null;
-      console.error('[PjeCalcService] Erro inesperado em getPensaoConfig:', error);
+      logger.error('[PjeCalcService] Erro inesperado em getPensaoConfig', error);
       throw error;
     }
     return data as Record<string, unknown> | null;
   } catch (err: any) {
     if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
-    console.error('[PjeCalcService] Erro inesperado em getPensaoConfig:', err);
+    logger.error('[PjeCalcService] Erro inesperado em getPensaoConfig', err);
     throw err;
   }
 }
@@ -498,13 +499,13 @@ export async function getPrevPrivConfig(caseId: string): Promise<Record<string, 
       .select('*').eq('case_id', caseId).maybeSingle();
     if (error) {
       if (error.code === 'PGRST116' || error.message?.includes('not found')) return null;
-      console.error('[PjeCalcService] Erro inesperado em getPrevPrivConfig:', error);
+      logger.error('[PjeCalcService] Erro inesperado em getPrevPrivConfig', error);
       throw error;
     }
     return data as Record<string, unknown> | null;
   } catch (err: any) {
     if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
-    console.error('[PjeCalcService] Erro inesperado em getPrevPrivConfig:', err);
+    logger.error('[PjeCalcService] Erro inesperado em getPrevPrivConfig', err);
     throw err;
   }
 }
@@ -529,13 +530,13 @@ export async function getSalarioFamiliaConfig(caseId: string): Promise<Record<st
       .select('*').eq('case_id', caseId).maybeSingle();
     if (error) {
       if (error.code === 'PGRST116' || error.message?.includes('not found')) return null;
-      console.error('[PjeCalcService] Erro inesperado em getSalarioFamiliaConfig:', error);
+      logger.error('[PjeCalcService] Erro inesperado em getSalarioFamiliaConfig', error);
       throw error;
     }
     return data as Record<string, unknown> | null;
   } catch (err: any) {
     if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
-    console.error('[PjeCalcService] Erro inesperado em getSalarioFamiliaConfig:', err);
+    logger.error('[PjeCalcService] Erro inesperado em getSalarioFamiliaConfig', err);
     throw err;
   }
 }
@@ -560,13 +561,13 @@ export async function getSeguroConfig(caseId: string): Promise<Record<string, un
       .select('*').eq('case_id', caseId).maybeSingle();
     if (error) {
       if (error.code === 'PGRST116' || error.message?.includes('not found')) return null;
-      console.error('[PjeCalcService] Erro inesperado em getSeguroConfig:', error);
+      logger.error('[PjeCalcService] Erro inesperado em getSeguroConfig', error);
       throw error;
     }
     return data as Record<string, unknown> | null;
   } catch (err: any) {
     if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return null;
-    console.error('[PjeCalcService] Erro inesperado em getSeguroConfig:', err);
+    logger.error('[PjeCalcService] Erro inesperado em getSeguroConfig', err);
     throw err;
   }
 }
@@ -681,13 +682,13 @@ export async function getFgtsSaldosSaques(caseId: string): Promise<Record<string
     const { data, error } = await fromView('pjecalc_fgts_saldos_saques').select('*').eq('case_id', caseId).order('data');
     if (error) {
       if (error.code === 'PGRST116' || error.message?.includes('not found')) return [];
-      console.error('[PjeCalcService] Erro inesperado em getFgtsSaldosSaques:', error);
+      logger.error('[PjeCalcService] Erro inesperado em getFgtsSaldosSaques', error);
       throw error;
     }
     return (data || []) as Record<string, unknown>[];
   } catch (err: any) {
     if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
-    console.error('[PjeCalcService] Erro inesperado em getFgtsSaldosSaques:', err);
+    logger.error('[PjeCalcService] Erro inesperado em getFgtsSaldosSaques', err);
     throw err;
   }
 }
@@ -750,13 +751,13 @@ export async function getAtualizacaoConfig(caseId: string): Promise<PjecalcAtual
       .eq('calculo_id', calculoId);
     if (error) {
       if (error.code === 'PGRST116' || error.message?.includes('not found')) return [];
-      console.error('[PjeCalcService] Erro inesperado em getAtualizacaoConfig:', error);
+      logger.error('[PjeCalcService] Erro inesperado em getAtualizacaoConfig', error);
       throw error;
     }
     return (data || []) as PjecalcAtualizacaoConfigRow[];
   } catch (err: any) {
     if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
-    console.error('[PjeCalcService] Erro inesperado em getAtualizacaoConfig:', err);
+    logger.error('[PjeCalcService] Erro inesperado em getAtualizacaoConfig', err);
     throw err;
   }
 }
@@ -884,13 +885,13 @@ export async function getObservacoes(caseId: string, modulo: string): Promise<Pj
       .order('created_at', { ascending: false });
     if (error) {
       if (error.code === 'PGRST116' || error.message?.includes('not found')) return [];
-      console.error('[PjeCalcService] Erro inesperado em getObservacoes:', error);
+      logger.error('[PjeCalcService] Erro inesperado em getObservacoes', error);
       throw error;
     }
     return (data || []) as PjecalcObservacaoRow[];
   } catch (err: any) {
     if (err?.code === 'PGRST116' || err?.message?.includes('not found')) return [];
-    console.error('[PjeCalcService] Erro inesperado em getObservacoes:', err);
+    logger.error('[PjeCalcService] Erro inesperado em getObservacoes', err);
     throw err;
   }
 }
@@ -957,12 +958,12 @@ export async function getInssFaixas(): Promise<Record<string, unknown>[]> {
   try {
     const { data, error } = await fromView('pjecalc_inss_faixas').select('*').order('competencia_inicio,faixa');
     if (error) {
-      console.error('[PjeCalcService] Falha ao carregar pjecalc_inss_faixas:', error);
+      logger.error('[PjeCalcService] Falha ao carregar pjecalc_inss_faixas', error);
       throw error;
     }
     return (data || []) as Record<string, unknown>[];
   } catch (err) {
-    console.error('[PjeCalcService] Falha ao carregar pjecalc_inss_faixas:', err);
+    logger.error('[PjeCalcService] Falha ao carregar pjecalc_inss_faixas', err);
     throw err;
   }
 }
@@ -971,12 +972,12 @@ export async function getIrFaixas(): Promise<Record<string, unknown>[]> {
   try {
     const { data, error } = await fromView('pjecalc_ir_faixas').select('*').order('competencia_inicio,faixa');
     if (error) {
-      console.error('[PjeCalcService] Falha ao carregar pjecalc_ir_faixas:', error);
+      logger.error('[PjeCalcService] Falha ao carregar pjecalc_ir_faixas', error);
       throw error;
     }
     return (data || []) as Record<string, unknown>[];
   } catch (err) {
-    console.error('[PjeCalcService] Falha ao carregar pjecalc_ir_faixas:', err);
+    logger.error('[PjeCalcService] Falha ao carregar pjecalc_ir_faixas', err);
     throw err;
   }
 }
@@ -985,12 +986,12 @@ export async function getFeriados(): Promise<Record<string, unknown>[]> {
   try {
     const { data, error } = await fromView('pjecalc_feriados').select('*');
     if (error) {
-      console.error('[PjeCalcService] Falha ao carregar pjecalc_feriados:', error);
+      logger.error('[PjeCalcService] Falha ao carregar pjecalc_feriados', error);
       throw error;
     }
     return (data || []) as Record<string, unknown>[];
   } catch (err) {
-    console.error('[PjeCalcService] Falha ao carregar pjecalc_feriados:', err);
+    logger.error('[PjeCalcService] Falha ao carregar pjecalc_feriados', err);
     throw err;
   }
 }
@@ -1010,7 +1011,7 @@ export async function deleteResultadoReal(calculoId: string): Promise<void> {
 
 export async function insertResultadoReal(payload: Record<string, unknown>): Promise<void> {
   const { error } = await fromView('pjecalc_resultado').insert(payload);
-  if (error) console.error("Erro ao persistir resultado:", error);
+  if (error) logger.error("Erro ao persistir resultado", error);
 }
 
 export async function deleteOcorrenciasReais(calculoId: string, origem: string): Promise<void> {
@@ -1020,7 +1021,7 @@ export async function deleteOcorrenciasReais(calculoId: string, origem: string):
 export async function insertOcorrenciasReaisBatch(rows: Record<string, unknown>[]): Promise<void> {
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await fromView('pjecalc_ocorrencia_calculo').insert(rows.slice(i, i + 500));
-    if (error) console.error("Erro ao persistir ocorrências:", error);
+    if (error) logger.error("Erro ao persistir ocorrências", error);
   }
 }
 
@@ -1036,4 +1037,143 @@ export async function getHistoricoOcorrenciasByIds(histIds: string[]): Promise<R
     .order('competencia');
   if (error) throw error;
   return (data || []) as Record<string, unknown>[];
+}
+
+// =====================================================
+// ADVOGADOS (GAP-2)
+// =====================================================
+
+export interface AdvogadoRow {
+  id: string;
+  calculo_id: string;
+  nome: string;
+  oab: string;
+  oab_uf: string;
+  cpf?: string | null;
+  email?: string | null;
+  telefone?: string | null;
+  representa: 'RECLAMANTE' | 'RECLAMADO' | 'AMBOS';
+}
+
+export async function getAdvogados(caseId: string): Promise<AdvogadoRow[]> {
+  const { data, error } = await fromView('pjecalc_advogados')
+    .select('*')
+    .eq('calculo_id', caseId)
+    .order('created_at');
+  if (error) throw error;
+  return (data || []) as AdvogadoRow[];
+}
+
+export async function insertAdvogado(payload: Omit<AdvogadoRow, 'id'>): Promise<void> {
+  const { error } = await fromView('pjecalc_advogados').insert(payload);
+  if (error) throw error;
+}
+
+export async function updateAdvogado(id: string, updates: Partial<AdvogadoRow>): Promise<void> {
+  const { error } = await fromView('pjecalc_advogados').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteAdvogado(id: string): Promise<void> {
+  const { error } = await fromView('pjecalc_advogados').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// =====================================================
+// VALE TRANSPORTE (GAP-1)
+// =====================================================
+
+export interface ValeTransporteConfigRow {
+  id: string;
+  calculo_id: string;
+  apurar: boolean;
+  desconto_empregado_pct: number;
+  observacoes?: string | null;
+}
+
+export interface ValeTransporteLinhaRow {
+  id: string;
+  config_id: string;
+  descricao: string;
+  tipo: 'URBANO' | 'INTERMUNICIPAL' | 'INTERESTADUAL';
+  valor_passagem: number;
+  quantidade_dia: number;
+  data_encerramento?: string | null;
+}
+
+export async function getValeTransporteConfig(caseId: string): Promise<ValeTransporteConfigRow | null> {
+  const { data, error } = await fromView('pjecalc_vale_transporte_config')
+    .select('*')
+    .eq('calculo_id', caseId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as ValeTransporteConfigRow | null;
+}
+
+export async function upsertValeTransporteConfig(
+  payload: Omit<ValeTransporteConfigRow, 'id'> & { id?: string },
+): Promise<string> {
+  if (payload.id) {
+    const { error } = await fromView('pjecalc_vale_transporte_config').update(payload).eq('id', payload.id);
+    if (error) throw error;
+    return payload.id;
+  }
+  const { data, error } = await fromView('pjecalc_vale_transporte_config')
+    .upsert(payload, { onConflict: 'calculo_id' })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return (data as { id: string }).id;
+}
+
+export async function getValeTransporteLinhas(configId: string): Promise<ValeTransporteLinhaRow[]> {
+  const { data, error } = await fromView('pjecalc_vale_transporte_linhas')
+    .select('*')
+    .eq('config_id', configId)
+    .order('created_at');
+  if (error) throw error;
+  return (data || []) as ValeTransporteLinhaRow[];
+}
+
+export async function insertValeTransporteLinha(payload: Omit<ValeTransporteLinhaRow, 'id'>): Promise<void> {
+  const { error } = await fromView('pjecalc_vale_transporte_linhas').insert(payload);
+  if (error) throw error;
+}
+
+export async function deleteValeTransporteLinha(id: string): Promise<void> {
+  const { error } = await fromView('pjecalc_vale_transporte_linhas').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// =====================================================
+// EXCEÇÕES DE JUROS (GAP-5)
+// =====================================================
+
+export interface ExcecaoJurosRow {
+  id: string;
+  calculo_id: string;
+  periodo_inicio: string;
+  periodo_fim: string;
+  tipo_juros: 'SEM_JUROS' | 'SELIC' | 'TAXA_LEGAL' | 'UM_PORCENTO' | 'MEIO_PORCENTO';
+  percentual?: number | null;
+  motivo?: string | null;
+}
+
+export async function getExcecoesJuros(caseId: string): Promise<ExcecaoJurosRow[]> {
+  const { data, error } = await fromView('pjecalc_excecao_juros')
+    .select('*')
+    .eq('calculo_id', caseId)
+    .order('periodo_inicio');
+  if (error) throw error;
+  return (data || []) as ExcecaoJurosRow[];
+}
+
+export async function insertExcecaoJuros(payload: Omit<ExcecaoJurosRow, 'id'>): Promise<void> {
+  const { error } = await fromView('pjecalc_excecao_juros').insert(payload);
+  if (error) throw error;
+}
+
+export async function deleteExcecaoJuros(id: string): Promise<void> {
+  const { error } = await fromView('pjecalc_excecao_juros').delete().eq('id', id);
+  if (error) throw error;
 }

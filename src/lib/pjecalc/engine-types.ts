@@ -40,13 +40,25 @@ export interface PjeParametros {
   projetar_aviso_indenizado: boolean;
   limitar_avos_periodo: boolean;
   zerar_valor_negativo: boolean;
+  valor_da_causa?: number;
   sabado_dia_util: boolean;
+  excecoes_sabado?: PjeExcecaoSabado[];
   considerar_feriado_estadual: boolean;
   considerar_feriado_municipal: boolean;
   /** Pontos Facultativos a considerar como feriado (Sexta-feira Santa, Carnaval, Corpus Christi) */
   pontos_facultativos?: ('sexta_santa' | 'carnaval' | 'corpus_christi')[];
   /** Art. 64 CLT: 'comercial' usa 30 dias fixos; 'civil' usa dias reais do mês */
   tipo_mes?: 'civil' | 'comercial';
+  /** Dia de fechamento do mês (1-31, default 31) — Art. 459 CLT */
+  dia_fechamento_mes?: number;
+  /** Prazo de férias proporcional em dias (30, 24, 18, 12) — Art. 130 CLT */
+  prazo_ferias_proporcional?: number;
+  /** Início das férias coletivas (opcional) */
+  inicio_ferias_coletivas?: string;
+  /** Instância do processo */
+  instancia?: 'PRIMEIRA' | 'SEGUNDA' | 'TST';
+  /** Tipo de cálculo */
+  tipo_calculo?: 'LIQUIDACAO' | 'ATUALIZACAO' | 'PRECATORIO' | 'RPV';
   /** Multi-link: identifier for this employment contract (vínculos múltiplos) */
   vinculo_id?: string;
   /** Multi-link: label for this contract (e.g. "1º Vínculo - 2015/2020") */
@@ -222,7 +234,12 @@ export interface PjeVerba {
   };
   
   juros_ajuizamento: 'ocorrencias_vencidas' | 'ocorrencias_vencidas_vincendas';
-  
+
+  /** Aplicar proporcionalidade pelo período trabalhado no mês */
+  aplicar_proporcionalidade?: boolean;
+  /** Comentários / observações sobre a verba */
+  comentarios?: string;
+
   verba_principal_id?: string;
   comportamento_reflexo?: 'valor_mensal' | 'media_valor_absoluto' | 'media_valor_corrigido' | 'media_quantidade' | 'media_pela_quantidade';
   /** Período de agrupamento para reflexos: ANO_CIVIL (13º), PERIODO_AQUISITIVO (férias) */
@@ -333,7 +350,7 @@ export interface PjeFGTSConfig {
   multa_apurar: boolean;
   multa_tipo: 'calculada' | 'informada';
   multa_percentual: number;
-  multa_base: 'devido' | 'diferenca' | 'saldo_saque' | 'devido_menos_saldo' | 'devido_mais_saldo';
+  multa_base: 'devido' | 'diferenca' | 'saldo_saque' | 'devido_menos_saldo' | 'devido_mais_saldo' | 'nominal';
   multa_valor_informado?: number;
   saldos_saques: { data: string; valor: number }[];
   deduzir_saldo: boolean;
@@ -397,6 +414,22 @@ export interface PjeCSConfig {
   contribuicao_sindical_pos2017?: boolean;
   /** Código FPAS para cálculo de terceiros */
   fpas_code?: string;
+  /**
+   * "Com Correção Trabalhista" — quando true, antes de calcular INSS aplica o
+   * fator de correção monetária da competência sobre a base salarial (base_cs
+   * = base_nominal × fator_correcao). Faz o INSS incidir sobre o valor já
+   * atualizado monetariamente. Default false = INSS sobre nominal histórico
+   * (comportamento PJe-Calc padrão). Checkbox na tela CS do PJe-Calc.
+   */
+  com_correcao_trabalhista?: boolean;
+  /**
+   * CAUSA-7 do roadmap: aplica atualização monetária pela SELIC (soma simples
+   * RFB/SICALC) sobre os valores de INSS apurados, da competência de cada guia
+   * até a data de liquidação. PJe-Calc trata o INSS como tributo federal
+   * (Lei 8.212/91 + Lei 9.430/96) e adiciona SELIC sobre cada parcela.
+   * Default false (compatibilidade) — quando true, totais de INSS retornam atualizados.
+   */
+  atualizar_inss_selic?: boolean;
 }
 
 export interface PjeIRConfig {
@@ -457,7 +490,17 @@ export interface PjeCorrecaoConfig {
   };
   /** PJC: ignorarTaxaNegativa — when true, negative correction factors are clamped to 1 */
   ignorar_taxa_negativa?: boolean;
-  /** PJC: baseDeJurosDasVerbas — 'DIFERENCA' | 'DEVIDO' | 'CORRIGIDO' */
+  /**
+   * PJC: baseDeJurosDasVerbas — base de cálculo para juros sobre verbas.
+   * Valores aceitos:
+   * - 'DIFERENCA' (default PJe-Calc): juros sobre `oc.diferenca` (devido - pago).
+   * - 'DEVIDO':    juros sobre `oc.devido` (valor bruto antes de descontos).
+   * - 'CORRIGIDO': juros sobre `oc.valor_corrigido` (diferença após correção monetária).
+   * - 'VERBA_INSS' (CAUSA-4 do roadmap): juros sobre `(diferenca − INSS_proporcional)`.
+   *   Reflete a opção do PJe-Calc onde o INSS proporcional é deduzido da base de
+   *   juros antes do cálculo. Quando ativado, o engine aplica a alíquota efetiva
+   *   de INSS reclamante (cs_segurado / principal_bruto) sobre cada ocorrência.
+   */
   base_de_juros_das_verbas?: string;
   /** PJC: entePublico — affects interest calculation rules */
   ente_publico?: boolean;
@@ -468,6 +511,39 @@ export interface PjeCorrecaoConfig {
   /** OJ 394 SDI-1 TST: juros calculados sobre base após dedução de IR.
    *  When true, interest should be recalculated on the post-IR base. */
   oj_394_juros_pos_ir?: boolean;
+  /**
+   * CAUSA-2 do roadmap de paridade: aplica SELIC pro rata die no 1° mês (data
+   * de citação) e fixa 1.00% no mês de liquidação (convenção RFB/SICALC).
+   * Default false = comportamento atual (meses cheios).
+   * Recomenda-se ativar quando os dados de citação/liquidação são confiáveis
+   * para alinhar com PJe-Calc oficial.
+   */
+  selic_pro_rata_die?: boolean;
+
+  /** Exceções de juros por período (períodos onde se aplica regime diferente) */
+  excecoes_juros?: PjeExcecaoJuros[];
+
+  /** Lei 11.941/2009: aplicar sobre INSS salários devidos */
+  lei_11941_devidos?: boolean;
+  /** Lei 11.941/2009: data a partir de (salários devidos) */
+  lei_11941_devidos_a_partir_de?: string;
+  /** Lei 11.941/2009: aplicar sobre INSS salários pagos */
+  lei_11941_pagos?: boolean;
+  /** Lei 11.941/2009: data a partir de (salários pagos) */
+  lei_11941_pagos_a_partir_de?: string;
+  /** Lei 11.941/2009: aplicar multa */
+  lei_11941_multa?: boolean;
+  /** Lei 11.941/2009: data a partir de (multa) */
+  lei_11941_multa_a_partir_de?: string;
+}
+
+/** Exceção de juros por período (ex: COVID, suspensão judicial) */
+export interface PjeExcecaoJuros {
+  periodo_inicio: string;
+  periodo_fim: string;
+  tipo_juros: 'SEM_JUROS' | 'SELIC' | 'TAXA_LEGAL' | 'UM_PORCENTO' | 'MEIO_PORCENTO';
+  percentual?: number;
+  motivo?: string;
 }
 
 export interface PjeHonorariosConfig {
@@ -580,14 +656,6 @@ export interface PjeOcorrenciaResult {
   devido_integral?: number;
   /** Rastreabilidade de arredondamento por etapa (Método PJe-Calc) */
   arredondamento_trace?: { etapa: string; valor_cheio: string; valor_truncado: string }[];
-  /** PJC ground truth correction factor — when present, engine uses this instead of recalculating */
-  pjc_indice_acumulado?: number;
-  /** Flag: true when pjc_indice_acumulado was applied as the correction factor */
-  pjc_ground_truth_applied?: boolean;
-  /** The correction regime active for this occurrence (e.g. 'SELIC', 'IPCA-E', 'SEM_CORRECAO').
-   *  When 'SELIC', the ground truth factor already includes interest → skip separate interest.
-   *  When 'IPCA-E' or other, the factor is correction-only → interest must be calculated separately. */
-  pjc_ground_truth_regime?: string;
   /** Per-occurrence paid value breakdown (Feature #3: rubric-specific paid values) */
   pago_breakdown?: {
     base: number;

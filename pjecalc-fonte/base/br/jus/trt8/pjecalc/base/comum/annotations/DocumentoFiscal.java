@@ -1,0 +1,27 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  org.hibernate.validator.ValidatorClass
+ */
+package br.jus.trt8.pjecalc.base.comum.annotations;
+
+import br.jus.trt8.pjecalc.base.comum.validadores.ValidadorDocumentoFiscal;
+import br.jus.trt8.pjecalc.base.constantes.TipoDocumentoFiscal;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+import org.hibernate.validator.ValidatorClass;
+
+@Retention(value=RetentionPolicy.RUNTIME)
+@Target(value={ElementType.FIELD})
+@ValidatorClass(value=ValidadorDocumentoFiscal.class)
+@Documented
+public @interface DocumentoFiscal {
+    public TipoDocumentoFiscal tipoDocumentoFiscal();
+
+    public String message() default "Documento Fiscal Invalido";
+}
+

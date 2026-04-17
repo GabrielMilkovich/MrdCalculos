@@ -6,6 +6,15 @@
 //
 // IMPORTANTE: Atualizar mensalmente via script fetch-indices.ts
 // Último update: 2026-03 (até Fev/2026)
+//
+// LIMITAÇÃO CONHECIDA (CAUSA 8 do roadmap de paridade):
+// Os valores tabulados aqui têm precisão de 8 casas decimais derivada de cálculo
+// mês-a-mês a partir das taxas mensais. O PJe-Calc oficial consome séries publicadas
+// pelos TRTs/IBGE/RFB com precisão maior. Pequenas diferenças no 4°-5° dígito se
+// acumulam ao longo de 120+ competências (impacto típico ≤ 2%). Para paridade ≤1%,
+// migrar para os arquivos auxiliares oficiais do PJe-Calc Cidadão (TRT-X / IBGE
+// série 10764 com 6+ casas) e popular os índices via Supabase ao invés deste
+// hardcoded fallback.
 // =====================================================
 
 /**
@@ -300,6 +309,59 @@ export const SELIC_ACUMULADO: Record<string, number> = {
 };
 
 /**
+ * SELIC monthly rates (% per month) — fonte RFB/SICALC.
+ *
+ * Usado pelo PJe-Calc para apuração de juros pela soma simples (Súmula 121 STF
+ * + metodologia PROJEF/PJE-Calc). NÃO é a série 4390 do BCB (que usa dias úteis
+ * e capitalização composta). Estas são as taxas aplicáveis em cálculos
+ * judiciais/fiscais — derivadas das mesmas taxas que compõem `SELIC_ACUMULADO`
+ * acima, expostas aqui como série mensal `valor` para somatório simples.
+ *
+ * IMPORTANTE: O 1° mês (data de citação) deve ser computado pro rata die e o
+ * mês de pagamento (liquidação) é fixado em 1.00% pela RFB (vide
+ * `getSelicSimplesProRata` no engine.ts).
+ *
+ * Última atualização: 2026-02. Fonte das taxas: tabelas RFB-SICALC (idênticas
+ * às utilizadas no PJe-Calc Cidadão para cálculos de natureza tributária).
+ */
+export const SELIC_MENSAL: Record<string, number> = {
+  '2015-01': 0.94, '2015-02': 0.82, '2015-03': 1.04, '2015-04': 0.95,
+  '2015-05': 0.99, '2015-06': 1.07, '2015-07': 1.18, '2015-08': 1.11,
+  '2015-09': 1.11, '2015-10': 1.11, '2015-11': 1.06, '2015-12': 1.16,
+  '2016-01': 1.06, '2016-02': 1.00, '2016-03': 1.16, '2016-04': 1.06,
+  '2016-05': 1.11, '2016-06': 1.16, '2016-07': 1.11, '2016-08': 1.22,
+  '2016-09': 1.11, '2016-10': 1.05, '2016-11': 1.04, '2016-12': 1.12,
+  '2017-01': 1.09, '2017-02': 0.87, '2017-03': 1.05, '2017-04': 0.79,
+  '2017-05': 0.93, '2017-06': 0.81, '2017-07': 0.80, '2017-08': 0.80,
+  '2017-09': 0.64, '2017-10': 0.64, '2017-11': 0.57, '2017-12': 0.54,
+  '2018-01': 0.58, '2018-02': 0.46, '2018-03': 0.53, '2018-04': 0.52,
+  '2018-05': 0.52, '2018-06': 0.51, '2018-07': 0.54, '2018-08': 0.57,
+  '2018-09': 0.47, '2018-10': 0.54, '2018-11': 0.50, '2018-12': 0.49,
+  '2019-01': 0.54, '2019-02': 0.49, '2019-03': 0.47, '2019-04': 0.52,
+  '2019-05': 0.54, '2019-06': 0.47, '2019-07': 0.57, '2019-08': 0.50,
+  '2019-09': 0.46, '2019-10': 0.48, '2019-11': 0.38, '2019-12': 0.37,
+  '2020-01': 0.38, '2020-02': 0.29, '2020-03': 0.34, '2020-04': 0.28,
+  '2020-05': 0.24, '2020-06': 0.21, '2020-07': 0.19, '2020-08': 0.16,
+  '2020-09': 0.16, '2020-10': 0.16, '2020-11': 0.15, '2020-12': 0.16,
+  '2021-01': 0.15, '2021-02': 0.13, '2021-03': 0.20, '2021-04': 0.21,
+  '2021-05': 0.27, '2021-06': 0.31, '2021-07': 0.36, '2021-08': 0.43,
+  '2021-09': 0.44, '2021-10': 0.49, '2021-11': 0.59, '2021-12': 0.77,
+  '2022-01': 0.73, '2022-02': 0.76, '2022-03': 0.93, '2022-04': 0.83,
+  '2022-05': 1.03, '2022-06': 1.02, '2022-07': 1.03, '2022-08': 1.17,
+  '2022-09': 1.07, '2022-10': 1.02, '2022-11': 1.02, '2022-12': 1.12,
+  '2023-01': 1.12, '2023-02': 0.92, '2023-03': 1.17, '2023-04': 0.92,
+  '2023-05': 1.12, '2023-06': 1.07, '2023-07': 1.07, '2023-08': 1.14,
+  '2023-09': 0.97, '2023-10': 1.00, '2023-11': 0.92, '2023-12': 0.89,
+  '2024-01': 0.97, '2024-02': 0.80, '2024-03': 0.83, '2024-04': 0.89,
+  '2024-05': 0.83, '2024-06': 0.79, '2024-07': 0.91, '2024-08': 0.87,
+  '2024-09': 0.84, '2024-10': 0.93, '2024-11': 0.79, '2024-12': 0.93,
+  '2025-01': 1.01, '2025-02': 0.99, '2025-03': 0.96, '2025-04': 1.06,
+  '2025-05': 1.14, '2025-06': 1.10, '2025-07': 1.28, '2025-08': 1.16,
+  '2025-09': 1.22, '2025-10': 1.28, '2025-11': 1.05, '2025-12': 1.22,
+  '2026-01': 1.15, '2026-02': 1.00,
+};
+
+/**
  * TR accumulated factors (base 100 at 2014-12).
  * Fonte: BCB série 188 (TR mensal).
  *
@@ -407,6 +469,34 @@ export const TR_ACUMULADO: Record<string, number> = {
   '2025-10': 104.70404600, '2025-11': 104.70404600, '2025-12': 104.70404600,
   '2026-01': 104.70404600, '2026-02': 104.70404600,
 };
+
+/**
+ * TR monthly rates (% per month) — derivada do TR_ACUMULADO.
+ * Usada como suporte ao cálculo do FGTS quando o índice JAM/TR_FGTS
+ * não está disponível no banco — permite aplicar (TR + 0.25%/mês)
+ * dia a dia composto, ao invés da aproximação fixa 1.002466^meses
+ * (que assume TR=0 e 3% a.a. compound).
+ *
+ * A partir de 2017-09 a TR é zerada (Lei 12.703/2012). Para meses
+ * ausentes assume-se 0%.
+ */
+export const TR_MENSAL: Record<string, number> = (() => {
+  const out: Record<string, number> = {};
+  const acums = TR_ACUMULADO;
+  const months = Object.keys(acums).sort();
+  let prev: number | null = null;
+  for (const m of months) {
+    const cur = acums[m];
+    if (prev !== null && prev > 0) {
+      const taxa = ((cur / prev) - 1) * 100;
+      out[m] = Math.max(0, Math.round(taxa * 1e6) / 1e6);
+    } else {
+      out[m] = 0;
+    }
+    prev = cur;
+  }
+  return out;
+})();
 
 // =====================================================
 // SISTEMA DE ALERTA DE DESATUALIZAÇÃO

@@ -56,6 +56,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { logger } from "@/lib/logger";
 
 interface ExtractionWizardProps {
   caseId: string;
@@ -253,7 +254,7 @@ export function ExtractionWizard({ caseId, onFactsExtracted }: ExtractionWizardP
       }
 
     } catch (err) {
-      console.error("Extraction error:", err);
+      logger.error("Extraction error", err);
       toast.error("Erro na extração: " + (err as Error).message);
     } finally {
       setIsExtracting(false);
@@ -309,7 +310,7 @@ export function ExtractionWizard({ caseId, onFactsExtracted }: ExtractionWizardP
       }
 
     } catch (err) {
-      console.error("Review error:", err);
+      logger.error("Review error", err);
       toast.error("Erro na revisão: " + (err as Error).message);
     } finally {
       setIsReviewing(false);
@@ -368,7 +369,7 @@ export function ExtractionWizard({ caseId, onFactsExtracted }: ExtractionWizardP
             .insert(evidences);
 
           if (evidenceError) {
-            console.warn("Error inserting evidences:", evidenceError);
+            logger.warn("Error inserting evidences", { error: evidenceError });
           }
         }
       }
@@ -386,7 +387,7 @@ export function ExtractionWizard({ caseId, onFactsExtracted }: ExtractionWizardP
       onFactsExtracted();
 
     } catch (err) {
-      console.error("Confirm fact error:", err);
+      logger.error("Confirm fact error", err);
       toast.error("Erro ao confirmar fato: " + (err as Error).message);
     }
   }, [caseId, onFactsExtracted]);

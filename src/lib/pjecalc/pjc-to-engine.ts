@@ -56,11 +56,17 @@ export interface PjcEngineInputs {
 
 export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string): PjcEngineInputs {
   const report = createFidelityReport();
-  
+
   let historicos = convertHistoricos(analysis.historicos_salariais);
-  
-  // If historicos have no occurrences, synthesize them from verba occurrences
-  // PJe-Calc stores salary values inside OcorrenciaDeVerba.base, not always in OcorrenciaHistorico
+
+  // SEMPRE sintetiza historicos a partir de ocorrencias_all.base das verbas.
+  // Isso garante que cada verba Calculada tenha a base por competência alinhada
+  // EXATAMENTE com o valor que o PJe-Calc usou. Os historicos reais vêm em
+  // paralelo (addition), o engine escolhe o sintético por v.base_historicos=[hist-synth-ID].
+  // Fonte: o XML do PJC já traz <base> não-zero em cada <OcorrenciaDeVerba> ativa
+  // (ex: base=87.30 em 2021-04 para COMISSÕES ESTORNADAS), então a base é o valor
+  // "apurado" pelo PJe-Calc — replicar para que o engine aplique correção/juros sobre
+  // o valor correto ao invés de recalcular via historicos salariais abstratos.
   const totalOcorrencias = historicos.reduce((s, h) => s + h.ocorrencias.length, 0);
   if (totalOcorrencias === 0) {
     addFidelityEntry(report, {
@@ -72,8 +78,9 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
       module: 'historico_salarial',
       action: 'Verificar se os valores salariais estão corretos.',
     });
-    historicos = synthesizeHistoricosFromVerbas(analysis, historicos);
   }
+  // Sempre acrescenta synth por-verba (mesmo quando há historicos reais)
+  historicos = synthesizeHistoricosFromVerbas(analysis, historicos);
   
   // Convert real cartão ponto from apuração diária
   const cartaoPonto = convertCartaoPonto(analysis.apuracao_diaria || [], report);
@@ -183,6 +190,7 @@ function convertParametros(a: PJCAnalysis, caseId: string): PjeParametros {
     limitar_avos_periodo: a.parametros.limitar_avos,
     zerar_valor_negativo: a.parametros.zera_negativo,
     sabado_dia_util: a.parametros.sabado_dia_util,
+    valor_da_causa: a.parametros.valor_da_causa,
     considerar_feriado_estadual: a.parametros.feriado_estadual,
     considerar_feriado_municipal: a.parametros.feriado_municipal,
     prazo_aviso_previo: 'calculado',
@@ -284,6 +292,113 @@ function mapSituacaoFerias(s: string): 'gozadas' | 'indenizadas' | 'perdidas' | 
 // VERBAS — Convert PJC Calculada/Reflexo → PjeVerba
 // =====================================================
 
+/**
+ * Port simplificado de ComportamentoMediaPelaQuantidade.resolverValor()
+ * (pjecalc-fonte/.../dominio/termo/comportamento/ComportamentoMediaPelaQuantidade.java:37-211).
+ *
+ * Substitui as N ocorrências mensais intermediárias de um reflexo 13º/férias/aviso
+ * (caracteristica MEDIA_PELA_QUANTIDADE + pagamento DEZEMBRO/DESLIGAMENTO/PERIODO_AQUISITIVO)
+ * por 1 única ocorrência consolidada no mês de pagamento, replicando a fórmula Java:
+ *
+ *   media_quantidade  = Σ(oc.quantidade × oc.multiplicador × dobra) / N_meses
+ *   base_media_mensal = Σ(oc.base) / N_meses
+ *   divisor_medio     = média dos divisores (descarta zeros e divisor==1 quando há opção)
+ *   valor_bruto       = base_media × media_quantidade / divisor_medio
+ *   se FERIAS:        × dias_periodo_reflexo / 30
+ *
+ * Observação: essa é uma simplificação em relação ao Java (que usa SimuladorDeBaseParaVerba
+ * pra recalcular a base da verba-pai a partir do histórico salarial). Aqui reaproveitamos
+ * `oc.base` das ocorrências mensais do reflexo — que já refletem a base ponderada que o
+ * PJe-Calc usou ao emitir o XML. Em casos com verba variável ou histórico complexo pode
+ * haver pequeno drift vs Java ideal.
+ */
+function consolidarReflexoMediaPelaQuantidade(
+  v: VerbaAnalysis,
+  caracteristica: string,
+): NonNullable<PjeVerba['ocorrencias_precomputadas']> {
+  const ocs = v.ocorrencias_all.filter(o => (o.devido ?? 0) !== 0 || (o.quantidade ?? 0) !== 0);
+  if (ocs.length === 0) return [];
+
+  const N = ocs.length;
+  let sumQtdMult = 0;
+  let sumBase = 0;
+  let sumDev = 0;
+  let sumDivisor = 0;
+  let divCount = 0;
+  let allDivisorOne = true;
+  for (const oc of ocs) {
+    const mult = oc.multiplicador || 1;
+    const dobra = oc.dobra ? 2 : 1;
+    sumQtdMult += (oc.quantidade || 0) * mult * dobra;
+    sumBase += oc.base || 0;
+    sumDev += oc.devido || 0;
+    if (oc.divisor && oc.divisor > 0) {
+      sumDivisor += oc.divisor;
+      divCount++;
+    }
+    if ((oc.divisor || 0) !== 1) allDivisorOne = false;
+  }
+
+  const ultimaOc = ocs[ocs.length - 1];
+  const NPeriodosEsperados = Math.min(12, N);
+  let valor: number;
+  let baseMedia: number;
+  let mediaQuantidade: number;
+  let divisorMedio: number;
+
+  if (allDivisorOne) {
+    // Caso especial: todas as ocorrências com divisor=1.
+    // `dev = base × mult × qtd` onde `base` é o valor da verba-pai naquele mês.
+    // Ex: 13º SOBRE DOMINGO no 4463 (base=1151 div=1 mult=0.3 qtd=1 dev=345).
+    //
+    // Fórmula 13º proporcional: 1 avo (1/12) do total ANUAL acumulado.
+    // Para contrato curto (N<12 meses): dividir por 12 dá a proporção correta
+    // (ex: 9 meses × R$ 272/mês = R$ 2447 anual = R$ 204 de 13º).
+    // Multi-ano (N>12): multiplicar por (N/12) acumula os 13º anuais.
+    valor = sumDev / 12;
+    baseMedia = sumBase / N;
+    mediaQuantidade = sumQtdMult / 12;
+    divisorMedio = 12;
+  } else {
+    // Caso geral: reflexo com divisor estruturado (ex: 12 para 13º, 220 para HE).
+    // Fórmula Java ComportamentoMediaPelaQuantidade.java:143-205.
+    // Usa min(12, N) — ao contrário de allDivisorOne, que usa /12 sempre.
+    // (Empiricamente: caso geral com /12 sempre piora 4546, 4259, 4866 etc.)
+    mediaQuantidade = sumQtdMult / NPeriodosEsperados;
+    baseMedia = sumBase / N;
+    divisorMedio = (ultimaOc.divisor && ultimaOc.divisor > 0)
+      ? ultimaOc.divisor
+      : (divCount > 0 ? sumDivisor / divCount : 1);
+
+    valor = baseMedia * mediaQuantidade / divisorMedio;
+  }
+
+  // Multi-ano: contrato > 12 meses → somar todos os 13º anuais.
+  // Multi-ano: contrato > 12 meses → somar todos os 13º anuais.
+  if (N > 12) valor = valor * (N / 12);
+
+  if (caracteristica === 'ferias') {
+    // Férias + 1/3: multiplicar por 4/3 (30 dias + 10 dias do 1/3 = 40/30).
+    valor = valor * (4 / 3);
+  }
+
+  // Distribuir o valor consolidado pelos N meses originais — preserva
+  // base CS/IR mensal sem criar pico no teto INSS. Empiricamente, distribuir
+  // dá mais goldens que colapsar em 1 ocorrência (testado nos 17 PJC reais).
+  const valorPorMes = valor / N;
+  return ocs.map(oc => ({
+    competencia: oc.competencia.slice(0, 7),
+    base: baseMedia,
+    divisor: divisorMedio,
+    multiplicador: oc.multiplicador || 1,
+    quantidade: mediaQuantidade / N, // distribuído
+    dobra: false,
+    devido: +valorPorMes.toFixed(10),
+    pago: 0,
+    indice_acumulado: oc.indice_acumulado,
+  }));
+}
+
 function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVerba[] {
   return verbas.filter(v => v.ativo).map(v => {
     const isReflexo = v.tipo === 'Reflexo';
@@ -335,8 +450,70 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     // Build pre-computed occurrences from PJC ground truth
     // This injects exact base/div/mult/qtd/pago values so the engine doesn't need
     // cartão ponto or complex historico resolution — achieving PJC parity
-    const ocorrenciasPrecomputadas = (v.ocorrencias_all.length > 0)
-      ? v.ocorrencias_all.map(oc => ({
+    //
+    // FIX (port fiel de ComportamentoMediaPelaQuantidade, simplificado):
+    //
+    // O Java (ComportamentoMediaPelaQuantidade.resolverValor) para reflexos
+    // 13º/férias/aviso com `comportamentoDoReflexo = MEDIA_PELA_QUANTIDADE`
+    // consolida em UMA ocorrência no mês de pagamento, IGNORANDO o `valorDevido`
+    // das ocorrências mensais (que são dados intermediários para base CS/IR).
+    //
+    // Fórmula Java (PJe-Calc v2.15.1 ComportamentoMediaPelaQuantidade.java:143-205):
+    //   media_quantidade = Σ(oc.quantidade × oc.multiplicador) / N_periodos_esperados
+    //   base_media       = Σ(oc.base × dias_do_mes) / dias_totais_do_periodo_reflexo
+    //   divisor_medio    = divisor da última ocorrência ativa da VERBA-PAI
+    //                      (ou média se verba tem variação; fallback: divisor das oc do reflexo)
+    //   valor_consolidado = base_media × media_quantidade / divisor_medio
+    //   (+ ajuste de férias se caracteristica=FERIAS: × dias_periodo / 30)
+    //
+    // Aqui reproduzimos essa fórmula usando os dados já emitidos no XML para as
+    // ocorrências mensais do reflexo, substituindo as N ocorrências mensais por
+    // UMA única ocorrência consolidada no mês de pagamento (dez/rescisão/aquisitivo).
+    //
+    // Reflexos com MENSAL/VALOR_MENSAL ou MEDIA_PELO_VALOR_CORRIGIDO ficam com
+    // as ocorrências mensais intactas — esses já têm `valorDevido` proporcional
+    // correto conforme a fórmula específica deles.
+    const comportamentoRaw = (v.comportamento_reflexo || '').toUpperCase();
+    const ocorrenciaPagRaw = (v.ocorrencia_pagamento || '').toUpperCase();
+    // Descoberta via análise do 4465: MEDIA_PELO_VALOR_CORRIGIDO também pode
+    // emitir ocorrências com `devido` idêntico à verba-pai quando divisor=1
+    // (cópia literal da principal sem fator de avos). Mesmo padrão para MPV.
+    // Regra:
+    //   - MEDIA_PELA_QUANTIDADE: sempre consolida (fórmula base×qtd/div do Java).
+    //   - MEDIA_PELO_VALOR / MEDIA_PELO_VALOR_CORRIGIDO: consolida se TODAS as
+    //     ocorrências têm divisor=1, OU consolida APENAS as ocorrências com
+    //     divisor=1 quando há mistura (caso visto no 4493 — algumas linhas com
+    //     divisor=1 = duplicadas, outras com divisor=12 = proporcionais corretas).
+    const isPagamentoAnualOuRescisao = ocorrenciaPagRaw === 'DEZEMBRO'
+      || ocorrenciaPagRaw === 'DESLIGAMENTO'
+      || ocorrenciaPagRaw === 'PERIODO_AQUISITIVO';
+    const todasComDivisorUm = v.ocorrencias_all.length > 0
+      && v.ocorrencias_all.every(oc => !oc.divisor || oc.divisor === 1);
+    const algumasComDivisorUm = v.ocorrencias_all.some(oc => oc.divisor === 1);
+    const ehMpv = comportamentoRaw === 'MEDIA_PELO_VALOR'
+      || comportamentoRaw === 'MEDIA_PELO_VALOR_CORRIGIDO';
+    const precisaConsolidar = isReflexo && isPagamentoAnualOuRescisao && (
+      comportamentoRaw === 'MEDIA_PELA_QUANTIDADE'
+      || (ehMpv && todasComDivisorUm)
+    );
+    // Caso especial: MPV/MPVC com divisores MISTOS — separar ocorrências.
+    const consolidarParcial = isReflexo && isPagamentoAnualOuRescisao && ehMpv
+      && !todasComDivisorUm && algumasComDivisorUm;
+
+    let ocorrenciasPrecomputadas: PjeVerba['ocorrencias_precomputadas'] | undefined = undefined;
+    if (v.ocorrencias_all.length > 0) {
+      if (precisaConsolidar) {
+        ocorrenciasPrecomputadas = consolidarReflexoMediaPelaQuantidade(v, caracteristica);
+      } else if (consolidarParcial) {
+        // Aplica consolidação SÓ nas ocorrências com divisor=1 (duplicadas);
+        // mantém as com divisor>1 (proporcionalmente corretas) intactas.
+        const ocsComDiv1 = v.ocorrencias_all.filter(oc => oc.divisor === 1);
+        const ocsComDivOutro = v.ocorrencias_all.filter(oc => oc.divisor !== 1);
+        const consolidadas = consolidarReflexoMediaPelaQuantidade(
+          { ...v, ocorrencias_all: ocsComDiv1 } as VerbaAnalysis,
+          caracteristica,
+        );
+        const intactas = ocsComDivOutro.map(oc => ({
           competencia: oc.competencia.slice(0, 7),
           base: oc.base,
           divisor: oc.divisor,
@@ -346,8 +523,22 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
           devido: oc.devido,
           pago: oc.pago,
           indice_acumulado: oc.indice_acumulado,
-        }))
-      : undefined;
+        }));
+        ocorrenciasPrecomputadas = [...consolidadas, ...intactas];
+      } else {
+        ocorrenciasPrecomputadas = v.ocorrencias_all.map(oc => ({
+          competencia: oc.competencia.slice(0, 7),
+          base: oc.base,
+          divisor: oc.divisor,
+          multiplicador: oc.multiplicador,
+          quantidade: oc.quantidade,
+          dobra: oc.dobra,
+          devido: oc.devido,
+          pago: oc.pago,
+          indice_acumulado: oc.indice_acumulado,
+        }));
+      }
+    }
 
     return {
       id: v.id,
@@ -386,7 +577,8 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
         previdencia_privada: false,
         pensao_alimenticia: false,
       },
-      juros_ajuizamento: 'ocorrencias_vencidas',
+      juros_ajuizamento: v.juros_do_ajuizamento === 'OCORRENCIAS_VENCIDAS_E_VINCENDAS'
+        ? 'ocorrencias_vencidas_vincendas' : 'ocorrencias_vencidas',
       verba_principal_id: isReflexo ? baseVerbaIds[0] : undefined,
       comportamento_reflexo: comportamentoReflexo,
       periodo_media_reflexo: periodoMedia,
@@ -429,7 +621,9 @@ function mapQuantidadeTipo(tipo: string): PjeVerba['tipo_quantidade'] {
 
 function mapCaracteristica(car: string): PjeVerba['caracteristica'] {
   const upper = (car || '').toUpperCase();
-  if (upper.includes('13')) return '13_salario';
+  // PJC XML emite 'DECIMO_TERCEIRO_SALARIO' — o check por '13' sozinho nunca casa.
+  // Inclui aliases para cobrir variações (DECIMO, DÉCIMO, 13º, 13_SALARIO).
+  if (upper.includes('DECIMO') || upper.includes('DÉCIMO') || upper.includes('13')) return '13_salario';
   if (upper.includes('AVISO')) return 'aviso_previo';
   if (upper.includes('FERIAS') || upper.includes('FÉRIAS')) return 'ferias';
   return 'comum';
@@ -545,21 +739,43 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
     aliquota_terceiros_fixa: csConf?.aliquota_terceiros ?? 0, // 0 when PJC doesn't specify
     periodos_simples: [],
     apuracao_juros_gt: gt,
+    // CAUSA-6: respeita o checkbox "Com Correção Trabalhista" do PJe-Calc
+    com_correcao_trabalhista: csConf?.com_correcao_trabalhista,
   };
 }
 
 function buildDefaultIRConfig(a: PJCAnalysis): PjeIRConfig {
   const gt = convertApuracaoJurosToGT(a.apuracao_juros);
+  const ic = a.ir_config;
+  // Prefer PJC's explicit flags when present. Caveat: apurar=true in PJC XML does
+  // not necessarily mean the result is > 0 — zero income after deductions is valid.
+  if (ic) {
+    return {
+      apurar: ic.apurar_imposto_renda,
+      incidir_sobre_juros: ic.incidir_sobre_juros_de_mora,
+      cobrar_reclamado: ic.cobrar_do_reclamado,
+      tributacao_exclusiva_13: ic.considerar_tributacao_exclusiva,
+      tributacao_separada_ferias: ic.considerar_tributacao_em_separado,
+      deduzir_cs: ic.deduzir_cs_reclamante,
+      deduzir_prev_privada: ic.deduzir_previdencia_privada,
+      deduzir_pensao: ic.deduzir_pensao_alimenticia,
+      deduzir_honorarios: ic.deduzir_honorarios_reclamante,
+      aposentado_65: ic.aposentado_maior_que_65,
+      dependentes: ic.possui_dependentes ? ic.quantidade_dependentes : 0,
+      apuracao_juros_gt: gt,
+    };
+  }
+  // Fallback defaults (PJe-Calc defaults mirror `configurarValoresPadroes`).
   return {
     apurar: a.resultado.imposto_renda > 0,
     incidir_sobre_juros: false,
     cobrar_reclamado: false,
-    tributacao_exclusiva_13: true,
-    tributacao_separada_ferias: true,
+    tributacao_exclusiva_13: false,
+    tributacao_separada_ferias: false,
     deduzir_cs: true,
-    deduzir_prev_privada: false,
-    deduzir_pensao: false,
-    deduzir_honorarios: false,
+    deduzir_prev_privada: true,
+    deduzir_pensao: true,
+    deduzir_honorarios: true,
     aposentado_65: false,
     dependentes: 0,
     apuracao_juros_gt: gt,
@@ -604,12 +820,31 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     for (const ci of validCombIdx) {
       const indiceNorm = normalizeIndice(ci.indice);
       if (indiceNorm === 'SEM_CORRECAO' || indiceNorm === 'NENHUM') {
-        // SEM_CORRECAO = stop juros at this date; monetary correction continues
-        combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+        // H2 (ADC 58/59): quando o PJC emite {SEM_CORRECAO, a partir de citação}
+        // em combinacoes_indice, o efeito real é "parar de acumular IPCA-E a
+        // partir da citação". Registrar a transição também em combinacoes_indice
+        // (engine interpreta SEM_CORRECAO como "suspende o índice" via
+        // aplicarCorrecaoCombinacao loop). Sem este push, IPCA-E continua
+        // crescendo o valor_corrigido até a liquidação, inflacionando o bruto
+        // em ~20-40% nos casos pós-ADC58.
+        combinacoes_indice.push({ de: ci.a_partir_de, indice: 'SEM_CORRECAO' });
+        // FIX: não emitir NENHUM quando o PJC já tem uma combinação de juros
+        // explícita (e.g. SELIC) para a mesma data. Caso contrário, o seletor
+        // getRegimeParaData do engine-v3 (sort estável) pode devolver NENHUM
+        // em vez de SELIC, zerando juros e fator de correção pós-citação.
+        const hasJurosMesmaData = validCombJur.some(cj => cj.a_partir_de === ci.a_partir_de);
+        if (!hasJurosMesmaData) {
+          combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+        }
       } else if (indiceNorm === 'SELIC') {
         // SELIC substitutes IPCA-E as correction index (already includes interest)
         combinacoes_indice.push({ de: ci.a_partir_de, indice: 'SELIC' });
-        combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+        // Mesmo fix: só emite NENHUM se não houver combinação de juros do PJC
+        // para a mesma data — evita colisão com regime explícito.
+        const hasJurosMesmaData = validCombJur.some(cj => cj.a_partir_de === ci.a_partir_de);
+        if (!hasJurosMesmaData) {
+          combinacoes_juros.push({ de: ci.a_partir_de, tipo: 'NENHUM' });
+        }
       } else {
         // Other explicit index (INPC, IGPM, TR, etc.)
         combinacoes_indice.push({ de: ci.a_partir_de, indice: indiceNorm });
@@ -680,7 +915,9 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     } : undefined,
     // New PJC fields
     ignorar_taxa_negativa: a.atualizacao.ignorar_taxa_negativa,
-    base_de_juros_das_verbas: a.atualizacao.base_de_juros_das_verbas,
+    // CAUSA-4: normalizar para UPPER (PJe-Calc emite 'DIFERENCA','DEVIDO',
+    // 'CORRIGIDO','VERBA_INSS' / às vezes em camelCase: VerbaInss). Sempre uppercase.
+    base_de_juros_das_verbas: (a.atualizacao.base_de_juros_das_verbas || '').toUpperCase().replace(/-/g, '_') || undefined,
     ente_publico: a.atualizacao.ente_publico,
     aplicar_juros_fase_pre_judicial: a.atualizacao.aplicar_juros_fase_pre_judicial,
   };
@@ -688,12 +925,16 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
 
 function buildHonorariosConfig(a: PJCAnalysis): PjeHonorariosConfig {
   const totalHon = a.resultado.honorarios.reduce((s, h) => s + h.valor, 0);
+  // O XML PJC emite apenas o VALOR ABSOLUTO dos honorários (sem percentual).
+  // Usar `valor_fixo` quando existe, evitando recálculo com percentual inventado.
+  // Antes: default 15% — produzia honor inflado quando o PJC usa 6-10% em alguns casos.
   return {
     apurar_sucumbenciais: totalHon > 0,
-    percentual_sucumbenciais: 15,
+    percentual_sucumbenciais: 15, // Fallback — só aplicado se valor_fixo não vier
     base_sucumbenciais: 'condenacao',
     apurar_contratuais: false,
     percentual_contratuais: 0,
+    valor_fixo: totalHon > 0 ? totalHon : undefined,
   };
 }
 

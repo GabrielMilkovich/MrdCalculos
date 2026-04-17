@@ -1,0 +1,46 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  javax.persistence.NoResultException
+ *  org.jboss.seam.annotations.Name
+ *  org.slf4j.Logger
+ *  org.slf4j.LoggerFactory
+ */
+package br.jus.trt8.pjecalc.negocio.dominio.calculoexterno;
+
+import br.jus.trt8.pjecalc.base.comum.RepositorioBase;
+import br.jus.trt8.pjecalc.base.comum.api.TratadorDeExcecao;
+import br.jus.trt8.pjecalc.negocio.comum.TratadorDeExcecaoImpl;
+import br.jus.trt8.pjecalc.negocio.dominio.calculo.Calculo;
+import br.jus.trt8.pjecalc.negocio.dominio.calculoexterno.ParcelasAtualizaveisDescontoCreditosReclamante;
+import javax.persistence.NoResultException;
+import org.jboss.seam.annotations.Name;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@Name(value="repositorioDeParcelasAtualizaveisDescontoCreditosReclamante")
+public class RepositorioDeParcelasAtualizaveisDescontoCreditosReclamante
+extends RepositorioBase<ParcelasAtualizaveisDescontoCreditosReclamante> {
+    private final Logger logger = LoggerFactory.getLogger(RepositorioDeParcelasAtualizaveisDescontoCreditosReclamante.class);
+
+    public RepositorioDeParcelasAtualizaveisDescontoCreditosReclamante() {
+        super(ParcelasAtualizaveisDescontoCreditosReclamante.class);
+    }
+
+    @Override
+    public TratadorDeExcecao obterTratadorDeExcecao() {
+        return TratadorDeExcecaoImpl.instance();
+    }
+
+    public ParcelasAtualizaveisDescontoCreditosReclamante obterDoCalculo(Calculo calculo) {
+        try {
+            return (ParcelasAtualizaveisDescontoCreditosReclamante)this.entityManager.createQuery("FROM ParcelasAtualizaveisDescontoCreditosReclamante p WHERE p.calculoExterno = :calculo").setParameter("calculo", (Object)calculo).getSingleResult();
+        }
+        catch (NoResultException e) {
+            this.logger.info(e.getMessage(), (Throwable)e);
+            return new ParcelasAtualizaveisDescontoCreditosReclamante();
+        }
+    }
+}
+

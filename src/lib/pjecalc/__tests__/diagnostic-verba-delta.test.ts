@@ -13,7 +13,7 @@ import { execSync } from 'child_process';
 import Decimal from 'decimal.js';
 import { analyzePJC } from '../pjc-analyzer';
 import { convertPjcToEngineInputs } from '../pjc-to-engine';
-import { PjeCalcEngine } from '../engine';
+import { PjeCalcEngineV3 } from '../engine-v3';
 import type { PjeIndiceRow, PjeINSSFaixaRow } from '../engine-types';
 
 const SELIC_MONTHLY: Record<number, number[]> = {
@@ -106,88 +106,42 @@ describe('DIAGNOSTIC: Per-verba delta breakdown', () => {
       const xml = readPjcXml(file);
       const analysis = analyzePJC(xml);
 
-      // Run ASSISTED mode
-      const inputsA = convertPjcToEngineInputs(analysis, 'assisted');
-      inputsA.params.modo_calculo = 'assisted_from_pjc';
-      const engineA = new PjeCalcEngine(inputsA.params, inputsA.historicos, inputsA.faltas, inputsA.ferias, inputsA.verbas, inputsA.cartaoPonto, inputsA.fgtsConfig, inputsA.csConfig, inputsA.irConfig, inputsA.correcaoConfig, inputsA.honorariosConfig, inputsA.custasConfig, inputsA.seguroConfig, INDICES_DB, FAIXAS_INSS, [], inputsA.excecoesCargas || [], [], inputsA.prevPrivadaConfig, inputsA.pensaoConfig, inputsA.salarioFamiliaConfig);
-      const resultA = engineA.liquidar();
-
-      // Run INDEPENDENT mode
+      // Run INDEPENDENT mode (only mode supported)
       const inputsI = convertPjcToEngineInputs(analysis, 'independent');
       inputsI.params.modo_calculo = 'independent';
-      inputsI.correcaoConfig.gt_closure = undefined;
-      inputsI.correcaoConfig.apuracao_juros_gt = undefined;
-      if (inputsI.csConfig.apuracao_juros_gt) inputsI.csConfig.apuracao_juros_gt = undefined;
-      if (inputsI.irConfig.apuracao_juros_gt) inputsI.irConfig.apuracao_juros_gt = undefined;
+      if (inputsI.correcaoConfig.gt_closure) inputsI.correcaoConfig.gt_closure = undefined;
+      if (inputsI.correcaoConfig.apuracao_juros_gt) inputsI.correcaoConfig.apuracao_juros_gt = undefined;
+      if ((inputsI.csConfig as Record<string, unknown>).apuracao_juros_gt) (inputsI.csConfig as Record<string, unknown>).apuracao_juros_gt = undefined;
+      if ((inputsI.irConfig as Record<string, unknown>).apuracao_juros_gt) (inputsI.irConfig as Record<string, unknown>).apuracao_juros_gt = undefined;
       if (!inputsI.params.data_citacao) inputsI.params.data_citacao = inputsI.params.data_ajuizamento;
 
-      const engineI = new PjeCalcEngine(inputsI.params, inputsI.historicos, inputsI.faltas, inputsI.ferias, inputsI.verbas, inputsI.cartaoPonto, inputsI.fgtsConfig, inputsI.csConfig, inputsI.irConfig, inputsI.correcaoConfig, inputsI.honorariosConfig, inputsI.custasConfig, inputsI.seguroConfig, INDICES_DB, FAIXAS_INSS, [], inputsI.excecoesCargas || [], [], inputsI.prevPrivadaConfig, inputsI.pensaoConfig, inputsI.salarioFamiliaConfig);
+      const engineI = new PjeCalcEngineV3(inputsI.params, inputsI.historicos, inputsI.faltas, inputsI.ferias, inputsI.verbas, inputsI.cartaoPonto, inputsI.fgtsConfig, inputsI.csConfig, inputsI.irConfig, inputsI.correcaoConfig, inputsI.honorariosConfig, inputsI.custasConfig, inputsI.seguroConfig, INDICES_DB, FAIXAS_INSS, [], inputsI.excecoesCargas || [], [], inputsI.prevPrivadaConfig, inputsI.pensaoConfig, inputsI.salarioFamiliaConfig);
       const resultI = engineI.liquidar();
 
       console.log(`\n${'═'.repeat(100)}`);
       console.log(`  DIAGNOSTIC: ${analysis.parametros.beneficiario} (${file})`);
-      console.log(`  Assisted liquido: ${resultA.resumo.liquido_reclamante.toFixed(2)}`);
       console.log(`  Independent liquido: ${resultI.resumo.liquido_reclamante.toFixed(2)}`);
       console.log(`  PJC Golden liquido: ${analysis.resultado.liquido_exequente.toFixed(2)}`);
       console.log(`${'═'.repeat(100)}`);
 
-      // Compare verbas between modes
-      console.log(`\n  ${'Verba'.padEnd(40)} ${'Asst.Final'.padStart(14)} ${'Indp.Final'.padStart(14)} ${'Delta'.padStart(14)} ${'HasPrecomp'.padStart(12)}`);
-      console.log(`  ${'─'.repeat(96)}`);
+      // List verbas
+      console.log(`\n  ${'Verba'.padEnd(40)} ${'Indp.Final'.padStart(14)}`);
+      console.log(`  ${'─'.repeat(56)}`);
 
-      let totalAssisted = 0, totalIndependent = 0;
+      let totalIndependent = 0;
 
       for (const vrI of resultI.verbas) {
-        const vrA = resultA.verbas.find(v => v.verba_id === vrI.verba_id);
-        const aFinal = vrA?.total_final || 0;
         const iFinal = vrI.total_final;
-        const delta = iFinal - aFinal;
-        totalAssisted += aFinal;
         totalIndependent += iFinal;
 
-        // Check if this verba had precomputed data
-        const verba = inputsI.verbas.find(v => v.id === vrI.verba_id);
-        const hasPrecomp = (verba?.ocorrencias_precomputadas?.length || 0) > 0;
-
-        if (Math.abs(delta) > 1) {
+        if (Math.abs(iFinal) > 1) {
           const shortName = vrI.nome.length > 38 ? vrI.nome.substring(0, 35) + '...' : vrI.nome;
-          console.log(
-            `  ${shortName.padEnd(40)} ${aFinal.toFixed(2).padStart(14)} ${iFinal.toFixed(2).padStart(14)} ${(delta >= 0 ? '+' : '') + delta.toFixed(2)}`.padEnd(84) + `${hasPrecomp ? 'YES' : 'NO ←←←'}`.padStart(12)
-          );
+          console.log(`  ${shortName.padEnd(40)} ${iFinal.toFixed(2).padStart(14)}`);
         }
       }
 
-      // Show verbas in assisted but not in independent
-      for (const vrA of resultA.verbas) {
-        if (!resultI.verbas.find(v => v.verba_id === vrA.verba_id) && vrA.total_final > 0) {
-          console.log(`  ${'[MISSING IN INDEP] ' + vrA.nome}`.padEnd(40).substring(0, 40) + ` ${vrA.total_final.toFixed(2).padStart(14)} ${'N/A'.padStart(14)}`);
-        }
-      }
-
-      console.log(`  ${'─'.repeat(96)}`);
-      console.log(`  ${'TOTAL VERBAS'.padEnd(40)} ${totalAssisted.toFixed(2).padStart(14)} ${totalIndependent.toFixed(2).padStart(14)} ${((totalIndependent - totalAssisted >= 0 ? '+' : '') + (totalIndependent - totalAssisted).toFixed(2)).padStart(14)}`);
-
-      // Per-occurrence breakdown for top divergent verba
-      const sortedByDelta = resultI.verbas
-        .map(vrI => {
-          const vrA = resultA.verbas.find(v => v.verba_id === vrI.verba_id);
-          return { vrI, vrA, delta: Math.abs(vrI.total_final - (vrA?.total_final || 0)) };
-        })
-        .sort((a, b) => b.delta - a.delta);
-
-      if (sortedByDelta.length > 0 && sortedByDelta[0].delta > 10) {
-        const top = sortedByDelta[0];
-        console.log(`\n  TOP DIVERGENT VERBA: ${top.vrI.nome}`);
-        console.log(`  ${'Comp'.padEnd(10)} ${'A.difer'.padStart(12)} ${'I.difer'.padStart(12)} ${'A.corrig'.padStart(12)} ${'I.corrig'.padStart(12)} ${'A.juros'.padStart(12)} ${'I.juros'.padStart(12)} ${'A.final'.padStart(12)} ${'I.final'.padStart(12)}`);
-        for (let i = 0; i < Math.min(top.vrI.ocorrencias.length, 6); i++) {
-          const ocI = top.vrI.ocorrencias[i];
-          const ocA = top.vrA?.ocorrencias[i];
-          console.log(
-            `  ${ocI.competencia.padEnd(10)} ${(ocA?.diferenca || 0).toFixed(2).padStart(12)} ${ocI.diferenca.toFixed(2).padStart(12)} ${(ocA?.valor_corrigido || 0).toFixed(2).padStart(12)} ${ocI.valor_corrigido.toFixed(2).padStart(12)} ${(ocA?.juros || 0).toFixed(2).padStart(12)} ${ocI.juros.toFixed(2).padStart(12)} ${(ocA?.valor_final || 0).toFixed(2).padStart(12)} ${ocI.valor_final.toFixed(2).padStart(12)}`
-          );
-        }
-        if (top.vrI.ocorrencias.length > 6) console.log(`  ... e mais ${top.vrI.ocorrencias.length - 6} ocorrências`);
-      }
+      console.log(`  ${'─'.repeat(56)}`);
+      console.log(`  ${'TOTAL VERBAS'.padEnd(40)} ${totalIndependent.toFixed(2).padStart(14)}`);
 
       expect(resultI.resumo).toBeDefined();
     });

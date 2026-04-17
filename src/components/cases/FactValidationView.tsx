@@ -69,6 +69,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
+import { logger } from "@/lib/logger";
 
 // =====================================================
 // TYPES
@@ -583,7 +584,7 @@ export function FactValidationView({
       onFactsChange?.();
     },
     onError: (e) => {
-      console.error(e);
+      logger.error("Não foi possível adicionar o fato", e);
       toast.error("Não foi possível adicionar o fato.");
     },
   });
@@ -619,7 +620,7 @@ export function FactValidationView({
       onFactsChange?.();
     },
     onError: (e) => {
-      console.error(e);
+      logger.error("Erro ao atualizar status pericial", e);
       toast.error("Erro ao atualizar status pericial.");
     },
   });
@@ -675,7 +676,7 @@ export function FactValidationView({
     try {
       return await signedUrlMutation.mutateAsync(documentId);
     } catch (edgeError) {
-      console.error("Falha ao gerar URL via função de backend:", edgeError);
+      logger.error("Falha ao gerar URL via função de backend", edgeError);
       const storageSigned = await getFreshSignedUrlFromStorage(documentId);
       if (storageSigned) {
         toast.warning("Usando rota alternativa para gerar o preview.");
@@ -769,7 +770,7 @@ export function FactValidationView({
       try {
         finalBlob = await fetchPreviewBlobFromBackend(documentId, mimeType);
       } catch (backendErr) {
-        console.error("Backend blob preview failed, trying signed URL:", backendErr);
+        logger.error("Backend blob preview failed, trying signed URL", backendErr);
         const response = await fetch(signedUrl, { cache: "no-store" });
         if (!response.ok) throw new Error("Signed URL fetch failed");
         const blob = await response.blob();
@@ -781,7 +782,7 @@ export function FactValidationView({
       const url = URL.createObjectURL(finalBlob);
       setBlobUrl(url);
     } catch (e) {
-      console.error("Blob preview failed:", e);
+      logger.error("Blob preview failed", e);
       setBlobUrl(null);
     } finally {
       setBlobLoading(false);
@@ -813,7 +814,7 @@ export function FactValidationView({
         evidence = data[0] as FactEvidence;
       }
     } catch (e) {
-      console.error(e);
+      logger.error("Erro ao buscar fact_evidences", e);
     }
 
     // 2) Se não achou via fact_evidences, tentar via chunk_id na citação
@@ -834,7 +835,7 @@ export function FactValidationView({
             pageNumber = chunkData.page_number ?? pageNumber;
           }
         } catch (e) {
-          console.error("Chunk lookup failed:", e);
+          logger.error("Chunk lookup failed", e);
         }
       }
     }
@@ -883,7 +884,7 @@ export function FactValidationView({
       await fetchAndCreateBlobUrl(documentId, res.signedUrl, resolvedMimeType);
       return;
     } catch (e) {
-      console.error(e);
+      logger.error("Erro ao criar blob URL", e);
     }
 
     // 5) Último fallback: URL já salva no documento (pode estar expirada)

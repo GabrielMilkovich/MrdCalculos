@@ -8,7 +8,8 @@
  * 
  * @deprecated Use exportPJCXml() from pjc-xml-real.ts
  */
-import type { PjeLiquidacaoResult } from "./engine";
+import type { PjeLiquidacaoResult } from "./engine-types";
+import { logger } from "@/lib/logger";
 
 export interface PJCData {
   versao: string;
@@ -131,13 +132,13 @@ export interface PJCData {
 
 /** @deprecated Use exportPJCXml from pjc-xml-real.ts */
 export function exportarPJC(data: PJCData): string {
-  console.warn('[DEPRECATED] exportarPJC() generates MRDcalc JSON format. Use exportPJCXml() for real PJC XML.');
+  logger.warn('[DEPRECATED] exportarPJC() generates MRDcalc JSON format. Use exportPJCXml() for real PJC XML.');
   return JSON.stringify(data, null, 2);
 }
 
 /** @deprecated Use exportPJCXml from pjc-xml-real.ts */
 export function downloadPJC(data: PJCData, nomeArquivo?: string) {
-  console.warn('[DEPRECATED] downloadPJC() generates MRDcalc JSON format. Use exportPJCXml() for real PJC XML.');
+  logger.warn('[DEPRECATED] downloadPJC() generates MRDcalc JSON format. Use exportPJCXml() for real PJC XML.');
   const json = exportarPJC(data);
   const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -152,7 +153,7 @@ export function downloadPJC(data: PJCData, nomeArquivo?: string) {
 
 /** @deprecated This parses the MRDcalc JSON format only. Use analyzePJC() from pjc-analyzer.ts for real PJC XML. */
 export function importarPJC(conteudo: string): PJCData {
-  console.warn('[DEPRECATED] importarPJC() reads MRDcalc JSON format. Use analyzePJC() from pjc-analyzer.ts for real PJC XML.');
+  logger.warn('[DEPRECATED] importarPJC() reads MRDcalc JSON format. Use analyzePJC() from pjc-analyzer.ts for real PJC XML.');
   try {
     const data = JSON.parse(conteudo);
     if (!data.formato || !data.versao) {

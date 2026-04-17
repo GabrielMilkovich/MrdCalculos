@@ -38,6 +38,7 @@ import { ModuloPrevidenciaPrivada } from "./pjecalc/ModuloPrevidenciaPrivada";
 import { ModuloSalarioFamilia } from "./pjecalc/ModuloSalarioFamilia";
 import { ImportadorFichaFinanceira } from "./pjecalc/ImportadorFichaFinanceira";
 import { calcularCompletude, type ModuleStatus } from "@/lib/pjecalc/completude";
+import { logger } from "@/lib/logger";
 
   // Module definitions with metadata
   const MODULOS = [
@@ -205,9 +206,9 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         setSyncing(true);
         setAutoSyncDone(true);
         try {
-          console.warn('syncFromValidation removed');
+          logger.warn('syncFromValidation removed');
         } catch (e) {
-          console.warn("Auto-sync falhou:", e);
+          logger.warn("Auto-sync falhou", { error: e });
         } finally {
           setSyncing(false);
         }
@@ -219,7 +220,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const syncFromOCR = async () => {
     setSyncing(true);
     try {
-      console.warn('syncFromValidation removed');
+      logger.warn('syncFromValidation removed');
       toast.info("Sincronização removida temporariamente.");
     } catch (e) {
       toast.error("Erro ao sincronizar: " + (e as Error).message);

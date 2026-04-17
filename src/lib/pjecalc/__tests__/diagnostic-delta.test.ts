@@ -19,7 +19,7 @@ import { execSync } from 'child_process';
 import Decimal from 'decimal.js';
 import { analyzePJC } from '../pjc-analyzer';
 import { convertPjcToEngineInputs } from '../pjc-to-engine';
-import { PjeCalcEngine } from '../engine';
+import { PjeCalcEngineV3 } from '../engine-v3';
 import { IPCA_E_ACUMULADO, SELIC_ACUMULADO } from '../indices-fallback';
 import type { PjeLiquidacaoResult, PjeIndiceRow, PjeVerbaResult, PjeOcorrenciaResult } from '../engine-types';
 
@@ -129,7 +129,7 @@ function runIndependent(xmlString: string): PjeLiquidacaoResult | { error: strin
   if (!inputs.params.data_citacao) inputs.params.data_citacao = inputs.params.data_ajuizamento;
 
   try {
-    const engine = new PjeCalcEngine(
+    const engine = new PjeCalcEngineV3(
       inputs.params, inputs.historicos, inputs.faltas, inputs.ferias,
       inputs.verbas, inputs.cartaoPonto, inputs.fgtsConfig, inputs.csConfig,
       inputs.irConfig, inputs.correcaoConfig, inputs.honorariosConfig,

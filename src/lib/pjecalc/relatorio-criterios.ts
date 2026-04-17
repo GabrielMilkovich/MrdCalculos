@@ -2,7 +2,7 @@
  * Relatório de Critérios Legais — VERSÃO EXPANDIDA (Fase 11)
  * Gera documento completo explicando TODOS os parâmetros, índices, regras e trilha de auditoria aplicados.
  */
-import type { PjeLiquidacaoResult, PjeParametros, PjeCorrecaoConfig, PjeIRConfig, PjeCSConfig, PjeFGTSConfig, PjeCustasConfig, PjeHonorariosConfig } from "./engine";
+import type { PjeLiquidacaoResult, PjeParametros, PjeCorrecaoConfig, PjeIRConfig, PjeCSConfig, PjeFGTSConfig, PjeCustasConfig, PjeHonorariosConfig } from "./engine-types";
 
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
 const pct = (v: number) => `${(v || 0).toFixed(2)}%`;

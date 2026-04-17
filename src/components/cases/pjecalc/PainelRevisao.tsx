@@ -12,7 +12,7 @@ import {
   AlertTriangle, CheckCircle2, XCircle, Info, ClipboardCheck,
   FileText, Scale, Shield, Clock,
 } from "lucide-react";
-import type { PjeValidationResult, PjeLiquidacaoResult } from "@/lib/pjecalc/engine";
+import type { PjeValidationResult, PjeLiquidacaoResult } from "@/lib/pjecalc/engine-types";
 
 interface ReviewItem {
   id: string;

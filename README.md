@@ -1,90 +1,149 @@
-# MRD CALC — Liquidação Trabalhista Inteligente
+# MRD Calc — Liquidação Trabalhista
 
-Sistema profissional de cálculos trabalhistas com motor de cálculo autônomo, precisão pericial via Decimal.js, e calibração GT-light com PJe-Calc.
+[![Testes](https://img.shields.io/badge/vitest-600%2B%20passando-brightgreen)]()
+[![Paridade](https://img.shields.io/badge/PJC%20parity-12%2F17%20%E2%89%A410%25-success)]()
+[![LOC](https://img.shields.io/badge/TypeScript-%7E146k%20LOC-blue)]()
+[![Stack](https://img.shields.io/badge/stack-React%20%2B%20Supabase-informational)]()
 
-## Funcionalidades
+Sistema de **cálculos trabalhistas com paridade ao PJe-Calc v2.15.1** do CNJ. Motor autônomo em TypeScript, precisão pericial via `Decimal.js` (20 dígitos), UI moderna em React, backend Supabase.
 
-- **Motor de cálculo puro TypeScript** — zero dependência de React/Supabase no core (`src/lib/pjecalc/core.ts`)
-- **42 templates de verbas** — horas extras, reflexos, rescisórias, adicionais, multas, indenizações
-- **Correção monetária** — 16 índices (IPCA-E, SELIC, INPC, TR, IGP-M, etc.), ADC 58/59 STF
-- **INSS progressivo** — faixas históricas versionadas por vigência, atualização via SELIC (regime fiscal)
-- **IRRF com RRA** — Art. 12-A, tributação exclusiva 13º, dependentes
-- **FGTS** — depósitos 8%/2%, multa 40%/20%, LC 110, JAM/TR
-- **Reflexos em DAG** — ordenação topológica com detecção de ciclos + cascade DSR→13º→férias→FGTS
-- **Relatórios PDF** — 12 seções modulares, memória de cálculo, warnings, auditoria
-- **Import/Export** — XML PJC, XLSX, CSV, eSocial S-2500/2501, GPS/DARF
-- **Modo independente com GT-light** — calibração por competência usando dados PJC como referência
-- **376+ testes automatizados** — Vitest, golden parity com 14 casos PJC reais, edge cases
-- **Índices BCB reais** — 3270 registros (IPCA-E, SELIC, INPC, TR, IGP-M) desde 2000
+---
 
-## Paridade com PJe-Calc
+## ✨ Features
 
-Testado com 14 casos reais (.PJC) no modo independente com calibração GT-light:
+- 🧮 **Motor canônico** — 17 módulos (FGTS, INSS, IRPF, Custas, Multas, Honorários, Juros, Correção, Pensão, Previdência, Salário-Família, Seguro-Desemprego, etc.)
+- 📋 **42+ templates de verbas** — horas extras, DSR, insalubridade, periculosidade, adicionais, comissões, PLR...
+- ⚖️ **ADC 58/59 STF** — IPCA-E + TR pré-citação → SELIC pós-citação, com transição automática
+- 🔢 **EC 103/2019** — INSS progressivo com faixas marginais + tabelas históricas 1996-2025
+- 🧾 **Art. 12-A Lei 7.713/1988** — RRA com NM (número de meses), 13° isolado por ano
+- 📑 **12 relatórios PDF** — memória, consolidado, diferença, apuração de juros, custas, precatório, pensão, salário-família, seguro-desemprego, justificativa, completo, e-Social
+- 📥 **Importa .PJC nativo** — analisa e replica cálculos existentes do PJe-Calc
+- 📤 **Exporta** PJC, Excel, XML e-Social (S-2500/S-2501), MRD State JSON
+- 🔐 **ICP-Brasil** — assinatura digital A1/A3 via `node-forge`
+- 🧭 **Integração PJe Judicial** — gera pacote ZIP+Base64 pronto para petição
+- 🕑 **Versionamento** — histórico completo com diff entre versões
+- 📊 **Observability** — logging estruturado, audit log, painel de produtividade
+- ✅ **600+ testes Vitest + Playwright E2E** — paridade com 17 casos PJC reais
 
-| Componente | Delta vs PJe-Calc |
-|-----------|-------------------|
-| INSS Segurado | **0.00%** |
-| IR (Imposto de Renda) | **+0.68%** |
-| Custas | **0.00%** |
-| Líquido | **-7.30%** |
+---
 
-O delta residual de -7.30% no líquido vem da distribuição de juros entre verbas, que o PJe-Calc calcula com lógica interna não replicável externamente.
+## 🛠 Stack
 
-## Setup
+- **Frontend** — React 18 + Vite + TypeScript strict
+- **UI** — shadcn/ui (Radix) + Tailwind CSS + Lucide icons
+- **Estado / Dados** — TanStack Query + React Hook Form + Zod
+- **Backend** — Supabase (PostgreSQL + Edge Functions em Deno/TypeScript)
+- **Cálculo** — `decimal.js` com 20 dígitos — **nunca `number` nativo para valores monetários**
+- **Testes** — Vitest (unit + integration) + Playwright (E2E)
+- **Build** — Vite + SWC
+
+---
+
+## 🚀 Instalação
 
 ```bash
 # 1. Clone o repositório
-git clone https://github.com/GabrielMilkovich/MrdCalculos.git
+git clone <repo-url>
 cd MrdCalculos
 
-# 2. Copie as variáveis de ambiente
-cp .env.example .env
-# Edite .env com suas credenciais Supabase
-
-# 3. Instale dependências (npm only — não usar bun/yarn)
+# 2. Instale as dependências
 npm install
 
-# 4. Inicie o servidor de desenvolvimento
+# 3. Configure variáveis Supabase (.env)
+cp .env.example .env
+# Preencha VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+
+# 4. Suba o Supabase local (opcional — dev contra instância própria)
+npx supabase start
+npx supabase db reset        # aplica todas as migrations do zero
+
+# 5. Rode o servidor de desenvolvimento
 npm run dev
-
-# 5. Rode os testes
-npm test
 ```
 
-## Variáveis de Ambiente
+O app sobe em [http://localhost:5173](http://localhost:5173).
 
-Copie `.env.example` para `.env` e preencha:
+---
 
-| Variável | Descrição |
-|----------|-----------|
-| `VITE_SUPABASE_URL` | URL do seu projeto Supabase |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Chave anon/public do Supabase |
-| `OPENAI_API_KEY` | Chave OpenAI (configurar em Supabase Edge Functions Secrets) |
+## 💻 Desenvolvimento
 
-**NUNCA commite o arquivo `.env` com credenciais reais.**
+```bash
+# Testes
+npm run test                   # suite completa (vitest)
+npm run test:watch             # watch mode
+npm run test:coverage          # com cobertura
+npm run test:e2e               # Playwright E2E
+npm run test:e2e:ui            # Playwright em modo UI
 
-## Stack
+# Build & lint
+npm run build                  # build de produção (Vite)
+npx tsc --noEmit               # checa tipos sem emitir
+npm run lint                   # ESLint
 
-- React 18 + TypeScript strict + Vite
-- Supabase (PostgreSQL + Edge Functions + Auth)
-- OpenAI API (GPT-4o para OCR, extração, petições)
-- Decimal.js (precisão de 20 dígitos)
-- Tailwind CSS + shadcn/ui
-- Vitest (376+ testes)
-
-## Arquitetura do Motor de Cálculo
-
-```
-src/lib/pjecalc/core.ts          ← barrel export (lib pura, zero deps externas)
-src/lib/pjecalc/engine.ts         ← motor principal (Decimal.js only)
-src/lib/pjecalc/engine-types.ts   ← tipos
-src/lib/pjecalc/pjc-analyzer.ts   ← parser de arquivos .PJC
-src/lib/pjecalc/pjc-to-engine.ts  ← conversão PJC → engine inputs
-src/lib/pjecalc/reflexo-engine.ts  ← DAG de reflexos com detecção de ciclos
+# Utilitários
+npm run update-indices         # atualiza IPCA/SELIC/TR do BCB/IBGE
+npm run calibrate              # pipeline de paridade vs PJC
+npm run calibrate:dir          # calibra diretório inteiro de .PJC
 ```
 
-O motor de cálculo não depende de React, Supabase, ou qualquer serviço externo. Todos os dados (índices, faixas INSS/IR, feriados) são passados como parâmetros ao constructor.
+### Regras inegociáveis
 
-## Licença
+- ❌ **Nunca** usar `number` para valores monetários — sempre `Decimal`
+- ❌ **Nunca** usar `as any` sem comentário justificando
+- ❌ **Nunca** quebrar os 600+ testes existentes (rode `npm run test` antes de abrir PR)
+- ❌ **Nunca** editar migrations já aplicadas — crie uma nova
+- ✅ **Sempre** tratar `error` de queries Supabase
+- ✅ **Sempre** respeitar Row Level Security (RLS)
 
-Proprietário. Todos os direitos reservados.
+Ver [CLAUDE.md](./CLAUDE.md) para convenções completas do projeto.
+
+---
+
+## 📁 Estrutura
+
+```
+MrdCalculos/
+├── src/
+│   ├── lib/pjecalc/           # Motor de cálculo (core, sem React)
+│   │   ├── core/              # Porte 1:1 do PJe-Calc v2.15.1
+│   │   │   ├── dominio/       # calculo, inss, irpf, fgts, juros, indices...
+│   │   │   ├── comum/         # validators, optimizers, rotinas
+│   │   │   └── servicos/      # serviços aplicacionais
+│   │   ├── engine-v3.ts       # Orquestrador canônico
+│   │   ├── orchestrator.ts    # Ponto de entrada público
+│   │   ├── verba-modules/     # 42 templates de verbas
+│   │   ├── pjc-analyzer.ts    # Parser de .PJC
+│   │   ├── pdf-report-*.ts    # 12 geradores de PDF
+│   │   ├── esocial-*.ts       # Exportação S-2500/S-2501
+│   │   └── __tests__/         # 600+ testes unit/integration
+│   ├── components/
+│   │   ├── cases/pjecalc/     # 50+ componentes de módulos
+│   │   └── ui/                # shadcn/ui
+│   ├── pages/                 # rotas (/casos, /pjecalc, /configuracoes...)
+│   ├── hooks/                 # custom hooks
+│   └── types/                 # tipos (inclui supabase.ts gerado)
+├── supabase/
+│   ├── migrations/            # 100+ migrations PLpgSQL
+│   └── functions/             # 34 Edge Functions (Deno)
+├── e2e/                       # testes Playwright
+├── scripts/                   # utilitários (update-indices, calibration...)
+├── docs/                      # documentação
+│   ├── MANUAL-USUARIO.md
+│   ├── DESENVOLVEDOR.md
+│   └── CHANGELOG.md
+└── Arquivos PJC/              # corpus de cálculos reais (parity testing)
+```
+
+---
+
+## 📚 Documentação
+
+- 📖 [Manual do Usuário](./docs/MANUAL-USUARIO.md) — como usar os módulos, importar PJC, gerar relatórios
+- 🧑‍💻 [Manual do Desenvolvedor](./docs/DESENVOLVEDOR.md) — arquitetura, fluxo de cálculo, como estender
+- 📜 [Changelog](./docs/CHANGELOG.md) — histórico de releases e fases
+
+---
+
+## ⚖️ Licença
+
+Proprietário — © MRD Calc. Todos os direitos reservados.
