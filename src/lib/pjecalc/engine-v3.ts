@@ -336,7 +336,10 @@ export class PjeCalcEngineV3 {
         const indice = oc.getIndiceAcumulado()?.toNumber() ?? 1;
         const corrigida = oc.getDiferencaCorrigida()?.toNumber() ?? diferenca;
         const valorCorrigido = arredondarValorMonetario(new Decimal(corrigida)).toNumber();
-        const juros = this.calcularJurosOcorrencia(oc, valorCorrigido);
+        // Juros aplicados sobre DIFERENCA (nominal), nao sobre valor_corrigido.
+        // PJe-Calc: base_de_juros_das_verbas default = 'DIFERENCA' (Sumula 200 TST).
+        // Valor_corrigido + juros eh aritmeticamente equivalente a DIFERENCA * (1 + correcao + juros).
+        const juros = this.calcularJurosOcorrencia(oc, Math.max(0, diferenca));
         const valorFinal = valorCorrigido + juros;
 
         totalDevido += oc.getDevido()?.toNumber() ?? 0;
