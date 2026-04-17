@@ -376,18 +376,26 @@ export class PjeCalcEngineV3 {
     const principalCorrigido = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
     const jurosMora = verbaResults.reduce((s, v) => s + v.total_juros, 0);
 
+    // FGTS rescisório + multa 40% (BUG FIX: era hardcoded em zero)
+    const fgtsResult = this.calcularFGTS(verbaResults);
+
     // Descontos do líquido do reclamante (INSS segurado + IRPF)
     const csSegurado = inssAdapter.totalSegurado;
     const csEmpregador = inssAdapter.totalEmpregador;
     const csReclamante = inssAdapter.csReclamante;
     const irRetido = irpfAdapter.impostoDevido;
-    const liquidoReclamante = +(principalCorrigido + jurosMora - csReclamante - irRetido).toFixed(2);
+    // FGTS entra no liquido quando destino=pagar_reclamante ou compor_principal=true
+    // (PJe-Calc liquido_exequente consolida FGTS+multa na linha do reclamante)
+    const fgtsNoLiquido = (this.fgtsConfig.compor_principal || this.fgtsConfig.destino === 'pagar_reclamante')
+      ? fgtsResult.total_fgts
+      : 0;
+    const liquidoReclamante = +(principalCorrigido + jurosMora + fgtsNoLiquido - csReclamante - irRetido).toFixed(2);
 
     const resumo: PjeResumo = {
       principal_bruto: +principalBruto.toFixed(2),
       principal_corrigido: +principalCorrigido.toFixed(2),
       juros_mora: +jurosMora.toFixed(2),
-      fgts_total: 0,
+      fgts_total: fgtsResult.total_fgts,
       cs_segurado: +csSegurado.toFixed(2),
       cs_empregador: +csEmpregador.toFixed(2),
       ir_retido: +irRetido.toFixed(2),
@@ -405,13 +413,13 @@ export class PjeCalcEngineV3 {
       contribuicao_sindical: 0,
       abono_pecuniario: 0,
       liquido_reclamante: liquidoReclamante,
-      total_reclamada: +(principalCorrigido + jurosMora).toFixed(2),
+      total_reclamada: +(principalCorrigido + jurosMora + fgtsResult.total_fgts).toFixed(2),
     };
 
     return {
       data_liquidacao: this.correcaoConfig.data_liquidacao,
       verbas: verbaResults,
-      fgts: { depositos: [], total_depositos: 0, multa_valor: 0, lc110_10: 0, lc110_05: 0, saldo_deduzido: 0, total_fgts: 0 },
+      fgts: fgtsResult,
       contribuicao_social: {
         segurado_devidos: inssAdapter.seguradoDevidos.map(d => ({
           ...d, recolhido: 0, diferenca: d.valor,
@@ -441,6 +449,95 @@ export class PjeCalcEngineV3 {
       previdencia_privada: { apurado: false, base: 0, percentual: 0, valor: 0 },
       salario_familia: { apurado: false, total: 0, ocorrencias: [] },
       resumo,
+    };
+  }
+
+  // ── Cálculo de FGTS (depósitos + multa 40%) ──
+
+  /**
+   * Calcula FGTS rescisório + multa sobre diferenças salariais.
+   * - Depósito: aliquota% sobre diferença (default 8%)
+   * - Correção FGTS aproximada: 1 + 3% a.a. (TR assumida zero pós-2017)
+   * - Multa: multa_percentual% sobre saldo corrigido (default 40%)
+   * - LC 110/2001: +10% (Art. 1°) e +5% (Art. 2°) opcionais
+   */
+  private calcularFGTS(verbaResults: PjeVerbaResult[]): PjeFGTSResult {
+    // Sempre calcula se houver verba com incidência FGTS + diferença positiva.
+    // O flag fgtsConfig.apurar indica se HÁ SALDO INICIAL; mas as diferenças
+    // reconhecidas no processo geram FGTS+multa mesmo sem saldo prévio.
+    const temIncidenciaFgts = this.verbas.some((v, i) => {
+      const inc = v.incidencias?.fgts !== false;
+      const temDif = (verbaResults[i]?.total_diferenca ?? 0) > 0;
+      return inc && temDif;
+    });
+    if (!temIncidenciaFgts) {
+      return { depositos: [], total_depositos: 0, multa_valor: 0, lc110_10: 0, lc110_05: 0, saldo_deduzido: 0, total_fgts: 0 };
+    }
+
+    const dataLiq = new Decimal(new Date(this.correcaoConfig.data_liquidacao).getTime());
+    const depositos: { competencia: string; base: number; aliquota: number; valor: number }[] = [];
+    let totalDepositosCorrigido = new Decimal(0);
+    const aliquota = 8;
+
+    for (let i = 0; i < verbaResults.length; i++) {
+      const vResult = verbaResults[i];
+      const vUI = this.verbas[i];
+      if (vUI.incidencias?.fgts === false) continue;
+
+      for (const oc of vResult.ocorrencias) {
+        if (oc.diferenca <= 0) continue;
+        const valorDep = new Decimal(oc.diferenca).times(aliquota).div(100).toDP(2);
+        depositos.push({
+          competencia: oc.competencia,
+          base: oc.diferenca,
+          aliquota,
+          valor: valorDep.toNumber(),
+        });
+        // Correção aproximada: 3% a.a. composto desde a competência
+        const dataComp = new Decimal(new Date(oc.competencia + '-01').getTime());
+        const anos = dataLiq.minus(dataComp).div(1000 * 3600 * 24 * 365.25).toNumber();
+        const fator = new Decimal(1.03).pow(Math.max(0, anos));
+        totalDepositosCorrigido = totalDepositosCorrigido.plus(valorDep.times(fator));
+      }
+    }
+
+    const totalDepositos = depositos.reduce((s, d) => s + d.valor, 0);
+
+    // Saldo saque — deduzir se configurado
+    const saldoSaques = this.fgtsConfig.saldos_saques ?? [];
+    const saldoDeduzido = this.fgtsConfig.deduzir_saldo
+      ? saldoSaques.reduce((s, sq) => s + (sq.valor ?? 0), 0)
+      : 0;
+
+    // Base da multa
+    let baseMulta = totalDepositosCorrigido;
+    if (this.fgtsConfig.multa_base === 'nominal') baseMulta = new Decimal(totalDepositos);
+    else if (this.fgtsConfig.multa_base === 'devido_menos_saldo') baseMulta = baseMulta.minus(saldoDeduzido);
+
+    const multaPct = this.fgtsConfig.multa_percentual ?? 40;
+    let multaValor = 0;
+    if (this.fgtsConfig.multa_apurar) {
+      if (this.fgtsConfig.multa_tipo === 'informada') {
+        multaValor = this.fgtsConfig.multa_valor_informado ?? 0;
+      } else {
+        multaValor = baseMulta.times(multaPct).div(100).toDP(2).toNumber();
+      }
+    }
+
+    // LC 110/2001 — incide sobre base FGTS corrigida
+    const lc110_10 = this.fgtsConfig.lc110_10 ? totalDepositosCorrigido.times(10).div(100).toDP(2).toNumber() : 0;
+    const lc110_05 = this.fgtsConfig.lc110_05 ? totalDepositosCorrigido.times(5).div(100).toDP(2).toNumber() : 0;
+
+    const totalFgts = +(totalDepositosCorrigido.toNumber() - saldoDeduzido + multaValor + lc110_10 + lc110_05).toFixed(2);
+
+    return {
+      depositos,
+      total_depositos: +totalDepositos.toFixed(2),
+      multa_valor: multaValor,
+      lc110_10,
+      lc110_05,
+      saldo_deduzido: saldoDeduzido,
+      total_fgts: totalFgts,
     };
   }
 
