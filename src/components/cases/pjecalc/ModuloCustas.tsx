@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,12 +8,54 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Save, Loader2, Plus, Trash2 } from "lucide-react";
+import { Save, Loader2, Plus, Trash2, FileText } from "lucide-react";
+import Decimal from "decimal.js";
 import * as svc from "@/lib/pjecalc/service";
+import {
+  abrirRelatorioCustasDetalhado,
+  calcularSubtotaisCustas,
+  type TipoCusta,
+} from "@/lib/pjecalc/pdf-report-custas";
+import type {
+  PjeLiquidacaoResult,
+  PjeCustaResult,
+  PjeCustasConfig,
+  PjeCustaItem,
+} from "@/lib/pjecalc/engine-types";
 
 interface AutoItem { tipo: string; vencimento: string; valor_bem: string; }
 interface ArmazenamentoItem { inicio: string; termino: string; valor_bem: string; }
 interface Props { caseId: string; }
+
+type CategoriaFixa = { tipo: TipoCusta; label: string };
+const CATEGORIAS_FIXAS: CategoriaFixa[] = [
+  { tipo: 'judiciais',   label: 'Custas Judiciais' },
+  { tipo: 'periciais',   label: 'Custas Periciais' },
+  { tipo: 'emolumentos', label: 'Emolumentos' },
+  { tipo: 'postais',     label: 'Custas Postais' },
+];
+
+interface CategoriaEstado {
+  apurar: boolean;
+  percentual: string;
+  valor_fixo: string;
+}
+
+interface OutraCusta {
+  descricao: string;
+  valor: string;
+}
+
+const defaultCategorias = (): Record<TipoCusta, CategoriaEstado> => ({
+  judiciais:   { apurar: true,  percentual: '2',    valor_fixo: '' },
+  periciais:   { apurar: false, percentual: '',     valor_fixo: '' },
+  emolumentos: { apurar: false, percentual: '',     valor_fixo: '' },
+  postais:     { apurar: false, percentual: '',     valor_fixo: '' },
+  outras:      { apurar: true,  percentual: '',     valor_fixo: '' },
+});
+
+const fmtBRL = (n: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number.isFinite(n) ? n : 0);
 
 export function ModuloCustas({ caseId }: Props) {
   const qc = useQueryClient();
@@ -38,6 +80,18 @@ export function ModuloCustas({ caseId }: Props) {
     autos: [] as AutoItem[], armazenamento: [] as ArmazenamentoItem[],
   });
   const [recolhidas, setRecolhidas] = useState<{ descricao: string; valor: string; data: string }[]>([]);
+  const [categorias, setCategorias] = useState<Record<TipoCusta, CategoriaEstado>>(defaultCategorias());
+  const [outras, setOutras] = useState<OutraCusta[]>([]);
+
+  // Ultimo resultado de liquidacao (para gerar o PDF detalhado e preview dos subtotais)
+  const { data: resultado } = useQuery({
+    queryKey: ["pjecalc_liquidacao_resultado", caseId],
+    queryFn: () => svc.getResultado(caseId),
+  });
+  const { data: caseData } = useQuery({
+    queryKey: ["pjecalc_dados_processo", caseId],
+    queryFn: () => svc.getDadosProcesso(caseId),
+  });
 
   useEffect(() => {
     if (data) {
@@ -57,8 +111,116 @@ export function ModuloCustas({ caseId }: Props) {
         armazenamento: (d.armazenamento as ArmazenamentoItem[]) || [],
       }));
       if (d.recolhidas && Array.isArray(d.recolhidas)) setRecolhidas(d.recolhidas as typeof recolhidas);
+      // Restaurar itens por categoria (PjeCustasConfig.itens)
+      if (Array.isArray(d.itens)) {
+        const cats = defaultCategorias();
+        const outrasList: OutraCusta[] = [];
+        for (const raw of d.itens as PjeCustaItem[]) {
+          if (!raw || typeof raw !== 'object') continue;
+          if (raw.tipo === 'outras') {
+            outrasList.push({
+              descricao: raw.descricao ?? '',
+              valor: raw.valor_fixo != null ? String(raw.valor_fixo) : '',
+            });
+          } else if (raw.tipo && (['judiciais','periciais','emolumentos','postais'] as TipoCusta[]).includes(raw.tipo)) {
+            cats[raw.tipo] = {
+              apurar: !!raw.apurar,
+              percentual: raw.percentual != null ? String(raw.percentual) : '',
+              valor_fixo: raw.valor_fixo != null ? String(raw.valor_fixo) : '',
+            };
+          }
+        }
+        setCategorias(cats);
+        setOutras(outrasList);
+      }
     }
   }, [data]);
+
+  // Construir lista de itens de custas para persistir e para preview do PDF
+  const itensCustas = useMemo<PjeCustaItem[]>(() => {
+    const out: PjeCustaItem[] = [];
+    for (const cat of CATEGORIAS_FIXAS) {
+      const c = categorias[cat.tipo];
+      if (!c.apurar) continue;
+      const pct = c.percentual ? new Decimal(c.percentual).toNumber() : 0;
+      const vf = c.valor_fixo ? new Decimal(c.valor_fixo).toNumber() : undefined;
+      out.push({
+        tipo: cat.tipo,
+        descricao: cat.label,
+        apurar: true,
+        percentual: Number.isFinite(pct) ? pct : 0,
+        valor_fixo: vf != null && Number.isFinite(vf) ? vf : undefined,
+        valor_minimo: 0,
+        isento: false,
+      });
+    }
+    for (const o of outras) {
+      if (!o.descricao.trim() && !o.valor) continue;
+      const v = o.valor ? new Decimal(o.valor).toNumber() : 0;
+      out.push({
+        tipo: 'outras',
+        descricao: o.descricao.trim() || 'Outras custas',
+        apurar: true,
+        percentual: 0,
+        valor_fixo: Number.isFinite(v) ? v : 0,
+        valor_minimo: 0,
+        isento: false,
+      });
+    }
+    return out;
+  }, [categorias, outras]);
+
+  // Construir config completa para o PDF
+  const custasConfig = useMemo<PjeCustasConfig>(() => ({
+    apurar: true,
+    percentual: categorias.judiciais.percentual ? new Decimal(categorias.judiciais.percentual).toNumber() : 2,
+    valor_minimo: 0,
+    isento: false,
+    assistencia_judiciaria: false,
+    itens: itensCustas,
+  }), [categorias.judiciais.percentual, itensCustas]);
+
+  // Preview de subtotais a partir do ultimo resultado de liquidacao (apenas leitura)
+  const resultadoLiquidacao = useMemo<PjeLiquidacaoResult | null>(() => {
+    const rec = resultado as unknown as { resultado?: PjeLiquidacaoResult } | null;
+    return rec?.resultado || null;
+  }, [resultado]);
+
+  const subtotaisPreview = useMemo(() => {
+    if (resultadoLiquidacao) {
+      return calcularSubtotaisCustas(resultadoLiquidacao);
+    }
+    // Sem liquidacao ainda: calcular preview local usando valor_fixo das categorias apuradas
+    // (aprovacao sem base financeira e so preview grosseiro)
+    return CATEGORIAS_FIXAS.map(cat => {
+      const c = categorias[cat.tipo];
+      const v = c.apurar && c.valor_fixo ? new Decimal(c.valor_fixo).toNumber() : 0;
+      return { tipo: cat.tipo, titulo: cat.label, subtotal: v, quantidade: c.apurar ? 1 : 0 };
+    }).concat([{
+      tipo: 'outras' as TipoCusta,
+      titulo: 'Outras Custas',
+      subtotal: outras.reduce((acc, o) => acc.plus(new Decimal(o.valor || 0)), new Decimal(0)).toDecimalPlaces(2).toNumber(),
+      quantidade: outras.filter(o => o.descricao.trim() || o.valor).length,
+    }]);
+  }, [resultadoLiquidacao, categorias, outras]);
+
+  const totalPreview = useMemo(() =>
+    subtotaisPreview.reduce((acc, s) => acc.plus(new Decimal(s.subtotal)), new Decimal(0)).toDecimalPlaces(2).toNumber()
+  , [subtotaisPreview]);
+
+  const handleGerarPDF = () => {
+    if (!resultadoLiquidacao) {
+      toast.error('Execute a liquidacao antes de gerar o relatorio detalhado de custas.');
+      return;
+    }
+    abrirRelatorioCustasDetalhado(resultadoLiquidacao, {
+      cliente: caseData?.reclamante_nome ?? undefined,
+      processo: caseData?.numero_processo ?? undefined,
+      reclamado: caseData?.reclamado ?? undefined,
+      dataLiquidacao: resultadoLiquidacao.data_liquidacao,
+      custasConfig,
+    });
+  };
 
   const save = async () => {
     setSaving(true);
@@ -73,7 +235,7 @@ export function ModuloCustas({ caseId }: Props) {
         rdo_liquidacao_valor: form.rdo_liquidacao_valor ? parseFloat(form.rdo_liquidacao_valor) : null,
         custas_fixas_vencimento: form.custas_fixas_vencimento || null,
         custas_fixas: form.custas_fixas, autos: form.autos, armazenamento: form.armazenamento,
-        recolhidas, itens: [],
+        recolhidas, itens: itensCustas,
       } as any);
       qc.invalidateQueries({ queryKey: ["pjecalc_custas_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
@@ -93,10 +255,162 @@ export function ModuloCustas({ caseId }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Custas Judiciais</h2>
-        <Button onClick={save} disabled={saving} size="sm">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />} Salvar
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleGerarPDF} size="sm" variant="outline" disabled={!resultadoLiquidacao}>
+            <FileText className="h-4 w-4 mr-1" /> Gerar PDF Custas
+          </Button>
+          <Button onClick={save} disabled={saving} size="sm">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />} Salvar
+          </Button>
+        </div>
       </div>
+
+      {/* ─── Categorias detalhadas de custas (5 secoes) ─── */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Categorias de Custas</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="border border-border rounded overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-muted/50 border-b">
+                  <th className="p-1.5 text-left w-8">Apurar</th>
+                  <th className="p-1.5 text-left">Categoria</th>
+                  <th className="p-1.5 text-left w-28">Percentual (%)</th>
+                  <th className="p-1.5 text-left w-32">Valor Fixo (R$)</th>
+                  <th className="p-1.5 text-right w-32">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {CATEGORIAS_FIXAS.map(cat => {
+                  const c = categorias[cat.tipo];
+                  const preview = subtotaisPreview.find(s => s.tipo === cat.tipo);
+                  return (
+                    <tr key={cat.tipo} className="border-b border-border/50">
+                      <td className="p-1.5">
+                        <Checkbox
+                          checked={c.apurar}
+                          onCheckedChange={v =>
+                            setCategorias(p => ({ ...p, [cat.tipo]: { ...p[cat.tipo], apurar: !!v } }))
+                          }
+                        />
+                      </td>
+                      <td className="p-1.5">{cat.label}</td>
+                      <td className="p-1">
+                        <Input
+                          type="number" step="0.01" min="0"
+                          value={c.percentual}
+                          disabled={!c.apurar}
+                          onChange={e =>
+                            setCategorias(p => ({ ...p, [cat.tipo]: { ...p[cat.tipo], percentual: e.target.value } }))
+                          }
+                          className="h-7 text-xs"
+                          placeholder="0.00"
+                        />
+                      </td>
+                      <td className="p-1">
+                        <Input
+                          type="number" step="0.01" min="0"
+                          value={c.valor_fixo}
+                          disabled={!c.apurar}
+                          onChange={e =>
+                            setCategorias(p => ({ ...p, [cat.tipo]: { ...p[cat.tipo], valor_fixo: e.target.value } }))
+                          }
+                          className="h-7 text-xs"
+                          placeholder="0.00"
+                        />
+                      </td>
+                      <td className="p-1.5 text-right font-mono">{fmtBRL(preview?.subtotal ?? 0)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Outras Custas */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold">Outras Custas</Label>
+              <Button
+                variant="outline" size="icon" className="h-6 w-6"
+                onClick={() => setOutras(p => [...p, { descricao: '', valor: '' }])}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
+            {outras.length === 0 && (
+              <p className="text-[10px] text-muted-foreground py-1">
+                Nenhuma custa adicional. Use o botao + para incluir.
+              </p>
+            )}
+            {outras.length > 0 && (
+              <div className="border border-border rounded overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-muted/50 border-b">
+                      <th className="p-1.5 text-left">Descricao</th>
+                      <th className="p-1.5 text-left w-32">Valor (R$)</th>
+                      <th className="p-1.5 w-6"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outras.map((o, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        <td className="p-1">
+                          <Input
+                            value={o.descricao}
+                            onChange={e => {
+                              const n = [...outras]; n[i] = { ...o, descricao: e.target.value };
+                              setOutras(n);
+                            }}
+                            className="h-7 text-xs"
+                            placeholder="Ex.: Taxa de Diligencia"
+                          />
+                        </td>
+                        <td className="p-1">
+                          <Input
+                            type="number" step="0.01" min="0"
+                            value={o.valor}
+                            onChange={e => {
+                              const n = [...outras]; n[i] = { ...o, valor: e.target.value };
+                              setOutras(n);
+                            }}
+                            className="h-7 text-xs"
+                            placeholder="0.00"
+                          />
+                        </td>
+                        <td className="p-1">
+                          <Button
+                            variant="ghost" size="icon" className="h-6 w-6"
+                            onClick={() => setOutras(p => p.filter((_, j) => j !== i))}
+                          >
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Totalizador Preview */}
+          <div className="flex items-center justify-between bg-muted/40 rounded px-3 py-2 border border-border">
+            <span className="text-xs font-semibold uppercase tracking-wide">Total Preview de Custas</span>
+            <span className="text-sm font-mono font-bold">{fmtBRL(totalPreview)}</span>
+          </div>
+          {!resultadoLiquidacao && (
+            <p className="text-[10px] text-muted-foreground">
+              Dica: execute a liquidacao para obter o subtotal real calculado pelo motor.
+              O preview acima usa apenas os valores fixos informados.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm">Dados de Custas Judiciais</CardTitle></CardHeader>
         <CardContent>
