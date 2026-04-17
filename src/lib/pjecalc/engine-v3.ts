@@ -21,6 +21,8 @@ import type {
   PjeFGTSResult, PjeCSResult, PjeIRResult, PjeSeguroResult,
   PjePrevidenciaPrivadaConfig, PjePensaoConfig, PjeSalarioFamiliaConfig,
   PjePrevidenciaPrivadaResult, PjeSalarioFamiliaResult,
+  PjeExcecaoCargaHoraria, PjeExcecaoSabado, PjeFeriadoDB,
+  PjeSeguroDesempregoDB, PjeSalarioFamiliaDB, PjeSalarioMinimoRow,
 } from './engine-types';
 
 // Core imports
@@ -66,45 +68,85 @@ import {
 export class PjeCalcEngineV3 {
   private params: PjeParametros;
   private historicos: PjeHistoricoSalarial[];
+  private faltas: PjeFalta[];
+  private ferias: PjeFerias[];
   private verbas: PjeVerba[];
+  private cartaoPonto: PjeCartaoPonto[];
   private correcaoConfig: PjeCorrecaoConfig;
   private csConfig: PjeCSConfig;
   private irConfig: PjeIRConfig;
   private fgtsConfig: PjeFGTSConfig;
   private honorariosConfig: PjeHonorariosConfig;
   private custasConfig: PjeCustasConfig;
+  private seguroConfig: PjeSeguroConfig;
   private indicesDB: PjeIndiceRow[];
   private faixasINSSDB: PjeINSSFaixaRow[];
+  private faixasIRDB: PjeIRFaixaRow[];
+  // Parâmetros adicionais armazenados para uso futuro pelo pipeline core/v4
+  // (hoje o V3 ainda não os consome em Calculo.liquidar, mas precisa aceitá-los
+  // para compatibilidade drop-in com o construtor do engine legado)
+  private excecoesCargas: PjeExcecaoCargaHoraria[];
+  private feriadosDB: PjeFeriadoDB[];
+  private prevPrivadaConfig: PjePrevidenciaPrivadaConfig;
+  private pensaoConfig: PjePensaoConfig;
+  private salarioFamiliaConfig: PjeSalarioFamiliaConfig;
+  private seguroDesempregoDB: PjeSeguroDesempregoDB[];
+  private salarioFamiliaDB: PjeSalarioFamiliaDB[];
+  private excecoesSabado: PjeExcecaoSabado[];
+  private salarioMinimoDB: PjeSalarioMinimoRow[];
 
   constructor(
     params: PjeParametros,
     historicos: PjeHistoricoSalarial[],
-    _faltas: PjeFalta[],
-    _ferias: PjeFerias[],
+    faltas: PjeFalta[],
+    ferias: PjeFerias[],
     verbas: PjeVerba[],
-    _cartaoPonto: PjeCartaoPonto[],
+    cartaoPonto: PjeCartaoPonto[],
     fgtsConfig: PjeFGTSConfig,
     csConfig: PjeCSConfig,
     irConfig: PjeIRConfig,
     correcaoConfig: PjeCorrecaoConfig,
     honorariosConfig: PjeHonorariosConfig,
     custasConfig: PjeCustasConfig,
-    _seguroConfig: PjeSeguroConfig,
+    seguroConfig: PjeSeguroConfig,
     indicesDB: PjeIndiceRow[] = [],
     faixasINSSDB: PjeINSSFaixaRow[] = [],
-    _faixasIRDB: PjeIRFaixaRow[] = [],
+    faixasIRDB: PjeIRFaixaRow[] = [],
+    excecoesCargas: PjeExcecaoCargaHoraria[] = [],
+    feriadosDB: PjeFeriadoDB[] = [],
+    prevPrivadaConfig: PjePrevidenciaPrivadaConfig = { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false },
+    pensaoConfig: PjePensaoConfig = { apurar: false, percentual: 0, base: 'liquido' },
+    salarioFamiliaConfig: PjeSalarioFamiliaConfig = { apurar: false, numero_filhos: 0 },
+    seguroDesempregoDB: PjeSeguroDesempregoDB[] = [],
+    salarioFamiliaDB: PjeSalarioFamiliaDB[] = [],
+    excecoesSabado: PjeExcecaoSabado[] = [],
+    salarioMinimoDB: PjeSalarioMinimoRow[] = [],
   ) {
     this.params = params;
     this.historicos = historicos;
+    this.faltas = faltas;
+    this.ferias = ferias;
     this.verbas = verbas;
+    this.cartaoPonto = cartaoPonto;
     this.correcaoConfig = correcaoConfig;
     this.csConfig = csConfig;
     this.irConfig = irConfig;
     this.fgtsConfig = fgtsConfig;
     this.honorariosConfig = honorariosConfig;
     this.custasConfig = custasConfig;
+    this.seguroConfig = seguroConfig;
     this.indicesDB = indicesDB;
     this.faixasINSSDB = faixasINSSDB;
+    this.faixasIRDB = faixasIRDB;
+    this.excecoesCargas = excecoesCargas;
+    this.feriadosDB = feriadosDB;
+    this.prevPrivadaConfig = prevPrivadaConfig;
+    this.pensaoConfig = pensaoConfig;
+    this.salarioFamiliaConfig = salarioFamiliaConfig;
+    this.seguroDesempregoDB = seguroDesempregoDB;
+    this.salarioFamiliaDB = salarioFamiliaDB;
+    this.excecoesSabado = excecoesSabado;
+    this.salarioMinimoDB = salarioMinimoDB;
   }
 
   /**
