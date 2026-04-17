@@ -351,6 +351,340 @@ export type Database = {
           },
         ]
       }
+      audit_lines: {
+        Row: {
+          case_id: string | null
+          created_at: string | null
+          descricao: string | null
+          id: string
+          metadata: Json | null
+          tipo: string | null
+          valor: number | null
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          metadata?: Json | null
+          tipo?: string | null
+          valor?: number | null
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          metadata?: Json | null
+          tipo?: string | null
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_lines_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calc_lineage: {
+        Row: {
+          case_id: string | null
+          changes: Json | null
+          child_snapshot_id: string | null
+          created_at: string | null
+          id: string
+          parent_snapshot_id: string | null
+        }
+        Insert: {
+          case_id?: string | null
+          changes?: Json | null
+          child_snapshot_id?: string | null
+          created_at?: string | null
+          id?: string
+          parent_snapshot_id?: string | null
+        }
+        Update: {
+          case_id?: string | null
+          changes?: Json | null
+          child_snapshot_id?: string | null
+          created_at?: string | null
+          id?: string
+          parent_snapshot_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calc_lineage_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calc_result_items: {
+        Row: {
+          case_id: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          snapshot_id: string | null
+          valor: number | null
+          verba: string | null
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          snapshot_id?: string | null
+          valor?: number | null
+          verba?: string | null
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          snapshot_id?: string | null
+          valor?: number | null
+          verba?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calc_result_items_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calc_scenarios: {
+        Row: {
+          ativo: boolean | null
+          case_id: string | null
+          created_at: string | null
+          descricao: string | null
+          id: string
+          nome: string | null
+          parametros: Json | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          case_id?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string | null
+          parametros?: Json | null
+        }
+        Update: {
+          ativo?: boolean | null
+          case_id?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string | null
+          parametros?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calc_scenarios_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calc_snapshots: {
+        Row: {
+          case_id: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          nome: string | null
+          snapshot: Json | null
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          nome?: string | null
+          snapshot?: Json | null
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          nome?: string | null
+          snapshot?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calc_snapshots_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calculation_cases: {
+        Row: {
+          calculator_id: string | null
+          case_id: string | null
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          calculator_id?: string | null
+          case_id?: string | null
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          calculator_id?: string | null
+          case_id?: string | null
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calculation_cases_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calculation_profiles: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          descricao: string | null
+          id: string
+          nome: string | null
+          parametros: Json | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string | null
+          parametros?: Json | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string | null
+          parametros?: Json | null
+        }
+        Relationships: []
+      }
+      calculation_runs: {
+        Row: {
+          case_id: string | null
+          completed_at: string | null
+          id: string
+          result: Json | null
+          started_at: string | null
+          status: string | null
+        }
+        Insert: {
+          case_id?: string | null
+          completed_at?: string | null
+          id?: string
+          result?: Json | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Update: {
+          case_id?: string | null
+          completed_at?: string | null
+          id?: string
+          result?: Json | null
+          started_at?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calculation_runs_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calculator_versions: {
+        Row: {
+          calculator_id: string | null
+          created_at: string | null
+          id: string
+          schema: Json | null
+          versao: string | null
+        }
+        Insert: {
+          calculator_id?: string | null
+          created_at?: string | null
+          id?: string
+          schema?: Json | null
+          versao?: string | null
+        }
+        Update: {
+          calculator_id?: string | null
+          created_at?: string | null
+          id?: string
+          schema?: Json | null
+          versao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calculator_versions_calculator_id_fkey"
+            columns: ["calculator_id"]
+            isOneToOne: false
+            referencedRelation: "calculators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calculators: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          descricao: string | null
+          id: string
+          nome: string | null
+          tipo: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string | null
+          tipo?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string | null
+          tipo?: string | null
+        }
+        Relationships: []
+      }
       case_briefings: {
         Row: {
           case_id: string | null
@@ -544,6 +878,41 @@ export type Database = {
           verba_nome?: string | null
         }
         Relationships: []
+      }
+      case_processing_stats: {
+        Row: {
+          case_id: string | null
+          docs_count: number | null
+          id: string
+          pages_count: number | null
+          stats: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          case_id?: string | null
+          docs_count?: number | null
+          id?: string
+          pages_count?: number | null
+          stats?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          case_id?: string | null
+          docs_count?: number | null
+          id?: string
+          pages_count?: number | null
+          stats?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_processing_stats_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       case_risk_analysis: {
         Row: {
@@ -896,6 +1265,41 @@ export type Database = {
         }
         Relationships: []
       }
+      domain_calculation_items: {
+        Row: {
+          case_id: string | null
+          codigo: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          valor: number | null
+        }
+        Insert: {
+          case_id?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          valor?: number | null
+        }
+        Update: {
+          case_id?: string | null
+          codigo?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          valor?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domain_calculation_items_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employment_contracts: {
         Row: {
           case_id: string | null
@@ -1129,6 +1533,82 @@ export type Database = {
           },
         ]
       }
+      fact_evidences: {
+        Row: {
+          created_at: string | null
+          document_id: string | null
+          fact_id: string | null
+          id: string
+          pagina: number | null
+          texto: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          document_id?: string | null
+          fact_id?: string | null
+          id?: string
+          pagina?: number | null
+          texto?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          document_id?: string | null
+          fact_id?: string | null
+          id?: string
+          pagina?: number | null
+          texto?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fact_evidences_fact_id_fkey"
+            columns: ["fact_id"]
+            isOneToOne: false
+            referencedRelation: "facts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      facts: {
+        Row: {
+          campo: string | null
+          case_id: string | null
+          confianca: number | null
+          created_at: string | null
+          id: string
+          origem: string | null
+          tipo: string | null
+          valor: string | null
+        }
+        Insert: {
+          campo?: string | null
+          case_id?: string | null
+          confianca?: number | null
+          created_at?: string | null
+          id?: string
+          origem?: string | null
+          tipo?: string | null
+          valor?: string | null
+        }
+        Update: {
+          campo?: string | null
+          case_id?: string | null
+          confianca?: number | null
+          created_at?: string | null
+          id?: string
+          origem?: string | null
+          tipo?: string | null
+          valor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facts_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fonte_conflito: {
         Row: {
           campo: string | null
@@ -1240,6 +1720,33 @@ export type Database = {
           scenario_id?: string | null
           severidade?: string | null
           sugestao?: string | null
+        }
+        Relationships: []
+      }
+      index_series: {
+        Row: {
+          competencia: string | null
+          created_at: string | null
+          id: string
+          nome: string | null
+          serie_id: string | null
+          valor: number | null
+        }
+        Insert: {
+          competencia?: string | null
+          created_at?: string | null
+          id?: string
+          nome?: string | null
+          serie_id?: string | null
+          valor?: number | null
+        }
+        Update: {
+          competencia?: string | null
+          created_at?: string | null
+          id?: string
+          nome?: string | null
+          serie_id?: string | null
+          valor?: number | null
         }
         Relationships: []
       }
@@ -1863,7 +2370,21 @@ export type Database = {
             foreignKeyName: "pjecalc_advogados_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_advogados_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_advogados_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -2485,6 +3006,98 @@ export type Database = {
           },
         ]
       }
+      pjecalc_correcao_config: {
+        Row: {
+          aplicar_juros_fase_pre_judicial: boolean | null
+          base_de_juros_das_verbas: string | null
+          case_id: string | null
+          combinacoes_indice: Json | null
+          combinacoes_juros: Json | null
+          created_at: string | null
+          data_fixa: string | null
+          data_liquidacao: string | null
+          epoca: string | null
+          excecoes_juros: Json | null
+          extras: Json | null
+          id: string
+          ignorar_taxa_negativa: boolean | null
+          indice: string | null
+          juros_apos_deducao_cs: boolean | null
+          juros_inicio: string | null
+          juros_percentual: number | null
+          juros_tipo: string | null
+          multa_467: boolean | null
+          multa_467_percentual: number | null
+          multa_523: boolean | null
+          multa_523_percentual: number | null
+          oj_394_juros_pos_ir: boolean | null
+          selic_pro_rata_die: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          aplicar_juros_fase_pre_judicial?: boolean | null
+          base_de_juros_das_verbas?: string | null
+          case_id?: string | null
+          combinacoes_indice?: Json | null
+          combinacoes_juros?: Json | null
+          created_at?: string | null
+          data_fixa?: string | null
+          data_liquidacao?: string | null
+          epoca?: string | null
+          excecoes_juros?: Json | null
+          extras?: Json | null
+          id?: string
+          ignorar_taxa_negativa?: boolean | null
+          indice?: string | null
+          juros_apos_deducao_cs?: boolean | null
+          juros_inicio?: string | null
+          juros_percentual?: number | null
+          juros_tipo?: string | null
+          multa_467?: boolean | null
+          multa_467_percentual?: number | null
+          multa_523?: boolean | null
+          multa_523_percentual?: number | null
+          oj_394_juros_pos_ir?: boolean | null
+          selic_pro_rata_die?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          aplicar_juros_fase_pre_judicial?: boolean | null
+          base_de_juros_das_verbas?: string | null
+          case_id?: string | null
+          combinacoes_indice?: Json | null
+          combinacoes_juros?: Json | null
+          created_at?: string | null
+          data_fixa?: string | null
+          data_liquidacao?: string | null
+          epoca?: string | null
+          excecoes_juros?: Json | null
+          extras?: Json | null
+          id?: string
+          ignorar_taxa_negativa?: boolean | null
+          indice?: string | null
+          juros_apos_deducao_cs?: boolean | null
+          juros_inicio?: string | null
+          juros_percentual?: number | null
+          juros_tipo?: string | null
+          multa_467?: boolean | null
+          multa_467_percentual?: number | null
+          multa_523?: boolean | null
+          multa_523_percentual?: number | null
+          oj_394_juros_pos_ir?: boolean | null
+          selic_pro_rata_die?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_correcao_config_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pjecalc_correcao_monetaria: {
         Row: {
           acumulado: number | null
@@ -2522,6 +3135,74 @@ export type Database = {
             columns: ["version_id"]
             isOneToOne: false
             referencedRelation: "reference_table_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_cs_config: {
+        Row: {
+          aliquota_empresa_fixa: number | null
+          aliquota_sat_fixa: number | null
+          aliquota_segurado_tipo: string | null
+          aliquota_terceiros_fixa: number | null
+          apurar_empresa: boolean | null
+          apurar_sat: boolean | null
+          apurar_segurado: boolean | null
+          apurar_terceiros: boolean | null
+          atualizar_inss_selic: boolean | null
+          case_id: string | null
+          cobrar_reclamante: boolean | null
+          com_correcao_trabalhista: boolean | null
+          created_at: string | null
+          extras: Json | null
+          id: string
+          periodos_simples: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          aliquota_empresa_fixa?: number | null
+          aliquota_sat_fixa?: number | null
+          aliquota_segurado_tipo?: string | null
+          aliquota_terceiros_fixa?: number | null
+          apurar_empresa?: boolean | null
+          apurar_sat?: boolean | null
+          apurar_segurado?: boolean | null
+          apurar_terceiros?: boolean | null
+          atualizar_inss_selic?: boolean | null
+          case_id?: string | null
+          cobrar_reclamante?: boolean | null
+          com_correcao_trabalhista?: boolean | null
+          created_at?: string | null
+          extras?: Json | null
+          id?: string
+          periodos_simples?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          aliquota_empresa_fixa?: number | null
+          aliquota_sat_fixa?: number | null
+          aliquota_segurado_tipo?: string | null
+          aliquota_terceiros_fixa?: number | null
+          apurar_empresa?: boolean | null
+          apurar_sat?: boolean | null
+          apurar_segurado?: boolean | null
+          apurar_terceiros?: boolean | null
+          atualizar_inss_selic?: boolean | null
+          case_id?: string | null
+          cobrar_reclamante?: boolean | null
+          com_correcao_trabalhista?: boolean | null
+          created_at?: string | null
+          extras?: Json | null
+          id?: string
+          periodos_simples?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_cs_config_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases"
             referencedColumns: ["id"]
           },
         ]
@@ -2599,7 +3280,21 @@ export type Database = {
             foreignKeyName: "pjecalc_custas_config_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_custas_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_custas_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -2777,7 +3472,21 @@ export type Database = {
             foreignKeyName: "pjecalc_excecao_juros_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_excecao_juros_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_excecao_juros_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -2892,7 +3601,21 @@ export type Database = {
             foreignKeyName: "pjecalc_faltas_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_faltas_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_faltas_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -3049,7 +3772,21 @@ export type Database = {
             foreignKeyName: "pjecalc_ferias_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_ferias_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_ferias_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -3063,6 +3800,74 @@ export type Database = {
             foreignKeyName: "pjecalc_ferias_case_id_fkey"
             columns: ["case_id"]
             isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_fgts_config: {
+        Row: {
+          apurar: boolean | null
+          case_id: string | null
+          compor_principal: boolean | null
+          created_at: string | null
+          deduzir_saldo: boolean | null
+          destino: string | null
+          extras: Json | null
+          id: string
+          lc110_05: boolean | null
+          lc110_10: boolean | null
+          multa_apurar: boolean | null
+          multa_base: string | null
+          multa_percentual: number | null
+          multa_tipo: string | null
+          multa_valor_informado: number | null
+          saldos_saques: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          apurar?: boolean | null
+          case_id?: string | null
+          compor_principal?: boolean | null
+          created_at?: string | null
+          deduzir_saldo?: boolean | null
+          destino?: string | null
+          extras?: Json | null
+          id?: string
+          lc110_05?: boolean | null
+          lc110_10?: boolean | null
+          multa_apurar?: boolean | null
+          multa_base?: string | null
+          multa_percentual?: number | null
+          multa_tipo?: string | null
+          multa_valor_informado?: number | null
+          saldos_saques?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          apurar?: boolean | null
+          case_id?: string | null
+          compor_principal?: boolean | null
+          created_at?: string | null
+          deduzir_saldo?: boolean | null
+          destino?: string | null
+          extras?: Json | null
+          id?: string
+          lc110_05?: boolean | null
+          lc110_10?: boolean | null
+          multa_apurar?: boolean | null
+          multa_base?: string | null
+          multa_percentual?: number | null
+          multa_tipo?: string | null
+          multa_valor_informado?: number | null
+          saldos_saques?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_fgts_config_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
             referencedRelation: "cases"
             referencedColumns: ["id"]
           },
@@ -3203,6 +4008,13 @@ export type Database = {
             foreignKeyName: "pjecalc_hist_salarial_mes_hist_salarial_id_fkey"
             columns: ["hist_salarial_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_hist_report"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_hist_salarial_mes_hist_salarial_id_fkey"
+            columns: ["hist_salarial_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_hist_salarial"
             referencedColumns: ["id"]
           },
@@ -3297,7 +4109,21 @@ export type Database = {
             foreignKeyName: "pjecalc_honorarios_config_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_honorarios_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_honorarios_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -3482,6 +4308,77 @@ export type Database = {
         }
         Relationships: []
       }
+      pjecalc_ir_config: {
+        Row: {
+          aposentado_65: boolean | null
+          apurar: boolean | null
+          art_12a_rra: boolean | null
+          case_id: string | null
+          cobrar_reclamado: boolean | null
+          created_at: string | null
+          deduzir_cs: boolean | null
+          deduzir_honorarios: boolean | null
+          deduzir_pensao: boolean | null
+          deduzir_prev_privada: boolean | null
+          dependentes: number | null
+          extras: Json | null
+          id: string
+          incidir_sobre_juros: boolean | null
+          regime_caixa: boolean | null
+          tributacao_exclusiva_13: boolean | null
+          tributacao_separada_ferias: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          aposentado_65?: boolean | null
+          apurar?: boolean | null
+          art_12a_rra?: boolean | null
+          case_id?: string | null
+          cobrar_reclamado?: boolean | null
+          created_at?: string | null
+          deduzir_cs?: boolean | null
+          deduzir_honorarios?: boolean | null
+          deduzir_pensao?: boolean | null
+          deduzir_prev_privada?: boolean | null
+          dependentes?: number | null
+          extras?: Json | null
+          id?: string
+          incidir_sobre_juros?: boolean | null
+          regime_caixa?: boolean | null
+          tributacao_exclusiva_13?: boolean | null
+          tributacao_separada_ferias?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          aposentado_65?: boolean | null
+          apurar?: boolean | null
+          art_12a_rra?: boolean | null
+          case_id?: string | null
+          cobrar_reclamado?: boolean | null
+          created_at?: string | null
+          deduzir_cs?: boolean | null
+          deduzir_honorarios?: boolean | null
+          deduzir_pensao?: boolean | null
+          deduzir_prev_privada?: boolean | null
+          dependentes?: number | null
+          extras?: Json | null
+          id?: string
+          incidir_sobre_juros?: boolean | null
+          regime_caixa?: boolean | null
+          tributacao_exclusiva_13?: boolean | null
+          tributacao_separada_ferias?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_ir_config_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pjecalc_jam: {
         Row: {
           competencia: string | null
@@ -3582,7 +4479,21 @@ export type Database = {
             foreignKeyName: "pjecalc_justificativas_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_justificativas_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_justificativas_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -3658,7 +4569,21 @@ export type Database = {
             foreignKeyName: "pjecalc_multas_config_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_multas_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_multas_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -3892,7 +4817,21 @@ export type Database = {
             foreignKeyName: "pjecalc_pagamentos_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_pagamentos_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_pagamentos_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -4018,7 +4957,21 @@ export type Database = {
             foreignKeyName: "pjecalc_participantes_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_participantes_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_participantes_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -4118,7 +5071,21 @@ export type Database = {
             foreignKeyName: "pjecalc_pensao_ocorrencia_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_pensao_ocorrencia_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_pensao_ocorrencia_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -4259,7 +5226,21 @@ export type Database = {
             foreignKeyName: "pjecalc_prev_privada_ocorrencia_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_prev_privada_ocorrencia_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_prev_privada_ocorrencia_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -4461,7 +5442,21 @@ export type Database = {
             foreignKeyName: "pjecalc_relatorios_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_relatorios_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_relatorios_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -4826,6 +5821,50 @@ export type Database = {
           },
         ]
       }
+      pjecalc_seguro_config: {
+        Row: {
+          apurar: boolean | null
+          case_id: string | null
+          created_at: string | null
+          extras: Json | null
+          id: string
+          parcelas: number | null
+          recebeu: boolean | null
+          updated_at: string | null
+          valor_parcela: number | null
+        }
+        Insert: {
+          apurar?: boolean | null
+          case_id?: string | null
+          created_at?: string | null
+          extras?: Json | null
+          id?: string
+          parcelas?: number | null
+          recebeu?: boolean | null
+          updated_at?: string | null
+          valor_parcela?: number | null
+        }
+        Update: {
+          apurar?: boolean | null
+          case_id?: string | null
+          created_at?: string | null
+          extras?: Json | null
+          id?: string
+          parcelas?: number | null
+          recebeu?: boolean | null
+          updated_at?: string | null
+          valor_parcela?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_seguro_config_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pjecalc_seguro_desemprego: {
         Row: {
           competencia: string | null
@@ -5060,7 +6099,21 @@ export type Database = {
             foreignKeyName: "pjecalc_vale_transporte_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_vale_transporte_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_vale_transporte_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -5136,6 +6189,13 @@ export type Database = {
             columns: ["config_id"]
             isOneToOne: false
             referencedRelation: "pjecalc_vale_transporte_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_vale_transporte_linhas_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_vt_config"
             referencedColumns: ["id"]
           },
         ]
@@ -5355,7 +6415,21 @@ export type Database = {
             foreignKeyName: "pjecalc_versoes_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_versoes_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
             referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_versoes_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
             referencedColumns: ["id"]
           },
           {
@@ -5722,6 +6796,33 @@ export type Database = {
         }
         Relationships: []
       }
+      tax_tables: {
+        Row: {
+          created_at: string | null
+          dados: Json | null
+          id: string
+          tipo: string | null
+          vigencia_fim: string | null
+          vigencia_inicio: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          dados?: Json | null
+          id?: string
+          tipo?: string | null
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          dados?: Json | null
+          id?: string
+          tipo?: string | null
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -5843,6 +6944,167 @@ export type Database = {
       }
     }
     Views: {
+      doc_chunks: {
+        Row: {
+          case_id: string | null
+          chunk_index: number | null
+          content: string | null
+          content_hash: string | null
+          created_at: string | null
+          doc_type: string | null
+          document_id: string | null
+          embedding: string | null
+          id: string | null
+          metadata: Json | null
+          page_number: number | null
+        }
+        Insert: {
+          case_id?: string | null
+          chunk_index?: number | null
+          content?: string | null
+          content_hash?: string | null
+          created_at?: string | null
+          doc_type?: string | null
+          document_id?: string | null
+          embedding?: string | null
+          id?: string | null
+          metadata?: Json | null
+          page_number?: number | null
+        }
+        Update: {
+          case_id?: string | null
+          chunk_index?: number | null
+          content?: string | null
+          content_hash?: string | null
+          created_at?: string | null
+          doc_type?: string | null
+          document_id?: string | null
+          embedding?: string | null
+          id?: string | null
+          metadata?: Json | null
+          page_number?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_atualizacao_config_report: {
+        Row: {
+          a_partir_de_lei_11941: string | null
+          a_partir_de_lei_11941_multa: string | null
+          a_partir_de_lei_11941_pago: string | null
+          a_partir_de_outro_indice: string | null
+          aplicar_multa_salarios_devidos_inss: boolean | null
+          aplicar_multa_salarios_pagos_inss: boolean | null
+          calculo_id: string | null
+          combinacoes_indice: string | null
+          combinacoes_juros: string | null
+          combinar_outro_indice: boolean | null
+          correcao_previdenciaria_salarios_devidos_inss: boolean | null
+          correcao_previdenciaria_salarios_pagos_inss: boolean | null
+          correcao_trabalhista_salarios_devidos_inss: boolean | null
+          correcao_trabalhista_salarios_pagos_inss: boolean | null
+          created_at: string | null
+          data_liquidacao: string | null
+          id: string | null
+          ignorar_taxa_correcao_negativa: boolean | null
+          indice_fgts: string | null
+          indice_irpf: string | null
+          indice_previdenciario: string | null
+          indice_trabalhista: string | null
+          juros_apos_deducao_cs: boolean | null
+          lei_11941: boolean | null
+          lei_11941_multa: boolean | null
+          lei_11941_pago: boolean | null
+          observacoes: string | null
+          oj_394_juros_pos_ir: boolean | null
+          outro_indice_trabalhista: string | null
+          regime_padrao: string | null
+          regimes: Json | null
+          salario_devido_forma_aplicacao: string | null
+          salario_pago_forma_aplicacao: string | null
+          tipo: string | null
+        }
+        Insert: {
+          a_partir_de_lei_11941?: string | null
+          a_partir_de_lei_11941_multa?: string | null
+          a_partir_de_lei_11941_pago?: string | null
+          a_partir_de_outro_indice?: string | null
+          aplicar_multa_salarios_devidos_inss?: boolean | null
+          aplicar_multa_salarios_pagos_inss?: boolean | null
+          calculo_id?: string | null
+          combinacoes_indice?: string | null
+          combinacoes_juros?: string | null
+          combinar_outro_indice?: boolean | null
+          correcao_previdenciaria_salarios_devidos_inss?: boolean | null
+          correcao_previdenciaria_salarios_pagos_inss?: boolean | null
+          correcao_trabalhista_salarios_devidos_inss?: boolean | null
+          correcao_trabalhista_salarios_pagos_inss?: boolean | null
+          created_at?: string | null
+          data_liquidacao?: string | null
+          id?: string | null
+          ignorar_taxa_correcao_negativa?: boolean | null
+          indice_fgts?: string | null
+          indice_irpf?: string | null
+          indice_previdenciario?: string | null
+          indice_trabalhista?: string | null
+          juros_apos_deducao_cs?: boolean | null
+          lei_11941?: boolean | null
+          lei_11941_multa?: boolean | null
+          lei_11941_pago?: boolean | null
+          observacoes?: string | null
+          oj_394_juros_pos_ir?: boolean | null
+          outro_indice_trabalhista?: string | null
+          regime_padrao?: string | null
+          regimes?: Json | null
+          salario_devido_forma_aplicacao?: string | null
+          salario_pago_forma_aplicacao?: string | null
+          tipo?: string | null
+        }
+        Update: {
+          a_partir_de_lei_11941?: string | null
+          a_partir_de_lei_11941_multa?: string | null
+          a_partir_de_lei_11941_pago?: string | null
+          a_partir_de_outro_indice?: string | null
+          aplicar_multa_salarios_devidos_inss?: boolean | null
+          aplicar_multa_salarios_pagos_inss?: boolean | null
+          calculo_id?: string | null
+          combinacoes_indice?: string | null
+          combinacoes_juros?: string | null
+          combinar_outro_indice?: boolean | null
+          correcao_previdenciaria_salarios_devidos_inss?: boolean | null
+          correcao_previdenciaria_salarios_pagos_inss?: boolean | null
+          correcao_trabalhista_salarios_devidos_inss?: boolean | null
+          correcao_trabalhista_salarios_pagos_inss?: boolean | null
+          created_at?: string | null
+          data_liquidacao?: string | null
+          id?: string | null
+          ignorar_taxa_correcao_negativa?: boolean | null
+          indice_fgts?: string | null
+          indice_irpf?: string | null
+          indice_previdenciario?: string | null
+          indice_trabalhista?: string | null
+          juros_apos_deducao_cs?: boolean | null
+          lei_11941?: boolean | null
+          lei_11941_multa?: boolean | null
+          lei_11941_pago?: boolean | null
+          observacoes?: string | null
+          oj_394_juros_pos_ir?: boolean | null
+          outro_indice_trabalhista?: string | null
+          regime_padrao?: string | null
+          regimes?: Json | null
+          salario_devido_forma_aplicacao?: string | null
+          salario_pago_forma_aplicacao?: string | null
+          tipo?: string | null
+        }
+        Relationships: []
+      }
       pjecalc_cartao_ponto: {
         Row: {
           calculo_id: string | null
@@ -5953,6 +7215,154 @@ export type Database = {
           },
         ]
       }
+      pjecalc_case_data: {
+        Row: {
+          case_id: string | null
+          created_at: string | null
+          fase: string | null
+          id: string | null
+          instancia: string | null
+          processo_cnj: string | null
+          reclamado_cnpj: string | null
+          reclamado_nome: string | null
+          reclamante_cpf: string | null
+          reclamante_nome: string | null
+          tribunal: string | null
+          updated_at: string | null
+          vara: string | null
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string | null
+          fase?: string | null
+          id?: string | null
+          instancia?: string | null
+          processo_cnj?: string | null
+          reclamado_cnpj?: string | null
+          reclamado_nome?: string | null
+          reclamante_cpf?: string | null
+          reclamante_nome?: string | null
+          tribunal?: string | null
+          updated_at?: string | null
+          vara?: string | null
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string | null
+          fase?: string | null
+          id?: string | null
+          instancia?: string | null
+          processo_cnj?: string | null
+          reclamado_cnpj?: string | null
+          reclamado_nome?: string | null
+          reclamante_cpf?: string | null
+          reclamante_nome?: string | null
+          tribunal?: string | null
+          updated_at?: string | null
+          vara?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_calculo_case"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_correcao_report: {
+        Row: {
+          aplicar_juros_fase_pre_judicial: boolean | null
+          base_de_juros_das_verbas: string | null
+          case_id: string | null
+          combinacoes_indice: Json | null
+          combinacoes_juros: Json | null
+          created_at: string | null
+          data_fixa: string | null
+          data_liquidacao: string | null
+          epoca: string | null
+          excecoes_juros: Json | null
+          extras: Json | null
+          id: string | null
+          ignorar_taxa_negativa: boolean | null
+          indice: string | null
+          juros_apos_deducao_cs: boolean | null
+          juros_inicio: string | null
+          juros_percentual: number | null
+          juros_tipo: string | null
+          multa_467: boolean | null
+          multa_467_percentual: number | null
+          multa_523: boolean | null
+          multa_523_percentual: number | null
+          oj_394_juros_pos_ir: boolean | null
+          selic_pro_rata_die: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          aplicar_juros_fase_pre_judicial?: boolean | null
+          base_de_juros_das_verbas?: string | null
+          case_id?: string | null
+          combinacoes_indice?: Json | null
+          combinacoes_juros?: Json | null
+          created_at?: string | null
+          data_fixa?: string | null
+          data_liquidacao?: string | null
+          epoca?: string | null
+          excecoes_juros?: Json | null
+          extras?: Json | null
+          id?: string | null
+          ignorar_taxa_negativa?: boolean | null
+          indice?: string | null
+          juros_apos_deducao_cs?: boolean | null
+          juros_inicio?: string | null
+          juros_percentual?: number | null
+          juros_tipo?: string | null
+          multa_467?: boolean | null
+          multa_467_percentual?: number | null
+          multa_523?: boolean | null
+          multa_523_percentual?: number | null
+          oj_394_juros_pos_ir?: boolean | null
+          selic_pro_rata_die?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          aplicar_juros_fase_pre_judicial?: boolean | null
+          base_de_juros_das_verbas?: string | null
+          case_id?: string | null
+          combinacoes_indice?: Json | null
+          combinacoes_juros?: Json | null
+          created_at?: string | null
+          data_fixa?: string | null
+          data_liquidacao?: string | null
+          epoca?: string | null
+          excecoes_juros?: Json | null
+          extras?: Json | null
+          id?: string | null
+          ignorar_taxa_negativa?: boolean | null
+          indice?: string | null
+          juros_apos_deducao_cs?: boolean | null
+          juros_inicio?: string | null
+          juros_percentual?: number | null
+          juros_tipo?: string | null
+          multa_467?: boolean | null
+          multa_467_percentual?: number | null
+          multa_523?: boolean | null
+          multa_523_percentual?: number | null
+          oj_394_juros_pos_ir?: boolean | null
+          selic_pro_rata_die?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_correcao_config_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pjecalc_dados_processo: {
         Row: {
           case_id: string | null
@@ -6033,6 +7443,420 @@ export type Database = {
           },
         ]
       }
+      pjecalc_dados_processo_report: {
+        Row: {
+          case_id: string | null
+          created_at: string | null
+          data_admissao: string | null
+          data_ajuizamento: string | null
+          data_citacao: string | null
+          data_demissao: string | null
+          data_fim_calculo: string | null
+          data_inicio_calculo: string | null
+          data_liquidacao: string | null
+          fase: string | null
+          id: string | null
+          instancia: string | null
+          processo_cnj: string | null
+          reclamado_cnpj: string | null
+          reclamado_nome: string | null
+          reclamante_cpf: string | null
+          reclamante_nome: string | null
+          tipo_demissao: string | null
+          tribunal: string | null
+          updated_at: string | null
+          vara: string | null
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string | null
+          data_admissao?: string | null
+          data_ajuizamento?: string | null
+          data_citacao?: string | null
+          data_demissao?: string | null
+          data_fim_calculo?: string | null
+          data_inicio_calculo?: string | null
+          data_liquidacao?: string | null
+          fase?: string | null
+          id?: string | null
+          instancia?: string | null
+          processo_cnj?: string | null
+          reclamado_cnpj?: string | null
+          reclamado_nome?: string | null
+          reclamante_cpf?: string | null
+          reclamante_nome?: string | null
+          tipo_demissao?: string | null
+          tribunal?: string | null
+          updated_at?: string | null
+          vara?: string | null
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string | null
+          data_admissao?: string | null
+          data_ajuizamento?: string | null
+          data_citacao?: string | null
+          data_demissao?: string | null
+          data_fim_calculo?: string | null
+          data_inicio_calculo?: string | null
+          data_liquidacao?: string | null
+          fase?: string | null
+          id?: string | null
+          instancia?: string | null
+          processo_cnj?: string | null
+          reclamado_cnpj?: string | null
+          reclamado_nome?: string | null
+          reclamante_cpf?: string | null
+          reclamante_nome?: string | null
+          tipo_demissao?: string | null
+          tribunal?: string | null
+          updated_at?: string | null
+          vara?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_calculo_case"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_excecoes_juros: {
+        Row: {
+          calculo_id: string | null
+          created_at: string | null
+          fundamento: string | null
+          id: string | null
+          motivo: string | null
+          percentual: number | null
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          tipo_juros: string | null
+        }
+        Insert: {
+          calculo_id?: string | null
+          created_at?: string | null
+          fundamento?: string | null
+          id?: string | null
+          motivo?: string | null
+          percentual?: number | null
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          tipo_juros?: string | null
+        }
+        Update: {
+          calculo_id?: string | null
+          created_at?: string | null
+          fundamento?: string | null
+          id?: string | null
+          motivo?: string | null
+          percentual?: number | null
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          tipo_juros?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_excecao_juros_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_excecao_juros_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_excecao_juros_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_excecao_juros_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_excecao_juros_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_parametros_extras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_faltas_report: {
+        Row: {
+          calculo_id: string | null
+          case_id: string | null
+          created_at: string | null
+          data_final: string | null
+          data_inicial: string | null
+          documento_id: string | null
+          id: string | null
+          justificada: boolean | null
+          motivo: string | null
+          reiniciar_ferias: boolean | null
+        }
+        Insert: {
+          calculo_id?: string | null
+          case_id?: string | null
+          created_at?: string | null
+          data_final?: string | null
+          data_inicial?: string | null
+          documento_id?: string | null
+          id?: string | null
+          justificada?: boolean | null
+          motivo?: string | null
+          reiniciar_ferias?: boolean | null
+        }
+        Update: {
+          calculo_id?: string | null
+          case_id?: string | null
+          created_at?: string | null
+          data_final?: string | null
+          data_inicial?: string | null
+          documento_id?: string | null
+          id?: string | null
+          justificada?: boolean | null
+          motivo?: string | null
+          reiniciar_ferias?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_faltas_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_faltas_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_faltas_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_faltas_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_faltas_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_parametros_extras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_faltas_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_ferias_report: {
+        Row: {
+          abono: boolean | null
+          abono_dias: number | null
+          calculo_id: string | null
+          case_id: string | null
+          created_at: string | null
+          dobra_geral: boolean | null
+          gozo_1_dobra: boolean | null
+          gozo_1_fim: string | null
+          gozo_1_inicio: string | null
+          gozo_2_dobra: boolean | null
+          gozo_2_fim: string | null
+          gozo_2_inicio: string | null
+          gozo_3_dobra: boolean | null
+          gozo_3_fim: string | null
+          gozo_3_inicio: string | null
+          id: string | null
+          observacoes: string | null
+          periodo_aquisitivo_fim: string | null
+          periodo_aquisitivo_inicio: string | null
+          periodo_concessivo_fim: string | null
+          periodo_concessivo_inicio: string | null
+          prazo_dias: number | null
+          situacao: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          abono?: boolean | null
+          abono_dias?: number | null
+          calculo_id?: string | null
+          case_id?: string | null
+          created_at?: string | null
+          dobra_geral?: boolean | null
+          gozo_1_dobra?: boolean | null
+          gozo_1_fim?: string | null
+          gozo_1_inicio?: string | null
+          gozo_2_dobra?: boolean | null
+          gozo_2_fim?: string | null
+          gozo_2_inicio?: string | null
+          gozo_3_dobra?: boolean | null
+          gozo_3_fim?: string | null
+          gozo_3_inicio?: string | null
+          id?: string | null
+          observacoes?: string | null
+          periodo_aquisitivo_fim?: string | null
+          periodo_aquisitivo_inicio?: string | null
+          periodo_concessivo_fim?: string | null
+          periodo_concessivo_inicio?: string | null
+          prazo_dias?: number | null
+          situacao?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          abono?: boolean | null
+          abono_dias?: number | null
+          calculo_id?: string | null
+          case_id?: string | null
+          created_at?: string | null
+          dobra_geral?: boolean | null
+          gozo_1_dobra?: boolean | null
+          gozo_1_fim?: string | null
+          gozo_1_inicio?: string | null
+          gozo_2_dobra?: boolean | null
+          gozo_2_fim?: string | null
+          gozo_2_inicio?: string | null
+          gozo_3_dobra?: boolean | null
+          gozo_3_fim?: string | null
+          gozo_3_inicio?: string | null
+          id?: string | null
+          observacoes?: string | null
+          periodo_aquisitivo_fim?: string | null
+          periodo_aquisitivo_inicio?: string | null
+          periodo_concessivo_fim?: string | null
+          periodo_concessivo_inicio?: string | null
+          prazo_dias?: number | null
+          situacao?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_ferias_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_ferias_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_ferias_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_ferias_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_ferias_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_parametros_extras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_ferias_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_hist_report: {
+        Row: {
+          calculo_id: string | null
+          case_id: string | null
+          created_at: string | null
+          id: string | null
+          incide_fgts: boolean | null
+          incide_inss: boolean | null
+          incide_ir: boolean | null
+          nome: string | null
+          observacoes: string | null
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          tipo_variacao: string | null
+          valor_fixo: number | null
+        }
+        Insert: {
+          calculo_id?: string | null
+          case_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          incide_fgts?: boolean | null
+          incide_inss?: boolean | null
+          incide_ir?: boolean | null
+          nome?: string | null
+          observacoes?: string | null
+          periodo_fim?: never
+          periodo_inicio?: never
+          tipo_variacao?: string | null
+          valor_fixo?: number | null
+        }
+        Update: {
+          calculo_id?: string | null
+          case_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          incide_fgts?: boolean | null
+          incide_inss?: boolean | null
+          incide_ir?: boolean | null
+          nome?: string | null
+          observacoes?: string | null
+          periodo_fim?: never
+          periodo_inicio?: never
+          tipo_variacao?: string | null
+          valor_fixo?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_hist_salarial_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pjecalc_historico_ocorrencias: {
         Row: {
           calculo_id: string | null
@@ -6073,6 +7897,13 @@ export type Database = {
             columns: ["case_id"]
             isOneToOne: false
             referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_hist_salarial_mes_hist_salarial_id_fkey"
+            columns: ["hist_salarial_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_hist_report"
             referencedColumns: ["id"]
           },
           {
@@ -6147,6 +7978,114 @@ export type Database = {
           },
         ]
       }
+      pjecalc_honorarios: {
+        Row: {
+          aliquota_iss: number | null
+          ativo: boolean | null
+          base: string | null
+          calculo_id: string | null
+          com_juros: boolean | null
+          corrigido: boolean | null
+          created_at: string | null
+          credor: string | null
+          deduzir_cs_segurado: boolean | null
+          deduzir_fgts_depositar: boolean | null
+          deduzir_honorarios_contratuais: boolean | null
+          deduzir_ir: boolean | null
+          faixas: Json | null
+          id: string | null
+          incide_iss: boolean | null
+          observacoes: string | null
+          ordem: number | null
+          percentual: number | null
+          tipo: string | null
+          usar_faixas: boolean | null
+          valor_informado: number | null
+        }
+        Insert: {
+          aliquota_iss?: number | null
+          ativo?: boolean | null
+          base?: string | null
+          calculo_id?: string | null
+          com_juros?: boolean | null
+          corrigido?: boolean | null
+          created_at?: string | null
+          credor?: string | null
+          deduzir_cs_segurado?: boolean | null
+          deduzir_fgts_depositar?: boolean | null
+          deduzir_honorarios_contratuais?: boolean | null
+          deduzir_ir?: boolean | null
+          faixas?: Json | null
+          id?: string | null
+          incide_iss?: boolean | null
+          observacoes?: string | null
+          ordem?: number | null
+          percentual?: number | null
+          tipo?: string | null
+          usar_faixas?: boolean | null
+          valor_informado?: number | null
+        }
+        Update: {
+          aliquota_iss?: number | null
+          ativo?: boolean | null
+          base?: string | null
+          calculo_id?: string | null
+          com_juros?: boolean | null
+          corrigido?: boolean | null
+          created_at?: string | null
+          credor?: string | null
+          deduzir_cs_segurado?: boolean | null
+          deduzir_fgts_depositar?: boolean | null
+          deduzir_honorarios_contratuais?: boolean | null
+          deduzir_ir?: boolean | null
+          faixas?: Json | null
+          id?: string | null
+          incide_iss?: boolean | null
+          observacoes?: string | null
+          ordem?: number | null
+          percentual?: number | null
+          tipo?: string | null
+          usar_faixas?: boolean | null
+          valor_informado?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_honorarios_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_honorarios_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_case_data"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_honorarios_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_honorarios_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_dados_processo_report"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_honorarios_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_parametros_extras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pjecalc_indice_cobertura: {
         Row: {
           cobertura_fim: string | null
@@ -6170,6 +8109,98 @@ export type Database = {
           valor_inicial: number | null
         }
         Relationships: []
+      }
+      pjecalc_liquidacao: {
+        Row: {
+          calculado_em: string | null
+          calculo_id: string | null
+          case_id: string | null
+          created_at: string | null
+          custas: number | null
+          desconto_inss_reclamado: number | null
+          desconto_inss_reclamante: number | null
+          desconto_ir: number | null
+          engine_version: string | null
+          fgts_depositar: number | null
+          fgts_multa_40: number | null
+          hash_resultado: string | null
+          honorarios: number | null
+          id: string | null
+          multa_467: number | null
+          multa_477: number | null
+          resumo_verbas: Json | null
+          total_bruto: number | null
+          total_correcao: number | null
+          total_diferenca: number | null
+          total_juros: number | null
+          total_liquido_antes_descontos: number | null
+          total_pago: number | null
+          total_reclamado: number | null
+          total_reclamante: number | null
+        }
+        Insert: {
+          calculado_em?: string | null
+          calculo_id?: string | null
+          case_id?: string | null
+          created_at?: string | null
+          custas?: number | null
+          desconto_inss_reclamado?: number | null
+          desconto_inss_reclamante?: number | null
+          desconto_ir?: number | null
+          engine_version?: string | null
+          fgts_depositar?: number | null
+          fgts_multa_40?: number | null
+          hash_resultado?: string | null
+          honorarios?: number | null
+          id?: string | null
+          multa_467?: number | null
+          multa_477?: number | null
+          resumo_verbas?: Json | null
+          total_bruto?: number | null
+          total_correcao?: number | null
+          total_diferenca?: number | null
+          total_juros?: number | null
+          total_liquido_antes_descontos?: number | null
+          total_pago?: number | null
+          total_reclamado?: number | null
+          total_reclamante?: number | null
+        }
+        Update: {
+          calculado_em?: string | null
+          calculo_id?: string | null
+          case_id?: string | null
+          created_at?: string | null
+          custas?: number | null
+          desconto_inss_reclamado?: number | null
+          desconto_inss_reclamante?: number | null
+          desconto_ir?: number | null
+          engine_version?: string | null
+          fgts_depositar?: number | null
+          fgts_multa_40?: number | null
+          hash_resultado?: string | null
+          honorarios?: number | null
+          id?: string | null
+          multa_467?: number | null
+          multa_477?: number | null
+          resumo_verbas?: Json | null
+          total_bruto?: number | null
+          total_correcao?: number | null
+          total_diferenca?: number | null
+          total_juros?: number | null
+          total_liquido_antes_descontos?: number | null
+          total_pago?: number | null
+          total_reclamado?: number | null
+          total_reclamante?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_resultado_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pjecalc_liquidacao_resultado: {
         Row: {
@@ -6258,6 +8289,44 @@ export type Database = {
             foreignKeyName: "pjecalc_resultado_case_id_fkey"
             columns: ["case_id"]
             isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_parametros_conflict: {
+        Row: {
+          carga_horaria_padrao: number | null
+          case_id: string | null
+          created_at: string | null
+          data_admissao: string | null
+          data_demissao: string | null
+          id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          carga_horaria_padrao?: number | null
+          case_id?: string | null
+          created_at?: string | null
+          data_admissao?: string | null
+          data_demissao?: string | null
+          id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          carga_horaria_padrao?: number | null
+          case_id?: string | null
+          created_at?: string | null
+          data_admissao?: string | null
+          data_demissao?: string | null
+          id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_parametros_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
             referencedRelation: "cases"
             referencedColumns: ["id"]
           },
@@ -6360,6 +8429,86 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pjecalc_parametros_report: {
+        Row: {
+          carga_horaria_padrao: number | null
+          case_id: string | null
+          created_at: string | null
+          data_admissao: string | null
+          data_demissao: string | null
+          id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          carga_horaria_padrao?: number | null
+          case_id?: string | null
+          created_at?: string | null
+          data_admissao?: string | null
+          data_demissao?: string | null
+          id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          carga_horaria_padrao?: number | null
+          case_id?: string | null
+          created_at?: string | null
+          data_admissao?: string | null
+          data_demissao?: string | null
+          id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_parametros_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_pensao_config: {
+        Row: {
+          apurar: boolean | null
+          base_incidencia: string | null
+          beneficiario: string | null
+          calculo_id: string | null
+          created_at: string | null
+          id: string | null
+          observacoes: string | null
+          percentual: number | null
+          tipo: string | null
+          updated_at: string | null
+          valor_fixo: number | null
+        }
+        Insert: {
+          apurar?: boolean | null
+          base_incidencia?: string | null
+          beneficiario?: string | null
+          calculo_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          observacoes?: string | null
+          percentual?: number | null
+          tipo?: string | null
+          updated_at?: string | null
+          valor_fixo?: number | null
+        }
+        Update: {
+          apurar?: boolean | null
+          base_incidencia?: string | null
+          beneficiario?: string | null
+          calculo_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          observacoes?: string | null
+          percentual?: number | null
+          tipo?: string | null
+          updated_at?: string | null
+          valor_fixo?: number | null
+        }
+        Relationships: []
       }
       pjecalc_ponto_diario: {
         Row: {
@@ -6470,6 +8619,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pjecalc_prev_priv: {
+        Row: {
+          apurar: boolean | null
+          calculo_id: string | null
+          created_at: string | null
+          entidade: string | null
+          id: string | null
+          observacoes: string | null
+          percentual_empregado: number | null
+          percentual_empregador: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          apurar?: boolean | null
+          calculo_id?: string | null
+          created_at?: string | null
+          entidade?: string | null
+          id?: string | null
+          observacoes?: string | null
+          percentual_empregado?: number | null
+          percentual_empregador?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          apurar?: boolean | null
+          calculo_id?: string | null
+          created_at?: string | null
+          entidade?: string | null
+          id?: string | null
+          observacoes?: string | null
+          percentual_empregado?: number | null
+          percentual_empregador?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      pjecalc_salario_familia_config: {
+        Row: {
+          apurar: boolean | null
+          calculo_id: string | null
+          created_at: string | null
+          id: string | null
+          numero_filhos: number | null
+          observacoes: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          apurar?: boolean | null
+          calculo_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          numero_filhos?: number | null
+          observacoes?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          apurar?: boolean | null
+          calculo_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          numero_filhos?: number | null
+          observacoes?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       pjecalc_verba_ocorrencias: {
         Row: {
@@ -6770,6 +8985,131 @@ export type Database = {
             columns: ["verba_principal_id"]
             isOneToOne: false
             referencedRelation: "pjecalc_verbas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_vt_config: {
+        Row: {
+          apurar: boolean | null
+          calculo_id: string | null
+          created_at: string | null
+          desconto_empregado_pct: number | null
+          id: string | null
+          observacoes: string | null
+        }
+        Insert: {
+          apurar?: boolean | null
+          calculo_id?: string | null
+          created_at?: string | null
+          desconto_empregado_pct?: number | null
+          id?: string | null
+          observacoes?: string | null
+        }
+        Update: {
+          apurar?: boolean | null
+          calculo_id?: string | null
+          created_at?: string | null
+          desconto_empregado_pct?: number | null
+          id?: string | null
+          observacoes?: string | null
+        }
+        Relationships: []
+      }
+      pjecalc_vt_linhas: {
+        Row: {
+          config_id: string | null
+          created_at: string | null
+          data_encerramento: string | null
+          descricao: string | null
+          id: string | null
+          quantidade_dia: number | null
+          tipo: string | null
+          valor_passagem: number | null
+        }
+        Insert: {
+          config_id?: string | null
+          created_at?: string | null
+          data_encerramento?: string | null
+          descricao?: string | null
+          id?: string | null
+          quantidade_dia?: number | null
+          tipo?: string | null
+          valor_passagem?: number | null
+        }
+        Update: {
+          config_id?: string | null
+          created_at?: string | null
+          data_encerramento?: string | null
+          descricao?: string | null
+          id?: string | null
+          quantidade_dia?: number | null
+          tipo?: string | null
+          valor_passagem?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_vale_transporte_linhas_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_vale_transporte_config"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_vale_transporte_linhas_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_vt_config"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reference_tables: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          is_auto_importable: boolean | null
+          last_import_at: string | null
+          last_import_result: Json | null
+          name: string | null
+          requires_manual_input: boolean | null
+          slug: string | null
+          source_id: string | null
+          status: string | null
+          update_frequency: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          is_auto_importable?: boolean | null
+          last_import_at?: string | null
+          last_import_result?: Json | null
+          name?: string | null
+          requires_manual_input?: boolean | null
+          slug?: string | null
+          source_id?: string | null
+          status?: string | null
+          update_frequency?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          is_auto_importable?: boolean | null
+          last_import_at?: string | null
+          last_import_result?: Json | null
+          name?: string | null
+          requires_manual_input?: boolean | null
+          slug?: string | null
+          source_id?: string | null
+          status?: string | null
+          update_frequency?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reference_table_registry_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "reference_sources"
             referencedColumns: ["id"]
           },
         ]
