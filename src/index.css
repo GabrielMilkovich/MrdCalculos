@@ -3,54 +3,55 @@
 @tailwind utilities;
 
 /* ========================================================
-   MRDCalc – Refined Professional Design System
-   Slate-Navy + Teal Accent | Clean & Modern
+   MRDCalc – PJe-Calc Official Theme (TRT)
+   White + Azul TRT #1A3E7C + neutrals | Governmental
    ======================================================== */
 
 @layer base {
   :root {
-    /* Core: warm off-white, deep navy text */
-    --background: 220 16% 96%;
-    --foreground: 220 30% 14%;
+    /* Core: white background, dark gray text (#2D3748) */
+    --background: 0 0% 100%;
+    --foreground: 218 17% 23%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 30% 14%;
+    --card-foreground: 218 17% 23%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 30% 14%;
+    --popover-foreground: 218 17% 23%;
 
-    /* Deep slate-navy — professional authority */
-    --primary: 215 50% 23%;
-    --primary-foreground: 210 40% 98%;
+    /* Azul TRT #1A3E7C */
+    --primary: 218 65% 30%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Cool secondary */
-    --secondary: 218 14% 92%;
-    --secondary-foreground: 215 50% 23%;
+    /* Secondary: light neutral */
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 218 65% 30%;
 
-    /* Muted */
-    --muted: 220 14% 96%;
-    --muted-foreground: 218 10% 48%;
+    /* Muted: super light gray #F7FAFC */
+    --muted: 210 40% 98%;
+    --muted-foreground: 218 11% 45%;
 
-    /* Teal accent — modern, trustworthy */
-    --accent: 190 60% 42%;
-    --accent-foreground: 0 0% 100%;
+    /* Accent: azul claro #E6EBF5 (hover) */
+    --accent: 220 40% 93%;
+    --accent-foreground: 218 65% 30%;
 
-    --destructive: 0 72% 55%;
+    --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
 
     /* Success */
-    --success: 158 64% 40%;
+    --success: 158 64% 35%;
     --success-foreground: 0 0% 100%;
 
     /* Warning */
-    --warning: 38 92% 50%;
-    --warning-foreground: 220 30% 14%;
+    --warning: 38 92% 48%;
+    --warning-foreground: 218 17% 23%;
 
-    --border: 218 14% 90%;
-    --input: 218 14% 90%;
-    --ring: 215 50% 23%;
+    /* Border: cinza #E2E8F0 */
+    --border: 214 32% 91%;
+    --input: 214 25% 80%;
+    --ring: 218 65% 30%;
 
-    --radius: 0.5rem;
+    --radius: 0.25rem;
 
     /* Status tokens */
     --status-draft: 218 10% 48%;
@@ -68,17 +69,17 @@
     --sidebar-border: 215 35% 20%;
     --sidebar-ring: 190 60% 50%;
 
-    /* Shadows */
-    --shadow-xs: 0 1px 2px 0 hsl(220 30% 14% / 0.03);
-    --shadow-sm: 0 1px 3px 0 hsl(220 30% 14% / 0.05), 0 1px 2px -1px hsl(220 30% 14% / 0.05);
-    --shadow-md: 0 4px 6px -1px hsl(220 30% 14% / 0.06), 0 2px 4px -2px hsl(220 30% 14% / 0.04);
-    --shadow-lg: 0 10px 15px -3px hsl(220 30% 14% / 0.07), 0 4px 6px -4px hsl(220 30% 14% / 0.04);
-    --shadow-xl: 0 20px 25px -5px hsl(220 30% 14% / 0.08), 0 8px 10px -6px hsl(220 30% 14% / 0.04);
+    /* Shadows — flat governmental, minimal */
+    --shadow-xs: 0 1px 1px 0 hsl(218 17% 23% / 0.04);
+    --shadow-sm: 0 1px 2px 0 hsl(218 17% 23% / 0.05);
+    --shadow-md: 0 1px 3px 0 hsl(218 17% 23% / 0.06);
+    --shadow-lg: 0 2px 4px 0 hsl(218 17% 23% / 0.07);
+    --shadow-xl: 0 2px 6px 0 hsl(218 17% 23% / 0.08);
 
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(215 50% 23%) 0%, hsl(215 45% 30%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(190 60% 42%) 0%, hsl(190 65% 36%) 100%);
-    --gradient-glass: linear-gradient(135deg, hsl(0 0% 100% / 0.95) 0%, hsl(0 0% 100% / 0.85) 100%);
+    /* Gradients — disabled (flat theme) */
+    --gradient-primary: hsl(218 65% 30%);
+    --gradient-accent: hsl(218 65% 30%);
+    --gradient-glass: hsl(0 0% 100%);
   }
 
   .dark {
@@ -132,8 +133,34 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+  }
+}
+
+@layer components {
+  /* ---- PJe-Calc utility classes ---- */
+  .pje-card {
+    @apply border border-gray-300 bg-white p-4;
+  }
+  .pje-section-header {
+    @apply bg-[#1A3E7C] text-white px-3 py-2 text-sm font-semibold;
+  }
+  .pje-form-label {
+    @apply block text-xs font-medium text-gray-700 mb-1;
+  }
+  .pje-table {
+    @apply border-collapse w-full text-sm;
+  }
+  .pje-table td,
+  .pje-table th {
+    @apply px-3 py-1 border border-gray-300;
+  }
+  .pje-table th {
+    @apply bg-gray-100 font-semibold text-left;
+  }
+  .pje-btn-primary {
+    @apply bg-[#1A3E7C] text-white hover:bg-[#163264] px-4 py-1.5 rounded-sm text-sm font-medium transition-colors;
   }
 }
 

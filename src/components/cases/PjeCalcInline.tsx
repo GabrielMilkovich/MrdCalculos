@@ -16,6 +16,9 @@ import {
   DollarSign, Building2, Receipt, Percent, TrendingUp, FileBarChart,
   Check, Plus, Trash2, Loader2, Briefcase, Calculator,
   Scale, Shield, Gavel, Users, Landmark, Zap, Pencil,
+  ChevronDown, ChevronRight, ClipboardList, CalendarClock,
+  Wallet, Banknote, ScrollText, HeartHandshake, Activity,
+  BookOpen, Settings2, AlertCircle, Sparkles,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -24,6 +27,7 @@ import {
 // Module components
 import { ModuloDadosProcesso } from "./pjecalc/ModuloDadosProcesso";
 import { ModuloCartaoPonto } from "./pjecalc/ModuloCartaoPonto";
+import { ModuloCartaoPontoDiario } from "./pjecalc/ModuloCartaoPontoDiario";
 import { ModuloFGTS } from "./pjecalc/ModuloFGTS";
 import { ModuloCS } from "./pjecalc/ModuloCS";
 import { ModuloIR } from "./pjecalc/ModuloIR";
@@ -37,30 +41,126 @@ import { ModuloPensaoAlimenticia } from "./pjecalc/ModuloPensaoAlimenticia";
 import { ModuloPrevidenciaPrivada } from "./pjecalc/ModuloPrevidenciaPrivada";
 import { ModuloSalarioFamilia } from "./pjecalc/ModuloSalarioFamilia";
 import { ImportadorFichaFinanceira } from "./pjecalc/ImportadorFichaFinanceira";
+import { ModuloValeTransporte } from "./pjecalc/ModuloValeTransporte";
+import { ModuloAdvogados } from "./pjecalc/ModuloAdvogados";
+import { ModuloESocial } from "./pjecalc/ModuloESocial";
+import { ModuloExcecoesJuros } from "./pjecalc/ModuloExcecoesJuros";
+import { ModuloAjusteSentenca } from "./pjecalc/ModuloAjusteSentenca";
+import { ModuloGuiasRecolhimento } from "./pjecalc/ModuloGuiasRecolhimento";
+import { ModuloAtualizacao } from "./pjecalc/ModuloAtualizacao";
+import { ModuloDanosMorais } from "./pjecalc/ModuloDanosMorais";
+import { ModuloEquiparacaoSalarial } from "./pjecalc/ModuloEquiparacaoSalarial";
+import { ModuloEstabilidade } from "./pjecalc/ModuloEstabilidade";
+import { ModuloPericulosidade } from "./pjecalc/ModuloPericulosidade";
+import { ModuloTerceiros } from "./pjecalc/ModuloTerceiros";
 import { calcularCompletude, type ModuleStatus } from "@/lib/pjecalc/completude";
 import { logger } from "@/lib/logger";
 
-  // Module definitions with metadata
-  const MODULOS = [
-    { id: 'dados_processo', label: 'Dados do Processo', icon: Gavel, desc: 'Identificação e partes' },
-    { id: 'parametros', label: 'Parâmetros', icon: Calendar, desc: 'Datas e configuração' },
-    { id: 'historico', label: 'Histórico Salarial', icon: DollarSign, desc: 'Bases de cálculo' },
-    { id: 'faltas', label: 'Faltas', icon: Clock, desc: 'Registros de ausência' },
-    { id: 'ferias', label: 'Férias', icon: Calendar, desc: 'Períodos aquisitivos' },
-    { id: 'cartao_ponto', label: 'Cartão de Ponto', icon: Clock, desc: 'Horas extras e noturnas' },
-    { id: 'verbas', label: 'Verbas', icon: FileText, desc: 'Parcelas do cálculo' },
-    { id: 'salario_familia', label: 'Salário-Família', icon: Users, desc: 'Cotas por dependente' },
-    { id: 'seguro_desemprego', label: 'Seguro-Desemprego', icon: Shield, desc: 'Indenização substitutiva' },
-    { id: 'fgts', label: 'FGTS', icon: Building2, desc: 'Depósitos e multa' },
-    { id: 'cs', label: 'Contrib. Social', icon: Receipt, desc: 'Segurado e empregador' },
-    { id: 'prev_privada', label: 'Previd. Privada', icon: Briefcase, desc: 'Complementar' },
-    { id: 'pensao', label: 'Pensão Alimentícia', icon: Users, desc: 'Percentual sobre crédito' },
-    { id: 'ir', label: 'Imposto de Renda', icon: Percent, desc: 'IRRF / RRA' },
-    { id: 'correcao', label: 'Correção/Juros', icon: TrendingUp, desc: 'Atualização monetária' },
-    { id: 'multas', label: 'Multas e Inden.', icon: Gavel, desc: 'CLT 467, 477, etc.' },
-    { id: 'honorarios', label: 'Honorários', icon: Scale, desc: 'Sucumbenciais e contratuais' },
-    { id: 'custas', label: 'Custas', icon: Landmark, desc: 'Custas e assistência' },
-    { id: 'resumo', label: 'Resumo', icon: FileBarChart, desc: 'Resultado da liquidação' },
+  // ── Hierarchical sections (PJe-Calc official layout) ──
+  interface ModuloDef {
+    id: string;
+    label: string;
+    icon: any;
+  }
+  interface SecaoDef {
+    id: string;
+    label: string;
+    icon: any;
+    modulos: ModuloDef[];
+  }
+  const SECOES: SecaoDef[] = [
+    {
+      id: 'sec_dados',
+      label: '1. Dados do Cálculo',
+      icon: ClipboardList,
+      modulos: [
+        { id: 'dados_processo', label: 'Dados do Processo', icon: Gavel },
+        { id: 'parametros_gerais', label: 'Parâmetros Gerais', icon: Settings2 },
+        { id: 'advogados', label: 'Advogados', icon: Users },
+      ],
+    },
+    {
+      id: 'sec_periodos',
+      label: '2. Períodos e Ponto',
+      icon: CalendarClock,
+      modulos: [
+        { id: 'historico', label: 'Histórico Salarial', icon: DollarSign },
+        { id: 'faltas', label: 'Faltas', icon: Clock },
+        { id: 'ferias', label: 'Férias', icon: Calendar },
+        { id: 'cartao_ponto', label: 'Cartão de Ponto', icon: Clock },
+        { id: 'cartao_ponto_diario', label: 'Apuração Diária', icon: Activity },
+        { id: 'excecoes_carga', label: 'Exceções Carga Horária', icon: AlertCircle },
+        { id: 'excecoes_sabado', label: 'Exceções Sábado', icon: AlertCircle },
+      ],
+    },
+    {
+      id: 'sec_verbas',
+      label: '3. Verbas e Ocorrências',
+      icon: Wallet,
+      modulos: [
+        { id: 'verbas_cadastro', label: 'Cadastro de Verbas', icon: FileText },
+        { id: 'ocorrencias', label: 'Ocorrências', icon: ScrollText },
+        { id: 'pagamentos', label: 'Pagamentos', icon: Banknote },
+        { id: 'vale_transporte', label: 'Vale Transporte', icon: Receipt },
+      ],
+    },
+    {
+      id: 'sec_tributos',
+      label: '4. Tributos',
+      icon: Percent,
+      modulos: [
+        { id: 'cs', label: 'INSS / Contrib. Social', icon: Receipt },
+        { id: 'ir', label: 'Imposto de Renda', icon: Percent },
+        { id: 'fgts', label: 'FGTS', icon: Building2 },
+      ],
+    },
+    {
+      id: 'sec_outros',
+      label: '5. Outros Módulos',
+      icon: HeartHandshake,
+      modulos: [
+        { id: 'pensao', label: 'Pensão Alimentícia', icon: Users },
+        { id: 'prev_privada', label: 'Previdência Privada', icon: Briefcase },
+        { id: 'salario_familia', label: 'Salário Família', icon: Users },
+        { id: 'seguro_desemprego', label: 'Seguro Desemprego', icon: Shield },
+      ],
+    },
+    {
+      id: 'sec_ajustes',
+      label: '6. Ajustes Financeiros',
+      icon: Scale,
+      modulos: [
+        { id: 'multas', label: 'Multas CLT', icon: Gavel },
+        { id: 'honorarios', label: 'Honorários', icon: Scale },
+        { id: 'custas', label: 'Custas Judiciais', icon: Landmark },
+      ],
+    },
+    {
+      id: 'sec_atualizacao',
+      label: '7. Atualização Monetária',
+      icon: TrendingUp,
+      modulos: [
+        { id: 'correcao', label: 'Correção / Juros', icon: TrendingUp },
+        { id: 'atualizacao', label: 'Tabela de Juros', icon: BookOpen },
+        { id: 'excecoes_juros', label: 'Exceções de Juros', icon: AlertCircle },
+      ],
+    },
+    {
+      id: 'sec_resultado',
+      label: '8. Resultado e Relatórios',
+      icon: FileBarChart,
+      modulos: [
+        { id: 'resumo', label: 'Resumo', icon: FileBarChart },
+        { id: 'ajuste_sentenca', label: 'Ajuste Sentença', icon: Gavel },
+        { id: 'guias_recolhimento', label: 'Guias de Recolhimento', icon: FileText },
+        { id: 'esocial', label: 'e-Social', icon: FileText },
+        { id: 'danos_morais', label: 'Danos Morais', icon: Sparkles },
+        { id: 'equiparacao', label: 'Equiparação Salarial', icon: Scale },
+        { id: 'estabilidade', label: 'Estabilidade', icon: Shield },
+        { id: 'periculosidade', label: 'Periculosidade', icon: AlertCircle },
+        { id: 'terceiros', label: 'Terceiros', icon: Building2 },
+      ],
+    },
   ];
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
@@ -69,12 +169,39 @@ interface PjeCalcInlineProps {
   caseId: string;
 }
 
+// ── Stub for new modules not yet implemented (Calculo.java) ──
+function ModuloStub({ titulo, descricao }: { titulo: string; descricao?: string }) {
+  return (
+    <Card className="rounded-sm border">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold">{titulo}</CardTitle>
+      </CardHeader>
+      <CardContent className="text-sm text-muted-foreground">
+        Em construção — {descricao || 'campos de Calculo.java a serem mapeados'}.
+      </CardContent>
+    </Card>
+  );
+}
+
 export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const queryClient = useQueryClient();
   const [activeModule, setActiveModule] = useState('dados_processo');
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [autoSyncDone, setAutoSyncDone] = useState(false);
+
+  // Expand all sections by default so sidebar tree is usable on first render
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(
+    () => new Set(SECOES.map(s => s.id))
+  );
+
+  const toggleSection = useCallback((secId: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(secId)) next.delete(secId); else next.add(secId);
+      return next;
+    });
+  }, []);
 
   // DATA
   const { data: params } = useQuery({
@@ -292,25 +419,86 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
 
   const renderModule = () => {
     switch (activeModule) {
+      // 1. Dados do Cálculo
       case 'dados_processo': return <ModuloDadosProcesso caseId={caseId} />;
-      case 'parametros': return renderParametros();
+      case 'parametros_gerais': return renderParametros();
+      case 'advogados': return <ModuloAdvogados caseId={caseId} />;
+
+      // 2. Períodos e Ponto
+      case 'historico': return renderHistorico();
       case 'faltas': return renderFaltas();
       case 'ferias': return renderFerias();
-      case 'historico': return renderHistorico();
       case 'cartao_ponto': return <ModuloCartaoPonto caseId={caseId} dataAdmissao={formParams.data_admissao} dataDemissao={formParams.data_demissao} />;
-      case 'verbas': return renderVerbas();
-      case 'salario_familia': return <ModuloSalarioFamilia caseId={caseId} />;
-      case 'fgts': return <ModuloFGTS caseId={caseId} />;
+      case 'cartao_ponto_diario': return <ModuloCartaoPontoDiario caseId={caseId} />;
+      case 'excecoes_carga': return <ModuloStub titulo="Exceções Carga Horária" descricao="cadastro de exceções de carga horária (Calculo.java)" />;
+      case 'excecoes_sabado': return <ModuloStub titulo="Exceções Sábado" descricao="cadastro de exceções de sábado (Calculo.java)" />;
+
+      // 3. Verbas e Ocorrências
+      case 'verbas_cadastro': return renderVerbas();
+      case 'ocorrencias': return (
+        <Card className="rounded-sm border">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Ocorrências</CardTitle></CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            As ocorrências mensais são geradas e editadas diretamente dentro de cada verba (Cadastro de Verbas &gt; Editar &gt; Ocorrências).
+          </CardContent>
+        </Card>
+      );
+      case 'pagamentos': return <ModuloStub titulo="Pagamentos" descricao="lançamento de pagamentos (Calculo.java)" />;
+      case 'vale_transporte': return <ModuloValeTransporte caseId={caseId} />;
+
+      // 4. Tributos
       case 'cs': return <ModuloCS caseId={caseId} />;
-      case 'prev_privada': return <ModuloPrevidenciaPrivada caseId={caseId} />;
-      case 'pensao': return <ModuloPensaoAlimenticia caseId={caseId} />;
       case 'ir': return <ModuloIR caseId={caseId} />;
-      case 'correcao': return <ModuloCorrecao caseId={caseId} />;
+      case 'fgts': return <ModuloFGTS caseId={caseId} />;
+
+      // 5. Outros Módulos
+      case 'pensao': return <ModuloPensaoAlimenticia caseId={caseId} />;
+      case 'prev_privada': return <ModuloPrevidenciaPrivada caseId={caseId} />;
+      case 'salario_familia': return <ModuloSalarioFamilia caseId={caseId} />;
       case 'seguro_desemprego': return <ModuloSeguroDesemprego caseId={caseId} />;
+
+      // 6. Ajustes Financeiros
       case 'multas': return <ModuloMultasCLT caseId={caseId} />;
       case 'honorarios': return <ModuloHonorarios caseId={caseId} />;
       case 'custas': return <ModuloCustas caseId={caseId} />;
+
+      // 7. Atualização Monetária
+      case 'correcao': return <ModuloCorrecao caseId={caseId} />;
+      case 'atualizacao': return <ModuloAtualizacao caseId={caseId} />;
+      case 'excecoes_juros': return <ModuloExcecoesJuros caseId={caseId} />;
+
+      // 8. Resultado e Relatórios
       case 'resumo': return <ModuloResumo caseId={caseId} />;
+      case 'ajuste_sentenca': return (
+        <ModuloAjusteSentenca
+          caseId={caseId}
+          dataAdmissao={formParams.data_admissao}
+          dataDemissao={formParams.data_demissao}
+          cargaHoraria={formParams.carga_horaria_padrao}
+        />
+      );
+      case 'guias_recolhimento': return resultado ? (
+        <ModuloGuiasRecolhimento result={resultado as any} dadosProcesso={dadosProcesso as any} />
+      ) : (
+        <Card className="rounded-sm border">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Guias de Recolhimento</CardTitle></CardHeader>
+          <CardContent className="text-sm text-muted-foreground">Execute uma liquidação no módulo Resumo para gerar guias GPS/DARF.</CardContent>
+        </Card>
+      );
+      case 'esocial': return (
+        <ModuloESocial
+          caseId={caseId}
+          resultado={(resultado as any) ?? null}
+          dadosProcesso={dadosProcesso as any}
+          params={{ data_admissao: formParams.data_admissao, data_demissao: formParams.data_demissao }}
+        />
+      );
+      case 'danos_morais': return <ModuloDanosMorais caseId={caseId} />;
+      case 'equiparacao': return <ModuloEquiparacaoSalarial caseId={caseId} />;
+      case 'estabilidade': return <ModuloEstabilidade caseId={caseId} />;
+      case 'periculosidade': return <ModuloPericulosidade caseId={caseId} />;
+      case 'terceiros': return <ModuloTerceiros caseId={caseId} />;
+
       default: return null;
     }
   };
