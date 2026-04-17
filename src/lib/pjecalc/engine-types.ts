@@ -519,6 +519,31 @@ export interface PjeCorrecaoConfig {
    * para alinhar com PJe-Calc oficial.
    */
   selic_pro_rata_die?: boolean;
+
+  /** Exceções de juros por período (períodos onde se aplica regime diferente) */
+  excecoes_juros?: PjeExcecaoJuros[];
+
+  /** Lei 11.941/2009: aplicar sobre INSS salários devidos */
+  lei_11941_devidos?: boolean;
+  /** Lei 11.941/2009: data a partir de (salários devidos) */
+  lei_11941_devidos_a_partir_de?: string;
+  /** Lei 11.941/2009: aplicar sobre INSS salários pagos */
+  lei_11941_pagos?: boolean;
+  /** Lei 11.941/2009: data a partir de (salários pagos) */
+  lei_11941_pagos_a_partir_de?: string;
+  /** Lei 11.941/2009: aplicar multa */
+  lei_11941_multa?: boolean;
+  /** Lei 11.941/2009: data a partir de (multa) */
+  lei_11941_multa_a_partir_de?: string;
+}
+
+/** Exceção de juros por período (ex: COVID, suspensão judicial) */
+export interface PjeExcecaoJuros {
+  periodo_inicio: string;
+  periodo_fim: string;
+  tipo_juros: 'SEM_JUROS' | 'SELIC' | 'TAXA_LEGAL' | 'UM_PORCENTO' | 'MEIO_PORCENTO';
+  percentual?: number;
+  motivo?: string;
 }
 
 export interface PjeHonorariosConfig {
