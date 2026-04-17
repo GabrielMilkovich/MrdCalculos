@@ -5847,6 +5847,7 @@ export type Database = {
         Row: {
           calculo_id: string | null
           case_id: string | null
+          competencia: string | null
           created_at: string | null
           data: string | null
           documento_id: string | null
@@ -5879,6 +5880,7 @@ export type Database = {
         Insert: {
           calculo_id?: string | null
           case_id?: string | null
+          competencia?: never
           created_at?: string | null
           data?: string | null
           documento_id?: string | null
@@ -5911,6 +5913,7 @@ export type Database = {
         Update: {
           calculo_id?: string | null
           case_id?: string | null
+          competencia?: never
           created_at?: string | null
           data?: string | null
           documento_id?: string | null
@@ -6362,6 +6365,7 @@ export type Database = {
         Row: {
           calculo_id: string | null
           case_id: string | null
+          competencia: string | null
           created_at: string | null
           data: string | null
           documento_id: string | null
@@ -6394,6 +6398,7 @@ export type Database = {
         Insert: {
           calculo_id?: string | null
           case_id?: string | null
+          competencia?: never
           created_at?: string | null
           data?: string | null
           documento_id?: string | null
@@ -6426,6 +6431,7 @@ export type Database = {
         Update: {
           calculo_id?: string | null
           case_id?: string | null
+          competencia?: never
           created_at?: string | null
           data?: string | null
           documento_id?: string | null
