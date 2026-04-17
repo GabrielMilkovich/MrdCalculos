@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     exclude: [
       // These tests require .pjc corpus files that are not committed to the repo
       'src/lib/pjecalc/__tests__/blind-audit.test.ts',
