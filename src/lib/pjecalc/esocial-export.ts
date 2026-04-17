@@ -10,7 +10,10 @@
  * Layout: eSocial v. S-1.2 (Nota Técnica 01/2023)
  */
 
+import Decimal from 'decimal.js';
 import type { PjeLiquidacaoResult, PjeResumo, PjeVerbaResult, PjeOcorrenciaResult } from './engine-types';
+import { validateS2500, validateS2501, type ValidationError } from './esocial-validator';
+import type { S2500_Event, S2501_Event } from './esocial-schema';
 
 // =====================================================
 // TYPES
@@ -72,6 +75,126 @@ function gerarId(): string {
 }
 
 // =====================================================
+// VALIDAÇÃO — constrói eventos tipados e chama validadores
+// =====================================================
+
+function formatValidationErrors(prefix: string, errors: ValidationError[]): string {
+  const lines = errors.map(e => `  - ${e.field}: ${e.message}` + (e.value !== undefined ? ` (valor=${JSON.stringify(e.value)})` : ''));
+  return `${prefix}\n${lines.join('\n')}`;
+}
+
+/** Constrói o evento S-2500 tipado a partir do config + result (para validação) */
+function buildS2500Event(config: ESocialConfig, result: PjeLiquidacaoResult): S2500_Event {
+  const d = config.dados;
+  const cnpj = d.cnpjEmpregador.replace(/\D/g, '').slice(0, 14);
+  const cpf = d.cpfTrab.replace(/\D/g, '');
+
+  const competencias = new Set<string>();
+  for (const v of result.verbas) {
+    for (const o of v.ocorrencias) competencias.add(fmtMesAno(o.competencia));
+  }
+  const comps = Array.from(competencias).sort();
+
+  const periodos = comps.map(comp => {
+    const rubricas = result.verbas
+      .map(v => {
+        const mes = v.ocorrencias.filter(o => fmtMesAno(o.competencia) === comp);
+        if (mes.length === 0) return null;
+        const total = mes.reduce((s, o) => s + o.devido, 0);
+        if (total === 0) return null;
+        return {
+          codRubr: v.nome.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '') || 'RUBR',
+          ideTabRubr: 'MRD01',
+          vrRubr: fmtVal(total),
+        };
+      })
+      .filter((x): x is { codRubr: string; ideTabRubr: string; vrRubr: string } => x !== null);
+    return { perRef: comp, rubricas };
+  }).filter(p => p.rubricas.length > 0);
+
+  return {
+    ideEvento: {
+      indRetif: '1',
+      tpAmb: config.ambiente,
+      procEmi: '1',
+      verProc: 'MRDcalc-1.0',
+    },
+    ideEmpregador: { tpInsc: '1', nrInsc: cnpj },
+    infoProcesso: {
+      tpProc: config.tpProcesso === '2' ? '1' : '2',
+      nrProcTrab: d.nrProcTrab.replace(/\D/g, ''),
+      ...(d.obs !== undefined && d.obs !== '' ? { obsProc: d.obs } : {}),
+      ...(d.dtSentDecTransworker ? { dtSent: d.dtSentDecTransworker } : {}),
+    },
+    trabalhador: {
+      cpfTrab: cpf,
+      nmTrab: d.nmTrab,
+      ...(d.dtNascto ? { dtNascto: d.dtNascto } : {}),
+    },
+    infoContrato: {
+      indReconhec: d.indContr === '1' ? '1' : '2',
+      dtAdm: d.dtAdm,
+      ...(d.dtDeslig ? { dtDeslig: d.dtDeslig } : {}),
+      codCateg: d.codCateg as S2500_Event['infoContrato']['codCateg'],
+    },
+    perApurPgto: d.perApurPgto,
+    periodos: periodos.length > 0 ? periodos : [
+      { perRef: d.perApurPgto, rubricas: [{ codRubr: 'TOTAL', ideTabRubr: 'MRD01', vrRubr: '0.00' }] },
+    ],
+  };
+}
+
+/** Constrói o evento S-2501 tipado a partir do config + result (para validação) */
+function buildS2501Event(config: ESocialConfig, result: PjeLiquidacaoResult): S2501_Event {
+  const d = config.dados;
+  const cnpj = d.cnpjEmpregador.replace(/\D/g, '').slice(0, 14);
+  const cpf = d.cpfTrab.replace(/\D/g, '');
+  const resumo = result.resumo;
+
+  const competencias = new Set<string>();
+  for (const v of result.verbas) {
+    for (const o of v.ocorrencias) competencias.add(fmtMesAno(o.competencia));
+  }
+  const comps = Array.from(competencias).sort();
+
+  const basesInss = comps.map(comp => {
+    let base = 0;
+    for (const v of result.verbas) {
+      base += v.ocorrencias.filter(o => fmtMesAno(o.competencia) === comp)
+        .reduce((s, o) => s + o.diferenca, 0);
+    }
+    return { perRef: comp, vrBcCpMensal: fmtVal(Math.max(0, base)) };
+  }).filter(b => new Decimal(b.vrBcCpMensal).gt(0));
+
+  return {
+    ideEvento: {
+      indRetif: '1',
+      tpAmb: config.ambiente,
+      procEmi: '1',
+      verProc: 'MRDcalc-1.0',
+    },
+    ideEmpregador: { tpInsc: '1', nrInsc: cnpj },
+    ideProc: {
+      nrProcTrab: d.nrProcTrab.replace(/\D/g, ''),
+      perApurPgto: d.perApurPgto,
+      tpPgto: '1',
+      ...(d.dtEfetPgto ? { dtPgto: d.dtEfetPgto } : {}),
+    },
+    ideTrab: { cpfTrab: cpf, indCateg: '1' },
+    calcTrib: {
+      indApurIR: '1',
+      vrCpSeg: fmtVal(resumo.cs_segurado),
+      contribuicoes: [
+        { tpCR: '1708', vrCR: fmtVal(resumo.cs_segurado + resumo.cs_empregador) },
+      ],
+    },
+    basesInss: basesInss.length > 0
+      ? basesInss
+      : [{ perRef: d.perApurPgto, vrBcCpMensal: fmtVal(Math.max(0, resumo.principal_bruto)) }],
+  };
+}
+
+// =====================================================
 // S-2500 — PROCESSO TRABALHISTA
 // =====================================================
 
@@ -79,6 +202,11 @@ export function gerarS2500(
   config: ESocialConfig,
   result: PjeLiquidacaoResult,
 ): string {
+  // Validação canônica antes de gerar XML — falha rápido com lista de erros
+  const vr = validateS2500(buildS2500Event(config, result));
+  if (!vr.valid) {
+    throw new Error(formatValidationErrors('Validação S-2500 falhou:', vr.errors));
+  }
   const d = config.dados;
   const id = gerarId();
   const now = new Date().toISOString().slice(0, 19);
@@ -171,6 +299,11 @@ export function gerarS2501(
   config: ESocialConfig,
   result: PjeLiquidacaoResult,
 ): string {
+  // Validação canônica antes de gerar XML — falha rápido com lista de erros
+  const vr = validateS2501(buildS2501Event(config, result));
+  if (!vr.valid) {
+    throw new Error(formatValidationErrors('Validação S-2501 falhou:', vr.errors));
+  }
   const d = config.dados;
   const id = gerarId();
   const resumo = result.resumo;
