@@ -280,8 +280,15 @@ export class PjeCalcEngineV3 {
           oc.setMultiplicador(new Decimal(pre.multiplicador || 1));
           oc.setQuantidade(new Decimal(pre.quantidade || 1));
           oc.setDobra(pre.dobra || false);
-          oc.setDevido(new Decimal(pre.devido || 0));
-          oc.setPago(new Decimal(pre.pago || 0));
+          // TRULY INDEPENDENT: calcula `devido` FROM-SCRATCH usando formula oficial
+          // PJe-Calc: devido = base * multiplicador * quantidade / divisor * dobra.
+          // NAO usa pre.devido do PJC (que seria o resultado ja calculado).
+          const devidoCalculado = this.calcularDevidoFromScratch(
+            pre.base || 0, pre.divisor || 1, pre.multiplicador || 1,
+            pre.quantidade || 1, pre.dobra || false,
+          );
+          oc.setDevido(new Decimal(devidoCalculado));
+          oc.setPago(new Decimal(pre.pago || 0)); // pago = dado de entrada (holerite), nao resultado
           oc.setAtivo(true);
           oc.setValor(ValorDaVerbaEnum.CALCULADO);
           oc.setVerbaDeCalculo(vc);
@@ -485,6 +492,32 @@ export class PjeCalcEngineV3 {
       salario_familia: { apurado: false, total: 0, ocorrencias: [] },
       resumo,
     };
+  }
+
+  /**
+   * Calcula o `devido` de uma ocorrência from-scratch usando a formula oficial PJe-Calc:
+   *   devido = base × multiplicador × quantidade / divisor × (dobra ? 2 : 1)
+   *
+   * Esta e a FORMULA CORE do motor PJe-Calc (MaquinaDeCalculo.java linhas 325-329),
+   * implementada com MathContext(38) e HALF_EVEN em 2 casas decimais no final.
+   *
+   * O calculo aqui NAO depende de nenhum dado pre-computado do PJC (nem pre.devido,
+   * nem indice_acumulado, nem gt_closure). Apenas os inputs brutos (base/div/mult/qt/dobra).
+   */
+  private calcularDevidoFromScratch(
+    base: number, divisor: number, multiplicador: number,
+    quantidade: number, dobra: boolean,
+  ): number {
+    if (base === 0 || divisor === 0 || multiplicador === 0 || quantidade === 0) return 0;
+    // Ordem EXATA do Java MaquinaDeCalculo.java linhas 325-329:
+    // base / divisor * multiplicador * quantidade (* dobra)
+    // Com MathContext(38) em cada operacao e HALF_EVEN final em 2 casas.
+    let result = new Decimal(base)
+      .div(divisor)
+      .times(multiplicador)
+      .times(quantidade);
+    if (dobra) result = result.times(2);
+    return result.toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN).toNumber();
   }
 
   // ── Cálculo de Multa 467 CLT (50% sobre verbas rescisórias não pagas) ──
