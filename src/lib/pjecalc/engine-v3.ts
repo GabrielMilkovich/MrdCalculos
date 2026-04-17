@@ -392,6 +392,13 @@ export class PjeCalcEngineV3 {
     const principalCorrigido = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
     const jurosMora = verbaResults.reduce((s, v) => s + v.total_juros, 0);
 
+    // Multa 467 CLT: 50% sobre verbas RESCISORIAS (aviso, saldo salario, 13, ferias) nao pagas
+    const multa467 = this.calcularMulta467(verbaResults);
+    // Multa 523 CPC: 10% sobre total devido nao pago em 15 dias apos intimacao
+    const multa523 = this.correcaoConfig.multa_523
+      ? (principalCorrigido + jurosMora) * (this.correcaoConfig.multa_523_percentual ?? 10) / 100
+      : 0;
+
     // FGTS rescisório + multa 40% (BUG FIX: era hardcoded em zero)
     const fgtsResult = this.calcularFGTS(verbaResults);
 
@@ -403,7 +410,13 @@ export class PjeCalcEngineV3 {
     // FGTS entra no liquido APENAS quando compor_principal=true. PJe-Calc com
     // destino=pagar_reclamante ainda separa FGTS do liquido no resultado "liquido_exequente".
     const fgtsNoLiquido = this.fgtsConfig.compor_principal ? fgtsResult.total_fgts : 0;
-    const liquidoReclamante = +(principalCorrigido + jurosMora + fgtsNoLiquido - csReclamante - irRetido).toFixed(2);
+    // Honorarios contratuais: descontados do liquido do reclamante
+    const honorariosContratuais = this.honorariosConfig.apurar_contratuais
+      ? (this.honorariosConfig.valor_fixo ??
+         (principalCorrigido + jurosMora) * (this.honorariosConfig.percentual_contratuais ?? 0) / 100)
+      : 0;
+    const liquidoReclamante = +(principalCorrigido + jurosMora + fgtsNoLiquido + multa467 + multa523
+      - csReclamante - irRetido - honorariosContratuais).toFixed(2);
 
     const resumo: PjeResumo = {
       principal_bruto: +principalBruto.toFixed(2),
@@ -416,10 +429,12 @@ export class PjeCalcEngineV3 {
       seguro_desemprego: 0,
       previdencia_privada: 0,
       salario_familia: 0,
-      multa_523: 0,
-      multa_467: 0,
-      honorarios_sucumbenciais: 0,
-      honorarios_contratuais: 0,
+      multa_523: +multa523.toFixed(2),
+      multa_467: +multa467.toFixed(2),
+      honorarios_sucumbenciais: +(this.honorariosConfig.apurar_sucumbenciais
+        ? (principalCorrigido + jurosMora) * (this.honorariosConfig.percentual_sucumbenciais ?? 0) / 100
+        : 0).toFixed(2),
+      honorarios_contratuais: +honorariosContratuais.toFixed(2),
       custas: 0,
       custas_detalhadas: [],
       pensao_sobre_fgts: 0,
@@ -464,6 +479,26 @@ export class PjeCalcEngineV3 {
       salario_familia: { apurado: false, total: 0, ocorrencias: [] },
       resumo,
     };
+  }
+
+  // ── Cálculo de Multa 467 CLT (50% sobre verbas rescisórias não pagas) ──
+
+  /**
+   * Art. 467 CLT: 50% sobre verbas rescisórias (aviso prévio, saldo de salário,
+   * 13° proporcional, férias) quando o empregador não paga no 1° audiência.
+   * Base = verbas rescisórias CORRIGIDAS.
+   */
+  private calcularMulta467(verbaResults: PjeVerbaResult[]): number {
+    if (!this.correcaoConfig.multa_467) return 0;
+    const pct = this.correcaoConfig.multa_467_percentual ?? 50;
+    let baseRescisoria = 0;
+    for (const vr of verbaResults) {
+      const carac = vr.caracteristica;
+      if (carac === 'aviso_previo' || carac === '13_salario' || carac === 'ferias') {
+        baseRescisoria += vr.total_corrigido;
+      }
+    }
+    return +(baseRescisoria * pct / 100).toFixed(2);
   }
 
   // ── Cálculo de FGTS (depósitos + multa 40%) ──
