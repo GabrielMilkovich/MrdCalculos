@@ -11,9 +11,25 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { FileBarChart, Loader2, Layers } from "lucide-react";
-import { gerarRelatorioConsolidado, type CalculoConsolidado } from "@/lib/pjecalc/pdf-report-consolidado";
+import { FileBarChart, Loader2, Layers, FileDown } from "lucide-react";
+import {
+  gerarRelatorioConsolidado,
+  gerarRelatorioConsolidadoCompleto,
+  agregarTotais,
+  analisarTendencia,
+  type CalculoConsolidado,
+} from "@/lib/pjecalc/pdf-report-consolidado";
 import type { PjeLiquidacaoResult } from "@/lib/pjecalc/engine-types";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -36,6 +52,7 @@ export function RelatorioConsolidado({ processoNumero, clienteNome }: Props) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [gerando, setGerando] = useState(false);
+  const [gerandoCompleto, setGerandoCompleto] = useState(false);
 
   // Query all calculations that have results (liquidated)
   const { data: calculos = [], isLoading } = useQuery({
@@ -80,6 +97,34 @@ export function RelatorioConsolidado({ processoNumero, clienteNome }: Props) {
     });
   };
 
+  const buildSelecionados = (): CalculoConsolidado[] =>
+    calculos
+      .filter(c => selected.has(c.id))
+      .map((c, i) => ({
+        id: c.id,
+        nome: c.cliente || `Cálculo ${i + 1}`,
+        resultado: c.resultado_json as PjeLiquidacaoResult,
+        dataLiquidacao: c.data_liquidacao,
+      }));
+
+  const selecionados = buildSelecionados();
+
+  // Preview data for recharts (only when >= 2 selected)
+  const chartData = selecionados.map((c, i) => {
+    const r = c.resultado.resumo;
+    return {
+      name: (c.nome || `C${i + 1}`).slice(0, 14),
+      Principal: r.principal_bruto || 0,
+      Correcao: (r.principal_corrigido || 0) - (r.principal_bruto || 0),
+      Juros: r.juros_mora || 0,
+      FGTS: r.fgts_total || 0,
+      Liquido: r.liquido_reclamante || 0,
+    };
+  });
+
+  const totaisPreview = selecionados.length >= 2 ? agregarTotais(selecionados) : null;
+  const tendenciaPreview = selecionados.length >= 2 ? analisarTendencia(selecionados) : null;
+
   const gerar = () => {
     if (selected.size < 2) {
       toast.error("Selecione pelo menos 2 cálculos para consolidar");
@@ -87,15 +132,6 @@ export function RelatorioConsolidado({ processoNumero, clienteNome }: Props) {
     }
     setGerando(true);
     try {
-      const selecionados: CalculoConsolidado[] = calculos
-        .filter(c => selected.has(c.id))
-        .map((c, i) => ({
-          id: c.id,
-          nome: c.cliente || `Cálculo ${i + 1}`,
-          resultado: c.resultado_json as PjeLiquidacaoResult,
-          dataLiquidacao: c.data_liquidacao,
-        }));
-
       gerarRelatorioConsolidado(selecionados, {
         processo: processoNumero,
         cliente: clienteNome,
@@ -110,6 +146,34 @@ export function RelatorioConsolidado({ processoNumero, clienteNome }: Props) {
     }
   };
 
+  const gerarCompleto = () => {
+    if (selected.size < 2) {
+      toast.error("Selecione pelo menos 2 cálculos para consolidar");
+      return;
+    }
+    setGerandoCompleto(true);
+    try {
+      const blob = gerarRelatorioConsolidadoCompleto(selecionados, {
+        processo: processoNumero,
+        cliente: clienteNome,
+        engineVersion: '3.0.0',
+      });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, "_blank");
+      if (win) {
+        setTimeout(() => {
+          try { win.print(); } catch { /* ignore print errors */ }
+        }, 600);
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      toast.success("Relatório completo aberto para impressão");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGerandoCompleto(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -117,7 +181,7 @@ export function RelatorioConsolidado({ processoNumero, clienteNome }: Props) {
           <Layers className="h-4 w-4 mr-1" /> Consolidado
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg max-h-[70vh]">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileBarChart className="h-5 w-5" /> Relatório Consolidado por Processo
@@ -171,14 +235,91 @@ export function RelatorioConsolidado({ processoNumero, clienteNome }: Props) {
               })}
             </div>
 
-            <div className="flex items-center justify-between pt-2 border-t border-border">
+            {selecionados.length >= 2 && totaisPreview && (
+              <div className="pt-3 border-t border-border space-y-3">
+                <div className="text-xs font-semibold text-foreground">Preview Consolidado</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <Card className="bg-muted/30">
+                    <CardContent className="p-2">
+                      <div className="text-[9px] uppercase text-muted-foreground">Principal</div>
+                      <div className="text-sm font-semibold tabular-nums">
+                        {fmt(totaisPreview.principal_bruto.toNumber())}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-muted/30">
+                    <CardContent className="p-2">
+                      <div className="text-[9px] uppercase text-muted-foreground">Juros</div>
+                      <div className="text-sm font-semibold tabular-nums">
+                        {fmt(totaisPreview.juros_mora.toNumber())}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-primary/10 border-primary/30">
+                    <CardContent className="p-2">
+                      <div className="text-[9px] uppercase text-muted-foreground">Líquido</div>
+                      <div className="text-sm font-semibold tabular-nums text-primary">
+                        {fmt(totaisPreview.liquido_reclamante.toNumber())}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-muted/30">
+                    <CardContent className="p-2">
+                      <div className="text-[9px] uppercase text-muted-foreground">Total Rda.</div>
+                      <div className="text-sm font-semibold tabular-nums">
+                        {fmt(totaisPreview.total_reclamada.toNumber())}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="name" fontSize={10} />
+                      <YAxis fontSize={10} tickFormatter={(v: number) => `${Math.round(v / 1000)}k`} />
+                      <Tooltip
+                        formatter={(v: number) => fmt(v)}
+                        contentStyle={{ fontSize: 11 }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Bar dataKey="Principal" fill="#1e40af" />
+                      <Bar dataKey="Correcao" fill="#2563eb" />
+                      <Bar dataKey="Juros" fill="#7c3aed" />
+                      <Bar dataKey="FGTS" fill="#059669" />
+                      <Bar dataKey="Liquido" fill="#dc2626" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {tendenciaPreview?.temporal && tendenciaPreview.primeiro && tendenciaPreview.ultimo && (
+                  <div className="text-[10px] text-muted-foreground border rounded p-2">
+                    <strong>Tendência:</strong> {tendenciaPreview.dias_entre} dia(s) entre primeiro e último.
+                    Delta líquido{" "}
+                    <strong className={tendenciaPreview.delta_liquido.isNegative() ? "text-destructive" : "text-primary"}>
+                      {fmt(tendenciaPreview.delta_liquido.toNumber())}
+                    </strong>{" "}
+                    ({tendenciaPreview.delta_percent.toFixed(2)}%).
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border">
               <span className="text-xs text-muted-foreground">
                 {selected.size} selecionado(s)
               </span>
-              <Button size="sm" disabled={selected.size < 2 || gerando} onClick={gerar}>
-                {gerando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileBarChart className="h-4 w-4 mr-1" />}
-                Gerar Consolidado
-              </Button>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" disabled={selected.size < 2 || gerando} onClick={gerar}>
+                  {gerando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileBarChart className="h-4 w-4 mr-1" />}
+                  Consolidado Básico
+                </Button>
+                <Button size="sm" disabled={selected.size < 2 || gerandoCompleto} onClick={gerarCompleto}>
+                  {gerandoCompleto ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileDown className="h-4 w-4 mr-1" />}
+                  Exportar PDF Completo
+                </Button>
+              </div>
             </div>
           </>
         )}
