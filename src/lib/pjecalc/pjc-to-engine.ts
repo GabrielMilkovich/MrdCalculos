@@ -500,44 +500,25 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     const consolidarParcial = isReflexo && isPagamentoAnualOuRescisao && ehMpv
       && !todasComDivisorUm && algumasComDivisorUm;
 
+    // REMOVIDA consolidacao heuristica que era compensacao do bug antigo do parser.
+    // Com parseOcorrencias corrigido (filhos diretos de <ocorrencias><List>), os
+    // devidos ja vem corretos per-ocorrencia. Consolidar AGORA estava reduzindo
+    // erroneamente valores legítimos (ex: 4483 13° SOBRE HORAS EXTRAS 1800 -> 439).
+    // Mantem as flags precisaConsolidar/consolidarParcial para logging/debug futuro.
+    void precisaConsolidar; void consolidarParcial;
     let ocorrenciasPrecomputadas: PjeVerba['ocorrencias_precomputadas'] | undefined = undefined;
     if (v.ocorrencias_all.length > 0) {
-      if (precisaConsolidar) {
-        ocorrenciasPrecomputadas = consolidarReflexoMediaPelaQuantidade(v, caracteristica);
-      } else if (consolidarParcial) {
-        // Aplica consolidação SÓ nas ocorrências com divisor=1 (duplicadas);
-        // mantém as com divisor>1 (proporcionalmente corretas) intactas.
-        const ocsComDiv1 = v.ocorrencias_all.filter(oc => oc.divisor === 1);
-        const ocsComDivOutro = v.ocorrencias_all.filter(oc => oc.divisor !== 1);
-        const consolidadas = consolidarReflexoMediaPelaQuantidade(
-          { ...v, ocorrencias_all: ocsComDiv1 } as VerbaAnalysis,
-          caracteristica,
-        );
-        const intactas = ocsComDivOutro.map(oc => ({
-          competencia: oc.competencia.slice(0, 7),
-          base: oc.base,
-          divisor: oc.divisor,
-          multiplicador: oc.multiplicador,
-          quantidade: oc.quantidade,
-          dobra: oc.dobra,
-          devido: oc.devido,
-          pago: oc.pago,
-          indice_acumulado: oc.indice_acumulado,
-        }));
-        ocorrenciasPrecomputadas = [...consolidadas, ...intactas];
-      } else {
-        ocorrenciasPrecomputadas = v.ocorrencias_all.map(oc => ({
-          competencia: oc.competencia.slice(0, 7),
-          base: oc.base,
-          divisor: oc.divisor,
-          multiplicador: oc.multiplicador,
-          quantidade: oc.quantidade,
-          dobra: oc.dobra,
-          devido: oc.devido,
-          pago: oc.pago,
-          indice_acumulado: oc.indice_acumulado,
-        }));
-      }
+      ocorrenciasPrecomputadas = v.ocorrencias_all.map(oc => ({
+        competencia: oc.competencia.slice(0, 7),
+        base: oc.base,
+        divisor: oc.divisor,
+        multiplicador: oc.multiplicador,
+        quantidade: oc.quantidade,
+        dobra: oc.dobra,
+        devido: oc.devido,
+        pago: oc.pago,
+        indice_acumulado: oc.indice_acumulado,
+      }));
     }
 
     return {

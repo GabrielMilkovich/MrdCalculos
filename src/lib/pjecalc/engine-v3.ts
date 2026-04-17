@@ -285,9 +285,9 @@ export class PjeCalcEngineV3 {
           oc.setAtivo(true);
           oc.setValor(ValorDaVerbaEnum.CALCULADO);
           oc.setVerbaDeCalculo(vc);
-          if (pre.indice_acumulado) {
-            oc.setIndiceAcumulado(new Decimal(pre.indice_acumulado));
-          }
+          // INDEPENDENT MODE: NAO importar indice_acumulado pre-computado do PJC.
+          // calculo.liquidar() deve calcular fator de correcao from-scratch via
+          // ParametrosDeAtualizacao + TabelaDeCorrecaoMonetaria.
           ocorrencias.push(oc);
         }
         vc.setOcorrencias(ocorrencias);
