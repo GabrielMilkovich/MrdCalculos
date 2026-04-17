@@ -250,24 +250,56 @@ export function DocumentsManager({
         // Detectar tipo automaticamente pelo nome do arquivo
         const autoDetectedType = detectDocType(file.name);
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("case_id", caseId);
-        formData.append("doc_type", autoDetectedType);
+        // Upload direto do cliente (RLS do bucket garante ownership pelo user_id no path)
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          toast.error("Sessão expirada. Faça login novamente.");
+          continue;
+        }
 
-        // Use backend upload function (handles ownership checks + storage + DB insert + signed URL)
-        const { data, error } = await supabase.functions.invoke("upload-document", {
-          body: formData,
-        });
+        const timestamp = Date.now();
+        const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+        const storagePath = `${user.id}/${caseId}/${timestamp}_${sanitizedFilename}`;
 
-        if (error) {
-          logger.error("Upload function error", error);
+        const { error: uploadError } = await supabase.storage
+          .from("juriscalculo-documents")
+          .upload(storagePath, file, {
+            contentType: file.type,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          logger.error("Storage upload error", uploadError);
           toast.error(`Erro ao enviar: ${file.name}`);
           continue;
         }
 
-        if (!data?.success) {
-          toast.error(`Erro ao enviar: ${file.name}`);
+        const { data: signedUrlData } = await supabase.storage
+          .from("juriscalculo-documents")
+          .createSignedUrl(storagePath, 3600);
+
+        const { error: docError } = await supabase
+          .from("documents")
+          .insert({
+            case_id: caseId,
+            owner_user_id: user.id,
+            file_name: file.name,
+            mime_type: file.type,
+            storage_path: storagePath,
+            tipo: autoDetectedType as "peticao" | "trct" | "holerite" | "cartao_ponto" | "sentenca" | "outro" | "ctps" | "contrato" | "cct" | "fgts" | "ponto",
+            status: "uploaded",
+            arquivo_url: signedUrlData?.signedUrl ?? null,
+            metadata: {
+              original_name: file.name,
+              size: file.size,
+              uploaded_at: new Date().toISOString(),
+            },
+          });
+
+        if (docError) {
+          logger.error("Document insert error", docError);
+          await supabase.storage.from("juriscalculo-documents").remove([storagePath]);
+          toast.error(`Erro ao registrar: ${file.name}`);
           continue;
         }
 
