@@ -46,6 +46,7 @@ import { Multa } from './core/dominio/calculo/multa/multa';
 import { ServicoDeCalculo } from './core/servicos/servico-de-calculo';
 import { InssModuloAdapter } from './modulos/inss-modulo-adapter';
 import { IrpfModuloAdapter } from './modulos/irpf-modulo-adapter';
+import { SELIC_MENSAL } from './indices-fallback';
 import {
   IndiceMonetarioEnum,
   IndicesAcumuladosEnum,
@@ -322,8 +323,7 @@ export class PjeCalcEngineV3 {
         const indice = oc.getIndiceAcumulado()?.toNumber() ?? 1;
         const corrigida = oc.getDiferencaCorrigida()?.toNumber() ?? diferenca;
         const valorCorrigido = arredondarValorMonetario(new Decimal(corrigida)).toNumber();
-        // Juros = 0 por agora (calculado via TabelaDeJuros no pipeline completo)
-        const juros = 0;
+        const juros = this.calcularJurosOcorrencia(oc, valorCorrigido);
         const valorFinal = valorCorrigido + juros;
 
         totalDevido += oc.getDevido()?.toNumber() ?? 0;
@@ -442,6 +442,100 @@ export class PjeCalcEngineV3 {
       salario_familia: { apurado: false, total: 0, ocorrencias: [] },
       resumo,
     };
+  }
+
+  // ── Cálculo de juros (simples) ──
+
+  /**
+   * Calcula juros de mora sobre o valor corrigido de uma ocorrência.
+   * Regime: juros_tipo do correcaoConfig (default: 'simples_mensal' a 1% a.m.).
+   *
+   * Data-início: max(vencimento_da_competencia, juros_inicio).
+   *   - 'ajuizamento' (default PJe-Calc): data_ajuizamento do parametros
+   *   - 'citacao': params.data_citacao (ou ajuizamento+60d se ausente)
+   *   - 'vencimento': data da competência (juros por toda a inadimplência)
+   *
+   * Data-fim: data_liquidacao do correcaoConfig.
+   */
+  private calcularJurosOcorrencia(oc: OcorrenciaDeVerba, valorCorrigido: number): number {
+    if (valorCorrigido <= 0) return 0;
+    const tipo = (this.correcaoConfig.juros_tipo ?? 'simples_mensal') as string;
+    if (tipo === 'nenhum' || tipo === 'sem_juros') return 0;
+
+    const dataLiq = new Date(this.correcaoConfig.data_liquidacao);
+    const inicioJuros = this.resolverDataInicioJuros();
+    const dataComp = oc.getDataInicial();
+    if (!dataComp) return 0;
+
+    const inicio = dataComp.getTime() > inicioJuros.getTime() ? dataComp : inicioJuros;
+    if (inicio.getTime() >= dataLiq.getTime()) return 0;
+
+    const valor = new Decimal(valorCorrigido);
+
+    if (tipo === 'selic') {
+      const somaPct = this.somarSelicSimples(inicio, dataLiq);
+      return valor.times(somaPct).div(100).toDP(2).toNumber();
+    }
+
+    // simples_mensal / composto — 1% a.m. (ou juros_percentual explícito)
+    const pctMes = new Decimal(this.correcaoConfig.juros_percentual ?? 1);
+    const meses = this.mesesEntre(inicio, dataLiq);
+
+    if (tipo === 'composto') {
+      const fator = new Decimal(1).plus(pctMes.div(100)).pow(meses).minus(1);
+      return valor.times(fator).toDP(2).toNumber();
+    }
+    // simples
+    return valor.times(pctMes).times(meses).div(100).toDP(2).toNumber();
+  }
+
+  private resolverDataInicioJuros(): Date {
+    const tipo = this.correcaoConfig.juros_inicio ?? 'ajuizamento';
+    if (tipo === 'citacao') {
+      const dc = this.params.data_citacao;
+      if (dc) return new Date(dc);
+      const aj = new Date(this.params.data_ajuizamento);
+      aj.setDate(aj.getDate() + 60);
+      return aj;
+    }
+    if (tipo === 'vencimento') {
+      return new Date(this.params.data_admissao);
+    }
+    return new Date(this.params.data_ajuizamento);
+  }
+
+  private mesesEntre(inicio: Date, fim: Date): number {
+    const ms = fim.getTime() - inicio.getTime();
+    return new Decimal(ms).div(1000 * 3600 * 24 * 30.4375).toDP(6).toNumber();
+  }
+
+  private somarSelicSimples(inicio: Date, fim: Date): number {
+    let total = new Decimal(0);
+    const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+    const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+    while (cursor.getTime() <= fimMes.getTime()) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      const taxa = SELIC_MENSAL[key];
+      if (taxa !== undefined) {
+        const ehInicio = cursor.getFullYear() === inicio.getFullYear() && cursor.getMonth() === inicio.getMonth();
+        const ehFim = cursor.getFullYear() === fim.getFullYear() && cursor.getMonth() === fim.getMonth();
+        let fator = 1;
+        if (ehInicio && ehFim) {
+          const dias = fim.getDate() - inicio.getDate();
+          const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+          fator = Math.max(0, dias) / diasMes;
+        } else if (ehInicio) {
+          const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+          fator = (diasMes - inicio.getDate() + 1) / diasMes;
+        } else if (ehFim) {
+          const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+          fator = fim.getDate() / diasMes;
+        }
+        total = total.plus(new Decimal(taxa).times(fator));
+      }
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return total.toNumber();
   }
 
   // ── Mappers ──
