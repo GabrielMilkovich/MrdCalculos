@@ -1,11 +1,11 @@
 {
-  "name": "MRD Cálculos Trabalhistas",
-  "short_name": "MRD Calc",
-  "description": "Sistema de cálculos trabalhistas periciais com paridade PJe-Calc",
+  "name": "MRD CALC",
+  "short_name": "MRD CALC",
+  "description": "MRD CALC",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
-  "theme_color": "#2563eb",
+  "theme_color": "#2C3E50",
   "orientation": "any",
   "icons": [
     {
