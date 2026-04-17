@@ -55,6 +55,7 @@ import { IndiceIndebitoTributario } from '../indices/it/indice-indebito-tributar
 import { IndiceTabelaUnicaJTMensal } from '../indices/tabelaunica/indice-tabela-unica-jt-mensal';
 import { IndiceTabelaUnicaJTDiario } from '../indices/tabelaunica/indice-tabela-unica-jt-diario';
 import { IndiceTabelaUnicaDebitoTrabalhista } from '../indices/tabelaunica/indice-tabela-unica-debito-trabalhista';
+import { obterTabelaSelicParaCorrecao } from '../juros/juros-selic-para-correcao';
 
 const MASCARA_DIA = 'ddMMyyyy';
 const DIAS_A_MAIS_VENCIMENTO_RESCISORIAS = 10;
@@ -181,7 +182,6 @@ export class TabelaDeCorrecaoMonetaria {
           );
         }
         // Usa obterTabelaSelicParaCorrecao portado (com +1% liquidação)
-        const { obterTabelaSelicParaCorrecao } = require('../juros/juros-selic-para-correcao');
         const dataLiq = this.dataLiquidacao ?? this.context.getDataDeLiquidacao();
         return obterTabelaSelicParaCorrecao(periodo, dataLiq, this.ignorarTaxaCorrecaoNegativa);
       }

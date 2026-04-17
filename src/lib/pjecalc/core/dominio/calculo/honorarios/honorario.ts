@@ -40,6 +40,7 @@ import {
   TipoValorEnum,
 } from '../../../constantes/enums';
 import type { HonorarioVerbaDeCalculo } from './honorario-verba-de-calculo';
+import { MaquinaDeCalculoDeHonorarios } from './maquina-de-calculo-de-honorarios';
 
 const ZERO = new Decimal(0);
 
@@ -265,7 +266,6 @@ export class Honorario implements IModuloLiquidavel {
     if (this.valorFixoLegacy !== null && !this.valorFixoLegacy.isZero()) {
       this.valorCalculadoLegacy = this.valorFixoLegacy;
     }
-    const { MaquinaDeCalculoDeHonorarios } = require('./maquina-de-calculo-de-honorarios') as typeof import('./maquina-de-calculo-de-honorarios');
     new MaquinaDeCalculoDeHonorarios(this).liquidar();
   }
 

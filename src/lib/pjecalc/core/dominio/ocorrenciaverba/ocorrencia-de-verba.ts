@@ -16,6 +16,7 @@ import Decimal from 'decimal.js';
 import { Periodo } from '../../base/comum/periodo';
 import { nulo, naoNulo, naoNulos, subtrair, dividir } from '../../base/comum/utils';
 import { CaracteristicaDaVerbaEnum, LogicoEnum, OcorrenciaDePagamentoEnum, ValorDaVerbaEnum } from '../../constantes/enums';
+import { CalculoDoIntegralizar } from '../../comum/rotinasdecalculo/calculo-do-integralizar';
 
 // Constantes
 const ATRIBUTO_QUANTIDADE = 1;
@@ -270,7 +271,6 @@ export class OcorrenciaDeVerba {
    */
   integraliza(valor: Decimal): Decimal {
     if (!this.dataInicial || !this.dataFinal) return valor;
-    const { CalculoDoIntegralizar } = require('../../comum/rotinasdecalculo/calculo-do-integralizar');
     const calc = new CalculoDoIntegralizar(this.getPeriodo(), valor, 0);
     calc.executar();
     return calc.getResultado();

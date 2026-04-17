@@ -35,6 +35,7 @@ import type { AutoJudicial } from './auto-judicial';
 import type { CustasFixasAtualizacao } from './custas-fixas-atualizacao';
 import type { Armazenamento } from './armazenamento';
 import type { CustaPaga } from './custa-paga';
+import { MaquinaDeCalculoDeCustas } from './maquina-de-calculo-de-custas';
 
 const ZERO = new Decimal(0);
 const QUATRO = new Decimal(4);
@@ -324,8 +325,6 @@ export class CustasJudiciais implements IModuloLiquidavel {
     if (!this.valorCalculadoLegacy.isZero()) return;
     const base = this.valorBaseCustasCalculadas ?? ZERO;
     this.calcular(base);
-    // Delega para máquina portada.
-    const { MaquinaDeCalculoDeCustas } = require('./maquina-de-calculo-de-custas') as typeof import('./maquina-de-calculo-de-custas');
     new MaquinaDeCalculoDeCustas(this).liquidar();
   }
 

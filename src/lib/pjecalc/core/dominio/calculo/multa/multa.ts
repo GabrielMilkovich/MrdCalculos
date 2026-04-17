@@ -23,6 +23,7 @@ import Decimal from 'decimal.js';
 import { arredondarValorMonetario } from '../../../base/comum/utils';
 import type { IModuloLiquidavel } from '../calculo';
 import type { Calculo } from '../calculo';
+import { MaquinaDeCalculoDeMulta } from './maquina-de-calculo-de-multa';
 import {
   BaseParaApuracaoDeMultaEnum,
   CredorDevedorMultaEnum,
@@ -197,8 +198,6 @@ export class Multa implements IModuloLiquidavel {
         this.valorBaseLegacy.times(this.percentualLegacy).div(100),
       );
     }
-    // Caminho core: delega para máquina portada.
-    const { MaquinaDeCalculoDeMulta } = require('./maquina-de-calculo-de-multa') as typeof import('./maquina-de-calculo-de-multa');
     new MaquinaDeCalculoDeMulta(this).liquidar();
   }
 
