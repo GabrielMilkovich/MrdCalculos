@@ -310,20 +310,13 @@ export class PjeCalcEngineV3 {
     calculo.setIrpf(irpfAdapter);
 
     // ── 5. Liquidar (pipeline Calculo + módulos) ──
-    // Preserva indice_acumulado pré-computado do PJC (se presente em TODAS ocorrências)
-    // antes de calculo.liquidar() sobrescrever com cálculo que ainda tem bugs em ADC 58/59.
-    const indicesPreservados = new Map<OcorrenciaDeVerba, Decimal>();
-    for (const vc of verbasCore) {
-      for (const oc of vc.getOcorrenciasAtivas()) {
-        const idx = oc.getIndiceAcumulado();
-        if (idx) indicesPreservados.set(oc, idx);
-      }
-    }
+    // Calculo.liquidar() computa indice_acumulado por ocorrência via composição
+    // por segmento (ADC 58/59). Não mais precisa preservar o valor pré-computado
+    // vindo do PJC, pois o engine agora calcula corretamente:
+    //   - SELIC/SELIC_FAZENDA/JAM/DFP/IT/TABELA_UNICA_*: soma simples
+    //   - IPCA-E/IPCA/INPC/IGP-M/TR/IPCAETR: produto
+    //   - SEM_CORRECAO em um segmento: fator = 1
     calculo.liquidar();
-    // Restaura os indices pré-computados (PJC origem é mais precisa que nosso stub)
-    for (const [oc, idx] of indicesPreservados) {
-      oc.setIndiceAcumulado(idx);
-    }
 
     // ── 5. Converter resultados Core → UI ──
     const verbaResults: PjeVerbaResult[] = verbasCore.map((vc, idx) => {

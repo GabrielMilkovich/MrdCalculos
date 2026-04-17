@@ -699,30 +699,59 @@ export class Calculo {
     return fatorComposto;
   }
 
-  /** Constrói tabelas de correção por segmento (ADC 58/59). */
+  /**
+   * Constrói segmentos de correção (ADC 58/59) — cada segmento cobre um
+   * intervalo contínuo de tempo com um único índice monetário.
+   *
+   * Retorna, para cada segmento:
+   *   - `indice`: enum do índice aplicável no segmento
+   *   - `periodo`: janela [início, fim] do segmento
+   *   - `tabela`: TabelaDeCorrecaoMonetaria carregada (para compat retroativa)
+   *   - `indicesCalc`: lista de IndiceDeCalculo com valorAcumulado pré-computado
+   *                    pela rotina apropriada (produto para IPCA-E/IGP-M, soma
+   *                    simples para SELIC/SELIC_FAZENDA)
+   */
   private construirSegmentos(
     ctx: ITabelaCorrecaoContext,
     periodoTotal: Periodo,
     combinacoes: CombinacaoDeIndice[],
-  ): { indice: IndiceMonetarioEnum; periodo: Periodo; tabela: TabelaDeCorrecaoMonetaria }[] {
+  ): { indice: IndiceMonetarioEnum; periodo: Periodo; tabela: TabelaDeCorrecaoMonetaria; indicesCalc: IndiceDeCalculo[] }[] {
     const sorted = combinacoes
       .filter(c => c.getApartirDeOutroIndice() != null)
       .sort((a, b) => a.getApartirDeOutroIndice()!.getTime() - b.getApartirDeOutroIndice()!.getTime());
 
-    const segmentos: { indice: IndiceMonetarioEnum; periodo: Periodo; tabela: TabelaDeCorrecaoMonetaria }[] = [];
+    type Segmento = { indice: IndiceMonetarioEnum; periodo: Periodo; tabela: TabelaDeCorrecaoMonetaria; indicesCalc: IndiceDeCalculo[] };
+    const segmentos: Segmento[] = [];
     let currentStart = periodoTotal.getInicial();
     let currentIndice = this.getAtualizacaoMonetaria();
+
+    const makeSegmento = (indice: IndiceMonetarioEnum, periodo: Periodo): Segmento => {
+      const tabela = new TabelaDeCorrecaoMonetaria(
+        ctx, indice, this.getIndicesAcumulados(), this.getIgnorarTaxaCorrecaoNegativa(),
+      );
+      tabela.setOrigemCalculo(true);
+      let indicesCalc: IndiceDeCalculo[] = [];
+      if (indice !== IndiceMonetarioEnum.SEM_CORRECAO) {
+        try {
+          tabela.carregarTabela(periodo);
+          // Busca a lista bruta de IndiceDeCalculo (com valorAcumulado por taxa)
+          indicesCalc = tabela.obterIndicesDeCalculo(indice, periodo);
+        } catch {
+          // Índice desconhecido para a versão — tratar como sem correção.
+          indicesCalc = [];
+        }
+      }
+      return { indice, periodo, tabela, indicesCalc };
+    };
 
     for (const comb of sorted) {
       const transitionDate = comb.getApartirDeOutroIndice()!;
       if (HelperDate.dateAfter(transitionDate, currentStart)) {
-        const segPeriodo = new Periodo(currentStart, HelperDate.getInstance(transitionDate)!.addDay(-1).getDate());
-        const tabela = new TabelaDeCorrecaoMonetaria(
-          ctx, currentIndice, this.getIndicesAcumulados(), this.getIgnorarTaxaCorrecaoNegativa(),
+        const segPeriodo = new Periodo(
+          currentStart,
+          HelperDate.getInstance(transitionDate)!.addDay(-1).getDate(),
         );
-        tabela.setOrigemCalculo(true);
-        tabela.carregarTabela(segPeriodo);
-        segmentos.push({ indice: currentIndice, periodo: segPeriodo, tabela });
+        segmentos.push(makeSegmento(currentIndice, segPeriodo));
       }
       currentStart = transitionDate;
       currentIndice = comb.getOutroIndiceTrabalhista() ?? this.getAtualizacaoMonetaria();
@@ -730,19 +759,7 @@ export class Calculo {
 
     if (HelperDate.dateBeforeOrEquals(currentStart, periodoTotal.getFinal())) {
       const segPeriodo = new Periodo(currentStart, periodoTotal.getFinal());
-      if (currentIndice !== IndiceMonetarioEnum.NENHUM && currentIndice !== IndiceMonetarioEnum.SEM_CORRECAO) {
-        const tabela = new TabelaDeCorrecaoMonetaria(
-          ctx, currentIndice, this.getIndicesAcumulados(), this.getIgnorarTaxaCorrecaoNegativa(),
-        );
-        tabela.setOrigemCalculo(true);
-        tabela.carregarTabela(segPeriodo);
-        segmentos.push({ indice: currentIndice, periodo: segPeriodo, tabela });
-      } else {
-        const tabela = new TabelaDeCorrecaoMonetaria(
-          ctx, this.getAtualizacaoMonetaria(), this.getIndicesAcumulados(), this.getIgnorarTaxaCorrecaoNegativa(),
-        );
-        segmentos.push({ indice: currentIndice, periodo: segPeriodo, tabela });
-      }
+      segmentos.push(makeSegmento(currentIndice, segPeriodo));
     }
 
     return segmentos;
