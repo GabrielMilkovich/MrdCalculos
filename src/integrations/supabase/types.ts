@@ -2368,7 +2368,7 @@ export type Database = {
           {
             foreignKeyName: "fk_calculo_case"
             columns: ["case_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "case_controversies"
             referencedColumns: ["id"]
           },
@@ -2571,6 +2571,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pjecalc_custas_judiciais: {
+        Row: {
+          created_at: string | null
+          criterios: Json | null
+          id: string
+          teto_custas: number | null
+          teto_custas_autos: number | null
+          uf: string | null
+          vigencia_fim: string | null
+          vigencia_inicio: string
+        }
+        Insert: {
+          created_at?: string | null
+          criterios?: Json | null
+          id?: string
+          teto_custas?: number | null
+          teto_custas_autos?: number | null
+          uf?: string | null
+          vigencia_fim?: string | null
+          vigencia_inicio: string
+        }
+        Update: {
+          created_at?: string | null
+          criterios?: Json | null
+          id?: string
+          teto_custas?: number | null
+          teto_custas_autos?: number | null
+          uf?: string | null
+          vigencia_fim?: string | null
+          vigencia_inicio?: string
+        }
+        Relationships: []
       }
       pjecalc_evento_intervalo: {
         Row: {
@@ -3679,6 +3712,44 @@ export type Database = {
             columns: ["verba_base_id"]
             isOneToOne: false
             referencedRelation: "pjecalc_verba_base"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_parametros: {
+        Row: {
+          carga_horaria_padrao: number | null
+          case_id: string
+          created_at: string | null
+          data_admissao: string | null
+          data_demissao: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          carga_horaria_padrao?: number | null
+          case_id: string
+          created_at?: string | null
+          data_admissao?: string | null
+          data_demissao?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          carga_horaria_padrao?: number | null
+          case_id?: string
+          created_at?: string | null
+          data_admissao?: string | null
+          data_demissao?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_parametros_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases"
             referencedColumns: ["id"]
           },
         ]
