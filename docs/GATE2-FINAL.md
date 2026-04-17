@@ -96,8 +96,31 @@
 
 Para alcançar a meta original (≥15/17 ≤5%):
 
-1. **Corrigir duplicação de reflexos no parser** — fix em `pjc-to-engine.ts` para consolidar todas as ocorrências duplicadas (não só mpv + anual/rescisão)
-2. **Portar MaquinaDeCalculoDoInss per-competência** (agente TODO)
+1. **Corrigir duplicação de reflexos no parser** — investigação em profundidade identificou que alguns `.PJC` têm ocorrências com `<devido>` no mesmo valor da verba-base (ex: 13º SOBRE DOMINGO com mesmo sum que DOMINGO). Pode ser: (a) PJC-bug de export, (b) formato XML com referências compartilhadas não suportadas pelo nosso parser, (c) consolidação necessária pós-parse (`consolidarReflexoMediaPelaQuantidade` cobre só alguns padrões). Necessário investigar 1 caso específico (ex: 4463 +42%) com XML raw.
+2. **Portar MaquinaDeCalculoDoInss per-competência** (agente Fase 2 TODO)
 3. **Portar MaquinaDeCalculoDeIrpf** com OcorrenciaDeIrpf por competência (tabela por data)
-4. **Seeds oficiais IBGE/RFB/BCB** para modo totalmente independente
-5. **Implementar Honorários/Custas** nos casos reais que os apuram
+4. **Seeds oficiais IBGE/RFB/BCB** para modo totalmente independente (atualmente preservamos índices do PJC)
+5. **Detectar casos com juros suprimido** — PJC pode ter `jurosMora=null` quando não aplicou juros (ex: 4463). Testada detecção baseada em `valor_principal === liquido` mas essa igualdade é comum e causou regressão. Heurística requer sinal adicional (ex: `ApuracaoDeJuros.totalJurosSimples=0`).
+
+## Lições aprendidas
+
+- Agentes grandes (>1000 LOC Java) dão timeout; agentes menores (<500 LOC) são confiáveis
+- Quando stubs existem mas engine não os usa, o ganho vem de WIRAR e não de portar mais
+- Preservar dados já-computados do PJC (como `indice_acumulado`) é mais preciso que recalcular via stubs incompletos
+- O PJe-Calc tem casos especiais (juros suprimido, sem correção, valor informado) que não se detectam trivialmente sem ler a lógica completa do Java
+
+## Commits pushed (13 totais)
+
+1. `docs(fase0)`: baseline (0/17 aprov)
+2. `feat(fase1)`: MaquinaDeCalculo + 18 testes core
+3. `fix(engine-v3)`: juros de mora (SELIC/taxa legal/composto)
+4. `fix(engine-v3)`: FGTS + multa 40% + LC110
+5. `fix(engine-v3)`: combinacoes_juros (TRD_SIMPLES + SELIC ADC 58/59)
+6. `feat(fase2 r1)`: FGTS maquina + operacao + INSS WIP
+7. `feat(fase2 r1)`: IRPF + INSS adapter + IR/CS analyzer bugs
+8. `fix(engine-v3)`: preservar indices + FGTS só em liquido se compor_principal
+9. `fix(engine-v3)`: juros sobre DIFERENCA (nominal) - Súmula 200 TST
+10. `feat(fase4)`: multa 467/523 + honorarios
+11. `docs(fase6)`: GATE 2 FINAL
+12. `feat(analyzer)`: valor_principal e juros_mora_persistido
+13. `docs(gate2)`: licoes aprendidas + proximos passos
