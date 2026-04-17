@@ -167,20 +167,7 @@ export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
     }
   }
 
-  // ────────────── gerarOcorrencias / liquidar (linhas 55-66, 352-384) ──────────────
-
-  /**
-   * Porte das linhas 55-66. Envolve `executarGerarOcorrencias` com flag de
-   * reentrância.
-   *
-   * TODO(fase-12): a implementação completa (linhas 68-309) depende de
-   *   - `Calculo.restaurar()`, `ServicoDeCalculo.obterFeriasDoCalculo()`
-   *   - `HelperDate.breakInMonths` (já portado) + overloads c/ diaVencimento
-   *   - `OptimizerListSearchUnique` para manter alterações
-   *   - `Periodo.dividirNaData`, `Periodo.isMesmoPeriodo`
-   *   - `SituacaoDaFeriasEnum` (já portado) + switch case GOZADAS/INDENIZADAS
-   *  Todas essas peças precisam estar prontas antes de portar o miolo.
-   */
+  /** gerarOcorrencias (Java 55-66). Envolve `executarGerarOcorrencias` com flag de reentrância. */
   gerarOcorrencias(_manterAlteracoes: boolean): void {
     if (this.isExecutando()) {
       throw new Error(
@@ -197,21 +184,9 @@ export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
   }
 
   /**
-   * Porte de `executarGerarOcorrencias` (Java linhas 68-309).
-   *
-   * Este port cobre os quatro modos de ocorrência de pagamento com
-   * comportamento 1:1:
-   *   - MENSAL           (Java 113-117)
-   *   - DESLIGAMENTO     (Java  81-112)
-   *   - DEZEMBRO (13º)   (Java 215-264)
-   *   - PERIODO_AQUISITIVO (Java 118-214) — envolve Ferias, marcado como TODO.
-   *
-   * Observações (divergências assumidas por enxugamento):
-   *  - `OptimizerListSearchUnique` (reconciliação de alterações via
-   *    `manterAlteracoes`) é omitido — o parâmetro é preservado para API,
-   *    mas o mecanismo será retomado na fase seguinte quando
-   *    OcorrenciaDaVerbaUnique estiver portada.
-   *  - `calculo.restaurar()` (Java 73) é no-op aqui.
+   * Porte de `executarGerarOcorrencias` (Java 68-309). Cobre MENSAL, DESLIGAMENTO,
+   * DEZEMBRO 1:1; PERIODO_AQUISITIVO lança TODO (depende de Ferias).
+   * Divergência: `manterAlteracoes`/OptimizerListSearchUnique é no-op aqui.
    */
   protected executarGerarOcorrencias(_manterAlteracoes: boolean): void {
     const verba = this.verba;
@@ -350,20 +325,9 @@ export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
   }
 
   /**
-   * Porte de `executarLiquidar` (Java 386-420).
-   *
-   * Para cada ocorrência ativa:
-   *   1. obtém o valor da base via `obterValorDaBase` (FormaPadrao);
-   *   2. se `isProporcionalizado()`, guarda valorIntegral como baseIntegral;
-   *   3. aplica fator de abono quando `isFeriasComAbono` e tipo CALCULADO;
-   *   4. arredonda base/baseIntegral;
-   *   5. dispara `calcularValorDevidoDaOcorrencia`;
-   *   6. seta `indiceAcumulado` a partir da TabelaDeCorrecaoMonetaria.
-   *
-   * Obs.: `FormaPrecedenciaDeBases` (Java 591-611) é resolvida como simples
-   * chamada a `obterValorDaBase` (igual ao `FormaPadrao`), pois no fonte
-   * v2.15.1 ambas as classes delegam idêntico — o seletor só troca o
-   * comportamento por polimorfismo, e o port atual delega tudo via hook.
+   * Porte de `executarLiquidar` (Java 386-420). Para cada ocorrência ativa:
+   * obtém base (via `obterValorDaBase`), aplica fator de abono se `isFeriasComAbono`,
+   * arredonda, chama `calcularValorDevidoDaOcorrencia` e seta `indiceAcumulado`.
    */
   protected executarLiquidar(): void {
     this.modo = ModoDeCalculoEnum.LIQUIDACAO;
@@ -434,28 +398,15 @@ export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
     }
   }
 
-  // ────────────── criarOcorrencia / criarOcorrenciaComPeriodoAquisitivo ──────────────
-  //
-  // 5 overloads (Java linhas 422-547). Todos convergem para o 5-aridades.
-
   /** Overload 0 (Java 422-424). */
   protected criarOcorrencia(periodo: Periodo): void {
     this.criarOcorrenciaComPeriodoAquisitivo(periodo, null);
   }
 
   /**
-   * Overload canônico (Java 438-547).
-   *
-   * Port simplificado — a regra de `diasParaExcluir` (Java 459-474, 485-499,
-   * 512-527) depende de `getExcluirFeriasGozadas`/`obterDiasFerias`, que por
-   * sua vez dependem de Calculo plenamente portado. Este port fixa
-   * `quantidadeIntegral = quantidade` quando `parametro.isProporcionalizado()`
-   * é falso — equivalente a `diasParaExcluir = 0` com `CalculoDoIntegralizar`
-   * devolvendo o mesmo valor.
-   *
-   * TODO(fase-13): `CalculoDoIntegralizar` já está portado; restam os hooks
-   * `Calculo.obterDiasFerias`/`obterFaltasJustificadas`/`obterFaltasNaoJustificadas`
-   * para reproduzir fielmente o tratamento de exclusões.
+   * Overload canônico (Java 438-547). Os 3 overloads intermediários do Java
+   * viram args opcionais aqui (TS não tem overloading real).
+   * TODO(fase-13): `diasParaExcluir` (Java 459-474) depende de `Calculo.obterDiasFerias`.
    */
   protected criarOcorrenciaComPeriodoAquisitivo(
     periodo: Periodo,
