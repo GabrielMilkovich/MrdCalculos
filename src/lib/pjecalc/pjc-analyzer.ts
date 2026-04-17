@@ -60,6 +60,7 @@ export interface PJCAnalysis {
     limitar_avos: boolean;
     /** Data de citação extraída do PJC */
     data_citacao?: string;
+    valor_da_causa?: number;
   };
   resultado: {
     liquido_exequente: number;
@@ -188,6 +189,7 @@ export interface VerbaAnalysis {
   excluir_falta_justificada?: boolean;
   excluir_falta_nao_justificada?: boolean;
   excluir_ferias_gozadas?: boolean;
+  juros_do_ajuizamento?: string;
   ordem: number;
   ativo: boolean;
   gerar_principal?: string;
@@ -384,6 +386,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     prescricao_fgts: getTextContent(root, 'prescricaoFgts') === 'true',
     limitar_avos: getTextContent(root, 'limitarAvosAoPeriodoDoCalculo') === 'true',
     data_citacao: tsToDate(getTextContent(root, 'dataCitacao') || getTextContent(root, 'dataDaCitacao')) || undefined,
+    valor_da_causa: parseNum(getTextContent(root, 'valorDaCausa')) || undefined,
   };
 
   // --- Parser-level warnings ---
@@ -727,8 +730,25 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   }
 
   // --- FGTS Config ---
-  const fgtsEl = root.getElementsByTagName('FGTS')[0] || root.getElementsByTagName('fgts')[0]
-    || root.getElementsByTagName('ModuloFGTS')[0] || root.getElementsByTagName('moduloFgts')[0];
+  // O JSDOM é case-insensitive em HTML mode, então `getElementsByTagName('FGTS')`
+  // retorna `<fgts>` lowercase — que é um CAMPO de outros blocos (tipo
+  // `<fgtsDepositoContaVinculada>`) e NÃO o módulo FGTS. O módulo real do PJe-Calc
+  // aparece como `<ModuloFGTS>` ou tem tag filha `<multaPercentual>`/`<percentualMulta>`.
+  // Só considera módulo FGTS se tiver essas tags características.
+  const fgtsCandidates = [
+    root.getElementsByTagName('ModuloFGTS')[0],
+    root.getElementsByTagName('moduloFgts')[0],
+    root.getElementsByTagName('FGTS')[0],
+  ];
+  const fgtsEl = fgtsCandidates.find(el => {
+    if (!el) return false;
+    // Valida: elemento precisa ter tag característica de módulo FGTS
+    return !!(getTextContent(el, 'percentualMulta')
+      || getTextContent(el, 'multaPercentual')
+      || getTextContent(el, 'apurar')
+      || getTextContent(el, 'baseMulta')
+      || getTextContent(el, 'multaBase'));
+  });
   let fgts_config: PJCAnalysis['fgts_config'] = undefined;
   if (fgtsEl) {
     const multa_pct_raw = getTextContent(fgtsEl, 'percentualMulta') || getTextContent(fgtsEl, 'multaPercentual');
@@ -978,6 +998,7 @@ function parseVerbaCalculada(el: Element): VerbaAnalysis | null {
     excluir_falta_justificada: getTextContent(el, 'excluirFaltaJustificada') === 'true',
     excluir_falta_nao_justificada: getTextContent(el, 'excluirFaltaNaoJustificada') === 'true',
     excluir_ferias_gozadas: getTextContent(el, 'excluirFeriasGozadas') === 'true',
+    juros_do_ajuizamento: getTextContent(el, 'jurosDoAjuizamento') || 'OCORRENCIAS_VENCIDAS',
     ordem: parseInt(getTextContent(el, 'ordem')) || 0,
     ativo: getTextContent(el, 'ativo') !== 'false',
     gerar_principal: getTextContent(el, 'gerarPrincipal'),
@@ -1067,6 +1088,7 @@ function parseVerbaReflexo(el: Element, verbaMap: Map<string, VerbaAnalysis>): V
     excluir_falta_justificada: getTextContent(el, 'excluirFaltaJustificada') === 'true',
     excluir_falta_nao_justificada: getTextContent(el, 'excluirFaltaNaoJustificada') === 'true',
     excluir_ferias_gozadas: getTextContent(el, 'excluirFeriasGozadas') === 'true',
+    juros_do_ajuizamento: getTextContent(el, 'jurosDoAjuizamento') || 'OCORRENCIAS_VENCIDAS',
     ordem: parseInt(getTextContent(el, 'ordem')) || 0,
     ativo: getTextContent(el, 'ativo') !== 'false',
     gerar_principal: getTextContent(el, 'gerarPrincipal'),

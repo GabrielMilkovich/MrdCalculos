@@ -123,9 +123,10 @@ describe('TabelaDeCorrecaoMonetaria — carregarTabela + obterIndice', () => {
 
   it('retorna 1 quando não há valor para a data (fallback)', () => {
     const ctx = ctxSimples(new Date(2025, 11, 31));
+    // TABELA_DEVEDOR_FAZENDA é vazia (sem dados) — garante fallback = 1
     const tabela = new TabelaDeCorrecaoMonetaria(
       ctx,
-      IndiceMonetarioEnum.IPCA,  // tabela vazia
+      IndiceMonetarioEnum.TABELA_DEVEDOR_FAZENDA,
       IndicesAcumuladosEnum.MES_SUBSEQUENTE_AO_VENCIMENTO,
       false
     );

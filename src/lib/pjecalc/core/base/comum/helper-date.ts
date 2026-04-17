@@ -220,6 +220,82 @@ export class HelperDate {
   isMonday(): boolean { return this.getWeekOfDay() === 2; }
   isSaturday(): boolean { return this.getWeekOfDay() === 7; }
 
+  // ────────────── Feriados (provider externo) ──────────────
+  // HelperDate.java:349-361 usa `getFeriado().buscarFeriado(date)`.
+  // Port TS: registro de um provider estático (opcional). Quando não há
+  // provider, os métodos isHoliday/isFederalHolidays devolvem false (fallback).
+  // O provider pode ser conectado à tabela pjecalc_feriados pré-carregada.
+  private static feriadoProvider: {
+    isHoliday(date: Date): boolean;
+    isFederalHoliday(date: Date): boolean;
+  } | null = null;
+
+  static setFeriadoProvider(p: {
+    isHoliday(date: Date): boolean;
+    isFederalHoliday(date: Date): boolean;
+  } | null): void {
+    HelperDate.feriadoProvider = p;
+  }
+
+  isHoliday(): boolean {
+    return HelperDate.feriadoProvider?.isHoliday(this.dt) ?? false;
+  }
+
+  isFederalHolidays(): boolean {
+    return HelperDate.feriadoProvider?.isFederalHoliday(this.dt) ?? false;
+  }
+
+  // ────────────── Filters + totalizadores (HelperDate.java:379-409) ──────────────
+  // Ref: HelperDate.java:626-688 (inner classes de filtro)
+  //
+  // Todos os filtros delegam para `match(date): boolean` e depois contam dias.
+  // LogicoFuzzy é tratado via função pura, evitando ciclo de import.
+
+  /** totalDays (HelperDate.java:399-409) — itera dia a dia e conta os que casam com o filtro. */
+  totalDays(end: HelperDate, filter: (d: HelperDate) => boolean): number {
+    let total = 0;
+    const date = HelperDate.getInstance(this.dt)!;
+    // loop: do..while — conta inclusive end
+    while (true) {
+      if (filter(date)) total++;
+      date.addDay(1);
+      if (end.lessThen(date)) break;
+    }
+    return total;
+  }
+
+  /** totalWorkDays (HelperDate.java:379-381) — dias úteis.
+   *  filtro: (sábadoUtil || !sábado) && !domingo && !feriado */
+  totalWorkDays(end: HelperDate, sabadoDiaUtil: { isValido(d: Date): boolean } | null): number {
+    return this.totalDays(end, (d) => {
+      const sabUtil = sabadoDiaUtil?.isValido(d.getDate()) ?? false;
+      return (sabUtil || !d.isSaturday()) && !d.isSunday() && !d.isHoliday();
+    });
+  }
+
+  /** totalHolidays (HelperDate.java:383-385) — número de feriados no período. */
+  totalHolidays(end: HelperDate): number {
+    return this.totalDays(end, (d) => d.isHoliday());
+  }
+
+  /** totalWeekendOrHolidays (HelperDate.java:387-389) — repousos + feriados.
+   *  filtro: (!sábadoUtil && sábado) || domingo || feriado */
+  totalWeekendOrHolidays(end: HelperDate, sabadoDiaUtil: { isValido(d: Date): boolean } | null): number {
+    return this.totalDays(end, (d) => {
+      const sabUtil = sabadoDiaUtil?.isValido(d.getDate()) ?? false;
+      return (!sabUtil && d.isSaturday()) || d.isSunday() || d.isHoliday();
+    });
+  }
+
+  /** totalNotWorkDays (HelperDate.java:395-397) — dias não-úteis.
+   *  filtro: (!sábadoUtil && sábado) || domingo  [sem feriado] */
+  totalNotWorkDays(end: HelperDate, sabadoDiaUtil: { isValido(d: Date): boolean } | null): number {
+    return this.totalDays(end, (d) => {
+      const sabUtil = sabadoDiaUtil?.isValido(d.getDate()) ?? false;
+      return (!sabUtil && d.isSaturday()) || d.isSunday();
+    });
+  }
+
   // ────────────── Static date comparisons (linhas 411-443) ──────────────
 
   static resetHour(date: Date): Date {

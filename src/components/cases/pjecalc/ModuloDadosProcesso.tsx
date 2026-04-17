@@ -51,6 +51,8 @@ export function ModuloDadosProcesso({ caseId }: Props) {
     rito: 'ordinario', fase: 'conhecimento', data_distribuicao: '', data_citacao: '',
     data_transito: '', juiz: '', reclamante_nome: '', reclamante_cpf: '',
     reclamada_nome: '', reclamada_cnpj: '', objeto: '',
+    dia_fechamento_mes: '31', prazo_ferias_proporcional: '30',
+    inicio_ferias_coletivas: '', instancia: 'PRIMEIRA', tipo_calculo: 'LIQUIDACAO',
   });
 
   useEffect(() => {
@@ -294,6 +296,51 @@ export function ModuloDadosProcesso({ caseId }: Props) {
           {f("reclamada_nome", "Reclamada")}
           {f("reclamada_cnpj", "CNPJ Reclamada")}
           {f("juiz", "Juiz")}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Configurações do Cálculo</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-3 gap-4">
+          <div>
+            <Label className="text-xs">Dia fechamento mês</Label>
+            <Input type="number" min={1} max={31} className="mt-1 h-8 text-xs" value={form.dia_fechamento_mes} onChange={e => setForm(p => ({ ...p, dia_fechamento_mes: e.target.value }))} />
+          </div>
+          <div>
+            <Label className="text-xs">Prazo férias proporcional (Art. 130)</Label>
+            <Select value={form.prazo_ferias_proporcional} onValueChange={v => setForm(p => ({ ...p, prazo_ferias_proporcional: v }))}>
+              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">30 dias (até 5 faltas)</SelectItem>
+                <SelectItem value="24">24 dias (6-14 faltas)</SelectItem>
+                <SelectItem value="18">18 dias (15-23 faltas)</SelectItem>
+                <SelectItem value="12">12 dias (24-32 faltas)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {f("inicio_ferias_coletivas", "Férias coletivas (início)", "date")}
+          <div>
+            <Label className="text-xs">Instância</Label>
+            <Select value={form.instancia} onValueChange={v => setForm(p => ({ ...p, instancia: v }))}>
+              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PRIMEIRA">1ª Instância</SelectItem>
+                <SelectItem value="SEGUNDA">2ª Instância</SelectItem>
+                <SelectItem value="TST">TST</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Tipo de cálculo</Label>
+            <Select value={form.tipo_calculo} onValueChange={v => setForm(p => ({ ...p, tipo_calculo: v }))}>
+              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="LIQUIDACAO">Liquidação</SelectItem>
+                <SelectItem value="ATUALIZACAO">Atualização</SelectItem>
+                <SelectItem value="PRECATORIO">Precatório</SelectItem>
+                <SelectItem value="RPV">RPV</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
     </div>

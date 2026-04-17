@@ -60,6 +60,7 @@ import { IndiceIndebitoTributario } from '../indices/it/indice-indebito-tributar
 import { IndiceTabelaUnicaJTMensal } from '../indices/tabelaunica/indice-tabela-unica-jt-mensal';
 import { IndiceTabelaUnicaJTDiario } from '../indices/tabelaunica/indice-tabela-unica-jt-diario';
 import { IndiceTabelaUnicaDebitoTrabalhista } from '../indices/tabelaunica/indice-tabela-unica-debito-trabalhista';
+import { obterTabelaSelicParaCorrecao } from '../juros/juros-selic-para-correcao';
 
 const MASCARA_DIA = 'ddMMyyyy';
 const DIAS_A_MAIS_VENCIMENTO_RESCISORIAS = 10;
@@ -192,15 +193,15 @@ export class TabelaDeCorrecaoMonetaria {
       case IndiceMonetarioEnum.TR:           return IndiceTR.obterTabela(periodo);
       case IndiceMonetarioEnum.JAM:          return IndiceJAM.obterTabela(periodo);
       case IndiceMonetarioEnum.SELIC: {
-        // JurosSelicParaCorrecao.obterTabelaParaCorrecao — requer contexto
-        // do Calculo para decidir +1% no mês de liquidação.
+        // JurosSelicParaCorrecao.obterTabelaParaCorrecao com +1% no mês de liquidação
         if (this.context.obterTabelaSelicParaCorrecao) {
           return this.context.obterTabelaSelicParaCorrecao(
             periodo, this.ignorarTaxaCorrecaoNegativa, this.origemCalculo,
           );
         }
-        // Fallback: usa SELIC Fazenda (mesma metodologia, sem o +1% final)
-        return IndiceSelicFazenda.obterTabela(periodo);
+        // Usa obterTabelaSelicParaCorrecao portado (com +1% liquidação)
+        const dataLiq = this.dataLiquidacao ?? this.context.getDataDeLiquidacao();
+        return obterTabelaSelicParaCorrecao(periodo, dataLiq, this.ignorarTaxaCorrecaoNegativa);
       }
       case IndiceMonetarioEnum.SELIC_BACEN:   return IndiceSelicDiaria.obterTabela(periodo);
       case IndiceMonetarioEnum.SELIC_FAZENDA: return IndiceSelicFazenda.obterTabela(periodo);

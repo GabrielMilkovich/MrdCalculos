@@ -2,24 +2,47 @@
  * PJe-Calc v2.15.1 — Inss
  * Porte 1:1 de: br.jus.trt8.pjecalc.negocio.dominio.calculo.inss.Inss
  *
- * Ref Java: pjecalc-fonte/negocio/br/jus/trt8/pjecalc/negocio/dominio/calculo/inss/Inss.java (~300 linhas entidade)
- *                + RepositorioDeInss.java (~1340 linhas lógica de cálculo)
+ * Ref Java: pjecalc-fonte/.../calculo/inss/Inss.java (729 linhas)
  *
- * O INSS no PJe-Calc 2.15.1 tem:
- *   - InssSobreSalariosDevidos (segurado + empregador)
- *   - InssSobreSalariosPagos (segurado + empregador)
- *   - Alíquotas: segurado progressivo (EC 103/2019), empresa 20%, SAT, terceiros
- *   - Atualização SELIC das parcelas de INSS (tributo federal)
- *
- * Neste port, a lógica progressiva está em core/dominio/inss/faixas/ (já portada).
- * Aqui portamos a entidade-orquestradora.
+ * Entidade orquestradora do INSS do cálculo:
+ *   - tipoAliquotaSegurado (SEGURADO_EMPREGADO | EMPREGADO_DOMESTICO | FIXA)
+ *   - aliquotaSeguradoFixa (usada quando FIXA)
+ *   - limitarTeto (só para FIXA)
+ *   - tipoAliquotaEmpregador (FIXA | POR_PERIODO | POR_ATIVIDADE_ECONOMICA)
+ *   - aliquotaEmpresaFixa / aliquotaRATFixa / aliquotaTerceirosFixa
+ *   - apurar* (flags por atividade econômica)
+ *   - aliquotasPorPeriodos (lista, quando POR_PERIODO)
+ *   - periodosComOpcaoSimples (lista, descontos Simples Nacional)
+ *   - atividadeEconomica (quando POR_ATIVIDADE_ECONOMICA)
+ *   - inssSobreSalariosDevidos / Pagos (OneToOne)
+ *   - apurarInssSobreSalariosPagos (flag)
+ *   - maquinaDeCalculoDoInss (transient, orquestrador de cálculo)
+ *   - legendaDaFormula (transient, display)
+ *   - existeApuracao{INSSTerceiros,INSSEmpresa,INSSSAT} (transient memo)
  */
 import Decimal from 'decimal.js';
+import {
+  TipoDeAliquotaDoEmpregadorEnum,
+  TipoDeAliquotaDoSeguradoEnum,
+} from '../../../constantes/enums';
 import { arredondarValorMonetario } from '../../../base/comum/utils';
 import type { IModuloLiquidavel } from '../calculo';
-import { calcularInssProgressivo, FaixaPrevidenciaria } from '../../inss/faixas/faixa-previdenciaria';
+import type { Calculo } from '../calculo';
+import { calcularInssProgressivo, type FaixaPrevidenciaria } from '../../inss/faixas/faixa-previdenciaria';
+import { AliquotasDoEmpregadorPorPeriodo } from './aliquotas-do-empregador-por-periodo';
+import { PeriodoDoINSSComOpcaoSimples } from './periodo-do-inss-com-opcao-simples';
+import { InssSobreSalariosDevidos } from './sobresalarios/inss-sobre-salarios-devidos';
+import { InssSobreSalariosPagos } from './sobresalarios/inss-sobre-salarios-pagos';
+import { MaquinaDeCalculoDoInss } from './sobresalarios/maquina-de-calculo-do-inss';
+import { LegendaDaFormulaDoInss } from './sobresalarios/legenda-da-formula-do-inss';
+import type { OcorrenciaDeInssSobreSalariosDevidos } from './sobresalarios/ocorrencia-de-inss-sobre-salarios-devidos';
+import type { OcorrenciaDeInssSobreSalariosPagos } from './sobresalarios/ocorrencia-de-inss-sobre-salarios-pagos';
 
-export interface OcorrenciaDeInss {
+/**
+ * Estrutura legada (usada por código V3 antigo) — representa uma linha-mensal
+ * simplificada de ocorrência de INSS. Mantida para compatibilidade.
+ */
+export interface OcorrenciaDeInssLegacy {
   competencia: Date;
   baseSalarial: Decimal;
   aliquotaSegurado: Decimal;
@@ -33,23 +56,269 @@ export interface OcorrenciaDeInss {
 }
 
 export class Inss implements IModuloLiquidavel {
-  private ocorrenciasSalariosDevidos: OcorrenciaDeInss[] = [];
-  private ocorrenciasSalariosPagos: OcorrenciaDeInss[] = [];
+  private id: number | null = null;
+  private versao: number = 0;
+  private calculo: Calculo | null = null;
+
+  private tipoAliquotaSegurado: TipoDeAliquotaDoSeguradoEnum = TipoDeAliquotaDoSeguradoEnum.SEGURADO_EMPREGADO;
+  private aliquotaSeguradoFixa: Decimal | null = null;
+  private limitarTeto: boolean = true;
+
+  private tipoAliquotaEmpregador: TipoDeAliquotaDoEmpregadorEnum = TipoDeAliquotaDoEmpregadorEnum.FIXA;
+  private aliquotaEmpresaFixa: Decimal | null = null;
+  private aliquotaRATFixa: Decimal | null = null;
+  private aliquotaTerceirosFixa: Decimal | null = null;
+
+  private apurarEmpresaPorAtividade: boolean = false;
+  private apurarRATPorAtividade: boolean = false;
+  private apurarTerceirosPorAtividade: boolean = false;
+
+  private aliquotasPorPeriodos: AliquotasDoEmpregadorPorPeriodo[] = [];
+  private periodosComOpcaoSimples: PeriodoDoINSSComOpcaoSimples[] = [];
+
+  // AtividadeEconomica ainda não portada — placeholder null.
+  private atividadeEconomica: unknown | null = null;
+
+  private inssSobreSalariosDevidos: InssSobreSalariosDevidos;
+  private inssSobreSalariosPagos: InssSobreSalariosPagos;
+
+  private apurarInssSobreSalariosPagos: boolean = false;
+
+  // transient
+  private maquinaDeCalculoDoInss: MaquinaDeCalculoDoInss;
+  private legendaDaFormula: LegendaDaFormulaDoInss | null = null;
+  private existeApuracaoINSSTerceiros: boolean | null = null;
+  private existeApuracaoINSSEmpresa: boolean | null = null;
+  private existeApuracaoINSSSAT: boolean | null = null;
+
+  // ── campos legacy (V3) ──
+  private ocorrenciasSalariosDevidos: OcorrenciaDeInssLegacy[] = [];
+  private ocorrenciasSalariosPagos: OcorrenciaDeInssLegacy[] = [];
   private faixas: FaixaPrevidenciaria[] = [];
-  private aliquotaEmpresa: Decimal = new Decimal(20);
-  private aliquotaSAT: Decimal = new Decimal(2);
-  private aliquotaTerceiros: Decimal = new Decimal('5.8');
+  private aliquotaEmpresaLegacy: Decimal = new Decimal(20);
+  private aliquotaSATLegacy: Decimal = new Decimal(2);
+  private aliquotaTerceirosLegacy: Decimal = new Decimal('5.8');
   private apurarSegurado: boolean = true;
   private apurarEmpresa: boolean = true;
   private cobrarReclamante: boolean = true;
 
-  // ── Getters/Setters ──
-  getOcorrenciasSalariosDevidos(): OcorrenciaDeInss[] { return this.ocorrenciasSalariosDevidos; }
-  getOcorrenciasSalariosPagos(): OcorrenciaDeInss[] { return this.ocorrenciasSalariosPagos; }
+  constructor(calculo?: Calculo) {
+    this.inssSobreSalariosDevidos = new InssSobreSalariosDevidos();
+    this.inssSobreSalariosDevidos.setInss(this);
+    this.inssSobreSalariosPagos = new InssSobreSalariosPagos();
+    this.inssSobreSalariosPagos.setInss(this);
+    this.maquinaDeCalculoDoInss = new MaquinaDeCalculoDoInss(this);
+    if (calculo) {
+      this.calculo = calculo;
+      this.sugerirValoresPadroes();
+    }
+  }
+
+  getId(): number | null { return this.id; }
+  setId(id: number): void { this.id = id; }
+
+  getVersao(): number { return this.versao; }
+  setVersao(v: number): void { this.versao = v; }
+
+  getCalculo(): Calculo | null { return this.calculo; }
+  setCalculo(c: Calculo | null): void { this.calculo = c; }
+
+  getTipoAliquotaSegurado(): TipoDeAliquotaDoSeguradoEnum { return this.tipoAliquotaSegurado; }
+  setTipoAliquotaSegurado(v: TipoDeAliquotaDoSeguradoEnum): void { this.tipoAliquotaSegurado = v; }
+
+  getAliquotaSeguradoFixa(): Decimal | null { return this.aliquotaSeguradoFixa; }
+  setAliquotaSeguradoFixa(v: Decimal | null): void { this.aliquotaSeguradoFixa = v; }
+
+  getLimitarTeto(): boolean { return this.limitarTeto; }
+  setLimitarTeto(v: boolean): void { this.limitarTeto = v; }
+
+  getTipoAliquotaEmpregador(): TipoDeAliquotaDoEmpregadorEnum { return this.tipoAliquotaEmpregador; }
+  setTipoAliquotaEmpregador(v: TipoDeAliquotaDoEmpregadorEnum): void { this.tipoAliquotaEmpregador = v; }
+
+  getAliquotaEmpresaFixa(): Decimal | null { return this.aliquotaEmpresaFixa; }
+  setAliquotaEmpresaFixa(v: Decimal | null): void { this.aliquotaEmpresaFixa = v; }
+
+  getAliquotaRATFixa(): Decimal | null { return this.aliquotaRATFixa; }
+  setAliquotaRATFixa(v: Decimal | null): void { this.aliquotaRATFixa = v; }
+
+  getAliquotaTerceirosFixa(): Decimal | null { return this.aliquotaTerceirosFixa; }
+  setAliquotaTerceirosFixa(v: Decimal | null): void { this.aliquotaTerceirosFixa = v; }
+
+  getApurarEmpresaPorAtividade(): boolean { return this.apurarEmpresaPorAtividade; }
+  setApurarEmpresaPorAtividade(v: boolean): void { this.apurarEmpresaPorAtividade = v; }
+
+  getApurarRATPorAtividade(): boolean { return this.apurarRATPorAtividade; }
+  setApurarRATPorAtividade(v: boolean): void { this.apurarRATPorAtividade = v; }
+
+  getApurarTerceirosPorAtividade(): boolean { return this.apurarTerceirosPorAtividade; }
+  setApurarTerceirosPorAtividade(v: boolean): void { this.apurarTerceirosPorAtividade = v; }
+
+  getAtividadeEconomica(): unknown | null { return this.atividadeEconomica; }
+  setAtividadeEconomica(v: unknown | null): void { this.atividadeEconomica = v; }
+
+  getInssSobreSalariosDevidos(): InssSobreSalariosDevidos { return this.inssSobreSalariosDevidos; }
+  setInssSobreSalariosDevidos(v: InssSobreSalariosDevidos): void { this.inssSobreSalariosDevidos = v; }
+
+  getInssSobreSalariosPagos(): InssSobreSalariosPagos { return this.inssSobreSalariosPagos; }
+  setInssSobreSalariosPagos(v: InssSobreSalariosPagos): void { this.inssSobreSalariosPagos = v; }
+
+  getAliquotasPorPeriodos(): AliquotasDoEmpregadorPorPeriodo[] { return this.aliquotasPorPeriodos; }
+  setAliquotasPorPeriodos(v: AliquotasDoEmpregadorPorPeriodo[]): void { this.aliquotasPorPeriodos = v; }
+
+  getPeriodosComOpcaoSimples(): PeriodoDoINSSComOpcaoSimples[] { return this.periodosComOpcaoSimples; }
+  setPeriodosComOpcaoSimples(v: PeriodoDoINSSComOpcaoSimples[]): void { this.periodosComOpcaoSimples = v; }
+
+  getApurarInssSobreSalariosPagos(): boolean { return this.apurarInssSobreSalariosPagos; }
+  setApurarInssSobreSalariosPagos(v: boolean): void { this.apurarInssSobreSalariosPagos = v; }
+
+  /** adicionar (Java linha 348) — ligar a alíquota ao INSS e incluir na lista. */
+  adicionarAliquotasPorPeriodo(aliquotas: AliquotasDoEmpregadorPorPeriodo): void {
+    aliquotas.setInss(this);
+    this.aliquotasPorPeriodos.push(aliquotas);
+  }
+
+  /** adicionar (Java linha 354) */
+  adicionarPeriodoComOpcaoSimples(periodo: PeriodoDoINSSComOpcaoSimples): void {
+    periodo.setInss(this);
+    this.periodosComOpcaoSimples.push(periodo);
+  }
+
+  /** sugerirValoresPadroes (Java linha 332) */
+  private sugerirValoresPadroes(): void {
+    this.inssSobreSalariosDevidos.sugerirDatas();
+    this.inssSobreSalariosPagos.sugerirDatas();
+    this.aliquotaEmpresaFixa = new Decimal('20.0000');
+    this.aliquotaRATFixa = new Decimal('3.0000');
+  }
+
+  /** isTipoAliquotaSeguradoFixa (Java linha 406) */
+  isTipoAliquotaSeguradoFixa(): boolean {
+    return this.tipoAliquotaSegurado === TipoDeAliquotaDoSeguradoEnum.FIXA;
+  }
+  isTipoAliquotaEmpregadorFixa(): boolean {
+    return this.tipoAliquotaEmpregador === TipoDeAliquotaDoEmpregadorEnum.FIXA;
+  }
+  isTipoAliquotaEmpregadorPorAtividade(): boolean {
+    return this.tipoAliquotaEmpregador === TipoDeAliquotaDoEmpregadorEnum.POR_ATIVIDADE_ECONOMICA;
+  }
+  isTipoAliquotaEmpregadorPorPeriodo(): boolean {
+    return this.tipoAliquotaEmpregador === TipoDeAliquotaDoEmpregadorEnum.POR_PERIODO;
+  }
+
+  /** liquidar/liquidarAtualizacao delegam à MaquinaDeCalculo (Java 520, 524). */
+  liquidarAtualizacao(dataEvento: Date): void {
+    this.maquinaDeCalculoDoInss.liquidarAtualizacao(dataEvento);
+  }
+
+  liquidar(dataLiquidacao?: Date): void {
+    if (dataLiquidacao) {
+      this.maquinaDeCalculoDoInss.liquidar(dataLiquidacao);
+    }
+    // fluxo legacy mantido em liquidarComVerbas()
+  }
+
+  limparJuros(): void {
+    for (const oc of this.inssSobreSalariosDevidos.getOcorrencias()) {
+      oc.setTaxaDeJuros(null);
+    }
+    for (const oc of this.inssSobreSalariosPagos.getOcorrencias()) {
+      oc.setTaxaDeJuros(null);
+    }
+  }
+
+  calcularJurosDosSalariosDevidos(): void {
+    this.maquinaDeCalculoDoInss.calcularJurosDosSalariosDevidos();
+  }
+
+  calcularJurosDosSalariosPagos(): void {
+    this.maquinaDeCalculoDoInss.calcularJurosDosSalariosPagos();
+  }
+
+  existemOcorrencias(): boolean {
+    return this.inssSobreSalariosDevidos.existemOcorrencias() || this.inssSobreSalariosPagos.existemOcorrencias();
+  }
+
+  /** getLegendaDaFormula (Java linha 553) — lazy init. */
+  getLegendaDaFormula(): LegendaDaFormulaDoInss {
+    if (this.legendaDaFormula === null) {
+      this.legendaDaFormula = new LegendaDaFormulaDoInss(this);
+    }
+    return this.legendaDaFormula;
+  }
+
+  /** existeApuracaoParaEmpresa (Java linha 560) — memoizado em transient. */
+  existeApuracaoParaEmpresa(): boolean {
+    if (this.existeApuracaoINSSEmpresa !== null) return this.existeApuracaoINSSEmpresa;
+    let result = false;
+    switch (this.tipoAliquotaEmpregador) {
+      case TipoDeAliquotaDoEmpregadorEnum.FIXA:
+        result = this.aliquotaEmpresaFixa !== null;
+        break;
+      case TipoDeAliquotaDoEmpregadorEnum.POR_ATIVIDADE_ECONOMICA:
+        result = this.atividadeEconomica !== null && this.apurarEmpresaPorAtividade;
+        break;
+      case TipoDeAliquotaDoEmpregadorEnum.POR_PERIODO:
+        for (const p of this.aliquotasPorPeriodos) {
+          if (p.getAliquotaEmpresa() !== null) { result = true; break; }
+        }
+        break;
+    }
+    this.existeApuracaoINSSEmpresa = result;
+    return result;
+  }
+
+  /** existeApuracaoParaSAT (Java linha 592) */
+  existeApuracaoParaSAT(): boolean {
+    if (this.existeApuracaoINSSSAT !== null) return this.existeApuracaoINSSSAT;
+    let result = false;
+    switch (this.tipoAliquotaEmpregador) {
+      case TipoDeAliquotaDoEmpregadorEnum.FIXA:
+        result = this.aliquotaRATFixa !== null;
+        break;
+      case TipoDeAliquotaDoEmpregadorEnum.POR_ATIVIDADE_ECONOMICA:
+        result = this.apurarRATPorAtividade;
+        break;
+      case TipoDeAliquotaDoEmpregadorEnum.POR_PERIODO:
+        for (const p of this.aliquotasPorPeriodos) {
+          if (p.getAliquotaEmpresa() !== null || p.getAliquotaRAT() !== null) { result = true; break; }
+        }
+        break;
+    }
+    this.existeApuracaoINSSSAT = result;
+    return result;
+  }
+
+  /** existeApuracaoParaTerceiros (Java linha 624) */
+  existeApuracaoParaTerceiros(): boolean {
+    if (this.existeApuracaoINSSTerceiros !== null) return this.existeApuracaoINSSTerceiros;
+    let result = false;
+    switch (this.tipoAliquotaEmpregador) {
+      case TipoDeAliquotaDoEmpregadorEnum.FIXA:
+        result = this.aliquotaTerceirosFixa !== null;
+        break;
+      case TipoDeAliquotaDoEmpregadorEnum.POR_ATIVIDADE_ECONOMICA:
+        result = this.atividadeEconomica !== null && this.apurarTerceirosPorAtividade;
+        break;
+      case TipoDeAliquotaDoEmpregadorEnum.POR_PERIODO:
+        for (const p of this.aliquotasPorPeriodos) {
+          if (p.getAliquotaTerceiros() !== null) { result = true; break; }
+        }
+        break;
+    }
+    this.existeApuracaoINSSTerceiros = result;
+    return result;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  //                   API LEGACY (V3 pjc-to-engine)
+  // ─────────────────────────────────────────────────────────────────────
+
+  getOcorrenciasSalariosDevidos(): OcorrenciaDeInssLegacy[] { return this.ocorrenciasSalariosDevidos; }
+  getOcorrenciasSalariosPagos(): OcorrenciaDeInssLegacy[] { return this.ocorrenciasSalariosPagos; }
   setFaixas(v: FaixaPrevidenciaria[]): void { this.faixas = v; }
-  setAliquotaEmpresa(v: Decimal): void { this.aliquotaEmpresa = v; }
-  setAliquotaSAT(v: Decimal): void { this.aliquotaSAT = v; }
-  setAliquotaTerceiros(v: Decimal): void { this.aliquotaTerceiros = v; }
+  setAliquotaEmpresa(v: Decimal): void { this.aliquotaEmpresaLegacy = v; }
+  setAliquotaSAT(v: Decimal): void { this.aliquotaSATLegacy = v; }
+  setAliquotaTerceiros(v: Decimal): void { this.aliquotaTerceirosLegacy = v; }
   setApurarSegurado(v: boolean): void { this.apurarSegurado = v; }
   setApurarEmpresa(v: boolean): void { this.apurarEmpresa = v; }
   setCobrarReclamante(v: boolean): void { this.cobrarReclamante = v; }
@@ -69,23 +338,17 @@ export class Inss implements IModuloLiquidavel {
   }
 
   /**
-   * liquidar — port funcional de MaquinaDeCalculoDoInss.liquidar()
-   * (pjecalc-fonte/.../inss/sobresalarios/MaquinaDeCalculoDoInss.java:146-200)
-   *
-   * Fluxo do PJe-Calc:
-   * 1. Para cada competência com verbas com incidência INSS:
-   *    a. Soma bases normais + bases 13° (teto separado para 13°)
-   *    b. Calcula INSS progressivo do segurado (alíquota fixa OU progressivo)
-   *    c. Calcula empresa (alíquota fixa, geralmente 20%)
-   *    d. Calcula SAT + terceiros
-   * 2. Totaliza segurado + empregador
-   *
-   * @param verbas lista de VerbaDeCalculo com incidência INSS definida
+   * liquidarComVerbas — fluxo legacy (engine V3). Agrupa bases por competência
+   * e aplica faixas progressivas + alíquotas fixas de empresa/SAT/terceiros.
+   * Usado atualmente pelo `pjc-to-engine.ts`.
    */
-  liquidarComVerbas(verbas: { getIncidenciaINSS(): boolean; getOcorrenciasAtivas(): Array<{ getDataInicial(): Date | null; getDiferenca(): Decimal }> }[]): void {
+  liquidarComVerbas(
+    verbas: {
+      getIncidenciaINSS(): boolean;
+      getOcorrenciasAtivas(): Array<{ getDataInicial(): Date | null; getDiferenca(): Decimal }>;
+    }[],
+  ): void {
     this.ocorrenciasSalariosDevidos = [];
-
-    // Agrupa base por competência (YYYY-MM)
     const basesPorComp = new Map<string, Decimal>();
     for (const verba of verbas) {
       if (!verba.getIncidenciaINSS()) continue;
@@ -99,59 +362,37 @@ export class Inss implements IModuloLiquidavel {
         basesPorComp.set(comp, current.plus(dif));
       }
     }
-
-    // Calcula INSS por competência
     for (const [comp, base] of basesPorComp) {
       const [ano, mes] = comp.split('-').map(Number);
       const competencia = new Date(ano, mes - 1, 1);
-
-      // Segurado progressivo
       let valorSegurado = new Decimal(0);
       if (this.apurarSegurado && this.faixas.length > 0) {
         valorSegurado = arredondarValorMonetario(calcularInssProgressivo(base, this.faixas));
       }
-
-      // Empresa + SAT + terceiros
       let valorEmpresa = new Decimal(0);
       let valorSAT = new Decimal(0);
       let valorTerceiros = new Decimal(0);
       if (this.apurarEmpresa) {
-        valorEmpresa = arredondarValorMonetario(base.times(this.aliquotaEmpresa).div(100));
-        valorSAT = arredondarValorMonetario(base.times(this.aliquotaSAT).div(100));
-        valorTerceiros = arredondarValorMonetario(base.times(this.aliquotaTerceiros).div(100));
+        valorEmpresa = arredondarValorMonetario(base.times(this.aliquotaEmpresaLegacy).div(100));
+        valorSAT = arredondarValorMonetario(base.times(this.aliquotaSATLegacy).div(100));
+        valorTerceiros = arredondarValorMonetario(base.times(this.aliquotaTerceirosLegacy).div(100));
       }
-
       this.ocorrenciasSalariosDevidos.push({
         competencia,
         baseSalarial: base,
         aliquotaSegurado: base.isZero() ? new Decimal(0) : valorSegurado.div(base).times(100),
         valorSegurado,
-        aliquotaEmpresa: this.aliquotaEmpresa,
+        aliquotaEmpresa: this.aliquotaEmpresaLegacy,
         valorEmpresa,
-        aliquotaSAT: this.aliquotaSAT,
+        aliquotaSAT: this.aliquotaSATLegacy,
         valorSAT,
-        aliquotaTerceiros: this.aliquotaTerceiros,
+        aliquotaTerceiros: this.aliquotaTerceirosLegacy,
         valorTerceiros,
       });
     }
   }
-
-  /** liquidar via IModuloLiquidavel — stub sem acesso direto às verbas */
-  liquidar(_dataLiquidacao?: Date): void {
-    // Chamado pelo Calculo.liquidar() — sem verbas neste contexto.
-    // O calculo.liquidar() deve chamar liquidarComVerbas() diretamente
-    // passando as verbas ativas com incidência INSS.
-  }
-
-  limparJuros(): void {
-    // Reset taxas de juros das ocorrências
-  }
-
-  calcularJurosDosSalariosDevidos(): void {
-    // Atualização SELIC das parcelas — Lei 9.430/96
-  }
-
-  calcularJurosDosSalariosPagos(): void {
-    // Idem para salários pagos
-  }
 }
+
+// ── alias para compatibilidade com código legacy ──
+export type { OcorrenciaDeInssLegacy as OcorrenciaDeInss };
+export type { OcorrenciaDeInssSobreSalariosDevidos, OcorrenciaDeInssSobreSalariosPagos };

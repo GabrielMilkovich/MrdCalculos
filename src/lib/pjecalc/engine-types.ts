@@ -40,13 +40,25 @@ export interface PjeParametros {
   projetar_aviso_indenizado: boolean;
   limitar_avos_periodo: boolean;
   zerar_valor_negativo: boolean;
+  valor_da_causa?: number;
   sabado_dia_util: boolean;
+  excecoes_sabado?: PjeExcecaoSabado[];
   considerar_feriado_estadual: boolean;
   considerar_feriado_municipal: boolean;
   /** Pontos Facultativos a considerar como feriado (Sexta-feira Santa, Carnaval, Corpus Christi) */
   pontos_facultativos?: ('sexta_santa' | 'carnaval' | 'corpus_christi')[];
   /** Art. 64 CLT: 'comercial' usa 30 dias fixos; 'civil' usa dias reais do mês */
   tipo_mes?: 'civil' | 'comercial';
+  /** Dia de fechamento do mês (1-31, default 31) — Art. 459 CLT */
+  dia_fechamento_mes?: number;
+  /** Prazo de férias proporcional em dias (30, 24, 18, 12) — Art. 130 CLT */
+  prazo_ferias_proporcional?: number;
+  /** Início das férias coletivas (opcional) */
+  inicio_ferias_coletivas?: string;
+  /** Instância do processo */
+  instancia?: 'PRIMEIRA' | 'SEGUNDA' | 'TST';
+  /** Tipo de cálculo */
+  tipo_calculo?: 'LIQUIDACAO' | 'ATUALIZACAO' | 'PRECATORIO' | 'RPV';
   /** Multi-link: identifier for this employment contract (vínculos múltiplos) */
   vinculo_id?: string;
   /** Multi-link: label for this contract (e.g. "1º Vínculo - 2015/2020") */
@@ -222,7 +234,12 @@ export interface PjeVerba {
   };
   
   juros_ajuizamento: 'ocorrencias_vencidas' | 'ocorrencias_vencidas_vincendas';
-  
+
+  /** Aplicar proporcionalidade pelo período trabalhado no mês */
+  aplicar_proporcionalidade?: boolean;
+  /** Comentários / observações sobre a verba */
+  comentarios?: string;
+
   verba_principal_id?: string;
   comportamento_reflexo?: 'valor_mensal' | 'media_valor_absoluto' | 'media_valor_corrigido' | 'media_quantidade' | 'media_pela_quantidade';
   /** Período de agrupamento para reflexos: ANO_CIVIL (13º), PERIODO_AQUISITIVO (férias) */
@@ -502,6 +519,31 @@ export interface PjeCorrecaoConfig {
    * para alinhar com PJe-Calc oficial.
    */
   selic_pro_rata_die?: boolean;
+
+  /** Exceções de juros por período (períodos onde se aplica regime diferente) */
+  excecoes_juros?: PjeExcecaoJuros[];
+
+  /** Lei 11.941/2009: aplicar sobre INSS salários devidos */
+  lei_11941_devidos?: boolean;
+  /** Lei 11.941/2009: data a partir de (salários devidos) */
+  lei_11941_devidos_a_partir_de?: string;
+  /** Lei 11.941/2009: aplicar sobre INSS salários pagos */
+  lei_11941_pagos?: boolean;
+  /** Lei 11.941/2009: data a partir de (salários pagos) */
+  lei_11941_pagos_a_partir_de?: string;
+  /** Lei 11.941/2009: aplicar multa */
+  lei_11941_multa?: boolean;
+  /** Lei 11.941/2009: data a partir de (multa) */
+  lei_11941_multa_a_partir_de?: string;
+}
+
+/** Exceção de juros por período (ex: COVID, suspensão judicial) */
+export interface PjeExcecaoJuros {
+  periodo_inicio: string;
+  periodo_fim: string;
+  tipo_juros: 'SEM_JUROS' | 'SELIC' | 'TAXA_LEGAL' | 'UM_PORCENTO' | 'MEIO_PORCENTO';
+  percentual?: number;
+  motivo?: string;
 }
 
 export interface PjeHonorariosConfig {

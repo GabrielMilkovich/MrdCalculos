@@ -147,11 +147,12 @@ export { Multa } from './dominio/calculo/multa/multa';
 
 // ────────────── dominio/historicosalarial ──────────────
 export { HistoricoSalarial } from './dominio/historicosalarial/historico-salarial';
-export type { OcorrenciaDoHistoricoSalarial } from './dominio/historicosalarial/historico-salarial';
+export { OcorrenciaDoHistoricoSalarial } from './dominio/historicosalarial/ocorrencia-do-historico-salarial';
+export { OcorrenciaDoHistoricoSalarialOptimizerListSearch } from './dominio/historicosalarial/ocorrencia-do-historico-salarial-optimizer-list-search';
 
 // ────────────── dominio/pagamento ──────────────
-export { totalizar } from './dominio/pagamento/pagamento';
-export type { ResultadoPagamento } from './dominio/pagamento/pagamento';
+export { totalizar } from './dominio/pagamento/pagamento-totalizador';
+export type { ResultadoPagamento } from './dominio/pagamento/pagamento-totalizador';
 
 // ────────────── comum/rotinasdecalculo (Integralizar/Proporcionalizar) ──────────────
 export { CalculoDoIntegralizar } from './comum/rotinasdecalculo/calculo-do-integralizar';
@@ -166,3 +167,19 @@ export {
 
 // ────────────── servicos ──────────────
 export { ServicoDeCalculo } from './servicos/servico-de-calculo';
+
+// ────────────── dominio/calculo/pensaoalimenticia ──────────────
+export { PensaoAlimenticia } from './dominio/calculo/pensaoalimenticia/pensao-alimenticia';
+
+// ────────────── dominio/calculo/salariofamilia ──────────────
+export { SalarioFamilia } from './dominio/calculo/salariofamilia/salario-familia';
+
+// ────────────── dominio/calculo/segurodesemprego ──────────────
+export { SeguroDesemprego } from './dominio/calculo/segurodesemprego/seguro-desemprego';
+
+// ────────────── dominio/juros (JurosSelicParaCorrecao) ──────────────
+export { obterTabelaSelicParaCorrecao } from './dominio/juros/juros-selic-para-correcao';
+
+// ────────────── dominio/indices/selic (IndiceSelicMensal) ──────────────
+export { IndiceSelicMensal } from './dominio/indices/selic/indice-selic-mensal';
+export { TABELA_SELIC_MENSAL } from './dominio/indices/selic/tabela-selic-mensal';
