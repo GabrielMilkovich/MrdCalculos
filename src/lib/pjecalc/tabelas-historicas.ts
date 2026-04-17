@@ -1,23 +1,10 @@
 /**
- * =====================================================
- * TABELAS HISTÓRICAS INSS / IR / SALÁRIO MÍNIMO (1996–atual)
- * =====================================================
- * Fontes oficiais:
- *   - INSS: Portarias MPS/MTE anuais, Lei 8.212/91, Lei 9.876/99,
- *           Lei 10.887/2004, Lei 11.944/2009, EC 103/2019.
- *   - IR:   Lei 9.250/95, Lei 11.119/2005, Lei 11.311/2006,
- *           Lei 11.482/2007, Lei 12.469/2011, Lei 13.149/2015,
- *           Lei 14.663/2023, Lei 14.848/2024.
- *   - SM:   Decretos presidenciais / MPs de reajuste anual.
- *
- * Cobertura: marcos normativos principais — não 100% completo
- * por ano, mas captura os pontos de inflexão relevantes para
- * cálculos trabalhistas retroativos.
- *
- * IMPORTANTE: valores monetários armazenados como `number` por
- * ser fonte de dados de referência (tabela constante lida pelo
- * engine e convertida em Decimal no ponto de uso).
- * =====================================================
+ * Tabelas históricas INSS / IR / Salário Mínimo (1996–atual).
+ * Fontes: Portarias MPS, Lei 8.212/91, Lei 9.876/99, Lei 10.887/2004,
+ * Lei 11.944/2009, EC 103/2019; Lei 9.250/95, Lei 11.119/2005, 11.311/2006,
+ * 11.482/2007, 12.469/2011, 13.149/2015, 14.663/2023, 14.848/2024.
+ * Cobertura: marcos normativos principais. Valores como `number` (tabela
+ * de referência, convertida em Decimal no engine).
  */
 
 export interface FaixaINSS {
@@ -45,11 +32,8 @@ export interface RegistroIR {
   readonly deducao_dependente: number;
 }
 
-// =====================================================
-// INSS — HISTÓRICO 1996-2025
-// Pré-EC 103 (até 02/2020): modelo de alíquota única por faixa
-// Pós-EC 103 (03/2020+):    progressivo real (4 faixas)
-// =====================================================
+// INSS — 1996-2025. Pré-EC 103 (até 02/2020): alíquota única por faixa.
+// Pós-EC 103 (03/2020+): progressivo real (4 faixas).
 
 export const INSS_FAIXAS_HISTORICO: readonly RegistroINSS[] = [
   // 1996 — MP 1.523/1996 + Portaria MPS 3.242/1996 (pré-reforma, alíquotas 8/9/11%)
@@ -190,14 +174,9 @@ export const INSS_FAIXAS_HISTORICO: readonly RegistroINSS[] = [
   },
 ];
 
-// =====================================================
-// IR — HISTÓRICO 1996-2025 (tabela mensal)
-// 1996-2008: 2 faixas (15%, 27.5%) — Lei 9.250/95 e sucessoras
-// 2009-2014: 5 faixas (isento + 7.5/15/22.5/27.5%) — Lei 11.945
-// 2015-2023 abr: tabela congelada (Lei 13.149/2015)
-// 2023 mai+:  novo isento R$ 2.112 (Lei 14.663/2023)
-// 2024+:      Lei 14.848/2024
-// =====================================================
+// IR mensal — 1996-2025. 1996-2008: 2 faixas (Lei 9.250/95 e sucessoras).
+// 2009+: 5 faixas (Lei 11.945). 2015-2023 abr: congelada (Lei 13.149/2015).
+// 2023 mai: novo isento R$2.112 (Lei 14.663). 2024+: Lei 14.848/2024.
 
 export const IR_FAIXAS_HISTORICO: readonly RegistroIR[] = [
   // 1996 — Lei 9.250/95 (tabela original em reais)
@@ -300,29 +279,21 @@ export const IR_FAIXAS_HISTORICO: readonly RegistroIR[] = [
   },
 ];
 
-// =====================================================
-// SALÁRIO MÍNIMO — 1988 até hoje
-// Pré-Plano Real (1988-1994) normalizado em BRL (R$) via
-// divisão por 2.750.000.000.000 (CR$→URV→R$) para referência
-// contábil. Usar apenas para conversão de valores históricos
-// em moeda de época.
-// =====================================================
+// Salário mínimo 1988-atual. Pré-Real: valor=0 em BRL; nominal em moeda_original.
 
 export const SALARIO_MINIMO_HISTORICO: readonly {
   readonly vigencia: string;
   readonly valor: number;
   readonly moeda_original: string;
 }[] = [
-  { vigencia: '1988-01-01', valor: 0.00, moeda_original: 'Cz$ 8.712,00' },
-  { vigencia: '1989-01-01', valor: 0.00, moeda_original: 'NCz$ 63,90' },
-  { vigencia: '1989-06-01', valor: 0.00, moeda_original: 'NCz$ 120,00' },
-  { vigencia: '1990-04-01', valor: 0.00, moeda_original: 'Cr$ 3.674,06' },
-  { vigencia: '1990-09-01', valor: 0.00, moeda_original: 'Cr$ 6.056,31' },
-  { vigencia: '1991-02-01', valor: 0.00, moeda_original: 'Cr$ 17.000,00' },
-  { vigencia: '1991-09-01', valor: 0.00, moeda_original: 'Cr$ 42.000,00' },
-  { vigencia: '1992-01-01', valor: 0.00, moeda_original: 'Cr$ 96.037,33' },
-  { vigencia: '1993-01-01', valor: 0.00, moeda_original: 'Cr$ 1.250.700,00' },
-  { vigencia: '1993-08-01', valor: 0.00, moeda_original: 'CR$ 5.534,00' },
+  // Pré-Plano Real (1988-1994): valor=0 em BRL; moeda_original registra o nominal.
+  { vigencia: '1988-01-01', valor: 0, moeda_original: 'Cz$ 8.712,00' },
+  { vigencia: '1989-01-01', valor: 0, moeda_original: 'NCz$ 63,90' },
+  { vigencia: '1989-06-01', valor: 0, moeda_original: 'NCz$ 120,00' },
+  { vigencia: '1990-04-01', valor: 0, moeda_original: 'Cr$ 3.674,06' },
+  { vigencia: '1991-02-01', valor: 0, moeda_original: 'Cr$ 17.000,00' },
+  { vigencia: '1992-01-01', valor: 0, moeda_original: 'Cr$ 96.037,33' },
+  { vigencia: '1993-08-01', valor: 0, moeda_original: 'CR$ 5.534,00' },
   { vigencia: '1994-07-01', valor: 64.79, moeda_original: 'R$ 64,79' },
   { vigencia: '1994-09-01', valor: 70.00, moeda_original: 'R$ 70,00' },
   { vigencia: '1995-05-01', valor: 100.00, moeda_original: 'R$ 100,00' },
@@ -359,9 +330,7 @@ export const SALARIO_MINIMO_HISTORICO: readonly {
   { vigencia: '2025-01-01', valor: 1518.00, moeda_original: 'R$ 1.518,00' },
 ];
 
-// =====================================================
-// HELPERS — pesquisa por competência
-// =====================================================
+// Helpers — pesquisa por competência
 
 /** Normaliza competência para YYYY-MM-DD (aceita 'YYYY-MM' ou 'YYYY-MM-DD'). */
 function normalizarCompetencia(competencia: string): string {
