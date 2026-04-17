@@ -217,6 +217,203 @@ export class Inss implements IModuloLiquidavel {
     // fluxo legacy mantido em liquidarComVerbas()
   }
 
+  /**
+   * consistirDados (Java linha 360) — limpa campos que ficaram inconsistentes
+   * após mudança de tipo de alíquota segurado/empregador.
+   */
+  consistirDados(): void {
+    if (!this.isTipoAliquotaSeguradoFixa()) {
+      this.aliquotaSeguradoFixa = null;
+      this.limitarTeto = false;
+    }
+    if (!this.isTipoAliquotaEmpregadorFixa()) {
+      this.aliquotaEmpresaFixa = null;
+      this.aliquotaRATFixa = null;
+      this.aliquotaTerceirosFixa = null;
+    }
+    if (!this.isTipoAliquotaEmpregadorPorPeriodo()) {
+      this.aliquotasPorPeriodos = [];
+    }
+    if (!this.isTipoAliquotaEmpregadorPorAtividade()) {
+      this.atividadeEconomica = null;
+      this.apurarEmpresaPorAtividade = false;
+      this.apurarRATPorAtividade = false;
+      this.apurarTerceirosPorAtividade = false;
+    }
+  }
+
+  /** validar (Java linha 476) — gera erros se configuração obrigatória estiver faltando. */
+  validar(): void {
+    this.consistirDados();
+    const erros: string[] = [];
+    if (this.isTipoAliquotaSeguradoFixa() && this.aliquotaSeguradoFixa === null) {
+      erros.push('Alíquota Fixa do Segurado obrigatória.');
+    }
+    if (
+      this.isTipoAliquotaEmpregadorFixa() &&
+      this.aliquotaEmpresaFixa === null &&
+      this.aliquotaRATFixa === null &&
+      this.aliquotaTerceirosFixa === null
+    ) {
+      erros.push('Pelo menos uma alíquota do empregador é obrigatória.');
+    }
+    if (this.isTipoAliquotaEmpregadorPorAtividade()) {
+      if (this.atividadeEconomica === null) {
+        erros.push('Atividade Econômica obrigatória.');
+      }
+      if (!this.apurarEmpresaPorAtividade && !this.apurarRATPorAtividade && !this.apurarTerceirosPorAtividade) {
+        erros.push('Pelo menos uma flag de apuração por atividade é obrigatória.');
+      }
+    }
+    if (this.isTipoAliquotaEmpregadorPorPeriodo() && this.aliquotasPorPeriodos.length === 0) {
+      erros.push('Alíquotas por Períodos obrigatória.');
+    }
+    if (erros.length > 0) {
+      throw new Error(`Inss inválido: ${erros.join(' | ')}`);
+    }
+  }
+
+  /** restaurarValoresPadroes (Java linha 343) */
+  restaurarValoresPadroes(): void {
+    this.limparOcorrencias();
+  }
+
+  /** limparOcorrencias (Java linha 451) — chama limpar em devidos E pagos. */
+  limparOcorrencias(): void {
+    this.limparOcorrenciasDeSalariosDevidos();
+    this.limparOcorrenciasDeSalariosPagos();
+  }
+
+  /** limparOcorrenciasDeSalariosDevidos (Java linha 455) */
+  limparOcorrenciasDeSalariosDevidos(): void {
+    this.inssSobreSalariosDevidos.setOcorrencias(new Set());
+  }
+
+  /** limparOcorrenciasDeSalariosPagos (Java linha 463) */
+  limparOcorrenciasDeSalariosPagos(): void {
+    this.inssSobreSalariosPagos.setOcorrencias(new Set());
+  }
+
+  /** gerarOcorrencias (Java linha 435) — delegado ao repositório no Java original.
+   *  Na versão port, mantemos como método público para preservar API; o fluxo de
+   *  geração real é exercido via `MaquinaDeCalculoDoInss.liquidar`. */
+  gerarOcorrencias(_manterAlteracoes: boolean = true, _flush: boolean = false): void {
+    // TODO(integracao-futura): repositório de geração de ocorrências não portado.
+    // Quando histórico salarial estiver integrado, popular ocorrências mensais.
+  }
+
+  /** existemDadosParaRelatorio (Java linha 656) — checa se há algo exibível. */
+  existemDadosParaRelatorio(): boolean {
+    if (this.inssSobreSalariosDevidos.existemOcorrencias()) return true;
+    if (this.apurarInssSobreSalariosPagos && this.inssSobreSalariosPagos.existemOcorrencias()) return true;
+    return false;
+  }
+
+  /** copiarParametrosRegeracaoOcorrencias (Java linha 666) — clonagem para re-geração. */
+  copiarParametrosRegeracaoOcorrencias(filtro: Inss): void {
+    this.tipoAliquotaSegurado = filtro.tipoAliquotaSegurado;
+    if (filtro.tipoAliquotaSegurado === TipoDeAliquotaDoSeguradoEnum.FIXA) {
+      this.aliquotaSeguradoFixa = filtro.aliquotaSeguradoFixa;
+      this.limitarTeto = filtro.limitarTeto;
+    }
+    this.tipoAliquotaEmpregador = filtro.tipoAliquotaEmpregador;
+    switch (filtro.tipoAliquotaEmpregador) {
+      case TipoDeAliquotaDoEmpregadorEnum.POR_ATIVIDADE_ECONOMICA:
+        this.atividadeEconomica = filtro.atividadeEconomica;
+        this.apurarEmpresaPorAtividade = filtro.apurarEmpresaPorAtividade;
+        this.apurarRATPorAtividade = filtro.apurarRATPorAtividade;
+        this.apurarTerceirosPorAtividade = filtro.apurarTerceirosPorAtividade;
+        break;
+      case TipoDeAliquotaDoEmpregadorEnum.POR_PERIODO:
+        this.aliquotasPorPeriodos = [...filtro.aliquotasPorPeriodos];
+        break;
+      case TipoDeAliquotaDoEmpregadorEnum.FIXA:
+        this.aliquotaEmpresaFixa = filtro.aliquotaEmpresaFixa;
+        this.aliquotaRATFixa = filtro.aliquotaRATFixa;
+        this.aliquotaTerceirosFixa = filtro.aliquotaTerceirosFixa;
+        break;
+    }
+    this.inssSobreSalariosDevidos.setDataInicioPeriodo(filtro.inssSobreSalariosDevidos.getDataInicioPeriodo());
+    this.inssSobreSalariosDevidos.setDataTerminoPeriodo(filtro.inssSobreSalariosDevidos.getDataTerminoPeriodo());
+    this.inssSobreSalariosPagos.setDataInicioPeriodo(filtro.inssSobreSalariosPagos.getDataInicioPeriodo());
+    this.inssSobreSalariosPagos.setDataTerminoPeriodo(filtro.inssSobreSalariosPagos.getDataTerminoPeriodo());
+    this.periodosComOpcaoSimples = [...filtro.periodosComOpcaoSimples];
+  }
+
+  /** aplicarPagamento (Java linha 721) — delega à máquina. */
+  aplicarPagamento(
+    pagamento: unknown,
+    debitosDoReclamante: unknown,
+    outrosDebitosDoReclamado: unknown,
+  ): void {
+    // Stubs até integração com Pagamento/DebitosDoReclamante/OutrosDebitosReclamado.
+    this.maquinaDeCalculoDoInss.aplicarPagamento(
+      this,
+      pagamento as never,
+      debitosDoReclamante as never,
+      outrosDebitosDoReclamado as never,
+    );
+  }
+
+  /**
+   * apurarInss — cálculo 1:1 do INSS progressivo por competência.
+   *
+   * Replica a lógica de `MaquinaDeCalculoDoInss.liquidarInssSobreSalariosDevidos`:
+   *   - faixas progressivas (EC 103/2019 ≥ 03/2020): contribuição somada faixa a faixa
+   *     com teto na última faixa quando `limitarTeto === true`.
+   *   - alíquota única (< 03/2020): toda a base multiplicada pela alíquota da faixa
+   *     onde o salário se encaixa.
+   *   - base negativa/zero retorna 0.
+   *   - arredondamento final em 2 casas com `HALF_EVEN` (Banker's, conforme Java).
+   *
+   * Parâmetros:
+   *   - base           Decimal > 0 (nominal ou já corrigida — caller decide)
+   *   - faixas         lista ordenada asc por `ate`; formato PjeINSSFaixaRow
+   *   - aliquotaUnica  true para regime pré-EC 103/2019
+   *   - limitarTeto    aplica teto da última faixa quando true
+   */
+  static apurarInss(
+    base: Decimal,
+    faixas: readonly { ate: Decimal | number; aliquota: Decimal | number }[],
+    aliquotaUnica: boolean = false,
+    limitarTeto: boolean = true,
+  ): Decimal {
+    if (base.lte(0) || faixas.length === 0) return new Decimal(0);
+
+    const normFaixas = faixas.map((f) => ({
+      ate: f.ate instanceof Decimal ? f.ate : new Decimal(f.ate),
+      aliquota: f.aliquota instanceof Decimal ? f.aliquota : new Decimal(f.aliquota),
+    }));
+
+    // Pré-EC 103/2019: alíquota única
+    if (aliquotaUnica) {
+      for (const f of normFaixas) {
+        if (base.lte(f.ate)) {
+          return base.times(f.aliquota).toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN);
+        }
+      }
+      const ultima = normFaixas[normFaixas.length - 1];
+      return ultima.ate.times(ultima.aliquota).toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN);
+    }
+
+    // Progressivo (EC 103/2019)
+    const teto = normFaixas[normFaixas.length - 1].ate;
+    let baseRestante = limitarTeto && base.gt(teto) ? teto : base;
+    let imposto = new Decimal(0);
+    let faixaAnterior = new Decimal(0);
+    for (const f of normFaixas) {
+      const limiteNaFaixa = f.ate.minus(faixaAnterior);
+      const baseNaFaixa = Decimal.min(baseRestante, limiteNaFaixa);
+      if (baseNaFaixa.gt(0)) {
+        imposto = imposto.plus(baseNaFaixa.times(f.aliquota).toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN));
+        baseRestante = baseRestante.minus(baseNaFaixa);
+      }
+      if (baseRestante.lte(0)) break;
+      faixaAnterior = f.ate;
+    }
+    return imposto.toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN);
+  }
+
   limparJuros(): void {
     for (const oc of this.inssSobreSalariosDevidos.getOcorrencias()) {
       oc.setTaxaDeJuros(null);
