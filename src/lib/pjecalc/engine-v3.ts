@@ -318,6 +318,18 @@ export class PjeCalcEngineV3 {
     //   - SEM_CORRECAO em um segmento: fator = 1
     calculo.liquidar();
 
+    // Cache effective INSS rate for VERBA_INSS juros base reduction
+    let totalDifPreJuros = 0;
+    for (const vc of verbasCore) {
+      for (const oc of vc.getOcorrenciasAtivas()) {
+        const dif = oc.getDiferenca().toNumber();
+        if (dif > 0) totalDifPreJuros += dif;
+      }
+    }
+    const inssTotal = inssAdapter.totalSegurado + inssAdapter.totalEmpregador;
+    (this as unknown as { _inssEffectiveRate?: number })._inssEffectiveRate =
+      totalDifPreJuros > 0 ? Math.min(0.15, Math.max(0.05, inssTotal / totalDifPreJuros)) : 0.105;
+
     // ── 5. Converter resultados Core → UI ──
     const verbaResults: PjeVerbaResult[] = verbasCore.map((vc, idx) => {
       const vUI = this.verbas[idx];
@@ -329,10 +341,11 @@ export class PjeCalcEngineV3 {
         const indice = oc.getIndiceAcumulado()?.toNumber() ?? 1;
         const corrigida = oc.getDiferencaCorrigida()?.toNumber() ?? diferenca;
         const valorCorrigido = arredondarValorMonetario(new Decimal(corrigida)).toNumber();
-        // Juros aplicados sobre DIFERENCA (nominal), nao sobre valor_corrigido.
-        // PJe-Calc: base_de_juros_das_verbas default = 'DIFERENCA' (Sumula 200 TST).
-        // Valor_corrigido + juros eh aritmeticamente equivalente a DIFERENCA * (1 + correcao + juros).
-        const juros = this.calcularJurosOcorrencia(oc, Math.max(0, diferenca));
+        // Juros aplicados sobre DIFERENCA (nominal) ajustada pelo INSS proporcional
+        // quando base_de_juros_das_verbas = VERBA_INSS (Sumula 200 TST + config PJe).
+        // Sem VERBA_INSS, usa DIFERENCA pura.
+        const jurosBase = Math.max(0, diferenca) * this.getJurosBaseMultiplier(vUI);
+        const juros = this.calcularJurosOcorrencia(oc, jurosBase);
         const valorFinal = valorCorrigido + juros;
 
         totalDevido += oc.getDevido()?.toNumber() ?? 0;
@@ -596,6 +609,24 @@ export class PjeCalcEngineV3 {
    *
    * Data-fim: data_liquidacao do correcaoConfig.
    */
+  /**
+   * Multiplicador da base de juros conforme base_de_juros_das_verbas.
+   * - 'VERBA_INSS' (default do PJe-Calc): reduz por INSS proporcional (~10%)
+   * - 'DIFERENCA' / outros: 1.0 (sem reducao)
+   * Usa INSS efetivo computado pelo adapter se disponivel; senao 0.105 aproximado.
+   */
+  private getJurosBaseMultiplier(verba: PjeVerba): number {
+    const base = (this.correcaoConfig.base_de_juros_das_verbas ?? 'DIFERENCA').toUpperCase().replace(/-/g, '_');
+    if (base !== 'VERBA_INSS') return 1;
+    // Somente reduz se a verba incidir INSS
+    if (verba.incidencias?.contribuicao_social === false) return 1;
+    // INSS efetivo: se o adapter ja rodou, use total_inss / total_dif.
+    // Caso contrario, aproxima 10.5% (media entre 7.5% e 14% da progressiva).
+    const cachedRate = (this as unknown as { _inssEffectiveRate?: number })._inssEffectiveRate;
+    const rate = cachedRate ?? 0.105;
+    return 1 - rate;
+  }
+
   private calcularJurosOcorrencia(oc: OcorrenciaDeVerba, valorCorrigido: number): number {
     if (valorCorrigido <= 0) return 0;
     const tipo = (this.correcaoConfig.juros_tipo ?? 'simples_mensal') as string;
