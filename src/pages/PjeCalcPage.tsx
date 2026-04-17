@@ -20,7 +20,7 @@ import {
   ChevronRight, Check, AlertTriangle, Plus, Trash2, Loader2,
   Building2, Receipt, Scale, Percent, TrendingUp, FileBarChart,
   Eye, GitCompareArrows, ClipboardCheck, History, MessageSquare,
-  Lightbulb, XCircle, CheckCircle2, Info, Search, MapPin,
+  Lightbulb, XCircle, CheckCircle2, Info, Search, MapPin, Bus,
 } from "lucide-react";
 
 // Module components
@@ -61,6 +61,9 @@ import { PainelRevisao } from "@/components/cases/pjecalc/PainelRevisao";
 import { DashboardProdutividade } from "@/components/cases/pjecalc/DashboardProdutividade";
 import { AuditLog } from "@/components/cases/pjecalc/AuditLog";
 import { ObservacoesModulo } from "@/components/cases/pjecalc/ObservacoesModulo";
+import { ModuloValeTransporte } from "@/components/cases/pjecalc/ModuloValeTransporte";
+import { ModuloAdvogados } from "@/components/cases/pjecalc/ModuloAdvogados";
+import { ModuloExcecoesJuros } from "@/components/cases/pjecalc/ModuloExcecoesJuros";
 import { AssistenteContextual } from "@/components/cases/pjecalc/AssistenteContextual";
 import { ImportadorFichaFinanceira } from "@/components/cases/pjecalc/ImportadorFichaFinanceira";
 import { MemoriaCalculoExpandida } from "@/components/cases/pjecalc/MemoriaCalculoExpandida";
@@ -103,6 +106,9 @@ const MODULOS = [
   { id: 'multas', label: 'Multas CLT', icon: AlertTriangle, desc: 'Art. 467 e 477' },
   { id: 'pensao', label: 'Pensão Alimentícia', icon: Scale, desc: 'Desconto judicial' },
   { id: 'prev_privada', label: 'Prev. Privada', icon: Shield, desc: 'Complementar' },
+  { id: 'vale_transporte', label: 'Vale Transporte', icon: Bus, desc: 'Linhas e desconto' },
+  { id: 'advogados', label: 'Advogados', icon: Users, desc: 'OAB e representação' },
+  { id: 'excecoes_juros', label: 'Exceções Juros', icon: Scale, desc: 'Períodos com regime diferente' },
   { id: 'honorarios', label: 'Honorários', icon: Scale, desc: 'Sucumbenciais e contratuais' },
   { id: 'custas', label: 'Custas', icon: Receipt, desc: 'Custas processuais' },
   { id: 'atualizacao', label: 'Atualização', icon: TrendingUp, desc: 'Atualização pós-pagamento' },
@@ -324,6 +330,9 @@ export default function PjeCalcPage() {
         case 'salario_familia': return <ModuloSalarioFamilia caseId={caseId!} />;
         case 'multas': return <ModuloMultasCLT caseId={caseId!} />;
         case 'pensao': return <ModuloPensaoAlimenticia caseId={caseId!} />;
+        case 'vale_transporte': return <ModuloValeTransporte caseId={caseId!} />;
+        case 'advogados': return <ModuloAdvogados caseId={caseId!} />;
+        case 'excecoes_juros': return <ModuloExcecoesJuros caseId={caseId!} />;
         case 'honorarios': return <ModuloHonorarios caseId={caseId!} />;
         case 'prev_privada': return <ModuloPrevidenciaPrivada caseId={caseId!} />;
         case 'custas': return <ModuloCustas caseId={caseId!} />;
