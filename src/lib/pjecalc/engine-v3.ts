@@ -44,6 +44,8 @@ import { Honorario } from './core/dominio/calculo/honorarios/honorario';
 import { CustasJudiciais } from './core/dominio/calculo/custas/custas-judiciais';
 import { Multa } from './core/dominio/calculo/multa/multa';
 import { ServicoDeCalculo } from './core/servicos/servico-de-calculo';
+import { InssModuloAdapter } from './modulos/inss-modulo-adapter';
+import { IrpfModuloAdapter } from './modulos/irpf-modulo-adapter';
 import {
   IndiceMonetarioEnum,
   IndicesAcumuladosEnum,
@@ -294,7 +296,19 @@ export class PjeCalcEngineV3 {
       calculo.adicionarVerba(vc);
     }
 
-    // ── 4. Liquidar ──
+    // ── 4. Wire módulos INSS + IRPF no pipeline do Calculo ──
+    // A ordem de execução em Calculo.liquidar() é: verbas → INSS → IRPF.
+    // O IrpfAdapter mantém ref ao InssAdapter para deduzir CS no momento certo.
+    const inssAdapter = new InssModuloAdapter(verbasCore, this.csConfig, this.faixasINSSDB);
+    const irpfAdapter = new IrpfModuloAdapter(
+      verbasCore, this.irConfig, this.faixasIRDB,
+      this.honorariosConfig, inssAdapter,
+      this.correcaoConfig.data_liquidacao,
+    );
+    calculo.setInss(inssAdapter);
+    calculo.setIrpf(irpfAdapter);
+
+    // ── 5. Liquidar (pipeline Calculo + módulos) ──
     calculo.liquidar();
 
     // ── 5. Converter resultados Core → UI ──
@@ -362,14 +376,21 @@ export class PjeCalcEngineV3 {
     const principalCorrigido = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
     const jurosMora = verbaResults.reduce((s, v) => s + v.total_juros, 0);
 
+    // Descontos do líquido do reclamante (INSS segurado + IRPF)
+    const csSegurado = inssAdapter.totalSegurado;
+    const csEmpregador = inssAdapter.totalEmpregador;
+    const csReclamante = inssAdapter.csReclamante;
+    const irRetido = irpfAdapter.impostoDevido;
+    const liquidoReclamante = +(principalCorrigido + jurosMora - csReclamante - irRetido).toFixed(2);
+
     const resumo: PjeResumo = {
       principal_bruto: +principalBruto.toFixed(2),
       principal_corrigido: +principalCorrigido.toFixed(2),
       juros_mora: +jurosMora.toFixed(2),
       fgts_total: 0,
-      cs_segurado: 0,
-      cs_empregador: 0,
-      ir_retido: 0,
+      cs_segurado: +csSegurado.toFixed(2),
+      cs_empregador: +csEmpregador.toFixed(2),
+      ir_retido: +irRetido.toFixed(2),
       seguro_desemprego: 0,
       previdencia_privada: 0,
       salario_familia: 0,
@@ -383,7 +404,7 @@ export class PjeCalcEngineV3 {
       pensao_total: 0,
       contribuicao_sindical: 0,
       abono_pecuniario: 0,
-      liquido_reclamante: +(principalCorrigido + jurosMora).toFixed(2),
+      liquido_reclamante: liquidoReclamante,
       total_reclamada: +(principalCorrigido + jurosMora).toFixed(2),
     };
 
@@ -391,8 +412,31 @@ export class PjeCalcEngineV3 {
       data_liquidacao: this.correcaoConfig.data_liquidacao,
       verbas: verbaResults,
       fgts: { depositos: [], total_depositos: 0, multa_valor: 0, lc110_10: 0, lc110_05: 0, saldo_deduzido: 0, total_fgts: 0 },
-      contribuicao_social: { segurado_devidos: [], segurado_pagos: [], empregador: [], total_segurado_devidos: 0, total_segurado_pagos: 0, total_segurado: 0, total_empregador: 0 },
-      imposto_renda: { base_calculo: 0, deducoes: 0, base_tributavel: 0, imposto_devido: 0, meses_rra: 0, metodo: 'art_12a_rra', ir_anos_anteriores: 0, ir_ano_liquidacao: 0, ir_13_exclusivo: 0, ir_ferias_separado: 0, meses_anos_anteriores: 0, meses_ano_liquidacao: 0 },
+      contribuicao_social: {
+        segurado_devidos: inssAdapter.seguradoDevidos.map(d => ({
+          ...d, recolhido: 0, diferenca: d.valor,
+        })),
+        segurado_pagos: [],
+        empregador: inssAdapter.empregadorPorCompetencia,
+        total_segurado_devidos: +csSegurado.toFixed(2),
+        total_segurado_pagos: 0,
+        total_segurado: +csSegurado.toFixed(2),
+        total_empregador: +csEmpregador.toFixed(2),
+      },
+      imposto_renda: {
+        base_calculo: irpfAdapter.baseCalculo,
+        deducoes: irpfAdapter.deducoes,
+        base_tributavel: irpfAdapter.baseTributavel,
+        imposto_devido: irpfAdapter.impostoDevido,
+        meses_rra: irpfAdapter.mesesRRA,
+        metodo: irpfAdapter.metodo,
+        ir_anos_anteriores: 0,
+        ir_ano_liquidacao: irpfAdapter.irAnoLiquidacao,
+        ir_13_exclusivo: irpfAdapter.ir13Exclusivo,
+        ir_ferias_separado: irpfAdapter.irFeriasSeparado,
+        meses_anos_anteriores: 0,
+        meses_ano_liquidacao: irpfAdapter.mesesRRA,
+      },
       seguro_desemprego: { apurado: false, parcelas: 0, valor_parcela: 0, total: 0 },
       previdencia_privada: { apurado: false, base: 0, percentual: 0, valor: 0 },
       salario_familia: { apurado: false, total: 0, ocorrencias: [] },
