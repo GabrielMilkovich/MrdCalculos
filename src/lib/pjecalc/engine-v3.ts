@@ -56,6 +56,8 @@ import {
   type FaixaPrevidenciaria,
 } from './core/index';
 import { TabelaIrpf } from './core/dominio/irpf/tabela-irpf';
+import { LogicoFuzzy } from './core/base/comum/logico-fuzzy';
+import { Periodo } from './core/base/comum/periodo';
 
 export class PjeCalcEngineV3 {
   private params: PjeParametros;
@@ -111,6 +113,21 @@ export class PjeCalcEngineV3 {
     calculo.setDataDemissao(this.params.data_demissao ? new Date(this.params.data_demissao) : null);
     calculo.setDataAjuizamento(new Date(this.params.data_ajuizamento));
     calculo.setDataDeLiquidacao(new Date(this.correcaoConfig.data_liquidacao));
+    calculo.setSabadoDiaUtil(this.params.sabado_dia_util);
+
+    // Exceções de sábado → LogicoFuzzy (BUG-3)
+    if (this.params.excecoes_sabado?.length) {
+      const excecoes = new Set(this.params.excecoes_sabado.map(e => ({
+        getPeriodo: () => new Periodo(new Date(e.data_inicial), new Date(e.data_final)),
+      })));
+      calculo.setSabadoDiaUtilComExcecao(
+        new LogicoFuzzy(this.params.sabado_dia_util, excecoes),
+      );
+    } else {
+      calculo.setSabadoDiaUtilComExcecao(
+        this.params.sabado_dia_util ? LogicoFuzzy.VERDADEIRO : LogicoFuzzy.FALSO,
+      );
+    }
 
     // ── 2. Configurar ParametrosDeAtualizacao ──
     const parametros = new ParametrosDeAtualizacao();
