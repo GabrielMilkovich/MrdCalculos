@@ -44,6 +44,7 @@ import {
   TabelaDeCorrecaoMonetaria,
   type ITabelaCorrecaoContext,
 } from '../verbacalculo/tabela-de-correcao-monetaria';
+import type { IndiceDeCalculo } from '../indices/indice-de-calculo';
 import { ParametrosDeAtualizacao } from './atualizacao/parametros-de-atualizacao';
 import type { CombinacaoDeIndice } from './atualizacao/combinacao-de-indice';
 import type { Setor } from './setor';
@@ -522,8 +523,16 @@ export class Calculo {
     const combinacoes = params ? [...params.getListaDeCombinacaoDeIndices()] : [];
 
     if (combinacoes.length > 0) {
-      // ADC 58/59: combinações de índice → tabela por SEGMENTO.
-      // Cada ocorrência recebe o fator acumulado do segmento correto.
+      // ADC 58/59: combinações de índice → composição explícita por SEGMENTO.
+      // Para cada ocorrência, o fator final é o PRODUTO dos fatores de cada
+      // segmento que a ocorrência atravessa (de compInicio até dataLiquidacao).
+      // Cada fator de segmento é calculado conforme o tipo de índice:
+      //   - PRODUTO (IPCA-E, IPCA, INPC, IGP-M, TR, IPCAETR, DFP etc.):
+      //       fator_seg = acum(fim) / acum(inicio_anterior)
+      //   - SOMA SIMPLES (SELIC, SELIC_FAZENDA, JAM, TABELA_UNICA_JT_*, IT):
+      //       fator_seg = 1 + (acum(fim) - acum(inicio_anterior))
+      //   - NENHUM/SEM_CORRECAO: fator_seg = 1
+      // Súmula 381 TST: correção começa no MÊS SUBSEQUENTE ao vencimento.
       const segmentos = this.construirSegmentos(ctx, periodoCalculo, combinacoes);
       for (const verba of this.getVerbasAtivas()) {
         if (verba.isLiquidado()) continue;
@@ -531,21 +540,9 @@ export class Calculo {
         for (const ocorrencia of verba.getOcorrenciasAtivas()) {
           const dataInicial = ocorrencia.getDataInicial();
           if (!dataInicial) continue;
-          // Compor fator: multiplicar o indice de CADA segmento que a ocorrência atravessa.
-          let fatorComposto = new Decimal(1);
-          for (const seg of segmentos) {
-            if (seg.indice === IndiceMonetarioEnum.NENHUM || seg.indice === IndiceMonetarioEnum.SEM_CORRECAO) continue;
-            const compInicio = HelperDate.getCurrentCompetence(dataInicial).addMonth(1).getDate();
-            if (HelperDate.dateAfter(compInicio, seg.periodo.getFinal())) continue;
-            if (HelperDate.dateBefore(this.getDataDeLiquidacao(), seg.periodo.getInicial())) continue;
-            const inicio = HelperDate.dateAfter(compInicio, seg.periodo.getInicial()) ? compInicio : seg.periodo.getInicial();
-            const fim = HelperDate.dateBefore(this.getDataDeLiquidacao(), seg.periodo.getFinal()) ? this.getDataDeLiquidacao() : seg.periodo.getFinal();
-            const fatorInicio = seg.tabela.obterIndice(inicio);
-            const fatorFim = seg.tabela.obterIndice(fim);
-            if (fatorInicio.greaterThan(0)) {
-              fatorComposto = fatorComposto.times(fatorFim.div(fatorInicio));
-            }
-          }
+          const fatorComposto = this.composicaoFatorSegmentos(
+            dataInicial, segmentos, this.getDataDeLiquidacao(),
+          );
           ocorrencia.setIndiceAcumulado(fatorComposto);
         }
         verba.setLiquidado(true);
@@ -574,6 +571,132 @@ export class Calculo {
     this.pensaoAlimenticia?.liquidar();
     this.irpf?.liquidar();
     this.custasJudiciais?.liquidar();
+  }
+
+  /**
+   * Identifica índices de correção cujo acumulado é SOMA SIMPLES das taxas
+   * mensais (metodologia RFB / Súmula 121 STF), em oposição ao regime de
+   * PRODUTO (multiplicativo) usado por IPCA-E, IGP-M, INPC etc.
+   *
+   * Indices "soma simples":
+   *   - SELIC, SELIC_FAZENDA, SELIC_BACEN — Súmula 121 STF
+   *   - JAM — juros aplicados mensalmente, metodologia acumulativa linear
+   *   - TABELA_UNICA_JT_DIARIO / TABELA_UNICA_JT_MENSAL / TUACDT — TRT-8
+   *   - TABELA_INDEBITO_TRIBUTARIO (IT) — metodologia Selic-análoga
+   *   - TABELA_DEVEDOR_FAZENDA (DFP) — compõe SELIC pós-EC 113/2021
+   */
+  private ehIndiceSomaSimples(indice: IndiceMonetarioEnum): boolean {
+    switch (indice) {
+      case IndiceMonetarioEnum.SELIC:
+      case IndiceMonetarioEnum.SELIC_FAZENDA:
+      case IndiceMonetarioEnum.SELIC_BACEN:
+      case IndiceMonetarioEnum.JAM:
+      case IndiceMonetarioEnum.TABELA_UNICA_JT_DIARIO:
+      case IndiceMonetarioEnum.TABELA_UNICA_JT_MENSAL:
+      case IndiceMonetarioEnum.TUACDT:
+      case IndiceMonetarioEnum.TABELA_INDEBITO_TRIBUTARIO:
+      case IndiceMonetarioEnum.TABELA_DEVEDOR_FAZENDA:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Calcula o fator de correção composto de uma ocorrência ao longo dos segmentos
+   * de correção definidos por ADC 58/59.
+   *
+   * Para cada segmento:
+   *   - efetua recorte [compInicio, min(dataLiquidacao, fimSeg)]
+   *   - consulta os índices pré-carregados (IndiceDeCalculo[]) com valorAcumulado
+   *     já resolvido pela rotina apropriada (produto vs soma simples)
+   *   - calcula o fator do segmento e multiplica no fator composto
+   *
+   * Regras:
+   *   - Súmula 381 TST: compInicio = primeiro dia do MÊS SUBSEQUENTE ao vencimento
+   *   - NENHUM/SEM_CORRECAO: fator = 1 (sem efeito)
+   *   - Ocorrência antes do 1º segmento: fator = 1 (base sem correção)
+   *   - Ocorrência após liquidação: fator = 1 (não atravessa nenhum segmento)
+   */
+  private composicaoFatorSegmentos(
+    dataInicial: Date,
+    segmentos: { indice: IndiceMonetarioEnum; periodo: Periodo; tabela: TabelaDeCorrecaoMonetaria; indicesCalc: IndiceDeCalculo[] }[],
+    dataLiquidacao: Date,
+  ): Decimal {
+    // Súmula 381: correção inicia no mês SUBSEQUENTE ao mês de vencimento.
+    const compInicio = HelperDate.getCurrentCompetence(dataInicial).addMonth(1).getDate();
+    let fatorComposto = new Decimal(1);
+
+    for (const seg of segmentos) {
+      if (
+        seg.indice === IndiceMonetarioEnum.SEM_CORRECAO ||
+        seg.indicesCalc.length === 0
+      ) {
+        continue; // sem efeito
+      }
+
+      // Determinar janela efetiva do segmento [effStart, effEnd]
+      const segInicio = seg.periodo.getInicial();
+      const segFim = seg.periodo.getFinal();
+
+      // Se ocorrência começa DEPOIS do segmento inteiro, ignora
+      if (HelperDate.dateAfter(compInicio, segFim)) continue;
+      // Se liquidação acontece ANTES do segmento inteiro, ignora
+      if (HelperDate.dateBefore(dataLiquidacao, segInicio)) continue;
+
+      const effStart = HelperDate.dateAfter(compInicio, segInicio) ? compInicio : segInicio;
+      const effEnd = HelperDate.dateBefore(dataLiquidacao, segFim) ? dataLiquidacao : segFim;
+
+      // Competências pivot dentro do segmento
+      const competEffStart = HelperDate.getCurrentCompetence(effStart).getDate();
+      const competEffEnd = HelperDate.getCurrentCompetence(effEnd).getDate();
+
+      // Procurar nos índices do segmento
+      //   acumStart — acumulado na competência ANTERIOR a effStart (ou null se effStart é o primeiro).
+      //   acumEnd   — acumulado na competência effEnd (ou a última <= effEnd).
+      // Se effStart ≤ primeira_competencia, o baseline é implícito (para produto=1, para soma=0)
+      const indicesOrdenados = seg.indicesCalc; // já sorted asc por carregarTabela
+      let acumStart: Decimal | null = null; // null = baseline (produto:1, soma:0)
+      let acumEnd: Decimal | null = null;
+
+      for (const idx of indicesOrdenados) {
+        const comp = idx.getCompetencia();
+        if (HelperDate.dateBefore(comp, competEffStart)) {
+          // compromisso anterior — candidato a acumStart
+          acumStart = idx.getValorAcumulado();
+        } else if (HelperDate.dateBeforeOrEquals(comp, competEffEnd)) {
+          // dentro da janela — atualiza acumEnd
+          acumEnd = idx.getValorAcumulado();
+        } else {
+          break; // após fim — nenhum candidato mais
+        }
+      }
+
+      if (acumEnd === null) continue; // sem dados no segmento para a janela
+
+      const somaSimples = this.ehIndiceSomaSimples(seg.indice);
+      let fatorSeg: Decimal;
+      if (somaSimples) {
+        // Acumulado SOMA = 1 + Σ(taxas/100). fator janela = 1 + (acumEnd - acumStart).
+        // Quando acumStart é null, usa 1 (primeiro mês já contém a taxa do effStart).
+        const baseline = acumStart ?? new Decimal(1);
+        fatorSeg = new Decimal(1).plus(acumEnd.minus(baseline));
+      } else {
+        // Acumulado PRODUTO = Π(1+taxa/100). fator janela = acumEnd / acumStart.
+        // Quando acumStart é null, baseline = 1.
+        const baseline = acumStart ?? new Decimal(1);
+        if (baseline.isZero()) continue;
+        fatorSeg = acumEnd.div(baseline);
+      }
+
+      if (!fatorSeg.isFinite() || fatorSeg.isZero() || fatorSeg.isNegative()) {
+        continue; // proteção contra dados corrompidos
+      }
+
+      fatorComposto = fatorComposto.times(fatorSeg);
+    }
+
+    return fatorComposto;
   }
 
   /** Constrói tabelas de correção por segmento (ADC 58/59). */
