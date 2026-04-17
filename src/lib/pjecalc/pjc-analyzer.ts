@@ -68,6 +68,9 @@ export interface PJCAnalysis {
     inss_reclamado: number;
     imposto_renda: number;
     fgts_deposito: number;
+    valor_principal?: number;
+    /** null quando PJe-Calc nao persistiu juros; 0 significa juros=0 explicito */
+    juros_mora_persistido?: number | null;
     honorarios: { nome: string; cpf: string; valor: number }[];
     custas: number;
   };
@@ -434,12 +437,18 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     });
   }
 
+  // jurosMora pode ser null/undefined (PJe-Calc nao persistiu) ou numero
+  const jurosRaw = getTextContent(dados, 'jurosMora');
+  const jurosPersistido = jurosRaw === 'null' || jurosRaw === '' ? null : parseNum(jurosRaw);
+
   const resultado = {
     liquido_exequente: parseNum(getTextContent(gprec, 'liquidoExequente')),
     inss_reclamante: parseNum(getTextContent(dados, 'inssReclamante')),
     inss_reclamado: parseNum(getTextContent(dados, 'inssReclamado')),
     imposto_renda: parseNum(getTextContent(dados, 'impostoRenda')),
     fgts_deposito: parseNum(getTextContent(dados, 'fgtsDepositoContaVinculada')),
+    valor_principal: parseNum(getTextContent(dados, 'valorPrincipal')),
+    juros_mora_persistido: jurosPersistido,
     honorarios,
     custas: parseNum(getTextContent(dados, 'custasReclamado')) + parseNum(getTextContent(dados, 'custasReclamante')),
   };
