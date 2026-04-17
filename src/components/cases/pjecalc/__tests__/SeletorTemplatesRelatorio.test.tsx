@@ -47,6 +47,15 @@ vi.mock("@/lib/pjecalc/pdf-report-apuracao-juros", () => ({
 vi.mock("@/lib/pjecalc/pdf-report-consolidado", () => ({
   gerarRelatorioConsolidadoCompleto: vi.fn(() => new Blob(["<html>CONSOLIDADO</html>"], { type: "text/html" })),
 }));
+vi.mock("@/lib/pjecalc/pdf-report-salario-familia", () => ({
+  gerarRelatorioSalarioFamilia: vi.fn(() => new Blob(["<html>SF</html>"], { type: "text/html" })),
+}));
+vi.mock("@/lib/pjecalc/pdf-report-seguro-desemprego", () => ({
+  gerarRelatorioSeguroDesemprego: vi.fn(() => new Blob(["<html>SD</html>"], { type: "text/html" })),
+}));
+vi.mock("@/lib/pjecalc/pdf-report-pensao-alimenticia", () => ({
+  gerarRelatorioPensaoAlimenticia: vi.fn(() => new Blob(["<html>PENSAO</html>"], { type: "text/html" })),
+}));
 
 // Provide a minimal window.open for the legacy-capture path (node env).
 // The component replaces window.open internally during capture.
@@ -76,12 +85,13 @@ const fakeProps: SeletorTemplatesRelatorioProps = {
 };
 
 describe("SeletorTemplatesRelatorio - template catalog", () => {
-  it("exposes exactly 9 templates", () => {
-    expect(__TEMPLATES).toHaveLength(9);
+  it("exposes exactly 12 templates", () => {
+    expect(__TEMPLATES).toHaveLength(12);
     const ids = __TEMPLATES.map(t => t.id).sort();
     expect(ids).toEqual([
       "apuracao_juros", "completo", "consolidado", "custas", "diferenca",
-      "justificativa", "memoria", "precatorio", "resumo",
+      "justificativa", "memoria", "pensao_alimenticia", "precatorio",
+      "resumo", "salario_familia", "seguro_desemprego",
     ]);
   });
 

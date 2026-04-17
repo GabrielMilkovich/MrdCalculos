@@ -8,6 +8,7 @@ import JSZip from "jszip";
 import {
   FileText, FileSpreadsheet, Scale, Landmark, BookOpen,
   Calculator, Layers, GitCompare, NotebookPen, Loader2, Download,
+  Users, Briefcase, HeartHandshake,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -35,10 +36,14 @@ import {
   gerarRelatorioConsolidadoCompleto, type CalculoConsolidado,
 } from "@/lib/pjecalc/pdf-report-consolidado";
 import { gerarRelatorioDiferenca } from "@/lib/pjecalc/pdf-report-diferenca";
+import { gerarRelatorioSalarioFamilia } from "@/lib/pjecalc/pdf-report-salario-familia";
+import { gerarRelatorioSeguroDesemprego } from "@/lib/pjecalc/pdf-report-seguro-desemprego";
+import { gerarRelatorioPensaoAlimenticia } from "@/lib/pjecalc/pdf-report-pensao-alimenticia";
 
 export type TemplateId =
   | "resumo" | "completo" | "memoria" | "custas" | "precatorio"
-  | "justificativa" | "apuracao_juros" | "consolidado" | "diferenca";
+  | "justificativa" | "apuracao_juros" | "consolidado" | "diferenca"
+  | "salario_familia" | "seguro_desemprego" | "pensao_alimenticia";
 
 export interface SeletorTemplatesRelatorioProps {
   resultado: PjeLiquidacaoResult;
@@ -68,6 +73,9 @@ const TEMPLATES: readonly TemplateDef[] = [
   { id: "apuracao_juros", titulo: "Apuracao de Juros", descricao: "Apuracao detalhada de juros por periodo.", Icon: Calculator },
   { id: "consolidado", titulo: "Consolidado por Processo", descricao: "Consolida multiplos calculos do mesmo processo.", Icon: Layers },
   { id: "diferenca", titulo: "Diferenca entre Cenarios", descricao: "Diferencas liquidas por verba e competencia.", Icon: GitCompare },
+  { id: "salario_familia", titulo: "Salario Familia", descricao: "Demonstrativo do salario familia por competencia (Lei 8.213/91).", Icon: Users },
+  { id: "seguro_desemprego", titulo: "Seguro Desemprego", descricao: "Parcelas e valor do seguro desemprego (Lei 7.998/90).", Icon: Briefcase },
+  { id: "pensao_alimenticia", titulo: "Pensao Alimenticia", descricao: "Pensao sobre principal e FGTS com compensacoes (CPC art. 528).", Icon: HeartHandshake },
 ] as const;
 
 /** Capture HTML from a generator that writes into `window.open(...).document`. */
@@ -128,6 +136,12 @@ export function buildReportBlob(id: TemplateId, p: SeletorTemplatesRelatorioProp
       };
       return gerarRelatorioConsolidadoCompleto([calculo], { processo: p.processo, cliente: p.beneficiario });
     }
+    case "salario_familia":
+      return gerarRelatorioSalarioFamilia(p.resultado, metaBase);
+    case "seguro_desemprego":
+      return gerarRelatorioSeguroDesemprego(p.resultado, metaBase);
+    case "pensao_alimenticia":
+      return gerarRelatorioPensaoAlimenticia(p.resultado, metaBase);
   }
 }
 
