@@ -1213,15 +1213,46 @@ function parseOcorrencias(verbaEl: Element): {
   let total_devido = 0;
   let total_pago = 0;
 
-  // Get direct child <ocorrencias> first
-  const ocListEl = verbaEl.getElementsByTagName('ocorrencias')[0];
+  // BUG FIX: getElementsByTagName é RECURSIVO. Ele retornava OcorrenciaDeVerba
+  // tambem de ocorrenciasAtualizacao, ocorrenciasPagamento, etc. — inflando
+  // a contagem e gerando soma errada (ex: case 4463 tinha 9 ocs ao inves de 2).
+  //
+  // Correcao: pegar DIRECT children do verba's proprio <ocorrencias>, depois
+  // descer para <List> se existir.
+
+  // Encontra o elemento <ocorrencias> que é FILHO DIRETO de verbaEl
+  let ocListEl: Element | null = null;
+  for (let i = 0; i < verbaEl.childNodes.length; i++) {
+    const child = verbaEl.childNodes[i];
+    if (child.nodeType === 1 && (child as Element).tagName === 'ocorrencias') {
+      ocListEl = child as Element;
+      break;
+    }
+  }
   if (!ocListEl) return { ocorrencias, total_devido: 0, total_pago: 0, total_diferenca: 0 };
 
+  // Desce para <List> se existir (XStream wrapper), senao usa a propria <ocorrencias>
+  let listEl: Element = ocListEl;
+  for (let i = 0; i < ocListEl.childNodes.length; i++) {
+    const child = ocListEl.childNodes[i];
+    if (child.nodeType === 1 && (child as Element).tagName === 'List') {
+      listEl = child as Element;
+      break;
+    }
+  }
+
+  // Coleta DIRECT children <OcorrenciaDeVerba> (nao descendants)
+  const directOcEls: Element[] = [];
+  for (let i = 0; i < listEl.childNodes.length; i++) {
+    const child = listEl.childNodes[i];
+    if (child.nodeType === 1 && (child as Element).tagName === 'OcorrenciaDeVerba') {
+      directOcEls.push(child as Element);
+    }
+  }
+
   // First pass: collect indiceAcumulado from version-0 (original) occurrences by competencia.
-  // PJe-Calc stores indiceAcumulado on originals, not on calculated (versao>0) occurrences.
   const indiceByComp = new Map<string, number>();
-  const ocEls = ocListEl.getElementsByTagName('OcorrenciaDeVerba');
-  for (const oc of Array.from(ocEls)) {
+  for (const oc of directOcEls) {
     const versao = parseInt(getTextContent(oc, 'versao')) || 0;
     if (versao !== 0) continue;
     const idx = parseNum(getTextContent(oc, 'indiceAcumulado'));
@@ -1232,12 +1263,9 @@ function parseOcorrencias(verbaEl: Element): {
   }
 
   // Second pass: extract calculated occurrences (versao > 0)
-  for (const oc of Array.from(ocEls)) {
-    // Skip "original" sub-occurrences
-    if (oc.parentElement?.tagName === 'ocorrenciaOriginal') continue;
-    // Only top-level (versao > 0 usually means calculated)
+  for (const oc of directOcEls) {
     const versao = parseInt(getTextContent(oc, 'versao')) || 0;
-    if (versao === 0) continue; // originals
+    if (versao === 0) continue;
 
     const devido = parseNum(getTextContent(oc, 'devido'));
     const pago = parseNum(getTextContent(oc, 'pago'));
@@ -1245,8 +1273,6 @@ function parseOcorrencias(verbaEl: Element): {
     total_pago += pago;
 
     const comp = tsToDate(getTextContent(oc, 'dataInicial'));
-    // Use indiceAcumulado from calculated occurrence if present, otherwise
-    // fall back to the original occurrence for the same competencia
     const indiceCalc = parseNum(getTextContent(oc, 'indiceAcumulado'));
     const indiceFallback = indiceByComp.get(comp?.slice(0, 7) || '');
     const indiceAcumulado = indiceCalc > 0 ? indiceCalc : (indiceFallback || undefined);
