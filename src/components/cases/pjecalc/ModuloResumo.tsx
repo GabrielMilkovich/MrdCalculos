@@ -14,7 +14,6 @@ import { MemoriaCalculoExpandida } from "./MemoriaCalculoExpandida";
 import { ComparacaoCenarios } from "./ComparacaoCenarios";
 import { calcularCompletude } from "@/lib/pjecalc/completude";
 import * as svc from "@/lib/pjecalc/service";
-import {
 import { PjeCalcEngineV3 } from "@/lib/pjecalc/engine-v3";
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias,
