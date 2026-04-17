@@ -8,6 +8,7 @@
 // Core engines
 export { PjeCalcEngine } from './engine';
 export { PjeCalcEngineV3 } from './engine-v3';
+export { PjeCalcEngineV4 } from './engine-v4';
 
 // Types
 export type {
