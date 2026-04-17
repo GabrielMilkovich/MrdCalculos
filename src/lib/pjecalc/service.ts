@@ -1037,3 +1037,142 @@ export async function getHistoricoOcorrenciasByIds(histIds: string[]): Promise<R
   if (error) throw error;
   return (data || []) as Record<string, unknown>[];
 }
+
+// =====================================================
+// ADVOGADOS (GAP-2)
+// =====================================================
+
+export interface AdvogadoRow {
+  id: string;
+  calculo_id: string;
+  nome: string;
+  oab: string;
+  oab_uf: string;
+  cpf?: string | null;
+  email?: string | null;
+  telefone?: string | null;
+  representa: 'RECLAMANTE' | 'RECLAMADO' | 'AMBOS';
+}
+
+export async function getAdvogados(caseId: string): Promise<AdvogadoRow[]> {
+  const { data, error } = await fromView('pjecalc_advogados')
+    .select('*')
+    .eq('calculo_id', caseId)
+    .order('created_at');
+  if (error) throw error;
+  return (data || []) as AdvogadoRow[];
+}
+
+export async function insertAdvogado(payload: Omit<AdvogadoRow, 'id'>): Promise<void> {
+  const { error } = await fromView('pjecalc_advogados').insert(payload);
+  if (error) throw error;
+}
+
+export async function updateAdvogado(id: string, updates: Partial<AdvogadoRow>): Promise<void> {
+  const { error } = await fromView('pjecalc_advogados').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteAdvogado(id: string): Promise<void> {
+  const { error } = await fromView('pjecalc_advogados').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// =====================================================
+// VALE TRANSPORTE (GAP-1)
+// =====================================================
+
+export interface ValeTransporteConfigRow {
+  id: string;
+  calculo_id: string;
+  apurar: boolean;
+  desconto_empregado_pct: number;
+  observacoes?: string | null;
+}
+
+export interface ValeTransporteLinhaRow {
+  id: string;
+  config_id: string;
+  descricao: string;
+  tipo: 'URBANO' | 'INTERMUNICIPAL' | 'INTERESTADUAL';
+  valor_passagem: number;
+  quantidade_dia: number;
+  data_encerramento?: string | null;
+}
+
+export async function getValeTransporteConfig(caseId: string): Promise<ValeTransporteConfigRow | null> {
+  const { data, error } = await fromView('pjecalc_vale_transporte_config')
+    .select('*')
+    .eq('calculo_id', caseId)
+    .maybeSingle();
+  if (error) throw error;
+  return data as ValeTransporteConfigRow | null;
+}
+
+export async function upsertValeTransporteConfig(
+  payload: Omit<ValeTransporteConfigRow, 'id'> & { id?: string },
+): Promise<string> {
+  if (payload.id) {
+    const { error } = await fromView('pjecalc_vale_transporte_config').update(payload).eq('id', payload.id);
+    if (error) throw error;
+    return payload.id;
+  }
+  const { data, error } = await fromView('pjecalc_vale_transporte_config')
+    .upsert(payload, { onConflict: 'calculo_id' })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return (data as { id: string }).id;
+}
+
+export async function getValeTransporteLinhas(configId: string): Promise<ValeTransporteLinhaRow[]> {
+  const { data, error } = await fromView('pjecalc_vale_transporte_linhas')
+    .select('*')
+    .eq('config_id', configId)
+    .order('created_at');
+  if (error) throw error;
+  return (data || []) as ValeTransporteLinhaRow[];
+}
+
+export async function insertValeTransporteLinha(payload: Omit<ValeTransporteLinhaRow, 'id'>): Promise<void> {
+  const { error } = await fromView('pjecalc_vale_transporte_linhas').insert(payload);
+  if (error) throw error;
+}
+
+export async function deleteValeTransporteLinha(id: string): Promise<void> {
+  const { error } = await fromView('pjecalc_vale_transporte_linhas').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// =====================================================
+// EXCEÇÕES DE JUROS (GAP-5)
+// =====================================================
+
+export interface ExcecaoJurosRow {
+  id: string;
+  calculo_id: string;
+  periodo_inicio: string;
+  periodo_fim: string;
+  tipo_juros: 'SEM_JUROS' | 'SELIC' | 'TAXA_LEGAL' | 'UM_PORCENTO' | 'MEIO_PORCENTO';
+  percentual?: number | null;
+  motivo?: string | null;
+}
+
+export async function getExcecoesJuros(caseId: string): Promise<ExcecaoJurosRow[]> {
+  const { data, error } = await fromView('pjecalc_excecao_juros')
+    .select('*')
+    .eq('calculo_id', caseId)
+    .order('periodo_inicio');
+  if (error) throw error;
+  return (data || []) as ExcecaoJurosRow[];
+}
+
+export async function insertExcecaoJuros(payload: Omit<ExcecaoJurosRow, 'id'>): Promise<void> {
+  const { error } = await fromView('pjecalc_excecao_juros').insert(payload);
+  if (error) throw error;
+}
+
+export async function deleteExcecaoJuros(id: string): Promise<void> {
+  const { error } = await fromView('pjecalc_excecao_juros').delete().eq('id', id);
+  if (error) throw error;
+}
