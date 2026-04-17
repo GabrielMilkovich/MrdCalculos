@@ -12,6 +12,18 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [react()].filter(Boolean),
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Isolar @xmldom/xmldom em chunk separado para evitar colisão de
+          // nomes minificados com pjc-analyzer (ambos minificavam para 'Z'
+          // no mesmo escopo, causando SyntaxError em strict mode/ES module).
+          xmldom: ['@xmldom/xmldom'],
+        },
+      },
+    },
+  },
   optimizeDeps: {
     include: [
       "react",
