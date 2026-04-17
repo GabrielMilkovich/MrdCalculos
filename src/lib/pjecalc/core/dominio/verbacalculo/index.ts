@@ -26,7 +26,14 @@ export { TotalizadorDeVerba } from './totalizador-de-verba';
 export { ComparadorDeListas } from './comparador-de-listas';
 
 // Máquinas de cálculo (abstract + 3 concretas)
-export { calcularValorDevidoDaOcorrencia } from './maquina-de-calculo';
+export {
+  MaquinaDeCalculo,
+  calcularValorDevidoDaOcorrencia,
+  VALOR_PARA_APLICAR_DOBRA,
+  VENCIMENTO_DEZEMBRO,
+  QUANTIDADE_DIAS_MINIMA_PARA_UM_AVO,
+} from './maquina-de-calculo';
+export type { IVerbaDeCalculoMaqRef } from './maquina-de-calculo';
 export { MaquinaDeCalculoDaVerbaCalculada } from './maquina-de-calculo-da-verba-calculada';
 export { MaquinaDeCalculoDaVerbaInformada } from './maquina-de-calculo-da-verba-informada';
 export { MaquinaDeCalculoDaVerbaReflexo } from './maquina-de-calculo-da-verba-reflexo';
