@@ -59,15 +59,6 @@ function getField(obj: unknown, key: string): unknown {
   return obj[key];
 }
 
-function getPath(obj: unknown, path: string[]): unknown {
-  let cur: unknown = obj;
-  for (const k of path) {
-    cur = getField(cur, k);
-    if (cur === undefined) return undefined;
-  }
-  return cur;
-}
-
 // =====================================================
 // VALIDADORES DE TIPOS BÁSICOS
 // =====================================================
@@ -119,17 +110,12 @@ export function isValidISODate(value: string): boolean {
   const [y, m, d] = value.split('-').map(Number);
   if (m < 1 || m > 12 || d < 1 || d > 31) return false;
   const dt = new Date(Date.UTC(y, m - 1, d));
-  return (
-    dt.getUTCFullYear() === y &&
-    dt.getUTCMonth() === m - 1 &&
-    dt.getUTCDate() === d
-  );
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
 }
 
 /** Período YYYY-MM */
 export function isValidPerAnoMes(value: string): boolean {
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return false;
-  return true;
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 }
 
 /** Valor monetário: Decimal válido e >= 0 (a menos que permitNegative) */
@@ -260,18 +246,12 @@ function requireArray(ctx: Ctx, field: string, value: unknown, minLen = 1): bool
 function validateIdeEvento(ctx: Ctx, prefix: string, ide: unknown): void {
   if (!requireObject(ctx, prefix, ide)) return;
   const indRetif = getField(ide, 'indRetif');
-  requireString(ctx, `${prefix}.indRetif`, indRetif, {
-    enumVals: Object.values(IND_RETIF),
-  });
+  requireString(ctx, `${prefix}.indRetif`, indRetif, { enumVals: Object.values(IND_RETIF) });
   if (indRetif === IND_RETIF.RETIFICACAO) {
     requireString(ctx, `${prefix}.nrRecibo`, getField(ide, 'nrRecibo'), { min: 1, max: 40 });
   }
-  requireString(ctx, `${prefix}.tpAmb`, getField(ide, 'tpAmb'), {
-    enumVals: Object.values(TP_AMB),
-  });
-  requireString(ctx, `${prefix}.procEmi`, getField(ide, 'procEmi'), {
-    enumVals: Object.values(PROC_EMI),
-  });
+  requireString(ctx, `${prefix}.tpAmb`, getField(ide, 'tpAmb'), { enumVals: Object.values(TP_AMB) });
+  requireString(ctx, `${prefix}.procEmi`, getField(ide, 'procEmi'), { enumVals: Object.values(PROC_EMI) });
   requireString(ctx, `${prefix}.verProc`, getField(ide, 'verProc'), { min: 1, max: 20 });
 }
 
@@ -282,17 +262,19 @@ function validateIdeEmpregador(ctx: Ctx, prefix: string, ide: unknown): void {
   });
   const nrInsc = getField(ide, 'nrInsc');
   if (tpInsc === TP_INSC.CNPJ) {
-    // Para empregador CNPJ, validar 14 dígitos + DV (raiz: 8+ também é aceito em alguns casos,
-    // mas o uso padrão em eventos trabalhistas é CNPJ completo).
-    if (typeof nrInsc === 'string' && /^\d{8}$/.test(nrInsc)) {
-      // CNPJ raiz de 8 dígitos — aceitável sem DV
-    } else {
-      checkCNPJ(ctx, `${prefix}.nrInsc`, nrInsc);
-    }
+    if (typeof nrInsc === 'string' && /^\d{8}$/.test(nrInsc)) return; // raiz 8 dígitos aceitável
+    checkCNPJ(ctx, `${prefix}.nrInsc`, nrInsc);
   } else if (tpInsc === TP_INSC.CPF) {
     checkCPF(ctx, `${prefix}.nrInsc`, nrInsc);
   } else {
     requireString(ctx, `${prefix}.nrInsc`, nrInsc, { min: 8, max: 14 });
+  }
+}
+
+function checkNrProcCNJ(ctx: Ctx, field: string, value: unknown): void {
+  const s = requireString(ctx, field, value, { min: 20, max: 20 });
+  if (s && !/^\d{20}$/.test(s)) {
+    ctx.errors.push({ field, message: 'deve conter 20 dígitos (padrão CNJ)', value: s });
   }
 }
 
@@ -310,39 +292,23 @@ export function validateS2500(obj: unknown): ValidationResult {
   validateIdeEvento(ctx, 'ideEvento', getField(obj, 'ideEvento'));
   validateIdeEmpregador(ctx, 'ideEmpregador', getField(obj, 'ideEmpregador'));
 
-  // infoProcesso
   const info = getField(obj, 'infoProcesso');
   if (requireObject(ctx, 'infoProcesso', info)) {
-    requireString(ctx, 'infoProcesso.tpProc', getField(info, 'tpProc'), {
-      enumVals: Object.values(TP_PROC),
-    });
-    const nrProc = requireString(ctx, 'infoProcesso.nrProcTrab', getField(info, 'nrProcTrab'), {
-      min: 20,
-      max: 20,
-    });
-    if (nrProc && !/^\d{20}$/.test(nrProc)) {
-      ctx.errors.push({
-        field: 'infoProcesso.nrProcTrab',
-        message: 'deve conter 20 dígitos (padrão CNJ)',
-        value: nrProc,
-      });
-    }
+    requireString(ctx, 'infoProcesso.tpProc', getField(info, 'tpProc'), { enumVals: Object.values(TP_PROC) });
+    checkNrProcCNJ(ctx, 'infoProcesso.nrProcTrab', getField(info, 'nrProcTrab'));
     const obs = getField(info, 'obsProc');
     if (obs !== undefined) requireString(ctx, 'infoProcesso.obsProc', obs, { min: 1, max: 255 });
     checkISODate(ctx, 'infoProcesso.dtSent', getField(info, 'dtSent'), true);
   }
 
-  // trabalhador
   const trab = getField(obj, 'trabalhador');
   if (requireObject(ctx, 'trabalhador', trab)) {
     checkCPF(ctx, 'trabalhador.cpfTrab', getField(trab, 'cpfTrab'));
     requireString(ctx, 'trabalhador.nmTrab', getField(trab, 'nmTrab'), { min: 2, max: 70 });
     checkISODate(ctx, 'trabalhador.dtNascto', getField(trab, 'dtNascto'), true);
     const nis = getField(trab, 'nisTrab');
-    if (nis !== undefined && nis !== '') {
-      if (typeof nis !== 'string' || !isValidNIS(nis)) {
-        ctx.errors.push({ field: 'trabalhador.nisTrab', message: 'NIS deve conter 11 dígitos', value: nis });
-      }
+    if (nis !== undefined && nis !== '' && (typeof nis !== 'string' || !isValidNIS(nis))) {
+      ctx.errors.push({ field: 'trabalhador.nisTrab', message: 'NIS deve conter 11 dígitos', value: nis });
     }
     const codCateg = getField(trab, 'codCateg');
     if (codCateg !== undefined && codCateg !== '') {
@@ -350,7 +316,6 @@ export function validateS2500(obj: unknown): ValidationResult {
     }
   }
 
-  // infoContrato
   const contr = getField(obj, 'infoContrato');
   if (requireObject(ctx, 'infoContrato', contr)) {
     requireString(ctx, 'infoContrato.indReconhec', getField(contr, 'indReconhec'), {
@@ -360,15 +325,11 @@ export function validateS2500(obj: unknown): ValidationResult {
     checkISODate(ctx, 'infoContrato.dtDeslig', getField(contr, 'dtDeslig'), true);
     requireString(ctx, 'infoContrato.codCateg', getField(contr, 'codCateg'), { enumVals: COD_CATEG });
     const remun = getField(contr, 'remuneracao');
-    if (remun !== undefined && remun !== '') {
-      checkMoney(ctx, 'infoContrato.remuneracao', remun);
-    }
+    if (remun !== undefined && remun !== '') checkMoney(ctx, 'infoContrato.remuneracao', remun);
   }
 
-  // perApurPgto
   checkPerAnoMes(ctx, 'perApurPgto', getField(obj, 'perApurPgto'));
 
-  // periodos
   const periodos = getField(obj, 'periodos');
   if (requireArray(ctx, 'periodos', periodos, 1) && Array.isArray(periodos)) {
     periodos.forEach((per, i) => {
@@ -407,42 +368,23 @@ export function validateS2501(obj: unknown): ValidationResult {
   validateIdeEvento(ctx, 'ideEvento', getField(obj, 'ideEvento'));
   validateIdeEmpregador(ctx, 'ideEmpregador', getField(obj, 'ideEmpregador'));
 
-  // ideProc
   const ideProc = getField(obj, 'ideProc');
   if (requireObject(ctx, 'ideProc', ideProc)) {
-    const nrProc = requireString(ctx, 'ideProc.nrProcTrab', getField(ideProc, 'nrProcTrab'), {
-      min: 20,
-      max: 20,
-    });
-    if (nrProc && !/^\d{20}$/.test(nrProc)) {
-      ctx.errors.push({
-        field: 'ideProc.nrProcTrab',
-        message: 'deve conter 20 dígitos (padrão CNJ)',
-        value: nrProc,
-      });
-    }
+    checkNrProcCNJ(ctx, 'ideProc.nrProcTrab', getField(ideProc, 'nrProcTrab'));
     checkPerAnoMes(ctx, 'ideProc.perApurPgto', getField(ideProc, 'perApurPgto'));
-    requireString(ctx, 'ideProc.tpPgto', getField(ideProc, 'tpPgto'), {
-      enumVals: Object.values(TP_PGTO),
-    });
+    requireString(ctx, 'ideProc.tpPgto', getField(ideProc, 'tpPgto'), { enumVals: Object.values(TP_PGTO) });
     checkISODate(ctx, 'ideProc.dtPgto', getField(ideProc, 'dtPgto'), true);
   }
 
-  // ideTrab
   const ideTrab = getField(obj, 'ideTrab');
   if (requireObject(ctx, 'ideTrab', ideTrab)) {
     checkCPF(ctx, 'ideTrab.cpfTrab', getField(ideTrab, 'cpfTrab'));
-    requireString(ctx, 'ideTrab.indCateg', getField(ideTrab, 'indCateg'), {
-      enumVals: Object.values(IND_CATEG),
-    });
+    requireString(ctx, 'ideTrab.indCateg', getField(ideTrab, 'indCateg'), { enumVals: Object.values(IND_CATEG) });
   }
 
-  // calcTrib
   const calc = getField(obj, 'calcTrib');
   if (requireObject(ctx, 'calcTrib', calc)) {
-    requireString(ctx, 'calcTrib.indApurIR', getField(calc, 'indApurIR'), {
-      enumVals: Object.values(IND_APUR_IR),
-    });
+    requireString(ctx, 'calcTrib.indApurIR', getField(calc, 'indApurIR'), { enumVals: Object.values(IND_APUR_IR) });
     const anual = getField(calc, 'vrBcCpAnual');
     if (anual !== undefined && anual !== '') checkMoney(ctx, 'calcTrib.vrBcCpAnual', anual);
     const anual13 = getField(calc, 'vrBcCp13Anual');
@@ -462,7 +404,6 @@ export function validateS2501(obj: unknown): ValidationResult {
     }
   }
 
-  // basesInss
   const bases = getField(obj, 'basesInss');
   if (requireArray(ctx, 'basesInss', bases, 1) && Array.isArray(bases)) {
     bases.forEach((b, i) => {
@@ -476,9 +417,6 @@ export function validateS2501(obj: unknown): ValidationResult {
       if (vd !== undefined && vd !== '') checkMoney(ctx, `${bp}.vrDescCp`, vd);
     });
   }
-
-  // uso explícito para evitar "import sem uso" em builds estritos
-  void getPath;
 
   return { valid: ctx.errors.length === 0, errors: ctx.errors };
 }
