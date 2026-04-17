@@ -45,6 +45,7 @@ import {
   type ITabelaCorrecaoContext,
 } from '../verbacalculo/tabela-de-correcao-monetaria';
 import { ParametrosDeAtualizacao } from './atualizacao/parametros-de-atualizacao';
+import type { CombinacaoDeIndice } from './atualizacao/combinacao-de-indice';
 import type { Setor } from './setor';
 import type { ItemPontoFacultativo } from './item-ponto-facultativo';
 import type { ExcecaoDaCargaHorariaDoCalculo } from './excecao-da-carga-horaria-do-calculo';
@@ -507,31 +508,60 @@ export class Calculo {
     // Reset
     for (const v of this.verbas) v.setLiquidado(false);
 
-    // 1. TabelaDeCorrecaoMonetaria (índice trabalhista)
     const ctx: ITabelaCorrecaoContext = {
       getDataDeLiquidacao: () => this.getDataDeLiquidacao(),
       getDataDemissao: () => this.getDataDemissao(),
     };
-    const tabelaDeCorrecao = new TabelaDeCorrecaoMonetaria(
-      ctx,
-      this.getAtualizacaoMonetaria(),
-      this.getIndicesAcumulados(),
-      this.getIgnorarTaxaCorrecaoNegativa(),
-    );
-    tabelaDeCorrecao.setOrigemCalculo(true);
-
-    // 2. Carregar tabela para o período (admissão → liquidação)
     const periodoCalculo = new Periodo(
       HelperDate.getCurrentCompetence(this.getDataAdmissao()).getDate(),
       this.getDataDeLiquidacao(),
     );
-    tabelaDeCorrecao.carregarTabela(periodoCalculo);
 
-    // 3. Liquidar cada verba ativa
-    for (const verba of this.getVerbasAtivas()) {
-      if (verba.isLiquidado()) continue;
-      verba.setTabelaDeCorrecaoMonetariaTrabalhista(tabelaDeCorrecao);
-      this.liquidarVerba(verba, tabelaDeCorrecao);
+    const params = this.getParametrosDeAtualizacao();
+    const combinacoes = params ? [...params.getListaDeCombinacaoDeIndices()] : [];
+
+    if (combinacoes.length > 0) {
+      // ADC 58/59: combinações de índice → tabela por SEGMENTO.
+      // Cada ocorrência recebe o fator acumulado do segmento correto.
+      const segmentos = this.construirSegmentos(ctx, periodoCalculo, combinacoes);
+      for (const verba of this.getVerbasAtivas()) {
+        if (verba.isLiquidado()) continue;
+        verba.setTabelaDeCorrecaoMonetariaTrabalhista(segmentos[0]?.tabela ?? null);
+        for (const ocorrencia of verba.getOcorrenciasAtivas()) {
+          const dataInicial = ocorrencia.getDataInicial();
+          if (!dataInicial) continue;
+          // Compor fator: multiplicar o indice de CADA segmento que a ocorrência atravessa.
+          let fatorComposto = new Decimal(1);
+          for (const seg of segmentos) {
+            if (seg.indice === IndiceMonetarioEnum.NENHUM || seg.indice === IndiceMonetarioEnum.SEM_CORRECAO) continue;
+            const compInicio = HelperDate.getCurrentCompetence(dataInicial).addMonth(1).getDate();
+            if (HelperDate.dateAfter(compInicio, seg.periodo.getFinal())) continue;
+            if (HelperDate.dateBefore(this.getDataDeLiquidacao(), seg.periodo.getInicial())) continue;
+            const inicio = HelperDate.dateAfter(compInicio, seg.periodo.getInicial()) ? compInicio : seg.periodo.getInicial();
+            const fim = HelperDate.dateBefore(this.getDataDeLiquidacao(), seg.periodo.getFinal()) ? this.getDataDeLiquidacao() : seg.periodo.getFinal();
+            const fatorInicio = seg.tabela.obterIndice(inicio);
+            const fatorFim = seg.tabela.obterIndice(fim);
+            if (fatorInicio.greaterThan(0)) {
+              fatorComposto = fatorComposto.times(fatorFim.div(fatorInicio));
+            }
+          }
+          ocorrencia.setIndiceAcumulado(fatorComposto);
+        }
+        verba.setLiquidado(true);
+      }
+    } else {
+      // Sem combinações: tabela única
+      const tabelaDeCorrecao = new TabelaDeCorrecaoMonetaria(
+        ctx, this.getAtualizacaoMonetaria(), this.getIndicesAcumulados(),
+        this.getIgnorarTaxaCorrecaoNegativa(),
+      );
+      tabelaDeCorrecao.setOrigemCalculo(true);
+      tabelaDeCorrecao.carregarTabela(periodoCalculo);
+      for (const verba of this.getVerbasAtivas()) {
+        if (verba.isLiquidado()) continue;
+        verba.setTabelaDeCorrecaoMonetariaTrabalhista(tabelaDeCorrecao);
+        this.liquidarVerba(verba, tabelaDeCorrecao);
+      }
     }
 
     // 4-13. Módulos secundários (ordem Java)
@@ -540,12 +570,58 @@ export class Calculo {
     this.fgts?.liquidar();
     this.inss?.liquidar(this.getDataDeLiquidacao());
     this.previdenciaPrivada?.liquidar();
-    // calcularJuros() — tabela TabelaDeJuros invocada sob demanda por
-    // ApuracaoDeJuros (ver Fase 5).
     this.pensaoAlimenticia?.liquidar();
-    // Multas e honorários são liquidados individualmente por suas MaquinaDeCalculo.
     this.irpf?.liquidar();
     this.custasJudiciais?.liquidar();
+  }
+
+  /** Constrói tabelas de correção por segmento (ADC 58/59). */
+  private construirSegmentos(
+    ctx: ITabelaCorrecaoContext,
+    periodoTotal: Periodo,
+    combinacoes: CombinacaoDeIndice[],
+  ): { indice: IndiceMonetarioEnum; periodo: Periodo; tabela: TabelaDeCorrecaoMonetaria }[] {
+    const sorted = combinacoes
+      .filter(c => c.getApartirDeOutroIndice() != null)
+      .sort((a, b) => a.getApartirDeOutroIndice()!.getTime() - b.getApartirDeOutroIndice()!.getTime());
+
+    const segmentos: { indice: IndiceMonetarioEnum; periodo: Periodo; tabela: TabelaDeCorrecaoMonetaria }[] = [];
+    let currentStart = periodoTotal.getInicial();
+    let currentIndice = this.getAtualizacaoMonetaria();
+
+    for (const comb of sorted) {
+      const transitionDate = comb.getApartirDeOutroIndice()!;
+      if (HelperDate.dateAfter(transitionDate, currentStart)) {
+        const segPeriodo = new Periodo(currentStart, HelperDate.getInstance(transitionDate)!.addDay(-1).getDate());
+        const tabela = new TabelaDeCorrecaoMonetaria(
+          ctx, currentIndice, this.getIndicesAcumulados(), this.getIgnorarTaxaCorrecaoNegativa(),
+        );
+        tabela.setOrigemCalculo(true);
+        tabela.carregarTabela(segPeriodo);
+        segmentos.push({ indice: currentIndice, periodo: segPeriodo, tabela });
+      }
+      currentStart = transitionDate;
+      currentIndice = comb.getOutroIndiceTrabalhista() ?? this.getAtualizacaoMonetaria();
+    }
+
+    if (HelperDate.dateBeforeOrEquals(currentStart, periodoTotal.getFinal())) {
+      const segPeriodo = new Periodo(currentStart, periodoTotal.getFinal());
+      if (currentIndice !== IndiceMonetarioEnum.NENHUM && currentIndice !== IndiceMonetarioEnum.SEM_CORRECAO) {
+        const tabela = new TabelaDeCorrecaoMonetaria(
+          ctx, currentIndice, this.getIndicesAcumulados(), this.getIgnorarTaxaCorrecaoNegativa(),
+        );
+        tabela.setOrigemCalculo(true);
+        tabela.carregarTabela(segPeriodo);
+        segmentos.push({ indice: currentIndice, periodo: segPeriodo, tabela });
+      } else {
+        const tabela = new TabelaDeCorrecaoMonetaria(
+          ctx, this.getAtualizacaoMonetaria(), this.getIndicesAcumulados(), this.getIgnorarTaxaCorrecaoNegativa(),
+        );
+        segmentos.push({ indice: currentIndice, periodo: segPeriodo, tabela });
+      }
+    }
+
+    return segmentos;
   }
 
   /**
