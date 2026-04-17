@@ -592,7 +592,7 @@ export type Database = {
           criado_por: string | null
           id: string
           numero_processo: string | null
-          status: Database["public"]["Enums"]["case_status"] | null
+          status: string | null
           tags: string[] | null
           tribunal: string | null
         }
@@ -603,7 +603,7 @@ export type Database = {
           criado_por?: string | null
           id?: string
           numero_processo?: string | null
-          status?: Database["public"]["Enums"]["case_status"] | null
+          status?: string | null
           tags?: string[] | null
           tribunal?: string | null
         }
@@ -614,7 +614,7 @@ export type Database = {
           criado_por?: string | null
           id?: string
           numero_processo?: string | null
-          status?: Database["public"]["Enums"]["case_status"] | null
+          status?: string | null
           tags?: string[] | null
           tribunal?: string | null
         }
@@ -682,7 +682,7 @@ export type Database = {
           pages_count: number | null
           periodo_detectado_fim: string | null
           periodo_detectado_inicio: string | null
-          pipeline_type: Database["public"]["Enums"]["pipeline_doc_type"]
+          pipeline_type: string
           status: string
           template_detectado: string | null
           template_version: string | null
@@ -701,7 +701,7 @@ export type Database = {
           pages_count?: number | null
           periodo_detectado_fim?: string | null
           periodo_detectado_inicio?: string | null
-          pipeline_type?: Database["public"]["Enums"]["pipeline_doc_type"]
+          pipeline_type?: string
           status?: string
           template_detectado?: string | null
           template_version?: string | null
@@ -720,7 +720,7 @@ export type Database = {
           pages_count?: number | null
           periodo_detectado_fim?: string | null
           periodo_detectado_inicio?: string | null
-          pipeline_type?: Database["public"]["Enums"]["pipeline_doc_type"]
+          pipeline_type?: string
           status?: string
           template_detectado?: string | null
           template_version?: string | null
@@ -816,7 +816,7 @@ export type Database = {
           retry_count: number | null
           status: string
           storage_path: string | null
-          tipo: Database["public"]["Enums"]["doc_type"] | null
+          tipo: string | null
           updated_at: string | null
           uploaded_em: string | null
           validado: boolean | null
@@ -851,7 +851,7 @@ export type Database = {
           retry_count?: number | null
           status?: string
           storage_path?: string | null
-          tipo?: Database["public"]["Enums"]["doc_type"] | null
+          tipo?: string | null
           updated_at?: string | null
           uploaded_em?: string | null
           validado?: boolean | null
@@ -886,7 +886,7 @@ export type Database = {
           retry_count?: number | null
           status?: string
           storage_path?: string | null
-          tipo?: Database["public"]["Enums"]["doc_type"] | null
+          tipo?: string | null
           updated_at?: string | null
           uploaded_em?: string | null
           validado?: boolean | null
@@ -910,7 +910,7 @@ export type Database = {
           observacoes: string | null
           salario_inicial: number | null
           sindicato: string | null
-          tipo_demissao: Database["public"]["Enums"]["termination_type"] | null
+          tipo_demissao: string | null
           updated_at: string
         }
         Insert: {
@@ -926,7 +926,7 @@ export type Database = {
           observacoes?: string | null
           salario_inicial?: number | null
           sindicato?: string | null
-          tipo_demissao?: Database["public"]["Enums"]["termination_type"] | null
+          tipo_demissao?: string | null
           updated_at?: string
         }
         Update: {
@@ -942,7 +942,7 @@ export type Database = {
           observacoes?: string | null
           salario_inicial?: number | null
           sindicato?: string | null
-          tipo_demissao?: Database["public"]["Enums"]["termination_type"] | null
+          tipo_demissao?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -963,7 +963,7 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           source_doc_id: string | null
-          status: Database["public"]["Enums"]["extracao_status"]
+          status: string
           target_field: string | null
           target_table: string | null
           valor: string | null
@@ -983,7 +983,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           source_doc_id?: string | null
-          status?: Database["public"]["Enums"]["extracao_status"]
+          status?: string
           target_field?: string | null
           target_table?: string | null
           valor?: string | null
@@ -1003,7 +1003,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           source_doc_id?: string | null
-          status?: Database["public"]["Enums"]["extracao_status"]
+          status?: string
           target_field?: string | null
           target_table?: string | null
           valor?: string | null
@@ -1616,7 +1616,7 @@ export type Database = {
           documento_tipo: string | null
           id: string
           nome: string | null
-          tipo: Database["public"]["Enums"]["party_type"] | null
+          tipo: string | null
           updated_at: string
         }
         Insert: {
@@ -1627,7 +1627,7 @@ export type Database = {
           documento_tipo?: string | null
           id?: string
           nome?: string | null
-          tipo?: Database["public"]["Enums"]["party_type"] | null
+          tipo?: string | null
           updated_at?: string
         }
         Update: {
@@ -1638,7 +1638,7 @@ export type Database = {
           documento_tipo?: string | null
           id?: string
           nome?: string | null
-          tipo?: Database["public"]["Enums"]["party_type"] | null
+          tipo?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -5387,26 +5387,26 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          role: Database["public"]["Enums"]["app_role"] | null
+          role: string | null
           user_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
-          role?: Database["public"]["Enums"]["app_role"] | null
+          role?: string | null
           user_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
-          role?: Database["public"]["Enums"]["app_role"] | null
+          role?: string | null
           user_id?: string | null
         }
         Relationships: []
       }
       validations: {
         Row: {
-          acao: Database["public"]["Enums"]["validation_action"] | null
+          acao: string | null
           campo: string | null
           case_id: string | null
           extraction_id: string | null
@@ -5420,7 +5420,7 @@ export type Database = {
           valor_validado: string | null
         }
         Insert: {
-          acao?: Database["public"]["Enums"]["validation_action"] | null
+          acao?: string | null
           campo?: string | null
           case_id?: string | null
           extraction_id?: string | null
@@ -5434,7 +5434,7 @@ export type Database = {
           valor_validado?: string | null
         }
         Update: {
-          acao?: Database["public"]["Enums"]["validation_action"] | null
+          acao?: string | null
           campo?: string | null
           case_id?: string | null
           extraction_id?: string | null
