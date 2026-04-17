@@ -24,31 +24,31 @@ import {
   type InputValidationResult,
   type ConfidenceReport,
 } from './canonical';
-import {
-  PjeCalcEngine,
-  type PjeParametros,
-  type PjeHistoricoSalarial,
-  type PjeFalta,
-  type PjeFerias,
-  type PjeVerba,
-  type PjeCartaoPonto,
-  type PjeFGTSConfig,
-  type PjeCSConfig,
-  type PjeIRConfig,
-  type PjeCorrecaoConfig,
-  type PjeHonorariosConfig,
-  type PjeCustasConfig,
-  type PjeSeguroConfig,
-  type PjeLiquidacaoResult,
-  type PjeIndiceRow,
-  type PjeINSSFaixaRow,
-  type PjeIRFaixaRow,
-  type PjeFeriadoDB,
-  type PjeExcecaoCargaHoraria,
-  type PjePrevidenciaPrivadaConfig,
-  type PjePensaoConfig,
-  type PjeSalarioFamiliaConfig,
-} from './engine';
+import { PjeCalcEngineV3 } from './engine-v3';
+import type {
+  PjeParametros,
+  PjeHistoricoSalarial,
+  PjeFalta,
+  PjeFerias,
+  PjeVerba,
+  PjeCartaoPonto,
+  PjeFGTSConfig,
+  PjeCSConfig,
+  PjeIRConfig,
+  PjeCorrecaoConfig,
+  PjeHonorariosConfig,
+  PjeCustasConfig,
+  PjeSeguroConfig,
+  PjeLiquidacaoResult,
+  PjeIndiceRow,
+  PjeINSSFaixaRow,
+  PjeIRFaixaRow,
+  PjeFeriadoDB,
+  PjeExcecaoCargaHoraria,
+  PjePrevidenciaPrivadaConfig,
+  PjePensaoConfig,
+  PjeSalarioFamiliaConfig,
+} from './engine-types';
 import * as svc from './service';
 import { verificarDesatualizacaoIndices, getUltimoMesDisponivel } from './indices-fallback';
 import type {
@@ -1268,22 +1268,22 @@ export async function executarLiquidacao(
 
   // 4. Execute engine — ALL 21 constructor params populated
   
-  const engine = new PjeCalcEngine(
+  const engine = new PjeCalcEngineV3(
     engineParams, engineHistoricos, engineFaltas, engineFerias,
     engineVerbas, engineCartao, engineFgts, engineCs, engineIr,
     engineCorrecao, engineHonorarios, engineCustas, engineSeguro,
-    indicesDB,           // 14: correction indices  
+    indicesDB,           // 14: correction indices
     faixasINSSDB,        // 15: INSS progressive brackets
     faixasIRDB,          // 16: IR brackets
-    excecoesCargaDB,     // 17: exceções de carga horária (jornadas reduzidas)
+    excecoesCargaDB,     // 17: exceções de carga horária
     feriadosDB,          // 18: holidays
     prevPrivadaConfig,   // 19: previdência privada
     pensaoConfig,        // 20: pensão alimentícia
     salarioFamiliaConfig,// 21: salário família
     seguroDesempregoDB,  // 22: seguro-desemprego DB rows
     salarioFamiliaDB,    // 23: salário-família DB rows
-    excecoesSabadoDB,    // 24: exceções de sábado (dia útil override)
-    salarioMinimoDB,     // 25: salário mínimo DB (for insalubridade base — art. 192 CLT)
+    excecoesSabadoDB,    // 24: exceções de sábado
+    salarioMinimoDB,     // 25: salário mínimo DB
   );
 
   const result = engine.liquidar();
