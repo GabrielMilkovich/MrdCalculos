@@ -75,8 +75,9 @@ const ALVOS = [
 ];
 
 describe('Diagnóstico casos 4494 e 4463 — decomposição por componente', () => {
+  const hasCorpus = fs.existsSync(CORPUS_DIR);
   for (const alvo of ALVOS) {
-    it(`caso ${alvo.calc} (esperado ${alvo.esperado_delta})`, () => {
+    it.skipIf(!hasCorpus)(`caso ${alvo.calc} (esperado ${alvo.esperado_delta})`, () => {
       const xml = fs.readFileSync(path.join(CORPUS_DIR, alvo.file), 'latin1');
       const a = analyzePJC(xml);
       const inputs = convertPjcToEngineInputs(a, `diag-${alvo.calc}`);

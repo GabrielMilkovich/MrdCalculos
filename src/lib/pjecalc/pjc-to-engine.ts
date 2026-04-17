@@ -506,26 +506,45 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     // erroneamente valores legítimos (ex: 4483 13° SOBRE HORAS EXTRAS 1800 -> 439).
     // Mantem as flags precisaConsolidar/consolidarParcial para logging/debug futuro.
     void precisaConsolidar; void consolidarParcial;
+    const isInformada = v.tipo === 'Informada';
     let ocorrenciasPrecomputadas: PjeVerba['ocorrencias_precomputadas'] | undefined = undefined;
     if (v.ocorrencias_all.length > 0) {
-      ocorrenciasPrecomputadas = v.ocorrencias_all.map(oc => ({
-        competencia: oc.competencia.slice(0, 7),
-        base: oc.base,
-        divisor: oc.divisor,
-        multiplicador: oc.multiplicador,
-        quantidade: oc.quantidade,
-        dobra: oc.dobra,
-        devido: oc.devido,
-        pago: oc.pago,
-        indice_acumulado: oc.indice_acumulado,
-      }));
+      ocorrenciasPrecomputadas = v.ocorrencias_all.map(oc => {
+        // Informada verbas store devido directly (base/div/mult/qty are null in PJC XML).
+        // Normalize to base=devido, div=1, mult=1, qty=1 so engine's calcularDevidoFromScratch
+        // yields the correct devido.
+        if (isInformada) {
+          return {
+            competencia: oc.competencia.slice(0, 7),
+            base: oc.devido || 0,
+            divisor: 1,
+            multiplicador: 1,
+            quantidade: 1,
+            dobra: false,
+            devido: oc.devido || 0,
+            pago: oc.pago || 0,
+            indice_acumulado: oc.indice_acumulado,
+          };
+        }
+        return {
+          competencia: oc.competencia.slice(0, 7),
+          base: oc.base,
+          divisor: oc.divisor,
+          multiplicador: oc.multiplicador,
+          quantidade: oc.quantidade,
+          dobra: oc.dobra,
+          devido: oc.devido,
+          pago: oc.pago,
+          indice_acumulado: oc.indice_acumulado,
+        };
+      });
     }
 
     return {
       id: v.id,
       nome: v.nome,
       tipo: isReflexo ? 'reflexa' as const : 'principal' as const,
-      valor: 'calculado' as const,
+      valor: (isInformada ? 'informado' : 'calculado') as 'informado' | 'calculado',
       caracteristica,
       ocorrencia_pagamento: ocorrenciaPagamento,
       compor_principal: v.compor_principal !== 'NAO_COMPOR',
