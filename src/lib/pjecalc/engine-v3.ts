@@ -606,11 +606,20 @@ export class PjeCalcEngineV3 {
     const dataComp = oc.getDataInicial();
     if (!dataComp) return 0;
 
-    const inicio = dataComp.getTime() > inicioJuros.getTime() ? dataComp : inicioJuros;
-    if (inicio.getTime() >= dataLiq.getTime()) return 0;
-
     const valor = new Decimal(valorCorrigido);
     const combs = this.correcaoConfig.combinacoes_juros ?? [];
+
+    // Quando combinacoes_juros tem entrada-base (sem 'de') e entrada com 'de',
+    // ha juros PRE-JUDICIAIS (competencia -> ajuizamento) na base, depois o outro
+    // tipo pos-ajuizamento. Nesse caso, inicio e a competencia, nao o ajuizamento.
+    const temBase = combs.some(c => !c.de);
+    const temPeriodoExplicito = combs.some(c => !!c.de);
+    const aplicaPreJudicial = temBase && temPeriodoExplicito;
+
+    const inicio = aplicaPreJudicial
+      ? dataComp  // pre-judicial: conta desde a competencia
+      : (dataComp.getTime() > inicioJuros.getTime() ? dataComp : inicioJuros);
+    if (inicio.getTime() >= dataLiq.getTime()) return 0;
     if (combs.length > 0) {
       return valor.times(this.pctJurosCombinado(inicio, dataLiq, tipo, combs)).div(100).toDP(2).toNumber();
     }
