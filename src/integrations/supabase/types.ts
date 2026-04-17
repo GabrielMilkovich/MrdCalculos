@@ -16,38 +16,38 @@ export type Database = {
     Tables: {
       ai_agent_logs: {
         Row: {
-          agent_name: string
+          agent_name: string | null
           created_at: string
           duration_ms: number | null
           error: string | null
           id: string
           input_summary: Json | null
           output_summary: Json | null
-          run_id: string
+          run_id: string | null
           step: string | null
           tokens_used: number | null
         }
         Insert: {
-          agent_name: string
+          agent_name?: string | null
           created_at?: string
           duration_ms?: number | null
           error?: string | null
           id?: string
           input_summary?: Json | null
           output_summary?: Json | null
-          run_id: string
+          run_id?: string | null
           step?: string | null
           tokens_used?: number | null
         }
         Update: {
-          agent_name?: string
+          agent_name?: string | null
           created_at?: string
           duration_ms?: number | null
           error?: string | null
           id?: string
           input_summary?: Json | null
           output_summary?: Json | null
-          run_id?: string
+          run_id?: string | null
           step?: string | null
           tokens_used?: number | null
         }
@@ -63,73 +63,73 @@ export type Database = {
       }
       ai_audit_findings: {
         Row: {
-          agent_name: string
-          code: string
+          agent_name: string | null
+          code: string | null
           confidence: number | null
           created_at: string
           field: string | null
-          finding_type: string
+          finding_type: string | null
           id: string
           metadata: Json | null
-          module: string
+          module: string | null
           recommended_action: string | null
           requires_human_confirmation: boolean | null
           resolution_note: string | null
           resolved: boolean | null
           resolved_at: string | null
           resolved_by: string | null
-          run_id: string
-          severity: string
+          run_id: string | null
+          severity: string | null
           source_basis: string | null
-          technical_message: string
-          title: string
-          user_message: string
+          technical_message: string | null
+          title: string | null
+          user_message: string | null
         }
         Insert: {
-          agent_name: string
-          code: string
+          agent_name?: string | null
+          code?: string | null
           confidence?: number | null
           created_at?: string
           field?: string | null
-          finding_type: string
+          finding_type?: string | null
           id?: string
           metadata?: Json | null
-          module: string
+          module?: string | null
           recommended_action?: string | null
           requires_human_confirmation?: boolean | null
           resolution_note?: string | null
           resolved?: boolean | null
           resolved_at?: string | null
           resolved_by?: string | null
-          run_id: string
-          severity: string
+          run_id?: string | null
+          severity?: string | null
           source_basis?: string | null
-          technical_message: string
-          title: string
-          user_message: string
+          technical_message?: string | null
+          title?: string | null
+          user_message?: string | null
         }
         Update: {
-          agent_name?: string
-          code?: string
+          agent_name?: string | null
+          code?: string | null
           confidence?: number | null
           created_at?: string
           field?: string | null
-          finding_type?: string
+          finding_type?: string | null
           id?: string
           metadata?: Json | null
-          module?: string
+          module?: string | null
           recommended_action?: string | null
           requires_human_confirmation?: boolean | null
           resolution_note?: string | null
           resolved?: boolean | null
           resolved_at?: string | null
           resolved_by?: string | null
-          run_id?: string
-          severity?: string
+          run_id?: string | null
+          severity?: string | null
           source_basis?: string | null
-          technical_message?: string
-          title?: string
-          user_message?: string
+          technical_message?: string | null
+          title?: string | null
+          user_message?: string | null
         }
         Relationships: [
           {
@@ -144,7 +144,7 @@ export type Database = {
       ai_audit_runs: {
         Row: {
           calculo_id: string | null
-          case_id: string
+          case_id: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
@@ -155,12 +155,12 @@ export type Database = {
           overall_confidence: number | null
           overall_status: string | null
           prompt_version: string | null
-          run_type: string
+          run_type: string | null
           status: string
         }
         Insert: {
           calculo_id?: string | null
-          case_id: string
+          case_id?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -171,12 +171,12 @@ export type Database = {
           overall_confidence?: number | null
           overall_status?: string | null
           prompt_version?: string | null
-          run_type: string
+          run_type?: string | null
           status?: string
         }
         Update: {
           calculo_id?: string | null
-          case_id?: string
+          case_id?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
@@ -187,39 +187,39 @@ export type Database = {
           overall_confidence?: number | null
           overall_status?: string | null
           prompt_version?: string | null
-          run_type?: string
+          run_type?: string | null
           status?: string
         }
         Relationships: []
       }
       ai_canonical_inputs: {
         Row: {
-          case_id: string
+          case_id: string | null
           created_at: string
           id: string
           input_hash: string | null
           input_snapshot: Json
-          run_id: string
+          run_id: string | null
           source_summary: Json | null
           version: number | null
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           created_at?: string
           id?: string
           input_hash?: string | null
           input_snapshot?: Json
-          run_id: string
+          run_id?: string | null
           source_summary?: Json | null
           version?: number | null
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           created_at?: string
           id?: string
           input_hash?: string | null
           input_snapshot?: Json
-          run_id?: string
+          run_id?: string | null
           source_summary?: Json | null
           version?: number | null
         }
@@ -242,10 +242,10 @@ export type Database = {
           field_count: number | null
           id: string
           inferred_count: number | null
-          label: string
-          module: string
+          label: string | null
+          module: string | null
           resolved_count: number | null
-          run_id: string
+          run_id: string | null
           score: number
         }
         Insert: {
@@ -256,10 +256,10 @@ export type Database = {
           field_count?: number | null
           id?: string
           inferred_count?: number | null
-          label: string
-          module: string
+          label?: string | null
+          module?: string | null
           resolved_count?: number | null
-          run_id: string
+          run_id?: string | null
           score?: number
         }
         Update: {
@@ -270,10 +270,10 @@ export type Database = {
           field_count?: number | null
           id?: string
           inferred_count?: number | null
-          label?: string
-          module?: string
+          label?: string | null
+          module?: string | null
           resolved_count?: number | null
-          run_id?: string
+          run_id?: string | null
           score?: number
         }
         Relationships: [
@@ -288,7 +288,7 @@ export type Database = {
       }
       ai_reconciliation_reports: {
         Row: {
-          case_id: string
+          case_id: string | null
           closure_divergences: Json | null
           created_at: string
           delta_bruto: number | null
@@ -303,10 +303,10 @@ export type Database = {
           pje_total_liquido: number | null
           root_causes: Json | null
           rubric_divergences: Json | null
-          run_id: string
+          run_id: string | null
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           closure_divergences?: Json | null
           created_at?: string
           delta_bruto?: number | null
@@ -321,10 +321,10 @@ export type Database = {
           pje_total_liquido?: number | null
           root_causes?: Json | null
           rubric_divergences?: Json | null
-          run_id: string
+          run_id?: string | null
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           closure_divergences?: Json | null
           created_at?: string
           delta_bruto?: number | null
@@ -339,7 +339,7 @@ export type Database = {
           pje_total_liquido?: number | null
           root_causes?: Json | null
           rubric_divergences?: Json | null
-          run_id?: string
+          run_id?: string | null
         }
         Relationships: [
           {
@@ -353,24 +353,24 @@ export type Database = {
       }
       case_briefings: {
         Row: {
-          case_id: string
-          content: string
+          case_id: string | null
+          content: string | null
           created_at: string
           created_by: string | null
           id: string
           updated_at: string
         }
         Insert: {
-          case_id: string
-          content: string
+          case_id?: string | null
+          content?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           updated_at?: string
         }
         Update: {
-          case_id?: string
-          content?: string
+          case_id?: string | null
+          content?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -380,11 +380,11 @@ export type Database = {
       }
       case_controversies: {
         Row: {
-          campo: string
-          case_id: string
+          campo: string | null
+          case_id: string | null
           created_at: string
           created_by: string | null
-          descricao: string
+          descricao: string | null
           document_ids: string[] | null
           fact_ids: string[] | null
           fundamentacao_legal: string | null
@@ -394,16 +394,16 @@ export type Database = {
           prioridade: string | null
           resolvido_em: string | null
           resolvido_por: string | null
-          status: string
+          status: string | null
           updated_at: string
           valor_escolhido: string | null
         }
         Insert: {
-          campo: string
-          case_id: string
+          campo?: string | null
+          case_id?: string | null
           created_at?: string
           created_by?: string | null
-          descricao: string
+          descricao?: string | null
           document_ids?: string[] | null
           fact_ids?: string[] | null
           fundamentacao_legal?: string | null
@@ -413,16 +413,16 @@ export type Database = {
           prioridade?: string | null
           resolvido_em?: string | null
           resolvido_por?: string | null
-          status: string
+          status?: string | null
           updated_at?: string
           valor_escolhido?: string | null
         }
         Update: {
-          campo?: string
-          case_id?: string
+          campo?: string | null
+          case_id?: string | null
           created_at?: string
           created_by?: string | null
-          descricao?: string
+          descricao?: string | null
           document_ids?: string[] | null
           fact_ids?: string[] | null
           fundamentacao_legal?: string | null
@@ -432,7 +432,7 @@ export type Database = {
           prioridade?: string | null
           resolvido_em?: string | null
           resolvido_por?: string | null
-          status?: string
+          status?: string | null
           updated_at?: string
           valor_escolhido?: string | null
         }
@@ -440,42 +440,42 @@ export type Database = {
       }
       case_inputs: {
         Row: {
-          case_id: string
+          case_id: string | null
           created_at: string
           data_fim: string | null
-          data_inicio: string
+          data_inicio: string | null
           id: string
           metadata_json: Json | null
           observacoes: string | null
           quantidade: number | null
           source_document_id: string | null
-          tipo_evento: string
+          tipo_evento: string | null
           valor: number | null
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           created_at?: string
           data_fim?: string | null
-          data_inicio: string
+          data_inicio?: string | null
           id?: string
           metadata_json?: Json | null
           observacoes?: string | null
           quantidade?: number | null
           source_document_id?: string | null
-          tipo_evento: string
+          tipo_evento?: string | null
           valor?: number | null
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           created_at?: string
           data_fim?: string | null
-          data_inicio?: string
+          data_inicio?: string | null
           id?: string
           metadata_json?: Json | null
           observacoes?: string | null
           quantidade?: number | null
           source_document_id?: string | null
-          tipo_evento?: string
+          tipo_evento?: string | null
           valor?: number | null
         }
         Relationships: [
@@ -491,7 +491,7 @@ export type Database = {
       case_outputs: {
         Row: {
           base_calculo: number | null
-          case_id: string
+          case_id: string | null
           created_at: string
           descontos_json: Json | null
           formula_aplicada: string | null
@@ -502,14 +502,14 @@ export type Database = {
           periodo_ref: string | null
           reflexos_json: Json | null
           snapshot_id: string | null
-          valor_bruto: number
+          valor_bruto: number | null
           valor_liquido: number | null
-          verba_codigo: string
+          verba_codigo: string | null
           verba_nome: string | null
         }
         Insert: {
           base_calculo?: number | null
-          case_id: string
+          case_id?: string | null
           created_at?: string
           descontos_json?: Json | null
           formula_aplicada?: string | null
@@ -520,14 +520,14 @@ export type Database = {
           periodo_ref?: string | null
           reflexos_json?: Json | null
           snapshot_id?: string | null
-          valor_bruto: number
+          valor_bruto?: number | null
           valor_liquido?: number | null
-          verba_codigo: string
+          verba_codigo?: string | null
           verba_nome?: string | null
         }
         Update: {
           base_calculo?: number | null
-          case_id?: string
+          case_id?: string | null
           created_at?: string
           descontos_json?: Json | null
           formula_aplicada?: string | null
@@ -538,9 +538,9 @@ export type Database = {
           periodo_ref?: string | null
           reflexos_json?: Json | null
           snapshot_id?: string | null
-          valor_bruto?: number
+          valor_bruto?: number | null
           valor_liquido?: number | null
-          verba_codigo?: string
+          verba_codigo?: string | null
           verba_nome?: string | null
         }
         Relationships: []
@@ -549,10 +549,10 @@ export type Database = {
         Row: {
           analisado_em: string
           analisado_por: string | null
-          case_id: string
+          case_id: string | null
           fatores: Json
           id: string
-          nivel_risco: string
+          nivel_risco: string | null
           recomendacoes: string[] | null
           resumo: string | null
           score_risco: number | null
@@ -561,10 +561,10 @@ export type Database = {
         Insert: {
           analisado_em?: string
           analisado_por?: string | null
-          case_id: string
+          case_id?: string | null
           fatores?: Json
           id?: string
-          nivel_risco: string
+          nivel_risco?: string | null
           recomendacoes?: string[] | null
           resumo?: string | null
           score_risco?: number | null
@@ -573,10 +573,10 @@ export type Database = {
         Update: {
           analisado_em?: string
           analisado_por?: string | null
-          case_id?: string
+          case_id?: string | null
           fatores?: Json
           id?: string
-          nivel_risco?: string
+          nivel_risco?: string | null
           recomendacoes?: string[] | null
           resumo?: string | null
           score_risco?: number | null
@@ -587,7 +587,7 @@ export type Database = {
       cases: {
         Row: {
           atualizado_em: string | null
-          cliente: string
+          cliente: string | null
           criado_em: string | null
           criado_por: string | null
           id: string
@@ -598,7 +598,7 @@ export type Database = {
         }
         Insert: {
           atualizado_em?: string | null
-          cliente: string
+          cliente?: string | null
           criado_em?: string | null
           criado_por?: string | null
           id?: string
@@ -609,7 +609,7 @@ export type Database = {
         }
         Update: {
           atualizado_em?: string | null
-          cliente?: string
+          cliente?: string | null
           criado_em?: string | null
           criado_por?: string | null
           id?: string
@@ -622,39 +622,39 @@ export type Database = {
       }
       document_chunks: {
         Row: {
-          case_id: string
+          case_id: string | null
           chunk_index: number
-          content: string
+          content: string | null
           content_hash: string | null
           created_at: string
           doc_type: string | null
-          document_id: string
+          document_id: string | null
           embedding: string | null
           id: string
           metadata: Json
           page_number: number | null
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           chunk_index?: number
-          content: string
+          content?: string | null
           content_hash?: string | null
           created_at?: string
           doc_type?: string | null
-          document_id: string
+          document_id?: string | null
           embedding?: string | null
           id?: string
           metadata?: Json
           page_number?: number | null
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           chunk_index?: number
-          content?: string
+          content?: string | null
           content_hash?: string | null
           created_at?: string
           doc_type?: string | null
-          document_id?: string
+          document_id?: string | null
           embedding?: string | null
           id?: string
           metadata?: Json
@@ -672,9 +672,9 @@ export type Database = {
       }
       document_pipeline: {
         Row: {
-          case_id: string
+          case_id: string | null
           created_at: string
-          document_id: string
+          document_id: string | null
           empresa_detectada: string | null
           hash: string | null
           id: string
@@ -687,13 +687,13 @@ export type Database = {
           template_detectado: string | null
           template_version: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
           validation_warnings: Json | null
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           created_at?: string
-          document_id: string
+          document_id?: string | null
           empresa_detectada?: string | null
           hash?: string | null
           id?: string
@@ -706,13 +706,13 @@ export type Database = {
           template_detectado?: string | null
           template_version?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
           validation_warnings?: Json | null
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           created_at?: string
-          document_id?: string
+          document_id?: string | null
           empresa_detectada?: string | null
           hash?: string | null
           id?: string
@@ -725,7 +725,7 @@ export type Database = {
           template_detectado?: string | null
           template_version?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           validation_warnings?: Json | null
         }
         Relationships: [
@@ -740,10 +740,10 @@ export type Database = {
       }
       document_queue: {
         Row: {
-          case_id: string
+          case_id: string | null
           completed_at: string | null
           created_at: string | null
-          document_id: string
+          document_id: string | null
           error_message: string | null
           id: string
           metadata: Json | null
@@ -753,10 +753,10 @@ export type Database = {
           status: string | null
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           completed_at?: string | null
           created_at?: string | null
-          document_id: string
+          document_id?: string | null
           error_message?: string | null
           id?: string
           metadata?: Json | null
@@ -766,10 +766,10 @@ export type Database = {
           status?: string | null
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           completed_at?: string | null
           created_at?: string | null
-          document_id?: string
+          document_id?: string | null
           error_message?: string | null
           id?: string
           metadata?: Json | null
@@ -791,7 +791,7 @@ export type Database = {
       documents: {
         Row: {
           arquivo_url: string | null
-          case_id: string
+          case_id: string | null
           competencia: string | null
           error_message: string | null
           file_name: string | null
@@ -826,7 +826,7 @@ export type Database = {
         }
         Insert: {
           arquivo_url?: string | null
-          case_id: string
+          case_id?: string | null
           competencia?: string | null
           error_message?: string | null
           file_name?: string | null
@@ -861,7 +861,7 @@ export type Database = {
         }
         Update: {
           arquivo_url?: string | null
-          case_id?: string
+          case_id?: string | null
           competencia?: string | null
           error_message?: string | null
           file_name?: string | null
@@ -898,9 +898,9 @@ export type Database = {
       }
       employment_contracts: {
         Row: {
-          case_id: string
+          case_id: string | null
           created_at: string
-          data_admissao: string
+          data_admissao: string | null
           data_demissao: string | null
           funcao: string | null
           historico_salarial: Json | null
@@ -914,9 +914,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           created_at?: string
-          data_admissao: string
+          data_admissao?: string | null
           data_demissao?: string | null
           funcao?: string | null
           historico_salarial?: Json | null
@@ -930,9 +930,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           created_at?: string
-          data_admissao?: string
+          data_admissao?: string | null
           data_demissao?: string | null
           funcao?: string | null
           historico_salarial?: Json | null
@@ -950,15 +950,15 @@ export type Database = {
       extracao_item: {
         Row: {
           bbox: Json | null
-          case_id: string
+          case_id: string | null
           competencia: string | null
           confidence: number | null
           created_at: string
           evidence_text: string | null
-          field_key: string
+          field_key: string | null
           id: string
           page: number | null
-          pipeline_id: string
+          pipeline_id: string | null
           review_note: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -970,15 +970,15 @@ export type Database = {
         }
         Insert: {
           bbox?: Json | null
-          case_id: string
+          case_id?: string | null
           competencia?: string | null
           confidence?: number | null
           created_at?: string
           evidence_text?: string | null
-          field_key: string
+          field_key?: string | null
           id?: string
           page?: number | null
-          pipeline_id: string
+          pipeline_id?: string | null
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -990,15 +990,15 @@ export type Database = {
         }
         Update: {
           bbox?: Json | null
-          case_id?: string
+          case_id?: string | null
           competencia?: string | null
           confidence?: number | null
           created_at?: string
           evidence_text?: string | null
-          field_key?: string
+          field_key?: string | null
           id?: string
           page?: number | null
-          pipeline_id?: string
+          pipeline_id?: string | null
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1027,53 +1027,53 @@ export type Database = {
       }
       extraction_tasks: {
         Row: {
-          case_id: string
+          case_id: string | null
           chunks_analyzed: number | null
           created_at: string
           error_message: string | null
           filters: Json
           id: string
-          owner_user_id: string
+          owner_user_id: string | null
           processing_time_ms: number | null
-          query: string
+          query: string | null
           result_json: Json | null
           similarity_threshold: number | null
           status: string
-          task_type: string
+          task_type: string | null
           top_k: number
           updated_at: string
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           chunks_analyzed?: number | null
           created_at?: string
           error_message?: string | null
           filters?: Json
           id?: string
-          owner_user_id: string
+          owner_user_id?: string | null
           processing_time_ms?: number | null
-          query: string
+          query?: string | null
           result_json?: Json | null
           similarity_threshold?: number | null
           status?: string
-          task_type: string
+          task_type?: string | null
           top_k?: number
           updated_at?: string
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           chunks_analyzed?: number | null
           created_at?: string
           error_message?: string | null
           filters?: Json
           id?: string
-          owner_user_id?: string
+          owner_user_id?: string | null
           processing_time_ms?: number | null
-          query?: string
+          query?: string | null
           result_json?: Json | null
           similarity_threshold?: number | null
           status?: string
-          task_type?: string
+          task_type?: string | null
           top_k?: number
           updated_at?: string
         }
@@ -1081,43 +1081,43 @@ export type Database = {
       }
       extractions: {
         Row: {
-          campo: string
-          case_id: string
+          campo: string | null
+          case_id: string | null
           confianca: number | null
           created_at: string
-          document_id: string
+          document_id: string | null
           id: string
           metodo: string | null
           origem: Json
           status: string | null
           tipo_valor: string
-          valor_proposto: string
+          valor_proposto: string | null
         }
         Insert: {
-          campo: string
-          case_id: string
+          campo?: string | null
+          case_id?: string | null
           confianca?: number | null
           created_at?: string
-          document_id: string
+          document_id?: string | null
           id?: string
           metodo?: string | null
           origem?: Json
           status?: string | null
           tipo_valor?: string
-          valor_proposto: string
+          valor_proposto?: string | null
         }
         Update: {
-          campo?: string
-          case_id?: string
+          campo?: string | null
+          case_id?: string | null
           confianca?: number | null
           created_at?: string
-          document_id?: string
+          document_id?: string | null
           id?: string
           metodo?: string | null
           origem?: Json
           status?: string | null
           tipo_valor?: string
-          valor_proposto?: string
+          valor_proposto?: string | null
         }
         Relationships: [
           {
@@ -1131,9 +1131,9 @@ export type Database = {
       }
       fonte_conflito: {
         Row: {
-          campo: string
-          case_id: string
-          competencia: string
+          campo: string | null
+          case_id: string | null
+          competencia: string | null
           created_at: string
           fonte_a_doc_id: string | null
           fonte_b_doc_id: string | null
@@ -1147,9 +1147,9 @@ export type Database = {
           valor_fonte_b: string | null
         }
         Insert: {
-          campo: string
-          case_id: string
-          competencia: string
+          campo?: string | null
+          case_id?: string | null
+          competencia?: string | null
           created_at?: string
           fonte_a_doc_id?: string | null
           fonte_b_doc_id?: string | null
@@ -1163,9 +1163,9 @@ export type Database = {
           valor_fonte_b?: string | null
         }
         Update: {
-          campo?: string
-          case_id?: string
-          competencia?: string
+          campo?: string | null
+          case_id?: string | null
+          competencia?: string | null
           created_at?: string
           fonte_a_doc_id?: string | null
           fonte_b_doc_id?: string | null
@@ -1197,48 +1197,48 @@ export type Database = {
       }
       inconsistency_flags: {
         Row: {
-          case_id: string
-          categoria: string
+          case_id: string | null
+          categoria: string | null
           competencia: string | null
           created_at: string
-          descricao: string
+          descricao: string | null
           id: string
           resolvido: boolean
           resolvido_em: string | null
           resolvido_por: string | null
           rubric_code: string | null
           scenario_id: string | null
-          severidade: string
+          severidade: string | null
           sugestao: string | null
         }
         Insert: {
-          case_id: string
-          categoria: string
+          case_id?: string | null
+          categoria?: string | null
           competencia?: string | null
           created_at?: string
-          descricao: string
+          descricao?: string | null
           id?: string
           resolvido?: boolean
           resolvido_em?: string | null
           resolvido_por?: string | null
           rubric_code?: string | null
           scenario_id?: string | null
-          severidade: string
+          severidade?: string | null
           sugestao?: string | null
         }
         Update: {
-          case_id?: string
-          categoria?: string
+          case_id?: string | null
+          categoria?: string | null
           competencia?: string | null
           created_at?: string
-          descricao?: string
+          descricao?: string | null
           id?: string
           resolvido?: boolean
           resolvido_em?: string | null
           resolvido_por?: string | null
           rubric_code?: string | null
           scenario_id?: string | null
-          severidade?: string
+          severidade?: string | null
           sugestao?: string | null
         }
         Relationships: []
@@ -1247,7 +1247,7 @@ export type Database = {
         Row: {
           created_at: string
           descricao: string
-          fonte: string
+          fonte: string | null
           id: string
           observacoes: string | null
           parametros: Json
@@ -1256,13 +1256,13 @@ export type Database = {
           prioridade: number
           rubric_code: string | null
           substitui_rule_id: string | null
-          tipo: string
-          title_version_id: string
+          tipo: string | null
+          title_version_id: string | null
         }
         Insert: {
           created_at?: string
           descricao?: string
-          fonte: string
+          fonte?: string | null
           id?: string
           observacoes?: string | null
           parametros?: Json
@@ -1271,13 +1271,13 @@ export type Database = {
           prioridade?: number
           rubric_code?: string | null
           substitui_rule_id?: string | null
-          tipo: string
-          title_version_id: string
+          tipo?: string | null
+          title_version_id?: string | null
         }
         Update: {
           created_at?: string
           descricao?: string
-          fonte?: string
+          fonte?: string | null
           id?: string
           observacoes?: string | null
           parametros?: Json
@@ -1286,8 +1286,8 @@ export type Database = {
           prioridade?: number
           rubric_code?: string | null
           substitui_rule_id?: string | null
-          tipo?: string
-          title_version_id?: string
+          tipo?: string | null
+          title_version_id?: string | null
         }
         Relationships: [
           {
@@ -1308,36 +1308,36 @@ export type Database = {
       }
       judicial_title_versions: {
         Row: {
-          case_id: string
+          case_id: string | null
           created_at: string
           created_by: string | null
-          data_decisao: string
+          data_decisao: string | null
           descricao: string
           fonte_documento_id: string | null
           id: string
-          tipo: string
+          tipo: string | null
           versao: number
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           created_at?: string
           created_by?: string | null
-          data_decisao: string
+          data_decisao?: string | null
           descricao?: string
           fonte_documento_id?: string | null
           id?: string
-          tipo: string
+          tipo?: string | null
           versao?: number
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           created_at?: string
           created_by?: string | null
-          data_decisao?: string
+          data_decisao?: string | null
           descricao?: string
           fonte_documento_id?: string | null
           id?: string
-          tipo?: string
+          tipo?: string | null
           versao?: number
         }
         Relationships: [
@@ -1354,7 +1354,7 @@ export type Database = {
         Row: {
           ativo: boolean | null
           categoria: string | null
-          codigo: string
+          codigo: string | null
           created_at: string
           descricao: string | null
           flag_controversia: boolean | null
@@ -1369,7 +1369,7 @@ export type Database = {
           source_id: string | null
           status: string
           tese_opcoes: Json | null
-          titulo: string
+          titulo: string | null
           updated_at: string
           versao: number | null
           vigencia_fim: string | null
@@ -1378,7 +1378,7 @@ export type Database = {
         Insert: {
           ativo?: boolean | null
           categoria?: string | null
-          codigo: string
+          codigo?: string | null
           created_at?: string
           descricao?: string | null
           flag_controversia?: boolean | null
@@ -1393,7 +1393,7 @@ export type Database = {
           source_id?: string | null
           status?: string
           tese_opcoes?: Json | null
-          titulo: string
+          titulo?: string | null
           updated_at?: string
           versao?: number | null
           vigencia_fim?: string | null
@@ -1402,7 +1402,7 @@ export type Database = {
         Update: {
           ativo?: boolean | null
           categoria?: string | null
-          codigo?: string
+          codigo?: string | null
           created_at?: string
           descricao?: string | null
           flag_controversia?: boolean | null
@@ -1417,7 +1417,7 @@ export type Database = {
           source_id?: string | null
           status?: string
           tese_opcoes?: Json | null
-          titulo?: string
+          titulo?: string | null
           updated_at?: string
           versao?: number | null
           vigencia_fim?: string | null
@@ -1438,13 +1438,13 @@ export type Database = {
           ativo: boolean | null
           created_at: string
           id: string
-          nome: string
+          nome: string | null
           notas: string | null
           observado_em: string | null
-          orgao: string
+          orgao: string | null
           publicado_em: string | null
           status: string
-          tipo: string
+          tipo: string | null
           updated_at: string
           url: string | null
           vigencia_fim: string | null
@@ -1454,13 +1454,13 @@ export type Database = {
           ativo?: boolean | null
           created_at?: string
           id?: string
-          nome: string
+          nome?: string | null
           notas?: string | null
           observado_em?: string | null
-          orgao: string
+          orgao?: string | null
           publicado_em?: string | null
           status?: string
-          tipo: string
+          tipo?: string | null
           updated_at?: string
           url?: string | null
           vigencia_fim?: string | null
@@ -1470,13 +1470,13 @@ export type Database = {
           ativo?: boolean | null
           created_at?: string
           id?: string
-          nome?: string
+          nome?: string | null
           notas?: string | null
           observado_em?: string | null
-          orgao?: string
+          orgao?: string | null
           publicado_em?: string | null
           status?: string
-          tipo?: string
+          tipo?: string | null
           updated_at?: string
           url?: string | null
           vigencia_fim?: string | null
@@ -1490,7 +1490,7 @@ export type Database = {
           blockers: Json | null
           calculo_id: string | null
           canonical_input_snapshot: Json | null
-          case_id: string
+          case_id: string | null
           completed_at: string | null
           confidence_score: number | null
           confidence_status: string | null
@@ -1525,7 +1525,7 @@ export type Database = {
           blockers?: Json | null
           calculo_id?: string | null
           canonical_input_snapshot?: Json | null
-          case_id: string
+          case_id?: string | null
           completed_at?: string | null
           confidence_score?: number | null
           confidence_status?: string | null
@@ -1560,7 +1560,7 @@ export type Database = {
           blockers?: Json | null
           calculo_id?: string | null
           canonical_input_snapshot?: Json | null
-          case_id?: string
+          case_id?: string | null
           completed_at?: string | null
           confidence_score?: number | null
           confidence_status?: string | null
@@ -1609,36 +1609,36 @@ export type Database = {
       }
       parties: {
         Row: {
-          case_id: string
+          case_id: string | null
           contato: Json | null
           created_at: string
           documento: string | null
           documento_tipo: string | null
           id: string
-          nome: string
-          tipo: Database["public"]["Enums"]["party_type"]
+          nome: string | null
+          tipo: Database["public"]["Enums"]["party_type"] | null
           updated_at: string
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           contato?: Json | null
           created_at?: string
           documento?: string | null
           documento_tipo?: string | null
           id?: string
-          nome: string
-          tipo: Database["public"]["Enums"]["party_type"]
+          nome?: string | null
+          tipo?: Database["public"]["Enums"]["party_type"] | null
           updated_at?: string
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           contato?: Json | null
           created_at?: string
           documento?: string | null
           documento_tipo?: string | null
           id?: string
-          nome?: string
-          tipo?: Database["public"]["Enums"]["party_type"]
+          nome?: string | null
+          tipo?: Database["public"]["Enums"]["party_type"] | null
           updated_at?: string
         }
         Relationships: []
@@ -1652,8 +1652,8 @@ export type Database = {
           estrutura: Json
           id: string
           is_default: boolean | null
-          nome: string
-          tipo: string
+          nome: string | null
+          tipo: string | null
           variaveis: Json | null
         }
         Insert: {
@@ -1664,8 +1664,8 @@ export type Database = {
           estrutura?: Json
           id: string
           is_default?: boolean | null
-          nome: string
-          tipo: string
+          nome?: string | null
+          tipo?: string | null
           variaveis?: Json | null
         }
         Update: {
@@ -1676,8 +1676,8 @@ export type Database = {
           estrutura?: Json
           id?: string
           is_default?: boolean | null
-          nome?: string
-          tipo?: string
+          nome?: string | null
+          tipo?: string | null
           variaveis?: Json | null
         }
         Relationships: []
@@ -1686,7 +1686,7 @@ export type Database = {
         Row: {
           ai_model_used: string | null
           calculation_run_id: string | null
-          case_id: string
+          case_id: string | null
           conteudo_completo: string | null
           created_at: string
           created_by: string | null
@@ -1710,7 +1710,7 @@ export type Database = {
         Insert: {
           ai_model_used?: string | null
           calculation_run_id?: string | null
-          case_id: string
+          case_id?: string | null
           conteudo_completo?: string | null
           created_at?: string
           created_by?: string | null
@@ -1734,7 +1734,7 @@ export type Database = {
         Update: {
           ai_model_used?: string | null
           calculation_run_id?: string | null
-          case_id?: string
+          case_id?: string | null
           conteudo_completo?: string | null
           created_at?: string
           created_by?: string | null
@@ -1761,8 +1761,8 @@ export type Database = {
         Row: {
           arquivo_hash: string | null
           arquivo_nome: string | null
-          calculo_id: string
-          case_id: string
+          calculo_id: string | null
+          case_id: string | null
           completed_at: string | null
           created_at: string | null
           historicos_importados: number | null
@@ -1770,15 +1770,15 @@ export type Database = {
           reflexos_importados: number | null
           resultado: Json | null
           status: string | null
-          user_id: string
+          user_id: string | null
           verbas_importadas: number | null
           warnings: Json | null
         }
         Insert: {
           arquivo_hash?: string | null
           arquivo_nome?: string | null
-          calculo_id: string
-          case_id: string
+          calculo_id?: string | null
+          case_id?: string | null
           completed_at?: string | null
           created_at?: string | null
           historicos_importados?: number | null
@@ -1786,15 +1786,15 @@ export type Database = {
           reflexos_importados?: number | null
           resultado?: Json | null
           status?: string | null
-          user_id: string
+          user_id?: string | null
           verbas_importadas?: number | null
           warnings?: Json | null
         }
         Update: {
           arquivo_hash?: string | null
           arquivo_nome?: string | null
-          calculo_id?: string
-          case_id?: string
+          calculo_id?: string | null
+          case_id?: string | null
           completed_at?: string | null
           created_at?: string | null
           historicos_importados?: number | null
@@ -1802,7 +1802,7 @@ export type Database = {
           reflexos_importados?: number | null
           resultado?: Json | null
           status?: string | null
-          user_id?: string
+          user_id?: string | null
           verbas_importadas?: number | null
           warnings?: Json | null
         }
@@ -1811,42 +1811,42 @@ export type Database = {
       pjecalc_advogados: {
         Row: {
           ativo: boolean | null
-          calculo_id: string
+          calculo_id: string | null
           cpf: string | null
           created_at: string | null
           email: string | null
           id: string
-          nome: string
-          oab: string
-          oab_uf: string
+          nome: string | null
+          oab: string | null
+          oab_uf: string | null
           participante_id: string | null
           representa: string | null
           telefone: string | null
         }
         Insert: {
           ativo?: boolean | null
-          calculo_id: string
+          calculo_id?: string | null
           cpf?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
-          nome: string
-          oab: string
-          oab_uf: string
+          nome?: string | null
+          oab?: string | null
+          oab_uf?: string | null
           participante_id?: string | null
           representa?: string | null
           telefone?: string | null
         }
         Update: {
           ativo?: boolean | null
-          calculo_id?: string
+          calculo_id?: string | null
           cpf?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
-          nome?: string
-          oab?: string
-          oab_uf?: string
+          nome?: string | null
+          oab?: string | null
+          oab_uf?: string | null
           participante_id?: string | null
           representa?: string | null
           telefone?: string | null
@@ -1870,9 +1870,9 @@ export type Database = {
       }
       pjecalc_apuracao_diaria: {
         Row: {
-          calculo_id: string
+          calculo_id: string | null
           created_at: string | null
-          data: string
+          data: string | null
           documento_id: string | null
           feriado_nome: string | null
           frequencia_str: string | null
@@ -1901,9 +1901,9 @@ export type Database = {
           pagina: number | null
         }
         Insert: {
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string | null
-          data: string
+          data?: string | null
           documento_id?: string | null
           feriado_nome?: string | null
           frequencia_str?: string | null
@@ -1932,9 +1932,9 @@ export type Database = {
           pagina?: number | null
         }
         Update: {
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string | null
-          data?: string
+          data?: string | null
           documento_id?: string | null
           feriado_nome?: string | null
           frequencia_str?: string | null
@@ -1972,7 +1972,7 @@ export type Database = {
           a_partir_de_outro_indice: string | null
           aplicar_multa_salarios_devidos_inss: boolean | null
           aplicar_multa_salarios_pagos_inss: boolean | null
-          calculo_id: string
+          calculo_id: string | null
           combinacoes_indice: string | null
           combinacoes_juros: string | null
           combinar_outro_indice: boolean | null
@@ -1999,7 +1999,7 @@ export type Database = {
           regimes: Json
           salario_devido_forma_aplicacao: string | null
           salario_pago_forma_aplicacao: string | null
-          tipo: string
+          tipo: string | null
         }
         Insert: {
           a_partir_de_lei_11941?: string | null
@@ -2008,7 +2008,7 @@ export type Database = {
           a_partir_de_outro_indice?: string | null
           aplicar_multa_salarios_devidos_inss?: boolean | null
           aplicar_multa_salarios_pagos_inss?: boolean | null
-          calculo_id: string
+          calculo_id?: string | null
           combinacoes_indice?: string | null
           combinacoes_juros?: string | null
           combinar_outro_indice?: boolean | null
@@ -2035,7 +2035,7 @@ export type Database = {
           regimes?: Json
           salario_devido_forma_aplicacao?: string | null
           salario_pago_forma_aplicacao?: string | null
-          tipo: string
+          tipo?: string | null
         }
         Update: {
           a_partir_de_lei_11941?: string | null
@@ -2044,7 +2044,7 @@ export type Database = {
           a_partir_de_outro_indice?: string | null
           aplicar_multa_salarios_devidos_inss?: boolean | null
           aplicar_multa_salarios_pagos_inss?: boolean | null
-          calculo_id?: string
+          calculo_id?: string | null
           combinacoes_indice?: string | null
           combinacoes_juros?: string | null
           combinar_outro_indice?: boolean | null
@@ -2071,46 +2071,46 @@ export type Database = {
           regimes?: Json
           salario_devido_forma_aplicacao?: string | null
           salario_pago_forma_aplicacao?: string | null
-          tipo?: string
+          tipo?: string | null
         }
         Relationships: []
       }
       pjecalc_audit_log: {
         Row: {
-          acao: string
+          acao: string | null
           campo: string | null
-          case_id: string
+          case_id: string | null
           created_at: string | null
           id: string
           justificativa: string | null
           metadata: Json | null
-          modulo: string
+          modulo: string | null
           user_id: string | null
           valor_anterior: string | null
           valor_novo: string | null
         }
         Insert: {
-          acao: string
+          acao?: string | null
           campo?: string | null
-          case_id: string
+          case_id?: string | null
           created_at?: string | null
           id?: string
           justificativa?: string | null
           metadata?: Json | null
-          modulo: string
+          modulo?: string | null
           user_id?: string | null
           valor_anterior?: string | null
           valor_novo?: string | null
         }
         Update: {
-          acao?: string
+          acao?: string | null
           campo?: string | null
-          case_id?: string
+          case_id?: string | null
           created_at?: string | null
           id?: string
           justificativa?: string | null
           metadata?: Json | null
-          modulo?: string
+          modulo?: string | null
           user_id?: string | null
           valor_anterior?: string | null
           valor_novo?: string | null
@@ -2136,13 +2136,13 @@ export type Database = {
           cs_sobre_salarios_pagos: boolean | null
           custas_limite: number | null
           custas_percentual: number | null
-          data_admissao: string
+          data_admissao: string | null
           data_ajuizamento: string | null
           data_citacao: string | null
           data_demissao: string | null
           data_fim_calculo: string | null
           data_inicio_calculo: string | null
-          data_liquidacao: string
+          data_liquidacao: string | null
           data_prescricao_quinquenal: string | null
           data_ultima_atualizacao: string | null
           dia_fechamento: number | null
@@ -2191,7 +2191,7 @@ export type Database = {
           tribunal: string | null
           uf: string | null
           updated_at: string | null
-          user_id: string
+          user_id: string | null
           validado: boolean | null
           valor_maior_remuneracao: number | null
           valor_ultima_remuneracao: number | null
@@ -2218,13 +2218,13 @@ export type Database = {
           cs_sobre_salarios_pagos?: boolean | null
           custas_limite?: number | null
           custas_percentual?: number | null
-          data_admissao: string
+          data_admissao?: string | null
           data_ajuizamento?: string | null
           data_citacao?: string | null
           data_demissao?: string | null
           data_fim_calculo?: string | null
           data_inicio_calculo?: string | null
-          data_liquidacao: string
+          data_liquidacao?: string | null
           data_prescricao_quinquenal?: string | null
           data_ultima_atualizacao?: string | null
           dia_fechamento?: number | null
@@ -2273,7 +2273,7 @@ export type Database = {
           tribunal?: string | null
           uf?: string | null
           updated_at?: string | null
-          user_id: string
+          user_id?: string | null
           validado?: boolean | null
           valor_maior_remuneracao?: number | null
           valor_ultima_remuneracao?: number | null
@@ -2300,13 +2300,13 @@ export type Database = {
           cs_sobre_salarios_pagos?: boolean | null
           custas_limite?: number | null
           custas_percentual?: number | null
-          data_admissao?: string
+          data_admissao?: string | null
           data_ajuizamento?: string | null
           data_citacao?: string | null
           data_demissao?: string | null
           data_fim_calculo?: string | null
           data_inicio_calculo?: string | null
-          data_liquidacao?: string
+          data_liquidacao?: string | null
           data_prescricao_quinquenal?: string | null
           data_ultima_atualizacao?: string | null
           dia_fechamento?: number | null
@@ -2355,7 +2355,7 @@ export type Database = {
           tribunal?: string | null
           uf?: string | null
           updated_at?: string | null
-          user_id?: string
+          user_id?: string | null
           validado?: boolean | null
           valor_maior_remuneracao?: number | null
           valor_ultima_remuneracao?: number | null
@@ -2376,7 +2376,7 @@ export type Database = {
       }
       pjecalc_cnae_aliquotas: {
         Row: {
-          cnae: string
+          cnae: string | null
           created_at: string | null
           descricao: string | null
           fap: number | null
@@ -2384,10 +2384,10 @@ export type Database = {
           sat_rat: number
           terceiros: number
           vigencia_fim: string | null
-          vigencia_inicio: string
+          vigencia_inicio: string | null
         }
         Insert: {
-          cnae: string
+          cnae?: string | null
           created_at?: string | null
           descricao?: string | null
           fap?: number | null
@@ -2395,10 +2395,10 @@ export type Database = {
           sat_rat?: number
           terceiros?: number
           vigencia_fim?: string | null
-          vigencia_inicio: string
+          vigencia_inicio?: string | null
         }
         Update: {
-          cnae?: string
+          cnae?: string | null
           created_at?: string | null
           descricao?: string | null
           fap?: number | null
@@ -2406,47 +2406,47 @@ export type Database = {
           sat_rat?: number
           terceiros?: number
           vigencia_fim?: string | null
-          vigencia_inicio?: string
+          vigencia_inicio?: string | null
         }
         Relationships: []
       }
       pjecalc_contribuicao_social: {
         Row: {
-          aliquota: number
-          competencia: string
+          aliquota: number | null
+          competencia: string | null
           created_at: string
           faixa: number
           id: string
           teto_beneficio: number | null
           teto_maximo: number | null
           tipo: string
-          valor_final: number
+          valor_final: number | null
           valor_inicial: number
           version_id: string | null
         }
         Insert: {
-          aliquota: number
-          competencia: string
+          aliquota?: number | null
+          competencia?: string | null
           created_at?: string
           faixa?: number
           id?: string
           teto_beneficio?: number | null
           teto_maximo?: number | null
           tipo?: string
-          valor_final: number
+          valor_final?: number | null
           valor_inicial?: number
           version_id?: string | null
         }
         Update: {
-          aliquota?: number
-          competencia?: string
+          aliquota?: number | null
+          competencia?: string | null
           created_at?: string
           faixa?: number
           id?: string
           teto_beneficio?: number | null
           teto_maximo?: number | null
           tipo?: string
-          valor_final?: number
+          valor_final?: number | null
           valor_inicial?: number
           version_id?: string | null
         }
@@ -2463,32 +2463,32 @@ export type Database = {
       pjecalc_correcao_monetaria: {
         Row: {
           acumulado: number | null
-          competencia: string
+          competencia: string | null
           created_at: string
           fonte: string | null
           id: string
-          indice: string
-          valor: number
+          indice: string | null
+          valor: number | null
           version_id: string | null
         }
         Insert: {
           acumulado?: number | null
-          competencia: string
+          competencia?: string | null
           created_at?: string
           fonte?: string | null
           id?: string
-          indice: string
-          valor: number
+          indice?: string | null
+          valor?: number | null
           version_id?: string | null
         }
         Update: {
           acumulado?: number | null
-          competencia?: string
+          competencia?: string | null
           created_at?: string
           fonte?: string | null
           id?: string
-          indice?: string
-          valor?: number
+          indice?: string | null
+          valor?: number | null
           version_id?: string | null
         }
         Relationships: [
@@ -2505,7 +2505,7 @@ export type Database = {
         Row: {
           ativo: boolean | null
           base: string | null
-          calculo_id: string
+          calculo_id: string | null
           created_at: string | null
           data_pagamento: string | null
           descricao: string | null
@@ -2515,7 +2515,7 @@ export type Database = {
           ordem: number | null
           percentual: number | null
           responsavel: string | null
-          tipo: string
+          tipo: string | null
           valor_fixo: number | null
           valor_informado: number | null
           valor_maximo: number | null
@@ -2525,7 +2525,7 @@ export type Database = {
         Insert: {
           ativo?: boolean | null
           base?: string | null
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string | null
           data_pagamento?: string | null
           descricao?: string | null
@@ -2535,7 +2535,7 @@ export type Database = {
           ordem?: number | null
           percentual?: number | null
           responsavel?: string | null
-          tipo: string
+          tipo?: string | null
           valor_fixo?: number | null
           valor_informado?: number | null
           valor_maximo?: number | null
@@ -2545,7 +2545,7 @@ export type Database = {
         Update: {
           ativo?: boolean | null
           base?: string | null
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string | null
           data_pagamento?: string | null
           descricao?: string | null
@@ -2555,7 +2555,7 @@ export type Database = {
           ordem?: number | null
           percentual?: number | null
           responsavel?: string | null
-          tipo?: string
+          tipo?: string | null
           valor_fixo?: number | null
           valor_informado?: number | null
           valor_maximo?: number | null
@@ -2581,7 +2581,7 @@ export type Database = {
           teto_custas_autos: number | null
           uf: string | null
           vigencia_fim: string | null
-          vigencia_inicio: string
+          vigencia_inicio: string | null
         }
         Insert: {
           created_at?: string | null
@@ -2591,7 +2591,7 @@ export type Database = {
           teto_custas_autos?: number | null
           uf?: string | null
           vigencia_fim?: string | null
-          vigencia_inicio: string
+          vigencia_inicio?: string | null
         }
         Update: {
           created_at?: string | null
@@ -2601,17 +2601,17 @@ export type Database = {
           teto_custas_autos?: number | null
           uf?: string | null
           vigencia_fim?: string | null
-          vigencia_inicio?: string
+          vigencia_inicio?: string | null
         }
         Relationships: []
       }
       pjecalc_evento_intervalo: {
         Row: {
-          calculo_id: string
+          calculo_id: string | null
           confianca: number | null
           created_at: string | null
-          data_fim: string
-          data_inicio: string
+          data_fim: string | null
+          data_inicio: string | null
           documento_id: string | null
           ferias_abono: boolean | null
           ferias_aquisitivo_fim: string | null
@@ -2632,14 +2632,14 @@ export type Database = {
           observacoes: string | null
           pagina: number | null
           status_revisao: string | null
-          tipo: string
+          tipo: string | null
         }
         Insert: {
-          calculo_id: string
+          calculo_id?: string | null
           confianca?: number | null
           created_at?: string | null
-          data_fim: string
-          data_inicio: string
+          data_fim?: string | null
+          data_inicio?: string | null
           documento_id?: string | null
           ferias_abono?: boolean | null
           ferias_aquisitivo_fim?: string | null
@@ -2660,14 +2660,14 @@ export type Database = {
           observacoes?: string | null
           pagina?: number | null
           status_revisao?: string | null
-          tipo: string
+          tipo?: string | null
         }
         Update: {
-          calculo_id?: string
+          calculo_id?: string | null
           confianca?: number | null
           created_at?: string | null
-          data_fim?: string
-          data_inicio?: string
+          data_fim?: string | null
+          data_inicio?: string | null
           documento_id?: string | null
           ferias_abono?: boolean | null
           ferias_aquisitivo_fim?: string | null
@@ -2688,43 +2688,43 @@ export type Database = {
           observacoes?: string | null
           pagina?: number | null
           status_revisao?: string | null
-          tipo?: string
+          tipo?: string | null
         }
         Relationships: []
       }
       pjecalc_excecao_juros: {
         Row: {
-          calculo_id: string
+          calculo_id: string | null
           created_at: string | null
           fundamento: string | null
           id: string
           motivo: string | null
           percentual: number | null
-          periodo_fim: string
-          periodo_inicio: string
-          tipo_juros: string
+          periodo_fim: string | null
+          periodo_inicio: string | null
+          tipo_juros: string | null
         }
         Insert: {
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string | null
           fundamento?: string | null
           id?: string
           motivo?: string | null
           percentual?: number | null
-          periodo_fim: string
-          periodo_inicio: string
-          tipo_juros: string
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          tipo_juros?: string | null
         }
         Update: {
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string | null
           fundamento?: string | null
           id?: string
           motivo?: string | null
           percentual?: number | null
-          periodo_fim?: string
-          periodo_inicio?: string
-          tipo_juros?: string
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
+          tipo_juros?: string | null
         }
         Relationships: [
           {
@@ -2738,53 +2738,53 @@ export type Database = {
       }
       pjecalc_excecoes_carga: {
         Row: {
-          carga_horaria_mensal: number
-          case_id: string
+          carga_horaria_mensal: number | null
+          case_id: string | null
           created_at: string | null
           id: string
-          periodo_fim: string
-          periodo_inicio: string
+          periodo_fim: string | null
+          periodo_inicio: string | null
         }
         Insert: {
-          carga_horaria_mensal: number
-          case_id: string
+          carga_horaria_mensal?: number | null
+          case_id?: string | null
           created_at?: string | null
           id?: string
-          periodo_fim: string
-          periodo_inicio: string
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
         }
         Update: {
-          carga_horaria_mensal?: number
-          case_id?: string
+          carga_horaria_mensal?: number | null
+          case_id?: string | null
           created_at?: string | null
           id?: string
-          periodo_fim?: string
-          periodo_inicio?: string
+          periodo_fim?: string | null
+          periodo_inicio?: string | null
         }
         Relationships: []
       }
       pjecalc_excecoes_sabado: {
         Row: {
-          case_id: string
+          case_id: string | null
           created_at: string | null
-          data_fim: string
-          data_inicio: string
+          data_fim: string | null
+          data_inicio: string | null
           id: string
           sabado_dia_util: boolean
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           created_at?: string | null
-          data_fim: string
-          data_inicio: string
+          data_fim?: string | null
+          data_inicio?: string | null
           id?: string
           sabado_dia_util?: boolean
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           created_at?: string | null
-          data_fim?: string
-          data_inicio?: string
+          data_fim?: string | null
+          data_inicio?: string | null
           id?: string
           sabado_dia_util?: boolean
         }
@@ -2792,10 +2792,10 @@ export type Database = {
       }
       pjecalc_faltas: {
         Row: {
-          calculo_id: string
+          calculo_id: string | null
           created_at: string | null
-          data_final: string
-          data_inicial: string
+          data_final: string | null
+          data_inicial: string | null
           documento_id: string | null
           id: string
           justificada: boolean
@@ -2803,10 +2803,10 @@ export type Database = {
           reiniciar_ferias: boolean | null
         }
         Insert: {
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string | null
-          data_final: string
-          data_inicial: string
+          data_final?: string | null
+          data_inicial?: string | null
           documento_id?: string | null
           id?: string
           justificada?: boolean
@@ -2814,10 +2814,10 @@ export type Database = {
           reiniciar_ferias?: boolean | null
         }
         Update: {
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string | null
-          data_final?: string
-          data_inicial?: string
+          data_final?: string | null
+          data_inicial?: string | null
           documento_id?: string | null
           id?: string
           justificada?: boolean
@@ -2837,36 +2837,36 @@ export type Database = {
       pjecalc_feriados: {
         Row: {
           created_at: string
-          data: string
+          data: string | null
           fonte: string | null
           id: string
           municipio: string | null
           municipio_ibge: string | null
-          nome: string
+          nome: string | null
           scope: string
           uf: string | null
           version_id: string | null
         }
         Insert: {
           created_at?: string
-          data: string
+          data?: string | null
           fonte?: string | null
           id?: string
           municipio?: string | null
           municipio_ibge?: string | null
-          nome: string
+          nome?: string | null
           scope?: string
           uf?: string | null
           version_id?: string | null
         }
         Update: {
           created_at?: string
-          data?: string
+          data?: string | null
           fonte?: string | null
           id?: string
           municipio?: string | null
           municipio_ibge?: string | null
-          nome?: string
+          nome?: string | null
           scope?: string
           uf?: string | null
           version_id?: string | null
@@ -2885,7 +2885,7 @@ export type Database = {
         Row: {
           abono: boolean | null
           abono_dias: number | null
-          calculo_id: string
+          calculo_id: string | null
           created_at: string | null
           dobra_geral: boolean | null
           gozo_1_dobra: boolean | null
@@ -2899,8 +2899,8 @@ export type Database = {
           gozo_3_inicio: string | null
           id: string
           observacoes: string | null
-          periodo_aquisitivo_fim: string
-          periodo_aquisitivo_inicio: string
+          periodo_aquisitivo_fim: string | null
+          periodo_aquisitivo_inicio: string | null
           periodo_concessivo_fim: string | null
           periodo_concessivo_inicio: string | null
           prazo_dias: number
@@ -2910,7 +2910,7 @@ export type Database = {
         Insert: {
           abono?: boolean | null
           abono_dias?: number | null
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string | null
           dobra_geral?: boolean | null
           gozo_1_dobra?: boolean | null
@@ -2924,8 +2924,8 @@ export type Database = {
           gozo_3_inicio?: string | null
           id?: string
           observacoes?: string | null
-          periodo_aquisitivo_fim: string
-          periodo_aquisitivo_inicio: string
+          periodo_aquisitivo_fim?: string | null
+          periodo_aquisitivo_inicio?: string | null
           periodo_concessivo_fim?: string | null
           periodo_concessivo_inicio?: string | null
           prazo_dias?: number
@@ -2935,7 +2935,7 @@ export type Database = {
         Update: {
           abono?: boolean | null
           abono_dias?: number | null
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string | null
           dobra_geral?: boolean | null
           gozo_1_dobra?: boolean | null
@@ -2949,8 +2949,8 @@ export type Database = {
           gozo_3_inicio?: string | null
           id?: string
           observacoes?: string | null
-          periodo_aquisitivo_fim?: string
-          periodo_aquisitivo_inicio?: string
+          periodo_aquisitivo_fim?: string | null
+          periodo_aquisitivo_inicio?: string | null
           periodo_concessivo_fim?: string | null
           periodo_concessivo_inicio?: string | null
           prazo_dias?: number
@@ -2969,10 +2969,10 @@ export type Database = {
       }
       pjecalc_fgts_saldos_saques: {
         Row: {
-          calculo_id: string
-          case_id: string
+          calculo_id: string | null
+          case_id: string | null
           created_at: string
-          data: string
+          data: string | null
           descricao: string | null
           id: string
           observacoes: string | null
@@ -2981,10 +2981,10 @@ export type Database = {
           valor: number
         }
         Insert: {
-          calculo_id: string
-          case_id: string
+          calculo_id?: string | null
+          case_id?: string | null
           created_at?: string
-          data: string
+          data?: string | null
           descricao?: string | null
           id?: string
           observacoes?: string | null
@@ -2993,10 +2993,10 @@ export type Database = {
           valor?: number
         }
         Update: {
-          calculo_id?: string
-          case_id?: string
+          calculo_id?: string | null
+          case_id?: string | null
           created_at?: string
-          data?: string
+          data?: string | null
           descricao?: string | null
           id?: string
           observacoes?: string | null
@@ -3008,37 +3008,37 @@ export type Database = {
       }
       pjecalc_hist_salarial: {
         Row: {
-          calculo_id: string
+          calculo_id: string | null
           created_at: string | null
           id: string
           incide_fgts: boolean | null
           incide_inss: boolean | null
           incide_ir: boolean | null
-          nome: string
+          nome: string | null
           observacoes: string | null
           tipo_variacao: string | null
           valor_fixo: number | null
         }
         Insert: {
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string | null
           id?: string
           incide_fgts?: boolean | null
           incide_inss?: boolean | null
           incide_ir?: boolean | null
-          nome: string
+          nome?: string | null
           observacoes?: string | null
           tipo_variacao?: string | null
           valor_fixo?: number | null
         }
         Update: {
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string | null
           id?: string
           incide_fgts?: boolean | null
           incide_inss?: boolean | null
           incide_ir?: boolean | null
-          nome?: string
+          nome?: string | null
           observacoes?: string | null
           tipo_variacao?: string | null
           valor_fixo?: number | null
@@ -3047,31 +3047,31 @@ export type Database = {
       }
       pjecalc_hist_salarial_mes: {
         Row: {
-          calculo_id: string
-          competencia: string
+          calculo_id: string | null
+          competencia: string | null
           created_at: string | null
           documento_id: string | null
-          hist_salarial_id: string
+          hist_salarial_id: string | null
           id: string
           origem: string | null
           valor: number
         }
         Insert: {
-          calculo_id: string
-          competencia: string
+          calculo_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           documento_id?: string | null
-          hist_salarial_id: string
+          hist_salarial_id?: string | null
           id?: string
           origem?: string | null
           valor?: number
         }
         Update: {
-          calculo_id?: string
-          competencia?: string
+          calculo_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           documento_id?: string | null
-          hist_salarial_id?: string
+          hist_salarial_id?: string | null
           id?: string
           origem?: string | null
           valor?: number
@@ -3091,11 +3091,11 @@ export type Database = {
           aliquota_iss: number | null
           ativo: boolean | null
           base: string | null
-          calculo_id: string
+          calculo_id: string | null
           com_juros: boolean | null
           corrigido: boolean | null
           created_at: string | null
-          credor: string
+          credor: string | null
           deduzir_cs_segurado: boolean | null
           deduzir_fgts_depositar: boolean | null
           deduzir_honorarios_contratuais: boolean | null
@@ -3106,7 +3106,7 @@ export type Database = {
           observacoes: string | null
           ordem: number | null
           percentual: number | null
-          tipo: string
+          tipo: string | null
           usar_faixas: boolean | null
           valor_informado: number | null
         }
@@ -3114,11 +3114,11 @@ export type Database = {
           aliquota_iss?: number | null
           ativo?: boolean | null
           base?: string | null
-          calculo_id: string
+          calculo_id?: string | null
           com_juros?: boolean | null
           corrigido?: boolean | null
           created_at?: string | null
-          credor: string
+          credor?: string | null
           deduzir_cs_segurado?: boolean | null
           deduzir_fgts_depositar?: boolean | null
           deduzir_honorarios_contratuais?: boolean | null
@@ -3129,7 +3129,7 @@ export type Database = {
           observacoes?: string | null
           ordem?: number | null
           percentual?: number | null
-          tipo: string
+          tipo?: string | null
           usar_faixas?: boolean | null
           valor_informado?: number | null
         }
@@ -3137,11 +3137,11 @@ export type Database = {
           aliquota_iss?: number | null
           ativo?: boolean | null
           base?: string | null
-          calculo_id?: string
+          calculo_id?: string | null
           com_juros?: boolean | null
           corrigido?: boolean | null
           created_at?: string | null
-          credor?: string
+          credor?: string | null
           deduzir_cs_segurado?: boolean | null
           deduzir_fgts_depositar?: boolean | null
           deduzir_honorarios_contratuais?: boolean | null
@@ -3152,7 +3152,7 @@ export type Database = {
           observacoes?: string | null
           ordem?: number | null
           percentual?: number | null
-          tipo?: string
+          tipo?: string | null
           usar_faixas?: boolean | null
           valor_informado?: number | null
         }
@@ -3168,21 +3168,21 @@ export type Database = {
       }
       pjecalc_imposto_renda: {
         Row: {
-          competencia: string
+          competencia: string | null
           created_at: string
           deducao_aposentado_65: number
           deducao_dependente: number
           id: string
         }
         Insert: {
-          competencia: string
+          competencia?: string | null
           created_at?: string
           deducao_aposentado_65?: number
           deducao_dependente?: number
           id?: string
         }
         Update: {
-          competencia?: string
+          competencia?: string | null
           created_at?: string
           deducao_aposentado_65?: number
           deducao_dependente?: number
@@ -3196,7 +3196,7 @@ export type Database = {
           created_at: string
           faixa: number
           id: string
-          ir_id: string
+          ir_id: string | null
           parcela_deduzir: number
           valor_final: number | null
           valor_inicial: number
@@ -3206,7 +3206,7 @@ export type Database = {
           created_at?: string
           faixa?: number
           id?: string
-          ir_id: string
+          ir_id?: string | null
           parcela_deduzir?: number
           valor_final?: number | null
           valor_inicial?: number
@@ -3216,7 +3216,7 @@ export type Database = {
           created_at?: string
           faixa?: number
           id?: string
-          ir_id?: string
+          ir_id?: string | null
           parcela_deduzir?: number
           valor_final?: number | null
           valor_inicial?: number
@@ -3233,78 +3233,78 @@ export type Database = {
       }
       pjecalc_inss_faixas: {
         Row: {
-          aliquota: number
+          aliquota: number | null
           competencia_fim: string | null
-          competencia_inicio: string
+          competencia_inicio: string | null
           created_at: string | null
           descricao: string | null
-          faixa: number
+          faixa: number | null
           id: string
           progressiva: boolean | null
           teto_previdenciario: number | null
-          valor_ate: number
+          valor_ate: number | null
         }
         Insert: {
-          aliquota: number
+          aliquota?: number | null
           competencia_fim?: string | null
-          competencia_inicio: string
+          competencia_inicio?: string | null
           created_at?: string | null
           descricao?: string | null
-          faixa: number
+          faixa?: number | null
           id?: string
           progressiva?: boolean | null
           teto_previdenciario?: number | null
-          valor_ate: number
+          valor_ate?: number | null
         }
         Update: {
-          aliquota?: number
+          aliquota?: number | null
           competencia_fim?: string | null
-          competencia_inicio?: string
+          competencia_inicio?: string | null
           created_at?: string | null
           descricao?: string | null
-          faixa?: number
+          faixa?: number | null
           id?: string
           progressiva?: boolean | null
           teto_previdenciario?: number | null
-          valor_ate?: number
+          valor_ate?: number | null
         }
         Relationships: []
       }
       pjecalc_inss_faixas_domestico: {
         Row: {
-          aliquota: number
+          aliquota: number | null
           competencia_fim: string | null
-          competencia_inicio: string
+          competencia_inicio: string | null
           created_at: string | null
-          faixa: number
+          faixa: number | null
           id: string
           progressiva: boolean | null
           teto_previdenciario: number | null
-          valor_ate: number
+          valor_ate: number | null
           version_id: string | null
         }
         Insert: {
-          aliquota: number
+          aliquota?: number | null
           competencia_fim?: string | null
-          competencia_inicio: string
+          competencia_inicio?: string | null
           created_at?: string | null
-          faixa: number
+          faixa?: number | null
           id?: string
           progressiva?: boolean | null
           teto_previdenciario?: number | null
-          valor_ate: number
+          valor_ate?: number | null
           version_id?: string | null
         }
         Update: {
-          aliquota?: number
+          aliquota?: number | null
           competencia_fim?: string | null
-          competencia_inicio?: string
+          competencia_inicio?: string | null
           created_at?: string | null
-          faixa?: number
+          faixa?: number | null
           id?: string
           progressiva?: boolean | null
           teto_previdenciario?: number | null
-          valor_ate?: number
+          valor_ate?: number | null
           version_id?: string | null
         }
         Relationships: []
@@ -3312,83 +3312,83 @@ export type Database = {
       pjecalc_inss_multa: {
         Row: {
           competencia_fim: string | null
-          competencia_inicio: string
+          competencia_inicio: string | null
           created_at: string | null
           fundamento: string | null
           id: string
           percentual_maximo: number | null
-          percentual_por_mes: number
+          percentual_por_mes: number | null
         }
         Insert: {
           competencia_fim?: string | null
-          competencia_inicio: string
+          competencia_inicio?: string | null
           created_at?: string | null
           fundamento?: string | null
           id?: string
           percentual_maximo?: number | null
-          percentual_por_mes: number
+          percentual_por_mes?: number | null
         }
         Update: {
           competencia_fim?: string | null
-          competencia_inicio?: string
+          competencia_inicio?: string | null
           created_at?: string | null
           fundamento?: string | null
           id?: string
           percentual_maximo?: number | null
-          percentual_por_mes?: number
+          percentual_por_mes?: number | null
         }
         Relationships: []
       }
       pjecalc_jam: {
         Row: {
-          competencia: string
+          competencia: string | null
           created_at: string | null
           dia: number | null
           id: string
-          valor_acumulado: number
-          valor_indice: number
+          valor_acumulado: number | null
+          valor_indice: number | null
         }
         Insert: {
-          competencia: string
+          competencia?: string | null
           created_at?: string | null
           dia?: number | null
           id?: string
-          valor_acumulado: number
-          valor_indice: number
+          valor_acumulado?: number | null
+          valor_indice?: number | null
         }
         Update: {
-          competencia?: string
+          competencia?: string | null
           created_at?: string | null
           dia?: number | null
           id?: string
-          valor_acumulado?: number
-          valor_indice?: number
+          valor_acumulado?: number | null
+          valor_indice?: number | null
         }
         Relationships: []
       }
       pjecalc_juros_mora: {
         Row: {
           acumulado: number | null
-          competencia: string
+          competencia: string | null
           created_at: string
           id: string
-          taxa_mensal: number
+          taxa_mensal: number | null
           tipo: string
         }
         Insert: {
           acumulado?: number | null
-          competencia: string
+          competencia?: string | null
           created_at?: string
           id?: string
-          taxa_mensal: number
+          taxa_mensal?: number | null
           tipo?: string
         }
         Update: {
           acumulado?: number | null
-          competencia?: string
+          competencia?: string | null
           created_at?: string
           id?: string
-          taxa_mensal?: number
+          taxa_mensal?: number | null
           tipo?: string
         }
         Relationships: []
@@ -3396,36 +3396,36 @@ export type Database = {
       pjecalc_justificativas: {
         Row: {
           autor_id: string | null
-          calculo_id: string
-          contexto: string
+          calculo_id: string | null
+          contexto: string | null
           created_at: string | null
-          descricao: string
+          descricao: string | null
           entidade_id: string | null
           fundamento_legal: string | null
           id: string
-          titulo: string
+          titulo: string | null
         }
         Insert: {
           autor_id?: string | null
-          calculo_id: string
-          contexto: string
+          calculo_id?: string | null
+          contexto?: string | null
           created_at?: string | null
-          descricao: string
+          descricao?: string | null
           entidade_id?: string | null
           fundamento_legal?: string | null
           id?: string
-          titulo: string
+          titulo?: string | null
         }
         Update: {
           autor_id?: string | null
-          calculo_id?: string
-          contexto?: string
+          calculo_id?: string | null
+          contexto?: string | null
           created_at?: string | null
-          descricao?: string
+          descricao?: string | null
           entidade_id?: string | null
           fundamento_legal?: string | null
           id?: string
-          titulo?: string
+          titulo?: string | null
         }
         Relationships: [
           {
@@ -3441,7 +3441,7 @@ export type Database = {
         Row: {
           ativo: boolean | null
           base: string | null
-          calculo_id: string
+          calculo_id: string | null
           com_juros: boolean | null
           corrigida: boolean | null
           created_at: string | null
@@ -3452,13 +3452,13 @@ export type Database = {
           ordem: number | null
           percentual: number | null
           responsavel: string | null
-          tipo: string
+          tipo: string | null
           valor_informado: number | null
         }
         Insert: {
           ativo?: boolean | null
           base?: string | null
-          calculo_id: string
+          calculo_id?: string | null
           com_juros?: boolean | null
           corrigida?: boolean | null
           created_at?: string | null
@@ -3469,13 +3469,13 @@ export type Database = {
           ordem?: number | null
           percentual?: number | null
           responsavel?: string | null
-          tipo: string
+          tipo?: string | null
           valor_informado?: number | null
         }
         Update: {
           ativo?: boolean | null
           base?: string | null
-          calculo_id?: string
+          calculo_id?: string | null
           com_juros?: boolean | null
           corrigida?: boolean | null
           created_at?: string | null
@@ -3486,7 +3486,7 @@ export type Database = {
           ordem?: number | null
           percentual?: number | null
           responsavel?: string | null
-          tipo?: string
+          tipo?: string | null
           valor_informado?: number | null
         }
         Relationships: [
@@ -3501,30 +3501,30 @@ export type Database = {
       }
       pjecalc_observacoes: {
         Row: {
-          case_id: string
+          case_id: string | null
           created_at: string
           created_by: string | null
           id: string
-          modulo: string
-          texto: string
+          modulo: string | null
+          texto: string | null
           tipo: string
         }
         Insert: {
-          case_id: string
+          case_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
-          modulo: string
-          texto: string
+          modulo?: string | null
+          texto?: string | null
           tipo?: string
         }
         Update: {
-          case_id?: string
+          case_id?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
-          modulo?: string
-          texto?: string
+          modulo?: string | null
+          texto?: string | null
           tipo?: string
         }
         Relationships: []
@@ -3534,8 +3534,8 @@ export type Database = {
           ativa: boolean | null
           base_integral: number | null
           base_valor: number | null
-          calculo_id: string
-          competencia: string
+          calculo_id: string | null
+          competencia: string | null
           correcao: number | null
           created_at: string | null
           devido: number | null
@@ -3550,7 +3550,7 @@ export type Database = {
           juros: number | null
           juros_regime_usado: string | null
           multiplicador: number | null
-          nome: string
+          nome: string | null
           origem: string | null
           pago: number | null
           pago_integral: number | null
@@ -3559,7 +3559,7 @@ export type Database = {
           quantidade_integral: number | null
           reflexo_id: string | null
           taxa_juros: number | null
-          tipo: string
+          tipo: string | null
           total: number | null
           updated_at: string | null
           verba_base_id: string | null
@@ -3568,8 +3568,8 @@ export type Database = {
           ativa?: boolean | null
           base_integral?: number | null
           base_valor?: number | null
-          calculo_id: string
-          competencia: string
+          calculo_id?: string | null
+          competencia?: string | null
           correcao?: number | null
           created_at?: string | null
           devido?: number | null
@@ -3584,7 +3584,7 @@ export type Database = {
           juros?: number | null
           juros_regime_usado?: string | null
           multiplicador?: number | null
-          nome: string
+          nome?: string | null
           origem?: string | null
           pago?: number | null
           pago_integral?: number | null
@@ -3593,7 +3593,7 @@ export type Database = {
           quantidade_integral?: number | null
           reflexo_id?: string | null
           taxa_juros?: number | null
-          tipo: string
+          tipo?: string | null
           total?: number | null
           updated_at?: string | null
           verba_base_id?: string | null
@@ -3602,8 +3602,8 @@ export type Database = {
           ativa?: boolean | null
           base_integral?: number | null
           base_valor?: number | null
-          calculo_id?: string
-          competencia?: string
+          calculo_id?: string | null
+          competencia?: string | null
           correcao?: number | null
           created_at?: string | null
           devido?: number | null
@@ -3618,7 +3618,7 @@ export type Database = {
           juros?: number | null
           juros_regime_usado?: string | null
           multiplicador?: number | null
-          nome?: string
+          nome?: string | null
           origem?: string | null
           pago?: number | null
           pago_integral?: number | null
@@ -3627,7 +3627,7 @@ export type Database = {
           quantidade_integral?: number | null
           reflexo_id?: string | null
           taxa_juros?: number | null
-          tipo?: string
+          tipo?: string | null
           total?: number | null
           updated_at?: string | null
           verba_base_id?: string | null
@@ -3652,8 +3652,8 @@ export type Database = {
       pjecalc_pagamentos: {
         Row: {
           abatimento_global: boolean | null
-          calculo_id: string
-          competencia: string
+          calculo_id: string | null
+          competencia: string | null
           created_at: string | null
           data_pagamento: string | null
           descricao: string | null
@@ -3666,8 +3666,8 @@ export type Database = {
         }
         Insert: {
           abatimento_global?: boolean | null
-          calculo_id: string
-          competencia: string
+          calculo_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           data_pagamento?: string | null
           descricao?: string | null
@@ -3680,8 +3680,8 @@ export type Database = {
         }
         Update: {
           abatimento_global?: boolean | null
-          calculo_id?: string
-          competencia?: string
+          calculo_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           data_pagamento?: string | null
           descricao?: string | null
@@ -3719,7 +3719,7 @@ export type Database = {
       pjecalc_parametros: {
         Row: {
           carga_horaria_padrao: number | null
-          case_id: string
+          case_id: string | null
           created_at: string | null
           data_admissao: string | null
           data_demissao: string | null
@@ -3728,7 +3728,7 @@ export type Database = {
         }
         Insert: {
           carga_horaria_padrao?: number | null
-          case_id: string
+          case_id?: string | null
           created_at?: string | null
           data_admissao?: string | null
           data_demissao?: string | null
@@ -3737,7 +3737,7 @@ export type Database = {
         }
         Update: {
           carga_horaria_padrao?: number | null
-          case_id?: string
+          case_id?: string | null
           created_at?: string | null
           data_admissao?: string | null
           data_demissao?: string | null
@@ -3757,44 +3757,44 @@ export type Database = {
       pjecalc_participantes: {
         Row: {
           ativo: boolean | null
-          calculo_id: string
+          calculo_id: string | null
           created_at: string | null
           documento: string | null
           documento_tipo: string | null
           endereco: Json | null
           id: string
-          nome: string
+          nome: string | null
           observacoes: string | null
           ordem: number | null
-          tipo: string
+          tipo: string | null
           updated_at: string | null
         }
         Insert: {
           ativo?: boolean | null
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string | null
           documento?: string | null
           documento_tipo?: string | null
           endereco?: Json | null
           id?: string
-          nome: string
+          nome?: string | null
           observacoes?: string | null
           ordem?: number | null
-          tipo: string
+          tipo?: string | null
           updated_at?: string | null
         }
         Update: {
           ativo?: boolean | null
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string | null
           documento?: string | null
           documento_tipo?: string | null
           endereco?: Json | null
           id?: string
-          nome?: string
+          nome?: string | null
           observacoes?: string | null
           ordem?: number | null
-          tipo?: string
+          tipo?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -3812,7 +3812,7 @@ export type Database = {
           apurar: boolean
           base_incidencia: string | null
           beneficiario: string | null
-          calculo_id: string
+          calculo_id: string | null
           created_at: string
           id: string
           observacoes: string | null
@@ -3825,7 +3825,7 @@ export type Database = {
           apurar?: boolean
           base_incidencia?: string | null
           beneficiario?: string | null
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string
           id?: string
           observacoes?: string | null
@@ -3838,7 +3838,7 @@ export type Database = {
           apurar?: boolean
           base_incidencia?: string | null
           beneficiario?: string | null
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string
           id?: string
           observacoes?: string | null
@@ -3854,33 +3854,33 @@ export type Database = {
           base: number
           beneficiario_cpf: string | null
           beneficiario_nome: string | null
-          calculo_id: string
-          competencia: string
+          calculo_id: string | null
+          competencia: string | null
           created_at: string | null
           id: string
-          percentual: number
+          percentual: number | null
           valor: number
         }
         Insert: {
           base?: number
           beneficiario_cpf?: string | null
           beneficiario_nome?: string | null
-          calculo_id: string
-          competencia: string
+          calculo_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           id?: string
-          percentual: number
+          percentual?: number | null
           valor?: number
         }
         Update: {
           base?: number
           beneficiario_cpf?: string | null
           beneficiario_nome?: string | null
-          calculo_id?: string
-          competencia?: string
+          calculo_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           id?: string
-          percentual?: number
+          percentual?: number | null
           valor?: number
         }
         Relationships: [
@@ -3896,38 +3896,38 @@ export type Database = {
       pjecalc_pisos_salariais: {
         Row: {
           categoria: string | null
-          competencia: string
+          competencia: string | null
           created_at: string
           fonte_doc: string | null
           id: string
-          nome: string
+          nome: string | null
           sindicato: string | null
-          uf: string
-          valor: number
+          uf: string | null
+          valor: number | null
           version_id: string | null
         }
         Insert: {
           categoria?: string | null
-          competencia: string
+          competencia?: string | null
           created_at?: string
           fonte_doc?: string | null
           id?: string
-          nome: string
+          nome?: string | null
           sindicato?: string | null
-          uf: string
-          valor: number
+          uf?: string | null
+          valor?: number | null
           version_id?: string | null
         }
         Update: {
           categoria?: string | null
-          competencia?: string
+          competencia?: string | null
           created_at?: string
           fonte_doc?: string | null
           id?: string
-          nome?: string
+          nome?: string | null
           sindicato?: string | null
-          uf?: string
-          valor?: number
+          uf?: string | null
+          valor?: number | null
           version_id?: string | null
         }
         Relationships: [
@@ -3943,7 +3943,7 @@ export type Database = {
       pjecalc_prev_privada_config: {
         Row: {
           apurar: boolean
-          calculo_id: string
+          calculo_id: string | null
           created_at: string
           entidade: string | null
           id: string
@@ -3954,7 +3954,7 @@ export type Database = {
         }
         Insert: {
           apurar?: boolean
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string
           entidade?: string | null
           id?: string
@@ -3965,7 +3965,7 @@ export type Database = {
         }
         Update: {
           apurar?: boolean
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string
           entidade?: string | null
           id?: string
@@ -3979,34 +3979,34 @@ export type Database = {
       pjecalc_prev_privada_ocorrencia: {
         Row: {
           base: number
-          calculo_id: string
-          competencia: string
+          calculo_id: string | null
+          competencia: string | null
           created_at: string | null
           deduzir_ir: boolean | null
           id: string
-          percentual: number
+          percentual: number | null
           valor_empregado: number | null
           valor_empregador: number | null
         }
         Insert: {
           base?: number
-          calculo_id: string
-          competencia: string
+          calculo_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           deduzir_ir?: boolean | null
           id?: string
-          percentual: number
+          percentual?: number | null
           valor_empregado?: number | null
           valor_empregador?: number | null
         }
         Update: {
           base?: number
-          calculo_id?: string
-          competencia?: string
+          calculo_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           deduzir_ir?: boolean | null
           id?: string
-          percentual?: number
+          percentual?: number | null
           valor_empregado?: number | null
           valor_empregador?: number | null
         }
@@ -4023,7 +4023,7 @@ export type Database = {
       pjecalc_reflexo: {
         Row: {
           ativa: boolean | null
-          calculo_id: string
+          calculo_id: string | null
           codigo: string | null
           comportamento_reflexo: string | null
           created_at: string | null
@@ -4038,7 +4038,7 @@ export type Database = {
           media_meses: number | null
           media_tipo: string | null
           multiplicador: number | null
-          nome: string
+          nome: string | null
           observacoes: string | null
           ordem: number | null
           periodo_fim: string | null
@@ -4046,12 +4046,12 @@ export type Database = {
           periodo_media_reflexo: string | null
           pjc_id: string | null
           quantidade_tipo: string | null
-          tipo: string
+          tipo: string | null
           tratamento_fracao_mes: string | null
         }
         Insert: {
           ativa?: boolean | null
-          calculo_id: string
+          calculo_id?: string | null
           codigo?: string | null
           comportamento_reflexo?: string | null
           created_at?: string | null
@@ -4066,7 +4066,7 @@ export type Database = {
           media_meses?: number | null
           media_tipo?: string | null
           multiplicador?: number | null
-          nome: string
+          nome?: string | null
           observacoes?: string | null
           ordem?: number | null
           periodo_fim?: string | null
@@ -4074,12 +4074,12 @@ export type Database = {
           periodo_media_reflexo?: string | null
           pjc_id?: string | null
           quantidade_tipo?: string | null
-          tipo: string
+          tipo?: string | null
           tratamento_fracao_mes?: string | null
         }
         Update: {
           ativa?: boolean | null
-          calculo_id?: string
+          calculo_id?: string | null
           codigo?: string | null
           comportamento_reflexo?: string | null
           created_at?: string | null
@@ -4094,7 +4094,7 @@ export type Database = {
           media_meses?: number | null
           media_tipo?: string | null
           multiplicador?: number | null
-          nome?: string
+          nome?: string | null
           observacoes?: string | null
           ordem?: number | null
           periodo_fim?: string | null
@@ -4102,7 +4102,7 @@ export type Database = {
           periodo_media_reflexo?: string | null
           pjc_id?: string | null
           quantidade_tipo?: string | null
-          tipo?: string
+          tipo?: string | null
           tratamento_fracao_mes?: string | null
         }
         Relationships: []
@@ -4111,20 +4111,20 @@ export type Database = {
         Row: {
           id: string
           integralizar: boolean | null
-          reflexo_id: string
-          verba_base_id: string
+          reflexo_id: string | null
+          verba_base_id: string | null
         }
         Insert: {
           id?: string
           integralizar?: boolean | null
-          reflexo_id: string
-          verba_base_id: string
+          reflexo_id?: string | null
+          verba_base_id?: string | null
         }
         Update: {
           id?: string
           integralizar?: boolean | null
-          reflexo_id?: string
-          verba_base_id?: string
+          reflexo_id?: string | null
+          verba_base_id?: string | null
         }
         Relationships: [
           {
@@ -4145,7 +4145,7 @@ export type Database = {
       }
       pjecalc_relatorios: {
         Row: {
-          calculo_id: string
+          calculo_id: string | null
           conteudo_html: string | null
           created_at: string | null
           formato: string | null
@@ -4154,10 +4154,10 @@ export type Database = {
           id: string
           parametros: Json | null
           storage_path: string | null
-          tipo: string
+          tipo: string | null
         }
         Insert: {
-          calculo_id: string
+          calculo_id?: string | null
           conteudo_html?: string | null
           created_at?: string | null
           formato?: string | null
@@ -4166,10 +4166,10 @@ export type Database = {
           id?: string
           parametros?: Json | null
           storage_path?: string | null
-          tipo: string
+          tipo?: string | null
         }
         Update: {
-          calculo_id?: string
+          calculo_id?: string | null
           conteudo_html?: string | null
           created_at?: string | null
           formato?: string | null
@@ -4178,7 +4178,7 @@ export type Database = {
           id?: string
           parametros?: Json | null
           storage_path?: string | null
-          tipo?: string
+          tipo?: string | null
         }
         Relationships: [
           {
@@ -4193,7 +4193,7 @@ export type Database = {
       pjecalc_resultado: {
         Row: {
           calculado_em: string | null
-          calculo_id: string
+          calculo_id: string | null
           created_at: string | null
           custas: number | null
           desconto_inss_reclamado: number | null
@@ -4219,7 +4219,7 @@ export type Database = {
         }
         Insert: {
           calculado_em?: string | null
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string | null
           custas?: number | null
           desconto_inss_reclamado?: number | null
@@ -4245,7 +4245,7 @@ export type Database = {
         }
         Update: {
           calculado_em?: string | null
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string | null
           custas?: number | null
           desconto_inss_reclamado?: number | null
@@ -4274,9 +4274,9 @@ export type Database = {
       pjecalc_rubrica_map: {
         Row: {
           ativo: boolean | null
-          categoria: string
+          categoria: string | null
           codigo_match: string | null
-          conceito: string
+          conceito: string | null
           created_at: string | null
           descricao_regex: string | null
           empresa_cnpj: string | null
@@ -4285,9 +4285,9 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
-          categoria: string
+          categoria?: string | null
           codigo_match?: string | null
-          conceito: string
+          conceito?: string | null
           created_at?: string | null
           descricao_regex?: string | null
           empresa_cnpj?: string | null
@@ -4296,9 +4296,9 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
-          categoria?: string
+          categoria?: string | null
           codigo_match?: string | null
-          conceito?: string
+          conceito?: string | null
           created_at?: string | null
           descricao_regex?: string | null
           empresa_cnpj?: string | null
@@ -4309,53 +4309,53 @@ export type Database = {
       }
       pjecalc_rubrica_raw: {
         Row: {
-          calculo_id: string
-          classificacao: string
+          calculo_id: string | null
+          classificacao: string | null
           codigo: string | null
-          competencia: string
+          competencia: string | null
           confianca: number | null
           created_at: string | null
-          descricao: string
+          descricao: string | null
           documento_id: string | null
           id: string
           pagina: number | null
           tipo_documento: string | null
-          valor: number
+          valor: number | null
         }
         Insert: {
-          calculo_id: string
-          classificacao: string
+          calculo_id?: string | null
+          classificacao?: string | null
           codigo?: string | null
-          competencia: string
+          competencia?: string | null
           confianca?: number | null
           created_at?: string | null
-          descricao: string
+          descricao?: string | null
           documento_id?: string | null
           id?: string
           pagina?: number | null
           tipo_documento?: string | null
-          valor: number
+          valor?: number | null
         }
         Update: {
-          calculo_id?: string
-          classificacao?: string
+          calculo_id?: string | null
+          classificacao?: string | null
           codigo?: string | null
-          competencia?: string
+          competencia?: string | null
           confianca?: number | null
           created_at?: string | null
-          descricao?: string
+          descricao?: string | null
           documento_id?: string | null
           id?: string
           pagina?: number | null
           tipo_documento?: string | null
-          valor?: number
+          valor?: number | null
         }
         Relationships: []
       }
       pjecalc_sal_familia_config: {
         Row: {
           apurar: boolean
-          calculo_id: string
+          calculo_id: string | null
           created_at: string
           id: string
           numero_filhos: number | null
@@ -4364,7 +4364,7 @@ export type Database = {
         }
         Insert: {
           apurar?: boolean
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string
           id?: string
           numero_filhos?: number | null
@@ -4373,7 +4373,7 @@ export type Database = {
         }
         Update: {
           apurar?: boolean
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string
           id?: string
           numero_filhos?: number | null
@@ -4391,7 +4391,7 @@ export type Database = {
           created_at: string | null
           descricao: string | null
           id: string
-          nome: string
+          nome: string | null
           sindicato: string | null
           uf: string | null
           version_id: string | null
@@ -4404,7 +4404,7 @@ export type Database = {
           created_at?: string | null
           descricao?: string | null
           id?: string
-          nome: string
+          nome?: string | null
           sindicato?: string | null
           uf?: string | null
           version_id?: string | null
@@ -4417,7 +4417,7 @@ export type Database = {
           created_at?: string | null
           descricao?: string | null
           id?: string
-          nome?: string
+          nome?: string | null
           sindicato?: string | null
           uf?: string | null
           version_id?: string | null
@@ -4427,27 +4427,27 @@ export type Database = {
       pjecalc_salario_categoria_ocorrencia: {
         Row: {
           carga_horaria: number | null
-          competencia: string
+          competencia: string | null
           created_at: string | null
           id: string
-          salario_categoria_id: string
-          valor: number
+          salario_categoria_id: string | null
+          valor: number | null
         }
         Insert: {
           carga_horaria?: number | null
-          competencia: string
+          competencia?: string | null
           created_at?: string | null
           id?: string
-          salario_categoria_id: string
-          valor: number
+          salario_categoria_id?: string | null
+          valor?: number | null
         }
         Update: {
           carga_horaria?: number | null
-          competencia?: string
+          competencia?: string | null
           created_at?: string | null
           id?: string
-          salario_categoria_id?: string
-          valor?: number
+          salario_categoria_id?: string | null
+          valor?: number | null
         }
         Relationships: [
           {
@@ -4461,32 +4461,32 @@ export type Database = {
       }
       pjecalc_salario_familia: {
         Row: {
-          competencia: string
+          competencia: string | null
           created_at: string
           faixa: number
           id: string
-          valor_cota: number
-          valor_final: number
+          valor_cota: number | null
+          valor_final: number | null
           valor_inicial: number
           version_id: string | null
         }
         Insert: {
-          competencia: string
+          competencia?: string | null
           created_at?: string
           faixa?: number
           id?: string
-          valor_cota: number
-          valor_final: number
+          valor_cota?: number | null
+          valor_final?: number | null
           valor_inicial?: number
           version_id?: string | null
         }
         Update: {
-          competencia?: string
+          competencia?: string | null
           created_at?: string
           faixa?: number
           id?: string
-          valor_cota?: number
-          valor_final?: number
+          valor_cota?: number | null
+          valor_final?: number | null
           valor_inicial?: number
           version_id?: string | null
         }
@@ -4502,24 +4502,24 @@ export type Database = {
       }
       pjecalc_salario_minimo: {
         Row: {
-          competencia: string
+          competencia: string | null
           created_at: string
           id: string
-          valor: number
+          valor: number | null
           version_id: string | null
         }
         Insert: {
-          competencia: string
+          competencia?: string | null
           created_at?: string
           id?: string
-          valor: number
+          valor?: number | null
           version_id?: string | null
         }
         Update: {
-          competencia?: string
+          competencia?: string | null
           created_at?: string
           id?: string
-          valor?: number
+          valor?: number | null
           version_id?: string | null
         }
         Relationships: [
@@ -4534,40 +4534,40 @@ export type Database = {
       }
       pjecalc_seguro_desemprego: {
         Row: {
-          competencia: string
+          competencia: string | null
           created_at: string
           faixa: number
           id: string
-          percentual: number
-          valor_final: number
+          percentual: number | null
+          valor_final: number | null
           valor_inicial: number
-          valor_piso: number
+          valor_piso: number | null
           valor_soma: number | null
           valor_teto: number | null
           version_id: string | null
         }
         Insert: {
-          competencia: string
+          competencia?: string | null
           created_at?: string
           faixa?: number
           id?: string
-          percentual: number
-          valor_final: number
+          percentual?: number | null
+          valor_final?: number | null
           valor_inicial?: number
-          valor_piso: number
+          valor_piso?: number | null
           valor_soma?: number | null
           valor_teto?: number | null
           version_id?: string | null
         }
         Update: {
-          competencia?: string
+          competencia?: string | null
           created_at?: string
           faixa?: number
           id?: string
-          percentual?: number
-          valor_final?: number
+          percentual?: number | null
+          valor_final?: number | null
           valor_inicial?: number
-          valor_piso?: number
+          valor_piso?: number | null
           valor_soma?: number | null
           valor_teto?: number | null
           version_id?: string | null
@@ -4585,7 +4585,7 @@ export type Database = {
       pjecalc_seguro_desemprego_config: {
         Row: {
           apurar: boolean
-          calculo_id: string
+          calculo_id: string | null
           created_at: string
           habilitado_pelo_calculo: boolean | null
           id: string
@@ -4601,7 +4601,7 @@ export type Database = {
         }
         Insert: {
           apurar?: boolean
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string
           habilitado_pelo_calculo?: boolean | null
           id?: string
@@ -4617,7 +4617,7 @@ export type Database = {
         }
         Update: {
           apurar?: boolean
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string
           habilitado_pelo_calculo?: boolean | null
           id?: string
@@ -4636,59 +4636,59 @@ export type Database = {
       pjecalc_tabela_unica_jt: {
         Row: {
           created_at: string | null
-          data: string
+          data: string | null
           fonte: string | null
           id: string
           taxa_juros: number | null
-          tipo: string
-          valor_acumulado: number
-          valor_indice: number
+          tipo: string | null
+          valor_acumulado: number | null
+          valor_indice: number | null
         }
         Insert: {
           created_at?: string | null
-          data: string
+          data?: string | null
           fonte?: string | null
           id?: string
           taxa_juros?: number | null
-          tipo: string
-          valor_acumulado: number
-          valor_indice: number
+          tipo?: string | null
+          valor_acumulado?: number | null
+          valor_indice?: number | null
         }
         Update: {
           created_at?: string | null
-          data?: string
+          data?: string | null
           fonte?: string | null
           id?: string
           taxa_juros?: number | null
-          tipo?: string
-          valor_acumulado?: number
-          valor_indice?: number
+          tipo?: string | null
+          valor_acumulado?: number | null
+          valor_indice?: number | null
         }
         Relationships: []
       }
       pjecalc_taxa_legal: {
         Row: {
-          competencia: string
+          competencia: string | null
           created_at: string | null
           fundamento: string | null
           id: string
-          taxa_diaria: number
+          taxa_diaria: number | null
           taxa_mensal: number | null
         }
         Insert: {
-          competencia: string
+          competencia?: string | null
           created_at?: string | null
           fundamento?: string | null
           id?: string
-          taxa_diaria: number
+          taxa_diaria?: number | null
           taxa_mensal?: number | null
         }
         Update: {
-          competencia?: string
+          competencia?: string | null
           created_at?: string | null
           fundamento?: string | null
           id?: string
-          taxa_diaria?: number
+          taxa_diaria?: number | null
           taxa_mensal?: number | null
         }
         Relationships: []
@@ -4696,34 +4696,34 @@ export type Database = {
       pjecalc_ufir: {
         Row: {
           coeficiente: number | null
-          competencia: string
+          competencia: string | null
           created_at: string | null
           fonte: string | null
           id: string
-          valor: number
+          valor: number | null
         }
         Insert: {
           coeficiente?: number | null
-          competencia: string
+          competencia?: string | null
           created_at?: string | null
           fonte?: string | null
           id?: string
-          valor: number
+          valor?: number | null
         }
         Update: {
           coeficiente?: number | null
-          competencia?: string
+          competencia?: string | null
           created_at?: string | null
           fonte?: string | null
           id?: string
-          valor?: number
+          valor?: number | null
         }
         Relationships: []
       }
       pjecalc_vale_transporte: {
         Row: {
-          calculo_id: string
-          competencia: string
+          calculo_id: string | null
+          competencia: string | null
           created_at: string | null
           desconto_empregado: number | null
           fornecido: boolean | null
@@ -4733,8 +4733,8 @@ export type Database = {
           valor: number
         }
         Insert: {
-          calculo_id: string
-          competencia: string
+          calculo_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           desconto_empregado?: number | null
           fornecido?: boolean | null
@@ -4744,8 +4744,8 @@ export type Database = {
           valor?: number
         }
         Update: {
-          calculo_id?: string
-          competencia?: string
+          calculo_id?: string | null
+          competencia?: string | null
           created_at?: string | null
           desconto_empregado?: number | null
           fornecido?: boolean | null
@@ -4767,7 +4767,7 @@ export type Database = {
       pjecalc_vale_transporte_config: {
         Row: {
           apurar: boolean
-          calculo_id: string
+          calculo_id: string | null
           created_at: string
           desconto_empregado_pct: number
           id: string
@@ -4775,7 +4775,7 @@ export type Database = {
         }
         Insert: {
           apurar?: boolean
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string
           desconto_empregado_pct?: number
           id?: string
@@ -4783,7 +4783,7 @@ export type Database = {
         }
         Update: {
           apurar?: boolean
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string
           desconto_empregado_pct?: number
           id?: string
@@ -4793,30 +4793,30 @@ export type Database = {
       }
       pjecalc_vale_transporte_linhas: {
         Row: {
-          config_id: string
+          config_id: string | null
           created_at: string
           data_encerramento: string | null
-          descricao: string
+          descricao: string | null
           id: string
           quantidade_dia: number
           tipo: string
           valor_passagem: number
         }
         Insert: {
-          config_id: string
+          config_id?: string | null
           created_at?: string
           data_encerramento?: string | null
-          descricao: string
+          descricao?: string | null
           id?: string
           quantidade_dia?: number
           tipo?: string
           valor_passagem?: number
         }
         Update: {
-          config_id?: string
+          config_id?: string | null
           created_at?: string
           data_encerramento?: string | null
-          descricao?: string
+          descricao?: string | null
           id?: string
           quantidade_dia?: number
           tipo?: string
@@ -4837,7 +4837,7 @@ export type Database = {
           ativa: boolean | null
           base_tabelada: string | null
           base_tabelas: string[] | null
-          calculo_id: string
+          calculo_id: string | null
           caracteristica: string | null
           codigo: string | null
           compor_principal: boolean | null
@@ -4861,7 +4861,7 @@ export type Database = {
           incide_inss: boolean | null
           incide_ir: boolean | null
           multiplicador: number | null
-          nome: string
+          nome: string | null
           observacoes: string | null
           ordem: number | null
           periodicidade: string | null
@@ -4883,7 +4883,7 @@ export type Database = {
           ativa?: boolean | null
           base_tabelada?: string | null
           base_tabelas?: string[] | null
-          calculo_id: string
+          calculo_id?: string | null
           caracteristica?: string | null
           codigo?: string | null
           compor_principal?: boolean | null
@@ -4907,7 +4907,7 @@ export type Database = {
           incide_inss?: boolean | null
           incide_ir?: boolean | null
           multiplicador?: number | null
-          nome: string
+          nome?: string | null
           observacoes?: string | null
           ordem?: number | null
           periodicidade?: string | null
@@ -4929,7 +4929,7 @@ export type Database = {
           ativa?: boolean | null
           base_tabelada?: string | null
           base_tabelas?: string[] | null
-          calculo_id?: string
+          calculo_id?: string | null
           caracteristica?: string | null
           codigo?: string | null
           compor_principal?: boolean | null
@@ -4953,7 +4953,7 @@ export type Database = {
           incide_inss?: boolean | null
           incide_ir?: boolean | null
           multiplicador?: number | null
-          nome?: string
+          nome?: string | null
           observacoes?: string | null
           ordem?: number | null
           periodicidade?: string | null
@@ -4984,37 +4984,37 @@ export type Database = {
       pjecalc_versoes: {
         Row: {
           autor_id: string | null
-          calculo_id: string
+          calculo_id: string | null
           created_at: string | null
           descricao: string | null
           hash_conteudo: string | null
           id: string
-          numero_versao: number
-          snapshot: Json
+          numero_versao: number | null
+          snapshot: Json | null
           total_bruto: number | null
           total_liquido: number | null
         }
         Insert: {
           autor_id?: string | null
-          calculo_id: string
+          calculo_id?: string | null
           created_at?: string | null
           descricao?: string | null
           hash_conteudo?: string | null
           id?: string
-          numero_versao: number
-          snapshot: Json
+          numero_versao?: number | null
+          snapshot?: Json | null
           total_bruto?: number | null
           total_liquido?: number | null
         }
         Update: {
           autor_id?: string | null
-          calculo_id?: string
+          calculo_id?: string | null
           created_at?: string | null
           descricao?: string | null
           hash_conteudo?: string | null
           id?: string
-          numero_versao?: number
-          snapshot?: Json
+          numero_versao?: number | null
+          snapshot?: Json | null
           total_bruto?: number | null
           total_liquido?: number | null
         }
@@ -5067,7 +5067,7 @@ export type Database = {
           result: string
           started_at: string
           stats: Json | null
-          table_slug: string
+          table_slug: string | null
           trigger: string
         }
         Insert: {
@@ -5081,7 +5081,7 @@ export type Database = {
           result?: string
           started_at?: string
           stats?: Json | null
-          table_slug: string
+          table_slug?: string | null
           trigger?: string
         }
         Update: {
@@ -5095,7 +5095,7 @@ export type Database = {
           result?: string
           started_at?: string
           stats?: Json | null
-          table_slug?: string
+          table_slug?: string | null
           trigger?: string
         }
         Relationships: []
@@ -5105,7 +5105,7 @@ export type Database = {
           active: boolean
           created_at: string
           id: string
-          name: string
+          name: string | null
           notes: string | null
           type: string
           url: string | null
@@ -5114,7 +5114,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           id?: string
-          name: string
+          name?: string | null
           notes?: string | null
           type?: string
           url?: string | null
@@ -5123,7 +5123,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           id?: string
-          name?: string
+          name?: string | null
           notes?: string | null
           type?: string
           url?: string | null
@@ -5137,9 +5137,9 @@ export type Database = {
           is_auto_importable: boolean
           last_import_at: string | null
           last_import_result: Json | null
-          name: string
+          name: string | null
           requires_manual_input: boolean
-          slug: string
+          slug: string | null
           source_id: string | null
           status: string
           update_frequency: string
@@ -5150,9 +5150,9 @@ export type Database = {
           is_auto_importable?: boolean
           last_import_at?: string | null
           last_import_result?: Json | null
-          name: string
+          name?: string | null
           requires_manual_input?: boolean
-          slug: string
+          slug?: string | null
           source_id?: string | null
           status?: string
           update_frequency?: string
@@ -5163,9 +5163,9 @@ export type Database = {
           is_auto_importable?: boolean
           last_import_at?: string | null
           last_import_result?: Json | null
-          name?: string
+          name?: string | null
           requires_manual_input?: boolean
-          slug?: string
+          slug?: string | null
           source_id?: string | null
           status?: string
           update_frequency?: string
@@ -5183,7 +5183,7 @@ export type Database = {
       reference_table_versions: {
         Row: {
           competency_month: number | null
-          competency_year: number
+          competency_year: number | null
           created_at: string
           created_by: string | null
           id: string
@@ -5191,13 +5191,13 @@ export type Database = {
           notes: string | null
           source_snapshot: Json | null
           status: string
-          table_slug: string
+          table_slug: string | null
           valid_from: string | null
           valid_to: string | null
         }
         Insert: {
           competency_month?: number | null
-          competency_year: number
+          competency_year?: number | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -5205,13 +5205,13 @@ export type Database = {
           notes?: string | null
           source_snapshot?: Json | null
           status?: string
-          table_slug: string
+          table_slug?: string | null
           valid_from?: string | null
           valid_to?: string | null
         }
         Update: {
           competency_month?: number | null
-          competency_year?: number
+          competency_year?: number | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -5219,7 +5219,7 @@ export type Database = {
           notes?: string | null
           source_snapshot?: Json | null
           status?: string
-          table_slug?: string
+          table_slug?: string | null
           valid_from?: string | null
           valid_to?: string | null
         }
@@ -5235,40 +5235,40 @@ export type Database = {
       }
       rubric_classifications: {
         Row: {
-          canonical_code: string
+          canonical_code: string | null
           canonical_name: string | null
-          case_id: string
+          case_id: string | null
           confidence: number
           confirmed_at: string | null
           confirmed_by: string | null
           created_at: string
           id: string
-          method: string
-          source_name: string
+          method: string | null
+          source_name: string | null
         }
         Insert: {
-          canonical_code: string
+          canonical_code?: string | null
           canonical_name?: string | null
-          case_id: string
+          case_id?: string | null
           confidence?: number
           confirmed_at?: string | null
           confirmed_by?: string | null
           created_at?: string
           id?: string
-          method: string
-          source_name: string
+          method?: string | null
+          source_name?: string | null
         }
         Update: {
-          canonical_code?: string
+          canonical_code?: string | null
           canonical_name?: string | null
-          case_id?: string
+          case_id?: string | null
           confidence?: number
           confirmed_at?: string | null
           confirmed_by?: string | null
           created_at?: string
           id?: string
-          method?: string
-          source_name?: string
+          method?: string | null
+          source_name?: string | null
         }
         Relationships: []
       }
@@ -5281,8 +5281,8 @@ export type Database = {
           fatos_requeridos: string[]
           id: string
           nivel_exigencia: string | null
-          rubrica_codigo: string
-          rubrica_nome: string
+          rubrica_codigo: string | null
+          rubrica_nome: string | null
         }
         Insert: {
           alerta_sem_prova?: string | null
@@ -5292,8 +5292,8 @@ export type Database = {
           fatos_requeridos?: string[]
           id?: string
           nivel_exigencia?: string | null
-          rubrica_codigo: string
-          rubrica_nome: string
+          rubrica_codigo?: string | null
+          rubrica_nome?: string | null
         }
         Update: {
           alerta_sem_prova?: string | null
@@ -5303,8 +5303,8 @@ export type Database = {
           fatos_requeridos?: string[]
           id?: string
           nivel_exigencia?: string | null
-          rubrica_codigo?: string
-          rubrica_nome?: string
+          rubrica_codigo?: string | null
+          rubrica_nome?: string | null
         }
         Relationships: []
       }
@@ -5312,7 +5312,7 @@ export type Database = {
         Row: {
           apply_days: string[] | null
           ativo: boolean
-          case_id: string
+          case_id: string | null
           created_at: string
           date_range_end: string | null
           date_range_start: string | null
@@ -5325,7 +5325,7 @@ export type Database = {
         Insert: {
           apply_days?: string[] | null
           ativo?: boolean
-          case_id: string
+          case_id?: string | null
           created_at?: string
           date_range_end?: string | null
           date_range_start?: string | null
@@ -5338,7 +5338,7 @@ export type Database = {
         Update: {
           apply_days?: string[] | null
           ativo?: boolean
-          case_id?: string
+          case_id?: string | null
           created_at?: string
           date_range_end?: string | null
           date_range_start?: string | null
@@ -5357,7 +5357,7 @@ export type Database = {
           id: string
           last_processed_date: string | null
           last_sync_attempt: string | null
-          serie_id: number
+          serie_id: number | null
           serie_nome: string | null
           status: string | null
         }
@@ -5367,7 +5367,7 @@ export type Database = {
           id?: string
           last_processed_date?: string | null
           last_sync_attempt?: string | null
-          serie_id: number
+          serie_id?: number | null
           serie_nome?: string | null
           status?: string | null
         }
@@ -5377,7 +5377,7 @@ export type Database = {
           id?: string
           last_processed_date?: string | null
           last_sync_attempt?: string | null
-          serie_id?: number
+          serie_id?: number | null
           serie_nome?: string | null
           status?: string | null
         }
@@ -5387,62 +5387,62 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
+          role: Database["public"]["Enums"]["app_role"] | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
+          role?: Database["public"]["Enums"]["app_role"] | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
+          role?: Database["public"]["Enums"]["app_role"] | null
+          user_id?: string | null
         }
         Relationships: []
       }
       validations: {
         Row: {
-          acao: Database["public"]["Enums"]["validation_action"]
-          campo: string
-          case_id: string
+          acao: Database["public"]["Enums"]["validation_action"] | null
+          campo: string | null
+          case_id: string | null
           extraction_id: string | null
           id: string
           justificativa: string | null
           metadata: Json | null
           snapshot_id: string | null
-          usuario_id: string
+          usuario_id: string | null
           validated_at: string
           valor_anterior: string | null
           valor_validado: string | null
         }
         Insert: {
-          acao: Database["public"]["Enums"]["validation_action"]
-          campo: string
-          case_id: string
+          acao?: Database["public"]["Enums"]["validation_action"] | null
+          campo?: string | null
+          case_id?: string | null
           extraction_id?: string | null
           id?: string
           justificativa?: string | null
           metadata?: Json | null
           snapshot_id?: string | null
-          usuario_id: string
+          usuario_id?: string | null
           validated_at?: string
           valor_anterior?: string | null
           valor_validado?: string | null
         }
         Update: {
-          acao?: Database["public"]["Enums"]["validation_action"]
-          campo?: string
-          case_id?: string
+          acao?: Database["public"]["Enums"]["validation_action"] | null
+          campo?: string | null
+          case_id?: string | null
           extraction_id?: string | null
           id?: string
           justificativa?: string | null
           metadata?: Json | null
           snapshot_id?: string | null
-          usuario_id?: string
+          usuario_id?: string | null
           validated_at?: string
           valor_anterior?: string | null
           valor_validado?: string | null
@@ -5461,9 +5461,9 @@ export type Database = {
         Row: {
           adjusted_json: Json
           applied_rules: string[] | null
-          case_id: string
+          case_id: string | null
           created_at: string
-          data: string
+          data: string | null
           extras_diarias: number | null
           flags: string[] | null
           horas_trabalhadas_ajustadas: number | null
@@ -5475,9 +5475,9 @@ export type Database = {
         Insert: {
           adjusted_json?: Json
           applied_rules?: string[] | null
-          case_id: string
+          case_id?: string | null
           created_at?: string
-          data: string
+          data?: string | null
           extras_diarias?: number | null
           flags?: string[] | null
           horas_trabalhadas_ajustadas?: number | null
@@ -5489,9 +5489,9 @@ export type Database = {
         Update: {
           adjusted_json?: Json
           applied_rules?: string[] | null
-          case_id?: string
+          case_id?: string | null
           created_at?: string
-          data?: string
+          data?: string | null
           extras_diarias?: number | null
           flags?: string[] | null
           horas_trabalhadas_ajustadas?: number | null
