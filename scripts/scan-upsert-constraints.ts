@@ -98,12 +98,12 @@ for (const file of walk(SRC_DIR)) {
   }
 }
 
+for (const i of issues) {
+  console.error(`[${i.severity.toUpperCase()}] ${i.file}:${i.line} ${i.table} — ${i.detail}`);
+}
+
 if (issues.length === 0) {
   console.log('✓ Nenhum mismatch detectado em upsert/onConflict.');
   process.exit(0);
-}
-
-for (const i of issues) {
-  console.error(`[${i.severity.toUpperCase()}] ${i.file}:${i.line} ${i.table} — ${i.detail}`);
 }
 process.exit(1);
