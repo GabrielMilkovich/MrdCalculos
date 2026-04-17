@@ -14,17 +14,17 @@ import { MemoriaCalculoExpandida } from "./MemoriaCalculoExpandida";
 import { ComparacaoCenarios } from "./ComparacaoCenarios";
 import { calcularCompletude } from "@/lib/pjecalc/completude";
 import * as svc from "@/lib/pjecalc/service";
-import {
-  PjeCalcEngine,
-  type PjeParametros, type PjeHistoricoSalarial, type PjeFalta, type PjeFerias,
-  type PjeVerba, type PjeCartaoPonto, type PjeFGTSConfig, type PjeCSConfig,
-  type PjeIRConfig, type PjeCorrecaoConfig, type PjeHonorariosConfig,
-  type PjeCustasConfig, type PjeSeguroConfig, type PjeLiquidacaoResult,
-  type PjeIndiceRow, type PjeINSSFaixaRow, type PjeIRFaixaRow,
-  type PjeValidationResult,
-  type PjeExcecaoCargaHoraria, type PjeFeriadoDB,
-  type PjePrevidenciaPrivadaConfig, type PjePensaoConfig, type PjeSalarioFamiliaConfig,
-} from "@/lib/pjecalc/engine";
+import { PjeCalcEngineV3 } from "@/lib/pjecalc/engine-v3";
+import type {
+  PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias,
+  PjeVerba, PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig,
+  PjeIRConfig, PjeCorrecaoConfig, PjeHonorariosConfig,
+  PjeCustasConfig, PjeSeguroConfig, PjeLiquidacaoResult,
+  PjeIndiceRow, PjeINSSFaixaRow, PjeIRFaixaRow,
+  PjeValidationResult,
+  PjeExcecaoCargaHoraria, PjeFeriadoDB,
+  PjePrevidenciaPrivadaConfig, PjePensaoConfig, PjeSalarioFamiliaConfig,
+} from "@/lib/pjecalc/engine-types";
 import { gerarRelatorioPDF } from "@/lib/pjecalc/pdf-report";
 import { gerarRelatorioMemoriaCalculo } from "@/lib/pjecalc/pdf-report-memoria";
 import { gerarRelatorioDiferenca } from "@/lib/pjecalc/pdf-report-diferenca";
@@ -348,12 +348,12 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
 
       // Execute engine com TODOS os dados
       const verbasCast = verbas.map(v => ({ ...v, valor: v.valor as "calculado" | "informado" }));
-      const engine = new PjeCalcEngine(
+      const engine = new PjeCalcEngineV3(
         params, historicos, faltas, ferias, verbasCast, cartaoPonto,
         fgtsConfig, csConfig, irConfig, correcaoConfigLocal,
         honorariosConfig, custasConfigLocal, seguroConfig,
         indicesDB, faixasINSSDB, faixasIRDB,
-        [], // excecoesCargas — no service method (getExcecoesCarga) available yet; engine handles empty array gracefully
+        [], // excecoesCargas
         feriadosDB.map(f => ({ ...f, tipo: f.tipo as "estadual" | "facultativo" | "municipal" | "nacional" })),
         prevPrivadaConfig,
         pensaoConfig,

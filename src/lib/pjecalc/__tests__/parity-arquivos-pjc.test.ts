@@ -18,7 +18,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { analyzePJC } from '../pjc-analyzer';
 import { convertPjcToEngineInputs } from '../pjc-to-engine';
-import { PjeCalcEngine } from '../engine';
+import { PjeCalcEngineV3 } from '../engine-v3';
 import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, SELIC_MENSAL, TR_ACUMULADO } from '../indices-fallback';
 import type { PjeIndiceRow, PjeINSSFaixaRow } from '../engine-types';
 
@@ -125,7 +125,7 @@ function rodarCaso(file: string): Resultado {
     if (inputs.csConfig.apuracao_juros_gt) inputs.csConfig.apuracao_juros_gt = undefined;
     if (inputs.irConfig.apuracao_juros_gt) inputs.irConfig.apuracao_juros_gt = undefined;
 
-    const engine = new PjeCalcEngine(
+    const engine = new PjeCalcEngineV3(
       inputs.params, inputs.historicos, inputs.faltas, inputs.ferias,
       inputs.verbas, inputs.cartaoPonto, inputs.fgtsConfig, inputs.csConfig,
       inputs.irConfig, inputs.correcaoConfig, inputs.honorariosConfig,

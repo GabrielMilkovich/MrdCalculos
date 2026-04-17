@@ -7,11 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eye, X } from "lucide-react";
-import { PjeCalcEngine, type PjeVerba, type PjeOcorrenciaResult } from "@/lib/pjecalc/engine";
+import { PjeCalcEngineV3 } from "@/lib/pjecalc/engine-v3";
+import type { PjeVerba, PjeOcorrenciaResult } from "@/lib/pjecalc/engine-types";
 
 interface Props {
   verba: PjeVerba;
-  engine: PjeCalcEngine | null;
+  engine: PjeCalcEngineV3 | null;
   onClose: () => void;
 }
 

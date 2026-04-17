@@ -12,7 +12,7 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import { analyzePJC } from '../pjc-analyzer';
 import { convertPjcToEngineInputs } from '../pjc-to-engine';
-import { PjeCalcEngine } from '../engine';
+import { PjeCalcEngineV3 } from '../engine-v3';
 import { exportarMemoriaJSON } from '../memoria-export';
 import type { PjeIndiceRow, PjeINSSFaixaRow } from '../engine-types';
 
@@ -103,7 +103,7 @@ describe('Memória de Cálculo — Auditoria', () => {
       if ((inputs.csConfig as Record<string, unknown>).apuracao_juros_gt) (inputs.csConfig as Record<string, unknown>).apuracao_juros_gt = undefined;
       if ((inputs.irConfig as Record<string, unknown>).apuracao_juros_gt) (inputs.irConfig as Record<string, unknown>).apuracao_juros_gt = undefined;
 
-      const engine = new PjeCalcEngine(
+      const engine = new PjeCalcEngineV3(
         inputs.params, inputs.historicos, inputs.faltas, inputs.ferias,
         inputs.verbas, inputs.cartaoPonto, inputs.fgtsConfig, inputs.csConfig,
         inputs.irConfig, inputs.correcaoConfig, inputs.honorariosConfig,
@@ -144,7 +144,7 @@ describe('Memória de Cálculo — Auditoria', () => {
     if ((inputs.csConfig as Record<string, unknown>).apuracao_juros_gt) (inputs.csConfig as Record<string, unknown>).apuracao_juros_gt = undefined;
     if ((inputs.irConfig as Record<string, unknown>).apuracao_juros_gt) (inputs.irConfig as Record<string, unknown>).apuracao_juros_gt = undefined;
 
-    const engine = new PjeCalcEngine(
+    const engine = new PjeCalcEngineV3(
       inputs.params, inputs.historicos, inputs.faltas, inputs.ferias,
       inputs.verbas, inputs.cartaoPonto, inputs.fgtsConfig, inputs.csConfig,
       inputs.irConfig, inputs.correcaoConfig, inputs.honorariosConfig,

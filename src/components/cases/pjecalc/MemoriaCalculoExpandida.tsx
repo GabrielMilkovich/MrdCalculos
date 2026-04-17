@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronDown, ChevronRight, FileText, Scale } from "lucide-react";
-import type { PjeLiquidacaoResult, PjeVerbaResult, PjeOcorrenciaResult } from "@/lib/pjecalc/engine";
+import type { PjeLiquidacaoResult, PjeVerbaResult, PjeOcorrenciaResult } from "@/lib/pjecalc/engine-types";
 
 interface Props {
   resultado: PjeLiquidacaoResult;

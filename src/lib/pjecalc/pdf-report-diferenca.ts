@@ -2,7 +2,7 @@
  * PJe-Calc - Relatório por Diferença
  * Shows only the net difference per verba/competence.
  */
-import type { PjeLiquidacaoResult } from "./engine";
+import type { PjeLiquidacaoResult } from "./engine-types";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);

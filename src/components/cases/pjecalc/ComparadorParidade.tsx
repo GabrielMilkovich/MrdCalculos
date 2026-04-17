@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import type { PJCAnalysis } from '@/lib/pjecalc/pjc-analyzer';
-import type { PjeLiquidacaoResult, PjeVerbaResult } from '@/lib/pjecalc/engine';
+import type { PjeLiquidacaoResult, PjeVerbaResult } from '@/lib/pjecalc/engine-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import * as svc from "@/lib/pjecalc/service";
 import { GitCompareArrows, TrendingUp, TrendingDown, Equal } from "lucide-react";
-import type { PjeLiquidacaoResult } from "@/lib/pjecalc/engine";
+import type { PjeLiquidacaoResult } from "@/lib/pjecalc/engine-types";
 
 interface Props { caseId: string; }
 

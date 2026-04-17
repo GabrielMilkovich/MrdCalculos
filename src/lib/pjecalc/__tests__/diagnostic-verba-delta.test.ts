@@ -13,7 +13,7 @@ import { execSync } from 'child_process';
 import Decimal from 'decimal.js';
 import { analyzePJC } from '../pjc-analyzer';
 import { convertPjcToEngineInputs } from '../pjc-to-engine';
-import { PjeCalcEngine } from '../engine';
+import { PjeCalcEngineV3 } from '../engine-v3';
 import type { PjeIndiceRow, PjeINSSFaixaRow } from '../engine-types';
 
 const SELIC_MONTHLY: Record<number, number[]> = {
@@ -115,7 +115,7 @@ describe('DIAGNOSTIC: Per-verba delta breakdown', () => {
       if ((inputsI.irConfig as Record<string, unknown>).apuracao_juros_gt) (inputsI.irConfig as Record<string, unknown>).apuracao_juros_gt = undefined;
       if (!inputsI.params.data_citacao) inputsI.params.data_citacao = inputsI.params.data_ajuizamento;
 
-      const engineI = new PjeCalcEngine(inputsI.params, inputsI.historicos, inputsI.faltas, inputsI.ferias, inputsI.verbas, inputsI.cartaoPonto, inputsI.fgtsConfig, inputsI.csConfig, inputsI.irConfig, inputsI.correcaoConfig, inputsI.honorariosConfig, inputsI.custasConfig, inputsI.seguroConfig, INDICES_DB, FAIXAS_INSS, [], inputsI.excecoesCargas || [], [], inputsI.prevPrivadaConfig, inputsI.pensaoConfig, inputsI.salarioFamiliaConfig);
+      const engineI = new PjeCalcEngineV3(inputsI.params, inputsI.historicos, inputsI.faltas, inputsI.ferias, inputsI.verbas, inputsI.cartaoPonto, inputsI.fgtsConfig, inputsI.csConfig, inputsI.irConfig, inputsI.correcaoConfig, inputsI.honorariosConfig, inputsI.custasConfig, inputsI.seguroConfig, INDICES_DB, FAIXAS_INSS, [], inputsI.excecoesCargas || [], [], inputsI.prevPrivadaConfig, inputsI.pensaoConfig, inputsI.salarioFamiliaConfig);
       const resultI = engineI.liquidar();
 
       console.log(`\n${'═'.repeat(100)}`);

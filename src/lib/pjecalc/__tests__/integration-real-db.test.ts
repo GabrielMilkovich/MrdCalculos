@@ -11,7 +11,7 @@ import { execSync } from 'child_process';
 import { createClient } from '@supabase/supabase-js';
 import { analyzePJC } from '../pjc-analyzer';
 import { convertPjcToEngineInputs } from '../pjc-to-engine';
-import { PjeCalcEngine } from '../engine';
+import { PjeCalcEngineV3 } from '../engine-v3';
 import type { PjeIndiceRow, PjeINSSFaixaRow, PjeIRFaixaRow } from '../engine-types';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://guozwjosshsmcgzstroe.supabase.co';
@@ -141,7 +141,7 @@ describe('Integration: Real DB indices vs PJe-Calc', { timeout: TEST_TIMEOUT }, 
         inputs.params.data_citacao = inputs.params.data_ajuizamento;
       }
 
-      const engine = new PjeCalcEngine(
+      const engine = new PjeCalcEngineV3(
         inputs.params, inputs.historicos, inputs.faltas, inputs.ferias,
         inputs.verbas, inputs.cartaoPonto, inputs.fgtsConfig, inputs.csConfig,
         inputs.irConfig, inputs.correcaoConfig, inputs.honorariosConfig,

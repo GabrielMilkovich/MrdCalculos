@@ -511,6 +511,7 @@ export class Calculo {
     const ctx: ITabelaCorrecaoContext = {
       getDataDeLiquidacao: () => this.getDataDeLiquidacao(),
       getDataDemissao: () => this.getDataDemissao(),
+      getParametrosDeAtualizacao: () => this.parametrosDeAtualizacao,
     };
     const periodoCalculo = new Periodo(
       HelperDate.getCurrentCompetence(this.getDataAdmissao()).getDate(),

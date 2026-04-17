@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { FileBarChart, Download, Loader2, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import type { PjeLiquidacaoResult, PjeParametros } from "@/lib/pjecalc/engine";
+import type { PjeLiquidacaoResult, PjeParametros } from "@/lib/pjecalc/engine-types";
 import type { DadosProcesso } from "@/lib/pjecalc/pdf/types";
 import {
   buildMemoriaDeCalculo,
