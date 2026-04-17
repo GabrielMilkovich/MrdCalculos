@@ -22,6 +22,7 @@ import {
   HISTORICO_FAIXAS_INSS,
 } from '../engine-constants';
 import { CaracteristicaDaVerbaEnum } from '../core/constantes/enums';
+import { Inss } from '../core/dominio/calculo/inss/inss';
 
 // PJe-Calc usa ROUND_HALF_EVEN (Banker's rounding) para CS e IR
 const ROUND_CS_IR = Decimal.ROUND_HALF_EVEN;
@@ -66,6 +67,16 @@ export class InssModuloAdapter implements IModuloLiquidavel {
     if (!this.csConfig.apurar_segurado && !this.csConfig.apurar_empresa) return;
 
     // 1. Agrupa bases por competência (normal vs 13º — tetos separados)
+    //
+    // FIX CRÍTICO (CAUSA-6 / com_correcao_trabalhista):
+    // PJe-Calc aplica correção monetária sobre a base de INSS quando o flag
+    // "Com Correção Trabalhista" está ativo na tela CS. Em `MaquinaDeCalculoDoInss`
+    // isso é feito na fase de atualização (via tabela trabalhista salários devidos).
+    // O atalho equivalente no adapter é usar `getDiferencaCorrigida()`, que já
+    // multiplica a diferença nominal pelo `indiceAcumulado` setado pelo
+    // `Calculo.liquidarVerba`. Sem isso, o INSS vinha ~50% abaixo em casos
+    // históricos (pré-2020) onde o fator IPCA-E acumulado é grande.
+    const usarCorrigida = this.csConfig.com_correcao_trabalhista === true;
     const basesNormal: Record<string, number> = {};
     const bases13: Record<string, number> = {};
 
@@ -77,10 +88,18 @@ export class InssModuloAdapter implements IModuloLiquidavel {
       for (const oc of vc.getOcorrenciasAtivas()) {
         const dataIni = oc.getDataInicial();
         if (!dataIni) continue;
-        const dif = oc.getDiferenca().toNumber();
-        if (dif <= 0) continue;
+        // Se flag ativo: usa diferença corrigida (nominal × indiceAcumulado).
+        // Se não setado o indice, faz fallback para nominal.
+        let base: Decimal;
+        if (usarCorrigida) {
+          const corr = oc.getDiferencaCorrigida();
+          base = corr !== null ? corr : oc.getDiferenca();
+        } else {
+          base = oc.getDiferenca();
+        }
+        if (base.lte(0)) continue;
         const comp = this.formatCompetencia(dataIni);
-        target[comp] = (target[comp] ?? 0) + dif;
+        target[comp] = (target[comp] ?? 0) + base.toNumber();
       }
     }
 
@@ -193,25 +212,13 @@ export class InssModuloAdapter implements IModuloLiquidavel {
   }
 
   /**
-   * Alíquota única pré-EC 103/2019: toda a base é tributada na alíquota da faixa
-   * onde o salário se encaixa.
+   * Roteia o cálculo de INSS pelo port 1:1 (`Inss.apurarInss`).
+   *
+   *   - Alíquota fixa (quando usuário informou): base × aliquota_fixa / 100.
+   *   - Pré-EC 103/2019 (< 2020-03): alíquota única da faixa onde o salário se encaixa.
+   *   - Pós-EC 103/2019: progressivo faixa-a-faixa com teto.
    */
-  private calcularINSSAliquotaUnica(comp: string, base: number): number {
-    const faixas = this.getFaixasParaCompetencia(comp);
-    if (faixas.length === 0) return 0;
-    const baseD = new Decimal(base);
-    for (const f of faixas) {
-      if (baseD.lte(f.ate)) {
-        return baseD.times(f.aliquota).toDP(2, ROUND_CS_IR).toNumber();
-      }
-    }
-    // Base excede todas as faixas: teto da última × sua alíquota
-    const ultima = faixas[faixas.length - 1];
-    return new Decimal(ultima.ate).times(ultima.aliquota).toDP(2, ROUND_CS_IR).toNumber();
-  }
-
   private calcularINSSProgressivo(comp: string, base: number): number {
-    // Alíquota fixa informada pelo usuário
     if (this.csConfig.aliquota_segurado_tipo === 'fixa' && this.csConfig.aliquota_segurado_fixa) {
       return new Decimal(base)
         .times(this.csConfig.aliquota_segurado_fixa)
@@ -219,25 +226,9 @@ export class InssModuloAdapter implements IModuloLiquidavel {
         .toDP(2, ROUND_CS_IR)
         .toNumber();
     }
-    // Pré-EC 103/2019 (até 02/2020) — alíquota única
-    if (comp < '2020-03') return this.calcularINSSAliquotaUnica(comp, base);
-
     const faixas = this.getFaixasParaCompetencia(comp);
-    const teto = faixas[faixas.length - 1].ate;
-    const aplicarTeto = this.csConfig.aliquota_segurado_tipo !== 'fixa';
-    let baseRestante = new Decimal(aplicarTeto ? Math.min(base, teto) : base);
-    let imposto = new Decimal(0);
-    let faixaAnterior = new Decimal(0);
-    for (const f of faixas) {
-      const limiteNaFaixa = new Decimal(f.ate).minus(faixaAnterior);
-      const baseNaFaixa = Decimal.min(baseRestante, limiteNaFaixa);
-      if (baseNaFaixa.gt(0)) {
-        imposto = imposto.plus(baseNaFaixa.times(f.aliquota).toDP(2, ROUND_CS_IR));
-        baseRestante = baseRestante.minus(baseNaFaixa);
-      }
-      if (baseRestante.lte(0)) break;
-      faixaAnterior = new Decimal(f.ate);
-    }
-    return imposto.toDP(2, ROUND_CS_IR).toNumber();
+    const aliquotaUnica = comp < '2020-03';
+    const limitarTeto = this.csConfig.aliquota_segurado_tipo !== 'fixa';
+    return Inss.apurarInss(new Decimal(base), faixas, aliquotaUnica, limitarTeto).toNumber();
   }
 }

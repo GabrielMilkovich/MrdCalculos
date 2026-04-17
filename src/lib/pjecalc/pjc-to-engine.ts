@@ -746,17 +746,35 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
 
 function buildDefaultIRConfig(a: PJCAnalysis): PjeIRConfig {
   const gt = convertApuracaoJurosToGT(a.apuracao_juros);
+  const ic = a.ir_config;
+  // Prefer PJC's explicit flags when present. Caveat: apurar=true in PJC XML does
+  // not necessarily mean the result is > 0 — zero income after deductions is valid.
+  if (ic) {
+    return {
+      apurar: ic.apurar_imposto_renda,
+      incidir_sobre_juros: ic.incidir_sobre_juros_de_mora,
+      cobrar_reclamado: ic.cobrar_do_reclamado,
+      tributacao_exclusiva_13: ic.considerar_tributacao_exclusiva,
+      tributacao_separada_ferias: ic.considerar_tributacao_em_separado,
+      deduzir_cs: ic.deduzir_cs_reclamante,
+      deduzir_prev_privada: ic.deduzir_previdencia_privada,
+      deduzir_pensao: ic.deduzir_pensao_alimenticia,
+      deduzir_honorarios: ic.deduzir_honorarios_reclamante,
+      aposentado_65: ic.aposentado_maior_que_65,
+      dependentes: ic.possui_dependentes ? ic.quantidade_dependentes : 0,
+      apuracao_juros_gt: gt,
+    };
+  }
+  // Fallback defaults (PJe-Calc defaults mirror `configurarValoresPadroes`).
   return {
     apurar: a.resultado.imposto_renda > 0,
     incidir_sobre_juros: false,
     cobrar_reclamado: false,
-    tributacao_exclusiva_13: true,
-    tributacao_separada_ferias: true,
+    tributacao_exclusiva_13: false,
+    tributacao_separada_ferias: false,
     deduzir_cs: true,
-    deduzir_prev_privada: false,
-    deduzir_pensao: false,
-    // PJe-Calc default: "Honorários devidos pelo Reclamante" marcado por padrão
-    // na tela "Deduzir da Base do Imposto de Renda".
+    deduzir_prev_privada: true,
+    deduzir_pensao: true,
     deduzir_honorarios: true,
     aposentado_65: false,
     dependentes: 0,

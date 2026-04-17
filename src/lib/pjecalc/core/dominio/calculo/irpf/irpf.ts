@@ -345,17 +345,19 @@ export class Irpf implements IModuloLiquidavel {
       this.impostoDevido = ZERO;
       return;
     }
-    let impostoMensal: Decimal = ZERO;
+    // Encontrar a faixa aplicável: primeira cujo `ate >= baseTributavel`.
+    // Bug fix: não romper na 1ª faixa só por `aliquota.isZero()` — itera até encontrar
+    // a faixa correspondente ao nível mensal da base RRA.
+    let faixaAplicavel = this.faixas[this.faixas.length - 1];
     for (const faixa of this.faixas) {
-      if (this.baseTributavel.comparedTo(faixa.ate) <= 0 || faixa.aliquota.isZero()) {
-        impostoMensal = this.baseTributavel.times(faixa.aliquota).minus(faixa.deducao);
+      if (this.baseTributavel.comparedTo(faixa.ate) <= 0) {
+        faixaAplicavel = faixa;
         break;
       }
     }
-    if (impostoMensal.isZero()) {
-      const ultima = this.faixas[this.faixas.length - 1];
-      impostoMensal = this.baseTributavel.times(ultima.aliquota).minus(ultima.deducao);
-    }
+    const impostoMensal = this.baseTributavel
+      .times(faixaAplicavel.aliquota)
+      .minus(faixaAplicavel.deducao);
     const impostoTotal = impostoMensal.isNegative() ? ZERO : impostoMensal.times(this.mesesRRA);
     this.impostoDevido = arredondarValorMonetario(impostoTotal);
   }

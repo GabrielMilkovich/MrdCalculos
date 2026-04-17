@@ -81,6 +81,22 @@ export interface PJCAnalysis {
     /** CAUSA-6: PJe-Calc "Com Correção Trabalhista" — INSS sobre base corrigida */
     com_correcao_trabalhista?: boolean;
   };
+  /** IR config from PJC XML (ImpostoRendaCalculo / impostoDeRenda). */
+  ir_config?: {
+    apurar_imposto_renda: boolean;
+    incidir_sobre_juros_de_mora: boolean;
+    cobrar_do_reclamado: boolean;
+    considerar_tributacao_exclusiva: boolean;
+    considerar_tributacao_em_separado: boolean;
+    regime_de_caixa: boolean;
+    deduzir_cs_reclamante: boolean;
+    deduzir_previdencia_privada: boolean;
+    deduzir_pensao_alimenticia: boolean;
+    deduzir_honorarios_reclamante: boolean;
+    aposentado_maior_que_65: boolean;
+    possui_dependentes: boolean;
+    quantidade_dependentes: number;
+  };
   verbas: VerbaAnalysis[];
   historicos_salariais: HistoricoAnalysis[];
   /** @deprecated Use apuracao_diaria instead */
@@ -668,6 +684,12 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     || root.getElementsByTagName('contribuicaoSocial')[0]
     || root.getElementsByTagName('cs')[0];
   let cs_config: PJCAnalysis['cs_config'] = undefined;
+  // Flag "com correção trabalhista" — aparece no root como
+  // `correcaoTrabalhistaDosSalariosDevidosDoINSS` (dentro de parametrosAtualizacao)
+  // ou como `comCorrecaoTrabalhista` em arquivos mais recentes.
+  const comCorrecaoTrabalhista = getTextContent(root, 'comCorrecaoTrabalhista') === 'true'
+    || getTextContent(root, 'correcaoTrabalhistaDosSalariosDevidosDoINSS') === 'true'
+    ? true : undefined;
   if (csConfigEl) {
     cs_config = {
       apurar_segurado: getTextContent(csConfigEl, 'apurarSegurado') !== 'false',
@@ -676,10 +698,22 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       aliquota_empresa: parseNum(getTextContent(csConfigEl, 'aliquotaEmpresa') || getTextContent(csConfigEl, 'aliquotaPatronal')) || 20,
       aliquota_sat: parseNum(getTextContent(csConfigEl, 'aliquotaSAT') || getTextContent(csConfigEl, 'aliquotaRat')) || 0,
       aliquota_terceiros: parseNum(getTextContent(csConfigEl, 'aliquotaTerceiros')) || 0,
-      // CAUSA-6: PJe-Calc emite "comCorrecaoTrabalhista" quando o checkbox está ativo
       com_correcao_trabalhista: getTextContent(csConfigEl, 'comCorrecaoTrabalhista') === 'true'
-        || getTextContent(root, 'comCorrecaoTrabalhista') === 'true'
+        || comCorrecaoTrabalhista
         || undefined,
+    };
+  } else if (comCorrecaoTrabalhista) {
+    // Sem <ContribuicaoSocial>, mas o flag de correção trabalhista está no root.
+    // Cria um cs_config mínimo só para propagar o flag — os campos numéricos ficam
+    // em zero/default e serão preenchidos pelos fallbacks de buildDefaultCSConfig().
+    cs_config = {
+      apurar_segurado: true,
+      apurar_empresa: true,
+      aliquota_segurado: 0,
+      aliquota_empresa: 20,
+      aliquota_sat: 0,
+      aliquota_terceiros: 0,
+      com_correcao_trabalhista: true,
     };
   }
   // If PJC resultado shows zero CS, disable it
@@ -766,6 +800,62 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     fgts_config = { apurar: true, multa_percentual: 40, multa_base: 'devido', lc110_10: false, lc110_05: false, destino: 'pagar_reclamante' };
   }
 
+  // --- IR Config (flags from ImpostoRendaCalculo / impostoDeRenda) ---
+  const irConfigEl = root.getElementsByTagName('ImpostoRendaCalculo')[0]
+    || root.getElementsByTagName('impostoDeRenda')[0]
+    || root.getElementsByTagName('ImpostoRenda')[0]
+    || root.getElementsByTagName('impostoRendaCalculo')[0];
+  let ir_config: PJCAnalysis['ir_config'] = undefined;
+  if (irConfigEl) {
+    const getBoolTag = (tag: string, fallback: boolean): boolean => {
+      const t = getTextContent(irConfigEl, tag);
+      if (t === 'true') return true;
+      if (t === 'false') return false;
+      return fallback;
+    };
+    ir_config = {
+      apurar_imposto_renda: getBoolTag('apurarImpostoRenda', true),
+      incidir_sobre_juros_de_mora: getBoolTag('incidirSobreJurosDeMora', false),
+      cobrar_do_reclamado: getBoolTag('cobrarDoReclamado', false),
+      considerar_tributacao_exclusiva: getBoolTag('considerarTributacaoExclusiva', false),
+      considerar_tributacao_em_separado: getBoolTag('considerarTributacaoEmSeparado', false),
+      regime_de_caixa: getBoolTag('regimeDeCaixa', false),
+      deduzir_cs_reclamante: getBoolTag('deduzirContribuicaoSocialDevidaPeloReclamante', true),
+      deduzir_previdencia_privada: getBoolTag('deduzirPrevidenciaPrivada', true),
+      deduzir_pensao_alimenticia: getBoolTag('deduzirPensaoAlimenticia', true),
+      deduzir_honorarios_reclamante: getBoolTag('deduzirHonorariosDevidosPeloReclamante', true),
+      aposentado_maior_que_65: getBoolTag('aposentadoMaiorQue65Anos', false),
+      possui_dependentes: getBoolTag('possuiDependentes', false),
+      quantidade_dependentes: parseInt(getTextContent(irConfigEl, 'quantidadeDependentes')) || 0,
+    };
+  } else {
+    // fallback: look at root level
+    const getBoolRoot = (tag: string, fallback: boolean): boolean => {
+      const t = getTextContent(root, tag);
+      if (t === 'true') return true;
+      if (t === 'false') return false;
+      return fallback;
+    };
+    const tagApurar = getTextContent(root, 'apurarImpostoRenda');
+    if (tagApurar === 'true' || tagApurar === 'false') {
+      ir_config = {
+        apurar_imposto_renda: getBoolRoot('apurarImpostoRenda', true),
+        incidir_sobre_juros_de_mora: getBoolRoot('incidirSobreJurosDeMora', false),
+        cobrar_do_reclamado: getBoolRoot('cobrarDoReclamado', false),
+        considerar_tributacao_exclusiva: getBoolRoot('considerarTributacaoExclusiva', false),
+        considerar_tributacao_em_separado: getBoolRoot('considerarTributacaoEmSeparado', false),
+        regime_de_caixa: getBoolRoot('regimeDeCaixa', false),
+        deduzir_cs_reclamante: getBoolRoot('deduzirContribuicaoSocialDevidaPeloReclamante', true),
+        deduzir_previdencia_privada: getBoolRoot('deduzirPrevidenciaPrivada', true),
+        deduzir_pensao_alimenticia: getBoolRoot('deduzirPensaoAlimenticia', true),
+        deduzir_honorarios_reclamante: getBoolRoot('deduzirHonorariosDevidosPeloReclamante', true),
+        aposentado_maior_que_65: getBoolRoot('aposentadoMaiorQue65Anos', false),
+        possui_dependentes: getBoolRoot('possuiDependentes', false),
+        quantidade_dependentes: parseInt(getTextContent(root, 'quantidadeDependentes')) || 0,
+      };
+    }
+  }
+
   // --- Pensão, Previdência, Salário-Família, Seguro-Desemprego ---
   const pensaoEl = root.getElementsByTagName('PensaoAlimenticia')[0] || root.getElementsByTagName('pensaoAlimenticia')[0];
   const prevEl = root.getElementsByTagName('PrevidenciaPrivada')[0] || root.getElementsByTagName('previdenciaPrivada')[0];
@@ -776,6 +866,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     parametros,
     resultado,
     cs_config,
+    ir_config,
     verbas,
     historicos_salariais,
     apuracao_diaria_count,
