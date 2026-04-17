@@ -2,7 +2,7 @@
  * PJe-Calc PDF Report Generator
  * Generates a printable HTML report that opens in a new window for PDF printing.
  */
-import type { PjeLiquidacaoResult } from "./engine";
+import type { PjeLiquidacaoResult } from "./engine-types";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);

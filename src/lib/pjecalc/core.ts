@@ -6,15 +6,15 @@
  * All data (indices, faixas, feriados) is passed as parameters.
  *
  * Usage:
- *   import { PjeCalcEngine, analyzePJC, convertPjcToEngineInputs } from '@/lib/pjecalc/core';
+ *   import { PjeCalcEngineV3, analyzePJC, convertPjcToEngineInputs } from '@/lib/pjecalc/core';
  *   const analysis = analyzePJC(xmlString);
  *   const inputs = convertPjcToEngineInputs(analysis, caseId);
- *   const engine = new PjeCalcEngine(inputs.params, ...);
+ *   const engine = new PjeCalcEngineV3(inputs.params, ...);
  *   const result = engine.liquidar();
  */
 
-// Core engine
-export { PjeCalcEngine } from './engine';
+// Core engine — PjeCalcEngineV3 é o motor atual (pipeline Calculo.liquidar() do core portado)
+export { PjeCalcEngineV3 } from './engine-v3';
 
 // Types
 export type {

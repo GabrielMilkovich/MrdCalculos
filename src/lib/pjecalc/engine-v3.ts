@@ -23,6 +23,7 @@ import type {
   PjePrevidenciaPrivadaResult, PjeSalarioFamiliaResult,
   PjeExcecaoCargaHoraria, PjeExcecaoSabado, PjeFeriadoDB,
   PjeSeguroDesempregoDB, PjeSalarioFamiliaDB, PjeSalarioMinimoRow,
+  PjeValidationResult, PjeValidationItem,
 } from './engine-types';
 
 // Core imports
@@ -147,6 +148,59 @@ export class PjeCalcEngineV3 {
     this.salarioFamiliaDB = salarioFamiliaDB;
     this.excecoesSabado = excecoesSabado;
     this.salarioMinimoDB = salarioMinimoDB;
+  }
+
+  /**
+   * validarPreLiquidacao — espelha a API do engine legado. Valida os parâmetros
+   * mínimos (datas obrigatórias) sem bloquear a liquidação por regras legadas.
+   *
+   * A pipeline `Calculo.liquidar()` do core portado já lança exceção em erros
+   * críticos; esta função apenas informa a UI sobre campos faltantes para melhor
+   * UX. O retorno mantém o shape `PjeValidationResult` esperado pelos componentes.
+   */
+  validarPreLiquidacao(): PjeValidationResult {
+    const itens: PjeValidationItem[] = [];
+    if (!this.params.data_admissao) {
+      itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'Data de admissão não informada' });
+    }
+    if (!this.params.data_ajuizamento) {
+      itens.push({ tipo: 'erro', modulo: 'Parâmetros', mensagem: 'Data de ajuizamento não informada' });
+    }
+    if (!this.correcaoConfig.data_liquidacao) {
+      itens.push({ tipo: 'erro', modulo: 'Correção', mensagem: 'Data de liquidação não informada' });
+    }
+    if (this.verbas.length === 0) {
+      itens.push({ tipo: 'alerta', modulo: 'Verbas', mensagem: 'Nenhuma verba configurada' });
+    }
+    const erros = itens.filter(i => i.tipo === 'erro').length;
+    const alertas = itens.filter(i => i.tipo === 'alerta').length;
+    const observacoes = itens.filter(i => i.tipo === 'observacao').length;
+    return { valido: erros === 0, itens, erros, alertas, observacoes };
+  }
+
+  /**
+   * calcularVerba — compat com a API do engine legado para uso em preview individual.
+   * V3 não tem pipeline per-verba isolado (Calculo.liquidar() processa todas de uma
+   * vez), então executa a liquidação completa e filtra o resultado pela verba dada.
+   * Mais lento que o legado, mas correto. Para V4 pode-se implementar cache.
+   */
+  calcularVerba(verba: PjeVerba): PjeVerbaResult {
+    const r = this.liquidar();
+    const achado = r.verbas.find(v => v.id === verba.id);
+    if (achado) return achado;
+    // Fallback: retorna resultado zerado com ID da verba para não quebrar a UI
+    return {
+      id: verba.id,
+      nome: verba.nome,
+      tipo: verba.tipo,
+      ocorrencias: [],
+      total_devido: 0,
+      total_pago: 0,
+      total_diferenca: 0,
+      total_corrigido: 0,
+      total_juros: 0,
+      total_final: 0,
+    } as PjeVerbaResult;
   }
 
   /**

@@ -2,7 +2,7 @@
  * PJe-Calc - Relatório Consolidado por Processo
  * Gera relatório unificado para múltiplos cálculos vinculados ao mesmo nº de processo.
  */
-import type { PjeLiquidacaoResult, PjeResumo } from "./engine";
+import type { PjeLiquidacaoResult, PjeResumo } from "./engine-types";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);

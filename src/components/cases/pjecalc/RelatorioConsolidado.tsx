@@ -13,7 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { FileBarChart, Loader2, Layers } from "lucide-react";
 import { gerarRelatorioConsolidado, type CalculoConsolidado } from "@/lib/pjecalc/pdf-report-consolidado";
-import type { PjeLiquidacaoResult } from "@/lib/pjecalc/engine";
+import type { PjeLiquidacaoResult } from "@/lib/pjecalc/engine-types";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);

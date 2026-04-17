@@ -8,7 +8,7 @@
  * 
  * @deprecated Use exportPJCXml() from pjc-xml-real.ts
  */
-import type { PjeLiquidacaoResult } from "./engine";
+import type { PjeLiquidacaoResult } from "./engine-types";
 
 export interface PJCData {
   versao: string;

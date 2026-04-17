@@ -5,7 +5,7 @@
  *         Dados do Cálculo, Histórico Salarial, Faltas/Férias, Cartão de Ponto Diário,
  *         Memória de Cálculo, FGTS, CS, IR, Honorários/Custas, Assinatura
  */
-import type { PjeLiquidacaoResult } from "./engine";
+import type { PjeLiquidacaoResult } from "./engine-types";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);

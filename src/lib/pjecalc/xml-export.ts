@@ -5,7 +5,7 @@
  * 
  * @deprecated Use exportPJCXml() from pjc-xml-real.ts for real PJC format.
  */
-import type { PjeLiquidacaoResult } from "./engine";
+import type { PjeLiquidacaoResult } from "./engine-types";
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

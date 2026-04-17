@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import { Save, Loader2, Search, Building2 } from "lucide-react";
 import { GradeCSOcorrencias } from "./GradeCSOcorrencias";
-import { CNAE_ALIQUOTAS_COMUNS, type PjeCNAEAliquotas } from "@/lib/pjecalc/engine";
+import { CNAE_ALIQUOTAS_COMUNS } from "@/lib/pjecalc/engine-constants";
+import type { PjeCNAEAliquotas } from "@/lib/pjecalc/engine-types";
 import * as svc from "@/lib/pjecalc/service";
 
 interface Props { caseId: string; }
