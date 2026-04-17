@@ -14,9 +14,21 @@ import { describe, it, expect } from 'vitest';
 import Decimal from 'decimal.js';
 
 import { OcorrenciaDeVerba } from '../dominio/ocorrenciaverba/ocorrencia-de-verba';
-import { calcularValorDevidoDaOcorrencia } from '../dominio/verbacalculo/maquina-de-calculo';
-import { ValorDaVerbaEnum, IndiceMonetarioEnum, IndicesAcumuladosEnum } from '../constantes/enums';
+import {
+  calcularValorDevidoDaOcorrencia,
+  MaquinaDeCalculo,
+  type IVerbaDeCalculoMaqRef,
+} from '../dominio/verbacalculo/maquina-de-calculo';
+import {
+  ValorDaVerbaEnum,
+  IndiceMonetarioEnum,
+  IndicesAcumuladosEnum,
+  OcorrenciaDePagamentoEnum,
+  CaracteristicaDaVerbaEnum,
+  LogicoEnum,
+} from '../constantes/enums';
 import { aplicarCorrecaoMonetaria, arredondarValorMonetario } from '../base/comum/utils';
+import type { ParametroDoTermo } from '../dominio/termo/parametro-do-termo';
 
 // ────────────── Helper: factory de OcorrenciaDeVerba pronta para teste ──────────────
 
@@ -245,5 +257,129 @@ describe('MaquinaDeCalculo — smoke das dependências', () => {
   it('IndiceMonetarioEnum e IndicesAcumuladosEnum disponíveis', () => {
     expect(IndiceMonetarioEnum.SELIC).toBe('SELIC');
     expect(IndicesAcumuladosEnum.MES_SUBSEQUENTE_AO_VENCIMENTO).toBe('MSV');
+  });
+});
+
+// =====================================================================
+// Suite 4 — executarGerarOcorrencias (MENSAL) — fase 12
+// =====================================================================
+
+/**
+ * Subclasse de teste: implementa os hooks abstratos com valores fixos.
+ * Base=1000, divisor=220, multiplicador=44, quantidade=1 → devido=200
+ */
+class MaquinaTeste extends MaquinaDeCalculo<IVerbaDeCalculoMaqRef> {
+  protected obterValorDaBase(_p: ParametroDoTermo): Decimal | null { return new Decimal('1000'); }
+  protected obterValorDoDivisor(_p: ParametroDoTermo): Decimal | null { return new Decimal('220'); }
+  protected obterValorDoMultiplicador(_p: ParametroDoTermo): Decimal | null { return new Decimal('44'); }
+  protected obterQuantidade(_p: ParametroDoTermo): Decimal | null { return new Decimal('1'); }
+  protected obterValorDevido(_p: ParametroDoTermo): Decimal | null { return new Decimal('200.00'); }
+  protected obterValorPago(_p: ParametroDoTermo): Decimal | null { return new Decimal('0'); }
+  protected obterDobra(): boolean { return false; }
+}
+
+/** Factory mínima de verba que satisfaz IVerbaDeCalculoMaqRef. */
+function criarVerbaMock(opts: {
+  periodoInicial: Date;
+  periodoFinal: Date;
+  ocorrenciaDePagamento?: OcorrenciaDePagamentoEnum;
+  caracteristica?: CaracteristicaDaVerbaEnum;
+}): IVerbaDeCalculoMaqRef & { getOcorrencias(): OcorrenciaDeVerba[] } {
+  const ocorrencias: OcorrenciaDeVerba[] = [];
+  const verba: IVerbaDeCalculoMaqRef & { getOcorrencias(): OcorrenciaDeVerba[] } = {
+    getTipoValor: () => ValorDaVerbaEnum.CALCULADO,
+    getZeraValorNegativo: () => true,
+    getPeriodoInicial: () => opts.periodoInicial,
+    getPeriodoFinal: () => opts.periodoFinal,
+    getOcorrenciaDePagamento: () => opts.ocorrenciaDePagamento ?? OcorrenciaDePagamentoEnum.MENSAL,
+    getCaracteristica: () => opts.caracteristica ?? CaracteristicaDaVerbaEnum.COMUM,
+    getComporPrincipal: () => LogicoEnum.SIM,
+    getOcorrencias: () => ocorrencias,
+    getOcorrenciasAtivas: () => ocorrencias.filter((o) => o.getAtivo()),
+    setOcorrencias: (v: OcorrenciaDeVerba[]) => { ocorrencias.length = 0; ocorrencias.push(...v); },
+    // Calculo mínimo (os hooks `obter*` dos testes ignoram o parametro).
+    getCalculo: () => ({ getDataDemissao: () => null }),
+  };
+  return verba;
+}
+
+describe('MaquinaDeCalculo — executarGerarOcorrencias (MENSAL)', () => {
+  it('período de 6 meses gera 6 ocorrências mensais', () => {
+    const verba = criarVerbaMock({
+      periodoInicial: new Date(2024, 0, 1),  // Jan/2024
+      periodoFinal: new Date(2024, 5, 30),   // Jun/2024 (último dia)
+    });
+    const maquina = new MaquinaTeste(verba);
+    maquina.gerarOcorrencias(false);
+    expect(verba.getOcorrencias().length).toBe(6);
+    // Primeira ocorrência começa no 1º dia do mês
+    expect(verba.getOcorrencias()[0].getDataInicial()!.getMonth()).toBe(0);
+    expect(verba.getOcorrencias()[5].getDataFinal()!.getMonth()).toBe(5);
+  });
+
+  it('DESLIGAMENTO: dataDemissao < periodoFinal gera 1 ocorrência até demissão', () => {
+    const periodoInicial = new Date(2024, 0, 1);
+    const periodoFinal = new Date(2024, 11, 31);
+    const dataDemissao = new Date(2024, 5, 15); // 15/jun/2024
+    const verba = criarVerbaMock({
+      periodoInicial,
+      periodoFinal,
+      ocorrenciaDePagamento: OcorrenciaDePagamentoEnum.DESLIGAMENTO,
+      caracteristica: CaracteristicaDaVerbaEnum.COMUM,
+    });
+    // injeta calculo com getDataDemissao
+    (verba as unknown as { getCalculo: () => { getDataDemissao: () => Date } }).getCalculo =
+      () => ({ getDataDemissao: () => dataDemissao });
+
+    const maquina = new MaquinaTeste(verba);
+    maquina.gerarOcorrencias(false);
+    const ocs = verba.getOcorrencias();
+    expect(ocs.length).toBe(1);
+    // Deve começar no dia 1 do mês da demissão (01/jun) e terminar em 15/jun.
+    expect(ocs[0].getDataInicial()!.getDate()).toBe(1);
+    expect(ocs[0].getDataInicial()!.getMonth()).toBe(5);
+    expect(ocs[0].getDataFinal()!.getTime()).toBe(dataDemissao.getTime());
+  });
+
+  it('base, divisor, multiplicador e quantidade são aplicados na ocorrência', () => {
+    const verba = criarVerbaMock({
+      periodoInicial: new Date(2024, 0, 1),
+      periodoFinal: new Date(2024, 0, 31),
+    });
+    const maquina = new MaquinaTeste(verba);
+    maquina.gerarOcorrencias(false);
+    const oc = verba.getOcorrencias()[0];
+    expect(oc.getBase()!.toFixed(2)).toBe('1000.00');
+    expect(oc.getDivisor()!.toFixed(2)).toBe('220.00');
+    expect(oc.getMultiplicador()!.toFixed(2)).toBe('44.00');
+    expect(oc.getQuantidade()!.toFixed(2)).toBe('1.00');
+    // A fórmula dá 200 → arredondado no setDevido interno
+    expect(oc.getDevido()!.toFixed(2)).toBe('200.00');
+  });
+
+  it('fração de mês final: último período cobre apenas os dias efetivos', () => {
+    const verba = criarVerbaMock({
+      periodoInicial: new Date(2024, 0, 1),   // 01/jan
+      periodoFinal: new Date(2024, 2, 15),    // 15/mar (fração)
+    });
+    const maquina = new MaquinaTeste(verba);
+    maquina.gerarOcorrencias(false);
+    const ocs = verba.getOcorrencias();
+    expect(ocs.length).toBe(3);
+    // Último mês termina no dia 15 (fração), não no último dia.
+    expect(ocs[2].getDataFinal()!.getDate()).toBe(15);
+    expect(ocs[2].getDataFinal()!.getMonth()).toBe(2);
+    expect(ocs[2].getDataInicial()!.getDate()).toBe(1);
+  });
+
+  it('período vazio (inicio > fim) gera array vazio', () => {
+    // Inicio posterior ao fim → breakInMonths retorna []
+    const verba = criarVerbaMock({
+      periodoInicial: new Date(2024, 5, 1),
+      periodoFinal: new Date(2024, 2, 31),
+    });
+    const maquina = new MaquinaTeste(verba);
+    maquina.gerarOcorrencias(false);
+    expect(verba.getOcorrencias().length).toBe(0);
   });
 });

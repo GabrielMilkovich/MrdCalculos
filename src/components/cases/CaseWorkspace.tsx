@@ -24,6 +24,8 @@ interface CaseWorkspaceProps {
   workflowSteps: WorkflowStep[];
   children: ReactNode;
   totalBruto?: number | null;
+  /** Botões/ações a renderizar no header (ex: Importar .PJC, Exportar, etc.) */
+  headerActions?: ReactNode;
 }
 
 const statusConfig = {
@@ -42,6 +44,7 @@ export function CaseWorkspace({
   workflowSteps,
   children,
   totalBruto,
+  headerActions,
 }: CaseWorkspaceProps) {
   return (
     <div className="space-y-5 animate-fade-in">
@@ -60,6 +63,11 @@ export function CaseWorkspace({
             {numeroProcesso || "Sem número de processo"}
           </p>
         </div>
+        {headerActions && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {headerActions}
+          </div>
+        )}
         {totalBruto && totalBruto > 0 && (
           <div className="text-right flex-shrink-0">
             <div className="text-xs text-muted-foreground">Valor Bruto</div>

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MainLayoutPremium } from "@/components/layout/MainLayoutPremium";
 import { CaseWorkspace } from "@/components/cases/CaseWorkspace";
+import { ImportPJCDialog } from "@/components/cases/pjecalc/ImportPJCDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +102,14 @@ export default function CasoDetalhe() {
   
   const [activeTab, setActiveTab] = useState("documentos");
   const [selectedProfile, setSelectedProfile] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+
+  // Carrega user id para ações como Importar .PJC
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user?.id) setCurrentUserId(data.session.user.id);
+    });
+  }, []);
   const [isExtractingFacts, setIsExtractingFacts] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
@@ -980,6 +989,13 @@ export default function CasoDetalhe() {
         onTabChange={setActiveTab}
         workflowSteps={workflowSteps}
         totalBruto={latestTotal}
+        headerActions={currentUserId && id ? (
+          <ImportPJCDialog
+            caseId={id}
+            userId={currentUserId}
+            onImported={() => queryClient.invalidateQueries()}
+          />
+        ) : undefined}
       >
         {renderTabContent()}
       </CaseWorkspace>

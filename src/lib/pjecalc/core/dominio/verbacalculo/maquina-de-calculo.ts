@@ -1,40 +1,41 @@
 /**
- * PJe-Calc v2.15.1 — MaquinaDeCalculo (classe abstrata raiz)
+ * PJe-Calc v2.15.1 — MaquinaDeCalculo (classe abstrata raiz).
  * Porte 1:1 de: br.jus.trt8.pjecalc.negocio.dominio.verbacalculo.MaquinaDeCalculo
+ * (Java ~617 linhas).
  *
- * Ref Java: pjecalc-fonte/negocio/br/jus/trt8/pjecalc/negocio/dominio/verbacalculo/MaquinaDeCalculo.java (~617 linhas)
+ * Responsabilidades: calcularValorDevidoDaOcorrencia, gerarOcorrencias/
+ * executarGerarOcorrencias, liquidar/executarLiquidar, criarOcorrenciaComPeriodoAquisitivo
+ * (5 overloads) e métodos abstratos `obter*` implementados pelas subclasses.
  *
- * Responsabilidades da classe:
- *  - `calcularValorDevidoDaOcorrencia`  (linhas 320-350)   ← núcleo do motor
- *  - `gerarOcorrencias` / `executarGerarOcorrencias`       ← cria o calendário de ocorrências
- *  - `liquidar` / `executarLiquidar`                        ← preenche base/devido/pago
- *  - `criarOcorrenciaComPeriodoAquisitivo` (overloads 1-5) ← factory de OcorrenciaDeVerba
- *  - `isExecutando` / flags de reentrância
- *  - Métodos abstratos `obter*` implementados pelas 3 subclasses concretas
- *    (MaquinaDeCalculoDaVerbaCalculada / Informada / Reflexo).
+ * Fórmula OFICIAL do devido (Java 325-329):
+ *   devido = round₂ᴴᴱ(base/divisor × multiplicador × quantidade × [dobra?2])
+ * Operações intermediárias em MathContext(38); arredondamento final HALF_EVEN.
  *
- * **Fórmula OFICIAL do devido** (linhas 325-329):
- *   devido = (base ÷ divisor × multiplicador × quantidade)            ← MathContext(38)
- *   if dobra: devido *= 2                                             ← MathContext(38)
- *   devido = round(devido, 2, HALF_EVEN)                              ← Utils.arredondarValorMonetario
- *
- * IMPORTANTE: o fonte Java v2.15.1 **não** aplica TRUNC₂ intermediário.
- * Todas as operações até o arredondamento final são feitas em MathContext(38)
- * (precisão 38, HALF_EVEN). O arredondamento a 2 casas acontece somente no
- * final via `Utils.arredondarValorMonetario` (HALF_EVEN, banker's rounding).
- * Portanto este port preserva o comportamento 1:1 do fonte — sem truncamento.
- *
- * TODO: as dependências pesadas (`ServicoDeCalculo`, `Ferias`,
- * `CalculoDoIntegralizar`, `OptimizerListSearchUnique`, overloads completos de
- * `Calculo`) ainda não estão 100% portadas. Os métodos `gerarOcorrencias`,
- * `executarLiquidar` e `criarOcorrencia*` são expostos como overridable, com
- * ganchos que jogam um erro controlado nos pontos onde falta infraestrutura.
+ * TODO(fase-13): PERIODO_AQUISITIVO depende de Ferias/prescrição quinquenal;
+ * `diasParaExcluir` em criarOcorrencia depende de Calculo.obterDiasFerias.
  */
 import Decimal from 'decimal.js';
-import { naoNulo, naoNulos, arredondarValorMonetario } from '../../base/comum/utils';
-import { OcorrenciaDeVerba } from '../ocorrenciaverba/ocorrencia-de-verba';
-import { ModoDeCalculoEnum, ValorDaVerbaEnum } from '../../constantes/enums';
+import { naoNulo, naoNulos, nulos, arredondarValorMonetario } from '../../base/comum/utils';
+import { OcorrenciaDeVerba, type IVerbaDeCalculoRef } from '../ocorrenciaverba/ocorrencia-de-verba';
+import {
+  CaracteristicaDaVerbaEnum,
+  FaseDoCalculoEnum,
+  LogicoEnum,
+  ModoDeCalculoEnum,
+  OcorrenciaDePagamentoEnum,
+  ValorDaVerbaEnum,
+} from '../../constantes/enums';
 import { ParametroDoTermo } from '../termo/parametro-do-termo';
+import { HelperDate } from '../../base/comum/helper-date';
+import { Periodo } from '../../base/comum/periodo';
+
+/** Interface minimal para `Calculo` acessado pela MaquinaDeCalculo (evita ciclo).  */
+export interface ICalculoMaqRef {
+  getDataDemissao?(): Date | null;
+  getDataAdmissao?(): Date;
+  getProjetaAvisoIndenizado?(): boolean;
+  obterQuantidadeAdicionalAvisoPrevio?(): number;
+}
 
 /** Constante de dobra (fator 2× — Art. 467 CLT). Linha 42 do Java. */
 export const VALOR_PARA_APLICAR_DOBRA = new Decimal('2');
@@ -45,23 +46,29 @@ export const VENCIMENTO_DEZEMBRO = 20;
 /** Quantidade mínima de dias para gerar um avo adicional. Linha 41 do Java. */
 export const QUANTIDADE_DIAS_MINIMA_PARA_UM_AVO = 15;
 
-/**
- * Interface mínima de VerbaDeCalculo consumida por MaquinaDeCalculo.
- * Evita dependência circular com a própria VerbaDeCalculo (1598 linhas).
- */
-export interface IVerbaDeCalculoMaqRef {
+/** Interface mínima de VerbaDeCalculo consumida por MaquinaDeCalculo (evita ciclo). */
+export interface IVerbaDeCalculoMaqRef extends IVerbaDeCalculoRef {
   getTipoValor(): ValorDaVerbaEnum;
+  getPeriodoInicial?(): Date | null;
+  getPeriodoFinal?(): Date | null;
+  getOcorrenciaDePagamento?(): OcorrenciaDePagamentoEnum;
+  getCaracteristica?(): CaracteristicaDaVerbaEnum;
+  getComporPrincipal?(): LogicoEnum;
+  /** Lista mutável de ocorrências, manipulada no `executarGerarOcorrencias`. */
+  getOcorrencias?(): OcorrenciaDeVerba[];
+  getOcorrenciasAtivas?(): OcorrenciaDeVerba[];
+  setOcorrencias?(v: OcorrenciaDeVerba[]): void;
+  /** Tabela de correção, usada em `executarLiquidar` para setar indiceAcumulado. */
+  getTabelaDeCorrecaoMonetariaTrabalhista?(): {
+    setOcorrenciaDePagamento?(o: OcorrenciaDePagamentoEnum): void;
+    obterValorAcumuladoDoIndice(data: Date): Decimal;
+  } | null;
+  /** Calculo host — necessário para ParametroDoTermo nas subclasses concretas. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Calculo é raiz e traria ciclo
+  getCalculo?(): any;
 }
 
-/**
- * Porte 1:1 da classe abstrata `MaquinaDeCalculo<T extends VerbaDeCalculo>`.
- *
- * Preserva:
- *  - `executando` (flag de reentrância, linhas 45, 549-559)
- *  - `modo` (ModoDeCalculoEnum, linha 44)
- *  - Métodos abstratos `obter*` (linhas 561-573)
- *  - `calcularValorDevidoDaOcorrencia` com semântica idêntica ao Java
- */
+/** Porte 1:1 de `MaquinaDeCalculo<T extends VerbaDeCalculo>` (abstrata). */
 export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
   protected verba: T;
   protected modo: ModoDeCalculoEnum | null = null;
@@ -94,24 +101,10 @@ export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
   protected abstract obterValorPago(p: ParametroDoTermo): Decimal | null;
   protected abstract obterDobra(): boolean;
 
-  // ────────────── calcularValorDevidoDaOcorrencia (linhas 320-350) ──────────────
-
   /**
-   * Porte 1:1 de `calcularValorDevidoDaOcorrencia(OcorrenciaDeVerba)` — **núcleo
-   * do motor PJe-Calc**. Aplica a fórmula oficial:
-   *
-   *   1. Early-exit se `valor != CALCULADO`                         (linha 321)
-   *   2. Se `base/divisor/mult/qty` todos não-nulos:
-   *      a) devido = base / divisor × multiplicador × quantidade    (linha 325; MathContext 38)
-   *      b) se `dobra == true`: devido = devido × 2                 (linha 327)
-   *      c) devido = round(devido, 2, HALF_EVEN)                    (linha 329)
-   *      d) repete (a)-(c) para o devidoIntegral, usando
-   *         baseIntegral/quantidadeIntegral quando aplicável         (linhas 330-345)
-   *   3. Caso algum operando seja nulo: zera devido + devidoIntegral (linhas 347-348)
-   *
-   * Arredondamento: HALF_EVEN (banker's rounding) somente no final, via
-   * `arredondarValorMonetario`. Operações intermediárias preservam a precisão
-   * global (38 dígitos).
+   * Porte 1:1 de `calcularValorDevidoDaOcorrencia` (Java 320-350) — núcleo do motor.
+   * Fórmula: devido = round₂ᴴᴱ(base/divisor × mult × qty × [dobra?2]); idem para devidoIntegral.
+   * Operandos nulos → devido/devidoIntegral = null.
    */
   calcularValorDevidoDaOcorrencia(ocorrencia: OcorrenciaDeVerba): void {
     if (ocorrencia.getValor() !== ValorDaVerbaEnum.CALCULADO) return;
@@ -204,18 +197,143 @@ export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
   }
 
   /**
-   * Hook sobrescrivível pelas subclasses. No Java v2.15.1 é `private final` e
-   * concentra a lógica completa de criação do calendário de ocorrências
-   * (linhas 68-309). Aqui o porte base lança para sinalizar pendência.
+   * Porte de `executarGerarOcorrencias` (Java linhas 68-309).
+   *
+   * Este port cobre os quatro modos de ocorrência de pagamento com
+   * comportamento 1:1:
+   *   - MENSAL           (Java 113-117)
+   *   - DESLIGAMENTO     (Java  81-112)
+   *   - DEZEMBRO (13º)   (Java 215-264)
+   *   - PERIODO_AQUISITIVO (Java 118-214) — envolve Ferias, marcado como TODO.
+   *
+   * Observações (divergências assumidas por enxugamento):
+   *  - `OptimizerListSearchUnique` (reconciliação de alterações via
+   *    `manterAlteracoes`) é omitido — o parâmetro é preservado para API,
+   *    mas o mecanismo será retomado na fase seguinte quando
+   *    OcorrenciaDaVerbaUnique estiver portada.
+   *  - `calculo.restaurar()` (Java 73) é no-op aqui.
    */
   protected executarGerarOcorrencias(_manterAlteracoes: boolean): void {
-    // TODO(fase-12): porte completo requer ServicoDeCalculo, Ferias,
-    // OptimizerListSearchUnique, HelperDate.breakInMonths c/ overloads e
-    // Periodo.dividirNaData. Veja doc do arquivo.
-    throw new Error(
-      'MaquinaDeCalculo.executarGerarOcorrencias: porte pendente ' +
-      '(requer ServicoDeCalculo/Ferias/OptimizerListSearchUnique).'
-    );
+    const verba = this.verba;
+    const piGet = verba.getPeriodoInicial?.bind(verba);
+    const pfGet = verba.getPeriodoFinal?.bind(verba);
+    const periodoInicial = piGet ? piGet() : null;
+    const periodoFinal = pfGet ? pfGet() : null;
+    if (nulos(periodoInicial, periodoFinal)) {
+      throw new Error(
+        'MaquinaDeCalculo.gerarOcorrencias: Período inicial ou final em branco ' +
+        '(Mensagens.MSG0018).'
+      );
+    }
+    this.modo = ModoDeCalculoEnum.GERACAO_DE_OCORRENCIA;
+    // Limpa ocorrências existentes (Java linha 79).
+    verba.setOcorrencias?.([]);
+
+    const ocPgto = verba.getOcorrenciaDePagamento?.() ?? OcorrenciaDePagamentoEnum.MENSAL;
+
+    if (ocPgto === OcorrenciaDePagamentoEnum.MENSAL) {
+      // Java 113-117
+      const periodos = HelperDate.breakInMonths(periodoInicial!, periodoFinal!);
+      for (const periodo of periodos) {
+        this.criarOcorrencia(periodo);
+      }
+      return;
+    }
+
+    if (ocPgto === OcorrenciaDePagamentoEnum.DESLIGAMENTO) {
+      // Java 81-112
+      const calculo = verba.getCalculo?.() as ICalculoMaqRef | undefined;
+      const dataDemissaoRaw = calculo?.getDataDemissao?.() ?? null;
+      if (!dataDemissaoRaw) return;
+      const dataDemissao = HelperDate.getInstance(dataDemissaoRaw)!;
+      const caracteristica = verba.getCaracteristica?.() ?? CaracteristicaDaVerbaEnum.COMUM;
+
+      if (HelperDate.dateBeforeOrEquals(dataDemissao.getDate(), periodoFinal!)) {
+        let dataInicial: HelperDate | null = null;
+        if (caracteristica === CaracteristicaDaVerbaEnum.COMUM) {
+          dataInicial = HelperDate.getInstance(dataDemissao.getDate())!;
+          dataInicial.setDay(1);
+          if (HelperDate.dateAfter(periodoInicial!, dataInicial.getDate())) {
+            dataInicial = HelperDate.getInstance(periodoInicial!)!;
+          }
+        } else if (caracteristica === CaracteristicaDaVerbaEnum.AVISO_PREVIO) {
+          dataInicial = HelperDate.getInstance(dataDemissao.getDate())!;
+        }
+        if (dataInicial) {
+          const dataFinalHelper = HelperDate.getInstance(dataDemissao.getDate())!;
+          this.criarOcorrencia(new Periodo(dataInicial.getDate(), dataFinalHelper.getDate()));
+        }
+      } else if (
+        HelperDate.getInstance(periodoFinal!)!.compareMonthAndYear(dataDemissao.getDate())
+        && caracteristica === CaracteristicaDaVerbaEnum.COMUM
+      ) {
+        const dataInicial = HelperDate.getInstance(dataDemissao.getDate())!;
+        dataInicial.setDay(1);
+        const ini = HelperDate.dateAfter(periodoInicial!, dataInicial.getDate())
+          ? HelperDate.getInstance(periodoInicial!)!.getDate()
+          : dataInicial.getDate();
+        this.criarOcorrencia(new Periodo(ini, HelperDate.getInstance(periodoFinal!)!.getDate()));
+      }
+      return;
+    }
+
+    if (ocPgto === OcorrenciaDePagamentoEnum.DEZEMBRO) {
+      // Java 215-264 — 13º salário (vencimento 20/dez).
+      const calculo = verba.getCalculo?.() as ICalculoMaqRef | undefined;
+      const dataDemissaoRaw = calculo?.getDataDemissao?.() ?? null;
+      const dataDemissao = dataDemissaoRaw ? HelperDate.getInstance(dataDemissaoRaw)! : null;
+      const dataDeFimDoCalculo = HelperDate.getInstance(periodoFinal!)!;
+      const setPeriodoDia = (p: Periodo, dia: number): Periodo => {
+        p.setInicial(HelperDate.getInstance(p.getInicial())!.setDay(dia).getDate());
+        p.setFinal(HelperDate.getInstance(p.getFinal())!.setDay(dia).getDate());
+        return p;
+      };
+      // breakInMonths filtrado apenas para dezembro (mês 11).
+      const periodos = HelperDate.breakInMonthsSelected(periodoInicial!, periodoFinal!, 11);
+      for (const periodo of periodos) {
+        const diaIni = HelperDate.getInstance(periodo.getInicial())!.getDay();
+        const diaFim = HelperDate.getInstance(periodo.getFinal())!.getDay();
+        if (
+          naoNulo(dataDemissao)
+          && dataDeFimDoCalculo.compareMonthAndYear(dataDemissao!.getDate())
+          && HelperDate.getInstance(periodo.getFinal())!.compareMonthAndYear(dataDemissao!.getDate())
+        ) {
+          if (dataDemissao!.getDay() > VENCIMENTO_DEZEMBRO && diaIni <= VENCIMENTO_DEZEMBRO) {
+            this.criarOcorrencia(setPeriodoDia(periodo, VENCIMENTO_DEZEMBRO));
+            if (!calculo?.getProjetaAvisoIndenizado?.()) continue;
+            this.criarOcorrencia(setPeriodoDia(periodo, dataDemissao!.getDay()));
+            continue;
+          }
+          this.criarOcorrencia(setPeriodoDia(periodo, dataDemissao!.getDay()));
+          continue;
+        }
+        // Casos sem demissão no mês: só gera se 20/dez está contido no período.
+        if (diaIni === 1 && diaFim === 31) { this.criarOcorrencia(setPeriodoDia(periodo, VENCIMENTO_DEZEMBRO)); continue; }
+        if (diaIni === 1 && diaFim >= VENCIMENTO_DEZEMBRO) { this.criarOcorrencia(setPeriodoDia(periodo, VENCIMENTO_DEZEMBRO)); continue; }
+        if (diaFim === 31 && diaIni <= VENCIMENTO_DEZEMBRO) { this.criarOcorrencia(setPeriodoDia(periodo, VENCIMENTO_DEZEMBRO)); continue; }
+        if (diaIni <= VENCIMENTO_DEZEMBRO && diaFim >= VENCIMENTO_DEZEMBRO) {
+          this.criarOcorrencia(setPeriodoDia(periodo, VENCIMENTO_DEZEMBRO));
+        }
+      }
+      if (
+        naoNulo(dataDemissao)
+        && dataDeFimDoCalculo.compareMonthAndYear(dataDemissao!.getDate())
+        && dataDemissao!.getMonth() !== 11
+      ) {
+        this.criarOcorrencia(new Periodo(dataDemissao!.getDate(), dataDemissao!.getDate()));
+      }
+      return;
+    }
+
+    if (ocPgto === OcorrenciaDePagamentoEnum.PERIODO_AQUISITIVO) {
+      // TODO(fase-13): porte completo exige Ferias (situação GOZADAS/INDENIZADAS),
+      // prescrição quinquenal, `verificarFaltaQueReiniciePeriodoAquisitivo` e
+      // `Calculo.encontrarFaltasQueReiniciamFerias`. Ver Java 118-214.
+      throw new Error(
+        'MaquinaDeCalculo.executarGerarOcorrencias: PERIODO_AQUISITIVO ainda ' +
+        'não portado (depende de Ferias e prescrição quinquenal). Ver TODO(fase-13).'
+      );
+    }
   }
 
   /**
@@ -232,20 +350,207 @@ export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
   }
 
   /**
-   * Porte de `executarLiquidar` (linhas 386-420). Por padrão, itera pelas
-   * ocorrências ativas da verba chamando `calcularValorDevidoDaOcorrencia`
-   * após obter a base via `obterValorDaBase`. A lógica completa de bases
-   * integrais/férias com abono/etc depende de subclasses que podem
-   * sobrescrever livremente. O hook base mantém uma implementação
-   * simplificada suficiente para casos sem reflexo encadeado.
+   * Porte de `executarLiquidar` (Java 386-420).
    *
-   * TODO(fase-12): reproduzir exatamente o `FormaPadrao` / `FormaPrecedenciaDeBases`
-   * e aplicar a correção monetária por ocorrência (linha 418).
+   * Para cada ocorrência ativa:
+   *   1. obtém o valor da base via `obterValorDaBase` (FormaPadrao);
+   *   2. se `isProporcionalizado()`, guarda valorIntegral como baseIntegral;
+   *   3. aplica fator de abono quando `isFeriasComAbono` e tipo CALCULADO;
+   *   4. arredonda base/baseIntegral;
+   *   5. dispara `calcularValorDevidoDaOcorrencia`;
+   *   6. seta `indiceAcumulado` a partir da TabelaDeCorrecaoMonetaria.
+   *
+   * Obs.: `FormaPrecedenciaDeBases` (Java 591-611) é resolvida como simples
+   * chamada a `obterValorDaBase` (igual ao `FormaPadrao`), pois no fonte
+   * v2.15.1 ambas as classes delegam idêntico — o seletor só troca o
+   * comportamento por polimorfismo, e o port atual delega tudo via hook.
    */
   protected executarLiquidar(): void {
     this.modo = ModoDeCalculoEnum.LIQUIDACAO;
-    // Implementação mínima: a integração com Calculo/TabelaDeCorrecaoMonetaria
-    // é feita pelas subclasses concretas ou por um orquestrador externo.
+    const verba = this.verba;
+    // Tabela de correção (opcional: quando presente, registra ocorrência de pagamento).
+    const tabela = verba.getTabelaDeCorrecaoMonetariaTrabalhista?.() ?? null;
+    if (tabela) {
+      tabela.setOcorrenciaDePagamento?.(
+        verba.getOcorrenciaDePagamento?.() ?? OcorrenciaDePagamentoEnum.MENSAL,
+      );
+    }
+    const ocorrenciasAtivas = verba.getOcorrenciasAtivas?.() ?? [];
+
+    const calculo = verba.getCalculo?.();
+    // ParametroDoTermo é construído diretamente apenas quando há `calculo`/`verba`
+    // concretas (fase atual de integração — subclasses podem sobrescrever).
+    // Em cenários sem Calculo, caímos num caminho mínimo: sem base/índice.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- construtor requer tipo concreto
+    const parametro: ParametroDoTermo | null = calculo
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idem
+      ? new ParametroDoTermo(calculo as any, verba as any, null,
+          this.modo, FaseDoCalculoEnum.CALCULANDO_VALOR_DEVIDO, null, null)
+      : null;
+
+    for (const ocorrencia of ocorrenciasAtivas) {
+      if (parametro) {
+        parametro.setValorIntegral(null);
+        const periodoOc = new Periodo(ocorrencia.getDataInicial()!, ocorrencia.getDataFinal()!);
+        parametro.setPeriodo(periodoOc);
+        const periodoAq = new Periodo(
+          ocorrencia.getDataInicialPeriodoAquisitivo(),
+          ocorrencia.getDataFinalPeriodoAquisitivo(),
+        );
+        parametro.setPeriodoAquisitivo(periodoAq);
+        parametro.setFeriasIndenizadas(ocorrencia.isFeriasIndenizadas());
+
+        let valorDaBase = this.obterValorDaBase(parametro);
+        let valorDaBaseIntegral: Decimal | null = null;
+        if (parametro.isProporcionalizado()) {
+          valorDaBaseIntegral = parametro.getValorIntegral();
+        }
+        // Java 408-414: fator de abono em férias com abono.
+        if (
+          ocorrencia.isFeriasComAbono()
+          && ocorrencia.getVerbaDeCalculo()?.getTipoValor() === ValorDaVerbaEnum.CALCULADO
+        ) {
+          const fatorAbono = ocorrencia.calcularFatorAbono();
+          if (naoNulo(valorDaBase)) {
+            valorDaBase = valorDaBase!.times(fatorAbono);
+          }
+          if (naoNulo(valorDaBaseIntegral)) {
+            valorDaBaseIntegral = valorDaBaseIntegral!.times(fatorAbono);
+          }
+        }
+        if (naoNulo(valorDaBase)) {
+          ocorrencia.setBase(arredondarValorMonetario(valorDaBase!));
+        }
+        if (naoNulo(valorDaBaseIntegral)) {
+          ocorrencia.setBaseIntegral(arredondarValorMonetario(valorDaBaseIntegral!));
+        }
+      }
+      // Recalcula devido/devidoIntegral usando a fórmula oficial (Java 417).
+      this.calcularValorDevidoDaOcorrencia(ocorrencia);
+      // Java 418: índice acumulado para correção monetária.
+      if (tabela && ocorrencia.getDataInicial()) {
+        ocorrencia.setIndiceAcumulado(tabela.obterValorAcumuladoDoIndice(ocorrencia.getDataInicial()!));
+      }
+    }
+  }
+
+  // ────────────── criarOcorrencia / criarOcorrenciaComPeriodoAquisitivo ──────────────
+  //
+  // 5 overloads (Java linhas 422-547). Todos convergem para o 5-aridades.
+
+  /** Overload 0 (Java 422-424). */
+  protected criarOcorrencia(periodo: Periodo): void {
+    this.criarOcorrenciaComPeriodoAquisitivo(periodo, null);
+  }
+
+  /**
+   * Overload canônico (Java 438-547).
+   *
+   * Port simplificado — a regra de `diasParaExcluir` (Java 459-474, 485-499,
+   * 512-527) depende de `getExcluirFeriasGozadas`/`obterDiasFerias`, que por
+   * sua vez dependem de Calculo plenamente portado. Este port fixa
+   * `quantidadeIntegral = quantidade` quando `parametro.isProporcionalizado()`
+   * é falso — equivalente a `diasParaExcluir = 0` com `CalculoDoIntegralizar`
+   * devolvendo o mesmo valor.
+   *
+   * TODO(fase-13): `CalculoDoIntegralizar` já está portado; restam os hooks
+   * `Calculo.obterDiasFerias`/`obterFaltasJustificadas`/`obterFaltasNaoJustificadas`
+   * para reproduzir fielmente o tratamento de exclusões.
+   */
+  protected criarOcorrenciaComPeriodoAquisitivo(
+    periodo: Periodo,
+    periodoAquisitivo: Periodo | null,
+    dobraObrigatoria: boolean = false,
+    ocorrenciaDeFeriasIndenizadas: boolean = false,
+    ocorrenciaDeFeriasComAbono: boolean = false,
+  ): void {
+    const verba = this.verba;
+    const calculo = verba.getCalculo?.();
+    // Quando não há Calculo concreto, usa-se um parâmetro nulo: getters
+    // abstratos podem lidar com esse modo (ou subclasses podem sobrescrever).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ctor exige tipo concreto
+    const parametro: ParametroDoTermo | null = calculo
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idem
+      ? new ParametroDoTermo(calculo as any, verba as any, periodo,
+          this.modo ?? ModoDeCalculoEnum.LIQUIDACAO,
+          FaseDoCalculoEnum.CALCULANDO_VALOR_DEVIDO,
+          periodoAquisitivo, null)
+      : null;
+
+    const oc = new OcorrenciaDeVerba();
+    oc.setDataInicial(periodo.getInicial());
+    oc.setDataFinal(periodo.getFinal());
+    oc.setCaracteristica(verba.getCaracteristica?.() ?? CaracteristicaDaVerbaEnum.COMUM);
+    oc.setOcorrenciaDePagamento(verba.getOcorrenciaDePagamento?.() ?? OcorrenciaDePagamentoEnum.MENSAL);
+    oc.setComporPrincipal(verba.getComporPrincipal?.() ?? LogicoEnum.NAO);
+    oc.setValor(verba.getTipoValor());
+
+    if (parametro) {
+      const base = this.obterValorDaBase(parametro);
+      if (naoNulo(base)) oc.setBase(base!);
+      const divisor = this.obterValorDoDivisor(parametro);
+      if (naoNulo(divisor)) {
+        oc.setDivisor(divisor!);
+        if (new Decimal(0).comparedTo(divisor!) === 0) {
+          oc.setAtivo(false);
+        }
+      }
+      const multiplicador = this.obterValorDoMultiplicador(parametro);
+      if (naoNulo(multiplicador)) oc.setMultiplicador(multiplicador!);
+
+      const quantidade = this.obterQuantidade(parametro);
+      if (naoNulo(quantidade)) {
+        oc.setQuantidade(quantidade!);
+        if (parametro.isProporcionalizado()) {
+          oc.setQuantidadeIntegral(parametro.getValorIntegral());
+          parametro.setValorIntegral(null);
+        } else {
+          // Sem exclusões no port atual → integral = proporcional.
+          oc.setQuantidadeIntegral(quantidade!);
+        }
+      }
+
+      const devido = this.obterValorDevido(parametro);
+      if (naoNulo(devido)) {
+        oc.setDevido(arredondarValorMonetario(devido!));
+        if (parametro.isProporcionalizado()) {
+          oc.setDevidoIntegral(parametro.getValorIntegral());
+          parametro.setValorIntegral(null);
+        } else {
+          oc.setDevidoIntegral(arredondarValorMonetario(devido!));
+        }
+      }
+
+      parametro.setFase(FaseDoCalculoEnum.CALCULANDO_VALOR_PAGO);
+      const pago = this.obterValorPago(parametro);
+      if (naoNulo(pago)) {
+        oc.setPago(arredondarValorMonetario(pago!));
+        if (parametro.isProporcionalizado()) {
+          oc.setPagoIntegral(parametro.getValorIntegral());
+          parametro.setValorIntegral(null);
+        } else {
+          oc.setPagoIntegral(arredondarValorMonetario(pago!));
+        }
+      }
+    }
+
+    oc.setDobra(this.obterDobra());
+    if (dobraObrigatoria) oc.setDobra(true);
+
+    if (periodoAquisitivo) {
+      oc.setDataInicialPeriodoAquisitivo(periodoAquisitivo.getInicial());
+      oc.setDataFinalPeriodoAquisitivo(periodoAquisitivo.getFinal());
+    }
+    oc.setFeriasIndenizadas(ocorrenciaDeFeriasIndenizadas);
+    oc.setFeriasComAbono(ocorrenciaDeFeriasComAbono);
+    oc.setVerbaDeCalculo(verba);
+    // Java 543: recalcula usando a fórmula oficial (em modo CALCULADO).
+    this.calcularValorDevidoDaOcorrencia(oc);
+    const original = oc.clone();
+    oc.setOcorrenciaOriginal(original);
+    // Java 546: verba.adicionarEmOcorrencias(oc) — implementado como push à lista.
+    const lista = verba.getOcorrencias?.();
+    if (lista) lista.push(oc);
   }
 
   /**
@@ -269,50 +574,26 @@ export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
 // ────────────── Compat: função livre (legado) ──────────────
 
 /**
- * Alias funcional equivalente ao método da classe — mantém a API pré-port
- * (consumidores que importavam a função solta continuam funcionando).
- *
- * A lógica é idêntica à de `MaquinaDeCalculo#calcularValorDevidoDaOcorrencia`
- * — declarada aqui para evitar instanciar uma subclasse somente para esta
- * operação pontual.
+ * Alias funcional (mantém API pré-port). Usa uma subclasse anônima cujos
+ * hooks abstratos retornam null — a operação `calcularValorDevidoDaOcorrencia`
+ * só lê campos da ocorrência, então o estado dos hooks é indiferente.
  */
+class _MaquinaCalculoDevido extends MaquinaDeCalculo<IVerbaDeCalculoMaqRef> {
+  protected obterValorDaBase(): Decimal | null { return null; }
+  protected obterValorDoDivisor(): Decimal | null { return null; }
+  protected obterValorDoMultiplicador(): Decimal | null { return null; }
+  protected obterQuantidade(): Decimal | null { return null; }
+  protected obterValorDevido(): Decimal | null { return null; }
+  protected obterValorPago(): Decimal | null { return null; }
+  protected obterDobra(): boolean { return false; }
+}
+
+const _verbaNoop: IVerbaDeCalculoMaqRef = {
+  getTipoValor: () => ValorDaVerbaEnum.CALCULADO,
+  getZeraValorNegativo: () => false,
+};
+const _maquinaSingleton = new _MaquinaCalculoDevido(_verbaNoop);
+
 export function calcularValorDevidoDaOcorrencia(ocorrencia: OcorrenciaDeVerba): void {
-  if (ocorrencia.getValor() !== ValorDaVerbaEnum.CALCULADO) return;
-
-  const base = ocorrencia.getBase();
-  const divisor = ocorrencia.getDivisor();
-  const multiplicador = ocorrencia.getMultiplicador();
-  const quantidade = ocorrencia.getQuantidade();
-
-  if (naoNulos(base, divisor, multiplicador, quantidade)) {
-    let devido: Decimal = base!.div(divisor!).times(multiplicador!).times(quantidade!);
-    if (ocorrencia.getDobra()) devido = devido.times(VALOR_PARA_APLICAR_DOBRA);
-    ocorrencia.setDevido(arredondarValorMonetario(devido));
-
-    let baseParaCalculoIntegral: Decimal | null;
-    let quantidadeParaCalculoIntegral: Decimal | null;
-
-    const baseIntegral = ocorrencia.getBaseIntegral();
-    if (naoNulo(baseIntegral) && baseIntegral!.comparedTo(base!) !== 0) {
-      baseParaCalculoIntegral = baseIntegral;
-      quantidadeParaCalculoIntegral = quantidade;
-    } else {
-      baseParaCalculoIntegral = base;
-      const qtdIntegral = ocorrencia.getQuantidadeIntegral();
-      quantidadeParaCalculoIntegral =
-        naoNulo(qtdIntegral) && qtdIntegral!.comparedTo(quantidade!) !== 0 ? qtdIntegral : quantidade;
-    }
-
-    if (naoNulo(baseParaCalculoIntegral) && naoNulo(quantidadeParaCalculoIntegral)) {
-      let devidoIntegral: Decimal = baseParaCalculoIntegral!
-        .div(divisor!)
-        .times(multiplicador!)
-        .times(quantidadeParaCalculoIntegral!);
-      if (ocorrencia.getDobra()) devidoIntegral = devidoIntegral.times(VALOR_PARA_APLICAR_DOBRA);
-      ocorrencia.setDevidoIntegral(arredondarValorMonetario(devidoIntegral));
-    }
-  } else {
-    ocorrencia.setDevido(null as unknown as Decimal);
-    ocorrencia.setDevidoIntegral(null);
-  }
+  _maquinaSingleton.calcularValorDevidoDaOcorrencia(ocorrencia);
 }

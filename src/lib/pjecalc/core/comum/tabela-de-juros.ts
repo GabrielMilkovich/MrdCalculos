@@ -1,6 +1,6 @@
 /**
  * PJe-Calc v2.15.1 — TabelaDeJuros
- * Porte 1:1 de: br.jus.trt8.pjecalc.negocio.comum.TabelaDeJuros
+ * Porte de: br.jus.trt8.pjecalc.negocio.comum.TabelaDeJuros
  *
  * Ref Java: pjecalc-fonte/negocio/br/jus/trt8/pjecalc/negocio/comum/TabelaDeJuros.java
  *
@@ -11,16 +11,24 @@
  * Neste port, em vez de abstract class com Calculo injetado, usamos
  * uma interface `ITabelaDeJurosContext` e construção funcional.
  *
- * Método principal: `calcularTaxaDeJuros(data, projetarData)` → retorna
- * taxa percentual total (ex: 13.5 para 13,5%).
+ * Método principal: `calcularTaxaDeJurosTotal(raiz, dataLiquidacao, ...)`
+ * retorna taxa percentual total (ex: 13.5 para 13,5%).
+ *
+ * Fontes de taxas mensais (fallback offline):
+ *   - SELIC: `SELIC_MENSAL` em `indices-fallback.ts` (RFB/SICALC)
+ *   - TR:    `TR_MENSAL` em `indices-fallback.ts` (BCB série 188)
+ *   - TAXA_LEGAL / JUROS_UM_PORCENTO: 1%/mês fixo
+ *   - JUROS_MEIO_PORCENTO / FAZENDA_PUBLICA: 0.5%/mês fixo
+ *   - JUROS_POUPANCA: TR + 0.5%/mês (pós-2012)
  */
 import Decimal from 'decimal.js';
 import { HelperDate } from '../base/comum/helper-date';
 import { Periodo } from '../base/comum/periodo';
-import { nulo, naoNulo, multiplicar, subtrair, CEM } from '../base/comum/utils';
+import { CEM } from '../base/comum/utils';
 import { JurosEnum, TipoDeJurosEnum, TipoDeQuantidadeDeJurosBaseEnum } from '../constantes/enums';
 import { PeriodoDeJuros } from './periodo-de-juros';
 import type { CombinacaoDeJuros } from '../dominio/calculo/atualizacao/combinacao-de-juros';
+import { SELIC_MENSAL, TR_MENSAL } from '../../indices-fallback';
 
 // ────────────── Contexto injetável ──────────────
 
@@ -36,12 +44,37 @@ export interface ITabelaDeJurosContext {
   isSelicIndiceNaLiquidacao(): boolean;
 }
 
+// ────────────── Helpers de tabela ──────────────
+
+function competenceKey(date: Date): string {
+  const h = HelperDate.getInstance(date)!;
+  return h.format('yyyy-MM');
+}
+
+/** Procura a taxa mensal (%) em uma série mensal. Retorna 0 se ausente. */
+function lookupTaxaMensal(tabela: Record<string, number>, competencia: Date): Decimal {
+  const k = competenceKey(competencia);
+  const v = tabela[k];
+  if (v === undefined || v === null) return new Decimal(0);
+  return new Decimal(v);
+}
+
+/** Retorna a taxa SELIC mensal. Negativos são mantidos (pode zerar por soma simples). */
+function taxaSelicMensal(competencia: Date): Decimal {
+  return lookupTaxaMensal(SELIC_MENSAL, competencia);
+}
+
+/** Retorna a taxa TR mensal (≥0 já saneado na fonte). */
+function taxaTrMensal(competencia: Date): Decimal {
+  return lookupTaxaMensal(TR_MENSAL, competencia);
+}
+
 // ────────────── Construção dos períodos ──────────────
 
 /**
  * Constrói a cadeia de PeriodoDeJuros a partir do contexto.
- * Port de `carregarPeriodosDeJurosTotalComCombinacoes` (linha 81) e
- * `montarPeriodo` (linha 107).
+ * Port de `carregarPeriodosDeJurosTotalComCombinacoes` (Java linha 81) e
+ * `montarPeriodo` (Java linha 107).
  */
 export function construirPeriodosDeJuros(ctx: ITabelaDeJurosContext): PeriodoDeJuros | null {
   const periodoDeJuros = new Periodo(
@@ -59,53 +92,121 @@ export function construirPeriodosDeJuros(ctx: ITabelaDeJurosContext): PeriodoDeJ
     tipoQuantidade: TipoDeQuantidadeDeJurosBaseEnum, tipoJuros: TipoDeJurosEnum,
     tabelaJuros: JurosEnum
   ): PeriodoDeJuros => {
-    const fazendaPublica = tabelaJuros === JurosEnum.FAZENDA_PUBLICA || tabelaJuros === JurosEnum.JUROS_POUPANCA;
-    const p = new PeriodoDeJuros(dataInicial, dataFinal, aliquota, tipoQuantidade, tipoJuros, fazendaPublica, tabelaJuros);
+    const fazendaPublica =
+      tabelaJuros === JurosEnum.FAZENDA_PUBLICA ||
+      tabelaJuros === JurosEnum.JUROS_POUPANCA;
+    const p = new PeriodoDeJuros(
+      dataInicial, dataFinal, aliquota, tipoQuantidade, tipoJuros, fazendaPublica, tabelaJuros
+    );
     if (periodoAnterior === null) { raiz = p; }
     else { periodoAnterior.setProximoPeriodo(p); }
     periodoAnterior = p;
     return p;
   };
 
+  /**
+   * Quebra [dataInicial, dataFinal] em competências mensais e cria um
+   * PeriodoDeJuros por mês com a aliquota retornada por `aliqFn`.
+   *
+   * `tipoJurosFn` permite diferenciar SIMPLES vs COMPOSTOS por mês.
+   */
+  const montarPorMes = (
+    dataInicial: Date, dataFinal: Date,
+    tabelaJuros: JurosEnum,
+    aliqFn: (competencia: Date) => Decimal,
+    tipoJuros: TipoDeJurosEnum = TipoDeJurosEnum.SIMPLES
+  ) => {
+    // Caso degenerado: intervalo vazio ou invertido — nada a fazer.
+    if (HelperDate.dateAfter(dataInicial, dataFinal)) return;
+    const periodos = HelperDate.breakInMonths(dataInicial, dataFinal);
+    for (const p of periodos) {
+      const competencia = HelperDate.getCurrentCompetence(p.getInicial()).getDate();
+      const aliq = aliqFn(competencia);
+      criarPeriodo(
+        p.getInicial(), p.getFinal(), aliq,
+        TipoDeQuantidadeDeJurosBaseEnum.FRACAO, tipoJuros, tabelaJuros
+      );
+    }
+  };
+
   const montarPeriodo = (tabelaAtual: JurosEnum, dataInicial: Date, dataFinal: Date) => {
-    // Juros fixos por tipo
+    // Caso degenerado: nada a fazer.
+    if (HelperDate.dateAfter(dataInicial, dataFinal)) return;
+
+    // ── Taxas fixas em percentual mensal ──
     if (tabelaAtual === JurosEnum.SEM_JUROS) {
-      criarPeriodo(dataInicial, dataFinal, new Decimal(0), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+      criarPeriodo(dataInicial, dataFinal, new Decimal(0),
+        TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+      return;
     }
     if (tabelaAtual === JurosEnum.JUROS_MEIO_PORCENTO) {
-      criarPeriodo(dataInicial, dataFinal, new Decimal('0.5'), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+      criarPeriodo(dataInicial, dataFinal, new Decimal('0.5'),
+        TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+      return;
     }
     if (tabelaAtual === JurosEnum.JUROS_ZERO_TRINTA_TRES) {
-      criarPeriodo(dataInicial, dataFinal, new Decimal('0.0333333'), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+      // 0,0333% a.d. — getTaxa() do PeriodoDeJuros trata como aliquota × dias.
+      criarPeriodo(dataInicial, dataFinal, new Decimal('0.0333333'),
+        TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+      return;
     }
-    if (tabelaAtual === JurosEnum.JUROS_UM_PORCENTO) {
-      criarPeriodo(dataInicial, dataFinal, new Decimal(1), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+    if (tabelaAtual === JurosEnum.JUROS_UM_PORCENTO ||
+        tabelaAtual === JurosEnum.JUROS_PADRAO ||
+        tabelaAtual === JurosEnum.TAXA_LEGAL) {
+      // TAXA_LEGAL (CC Art. 406): historicamente 1%/mês; remissão à SELIC
+      // superveniente tratada via CombinacaoDeJuros quando necessário.
+      criarPeriodo(dataInicial, dataFinal, new Decimal(1),
+        TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+      return;
     }
-    // SELIC mensal — cada mês é um PeriodoDeJuros (taxa mensal da tabela)
-    if (tabelaAtual === JurosEnum.SELIC) {
-      // Simplificado: sem tabela SELIC mensal detalhada, montamos como período único.
-      // O taxa será a soma simples das taxas mensais; quando a tabela SELIC estiver
-      // populada, refinar para múltiplos períodos (um por mês).
-      criarPeriodo(dataInicial, dataFinal, new Decimal(0), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+    if (tabelaAtual === JurosEnum.FAZENDA_PUBLICA) {
+      // Pre-EC 113: TR + 0,5%/mês. Simplificamos p/ 0,5%/mês (TR≈0 pós-2017).
+      criarPeriodo(dataInicial, dataFinal, new Decimal('0.5'),
+        TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+      return;
     }
-    if (tabelaAtual === JurosEnum.TRD_SIMPLES) {
-      criarPeriodo(dataInicial, dataFinal, new Decimal(0), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+
+    // ── SELIC mensal — soma simples das taxas mensais ──
+    // Cada mês vira um PeriodoDeJuros com aliquota = taxa RFB do mês.
+    if (tabelaAtual === JurosEnum.SELIC || tabelaAtual === JurosEnum.SELIC_FAZENDA) {
+      montarPorMes(dataInicial, dataFinal, tabelaAtual, taxaSelicMensal);
+      return;
     }
-    if (tabelaAtual === JurosEnum.TRD_COMPOSTOS) {
-      criarPeriodo(dataInicial, dataFinal, new Decimal(0), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.COMPOSTOS, tabelaAtual);
-    }
-    if (tabelaAtual === JurosEnum.TAXA_LEGAL) {
-      criarPeriodo(dataInicial, dataFinal, new Decimal(0), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
-    }
-    if (tabelaAtual === JurosEnum.SELIC_FAZENDA) {
-      criarPeriodo(dataInicial, dataFinal, new Decimal(0), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
-    }
+
+    // ── SELIC_BACEN — taxa mensal composta (produto (1+i)). ──
+    // Java armazena a aliquota como (1 + taxa/100) para compor via multiplicação.
     if (tabelaAtual === JurosEnum.SELIC_BACEN) {
-      criarPeriodo(dataInicial, dataFinal, new Decimal(0), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+      montarPorMes(dataInicial, dataFinal, tabelaAtual,
+        (comp) => taxaSelicMensal(comp).div(CEM).plus(1),
+        TipoDeJurosEnum.SIMPLES // o regime composto é tratado via acumulado em calcularTaxaDeJurosTotal
+      );
+      return;
     }
-    if (tabelaAtual === JurosEnum.FAZENDA_PUBLICA || tabelaAtual === JurosEnum.JUROS_PADRAO || tabelaAtual === JurosEnum.JUROS_POUPANCA) {
-      // Tabelas com alíquotas variáveis por período — simplificado: alíquota 1%
-      criarPeriodo(dataInicial, dataFinal, new Decimal(1), TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+
+    // ── JUROS_POUPANCA — por mês: TR + 0.5%/mês (soma simples). ──
+    if (tabelaAtual === JurosEnum.JUROS_POUPANCA) {
+      montarPorMes(dataInicial, dataFinal, tabelaAtual,
+        (comp) => taxaTrMensal(comp).plus(new Decimal('0.5'))
+      );
+      return;
+    }
+
+    // ── TRD_SIMPLES — 1%/mês simples (stub histórico TJT diário). ──
+    if (tabelaAtual === JurosEnum.TRD_SIMPLES) {
+      criarPeriodo(dataInicial, dataFinal, new Decimal(1),
+        TipoDeQuantidadeDeJurosBaseEnum.FRACAO, TipoDeJurosEnum.SIMPLES, tabelaAtual);
+      return;
+    }
+
+    // ── TRD_COMPOSTOS — 1%/mês composto. ──
+    // Um período por mês com aliquota=(1+0.01); o produtório é feito em
+    // calcularTaxaDeJurosTotal via o acumuladoComposto (isJurosCompostos=true).
+    if (tabelaAtual === JurosEnum.TRD_COMPOSTOS) {
+      montarPorMes(dataInicial, dataFinal, tabelaAtual,
+        () => new Decimal('1.01'),
+        TipoDeJurosEnum.SIMPLES
+      );
+      return;
     }
   };
 
@@ -118,8 +219,9 @@ export function construirPeriodosDeJuros(ctx: ITabelaDeJurosContext): PeriodoDeJ
     combs.sort((a, b) => a.compareTo(b));
 
     for (const combinacao of combs) {
-      const proximaTabela = combinacao.getOutroJuros()!;
-      const dataAPartirDe = combinacao.getApartirDeOutroJuros()!;
+      const proximaTabela = combinacao.getOutroJuros();
+      const dataAPartirDe = combinacao.getApartirDeOutroJuros();
+      if (proximaTabela === null || dataAPartirDe === null) continue;
 
       if (HelperDate.dateBeforeOrEquals(dataAPartirDe, dataInicio)) {
         tabelaAtual = proximaTabela;
@@ -127,7 +229,11 @@ export function construirPeriodosDeJuros(ctx: ITabelaDeJurosContext): PeriodoDeJ
       }
       if (HelperDate.dateAfter(dataAPartirDe, periodoDeJuros.getFinal())) break;
 
-      montarPeriodo(tabelaAtual, dataInicio, HelperDate.getInstance(dataAPartirDe)!.addDay(-1).getDate());
+      montarPeriodo(
+        tabelaAtual,
+        dataInicio,
+        HelperDate.getInstance(dataAPartirDe)!.addDay(-1).getDate()
+      );
       dataInicio = dataAPartirDe;
       tabelaAtual = proximaTabela;
     }
@@ -139,19 +245,25 @@ export function construirPeriodosDeJuros(ctx: ITabelaDeJurosContext): PeriodoDeJ
 
 // ────────────── Cálculo da taxa total ──────────────
 
-function isJurosCompostos(t: JurosEnum): boolean {
+function isJurosCompostos(t: JurosEnum | null): boolean {
   return t === JurosEnum.TRD_COMPOSTOS || t === JurosEnum.SELIC_BACEN;
 }
 
 /**
- * calcularTaxaDeJuros (linha 489)
+ * calcularTaxaDeJurosTotal — port de `calcularTaxaDeJuros` (Java linha 489).
  *
- * Percorre a cadeia de PeriodoDeJuros e soma (simples) ou acumula (composto) as taxas.
- * Retorna taxa percentual total (ex: 13.5 para 13,5%).
+ * Percorre a cadeia de PeriodoDeJuros e soma (simples) ou acumula (composto)
+ * as taxas. Retorna taxa percentual total (ex: 13.5 para 13,5%).
+ *
+ * Para regimes compostos (SELIC_BACEN, TRD_COMPOSTOS), cada período armazena
+ * em `aliquota` o fator (1+i) e o acumulado é multiplicado. Ao mudar de
+ * regime (ou acabar a cadeia), o acumulado é convertido para taxa percentual
+ * via `(fator - 1) * 100` e somado a `totalDeTaxa`.
  *
  * @param raiz início da cadeia
  * @param dataLiquidacao data final para clampar períodos
  * @param isSelicIndiceNaLiquidacao se SELIC é o índice principal na liquidação
+ *        (quando true, o mês da liquidação é usado como mês cheio, não pro-rata)
  */
 export function calcularTaxaDeJurosTotal(
   raiz: PeriodoDeJuros | null,
@@ -165,7 +277,7 @@ export function calcularTaxaDeJurosTotal(
   while (periodoAtual !== null) {
     const tabelaJuros = periodoAtual.getTabelaJuros();
 
-    // Se o período ultrapassa a liquidação, clampa
+    // Se o período ultrapassa a liquidação, clampa.
     if (HelperDate.dateAfter(periodoAtual.getDataFinal()!, dataLiquidacao)) {
       const periodoAux = periodoAtual.clone();
       periodoAux.setDataFinal(
@@ -173,14 +285,14 @@ export function calcularTaxaDeJurosTotal(
           ? HelperDate.getCurrentCompetence(dataLiquidacao).lastDayOfTheMonth().getDate()
           : dataLiquidacao
       );
-      if (tabelaJuros && isJurosCompostos(tabelaJuros)) {
+      if (isJurosCompostos(tabelaJuros)) {
         acumuladoComposto = acumuladoComposto ?? new Decimal(1);
         const aliq = periodoAux.getAliquota();
         if (aliq) acumuladoComposto = acumuladoComposto.times(aliq);
       } else {
         totalDeTaxa = totalDeTaxa.plus(periodoAux.getTaxa());
       }
-    } else if (tabelaJuros && isJurosCompostos(tabelaJuros)) {
+    } else if (isJurosCompostos(tabelaJuros)) {
       acumuladoComposto = acumuladoComposto ?? new Decimal(1);
       const aliq = periodoAtual.getAliquota();
       if (aliq) acumuladoComposto = acumuladoComposto.times(aliq);
@@ -188,7 +300,7 @@ export function calcularTaxaDeJurosTotal(
       totalDeTaxa = totalDeTaxa.plus(periodoAtual.getTaxa());
     }
 
-    // Se mudou de regime (composto → simples), converte acumulado para taxa
+    // Se mudou de regime (composto → simples ou acabou), converte acumulado.
     const anterior = tabelaJuros;
     periodoAtual = periodoAtual.getProximoPeriodo();
     if (periodoAtual !== null && anterior === periodoAtual.getTabelaJuros()) continue;

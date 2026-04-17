@@ -145,6 +145,7 @@ export enum ModoDeCalculoEnum {
   LIQUIDACAO = 'L',
   ATUALIZACAO = 'A',
   CARGA_INICIAL = 'C',
+  GERACAO_DE_OCORRENCIA = 'G',
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
