@@ -53,6 +53,11 @@ import { ModuloEquiparacaoSalarial } from "./pjecalc/ModuloEquiparacaoSalarial";
 import { ModuloEstabilidade } from "./pjecalc/ModuloEstabilidade";
 import { ModuloPericulosidade } from "./pjecalc/ModuloPericulosidade";
 import { ModuloTerceiros } from "./pjecalc/ModuloTerceiros";
+import { ModuloParametrosGerais } from "./pjecalc/ModuloParametrosGerais";
+import { ModuloVerbasCadastro } from "./pjecalc/ModuloVerbasCadastro";
+import { ModuloPagamentos } from "./pjecalc/ModuloPagamentos";
+import { ModuloExcecoesCarga } from "./pjecalc/ModuloExcecoesCarga";
+import { ModuloExcecoesSabado } from "./pjecalc/ModuloExcecoesSabado";
 import { calcularCompletude, type ModuleStatus } from "@/lib/pjecalc/completude";
 import { logger } from "@/lib/logger";
 
@@ -421,7 +426,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
     switch (activeModule) {
       // 1. Dados do Cálculo
       case 'dados_processo': return <ModuloDadosProcesso caseId={caseId} />;
-      case 'parametros_gerais': return renderParametros();
+      case 'parametros_gerais': return <ModuloParametrosGerais caseId={caseId} />;
       case 'advogados': return <ModuloAdvogados caseId={caseId} />;
 
       // 2. Períodos e Ponto
@@ -430,11 +435,11 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
       case 'ferias': return renderFerias();
       case 'cartao_ponto': return <ModuloCartaoPonto caseId={caseId} dataAdmissao={formParams.data_admissao} dataDemissao={formParams.data_demissao} />;
       case 'cartao_ponto_diario': return <ModuloCartaoPontoDiario caseId={caseId} />;
-      case 'excecoes_carga': return <ModuloStub titulo="Exceções Carga Horária" descricao="cadastro de exceções de carga horária (Calculo.java)" />;
-      case 'excecoes_sabado': return <ModuloStub titulo="Exceções Sábado" descricao="cadastro de exceções de sábado (Calculo.java)" />;
+      case 'excecoes_carga': return <ModuloExcecoesCarga caseId={caseId} />;
+      case 'excecoes_sabado': return <ModuloExcecoesSabado caseId={caseId} />;
 
       // 3. Verbas e Ocorrências
-      case 'verbas_cadastro': return renderVerbas();
+      case 'verbas_cadastro': return <ModuloVerbasCadastro caseId={caseId} />;
       case 'ocorrencias': return (
         <Card className="rounded-sm border">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Ocorrências</CardTitle></CardHeader>
@@ -443,7 +448,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
           </CardContent>
         </Card>
       );
-      case 'pagamentos': return <ModuloStub titulo="Pagamentos" descricao="lançamento de pagamentos (Calculo.java)" />;
+      case 'pagamentos': return <ModuloPagamentos caseId={caseId} />;
       case 'vale_transporte': return <ModuloValeTransporte caseId={caseId} />;
 
       // 4. Tributos
