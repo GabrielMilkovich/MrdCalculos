@@ -3,7 +3,7 @@
 // VERSÃO 2: fix cache-first em HTML causando tela branca após deploy
 // =====================================================
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE = `mrd-calc-static-${CACHE_VERSION}`;
 const DATA_CACHE = `mrd-calc-data-${CACHE_VERSION}`;
 
