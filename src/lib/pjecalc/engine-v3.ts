@@ -24,22 +24,24 @@ import type {
 } from './engine-types';
 
 // Core imports
+// NOTE: Importando Calculo + Classes direto dos arquivos porque o barrel `./core`
+// expõe `Calculo` como undefined em ambiente Vite/Vitest (ciclo não identificado).
+// Demais exports de escopo amplo seguem do barrel para evitar explosão de imports.
+import { Calculo } from './core/dominio/calculo/calculo';
+import { VerbaDeCalculo } from './core/dominio/verbacalculo/verba-de-calculo';
+import { OcorrenciaDeVerba } from './core/dominio/ocorrenciaverba/ocorrencia-de-verba';
+import { ParametrosDeAtualizacao } from './core/dominio/calculo/atualizacao/parametros-de-atualizacao';
+import { CombinacaoDeIndice as CoreCombIndice } from './core/dominio/calculo/atualizacao/combinacao-de-indice';
+import { CombinacaoDeJuros as CoreCombJuros } from './core/dominio/calculo/atualizacao/combinacao-de-juros';
+import { TabelaDeCorrecaoMonetaria } from './core/dominio/verbacalculo/tabela-de-correcao-monetaria';
+import { Inss } from './core/dominio/calculo/inss/inss';
+import { Irpf } from './core/dominio/calculo/irpf/irpf';
+import { Fgts } from './core/dominio/calculo/fgts/fgts';
+import { Honorario } from './core/dominio/calculo/honorarios/honorario';
+import { CustasJudiciais } from './core/dominio/calculo/custas/custas-judiciais';
+import { Multa } from './core/dominio/calculo/multa/multa';
+import { ServicoDeCalculo } from './core/servicos/servico-de-calculo';
 import {
-  Calculo,
-  VerbaDeCalculo,
-  OcorrenciaDeVerba,
-  ParametrosDeAtualizacao,
-  CombinacaoDeIndice as CoreCombIndice,
-  CombinacaoDeJuros as CoreCombJuros,
-  TabelaDeCorrecaoMonetaria,
-  Inss,
-  Irpf,
-  Fgts,
-  Honorario,
-  CustasJudiciais,
-  Multa,
-  totalizar,
-  arredondarValorMonetario,
   IndiceMonetarioEnum,
   IndicesAcumuladosEnum,
   JurosEnum,
@@ -48,13 +50,18 @@ import {
   LogicoEnum,
   ValorDaVerbaEnum,
   BaseDeJurosDasVerbasEnum,
-  ServicoDeCalculo,
+} from './core/constantes/enums';
+import {
+  arredondarValorMonetario,
+} from './core/base/comum/utils';
+import { totalizar } from './core/dominio/pagamento/pagamento';
+import {
   PrimeiraFaixaPrevidenciaria,
   SegundaFaixaPrevidenciaria,
   TerceiraFaixaPrevidenciaria,
   QuartaFaixaPrevidenciaria,
   type FaixaPrevidenciaria,
-} from './core';
+} from './core/dominio/inss/faixas/faixa-previdenciaria';
 
 export class PjeCalcEngineV3 {
   private params: PjeParametros;
