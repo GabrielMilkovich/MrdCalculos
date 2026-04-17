@@ -568,22 +568,62 @@ export class PjeCalcEngineV3 {
     if (inicio.getTime() >= dataLiq.getTime()) return 0;
 
     const valor = new Decimal(valorCorrigido);
-
-    if (tipo === 'selic') {
-      const somaPct = this.somarSelicSimples(inicio, dataLiq);
-      return valor.times(somaPct).div(100).toDP(2).toNumber();
+    const combs = this.correcaoConfig.combinacoes_juros ?? [];
+    if (combs.length > 0) {
+      return valor.times(this.pctJurosCombinado(inicio, dataLiq, tipo, combs)).div(100).toDP(2).toNumber();
     }
+    return valor.times(this.pctJurosSegmento(inicio, dataLiq, tipo)).div(100).toDP(2).toNumber();
+  }
 
-    // simples_mensal / composto — 1% a.m. (ou juros_percentual explícito)
-    const pctMes = new Decimal(this.correcaoConfig.juros_percentual ?? 1);
-    const meses = this.mesesEntre(inicio, dataLiq);
-
-    if (tipo === 'composto') {
+  /**
+   * Retorna o percentual de juros acumulado em um segmento [inicio, fim] sob um tipo único.
+   * Tipos: 'selic' soma SELIC mensal pro-rata. 'simples_mensal' e 'taxa_legal' = 1%/mês.
+   * 'composto' retorna percentual equivalente (1 + r)^meses - 1. 'trd_simples' = 1%/mês.
+   * 'um_porcento' = 1%/mês. 'meio_porcento' = 0.5%/mês. 'nenhum'/'sem_juros' = 0.
+   */
+  private pctJurosSegmento(inicio: Date, fim: Date, tipo: string): Decimal {
+    if (inicio.getTime() >= fim.getTime()) return new Decimal(0);
+    const t = tipo.toLowerCase();
+    if (t === 'nenhum' || t === 'sem_juros') return new Decimal(0);
+    if (t === 'selic' || t === 'selic_bacen' || t === 'selic_fazenda') {
+      return new Decimal(this.somarSelicSimples(inicio, fim));
+    }
+    const pctMes = new Decimal(this.correcaoConfig.juros_percentual ?? (t === 'meio_porcento' ? 0.5 : 1));
+    const meses = this.mesesEntre(inicio, fim);
+    if (t === 'composto') {
       const fator = new Decimal(1).plus(pctMes.div(100)).pow(meses).minus(1);
-      return valor.times(fator).toDP(2).toNumber();
+      return fator.times(100);
     }
-    // simples
-    return valor.times(pctMes).times(meses).div(100).toDP(2).toNumber();
+    return pctMes.times(meses);
+  }
+
+  /**
+   * Combinações: lista ordenada de {de: Date, tipo: string}. Antes do primeiro "de",
+   * aplica o `tipoBase`. A cada "de", troca o regime.
+   */
+  private pctJurosCombinado(
+    inicio: Date, fim: Date, tipoBase: string,
+    combs: { de?: string; tipo: string }[],
+  ): Decimal {
+    const ordenadas = [...combs]
+      .filter(c => c.tipo)
+      .map(c => ({ de: c.de ? new Date(c.de) : null, tipo: c.tipo }))
+      .sort((a, b) => (a.de?.getTime() ?? 0) - (b.de?.getTime() ?? 0));
+
+    let total = new Decimal(0);
+    let cursor = inicio;
+    let tipoAtual = tipoBase;
+
+    for (const c of ordenadas) {
+      if (!c.de) { tipoAtual = c.tipo; continue; }
+      if (c.de.getTime() <= inicio.getTime()) { tipoAtual = c.tipo; continue; }
+      if (c.de.getTime() >= fim.getTime()) break;
+      total = total.plus(this.pctJurosSegmento(cursor, c.de, tipoAtual));
+      cursor = c.de;
+      tipoAtual = c.tipo;
+    }
+    total = total.plus(this.pctJurosSegmento(cursor, fim, tipoAtual));
+    return total;
   }
 
   private resolverDataInicioJuros(): Date {
