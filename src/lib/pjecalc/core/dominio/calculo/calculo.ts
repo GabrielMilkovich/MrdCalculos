@@ -146,6 +146,7 @@ export class Calculo {
     const ctx: ITabelaCorrecaoContext = {
       getDataDeLiquidacao: () => this.getDataDeLiquidacao(),
       getDataDemissao: () => this.getDataDemissao(),
+      getParametrosDeAtualizacao: () => this.parametrosDeAtualizacao,
     };
     const tabelaDeCorrecao = new TabelaDeCorrecaoMonetaria(
       ctx,

@@ -29,7 +29,7 @@
 import Decimal from 'decimal.js';
 import { HelperDate } from '../../base/comum/helper-date';
 import { Periodo } from '../../base/comum/periodo';
-import { naoNulo, nulo } from '../../base/comum/utils';
+import { naoNulo, nulo, multiplicar, dividir, somar, subtrair } from '../../base/comum/utils';
 import {
   IndiceMonetarioEnum, IndicesAcumuladosEnum, OcorrenciaDePagamentoEnum,
 } from '../../constantes/enums';
@@ -37,6 +37,11 @@ import type { IndiceDeCalculo } from '../indices/indice-de-calculo';
 import {
   revisarConversaoInicial, obterTabelaDeIndicesIgnorandoTaxasNegativas,
 } from '../../comum/rotinasdecalculo/calculador-de-indices';
+import type { ParametrosDeAtualizacao } from '../calculo/atualizacao/parametros-de-atualizacao';
+import type { CombinacaoDeIndice } from '../calculo/atualizacao/combinacao-de-indice';
+import { ParametrosDeAtualizacaoUtils } from '../calculo/atualizacao/parametros-de-atualizacao-utils';
+import { TabelaDeCorrecaoMonetariaUtils } from './tabela-de-correcao-monetaria-utils';
+import { MaquinaDeCalculoDeCorrecaoMonetaria } from './maquina-de-calculo-de-correcao-monetaria';
 
 // Índices concretos (todos portados):
 import { IndiceSemCorrecao } from '../indices/indice-sem-correcao';
@@ -69,6 +74,12 @@ export interface ITabelaCorrecaoContext {
   /** Data de demissão (usada em MES_SUBSEQUENTE_E_MES_DO_VENCIMENTO) */
   getDataDemissao(): Date | null;
   /**
+   * ParametrosDeAtualizacao do cálculo — necessário para detectar combinações
+   * de índice (ADC 58/59). Quando ausente, carregarTabela() opera em modo
+   * índice único (compatibilidade retroativa).
+   */
+  getParametrosDeAtualizacao?(): ParametrosDeAtualizacao | null;
+  /**
    * Função de resolução de índices SELIC (JurosSelicParaCorrecao) —
    * requer contexto do cálculo para decidir +1% no mês de liquidação etc.
    * Quando ausente, usa fallback simples baseado em IndiceSelicFazenda.
@@ -100,6 +111,8 @@ export class TabelaDeCorrecaoMonetaria {
   private origemCalculo: boolean | null = null;
   private dataLiquidacao: Date | null = null;
   private existeIndiceDiarioNaCombinacao: boolean | null = null;
+  private parametrosAtualizacao: ParametrosDeAtualizacao | null = null;
+  private maquinaDeCalculoDeCorrecaoMonetaria: MaquinaDeCalculoDeCorrecaoMonetaria | null = null;
   private context: ITabelaCorrecaoContext;
 
   constructor(
@@ -133,8 +146,13 @@ export class TabelaDeCorrecaoMonetaria {
 
   // ────────────── Obter índices (linhas 138-207) ──────────────
 
-  /** obterIndicesDeCalculo (linha 138) — usado internamente */
-  protected obterIndicesDeCalculo(indiceMonetario: IndiceMonetarioEnum, periodo: Periodo): IndiceDeCalculo[] {
+  /**
+   * obterIndicesDeCalculo (linha 138)
+   *
+   * Público porque a `MaquinaDeCalculoDeCorrecaoMonetaria` precisa consultar
+   * a tabela quando resolve combinações encadeadas no mesmo mês.
+   */
+  obterIndicesDeCalculo(indiceMonetario: IndiceMonetarioEnum, periodo: Periodo): IndiceDeCalculo[] {
     if (nulo(indiceMonetario)) return [];
     let tabelaDeIndices = this.obterTabelaDeIndicesPorPeriodo(indiceMonetario, periodo);
     const dataLiq = this.dataLiquidacao ?? this.context.getDataDeLiquidacao();
@@ -192,22 +210,29 @@ export class TabelaDeCorrecaoMonetaria {
 
   // ────────────── isIndiceDiario (linha 233) ──────────────
 
-  protected isIndiceDiario(indice: IndiceMonetarioEnum): boolean {
+  /** Público para uso da MaquinaDeCalculoDeCorrecaoMonetaria. */
+  isIndiceDiario(indice: IndiceMonetarioEnum): boolean {
     return indice === IndiceMonetarioEnum.JAM
       || indice === IndiceMonetarioEnum.TABELA_UNICA_JT_DIARIO
       || indice === IndiceMonetarioEnum.SELIC_BACEN
       || indice === IndiceMonetarioEnum.TUACDT;
   }
 
-  // ────────────── carregarTabela (linha 237) ──────────────
+  // ────────────── carregarTabela (linhas Java 237-307) ──────────────
 
   /**
    * Carrega a tabela de fatores acumulados para o período.
-   * Versão simplificada (sem combinação — combinação de índices trabalhistas
-   * é a parte mais complexa da classe e requer ParametrosDeAtualizacao portada).
+   *
+   * Suporta:
+   *  - Índice único (sem combinação) — fluxo direto
+   *  - Combinação de 1 índice trabalhista com outro (ADC 58/59: IPCA-E → SEM_CORRECAO/SELIC)
+   *  - Múltiplas combinações encadeadas (N combinações) — itera `descendingSet`
+   *
+   * Requer `context.getParametrosDeAtualizacao()` para ler as combinações.
+   * Se ausente, degrada para índice único (compatibilidade).
    */
   carregarTabela(periodo: Periodo): void {
-    // Se período atual já cobre o requerido, não recarrega
+    // Early-exit: período atual já cobre o requerido
     if (this.periodoDaTabelaAtual && this.periodoDaTabelaAtual.getFinal()
         && HelperDate.dateEquals(periodo.getFinal(), this.periodoDaTabelaAtual.getFinal())
         && HelperDate.dateAfterOrEquals(periodo.getInicial(), this.periodoDaTabelaAtual.getInicial())) {
@@ -216,16 +241,355 @@ export class TabelaDeCorrecaoMonetaria {
     this.tabela = new Map();
     this.periodoDaTabelaAtual = periodo;
 
-    const indices = this.obterIndicesDeCalculo(this.indice, periodo);
-    // Popula a tabela com valorAcumulado por competência (formato MASCARA_DIA)
-    for (const idx of indices) {
-      if (!idx) continue;
-      const valorAcum = idx.getValorAcumulado();
-      if (!valorAcum) continue;
-      const chave = HelperDate.getInstance(idx.getCompetencia())!.format(MASCARA_DIA);
-      this.tabela.set(chave, valorAcum);
+    this.parametrosAtualizacao = this.context.getParametrosDeAtualizacao?.() ?? null;
+    let outrosIndices: IndiceDeCalculo[] = [];
+    let indices: IndiceDeCalculo[] = [];
+    let montarTabelaCombinada = false;
+
+    indices = this.obterIndicesDeCalculo(this.indice, periodo);
+
+    // Caso sem combinação → fluxo direto
+    if (!this.isIndiceTrabalhista
+        || !this.parametrosAtualizacao
+        || !this.parametrosAtualizacao.getCombinarOutroIndice()) {
+      this.montarTabela(periodo, indices, outrosIndices, false, []);
+      this.dataFinalDoPeriodo.setDate(periodo.getFinal());
+      this.maquinaDeCalculoDeCorrecaoMonetaria?.ajustarTabelaSelicFazenda(this.tabela, this.periodoDaTabelaAtual);
+      return;
     }
+
+    // ── Combinações ──
+    this.outroIndice = this.parametrosAtualizacao.getOutroIndiceTrabalhista();
+    this.dataAPartirDeOutroIndice = this.parametrosAtualizacao.getApartirDeOutroIndice();
+    const combinacoesDeIndices = ParametrosDeAtualizacaoUtils.montarAsCombinacoesDeIndices(
+      this.parametrosAtualizacao, this.periodoDaTabelaAtual.getFinal()
+    );
+    // Se outroIndice/data não estão no ParametrosDeAtualizacao mas há combinações,
+    // usa a primeira combinação como fallback (Java linha 261-264)
+    const temOutroExplicito = this.outroIndice !== null && this.dataAPartirDeOutroIndice !== null;
+    if (!temOutroExplicito && combinacoesDeIndices.length > 0) {
+      this.outroIndice = combinacoesDeIndices[0].getOutroIndiceTrabalhista();
+      this.dataAPartirDeOutroIndice = combinacoesDeIndices[0].getApartirDeOutroIndice();
+    }
+    montarTabelaCombinada = true;
+
+    if (combinacoesDeIndices.length === 1) {
+      // Caso mais comum — ADC 58/59: uma única mudança no período
+      if (this.dataAPartirDeOutroIndice
+          && HelperDate.dateBefore(HelperDate.getCurrentCompetence(periodo.getInicial()).getDate(), this.dataAPartirDeOutroIndice)) {
+        this.outroIndiceEhDiario = this.isIndiceDiario(this.outroIndice!);
+        outrosIndices = this.obterIndicesDeCalculo(this.outroIndice!, new Periodo(this.dataAPartirDeOutroIndice, periodo.getFinal()));
+        indices = this.obterIndicesDeCalculo(
+          this.indice,
+          new Periodo(periodo.getInicial(), HelperDate.getInstance(this.dataAPartirDeOutroIndice)!.addDay(-1).getDate())
+        );
+      } else {
+        // data da mudança antes ou no início do período → usa apenas outroIndice
+        montarTabelaCombinada = false;
+        indices = this.obterIndicesDeCalculo(this.outroIndice!, periodo);
+      }
+      this.montarTabela(periodo, indices, outrosIndices, montarTabelaCombinada, []);
+    } else if (combinacoesDeIndices.length > 1) {
+      // N combinações — iterar de trás para frente
+      let anterior: CombinacaoDeIndice | null = null;
+      let numeroCombinacoesParaIgnorar = 0;
+      const descending = [...combinacoesDeIndices].sort((a, b) => b.compareTo(a));
+      for (const ind of descending) {
+        if (numeroCombinacoesParaIgnorar > 0) {
+          anterior = ind;
+          --numeroCombinacoesParaIgnorar;
+          continue;
+        }
+        // Índice "proximo" = combinação imediatamente anterior (lower)
+        const idxThis = combinacoesDeIndices.indexOf(ind);
+        let proximo: CombinacaoDeIndice | null = idxThis > 0 ? combinacoesDeIndices[idxThis - 1] : null;
+        const combinacoesAdicionaisNoMesmoMes = TabelaDeCorrecaoMonetariaUtils
+          .encontrarCombinacoesAdicionaisNoMesmoMes(ind, combinacoesDeIndices);
+        numeroCombinacoesParaIgnorar = combinacoesAdicionaisNoMesmoMes.length;
+        for (let i = 0; i < numeroCombinacoesParaIgnorar; ++i) {
+          const idxProx = proximo ? combinacoesDeIndices.indexOf(proximo) : -1;
+          proximo = idxProx > 0 ? combinacoesDeIndices[idxProx - 1] : null;
+        }
+        this.indice = proximo === null
+          ? this.parametrosAtualizacao.getIndiceTrabalhista()
+          : proximo.getOutroIndiceTrabalhista()!;
+        this.outroIndice = ind.getOutroIndiceTrabalhista();
+        this.dataAPartirDeOutroIndice = ind.getApartirDeOutroIndice();
+        this.indiceDiario = this.isIndiceDiario(this.indice);
+        this.outroIndiceEhDiario = this.isIndiceDiario(this.outroIndice!);
+        this.montarTabelaCombinada(outrosIndices, indices, proximo, anterior, periodo, combinacoesAdicionaisNoMesmoMes);
+        anterior = ind;
+      }
+    } else {
+      montarTabelaCombinada = false;
+      this.montarTabela(periodo, indices, outrosIndices, montarTabelaCombinada, []);
+    }
+
     this.dataFinalDoPeriodo.setDate(periodo.getFinal());
+    this.maquinaDeCalculoDeCorrecaoMonetaria?.ajustarTabelaSelicFazenda(this.tabela, this.periodoDaTabelaAtual);
+  }
+
+  // ────────────── montarTabelaCombinada (linhas Java 309-335) ──────────────
+
+  /**
+   * Resolve os sub-períodos (antes/depois da mudança) e delega para `montarTabela`
+   * com os índices já carregados para cada sub-período.
+   */
+  private montarTabelaCombinada(
+    outrosIndices: IndiceDeCalculo[],
+    indices: IndiceDeCalculo[],
+    proximo: CombinacaoDeIndice | null,
+    anterior: CombinacaoDeIndice | null,
+    periodo: Periodo,
+    combinacoesAdicionaisNoMesmoMes: CombinacaoDeIndice[]
+  ): void {
+    const pIndice = new Periodo(
+      proximo === null ? periodo.getInicial() : proximo.getApartirDeOutroIndice()!,
+      HelperDate.getInstance(this.dataAPartirDeOutroIndice!)!.addDay(-1).getDate()
+    );
+    const pOutroIndice = new Periodo(
+      this.dataAPartirDeOutroIndice!,
+      anterior === null ? periodo.getFinal() : HelperDate.getInstance(anterior.getApartirDeOutroIndice()!)!.addDay(-1).getDate()
+    );
+    if (HelperDate.dateBefore(pIndice.getFinal(), this.periodoDaTabelaAtual!.getInicial())
+        || HelperDate.dateAfter(pIndice.getInicial(), this.periodoDaTabelaAtual!.getFinal())) {
+      indices = [];
+    } else {
+      pIndice.setInicial(HelperDate.dateBefore(pIndice.getInicial(), this.periodoDaTabelaAtual!.getInicial())
+        ? this.periodoDaTabelaAtual!.getInicial() : pIndice.getInicial());
+      pIndice.setFinal(HelperDate.dateAfter(pIndice.getFinal(), this.periodoDaTabelaAtual!.getFinal())
+        ? this.periodoDaTabelaAtual!.getFinal() : pIndice.getFinal());
+      indices = this.obterIndicesDeCalculo(this.indice, pIndice);
+    }
+    if (HelperDate.dateBefore(pOutroIndice.getFinal(), this.periodoDaTabelaAtual!.getInicial())
+        || HelperDate.dateAfter(pOutroIndice.getInicial(), this.periodoDaTabelaAtual!.getFinal())) {
+      outrosIndices = [];
+    } else {
+      pOutroIndice.setInicial(HelperDate.dateBefore(pOutroIndice.getInicial(), this.periodoDaTabelaAtual!.getInicial())
+        ? this.periodoDaTabelaAtual!.getInicial() : pOutroIndice.getInicial());
+      pOutroIndice.setFinal(HelperDate.dateAfter(pOutroIndice.getFinal(), this.periodoDaTabelaAtual!.getFinal())
+        ? this.periodoDaTabelaAtual!.getFinal() : pOutroIndice.getFinal());
+      outrosIndices = this.obterIndicesDeCalculo(this.outroIndice!, pOutroIndice);
+    }
+    let periodoMontado = new Periodo(pIndice.getInicial(), pOutroIndice.getFinal());
+    if (indices.length > 0 && outrosIndices.length === 0) {
+      periodoMontado = new Periodo(pIndice.getInicial(), pIndice.getFinal());
+    } else if (indices.length === 0 && outrosIndices.length > 0) {
+      periodoMontado = new Periodo(pOutroIndice.getInicial(), pOutroIndice.getFinal());
+    }
+    if (indices.length > 0 || outrosIndices.length > 0) {
+      this.montarTabela(periodoMontado, indices, outrosIndices, true, combinacoesAdicionaisNoMesmoMes);
+    }
+  }
+
+  // ────────────── montarTabela (linhas Java 337-355) ──────────────
+
+  /**
+   * Dispatcher entre os 4 combinadores. Popula `this.tabela` diretamente.
+   */
+  private montarTabela(
+    periodo: Periodo,
+    indices: IndiceDeCalculo[],
+    outrosIndices: IndiceDeCalculo[],
+    montarTabelaCombinada: boolean,
+    combinacoesAdicionaisNoMesmoMes: CombinacaoDeIndice[]
+  ): void {
+    this.maquinaDeCalculoDeCorrecaoMonetaria = new MaquinaDeCalculoDeCorrecaoMonetaria(this);
+    if (montarTabelaCombinada) {
+      if (this.indiceDiario && !this.outroIndiceEhDiario) {
+        this.combinarIndiceDiarioComOutroIndiceNaoDiario(periodo, indices, outrosIndices, combinacoesAdicionaisNoMesmoMes);
+      } else if (!this.indiceDiario && this.outroIndiceEhDiario) {
+        this.combinarIndiceNaoDiarioComOutroIndiceDiario(periodo, indices, outrosIndices, combinacoesAdicionaisNoMesmoMes);
+      } else if (this.indiceDiario) {
+        this.combinarIndiceDiarioComOutroIndiceDiario(periodo, indices, outrosIndices, combinacoesAdicionaisNoMesmoMes);
+      } else {
+        this.combinarIndiceNaoDiarioComOutroIndiceNaoDiario(
+          periodo, indices, outrosIndices, combinacoesAdicionaisNoMesmoMes,
+          this.maquinaDeCalculoDeCorrecaoMonetaria.verificarSeExisteIndiceDiarioNas(combinacoesAdicionaisNoMesmoMes)
+        );
+      }
+    } else {
+      // Índice único — popula direto
+      for (const idx of indices) {
+        if (!idx) continue;
+        const valorAcum = idx.getValorAcumulado();
+        if (!valorAcum) continue;
+        const chave = HelperDate.getInstance(idx.getCompetencia())!.format(MASCARA_DIA);
+        this.tabela.set(chave, valorAcum);
+      }
+    }
+  }
+
+  // ────────────── combinarIndiceNaoDiarioComOutroIndiceNaoDiario (Java 360-443) ──────────────
+
+  /**
+   * Combinação de dois índices não-diários (caso ADC 58/59: IPCA-E → SEM_CORRECAO/SELIC).
+   *
+   * Algoritmo (Java 360-443):
+   *  1. Calcula `indiceAcumuladoDepoisDoMesDaMudanca` (via Utils) e
+   *     `indiceOutrosIndicesMesMudanca`/`indiceIndicesMesMudanca` (fatores do mês-pivô)
+   *  2. Popula tabela com valorAcumulado dos outros índices (pós-mudança)
+   *  3. Calcula `acumuladoAPartirDoMesDaMudanca` — pro-rata no mês da mudança
+   *  4. Reescala índices pré-mudança por fator = acumulado/indices[0]
+   */
+  private combinarIndiceNaoDiarioComOutroIndiceNaoDiario(
+    periodo: Periodo,
+    indices: IndiceDeCalculo[],
+    outrosIndices: IndiceDeCalculo[],
+    combinacoesAdicionaisNoMesmoMes: CombinacaoDeIndice[],
+    existeIndiceDiarioNasCombinacoesAdicionais: boolean
+  ): void {
+    let acumuladoAPartirDoMesDaMudanca: Decimal = new Decimal(1);
+    const size = outrosIndices.length;
+    const competenciaMesDaMudanca = HelperDate.getCurrentCompetence(this.dataAPartirDeOutroIndice!);
+    let indiceAcumuladoDepoisDoMesDaMudanca = TabelaDeCorrecaoMonetariaUtils
+      .encontrarIndiceAcumuladoAposMudanca(outrosIndices);
+    const isIndiceSELIC = this.indice === IndiceMonetarioEnum.SELIC
+                       || this.indice === IndiceMonetarioEnum.SELIC_FAZENDA;
+    const isOutroIndiceSELIC = this.outroIndice === IndiceMonetarioEnum.SELIC
+                            || this.outroIndice === IndiceMonetarioEnum.SELIC_FAZENDA;
+
+    // indiceOutrosIndicesMesMudanca — fator-mês para o OUTRO índice no mês-pivô
+    let indiceOutrosIndicesMesMudanca: Decimal = new Decimal(1);
+    if (size > 0 && naoNulo(outrosIndices[size - 1]) && isOutroIndiceSELIC) {
+      let fatorConversaoDuranteSelic = new Decimal(1);
+      if (HelperDate.dateEquals(competenciaMesDaMudanca.getDate(), this.dataAPartirDeOutroIndice!)) {
+        // ConversaoDeMoedas — simplificado para casos modernos: fator = 1
+        fatorConversaoDuranteSelic = new Decimal(1);
+      }
+      indiceOutrosIndicesMesMudanca = multiplicar(
+        outrosIndices[size - 1].getValorIndice(), fatorConversaoDuranteSelic
+      )!;
+    } else if (size > 0 && naoNulo(outrosIndices[size - 1])) {
+      indiceOutrosIndicesMesMudanca = dividir(
+        outrosIndices[size - 1].getValorAcumulado(), indiceAcumuladoDepoisDoMesDaMudanca
+      )!;
+    } else {
+      // outrosIndices vazio — fatorConversao=1 em casos modernos
+      indiceOutrosIndicesMesMudanca = new Decimal(1);
+    }
+
+    // indiceIndicesMesMudanca — fator do índice principal na primeira competência
+    let indiceIndicesMesMudanca: Decimal = new Decimal(1);
+    if (indices.length > 0 && naoNulo(indices[0])) {
+      indiceIndicesMesMudanca = indices[0].getValorAcumulado();
+    }
+
+    // 2. Popula outros índices (pós mudança) na tabela
+    for (const idx of outrosIndices) {
+      if (!naoNulo(idx)) continue;
+      const valorIndice = idx.getValorAcumulado();
+      const chave = HelperDate.getInstance(idx.getCompetencia())!.format(MASCARA_DIA);
+      if (!this.tabela.has(chave)) {
+        this.tabela.set(chave, valorIndice);
+      } else {
+        // Se já existe, re-extrai indiceAcumuladoDepois do mês seguinte
+        const chaveProxMes = HelperDate.getInstance(competenciaMesDaMudanca.getDate())!.addMonth(1).format(MASCARA_DIA);
+        const v = this.tabela.get(chaveProxMes);
+        if (v) indiceAcumuladoDepoisDoMesDaMudanca = v;
+      }
+    }
+
+    // 3. Calcula acumuladoAPartirDoMesDaMudanca
+    if (existeIndiceDiarioNasCombinacoesAdicionais) {
+      const mapa = this.maquinaDeCalculoDeCorrecaoMonetaria!.preencherTabelaDiariaDoMesDasCombinacoes(
+        4, periodo, competenciaMesDaMudanca,
+        indiceOutrosIndicesMesMudanca, indiceIndicesMesMudanca,
+        combinacoesAdicionaisNoMesmoMes, indiceAcumuladoDepoisDoMesDaMudanca
+      );
+      for (const [k, v] of mapa) this.tabela.set(k, v);
+      acumuladoAPartirDoMesDaMudanca = this.tabela.get(
+        HelperDate.getInstance(competenciaMesDaMudanca.getDate())!.format(MASCARA_DIA)
+      ) ?? new Decimal(1);
+    } else {
+      const proporcional = this.maquinaDeCalculoDeCorrecaoMonetaria!.encontrarIndiceProporcionalMesMudanca(
+        competenciaMesDaMudanca, indiceOutrosIndicesMesMudanca,
+        indiceIndicesMesMudanca, combinacoesAdicionaisNoMesmoMes
+      );
+      if (isOutroIndiceSELIC) {
+        // Caminho SELIC — ConversaoDeMoedas simplificada (fator 1) em casos modernos
+        const bd3 = indiceAcumuladoDepoisDoMesDaMudanca; // /1
+        acumuladoAPartirDoMesDaMudanca = multiplicar(
+          somar(proporcional, subtrair(bd3, new Decimal(1))!)!,
+          new Decimal(1)
+        )!;
+      } else {
+        acumuladoAPartirDoMesDaMudanca = multiplicar(proporcional, indiceAcumuladoDepoisDoMesDaMudanca)!;
+      }
+      if (periodo.isPeriodoContemEsta(this.dataAPartirDeOutroIndice!)) {
+        this.tabela.set(
+          HelperDate.getInstance(competenciaMesDaMudanca.getDate())!.format(MASCARA_DIA),
+          acumuladoAPartirDoMesDaMudanca
+        );
+      }
+    }
+
+    // 4. Reescala índices pré-mudança por fator = acumulado / indices[0]
+    //    (equivalente ao Java linhas 420-442 — sem fatorConversao SELIC simplificado)
+    let fator: Decimal;
+    if (isIndiceSELIC) {
+      fator = subtrair(acumuladoAPartirDoMesDaMudanca, indiceIndicesMesMudanca)!;
+    } else {
+      fator = dividir(acumuladoAPartirDoMesDaMudanca, indiceIndicesMesMudanca)!;
+    }
+    if (HelperDate.dateEquals(competenciaMesDaMudanca.getDate(), this.dataAPartirDeOutroIndice!) && isIndiceSELIC) {
+      fator = subtrair(acumuladoAPartirDoMesDaMudanca, new Decimal(1))!;
+    } else if (HelperDate.dateEquals(competenciaMesDaMudanca.getDate(), this.dataAPartirDeOutroIndice!)) {
+      fator = acumuladoAPartirDoMesDaMudanca;
+    }
+
+    for (const idx of indices) {
+      if (!naoNulo(idx)) continue;
+      let valorIndice: Decimal;
+      if (isIndiceSELIC) {
+        valorIndice = somar(idx.getValorAcumulado(), fator)!;
+      } else {
+        valorIndice = idx.getValorAcumulado().times(fator);
+      }
+      const chave = HelperDate.getInstance(idx.getCompetencia())!.format(MASCARA_DIA);
+      if (!this.tabela.has(chave)) this.tabela.set(chave, valorIndice);
+    }
+  }
+
+  // ────────────── Combiners remanescentes (stubs) ──────────────
+
+  /**
+   * combinarIndiceDiarioComOutroIndiceDiario (Java 452-494).
+   * Não implementado — caso raro (ex.: JAM → SELIC_BACEN).
+   */
+  private combinarIndiceDiarioComOutroIndiceDiario(
+    _periodo: Periodo, _indices: IndiceDeCalculo[], _outrosIndices: IndiceDeCalculo[],
+    _combinacoesAdicionaisNoMesmoMes: CombinacaoDeIndice[]
+  ): void {
+    throw new Error(
+      'TabelaDeCorrecaoMonetaria.combinarIndiceDiarioComOutroIndiceDiario: combinação diário×diário ainda não portada'
+    );
+  }
+
+  /**
+   * combinarIndiceNaoDiarioComOutroIndiceDiario (Java 496-...).
+   * Não implementado.
+   */
+  private combinarIndiceNaoDiarioComOutroIndiceDiario(
+    _periodo: Periodo, _indices: IndiceDeCalculo[], _outrosIndices: IndiceDeCalculo[],
+    _combinacoesAdicionaisNoMesmoMes: CombinacaoDeIndice[]
+  ): void {
+    throw new Error(
+      'TabelaDeCorrecaoMonetaria.combinarIndiceNaoDiarioComOutroIndiceDiario: combinação não-diário×diário ainda não portada'
+    );
+  }
+
+  /**
+   * combinarIndiceDiarioComOutroIndiceNaoDiario (Java).
+   * Não implementado.
+   */
+  private combinarIndiceDiarioComOutroIndiceNaoDiario(
+    _periodo: Periodo, _indices: IndiceDeCalculo[], _outrosIndices: IndiceDeCalculo[],
+    _combinacoesAdicionaisNoMesmoMes: CombinacaoDeIndice[]
+  ): void {
+    throw new Error(
+      'TabelaDeCorrecaoMonetaria.combinarIndiceDiarioComOutroIndiceNaoDiario: combinação diário×não-diário ainda não portada'
+    );
   }
 
   // ────────────── ajustarData (linha 608) — Súmula 381 ──────────────
