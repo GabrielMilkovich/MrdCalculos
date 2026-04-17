@@ -6099,6 +6099,8 @@ export type Database = {
           incide_ir: boolean | null
           nome: string | null
           observacoes: string | null
+          periodo_fim: string | null
+          periodo_inicio: string | null
           tipo_variacao: string | null
           valor_fixo: number | null
         }
@@ -6112,6 +6114,8 @@ export type Database = {
           incide_ir?: boolean | null
           nome?: string | null
           observacoes?: string | null
+          periodo_fim?: never
+          periodo_inicio?: never
           tipo_variacao?: string | null
           valor_fixo?: number | null
         }
@@ -6125,6 +6129,8 @@ export type Database = {
           incide_ir?: boolean | null
           nome?: string | null
           observacoes?: string | null
+          periodo_fim?: never
+          periodo_inicio?: never
           tipo_variacao?: string | null
           valor_fixo?: number | null
         }
