@@ -1271,31 +1271,80 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         </CardContent>
       </Card>
 
-      <div className="flex flex-col md:flex-row gap-6">
-        <aside className="w-full md:w-64 flex-shrink-0 space-y-1">
-          {MODULOS.map(m => (
-            <button
-              key={m.id}
-              onClick={() => setActiveModule(m.id)}
-              className={cn(
-                "w-full flex items-center gap-3 p-3 rounded-lg text-sm transition-all",
-                activeModule === m.id
-                  ? "bg-primary text-primary-foreground shadow-md"
-                  : "hover:bg-muted text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <m.icon className="h-4 w-4 flex-shrink-0" />
-              <span className="flex-1 text-left">{m.label}</span>
-              {/* Status Indicator */}
-              <div className={cn("w-2 h-2 rounded-full", getStatusColor(completude[m.id] || 'nao_iniciado'))} />
-            </button>
-          ))}
+      <div className="flex flex-col md:flex-row gap-4">
+        {/* Hierarchical sidebar — PJe-Calc style */}
+        <aside className="w-full md:w-72 flex-shrink-0 border rounded-sm bg-card">
+          <ScrollArea className="h-[650px]">
+            <nav className="p-2 text-[13px]" aria-label="Navegação PJe-Calc">
+              {SECOES.map(sec => {
+                const SecIcon = sec.icon;
+                const expanded = expandedSections.has(sec.id);
+                const total = sec.modulos.length;
+                return (
+                  <div key={sec.id} className="mb-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(sec.id)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-2 py-1.5 rounded-sm",
+                        "text-left font-semibold uppercase tracking-wide text-[11px]",
+                        "text-foreground hover:bg-muted transition-colors"
+                      )}
+                      aria-expanded={expanded}
+                    >
+                      {expanded
+                        ? <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                        : <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />}
+                      <SecIcon className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                      <span className="flex-1">{sec.label}</span>
+                      <span className="text-[10px] font-normal text-muted-foreground">{total}</span>
+                    </button>
+                    {expanded && (
+                      <ul className="mt-0.5 ml-1 border-l border-border">
+                        {sec.modulos.map(m => {
+                          const Icon = m.icon;
+                          const active = activeModule === m.id;
+                          const status = completude[m.id] || 'nao_iniciado';
+                          return (
+                            <li key={m.id}>
+                              <button
+                                type="button"
+                                onClick={() => setActiveModule(m.id)}
+                                className={cn(
+                                  "w-full flex items-center gap-2 pl-4 pr-2 py-1.5 rounded-sm",
+                                  "text-[13px] transition-colors",
+                                  active
+                                    ? "bg-[hsl(var(--primary))] text-primary-foreground font-medium"
+                                    : "hover:bg-muted text-foreground/80 hover:text-foreground"
+                                )}
+                                aria-current={active ? 'page' : undefined}
+                              >
+                                <Icon className={cn(
+                                  "h-3.5 w-3.5 flex-shrink-0",
+                                  active ? "" : "text-muted-foreground"
+                                )} />
+                                <span className="flex-1 text-left truncate">{m.label}</span>
+                                <span className={cn(
+                                  "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                                  getStatusColor(status)
+                                )} aria-hidden />
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
+            </nav>
+          </ScrollArea>
         </aside>
 
         {/* Main Content Area */}
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 border rounded-sm bg-card">
           <ScrollArea className="h-[650px]">
-            <div className="pr-4 pb-8">
+            <div className="p-4 pb-8">
               {renderModule()}
             </div>
           </ScrollArea>
