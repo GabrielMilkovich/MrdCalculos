@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -190,92 +190,7 @@ export type Database = {
           run_type?: string
           status?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "ai_audit_runs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       ai_canonical_inputs: {
         Row: {
@@ -309,20 +224,6 @@ export type Database = {
           version?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "ai_canonical_inputs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "ai_canonical_inputs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "ai_canonical_inputs_run_id_fkey"
             columns: ["run_id"]
@@ -442,20 +343,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "ai_reconciliation_reports_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "ai_reconciliation_reports_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "ai_reconciliation_reports_run_id_fkey"
             columns: ["run_id"]
             isOneToOne: false
@@ -463,766 +350,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      audit_lines: {
-        Row: {
-          calculadora: string
-          competencia: string | null
-          descricao: string | null
-          formula: string | null
-          id: string
-          linha: number
-          metadata: Json | null
-          run_id: string
-          valor_bruto: number | null
-          valor_liquido: number | null
-        }
-        Insert: {
-          calculadora: string
-          competencia?: string | null
-          descricao?: string | null
-          formula?: string | null
-          id?: string
-          linha: number
-          metadata?: Json | null
-          run_id: string
-          valor_bruto?: number | null
-          valor_liquido?: number | null
-        }
-        Update: {
-          calculadora?: string
-          competencia?: string | null
-          descricao?: string | null
-          formula?: string | null
-          id?: string
-          linha?: number
-          metadata?: Json | null
-          run_id?: string
-          valor_bruto?: number | null
-          valor_liquido?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "audit_lines_run_id_fkey"
-            columns: ["run_id"]
-            isOneToOne: false
-            referencedRelation: "calculation_runs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      audit_log: {
-        Row: {
-          acao: string
-          after_json: Json | null
-          before_json: Json | null
-          created_at: string
-          entidade: string
-          entidade_id: string | null
-          id: string
-          ip_address: string | null
-          metadata: Json | null
-          user_id: string | null
-        }
-        Insert: {
-          acao: string
-          after_json?: Json | null
-          before_json?: Json | null
-          created_at?: string
-          entidade: string
-          entidade_id?: string | null
-          id?: string
-          ip_address?: string | null
-          metadata?: Json | null
-          user_id?: string | null
-        }
-        Update: {
-          acao?: string
-          after_json?: Json | null
-          before_json?: Json | null
-          created_at?: string
-          entidade?: string
-          entidade_id?: string | null
-          id?: string
-          ip_address?: string | null
-          metadata?: Json | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      calc_lineage: {
-        Row: {
-          created_at: string
-          formula_aplicada: string | null
-          hash_reproducao: string | null
-          id: string
-          inputs: Json
-          output_tipo: string | null
-          output_valor: number | null
-          parametros: Json | null
-          result_item_id: string | null
-          rule_codigo: string | null
-          rule_id: string | null
-          rule_versao: string | null
-          snapshot_id: string
-        }
-        Insert: {
-          created_at?: string
-          formula_aplicada?: string | null
-          hash_reproducao?: string | null
-          id?: string
-          inputs?: Json
-          output_tipo?: string | null
-          output_valor?: number | null
-          parametros?: Json | null
-          result_item_id?: string | null
-          rule_codigo?: string | null
-          rule_id?: string | null
-          rule_versao?: string | null
-          snapshot_id: string
-        }
-        Update: {
-          created_at?: string
-          formula_aplicada?: string | null
-          hash_reproducao?: string | null
-          id?: string
-          inputs?: Json
-          output_tipo?: string | null
-          output_valor?: number | null
-          parametros?: Json | null
-          result_item_id?: string | null
-          rule_codigo?: string | null
-          rule_id?: string | null
-          rule_versao?: string | null
-          snapshot_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "calc_lineage_result_item_id_fkey"
-            columns: ["result_item_id"]
-            isOneToOne: false
-            referencedRelation: "calc_result_items"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "calc_lineage_rule_id_fkey"
-            columns: ["rule_id"]
-            isOneToOne: false
-            referencedRelation: "calc_rules"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "calc_lineage_snapshot_id_fkey"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "calc_snapshots"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      calc_result_items: {
-        Row: {
-          base_calculo: number | null
-          competencia: string | null
-          created_at: string
-          dependencias: Json | null
-          fator: number | null
-          id: string
-          memoria_detalhada: Json | null
-          ordem: number | null
-          percentual: number | null
-          periodo_fim: string | null
-          periodo_inicio: string | null
-          quantidade: number | null
-          rubrica_codigo: string
-          rubrica_nome: string | null
-          snapshot_id: string
-          valor_bruto: number
-          valor_liquido: number | null
-        }
-        Insert: {
-          base_calculo?: number | null
-          competencia?: string | null
-          created_at?: string
-          dependencias?: Json | null
-          fator?: number | null
-          id?: string
-          memoria_detalhada?: Json | null
-          ordem?: number | null
-          percentual?: number | null
-          periodo_fim?: string | null
-          periodo_inicio?: string | null
-          quantidade?: number | null
-          rubrica_codigo: string
-          rubrica_nome?: string | null
-          snapshot_id: string
-          valor_bruto: number
-          valor_liquido?: number | null
-        }
-        Update: {
-          base_calculo?: number | null
-          competencia?: string | null
-          created_at?: string
-          dependencias?: Json | null
-          fator?: number | null
-          id?: string
-          memoria_detalhada?: Json | null
-          ordem?: number | null
-          percentual?: number | null
-          periodo_fim?: string | null
-          periodo_inicio?: string | null
-          quantidade?: number | null
-          rubrica_codigo?: string
-          rubrica_nome?: string | null
-          snapshot_id?: string
-          valor_bruto?: number
-          valor_liquido?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "calc_result_items_snapshot_id_fkey"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "calc_snapshots"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      calc_rules: {
-        Row: {
-          ativo: boolean | null
-          categoria: string
-          codigo: string
-          created_at: string
-          descricao: string | null
-          formula: Json
-          id: string
-          nome: string
-          parametros_requeridos: Json | null
-          versao: string
-          versao_numero: number
-          vigencia_fim: string | null
-          vigencia_inicio: string | null
-        }
-        Insert: {
-          ativo?: boolean | null
-          categoria: string
-          codigo: string
-          created_at?: string
-          descricao?: string | null
-          formula?: Json
-          id?: string
-          nome: string
-          parametros_requeridos?: Json | null
-          versao?: string
-          versao_numero?: number
-          vigencia_fim?: string | null
-          vigencia_inicio?: string | null
-        }
-        Update: {
-          ativo?: boolean | null
-          categoria?: string
-          codigo?: string
-          created_at?: string
-          descricao?: string | null
-          formula?: Json
-          id?: string
-          nome?: string
-          parametros_requeridos?: Json | null
-          versao?: string
-          versao_numero?: number
-          vigencia_fim?: string | null
-          vigencia_inicio?: string | null
-        }
-        Relationships: []
-      }
-      calc_scenarios: {
-        Row: {
-          ativo: boolean | null
-          case_id: string
-          created_at: string
-          created_by: string | null
-          descricao: string | null
-          divisor: number
-          dsr_fator: number | null
-          hash_config: string | null
-          id: string
-          indice_correcao: string | null
-          media_variaveis_metodo: string | null
-          metodo_dsr: string
-          metodo_he: string
-          nome: string
-          premissas_completas: Json | null
-          prescricao_data_limite: string | null
-          prescricao_tipo: string | null
-          taxa_juros: number | null
-          tipo: string
-          updated_at: string
-        }
-        Insert: {
-          ativo?: boolean | null
-          case_id: string
-          created_at?: string
-          created_by?: string | null
-          descricao?: string | null
-          divisor?: number
-          dsr_fator?: number | null
-          hash_config?: string | null
-          id?: string
-          indice_correcao?: string | null
-          media_variaveis_metodo?: string | null
-          metodo_dsr?: string
-          metodo_he?: string
-          nome: string
-          premissas_completas?: Json | null
-          prescricao_data_limite?: string | null
-          prescricao_tipo?: string | null
-          taxa_juros?: number | null
-          tipo: string
-          updated_at?: string
-        }
-        Update: {
-          ativo?: boolean | null
-          case_id?: string
-          created_at?: string
-          created_by?: string | null
-          descricao?: string | null
-          divisor?: number
-          dsr_fator?: number | null
-          hash_config?: string | null
-          id?: string
-          indice_correcao?: string | null
-          media_variaveis_metodo?: string | null
-          metodo_dsr?: string
-          metodo_he?: string
-          nome?: string
-          premissas_completas?: Json | null
-          prescricao_data_limite?: string | null
-          prescricao_tipo?: string | null
-          taxa_juros?: number | null
-          tipo?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "calc_scenarios_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "calc_scenarios_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      calc_snapshots: {
-        Row: {
-          alertas_consistencia: Json | null
-          aprovado_em: string | null
-          aprovado_por: string | null
-          calendario_hash: string | null
-          case_id: string
-          created_at: string
-          created_by: string
-          diff_anterior: Json | null
-          engine_version: string
-          id: string
-          inputs_snapshot: Json
-          observacoes: string | null
-          pendencias: Json | null
-          periodo_fim: string | null
-          periodo_inicio: string | null
-          prescricao_aplicada: string | null
-          profile_id: string | null
-          qualidade_score: number | null
-          resultado_bruto: Json | null
-          resultado_liquido: Json | null
-          ruleset_hash: string | null
-          scenario_id: string | null
-          status: Database["public"]["Enums"]["snapshot_status"]
-          total_bruto: number | null
-          total_descontos: number | null
-          total_liquido: number | null
-          versao: number
-          warnings: Json | null
-        }
-        Insert: {
-          alertas_consistencia?: Json | null
-          aprovado_em?: string | null
-          aprovado_por?: string | null
-          calendario_hash?: string | null
-          case_id: string
-          created_at?: string
-          created_by: string
-          diff_anterior?: Json | null
-          engine_version?: string
-          id?: string
-          inputs_snapshot?: Json
-          observacoes?: string | null
-          pendencias?: Json | null
-          periodo_fim?: string | null
-          periodo_inicio?: string | null
-          prescricao_aplicada?: string | null
-          profile_id?: string | null
-          qualidade_score?: number | null
-          resultado_bruto?: Json | null
-          resultado_liquido?: Json | null
-          ruleset_hash?: string | null
-          scenario_id?: string | null
-          status?: Database["public"]["Enums"]["snapshot_status"]
-          total_bruto?: number | null
-          total_descontos?: number | null
-          total_liquido?: number | null
-          versao?: number
-          warnings?: Json | null
-        }
-        Update: {
-          alertas_consistencia?: Json | null
-          aprovado_em?: string | null
-          aprovado_por?: string | null
-          calendario_hash?: string | null
-          case_id?: string
-          created_at?: string
-          created_by?: string
-          diff_anterior?: Json | null
-          engine_version?: string
-          id?: string
-          inputs_snapshot?: Json
-          observacoes?: string | null
-          pendencias?: Json | null
-          periodo_fim?: string | null
-          periodo_inicio?: string | null
-          prescricao_aplicada?: string | null
-          profile_id?: string | null
-          qualidade_score?: number | null
-          resultado_bruto?: Json | null
-          resultado_liquido?: Json | null
-          ruleset_hash?: string | null
-          scenario_id?: string | null
-          status?: Database["public"]["Enums"]["snapshot_status"]
-          total_bruto?: number | null
-          total_descontos?: number | null
-          total_liquido?: number | null
-          versao?: number
-          warnings?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "calc_snapshots_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "calc_snapshots_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "calc_snapshots_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "calculation_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "calc_snapshots_scenario_id_fkey"
-            columns: ["scenario_id"]
-            isOneToOne: false
-            referencedRelation: "calc_scenarios"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      calculation_cases: {
-        Row: {
-          ajuizamento_data: string | null
-          case_id: string
-          categoria: string | null
-          cct_act: string | null
-          cidade: string | null
-          created_at: string
-          id: string
-          observacoes: string | null
-          periodo_fim: string | null
-          periodo_inicio: string | null
-          tipo_contrato: string | null
-          uf: string | null
-          updated_at: string
-        }
-        Insert: {
-          ajuizamento_data?: string | null
-          case_id: string
-          categoria?: string | null
-          cct_act?: string | null
-          cidade?: string | null
-          created_at?: string
-          id?: string
-          observacoes?: string | null
-          periodo_fim?: string | null
-          periodo_inicio?: string | null
-          tipo_contrato?: string | null
-          uf?: string | null
-          updated_at?: string
-        }
-        Update: {
-          ajuizamento_data?: string | null
-          case_id?: string
-          categoria?: string | null
-          cct_act?: string | null
-          cidade?: string | null
-          created_at?: string
-          id?: string
-          observacoes?: string | null
-          periodo_fim?: string | null
-          periodo_inicio?: string | null
-          tipo_contrato?: string | null
-          uf?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "calculation_cases_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "calculation_cases_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      calculation_profiles: {
-        Row: {
-          ativo: boolean | null
-          calculadoras_incluidas: string[] | null
-          config: Json | null
-          criado_em: string | null
-          criado_por: string | null
-          descricao: string | null
-          id: string
-          nome: string
-        }
-        Insert: {
-          ativo?: boolean | null
-          calculadoras_incluidas?: string[] | null
-          config?: Json | null
-          criado_em?: string | null
-          criado_por?: string | null
-          descricao?: string | null
-          id?: string
-          nome: string
-        }
-        Update: {
-          ativo?: boolean | null
-          calculadoras_incluidas?: string[] | null
-          config?: Json | null
-          criado_em?: string | null
-          criado_por?: string | null
-          descricao?: string | null
-          id?: string
-          nome?: string
-        }
-        Relationships: []
-      }
-      calculation_runs: {
-        Row: {
-          calculators_used: Json | null
-          case_id: string
-          executado_em: string | null
-          executado_por: string | null
-          facts_snapshot: Json | null
-          id: string
-          profile_id: string | null
-          resultado_bruto: Json | null
-          resultado_liquido: Json | null
-          warnings: Json | null
-        }
-        Insert: {
-          calculators_used?: Json | null
-          case_id: string
-          executado_em?: string | null
-          executado_por?: string | null
-          facts_snapshot?: Json | null
-          id?: string
-          profile_id?: string | null
-          resultado_bruto?: Json | null
-          resultado_liquido?: Json | null
-          warnings?: Json | null
-        }
-        Update: {
-          calculators_used?: Json | null
-          case_id?: string
-          executado_em?: string | null
-          executado_por?: string | null
-          facts_snapshot?: Json | null
-          id?: string
-          profile_id?: string | null
-          resultado_bruto?: Json | null
-          resultado_liquido?: Json | null
-          warnings?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "calculation_runs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "calculation_runs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "calculation_runs_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "calculation_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      calculator_versions: {
-        Row: {
-          ativo: boolean | null
-          calculator_id: string
-          changelog: string | null
-          codigo_ref: string | null
-          criado_em: string | null
-          criado_por: string | null
-          id: string
-          regras: Json | null
-          versao: string
-          vigencia_fim: string | null
-          vigencia_inicio: string
-        }
-        Insert: {
-          ativo?: boolean | null
-          calculator_id: string
-          changelog?: string | null
-          codigo_ref?: string | null
-          criado_em?: string | null
-          criado_por?: string | null
-          id?: string
-          regras?: Json | null
-          versao: string
-          vigencia_fim?: string | null
-          vigencia_inicio: string
-        }
-        Update: {
-          ativo?: boolean | null
-          calculator_id?: string
-          changelog?: string | null
-          codigo_ref?: string | null
-          criado_em?: string | null
-          criado_por?: string | null
-          id?: string
-          regras?: Json | null
-          versao?: string
-          vigencia_fim?: string | null
-          vigencia_inicio?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "calculator_versions_calculator_id_fkey"
-            columns: ["calculator_id"]
-            isOneToOne: false
-            referencedRelation: "calculators"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      calculators: {
-        Row: {
-          ativo: boolean | null
-          categoria: string
-          criado_em: string | null
-          descricao: string | null
-          id: string
-          inputs_esperados: Json | null
-          nome: string
-          outputs: Json | null
-          tags: string[] | null
-        }
-        Insert: {
-          ativo?: boolean | null
-          categoria: string
-          criado_em?: string | null
-          descricao?: string | null
-          id?: string
-          inputs_esperados?: Json | null
-          nome: string
-          outputs?: Json | null
-          tags?: string[] | null
-        }
-        Update: {
-          ativo?: boolean | null
-          categoria?: string
-          criado_em?: string | null
-          descricao?: string | null
-          id?: string
-          inputs_esperados?: Json | null
-          nome?: string
-          outputs?: Json | null
-          tags?: string[] | null
-        }
-        Relationships: []
-      }
-      calendars: {
-        Row: {
-          ano: number
-          ativo: boolean | null
-          created_at: string
-          feriados: Json
-          fonte: string | null
-          hash_versao: string
-          id: string
-          municipio: string | null
-          nome: string
-          uf: string
-        }
-        Insert: {
-          ano: number
-          ativo?: boolean | null
-          created_at?: string
-          feriados?: Json
-          fonte?: string | null
-          hash_versao: string
-          id?: string
-          municipio?: string | null
-          nome: string
-          uf: string
-        }
-        Update: {
-          ano?: number
-          ativo?: boolean | null
-          created_at?: string
-          feriados?: Json
-          fonte?: string | null
-          hash_versao?: string
-          id?: string
-          municipio?: string | null
-          nome?: string
-          uf?: string
-        }
-        Relationships: []
       }
       case_briefings: {
         Row: {
@@ -1249,22 +376,7 @@ export type Database = {
           id?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "case_briefings_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "case_briefings_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       case_controversies: {
         Row: {
@@ -1324,22 +436,7 @@ export type Database = {
           updated_at?: string
           valor_escolhido?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "case_controversies_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "case_controversies_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       case_inputs: {
         Row: {
@@ -1382,20 +479,6 @@ export type Database = {
           valor?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "case_inputs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "case_inputs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "case_inputs_source_document_id_fkey"
             columns: ["source_document_id"]
@@ -1460,29 +543,7 @@ export type Database = {
           verba_codigo?: string
           verba_nome?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "case_outputs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "case_outputs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "case_outputs_snapshot_id_fkey"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "calc_snapshots"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       case_risk_analysis: {
         Row: {
@@ -1521,29 +582,7 @@ export type Database = {
           score_risco?: number | null
           snapshot_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "case_risk_analysis_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "case_risk_analysis_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "case_risk_analysis_snapshot_id_fkey"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "calc_snapshots"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       cases: {
         Row: {
@@ -1580,38 +619,6 @@ export type Database = {
           tribunal?: string | null
         }
         Relationships: []
-      }
-      doc_chunks: {
-        Row: {
-          document_id: string
-          embedding: string | null
-          id: string
-          metadata: Json | null
-          texto: string
-        }
-        Insert: {
-          document_id: string
-          embedding?: string | null
-          id?: string
-          metadata?: Json | null
-          texto: string
-        }
-        Update: {
-          document_id?: string
-          embedding?: string | null
-          id?: string
-          metadata?: Json | null
-          texto?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "doc_chunks_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       document_chunks: {
         Row: {
@@ -1654,20 +661,6 @@ export type Database = {
           page_number?: number | null
         }
         Relationships: [
-          {
-            foreignKeyName: "document_chunks_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "document_chunks_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "document_chunks_document_id_fkey"
             columns: ["document_id"]
@@ -1737,20 +730,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "document_pipeline_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "document_pipeline_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "document_pipeline_document_id_fkey"
             columns: ["document_id"]
             isOneToOne: false
@@ -1800,20 +779,6 @@ export type Database = {
           status?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "document_queue_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "document_queue_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "document_queue_document_id_fkey"
             columns: ["document_id"]
@@ -1929,127 +894,7 @@ export type Database = {
           validado_por?: string | null
           versao_documento?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "documents_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "documents_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      domain_calculation_items: {
-        Row: {
-          ativo: boolean
-          audit_trail: Json
-          base: number
-          base_source: string | null
-          competencia: string
-          correcao: number
-          created_at: string
-          diferenca: number
-          divisor: number
-          divisor_source: string | null
-          dobra: number
-          formula_aplicada: string | null
-          id: string
-          incidences: Json
-          judicial_rule_id: string | null
-          juros: number
-          multiplicador: number
-          offsets: Json
-          quantidade: number
-          quantidade_source: string | null
-          reflections: Json
-          rubric_code: string
-          rubric_name: string
-          scenario_id: string
-          total: number
-          valor_devido: number
-          valor_pago: number
-        }
-        Insert: {
-          ativo?: boolean
-          audit_trail?: Json
-          base?: number
-          base_source?: string | null
-          competencia: string
-          correcao?: number
-          created_at?: string
-          diferenca?: number
-          divisor?: number
-          divisor_source?: string | null
-          dobra?: number
-          formula_aplicada?: string | null
-          id?: string
-          incidences?: Json
-          judicial_rule_id?: string | null
-          juros?: number
-          multiplicador?: number
-          offsets?: Json
-          quantidade?: number
-          quantidade_source?: string | null
-          reflections?: Json
-          rubric_code: string
-          rubric_name: string
-          scenario_id: string
-          total?: number
-          valor_devido?: number
-          valor_pago?: number
-        }
-        Update: {
-          ativo?: boolean
-          audit_trail?: Json
-          base?: number
-          base_source?: string | null
-          competencia?: string
-          correcao?: number
-          created_at?: string
-          diferenca?: number
-          divisor?: number
-          divisor_source?: string | null
-          dobra?: number
-          formula_aplicada?: string | null
-          id?: string
-          incidences?: Json
-          judicial_rule_id?: string | null
-          juros?: number
-          multiplicador?: number
-          offsets?: Json
-          quantidade?: number
-          quantidade_source?: string | null
-          reflections?: Json
-          rubric_code?: string
-          rubric_name?: string
-          scenario_id?: string
-          total?: number
-          valor_devido?: number
-          valor_pago?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "domain_calculation_items_judicial_rule_id_fkey"
-            columns: ["judicial_rule_id"]
-            isOneToOne: false
-            referencedRelation: "judicial_rules"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "domain_calculation_items_scenario_id_fkey"
-            columns: ["scenario_id"]
-            isOneToOne: false
-            referencedRelation: "calc_scenarios"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       employment_contracts: {
         Row: {
@@ -2100,22 +945,7 @@ export type Database = {
           tipo_demissao?: Database["public"]["Enums"]["termination_type"] | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "employment_contracts_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "employment_contracts_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       extracao_item: {
         Row: {
@@ -2179,20 +1009,6 @@ export type Database = {
           valor?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "extracao_item_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "extracao_item_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "extracao_item_pipeline_id_fkey"
             columns: ["pipeline_id"]
@@ -2261,22 +1077,7 @@ export type Database = {
           top_k?: number
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "extraction_tasks_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "extraction_tasks_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       extractions: {
         Row: {
@@ -2320,217 +1121,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "extractions_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "extractions_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "extractions_document_id_fkey"
             columns: ["document_id"]
             isOneToOne: false
             referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      fact_evidences: {
-        Row: {
-          case_id: string
-          chunk_id: string
-          confidence: number | null
-          created_at: string
-          document_id: string
-          fact_id: string
-          id: string
-          page_number: number | null
-          quote: string
-        }
-        Insert: {
-          case_id: string
-          chunk_id: string
-          confidence?: number | null
-          created_at?: string
-          document_id: string
-          fact_id: string
-          id?: string
-          page_number?: number | null
-          quote: string
-        }
-        Update: {
-          case_id?: string
-          chunk_id?: string
-          confidence?: number | null
-          created_at?: string
-          document_id?: string
-          fact_id?: string
-          id?: string
-          page_number?: number | null
-          quote?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fact_evidences_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "fact_evidences_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fact_evidences_chunk_id_fkey"
-            columns: ["chunk_id"]
-            isOneToOne: false
-            referencedRelation: "document_chunks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fact_evidences_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fact_evidences_fact_id_fkey"
-            columns: ["fact_id"]
-            isOneToOne: false
-            referencedRelation: "facts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      fact_sources: {
-        Row: {
-          document_id: string
-          fact_id: string
-          id: string
-          pagina: number | null
-          trecho: string | null
-        }
-        Insert: {
-          document_id: string
-          fact_id: string
-          id?: string
-          pagina?: number | null
-          trecho?: string | null
-        }
-        Update: {
-          document_id?: string
-          fact_id?: string
-          id?: string
-          pagina?: number | null
-          trecho?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fact_sources_document_id_fkey"
-            columns: ["document_id"]
-            isOneToOne: false
-            referencedRelation: "documents"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fact_sources_fact_id_fkey"
-            columns: ["fact_id"]
-            isOneToOne: false
-            referencedRelation: "facts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      facts: {
-        Row: {
-          case_id: string
-          chave: string
-          chunk_id: string | null
-          citacao: string | null
-          confianca: number | null
-          confirmado: boolean | null
-          confirmado_em: string | null
-          confirmado_por: string | null
-          criado_em: string | null
-          id: string
-          justificativa_validacao: string | null
-          origem: Database["public"]["Enums"]["fact_origem"]
-          pagina: number | null
-          prova_qualidade: string | null
-          status_pericial: string | null
-          tipo: Database["public"]["Enums"]["fact_type"]
-          valor: string
-        }
-        Insert: {
-          case_id: string
-          chave: string
-          chunk_id?: string | null
-          citacao?: string | null
-          confianca?: number | null
-          confirmado?: boolean | null
-          confirmado_em?: string | null
-          confirmado_por?: string | null
-          criado_em?: string | null
-          id?: string
-          justificativa_validacao?: string | null
-          origem?: Database["public"]["Enums"]["fact_origem"]
-          pagina?: number | null
-          prova_qualidade?: string | null
-          status_pericial?: string | null
-          tipo?: Database["public"]["Enums"]["fact_type"]
-          valor: string
-        }
-        Update: {
-          case_id?: string
-          chave?: string
-          chunk_id?: string | null
-          citacao?: string | null
-          confianca?: number | null
-          confirmado?: boolean | null
-          confirmado_em?: string | null
-          confirmado_por?: string | null
-          criado_em?: string | null
-          id?: string
-          justificativa_validacao?: string | null
-          origem?: Database["public"]["Enums"]["fact_origem"]
-          pagina?: number | null
-          prova_qualidade?: string | null
-          status_pericial?: string | null
-          tipo?: Database["public"]["Enums"]["fact_type"]
-          valor?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "facts_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "facts_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "facts_chunk_id_fkey"
-            columns: ["chunk_id"]
-            isOneToOne: false
-            referencedRelation: "doc_chunks"
             referencedColumns: ["id"]
           },
         ]
@@ -2585,20 +1179,6 @@ export type Database = {
           valor_fonte_b?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "fonte_conflito_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "fonte_conflito_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "fonte_conflito_fonte_a_doc_id_fkey"
             columns: ["fonte_a_doc_id"]
@@ -2660,79 +1240,6 @@ export type Database = {
           scenario_id?: string | null
           severidade?: string
           sugestao?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "inconsistency_flags_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "inconsistency_flags_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inconsistency_flags_scenario_id_fkey"
-            columns: ["scenario_id"]
-            isOneToOne: false
-            referencedRelation: "calc_scenarios"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      index_series: {
-        Row: {
-          competencia: string
-          criado_em: string | null
-          fonte: string | null
-          id: string
-          nome: string
-          valor: number
-          versao: number | null
-        }
-        Insert: {
-          competencia: string
-          criado_em?: string | null
-          fonte?: string | null
-          id?: string
-          nome: string
-          valor: number
-          versao?: number | null
-        }
-        Update: {
-          competencia?: string
-          criado_em?: string | null
-          fonte?: string | null
-          id?: string
-          nome?: string
-          valor?: number
-          versao?: number | null
-        }
-        Relationships: []
-      }
-      indices_oficiais: {
-        Row: {
-          data_referencia: string
-          serie_id: number
-          ultima_atualizacao: string | null
-          valor: number
-        }
-        Insert: {
-          data_referencia: string
-          serie_id: number
-          ultima_atualizacao?: string | null
-          valor: number
-        }
-        Update: {
-          data_referencia?: string
-          serie_id?: number
-          ultima_atualizacao?: string | null
-          valor?: number
         }
         Relationships: []
       }
@@ -2834,20 +1341,6 @@ export type Database = {
           versao?: number
         }
         Relationships: [
-          {
-            foreignKeyName: "judicial_title_versions_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "judicial_title_versions_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "judicial_title_versions_fonte_documento_id_fkey"
             columns: ["fonte_documento_id"]
@@ -3099,90 +1592,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "liquidation_ai_runs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "liquidation_ai_runs_post_calc_audit_id_fkey"
             columns: ["post_calc_audit_id"]
             isOneToOne: false
@@ -3232,22 +1641,7 @@ export type Database = {
           tipo?: Database["public"]["Enums"]["party_type"]
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "parties_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "parties_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       petition_templates: {
         Row: {
@@ -3361,29 +1755,7 @@ export type Database = {
           titulo?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "petitions_calculation_run_id_fkey"
-            columns: ["calculation_run_id"]
-            isOneToOne: false
-            referencedRelation: "calculation_runs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "petitions_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "petitions_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       pjc_import_jobs: {
         Row: {
@@ -3434,89 +1806,64 @@ export type Database = {
           verbas_importadas?: number | null
           warnings?: Json | null
         }
+        Relationships: []
+      }
+      pjecalc_advogados: {
+        Row: {
+          ativo: boolean | null
+          calculo_id: string
+          cpf: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          nome: string
+          oab: string
+          oab_uf: string
+          participante_id: string | null
+          representa: string | null
+          telefone: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          calculo_id: string
+          cpf?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          nome: string
+          oab: string
+          oab_uf: string
+          participante_id?: string | null
+          representa?: string | null
+          telefone?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          calculo_id?: string
+          cpf?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          nome?: string
+          oab?: string
+          oab_uf?: string
+          participante_id?: string | null
+          representa?: string | null
+          telefone?: string | null
+        }
         Relationships: [
           {
-            foreignKeyName: "pjc_import_jobs_calculo_id_fkey"
+            foreignKeyName: "pjecalc_advogados_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
             referencedRelation: "pjecalc_calculos"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "pjc_import_jobs_calculo_id_fkey"
-            columns: ["calculo_id"]
+            foreignKeyName: "pjecalc_advogados_participante_id_fkey"
+            columns: ["participante_id"]
             isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjc_import_jobs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjc_import_jobs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjc_import_jobs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjc_import_jobs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjc_import_jobs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjc_import_jobs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjc_import_jobs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjc_import_jobs_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjc_import_jobs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjc_import_jobs_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
+            referencedRelation: "pjecalc_participantes"
             referencedColumns: ["id"]
           },
         ]
@@ -3615,185 +1962,118 @@ export type Database = {
           origem?: string | null
           pagina?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       pjecalc_atualizacao_config: {
         Row: {
+          a_partir_de_lei_11941: string | null
+          a_partir_de_lei_11941_multa: string | null
+          a_partir_de_lei_11941_pago: string | null
+          a_partir_de_outro_indice: string | null
+          aplicar_multa_salarios_devidos_inss: boolean | null
+          aplicar_multa_salarios_pagos_inss: boolean | null
           calculo_id: string
           combinacoes_indice: string | null
           combinacoes_juros: string | null
+          combinar_outro_indice: boolean | null
+          correcao_previdenciaria_salarios_devidos_inss: boolean | null
+          correcao_previdenciaria_salarios_pagos_inss: boolean | null
+          correcao_trabalhista_salarios_devidos_inss: boolean | null
+          correcao_trabalhista_salarios_pagos_inss: boolean | null
           created_at: string | null
+          data_liquidacao: string | null
           id: string
+          ignorar_taxa_correcao_negativa: boolean | null
+          indice_fgts: string | null
+          indice_irpf: string | null
+          indice_previdenciario: string | null
+          indice_trabalhista: string | null
+          juros_apos_deducao_cs: boolean | null
+          lei_11941: boolean | null
+          lei_11941_multa: boolean | null
+          lei_11941_pago: boolean | null
           observacoes: string | null
+          oj_394_juros_pos_ir: boolean | null
+          outro_indice_trabalhista: string | null
           regime_padrao: string | null
           regimes: Json
+          salario_devido_forma_aplicacao: string | null
+          salario_pago_forma_aplicacao: string | null
           tipo: string
         }
         Insert: {
+          a_partir_de_lei_11941?: string | null
+          a_partir_de_lei_11941_multa?: string | null
+          a_partir_de_lei_11941_pago?: string | null
+          a_partir_de_outro_indice?: string | null
+          aplicar_multa_salarios_devidos_inss?: boolean | null
+          aplicar_multa_salarios_pagos_inss?: boolean | null
           calculo_id: string
           combinacoes_indice?: string | null
           combinacoes_juros?: string | null
+          combinar_outro_indice?: boolean | null
+          correcao_previdenciaria_salarios_devidos_inss?: boolean | null
+          correcao_previdenciaria_salarios_pagos_inss?: boolean | null
+          correcao_trabalhista_salarios_devidos_inss?: boolean | null
+          correcao_trabalhista_salarios_pagos_inss?: boolean | null
           created_at?: string | null
+          data_liquidacao?: string | null
           id?: string
+          ignorar_taxa_correcao_negativa?: boolean | null
+          indice_fgts?: string | null
+          indice_irpf?: string | null
+          indice_previdenciario?: string | null
+          indice_trabalhista?: string | null
+          juros_apos_deducao_cs?: boolean | null
+          lei_11941?: boolean | null
+          lei_11941_multa?: boolean | null
+          lei_11941_pago?: boolean | null
           observacoes?: string | null
+          oj_394_juros_pos_ir?: boolean | null
+          outro_indice_trabalhista?: string | null
           regime_padrao?: string | null
           regimes?: Json
+          salario_devido_forma_aplicacao?: string | null
+          salario_pago_forma_aplicacao?: string | null
           tipo: string
         }
         Update: {
+          a_partir_de_lei_11941?: string | null
+          a_partir_de_lei_11941_multa?: string | null
+          a_partir_de_lei_11941_pago?: string | null
+          a_partir_de_outro_indice?: string | null
+          aplicar_multa_salarios_devidos_inss?: boolean | null
+          aplicar_multa_salarios_pagos_inss?: boolean | null
           calculo_id?: string
           combinacoes_indice?: string | null
           combinacoes_juros?: string | null
+          combinar_outro_indice?: boolean | null
+          correcao_previdenciaria_salarios_devidos_inss?: boolean | null
+          correcao_previdenciaria_salarios_pagos_inss?: boolean | null
+          correcao_trabalhista_salarios_devidos_inss?: boolean | null
+          correcao_trabalhista_salarios_pagos_inss?: boolean | null
           created_at?: string | null
+          data_liquidacao?: string | null
           id?: string
+          ignorar_taxa_correcao_negativa?: boolean | null
+          indice_fgts?: string | null
+          indice_irpf?: string | null
+          indice_previdenciario?: string | null
+          indice_trabalhista?: string | null
+          juros_apos_deducao_cs?: boolean | null
+          lei_11941?: boolean | null
+          lei_11941_multa?: boolean | null
+          lei_11941_pago?: boolean | null
           observacoes?: string | null
+          oj_394_juros_pos_ir?: boolean | null
+          outro_indice_trabalhista?: string | null
           regime_padrao?: string | null
           regimes?: Json
+          salario_devido_forma_aplicacao?: string | null
+          salario_pago_forma_aplicacao?: string | null
           tipo?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_atualizacao_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_atualizacao_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_atualizacao_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_atualizacao_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_atualizacao_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_atualizacao_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_atualizacao_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_atualizacao_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_atualizacao_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_atualizacao_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       pjecalc_audit_log: {
         Row: {
@@ -3839,253 +2119,227 @@ export type Database = {
       }
       pjecalc_calculos: {
         Row: {
+          ativo: boolean | null
+          atualizacao_monetaria: string | null
           aviso_previo_dias: number | null
           aviso_previo_tipo: string | null
-          case_id: string
+          calculo_externo: boolean | null
+          case_id: string | null
           considera_feriado_estadual: boolean | null
           considera_feriado_municipal: boolean | null
+          considera_feriado_nacional: boolean | null
           created_at: string | null
-          cs_aliquota_empresa: number | null
-          cs_aliquota_sat: number | null
-          cs_aliquota_terceiros: number | null
-          cs_cobrar_reclamante: boolean | null
-          cs_sobre_salarios_pagos: boolean | null
-          custas_limite: number | null
-          custas_percentual: number | null
-          data_admissao: string | null
+          data_admissao: string
           data_ajuizamento: string | null
+          data_citacao: string | null
           data_demissao: string | null
           data_fim_calculo: string | null
           data_inicio_calculo: string | null
-          data_liquidacao: string | null
-          dia_fechamento: number | null
+          data_liquidacao: string
+          data_prescricao_quinquenal: string | null
+          data_ultima_atualizacao: string | null
+          dia_fechamento_mes: number | null
           divisor_horas: number | null
-          duplicado_de: string | null
-          hash_estado: string | null
-          honorarios_percentual: number | null
-          honorarios_sobre: string | null
+          engine_version: string | null
+          fase: string | null
+          hash_atualizacao: string | null
+          hash_calculo: string | null
           id: string
+          ignorar_taxa_correcao_negativa: boolean | null
+          indices_acumulados: string | null
+          instancia: string | null
           jornada_contratual_horas: number | null
-          limitar_avos: boolean | null
-          multa_467_habilitada: boolean | null
-          multa_477_habilitada: boolean | null
+          last_calculated_at: string | null
+          limitar_avos_periodo_calculo: boolean | null
+          municipio_ibge: string | null
           observacoes: string | null
+          ordem: number | null
           percentual_adicional_noturno: number | null
           percentual_he_100: number | null
           percentual_he_50: number | null
-          pjc_import_metadata: Json | null
           prescricao_fgts: boolean | null
           prescricao_quinquenal: boolean | null
           processo_cnj: string | null
-          projeta_aviso: boolean | null
-          reclamado_cnpj: string | null
-          reclamado_nome: string | null
-          reclamante_cpf: string | null
-          reclamante_nome: string | null
+          projetar_aviso_indenizado: boolean | null
+          regime_contrato: string | null
           sabado_dia_util: boolean | null
           status: string | null
+          tags: string[] | null
           tipo_demissao: string | null
+          titulo: string | null
           tribunal: string | null
+          uf: string | null
           updated_at: string | null
           user_id: string
+          validado: boolean | null
+          valor_maior_remuneracao: number | null
+          valor_ultima_remuneracao: number | null
           vara: string | null
-          versao: number | null
-          zera_negativo: boolean | null
+          zera_valor_negativo: boolean | null
         }
         Insert: {
+          ativo?: boolean | null
+          atualizacao_monetaria?: string | null
           aviso_previo_dias?: number | null
           aviso_previo_tipo?: string | null
-          case_id: string
+          calculo_externo?: boolean | null
+          case_id?: string | null
           considera_feriado_estadual?: boolean | null
           considera_feriado_municipal?: boolean | null
+          considera_feriado_nacional?: boolean | null
           created_at?: string | null
-          cs_aliquota_empresa?: number | null
-          cs_aliquota_sat?: number | null
-          cs_aliquota_terceiros?: number | null
-          cs_cobrar_reclamante?: boolean | null
-          cs_sobre_salarios_pagos?: boolean | null
-          custas_limite?: number | null
-          custas_percentual?: number | null
-          data_admissao?: string | null
+          data_admissao: string
           data_ajuizamento?: string | null
+          data_citacao?: string | null
           data_demissao?: string | null
           data_fim_calculo?: string | null
           data_inicio_calculo?: string | null
-          data_liquidacao?: string | null
-          dia_fechamento?: number | null
+          data_liquidacao: string
+          data_prescricao_quinquenal?: string | null
+          data_ultima_atualizacao?: string | null
+          dia_fechamento_mes?: number | null
           divisor_horas?: number | null
-          duplicado_de?: string | null
-          hash_estado?: string | null
-          honorarios_percentual?: number | null
-          honorarios_sobre?: string | null
+          engine_version?: string | null
+          fase?: string | null
+          hash_atualizacao?: string | null
+          hash_calculo?: string | null
           id?: string
+          ignorar_taxa_correcao_negativa?: boolean | null
+          indices_acumulados?: string | null
+          instancia?: string | null
           jornada_contratual_horas?: number | null
-          limitar_avos?: boolean | null
-          multa_467_habilitada?: boolean | null
-          multa_477_habilitada?: boolean | null
+          last_calculated_at?: string | null
+          limitar_avos_periodo_calculo?: boolean | null
+          municipio_ibge?: string | null
           observacoes?: string | null
+          ordem?: number | null
           percentual_adicional_noturno?: number | null
           percentual_he_100?: number | null
           percentual_he_50?: number | null
-          pjc_import_metadata?: Json | null
           prescricao_fgts?: boolean | null
           prescricao_quinquenal?: boolean | null
           processo_cnj?: string | null
-          projeta_aviso?: boolean | null
-          reclamado_cnpj?: string | null
-          reclamado_nome?: string | null
-          reclamante_cpf?: string | null
-          reclamante_nome?: string | null
+          projetar_aviso_indenizado?: boolean | null
+          regime_contrato?: string | null
           sabado_dia_util?: boolean | null
           status?: string | null
+          tags?: string[] | null
           tipo_demissao?: string | null
+          titulo?: string | null
           tribunal?: string | null
+          uf?: string | null
           updated_at?: string | null
           user_id: string
+          validado?: boolean | null
+          valor_maior_remuneracao?: number | null
+          valor_ultima_remuneracao?: number | null
           vara?: string | null
-          versao?: number | null
-          zera_negativo?: boolean | null
+          zera_valor_negativo?: boolean | null
         }
         Update: {
+          ativo?: boolean | null
+          atualizacao_monetaria?: string | null
           aviso_previo_dias?: number | null
           aviso_previo_tipo?: string | null
-          case_id?: string
+          calculo_externo?: boolean | null
+          case_id?: string | null
           considera_feriado_estadual?: boolean | null
           considera_feriado_municipal?: boolean | null
+          considera_feriado_nacional?: boolean | null
           created_at?: string | null
-          cs_aliquota_empresa?: number | null
-          cs_aliquota_sat?: number | null
-          cs_aliquota_terceiros?: number | null
-          cs_cobrar_reclamante?: boolean | null
-          cs_sobre_salarios_pagos?: boolean | null
-          custas_limite?: number | null
-          custas_percentual?: number | null
-          data_admissao?: string | null
+          data_admissao?: string
           data_ajuizamento?: string | null
+          data_citacao?: string | null
           data_demissao?: string | null
           data_fim_calculo?: string | null
           data_inicio_calculo?: string | null
-          data_liquidacao?: string | null
-          dia_fechamento?: number | null
+          data_liquidacao?: string
+          data_prescricao_quinquenal?: string | null
+          data_ultima_atualizacao?: string | null
+          dia_fechamento_mes?: number | null
           divisor_horas?: number | null
-          duplicado_de?: string | null
-          hash_estado?: string | null
-          honorarios_percentual?: number | null
-          honorarios_sobre?: string | null
+          engine_version?: string | null
+          fase?: string | null
+          hash_atualizacao?: string | null
+          hash_calculo?: string | null
           id?: string
+          ignorar_taxa_correcao_negativa?: boolean | null
+          indices_acumulados?: string | null
+          instancia?: string | null
           jornada_contratual_horas?: number | null
-          limitar_avos?: boolean | null
-          multa_467_habilitada?: boolean | null
-          multa_477_habilitada?: boolean | null
+          last_calculated_at?: string | null
+          limitar_avos_periodo_calculo?: boolean | null
+          municipio_ibge?: string | null
           observacoes?: string | null
+          ordem?: number | null
           percentual_adicional_noturno?: number | null
           percentual_he_100?: number | null
           percentual_he_50?: number | null
-          pjc_import_metadata?: Json | null
           prescricao_fgts?: boolean | null
           prescricao_quinquenal?: boolean | null
           processo_cnj?: string | null
-          projeta_aviso?: boolean | null
-          reclamado_cnpj?: string | null
-          reclamado_nome?: string | null
-          reclamante_cpf?: string | null
-          reclamante_nome?: string | null
+          projetar_aviso_indenizado?: boolean | null
+          regime_contrato?: string | null
           sabado_dia_util?: boolean | null
           status?: string | null
+          tags?: string[] | null
           tipo_demissao?: string | null
+          titulo?: string | null
           tribunal?: string | null
+          uf?: string | null
           updated_at?: string | null
           user_id?: string
+          validado?: boolean | null
+          valor_maior_remuneracao?: number | null
+          valor_ultima_remuneracao?: number | null
           vara?: string | null
-          versao?: number | null
-          zera_negativo?: boolean | null
+          zera_valor_negativo?: boolean | null
         }
         Relationships: [
           {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
+            foreignKeyName: "fk_calculo_case"
             columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_duplicado_de_fkey"
-            columns: ["duplicado_de"]
             isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_duplicado_de_fkey"
-            columns: ["duplicado_de"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_duplicado_de_fkey"
-            columns: ["duplicado_de"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_duplicado_de_fkey"
-            columns: ["duplicado_de"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_duplicado_de_fkey"
-            columns: ["duplicado_de"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_duplicado_de_fkey"
-            columns: ["duplicado_de"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_duplicado_de_fkey"
-            columns: ["duplicado_de"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_duplicado_de_fkey"
-            columns: ["duplicado_de"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_duplicado_de_fkey"
-            columns: ["duplicado_de"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_duplicado_de_fkey"
-            columns: ["duplicado_de"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
+            referencedRelation: "case_controversies"
             referencedColumns: ["id"]
           },
         ]
+      }
+      pjecalc_cnae_aliquotas: {
+        Row: {
+          cnae: string
+          created_at: string | null
+          descricao: string | null
+          fap: number | null
+          id: string
+          sat_rat: number
+          terceiros: number
+          vigencia_fim: string | null
+          vigencia_inicio: string
+        }
+        Insert: {
+          cnae: string
+          created_at?: string | null
+          descricao?: string | null
+          fap?: number | null
+          id?: string
+          sat_rat?: number
+          terceiros?: number
+          vigencia_fim?: string | null
+          vigencia_inicio: string
+        }
+        Update: {
+          cnae?: string
+          created_at?: string | null
+          descricao?: string | null
+          fap?: number | null
+          id?: string
+          sat_rat?: number
+          terceiros?: number
+          vigencia_fim?: string | null
+          vigencia_inicio?: string
+        }
+        Relationships: []
       }
       pjecalc_contribuicao_social: {
         Row: {
@@ -4178,6 +2432,77 @@ export type Database = {
           },
         ]
       }
+      pjecalc_custas_config: {
+        Row: {
+          ativo: boolean | null
+          base: string | null
+          calculo_id: string
+          created_at: string | null
+          data_pagamento: string | null
+          descricao: string | null
+          gru_numero: string | null
+          id: string
+          ja_paga: boolean | null
+          ordem: number | null
+          percentual: number | null
+          responsavel: string | null
+          tipo: string
+          valor_fixo: number | null
+          valor_informado: number | null
+          valor_maximo: number | null
+          valor_minimo: number | null
+          valor_pago: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          base?: string | null
+          calculo_id: string
+          created_at?: string | null
+          data_pagamento?: string | null
+          descricao?: string | null
+          gru_numero?: string | null
+          id?: string
+          ja_paga?: boolean | null
+          ordem?: number | null
+          percentual?: number | null
+          responsavel?: string | null
+          tipo: string
+          valor_fixo?: number | null
+          valor_informado?: number | null
+          valor_maximo?: number | null
+          valor_minimo?: number | null
+          valor_pago?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          base?: string | null
+          calculo_id?: string
+          created_at?: string | null
+          data_pagamento?: string | null
+          descricao?: string | null
+          gru_numero?: string | null
+          id?: string
+          ja_paga?: boolean | null
+          ordem?: number | null
+          percentual?: number | null
+          responsavel?: string | null
+          tipo?: string
+          valor_fixo?: number | null
+          valor_informado?: number | null
+          valor_maximo?: number | null
+          valor_minimo?: number | null
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_custas_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pjecalc_evento_intervalo: {
         Row: {
           calculo_id: string
@@ -4263,75 +2588,146 @@ export type Database = {
           status_revisao?: string | null
           tipo?: string
         }
+        Relationships: []
+      }
+      pjecalc_excecao_juros: {
+        Row: {
+          calculo_id: string
+          created_at: string | null
+          fundamento: string | null
+          id: string
+          motivo: string | null
+          percentual: number | null
+          periodo_fim: string
+          periodo_inicio: string
+          tipo_juros: string
+        }
+        Insert: {
+          calculo_id: string
+          created_at?: string | null
+          fundamento?: string | null
+          id?: string
+          motivo?: string | null
+          percentual?: number | null
+          periodo_fim: string
+          periodo_inicio: string
+          tipo_juros: string
+        }
+        Update: {
+          calculo_id?: string
+          created_at?: string | null
+          fundamento?: string | null
+          id?: string
+          motivo?: string | null
+          percentual?: number | null
+          periodo_fim?: string
+          periodo_inicio?: string
+          tipo_juros?: string
+        }
         Relationships: [
           {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
+            foreignKeyName: "pjecalc_excecao_juros_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
             referencedRelation: "pjecalc_calculos"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      pjecalc_excecoes_carga: {
+        Row: {
+          carga_horaria_mensal: number
+          case_id: string
+          created_at: string | null
+          id: string
+          periodo_fim: string
+          periodo_inicio: string
+        }
+        Insert: {
+          carga_horaria_mensal: number
+          case_id: string
+          created_at?: string | null
+          id?: string
+          periodo_fim: string
+          periodo_inicio: string
+        }
+        Update: {
+          carga_horaria_mensal?: number
+          case_id?: string
+          created_at?: string | null
+          id?: string
+          periodo_fim?: string
+          periodo_inicio?: string
+        }
+        Relationships: []
+      }
+      pjecalc_excecoes_sabado: {
+        Row: {
+          case_id: string
+          created_at: string | null
+          data_fim: string
+          data_inicio: string
+          id: string
+          sabado_dia_util: boolean
+        }
+        Insert: {
+          case_id: string
+          created_at?: string | null
+          data_fim: string
+          data_inicio: string
+          id?: string
+          sabado_dia_util?: boolean
+        }
+        Update: {
+          case_id?: string
+          created_at?: string | null
+          data_fim?: string
+          data_inicio?: string
+          id?: string
+          sabado_dia_util?: boolean
+        }
+        Relationships: []
+      }
+      pjecalc_faltas: {
+        Row: {
+          calculo_id: string
+          created_at: string | null
+          data_final: string
+          data_inicial: string
+          documento_id: string | null
+          id: string
+          justificada: boolean
+          motivo: string | null
+          reiniciar_ferias: boolean | null
+        }
+        Insert: {
+          calculo_id: string
+          created_at?: string | null
+          data_final: string
+          data_inicial: string
+          documento_id?: string | null
+          id?: string
+          justificada?: boolean
+          motivo?: string | null
+          reiniciar_ferias?: boolean | null
+        }
+        Update: {
+          calculo_id?: string
+          created_at?: string | null
+          data_final?: string
+          data_inicial?: string
+          documento_id?: string | null
+          id?: string
+          justificada?: boolean
+          motivo?: string | null
+          reiniciar_ferias?: boolean | null
+        }
+        Relationships: [
           {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
+            foreignKeyName: "pjecalc_faltas_calculo_id_fkey"
             columns: ["calculo_id"]
             isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
+            referencedRelation: "pjecalc_calculos"
             referencedColumns: ["id"]
           },
         ]
@@ -4383,6 +2779,92 @@ export type Database = {
           },
         ]
       }
+      pjecalc_ferias: {
+        Row: {
+          abono: boolean | null
+          abono_dias: number | null
+          calculo_id: string
+          created_at: string | null
+          dobra_geral: boolean | null
+          gozo_1_dobra: boolean | null
+          gozo_1_fim: string | null
+          gozo_1_inicio: string | null
+          gozo_2_dobra: boolean | null
+          gozo_2_fim: string | null
+          gozo_2_inicio: string | null
+          gozo_3_dobra: boolean | null
+          gozo_3_fim: string | null
+          gozo_3_inicio: string | null
+          id: string
+          observacoes: string | null
+          periodo_aquisitivo_fim: string
+          periodo_aquisitivo_inicio: string
+          periodo_concessivo_fim: string | null
+          periodo_concessivo_inicio: string | null
+          prazo_dias: number
+          situacao: string
+          updated_at: string | null
+        }
+        Insert: {
+          abono?: boolean | null
+          abono_dias?: number | null
+          calculo_id: string
+          created_at?: string | null
+          dobra_geral?: boolean | null
+          gozo_1_dobra?: boolean | null
+          gozo_1_fim?: string | null
+          gozo_1_inicio?: string | null
+          gozo_2_dobra?: boolean | null
+          gozo_2_fim?: string | null
+          gozo_2_inicio?: string | null
+          gozo_3_dobra?: boolean | null
+          gozo_3_fim?: string | null
+          gozo_3_inicio?: string | null
+          id?: string
+          observacoes?: string | null
+          periodo_aquisitivo_fim: string
+          periodo_aquisitivo_inicio: string
+          periodo_concessivo_fim?: string | null
+          periodo_concessivo_inicio?: string | null
+          prazo_dias?: number
+          situacao?: string
+          updated_at?: string | null
+        }
+        Update: {
+          abono?: boolean | null
+          abono_dias?: number | null
+          calculo_id?: string
+          created_at?: string | null
+          dobra_geral?: boolean | null
+          gozo_1_dobra?: boolean | null
+          gozo_1_fim?: string | null
+          gozo_1_inicio?: string | null
+          gozo_2_dobra?: boolean | null
+          gozo_2_fim?: string | null
+          gozo_2_inicio?: string | null
+          gozo_3_dobra?: boolean | null
+          gozo_3_fim?: string | null
+          gozo_3_inicio?: string | null
+          id?: string
+          observacoes?: string | null
+          periodo_aquisitivo_fim?: string
+          periodo_aquisitivo_inicio?: string
+          periodo_concessivo_fim?: string | null
+          periodo_concessivo_inicio?: string | null
+          prazo_dias?: number
+          situacao?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_ferias_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pjecalc_fgts_saldos_saques: {
         Row: {
           calculo_id: string
@@ -4420,78 +2902,7 @@ export type Database = {
           updated_at?: string
           valor?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_fgts_saldos_saques_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_fgts_saldos_saques_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_fgts_saldos_saques_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_fgts_saldos_saques_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_fgts_saldos_saques_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_fgts_saldos_saques_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_fgts_saldos_saques_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_fgts_saldos_saques_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_fgts_saldos_saques_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_fgts_saldos_saques_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       pjecalc_hist_salarial: {
         Row: {
@@ -4530,78 +2941,7 @@ export type Database = {
           tipo_variacao?: string | null
           valor_fixo?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       pjecalc_hist_salarial_mes: {
         Row: {
@@ -4636,87 +2976,90 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "pjecalc_hist_salarial_mes_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "pjecalc_hist_salarial_mes_hist_salarial_id_fkey"
             columns: ["hist_salarial_id"]
             isOneToOne: false
             referencedRelation: "pjecalc_hist_salarial"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      pjecalc_honorarios_config: {
+        Row: {
+          aliquota_iss: number | null
+          ativo: boolean | null
+          base: string | null
+          calculo_id: string
+          com_juros: boolean | null
+          corrigido: boolean | null
+          created_at: string | null
+          credor: string
+          deduzir_cs_segurado: boolean | null
+          deduzir_fgts_depositar: boolean | null
+          deduzir_honorarios_contratuais: boolean | null
+          deduzir_ir: boolean | null
+          faixas: Json | null
+          id: string
+          incide_iss: boolean | null
+          observacoes: string | null
+          ordem: number | null
+          percentual: number | null
+          tipo: string
+          usar_faixas: boolean | null
+          valor_informado: number | null
+        }
+        Insert: {
+          aliquota_iss?: number | null
+          ativo?: boolean | null
+          base?: string | null
+          calculo_id: string
+          com_juros?: boolean | null
+          corrigido?: boolean | null
+          created_at?: string | null
+          credor: string
+          deduzir_cs_segurado?: boolean | null
+          deduzir_fgts_depositar?: boolean | null
+          deduzir_honorarios_contratuais?: boolean | null
+          deduzir_ir?: boolean | null
+          faixas?: Json | null
+          id?: string
+          incide_iss?: boolean | null
+          observacoes?: string | null
+          ordem?: number | null
+          percentual?: number | null
+          tipo: string
+          usar_faixas?: boolean | null
+          valor_informado?: number | null
+        }
+        Update: {
+          aliquota_iss?: number | null
+          ativo?: boolean | null
+          base?: string | null
+          calculo_id?: string
+          com_juros?: boolean | null
+          corrigido?: boolean | null
+          created_at?: string | null
+          credor?: string
+          deduzir_cs_segurado?: boolean | null
+          deduzir_fgts_depositar?: boolean | null
+          deduzir_honorarios_contratuais?: boolean | null
+          deduzir_ir?: boolean | null
+          faixas?: Json | null
+          id?: string
+          incide_iss?: boolean | null
+          observacoes?: string | null
+          ordem?: number | null
+          percentual?: number | null
+          tipo?: string
+          usar_faixas?: boolean | null
+          valor_informado?: number | null
+        }
+        Relationships: [
           {
-            foreignKeyName: "pjecalc_hist_salarial_mes_hist_salarial_id_fkey"
-            columns: ["hist_salarial_id"]
+            foreignKeyName: "pjecalc_honorarios_config_calculo_id_fkey"
+            columns: ["calculo_id"]
             isOneToOne: false
-            referencedRelation: "pjecalc_historico_salarial"
+            referencedRelation: "pjecalc_calculos"
             referencedColumns: ["id"]
           },
         ]
@@ -4792,9 +3135,51 @@ export type Database = {
           competencia_fim: string | null
           competencia_inicio: string
           created_at: string | null
+          descricao: string | null
           faixa: number
           id: string
+          progressiva: boolean | null
+          teto_previdenciario: number | null
           valor_ate: number
+        }
+        Insert: {
+          aliquota: number
+          competencia_fim?: string | null
+          competencia_inicio: string
+          created_at?: string | null
+          descricao?: string | null
+          faixa: number
+          id?: string
+          progressiva?: boolean | null
+          teto_previdenciario?: number | null
+          valor_ate: number
+        }
+        Update: {
+          aliquota?: number
+          competencia_fim?: string | null
+          competencia_inicio?: string
+          created_at?: string | null
+          descricao?: string | null
+          faixa?: number
+          id?: string
+          progressiva?: boolean | null
+          teto_previdenciario?: number | null
+          valor_ate?: number
+        }
+        Relationships: []
+      }
+      pjecalc_inss_faixas_domestico: {
+        Row: {
+          aliquota: number
+          competencia_fim: string | null
+          competencia_inicio: string
+          created_at: string | null
+          faixa: number
+          id: string
+          progressiva: boolean | null
+          teto_previdenciario: number | null
+          valor_ate: number
+          version_id: string | null
         }
         Insert: {
           aliquota: number
@@ -4803,7 +3188,10 @@ export type Database = {
           created_at?: string | null
           faixa: number
           id?: string
+          progressiva?: boolean | null
+          teto_previdenciario?: number | null
           valor_ate: number
+          version_id?: string | null
         }
         Update: {
           aliquota?: number
@@ -4812,7 +3200,67 @@ export type Database = {
           created_at?: string | null
           faixa?: number
           id?: string
+          progressiva?: boolean | null
+          teto_previdenciario?: number | null
           valor_ate?: number
+          version_id?: string | null
+        }
+        Relationships: []
+      }
+      pjecalc_inss_multa: {
+        Row: {
+          competencia_fim: string | null
+          competencia_inicio: string
+          created_at: string | null
+          fundamento: string | null
+          id: string
+          percentual_maximo: number | null
+          percentual_por_mes: number
+        }
+        Insert: {
+          competencia_fim?: string | null
+          competencia_inicio: string
+          created_at?: string | null
+          fundamento?: string | null
+          id?: string
+          percentual_maximo?: number | null
+          percentual_por_mes: number
+        }
+        Update: {
+          competencia_fim?: string | null
+          competencia_inicio?: string
+          created_at?: string | null
+          fundamento?: string | null
+          id?: string
+          percentual_maximo?: number | null
+          percentual_por_mes?: number
+        }
+        Relationships: []
+      }
+      pjecalc_jam: {
+        Row: {
+          competencia: string
+          created_at: string | null
+          dia: number | null
+          id: string
+          valor_acumulado: number
+          valor_indice: number
+        }
+        Insert: {
+          competencia: string
+          created_at?: string | null
+          dia?: number | null
+          id?: string
+          valor_acumulado: number
+          valor_indice: number
+        }
+        Update: {
+          competencia?: string
+          created_at?: string | null
+          dia?: number | null
+          id?: string
+          valor_acumulado?: number
+          valor_indice?: number
         }
         Relationships: []
       }
@@ -4842,6 +3290,112 @@ export type Database = {
           tipo?: string
         }
         Relationships: []
+      }
+      pjecalc_justificativas: {
+        Row: {
+          autor_id: string | null
+          calculo_id: string
+          contexto: string
+          created_at: string | null
+          descricao: string
+          entidade_id: string | null
+          fundamento_legal: string | null
+          id: string
+          titulo: string
+        }
+        Insert: {
+          autor_id?: string | null
+          calculo_id: string
+          contexto: string
+          created_at?: string | null
+          descricao: string
+          entidade_id?: string | null
+          fundamento_legal?: string | null
+          id?: string
+          titulo: string
+        }
+        Update: {
+          autor_id?: string | null
+          calculo_id?: string
+          contexto?: string
+          created_at?: string | null
+          descricao?: string
+          entidade_id?: string | null
+          fundamento_legal?: string | null
+          id?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_justificativas_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_multas_config: {
+        Row: {
+          ativo: boolean | null
+          base: string | null
+          calculo_id: string
+          com_juros: boolean | null
+          corrigida: boolean | null
+          created_at: string | null
+          descricao: string | null
+          fundamento_legal: string | null
+          id: string
+          multiplicador: number | null
+          ordem: number | null
+          percentual: number | null
+          responsavel: string | null
+          tipo: string
+          valor_informado: number | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          base?: string | null
+          calculo_id: string
+          com_juros?: boolean | null
+          corrigida?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          fundamento_legal?: string | null
+          id?: string
+          multiplicador?: number | null
+          ordem?: number | null
+          percentual?: number | null
+          responsavel?: string | null
+          tipo: string
+          valor_informado?: number | null
+        }
+        Update: {
+          ativo?: boolean | null
+          base?: string | null
+          calculo_id?: string
+          com_juros?: boolean | null
+          corrigida?: boolean | null
+          created_at?: string | null
+          descricao?: string | null
+          fundamento_legal?: string | null
+          id?: string
+          multiplicador?: number | null
+          ordem?: number | null
+          percentual?: number | null
+          responsavel?: string | null
+          tipo?: string
+          valor_informado?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_multas_config_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pjecalc_observacoes: {
         Row: {
@@ -4978,76 +3532,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "pjecalc_ocorrencia_calculo_reflexo_id_fkey"
             columns: ["reflexo_id"]
             isOneToOne: false
@@ -5061,11 +3545,124 @@ export type Database = {
             referencedRelation: "pjecalc_verba_base"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      pjecalc_pagamentos: {
+        Row: {
+          abatimento_global: boolean | null
+          calculo_id: string
+          competencia: string
+          created_at: string | null
+          data_pagamento: string | null
+          descricao: string | null
+          documento_id: string | null
+          id: string
+          reflexo_id: string | null
+          tipo: string | null
+          valor: number
+          verba_base_id: string | null
+        }
+        Insert: {
+          abatimento_global?: boolean | null
+          calculo_id: string
+          competencia: string
+          created_at?: string | null
+          data_pagamento?: string | null
+          descricao?: string | null
+          documento_id?: string | null
+          id?: string
+          reflexo_id?: string | null
+          tipo?: string | null
+          valor?: number
+          verba_base_id?: string | null
+        }
+        Update: {
+          abatimento_global?: boolean | null
+          calculo_id?: string
+          competencia?: string
+          created_at?: string | null
+          data_pagamento?: string | null
+          descricao?: string | null
+          documento_id?: string | null
+          id?: string
+          reflexo_id?: string | null
+          tipo?: string | null
+          valor?: number
+          verba_base_id?: string | null
+        }
+        Relationships: [
           {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_verba_base_id_fkey"
+            foreignKeyName: "pjecalc_pagamentos_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_pagamentos_reflexo_id_fkey"
+            columns: ["reflexo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_reflexo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pjecalc_pagamentos_verba_base_id_fkey"
             columns: ["verba_base_id"]
             isOneToOne: false
-            referencedRelation: "pjecalc_verbas"
+            referencedRelation: "pjecalc_verba_base"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pjecalc_participantes: {
+        Row: {
+          ativo: boolean | null
+          calculo_id: string
+          created_at: string | null
+          documento: string | null
+          documento_tipo: string | null
+          endereco: Json | null
+          id: string
+          nome: string
+          observacoes: string | null
+          ordem: number | null
+          tipo: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          calculo_id: string
+          created_at?: string | null
+          documento?: string | null
+          documento_tipo?: string | null
+          endereco?: Json | null
+          id?: string
+          nome: string
+          observacoes?: string | null
+          ordem?: number | null
+          tipo: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          calculo_id?: string
+          created_at?: string | null
+          documento?: string | null
+          documento_tipo?: string | null
+          endereco?: Json | null
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          ordem?: number | null
+          tipo?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pjecalc_participantes_calculo_id_fkey"
+            columns: ["calculo_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_calculos"
             referencedColumns: ["id"]
           },
         ]
@@ -5110,75 +3707,48 @@ export type Database = {
           updated_at?: string
           valor_fixo?: number | null
         }
+        Relationships: []
+      }
+      pjecalc_pensao_ocorrencia: {
+        Row: {
+          base: number
+          beneficiario_cpf: string | null
+          beneficiario_nome: string | null
+          calculo_id: string
+          competencia: string
+          created_at: string | null
+          id: string
+          percentual: number
+          valor: number
+        }
+        Insert: {
+          base?: number
+          beneficiario_cpf?: string | null
+          beneficiario_nome?: string | null
+          calculo_id: string
+          competencia: string
+          created_at?: string | null
+          id?: string
+          percentual: number
+          valor?: number
+        }
+        Update: {
+          base?: number
+          beneficiario_cpf?: string | null
+          beneficiario_nome?: string | null
+          calculo_id?: string
+          competencia?: string
+          created_at?: string | null
+          id?: string
+          percentual?: number
+          valor?: number
+        }
         Relationships: [
           {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
+            foreignKeyName: "pjecalc_pensao_ocorrencia_calculo_id_fkey"
             columns: ["calculo_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_parametros"
             referencedColumns: ["id"]
           },
         ]
@@ -5264,75 +3834,48 @@ export type Database = {
           percentual_empregador?: number | null
           updated_at?: string
         }
+        Relationships: []
+      }
+      pjecalc_prev_privada_ocorrencia: {
+        Row: {
+          base: number
+          calculo_id: string
+          competencia: string
+          created_at: string | null
+          deduzir_ir: boolean | null
+          id: string
+          percentual: number
+          valor_empregado: number | null
+          valor_empregador: number | null
+        }
+        Insert: {
+          base?: number
+          calculo_id: string
+          competencia: string
+          created_at?: string | null
+          deduzir_ir?: boolean | null
+          id?: string
+          percentual: number
+          valor_empregado?: number | null
+          valor_empregador?: number | null
+        }
+        Update: {
+          base?: number
+          calculo_id?: string
+          competencia?: string
+          created_at?: string | null
+          deduzir_ir?: boolean | null
+          id?: string
+          percentual?: number
+          valor_empregado?: number | null
+          valor_empregador?: number | null
+        }
         Relationships: [
           {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
+            foreignKeyName: "pjecalc_prev_privada_ocorrencia_calculo_id_fkey"
             columns: ["calculo_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_parametros"
             referencedColumns: ["id"]
           },
         ]
@@ -5422,78 +3965,7 @@ export type Database = {
           tipo?: string
           tratamento_fracao_mes?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_reflexo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_reflexo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_reflexo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_reflexo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_reflexo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_reflexo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_reflexo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_reflexo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_reflexo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_reflexo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       pjecalc_reflexo_base_verba: {
         Row: {
@@ -5529,11 +4001,51 @@ export type Database = {
             referencedRelation: "pjecalc_verba_base"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      pjecalc_relatorios: {
+        Row: {
+          calculo_id: string
+          conteudo_html: string | null
+          created_at: string | null
+          formato: string | null
+          gerado_em: string | null
+          gerado_por: string | null
+          id: string
+          parametros: Json | null
+          storage_path: string | null
+          tipo: string
+        }
+        Insert: {
+          calculo_id: string
+          conteudo_html?: string | null
+          created_at?: string | null
+          formato?: string | null
+          gerado_em?: string | null
+          gerado_por?: string | null
+          id?: string
+          parametros?: Json | null
+          storage_path?: string | null
+          tipo: string
+        }
+        Update: {
+          calculo_id?: string
+          conteudo_html?: string | null
+          created_at?: string | null
+          formato?: string | null
+          gerado_em?: string | null
+          gerado_por?: string | null
+          id?: string
+          parametros?: Json | null
+          storage_path?: string | null
+          tipo?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "pjecalc_reflexo_base_verba_verba_base_id_fkey"
-            columns: ["verba_base_id"]
+            foreignKeyName: "pjecalc_relatorios_calculo_id_fkey"
+            columns: ["calculo_id"]
             isOneToOne: false
-            referencedRelation: "pjecalc_verbas"
+            referencedRelation: "pjecalc_calculos"
             referencedColumns: ["id"]
           },
         ]
@@ -5617,78 +4129,7 @@ export type Database = {
           total_reclamado?: number | null
           total_reclamante?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       pjecalc_rubrica_map: {
         Row: {
@@ -5769,78 +4210,7 @@ export type Database = {
           tipo_documento?: string | null
           valor?: number
         }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_rubrica_raw_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_rubrica_raw_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_rubrica_raw_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_rubrica_raw_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_rubrica_raw_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_rubrica_raw_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_rubrica_raw_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_rubrica_raw_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_rubrica_raw_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_rubrica_raw_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       pjecalc_sal_familia_config: {
         Row: {
@@ -5870,75 +4240,81 @@ export type Database = {
           observacoes?: string | null
           updated_at?: string
         }
+        Relationships: []
+      }
+      pjecalc_salario_categoria: {
+        Row: {
+          ativo: boolean | null
+          cct_numero: string | null
+          cct_vigencia_fim: string | null
+          cct_vigencia_inicio: string | null
+          created_at: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          sindicato: string | null
+          uf: string | null
+          version_id: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cct_numero?: string | null
+          cct_vigencia_fim?: string | null
+          cct_vigencia_inicio?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          sindicato?: string | null
+          uf?: string | null
+          version_id?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cct_numero?: string | null
+          cct_vigencia_fim?: string | null
+          cct_vigencia_inicio?: string | null
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          sindicato?: string | null
+          uf?: string | null
+          version_id?: string | null
+        }
+        Relationships: []
+      }
+      pjecalc_salario_categoria_ocorrencia: {
+        Row: {
+          carga_horaria: number | null
+          competencia: string
+          created_at: string | null
+          id: string
+          salario_categoria_id: string
+          valor: number
+        }
+        Insert: {
+          carga_horaria?: number | null
+          competencia: string
+          created_at?: string | null
+          id?: string
+          salario_categoria_id: string
+          valor: number
+        }
+        Update: {
+          carga_horaria?: number | null
+          competencia?: string
+          created_at?: string | null
+          id?: string
+          salario_categoria_id?: string
+          valor?: number
+        }
         Relationships: [
           {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_parametros"
+            foreignKeyName: "pjecalc_salario_categoria_ocorrencia_salario_categoria_id_fkey"
+            columns: ["salario_categoria_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_salario_categoria"
             referencedColumns: ["id"]
           },
         ]
@@ -6071,7 +4447,12 @@ export type Database = {
           apurar: boolean
           calculo_id: string
           created_at: string
+          habilitado_pelo_calculo: boolean | null
           id: string
+          media_salarios: number | null
+          meses_trabalhados: number | null
+          motivo_dispensa: string | null
+          numero_parcelas: number | null
           observacoes: string | null
           parcelas: number
           recebeu: boolean
@@ -6082,7 +4463,12 @@ export type Database = {
           apurar?: boolean
           calculo_id: string
           created_at?: string
+          habilitado_pelo_calculo?: boolean | null
           id?: string
+          media_salarios?: number | null
+          meses_trabalhados?: number | null
+          motivo_dispensa?: string | null
+          numero_parcelas?: number | null
           observacoes?: string | null
           parcelas?: number
           recebeu?: boolean
@@ -6093,82 +4479,215 @@ export type Database = {
           apurar?: boolean
           calculo_id?: string
           created_at?: string
+          habilitado_pelo_calculo?: boolean | null
           id?: string
+          media_salarios?: number | null
+          meses_trabalhados?: number | null
+          motivo_dispensa?: string | null
+          numero_parcelas?: number | null
           observacoes?: string | null
           parcelas?: number
           recebeu?: boolean
           updated_at?: string
           valor_parcela?: number | null
         }
+        Relationships: []
+      }
+      pjecalc_tabela_unica_jt: {
+        Row: {
+          created_at: string | null
+          data: string
+          fonte: string | null
+          id: string
+          taxa_juros: number | null
+          tipo: string
+          valor_acumulado: number
+          valor_indice: number
+        }
+        Insert: {
+          created_at?: string | null
+          data: string
+          fonte?: string | null
+          id?: string
+          taxa_juros?: number | null
+          tipo: string
+          valor_acumulado: number
+          valor_indice: number
+        }
+        Update: {
+          created_at?: string | null
+          data?: string
+          fonte?: string | null
+          id?: string
+          taxa_juros?: number | null
+          tipo?: string
+          valor_acumulado?: number
+          valor_indice?: number
+        }
+        Relationships: []
+      }
+      pjecalc_taxa_legal: {
+        Row: {
+          competencia: string
+          created_at: string | null
+          fundamento: string | null
+          id: string
+          taxa_diaria: number
+          taxa_mensal: number | null
+        }
+        Insert: {
+          competencia: string
+          created_at?: string | null
+          fundamento?: string | null
+          id?: string
+          taxa_diaria: number
+          taxa_mensal?: number | null
+        }
+        Update: {
+          competencia?: string
+          created_at?: string | null
+          fundamento?: string | null
+          id?: string
+          taxa_diaria?: number
+          taxa_mensal?: number | null
+        }
+        Relationships: []
+      }
+      pjecalc_ufir: {
+        Row: {
+          coeficiente: number | null
+          competencia: string
+          created_at: string | null
+          fonte: string | null
+          id: string
+          valor: number
+        }
+        Insert: {
+          coeficiente?: number | null
+          competencia: string
+          created_at?: string | null
+          fonte?: string | null
+          id?: string
+          valor: number
+        }
+        Update: {
+          coeficiente?: number | null
+          competencia?: string
+          created_at?: string | null
+          fonte?: string | null
+          id?: string
+          valor?: number
+        }
+        Relationships: []
+      }
+      pjecalc_vale_transporte: {
+        Row: {
+          calculo_id: string
+          competencia: string
+          created_at: string | null
+          desconto_empregado: number | null
+          fornecido: boolean | null
+          id: string
+          observacoes: string | null
+          quantidade_dias: number | null
+          valor: number
+        }
+        Insert: {
+          calculo_id: string
+          competencia: string
+          created_at?: string | null
+          desconto_empregado?: number | null
+          fornecido?: boolean | null
+          id?: string
+          observacoes?: string | null
+          quantidade_dias?: number | null
+          valor?: number
+        }
+        Update: {
+          calculo_id?: string
+          competencia?: string
+          created_at?: string | null
+          desconto_empregado?: number | null
+          fornecido?: boolean | null
+          id?: string
+          observacoes?: string | null
+          quantidade_dias?: number | null
+          valor?: number
+        }
         Relationships: [
           {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
+            foreignKeyName: "pjecalc_vale_transporte_calculo_id_fkey"
             columns: ["calculo_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "pjecalc_calculos"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      pjecalc_vale_transporte_config: {
+        Row: {
+          apurar: boolean
+          calculo_id: string
+          created_at: string
+          desconto_empregado_pct: number
+          id: string
+          observacoes: string | null
+        }
+        Insert: {
+          apurar?: boolean
+          calculo_id: string
+          created_at?: string
+          desconto_empregado_pct?: number
+          id?: string
+          observacoes?: string | null
+        }
+        Update: {
+          apurar?: boolean
+          calculo_id?: string
+          created_at?: string
+          desconto_empregado_pct?: number
+          id?: string
+          observacoes?: string | null
+        }
+        Relationships: []
+      }
+      pjecalc_vale_transporte_linhas: {
+        Row: {
+          config_id: string
+          created_at: string
+          data_encerramento: string | null
+          descricao: string
+          id: string
+          quantidade_dia: number
+          tipo: string
+          valor_passagem: number
+        }
+        Insert: {
+          config_id: string
+          created_at?: string
+          data_encerramento?: string | null
+          descricao: string
+          id?: string
+          quantidade_dia?: number
+          tipo?: string
+          valor_passagem?: number
+        }
+        Update: {
+          config_id?: string
+          created_at?: string
+          data_encerramento?: string | null
+          descricao?: string
+          id?: string
+          quantidade_dia?: number
+          tipo?: string
+          valor_passagem?: number
+        }
+        Relationships: [
           {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_parametros"
+            foreignKeyName: "pjecalc_vale_transporte_linhas_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "pjecalc_vale_transporte_config"
             referencedColumns: ["id"]
           },
         ]
@@ -6177,20 +4696,26 @@ export type Database = {
         Row: {
           ativa: boolean | null
           base_tabelada: string | null
+          base_tabelas: string[] | null
           calculo_id: string
           caracteristica: string | null
           codigo: string | null
           compor_principal: boolean | null
+          comportamento_reflexo: string | null
+          constante_mensal: number | null
           created_at: string | null
           divisor: number | null
           divisor_tipo: string | null
+          dobrar_valor_devido: boolean | null
           excluir_falta_justificada: boolean | null
           excluir_falta_nao_justificada: boolean | null
           excluir_ferias_gozadas: boolean | null
           fonte: string | null
+          fracao_mes_modo: string | null
           gerar_principal: string | null
           gerar_reflexo: string | null
           hist_salarial_nome: string | null
+          hora_noturna_ficticia: boolean | null
           id: string
           incide_fgts: boolean | null
           incide_inss: boolean | null
@@ -6202,7 +4727,9 @@ export type Database = {
           periodicidade: string | null
           periodo_fim: string | null
           periodo_inicio: string | null
+          periodo_media_reflexo: string | null
           pjc_id: string | null
+          quantidade_proporcionalizar: boolean | null
           quantidade_tipo: string | null
           quantidade_valor: number | null
           tipo_variacao: string | null
@@ -6215,20 +4742,26 @@ export type Database = {
         Insert: {
           ativa?: boolean | null
           base_tabelada?: string | null
+          base_tabelas?: string[] | null
           calculo_id: string
           caracteristica?: string | null
           codigo?: string | null
           compor_principal?: boolean | null
+          comportamento_reflexo?: string | null
+          constante_mensal?: number | null
           created_at?: string | null
           divisor?: number | null
           divisor_tipo?: string | null
+          dobrar_valor_devido?: boolean | null
           excluir_falta_justificada?: boolean | null
           excluir_falta_nao_justificada?: boolean | null
           excluir_ferias_gozadas?: boolean | null
           fonte?: string | null
+          fracao_mes_modo?: string | null
           gerar_principal?: string | null
           gerar_reflexo?: string | null
           hist_salarial_nome?: string | null
+          hora_noturna_ficticia?: boolean | null
           id?: string
           incide_fgts?: boolean | null
           incide_inss?: boolean | null
@@ -6240,7 +4773,9 @@ export type Database = {
           periodicidade?: string | null
           periodo_fim?: string | null
           periodo_inicio?: string | null
+          periodo_media_reflexo?: string | null
           pjc_id?: string | null
+          quantidade_proporcionalizar?: boolean | null
           quantidade_tipo?: string | null
           quantidade_valor?: number | null
           tipo_variacao?: string | null
@@ -6253,20 +4788,26 @@ export type Database = {
         Update: {
           ativa?: boolean | null
           base_tabelada?: string | null
+          base_tabelas?: string[] | null
           calculo_id?: string
           caracteristica?: string | null
           codigo?: string | null
           compor_principal?: boolean | null
+          comportamento_reflexo?: string | null
+          constante_mensal?: number | null
           created_at?: string | null
           divisor?: number | null
           divisor_tipo?: string | null
+          dobrar_valor_devido?: boolean | null
           excluir_falta_justificada?: boolean | null
           excluir_falta_nao_justificada?: boolean | null
           excluir_ferias_gozadas?: boolean | null
           fonte?: string | null
+          fracao_mes_modo?: string | null
           gerar_principal?: string | null
           gerar_reflexo?: string | null
           hist_salarial_nome?: string | null
+          hora_noturna_ficticia?: boolean | null
           id?: string
           incide_fgts?: boolean | null
           incide_inss?: boolean | null
@@ -6278,7 +4819,9 @@ export type Database = {
           periodicidade?: string | null
           periodo_fim?: string | null
           periodo_inicio?: string | null
+          periodo_media_reflexo?: string | null
           pjc_id?: string | null
+          quantidade_proporcionalizar?: boolean | null
           quantidade_tipo?: string | null
           quantidade_valor?: number | null
           tipo_variacao?: string | null
@@ -6290,120 +4833,57 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "pjecalc_verba_base_verba_principal_id_fkey"
             columns: ["verba_principal_id"]
             isOneToOne: false
             referencedRelation: "pjecalc_verba_base"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "pjecalc_verba_base_verba_principal_id_fkey"
-            columns: ["verba_principal_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verbas"
-            referencedColumns: ["id"]
-          },
         ]
       }
-      profile_calculators: {
+      pjecalc_versoes: {
         Row: {
-          calculator_version_id: string
-          criado_em: string | null
-          profile_id: string
+          autor_id: string | null
+          calculo_id: string
+          created_at: string | null
+          descricao: string | null
+          hash_conteudo: string | null
+          id: string
+          numero_versao: number
+          snapshot: Json
+          total_bruto: number | null
+          total_liquido: number | null
         }
         Insert: {
-          calculator_version_id: string
-          criado_em?: string | null
-          profile_id: string
+          autor_id?: string | null
+          calculo_id: string
+          created_at?: string | null
+          descricao?: string | null
+          hash_conteudo?: string | null
+          id?: string
+          numero_versao: number
+          snapshot: Json
+          total_bruto?: number | null
+          total_liquido?: number | null
         }
         Update: {
-          calculator_version_id?: string
-          criado_em?: string | null
-          profile_id?: string
+          autor_id?: string | null
+          calculo_id?: string
+          created_at?: string | null
+          descricao?: string | null
+          hash_conteudo?: string | null
+          id?: string
+          numero_versao?: number
+          snapshot?: Json
+          total_bruto?: number | null
+          total_liquido?: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "profile_calculators_calculator_version_id_fkey"
-            columns: ["calculator_version_id"]
+            foreignKeyName: "pjecalc_versoes_calculo_id_fkey"
+            columns: ["calculo_id"]
             isOneToOne: false
-            referencedRelation: "calculator_versions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "profile_calculators_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "calculation_profiles"
+            referencedRelation: "pjecalc_calculos"
             referencedColumns: ["id"]
           },
         ]
@@ -6613,53 +5093,6 @@ export type Database = {
           },
         ]
       }
-      reference_tables: {
-        Row: {
-          ativo: boolean | null
-          coletado_em: string | null
-          competencia: string
-          created_at: string
-          dados_json: Json
-          hash_integridade: string | null
-          id: string
-          nome: string
-          notas: string | null
-          source_id: string | null
-        }
-        Insert: {
-          ativo?: boolean | null
-          coletado_em?: string | null
-          competencia: string
-          created_at?: string
-          dados_json?: Json
-          hash_integridade?: string | null
-          id?: string
-          nome: string
-          notas?: string | null
-          source_id?: string | null
-        }
-        Update: {
-          ativo?: boolean | null
-          coletado_em?: string | null
-          competencia?: string
-          created_at?: string
-          dados_json?: Json
-          hash_integridade?: string | null
-          id?: string
-          nome?: string
-          notas?: string | null
-          source_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reference_tables_source_id_fkey"
-            columns: ["source_id"]
-            isOneToOne: false
-            referencedRelation: "legal_sources"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       rubric_classifications: {
         Row: {
           canonical_code: string
@@ -6696,69 +5129,6 @@ export type Database = {
           id?: string
           method?: string
           source_name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "rubric_classifications_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "rubric_classifications_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      rubrica_map: {
-        Row: {
-          categoria: string | null
-          codigo_original: string
-          created_at: string
-          created_by: string | null
-          descricao_original: string
-          empresa_pattern: string | null
-          id: string
-          is_pgto: boolean | null
-          priority: number | null
-          regex_pattern: string | null
-          rubrica_destino: string
-          updated_at: string
-          version: number | null
-        }
-        Insert: {
-          categoria?: string | null
-          codigo_original: string
-          created_at?: string
-          created_by?: string | null
-          descricao_original: string
-          empresa_pattern?: string | null
-          id?: string
-          is_pgto?: boolean | null
-          priority?: number | null
-          regex_pattern?: string | null
-          rubrica_destino: string
-          updated_at?: string
-          version?: number | null
-        }
-        Update: {
-          categoria?: string | null
-          codigo_original?: string
-          created_at?: string
-          created_by?: string | null
-          descricao_original?: string
-          empresa_pattern?: string | null
-          id?: string
-          is_pgto?: boolean | null
-          priority?: number | null
-          regex_pattern?: string | null
-          rubrica_destino?: string
-          updated_at?: string
-          version?: number | null
         }
         Relationships: []
       }
@@ -6838,22 +5208,7 @@ export type Database = {
           texto_sentenca?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "sentenca_rulesets_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "sentenca_rulesets_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       sync_status: {
         Row: {
@@ -6885,72 +5240,6 @@ export type Database = {
           serie_id?: number
           serie_nome?: string | null
           status?: string | null
-        }
-        Relationships: []
-      }
-      tax_tables: {
-        Row: {
-          criado_em: string | null
-          faixas: Json
-          id: string
-          tipo: string
-          vigencia_fim: string | null
-          vigencia_inicio: string
-        }
-        Insert: {
-          criado_em?: string | null
-          faixas?: Json
-          id?: string
-          tipo: string
-          vigencia_fim?: string | null
-          vigencia_inicio: string
-        }
-        Update: {
-          criado_em?: string | null
-          faixas?: Json
-          id?: string
-          tipo?: string
-          vigencia_fim?: string | null
-          vigencia_inicio?: string
-        }
-        Relationships: []
-      }
-      test_scenarios: {
-        Row: {
-          ativo: boolean | null
-          created_at: string
-          descricao: string | null
-          id: string
-          inputs: Json
-          nome: string
-          resultados_esperados: Json
-          ultima_execucao: string | null
-          ultimo_diff: Json | null
-          ultimo_resultado: string | null
-        }
-        Insert: {
-          ativo?: boolean | null
-          created_at?: string
-          descricao?: string | null
-          id?: string
-          inputs?: Json
-          nome: string
-          resultados_esperados?: Json
-          ultima_execucao?: string | null
-          ultimo_diff?: Json | null
-          ultimo_resultado?: string | null
-        }
-        Update: {
-          ativo?: boolean | null
-          created_at?: string
-          descricao?: string | null
-          id?: string
-          inputs?: Json
-          nome?: string
-          resultados_esperados?: Json
-          ultima_execucao?: string | null
-          ultimo_diff?: Json | null
-          ultimo_resultado?: string | null
         }
         Relationships: []
       }
@@ -7020,31 +5309,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "validations_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "validations_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "validations_extraction_id_fkey"
             columns: ["extraction_id"]
             isOneToOne: false
             referencedRelation: "extractions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "validations_snapshot_fk"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "calc_snapshots"
             referencedColumns: ["id"]
           },
         ]
@@ -7092,1061 +5360,20 @@ export type Database = {
           original_json?: Json
           ponto_diario_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "worktime_adjustments_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "worktime_adjustments_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: false
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
-      case_processing_stats: {
+      pjecalc_indice_cobertura: {
         Row: {
-          case_id: string | null
-          failed_documents: number | null
-          indexed_documents: number | null
-          last_processed_at: string | null
-          owner_id: string | null
-          pending_documents: number | null
-          processing_documents: number | null
-          total_chunks: number | null
-          total_documents: number | null
+          cobertura_fim: string | null
+          cobertura_inicio: string | null
+          esta_atualizado: boolean | null
+          indice: string | null
+          meses_atrasado: number | null
+          total_meses: number | null
         }
         Relationships: []
-      }
-      pjecalc_cartao_ponto: {
-        Row: {
-          calculo_id: string | null
-          case_id: string | null
-          competencia: string | null
-          created_at: string | null
-          dias_dsr: number | null
-          dias_falta: number | null
-          dias_feriado: number | null
-          horas_extras_100: number | null
-          horas_extras_50: number | null
-          horas_interjornada: number | null
-          horas_intrajornada: number | null
-          horas_noturnas: number | null
-          horas_trabalhadas: number | null
-          id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_apuracao_diaria_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_correcao_config: {
-        Row: {
-          case_id: string | null
-          combinacoes_indice: string | null
-          combinacoes_juros: string | null
-          created_at: string | null
-          data_citacao: string | null
-          data_fixa: string | null
-          data_liquidacao: string | null
-          epoca: string | null
-          id: string | null
-          indice: string | null
-          indice_pos_citacao: string | null
-          juros_inicio: string | null
-          juros_percentual: number | null
-          juros_pro_rata: boolean | null
-          juros_tipo: string | null
-          multa_467: boolean | null
-          multa_467_percentual: number | null
-          multa_523: boolean | null
-          multa_523_percentual: number | null
-          transicao_adc58: boolean | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_cs_config: {
-        Row: {
-          aliquota_empresa: number | null
-          aliquota_sat: number | null
-          aliquota_terceiros: number | null
-          case_id: string | null
-          cobrar_reclamante: boolean | null
-          created_at: string | null
-          cs_sobre_salarios_pagos: boolean | null
-          habilitado: boolean | null
-          id: string | null
-          regime: string | null
-        }
-        Insert: {
-          aliquota_empresa?: never
-          aliquota_sat?: never
-          aliquota_terceiros?: never
-          case_id?: string | null
-          cobrar_reclamante?: never
-          created_at?: string | null
-          cs_sobre_salarios_pagos?: never
-          habilitado?: never
-          id?: string | null
-          regime?: never
-        }
-        Update: {
-          aliquota_empresa?: never
-          aliquota_sat?: never
-          aliquota_terceiros?: never
-          case_id?: string | null
-          cobrar_reclamante?: never
-          created_at?: string | null
-          cs_sobre_salarios_pagos?: never
-          habilitado?: never
-          id?: string | null
-          regime?: never
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_cs_ocorrencias: {
-        Row: {
-          ativa: boolean | null
-          base_valor: number | null
-          calculo_id: string | null
-          case_id: string | null
-          competencia: string | null
-          correcao: number | null
-          created_at: string | null
-          devido: number | null
-          diferenca: number | null
-          divisor_valor: number | null
-          dobra: number | null
-          id: string | null
-          juros: number | null
-          multiplicador_valor: number | null
-          origem: string | null
-          pago: number | null
-          quantidade_valor: number | null
-          total: number | null
-          updated_at: string | null
-          verba_id: string | null
-          verba_nome: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_verba_base_id_fkey"
-            columns: ["verba_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verba_base"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_verba_base_id_fkey"
-            columns: ["verba_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verbas"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_custas_config: {
-        Row: {
-          case_id: string | null
-          created_at: string | null
-          id: string | null
-          limite: number | null
-          percentual: number | null
-        }
-        Insert: {
-          case_id?: string | null
-          created_at?: string | null
-          id?: string | null
-          limite?: number | null
-          percentual?: number | null
-        }
-        Update: {
-          case_id?: string | null
-          created_at?: string | null
-          id?: string | null
-          limite?: number | null
-          percentual?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_dados_processo: {
-        Row: {
-          case_id: string | null
-          comarca: string | null
-          created_at: string | null
-          id: string | null
-          numero_processo: string | null
-          objeto: string | null
-          reclamada_cnpj: string | null
-          reclamada_nome: string | null
-          reclamante_cpf: string | null
-          reclamante_nome: string | null
-          updated_at: string | null
-          vara: string | null
-        }
-        Insert: {
-          case_id?: string | null
-          comarca?: never
-          created_at?: string | null
-          id?: string | null
-          numero_processo?: string | null
-          objeto?: never
-          reclamada_cnpj?: string | null
-          reclamada_nome?: string | null
-          reclamante_cpf?: string | null
-          reclamante_nome?: string | null
-          updated_at?: string | null
-          vara?: string | null
-        }
-        Update: {
-          case_id?: string | null
-          comarca?: never
-          created_at?: string | null
-          id?: string | null
-          numero_processo?: string | null
-          objeto?: never
-          reclamada_cnpj?: string | null
-          reclamada_nome?: string | null
-          reclamante_cpf?: string | null
-          reclamante_nome?: string | null
-          updated_at?: string | null
-          vara?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_faltas: {
-        Row: {
-          calculo_id: string | null
-          case_id: string | null
-          created_at: string | null
-          data_final: string | null
-          data_inicial: string | null
-          id: string | null
-          justificada: boolean | null
-          motivo: string | null
-          observacoes: string | null
-          tipo_falta: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_ferias: {
-        Row: {
-          abono: boolean | null
-          calculo_id: string | null
-          case_id: string | null
-          created_at: string | null
-          dias: number | null
-          dias_abono: number | null
-          dobra: boolean | null
-          gozo_fim: string | null
-          gozo_inicio: string | null
-          gozo2_fim: string | null
-          gozo2_inicio: string | null
-          gozo3_fim: string | null
-          gozo3_inicio: string | null
-          id: string | null
-          observacoes: string | null
-          periodo_aquisitivo_fim: string | null
-          periodo_aquisitivo_inicio: string | null
-          periodo_concessivo_fim: string | null
-          periodo_concessivo_inicio: string | null
-          situacao: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_evento_intervalo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_fgts_config: {
-        Row: {
-          case_id: string | null
-          created_at: string | null
-          habilitado: boolean | null
-          id: string | null
-          percentual_deposito: number | null
-          percentual_multa: number | null
-        }
-        Insert: {
-          case_id?: string | null
-          created_at?: string | null
-          habilitado?: never
-          id?: string | null
-          percentual_deposito?: never
-          percentual_multa?: never
-        }
-        Update: {
-          case_id?: string | null
-          created_at?: string | null
-          habilitado?: never
-          id?: string | null
-          percentual_deposito?: never
-          percentual_multa?: never
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_fgts_ocorrencias: {
-        Row: {
-          ativa: boolean | null
-          base_valor: number | null
-          calculo_id: string | null
-          case_id: string | null
-          competencia: string | null
-          correcao: number | null
-          created_at: string | null
-          devido: number | null
-          diferenca: number | null
-          divisor_valor: number | null
-          dobra: number | null
-          id: string | null
-          juros: number | null
-          multiplicador_valor: number | null
-          origem: string | null
-          pago: number | null
-          quantidade_valor: number | null
-          total: number | null
-          updated_at: string | null
-          verba_id: string | null
-          verba_nome: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_verba_base_id_fkey"
-            columns: ["verba_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verba_base"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_verba_base_id_fkey"
-            columns: ["verba_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verbas"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_historico_ocorrencias: {
-        Row: {
-          case_id: string | null
-          competencia: string | null
-          created_at: string | null
-          historico_id: string | null
-          id: string | null
-          tipo: string | null
-          valor: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_hist_salarial_id_fkey"
-            columns: ["historico_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_hist_salarial"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_mes_hist_salarial_id_fkey"
-            columns: ["historico_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_historico_salarial"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_historico_salarial: {
-        Row: {
-          calculo_id: string | null
-          case_id: string | null
-          created_at: string | null
-          id: string | null
-          incidencia_cs: boolean | null
-          incidencia_fgts: boolean | null
-          nome: string | null
-          observacoes: string | null
-          periodo_fim: string | null
-          periodo_inicio: string | null
-          tipo_valor: string | null
-          valor_informado: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_hist_salarial_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_honorarios: {
-        Row: {
-          case_id: string | null
-          created_at: string | null
-          id: string | null
-          percentual: number | null
-          sobre: string | null
-        }
-        Insert: {
-          case_id?: string | null
-          created_at?: string | null
-          id?: string | null
-          percentual?: number | null
-          sobre?: string | null
-        }
-        Update: {
-          case_id?: string | null
-          created_at?: string | null
-          id?: string | null
-          percentual?: number | null
-          sobre?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_ir_config: {
-        Row: {
-          case_id: string | null
-          created_at: string | null
-          dependentes: number | null
-          habilitado: boolean | null
-          id: string | null
-          metodo: string | null
-        }
-        Insert: {
-          case_id?: string | null
-          created_at?: string | null
-          dependentes?: never
-          habilitado?: never
-          id?: string | null
-          metodo?: never
-        }
-        Update: {
-          case_id?: string | null
-          created_at?: string | null
-          dependentes?: never
-          habilitado?: never
-          id?: string | null
-          metodo?: never
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       pjecalc_ir_faixas: {
         Row: {
@@ -8160,1036 +5387,6 @@ export type Database = {
           valor_inicial: number | null
         }
         Relationships: []
-      }
-      pjecalc_liquidacao_resultado: {
-        Row: {
-          calculado_em: string | null
-          calculo_id: string | null
-          case_id: string | null
-          created_at: string | null
-          custas: number | null
-          engine_version: string | null
-          fgts_depositar: number | null
-          fgts_multa_40: number | null
-          honorarios: number | null
-          id: string | null
-          inss_patronal: number | null
-          inss_segurado: number | null
-          irrf: number | null
-          resultado: Json | null
-          total_bruto: number | null
-          total_liquido: number | null
-          total_reclamado: number | null
-          total_reclamante: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_resultado_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_multas_config: {
-        Row: {
-          case_id: string | null
-          created_at: string | null
-          id: string | null
-          multa_467: boolean | null
-          multa_477: boolean | null
-        }
-        Insert: {
-          case_id?: string | null
-          created_at?: string | null
-          id?: string | null
-          multa_467?: boolean | null
-          multa_477?: boolean | null
-        }
-        Update: {
-          case_id?: string | null
-          created_at?: string | null
-          id?: string | null
-          multa_467?: boolean | null
-          multa_477?: boolean | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_ocorrencias: {
-        Row: {
-          ativa: boolean | null
-          base_valor: number | null
-          calculo_id: string | null
-          case_id: string | null
-          competencia: string | null
-          correcao: number | null
-          created_at: string | null
-          devido: number | null
-          diferenca: number | null
-          divisor_valor: number | null
-          dobra: number | null
-          id: string | null
-          juros: number | null
-          multiplicador_valor: number | null
-          origem: string | null
-          pago: number | null
-          quantidade_valor: number | null
-          total: number | null
-          updated_at: string | null
-          verba_id: string | null
-          verba_nome: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_verba_base_id_fkey"
-            columns: ["verba_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verba_base"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_verba_base_id_fkey"
-            columns: ["verba_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verbas"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_parametros: {
-        Row: {
-          carga_horaria_padrao: number | null
-          case_id: string | null
-          comentarios: string | null
-          considerar_feriado_estadual: boolean | null
-          considerar_feriado_municipal: boolean | null
-          created_at: string | null
-          data_admissao: string | null
-          data_ajuizamento: string | null
-          data_demissao: string | null
-          data_final: string | null
-          data_inicial: string | null
-          estado: string | null
-          id: string | null
-          limitar_avos_periodo: boolean | null
-          maior_remuneracao: number | null
-          municipio: string | null
-          prazo_aviso_dias: string | null
-          prazo_aviso_previo: string | null
-          prescricao_fgts: boolean | null
-          prescricao_quinquenal: boolean | null
-          projetar_aviso_indenizado: boolean | null
-          regime_trabalho: string | null
-          sabado_dia_util: boolean | null
-          ultima_remuneracao: number | null
-          updated_at: string | null
-          zerar_valor_negativo: boolean | null
-        }
-        Insert: {
-          carga_horaria_padrao?: number | null
-          case_id?: string | null
-          comentarios?: string | null
-          considerar_feriado_estadual?: never
-          considerar_feriado_municipal?: never
-          created_at?: string | null
-          data_admissao?: never
-          data_ajuizamento?: never
-          data_demissao?: never
-          data_final?: never
-          data_inicial?: never
-          estado?: string | null
-          id?: string | null
-          limitar_avos_periodo?: never
-          maior_remuneracao?: never
-          municipio?: string | null
-          prazo_aviso_dias?: never
-          prazo_aviso_previo?: string | null
-          prescricao_fgts?: never
-          prescricao_quinquenal?: never
-          projetar_aviso_indenizado?: never
-          regime_trabalho?: never
-          sabado_dia_util?: never
-          ultima_remuneracao?: never
-          updated_at?: string | null
-          zerar_valor_negativo?: never
-        }
-        Update: {
-          carga_horaria_padrao?: number | null
-          case_id?: string | null
-          comentarios?: string | null
-          considerar_feriado_estadual?: never
-          considerar_feriado_municipal?: never
-          created_at?: string | null
-          data_admissao?: never
-          data_ajuizamento?: never
-          data_demissao?: never
-          data_final?: never
-          data_inicial?: never
-          estado?: string | null
-          id?: string | null
-          limitar_avos_periodo?: never
-          maior_remuneracao?: never
-          municipio?: string | null
-          prazo_aviso_dias?: never
-          prazo_aviso_previo?: string | null
-          prescricao_fgts?: never
-          prescricao_quinquenal?: never
-          projetar_aviso_indenizado?: never
-          regime_trabalho?: never
-          sabado_dia_util?: never
-          ultima_remuneracao?: never
-          updated_at?: string | null
-          zerar_valor_negativo?: never
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_pensao_config: {
-        Row: {
-          apurar: boolean | null
-          base_incidencia: string | null
-          beneficiario: string | null
-          calculo_id: string | null
-          case_id: string | null
-          created_at: string | null
-          id: string | null
-          observacoes: string | null
-          percentual: number | null
-          tipo: string | null
-          updated_at: string | null
-          valor_fixo: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_pensao_alimenticia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_previdencia_privada_config: {
-        Row: {
-          apurar: boolean | null
-          calculo_id: string | null
-          case_id: string | null
-          created_at: string | null
-          entidade: string | null
-          id: string | null
-          observacoes: string | null
-          percentual_empregado: number | null
-          percentual_empregador: number | null
-          updated_at: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_prev_privada_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_salario_familia_config: {
-        Row: {
-          apurar: boolean | null
-          calculo_id: string | null
-          case_id: string | null
-          created_at: string | null
-          id: string | null
-          numero_filhos: number | null
-          observacoes: string | null
-          updated_at: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_sal_familia_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_seguro_config: {
-        Row: {
-          apurar: boolean | null
-          calculo_id: string | null
-          case_id: string | null
-          created_at: string | null
-          id: string | null
-          observacoes: string | null
-          parcelas: number | null
-          recebeu: boolean | null
-          updated_at: string | null
-          valor_parcela: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_seguro_desemprego_config_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: true
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_verba_ocorrencias: {
-        Row: {
-          ativa: boolean | null
-          base_valor: number | null
-          calculo_id: string | null
-          case_id: string | null
-          competencia: string | null
-          correcao: number | null
-          created_at: string | null
-          devido: number | null
-          diferenca: number | null
-          divisor_valor: number | null
-          dobra: number | null
-          id: string | null
-          juros: number | null
-          multiplicador_valor: number | null
-          origem: string | null
-          pago: number | null
-          quantidade_valor: number | null
-          total: number | null
-          updated_at: string | null
-          verba_id: string | null
-          verba_nome: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_verba_base_id_fkey"
-            columns: ["verba_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verba_base"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_ocorrencia_calculo_verba_base_id_fkey"
-            columns: ["verba_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verbas"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pjecalc_verbas: {
-        Row: {
-          ativa: boolean | null
-          base_calculo: Json | null
-          calculo_id: string | null
-          caracteristica: string | null
-          case_id: string | null
-          codigo: string | null
-          created_at: string | null
-          divisor_informado: number | null
-          hist_salarial_nome: string | null
-          id: string | null
-          incide_fgts: boolean | null
-          incide_inss: boolean | null
-          incide_ir: boolean | null
-          incidencias: Json | null
-          multiplicador: number | null
-          nome: string | null
-          observacoes: string | null
-          ocorrencia_pagamento: string | null
-          ordem: number | null
-          periodo_fim: string | null
-          periodo_inicio: string | null
-          tipo: string | null
-          updated_at: string | null
-          valor: string | null
-          valor_informado_devido: number | null
-          valor_informado_pago: number | null
-          verba_principal_id: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "case_processing_stats"
-            referencedColumns: ["case_id"]
-          },
-          {
-            foreignKeyName: "pjecalc_calculos_case_id_fkey"
-            columns: ["case_id"]
-            isOneToOne: true
-            referencedRelation: "cases"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_calculos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_correcao_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_cs_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_custas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_dados_processo"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_fgts_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_honorarios"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_ir_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_multas_config"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_calculo_id_fkey"
-            columns: ["calculo_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_parametros"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_verba_principal_id_fkey"
-            columns: ["verba_principal_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verba_base"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "pjecalc_verba_base_verba_principal_id_fkey"
-            columns: ["verba_principal_id"]
-            isOneToOne: false
-            referencedRelation: "pjecalc_verbas"
-            referencedColumns: ["id"]
-          },
-        ]
       }
     }
     Functions: {
@@ -9236,22 +5433,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      match_document_chunks: {
-        Args: {
-          p_case_id: string
-          p_doc_types?: string[]
-          p_query_embedding: string
-          p_top_k: number
-        }
-        Returns: {
-          chunk_id: string
-          content: string
-          doc_type: string
-          document_id: string
-          page_number: number
-          similarity: number
-        }[]
-      }
       pjecalc_batch_update_ocorrencias: {
         Args: { p_calculo_id: string; p_changes: Json; p_filtro: Json }
         Returns: number
@@ -9264,10 +5445,15 @@ export type Database = {
         Args: { p_case_id: string; p_user_id?: string }
         Returns: string
       }
+      pjecalc_recompute_acumulado: {
+        Args: { p_indice: string }
+        Returns: undefined
+      }
       queue_case_documents: {
         Args: { p_case_id: string; p_priority?: number }
         Returns: number
       }
+      user_owns_calculo: { Args: { p_calculo_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
