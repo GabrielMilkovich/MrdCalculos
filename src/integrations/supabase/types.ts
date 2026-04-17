@@ -2129,6 +2129,13 @@ export type Database = {
           considera_feriado_municipal: boolean | null
           considera_feriado_nacional: boolean | null
           created_at: string | null
+          cs_aliquota_empresa: number | null
+          cs_aliquota_sat: number | null
+          cs_aliquota_terceiros: number | null
+          cs_cobrar_reclamante: boolean | null
+          cs_sobre_salarios_pagos: boolean | null
+          custas_limite: number | null
+          custas_percentual: number | null
           data_admissao: string
           data_ajuizamento: string | null
           data_citacao: string | null
@@ -2138,29 +2145,43 @@ export type Database = {
           data_liquidacao: string
           data_prescricao_quinquenal: string | null
           data_ultima_atualizacao: string | null
+          dia_fechamento: number | null
           dia_fechamento_mes: number | null
           divisor_horas: number | null
+          duplicado_de: string | null
           engine_version: string | null
           fase: string | null
           hash_atualizacao: string | null
           hash_calculo: string | null
+          hash_estado: string | null
+          honorarios_percentual: number | null
+          honorarios_sobre: string | null
           id: string
           ignorar_taxa_correcao_negativa: boolean | null
           indices_acumulados: string | null
           instancia: string | null
           jornada_contratual_horas: number | null
           last_calculated_at: string | null
+          limitar_avos: boolean | null
           limitar_avos_periodo_calculo: boolean | null
+          multa_467_habilitada: boolean | null
+          multa_477_habilitada: boolean | null
           municipio_ibge: string | null
           observacoes: string | null
           ordem: number | null
           percentual_adicional_noturno: number | null
           percentual_he_100: number | null
           percentual_he_50: number | null
+          pjc_import_metadata: Json | null
           prescricao_fgts: boolean | null
           prescricao_quinquenal: boolean | null
           processo_cnj: string | null
+          projeta_aviso: boolean | null
           projetar_aviso_indenizado: boolean | null
+          reclamado_cnpj: string | null
+          reclamado_nome: string | null
+          reclamante_cpf: string | null
+          reclamante_nome: string | null
           regime_contrato: string | null
           sabado_dia_util: boolean | null
           status: string | null
@@ -2175,6 +2196,8 @@ export type Database = {
           valor_maior_remuneracao: number | null
           valor_ultima_remuneracao: number | null
           vara: string | null
+          versao: number | null
+          zera_negativo: boolean | null
           zera_valor_negativo: boolean | null
         }
         Insert: {
@@ -2188,6 +2211,13 @@ export type Database = {
           considera_feriado_municipal?: boolean | null
           considera_feriado_nacional?: boolean | null
           created_at?: string | null
+          cs_aliquota_empresa?: number | null
+          cs_aliquota_sat?: number | null
+          cs_aliquota_terceiros?: number | null
+          cs_cobrar_reclamante?: boolean | null
+          cs_sobre_salarios_pagos?: boolean | null
+          custas_limite?: number | null
+          custas_percentual?: number | null
           data_admissao: string
           data_ajuizamento?: string | null
           data_citacao?: string | null
@@ -2197,29 +2227,43 @@ export type Database = {
           data_liquidacao: string
           data_prescricao_quinquenal?: string | null
           data_ultima_atualizacao?: string | null
+          dia_fechamento?: number | null
           dia_fechamento_mes?: number | null
           divisor_horas?: number | null
+          duplicado_de?: string | null
           engine_version?: string | null
           fase?: string | null
           hash_atualizacao?: string | null
           hash_calculo?: string | null
+          hash_estado?: string | null
+          honorarios_percentual?: number | null
+          honorarios_sobre?: string | null
           id?: string
           ignorar_taxa_correcao_negativa?: boolean | null
           indices_acumulados?: string | null
           instancia?: string | null
           jornada_contratual_horas?: number | null
           last_calculated_at?: string | null
+          limitar_avos?: boolean | null
           limitar_avos_periodo_calculo?: boolean | null
+          multa_467_habilitada?: boolean | null
+          multa_477_habilitada?: boolean | null
           municipio_ibge?: string | null
           observacoes?: string | null
           ordem?: number | null
           percentual_adicional_noturno?: number | null
           percentual_he_100?: number | null
           percentual_he_50?: number | null
+          pjc_import_metadata?: Json | null
           prescricao_fgts?: boolean | null
           prescricao_quinquenal?: boolean | null
           processo_cnj?: string | null
+          projeta_aviso?: boolean | null
           projetar_aviso_indenizado?: boolean | null
+          reclamado_cnpj?: string | null
+          reclamado_nome?: string | null
+          reclamante_cpf?: string | null
+          reclamante_nome?: string | null
           regime_contrato?: string | null
           sabado_dia_util?: boolean | null
           status?: string | null
@@ -2234,6 +2278,8 @@ export type Database = {
           valor_maior_remuneracao?: number | null
           valor_ultima_remuneracao?: number | null
           vara?: string | null
+          versao?: number | null
+          zera_negativo?: boolean | null
           zera_valor_negativo?: boolean | null
         }
         Update: {
@@ -2247,6 +2293,13 @@ export type Database = {
           considera_feriado_municipal?: boolean | null
           considera_feriado_nacional?: boolean | null
           created_at?: string | null
+          cs_aliquota_empresa?: number | null
+          cs_aliquota_sat?: number | null
+          cs_aliquota_terceiros?: number | null
+          cs_cobrar_reclamante?: boolean | null
+          cs_sobre_salarios_pagos?: boolean | null
+          custas_limite?: number | null
+          custas_percentual?: number | null
           data_admissao?: string
           data_ajuizamento?: string | null
           data_citacao?: string | null
@@ -2256,29 +2309,43 @@ export type Database = {
           data_liquidacao?: string
           data_prescricao_quinquenal?: string | null
           data_ultima_atualizacao?: string | null
+          dia_fechamento?: number | null
           dia_fechamento_mes?: number | null
           divisor_horas?: number | null
+          duplicado_de?: string | null
           engine_version?: string | null
           fase?: string | null
           hash_atualizacao?: string | null
           hash_calculo?: string | null
+          hash_estado?: string | null
+          honorarios_percentual?: number | null
+          honorarios_sobre?: string | null
           id?: string
           ignorar_taxa_correcao_negativa?: boolean | null
           indices_acumulados?: string | null
           instancia?: string | null
           jornada_contratual_horas?: number | null
           last_calculated_at?: string | null
+          limitar_avos?: boolean | null
           limitar_avos_periodo_calculo?: boolean | null
+          multa_467_habilitada?: boolean | null
+          multa_477_habilitada?: boolean | null
           municipio_ibge?: string | null
           observacoes?: string | null
           ordem?: number | null
           percentual_adicional_noturno?: number | null
           percentual_he_100?: number | null
           percentual_he_50?: number | null
+          pjc_import_metadata?: Json | null
           prescricao_fgts?: boolean | null
           prescricao_quinquenal?: boolean | null
           processo_cnj?: string | null
+          projeta_aviso?: boolean | null
           projetar_aviso_indenizado?: boolean | null
+          reclamado_cnpj?: string | null
+          reclamado_nome?: string | null
+          reclamante_cpf?: string | null
+          reclamante_nome?: string | null
           regime_contrato?: string | null
           sabado_dia_util?: boolean | null
           status?: string | null
@@ -2293,6 +2360,8 @@ export type Database = {
           valor_maior_remuneracao?: number | null
           valor_ultima_remuneracao?: number | null
           vara?: string | null
+          versao?: number | null
+          zera_negativo?: boolean | null
           zera_valor_negativo?: boolean | null
         }
         Relationships: [
