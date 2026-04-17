@@ -46,7 +46,7 @@ import { Multa } from './core/dominio/calculo/multa/multa';
 import { ServicoDeCalculo } from './core/servicos/servico-de-calculo';
 import { InssModuloAdapter } from './modulos/inss-modulo-adapter';
 import { IrpfModuloAdapter } from './modulos/irpf-modulo-adapter';
-import { SELIC_MENSAL } from './indices-fallback';
+import { SELIC_MENSAL, TR_MENSAL } from './indices-fallback';
 import {
   IndiceMonetarioEnum,
   IndicesAcumuladosEnum,
@@ -670,13 +670,37 @@ export class PjeCalcEngineV3 {
     if (t === 'selic' || t === 'selic_bacen' || t === 'selic_fazenda') {
       return new Decimal(this.somarSelicSimples(inicio, fim));
     }
-    const pctMes = new Decimal(this.correcaoConfig.juros_percentual ?? (t === 'meio_porcento' ? 0.5 : 1));
+    // FAZENDA_PUBLICA pre-EC 113: 0.5%/m (caderneta poupanca sem rendimento real)
+    if (t === 'fazenda_publica' || t === 'juros_poupanca') {
+      const meses = this.mesesEntre(inicio, fim);
+      return new Decimal(0.5).times(meses);
+    }
+    // JUROS_MEIO_PORCENTO: 0.5%/m
+    if (t === 'meio_porcento' || t === 'juros_meio_porcento') {
+      return new Decimal(0.5).times(this.mesesEntre(inicio, fim));
+    }
+    // TRD_SIMPLES, TAXA_LEGAL, JUROS_UM_PORCENTO, simples_mensal, padrao: 1%/m
+    const pctMes = new Decimal(this.correcaoConfig.juros_percentual ?? 1);
     const meses = this.mesesEntre(inicio, fim);
     if (t === 'composto') {
       const fator = new Decimal(1).plus(pctMes.div(100)).pow(meses).minus(1);
       return fator.times(100);
     }
     return pctMes.times(meses);
+  }
+
+  private somarTRSimples(inicio: Date, fim: Date): number {
+    // TR mensal e quase zero pos-2017. Usa TR_MENSAL de indices-fallback.
+    const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+    const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+    let total = new Decimal(0);
+    while (cursor.getTime() <= fimMes.getTime()) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      const taxa = TR_MENSAL[key];
+      if (taxa !== undefined) total = total.plus(taxa);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return total.toNumber();
   }
 
   /**
