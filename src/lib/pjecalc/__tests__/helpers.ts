@@ -7,7 +7,7 @@ import type {
   PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
   PjeIndiceRow, PjeINSSFaixaRow, PjeIRFaixaRow,
 } from '../engine-types';
-import { PjeCalcEngine } from '../engine';
+import { PjeCalcEngineV3 } from '../engine-v3';
 
 // ── Default Params ──
 export function makeParams(overrides: Partial<PjeParametros> = {}): PjeParametros {
@@ -271,8 +271,8 @@ export function createEngine(opts: {
   indicesDB?: PjeIndiceRow[];
   faixasINSSDB?: PjeINSSFaixaRow[];
   faixasIRDB?: PjeIRFaixaRow[];
-} = {}): PjeCalcEngine {
-  return new PjeCalcEngine(
+} = {}): PjeCalcEngineV3 {
+  return new PjeCalcEngineV3(
     makeParams(opts.params),
     opts.historicos || [makeHistorico()],
     opts.faltas || [],

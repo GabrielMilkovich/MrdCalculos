@@ -19,7 +19,7 @@ import { execSync } from 'child_process';
 import Decimal from 'decimal.js';
 import { analyzePJC, type PJCAnalysis } from '../pjc-analyzer';
 import { convertPjcToEngineInputs } from '../pjc-to-engine';
-import { PjeCalcEngine } from '../engine';
+import { PjeCalcEngineV3 } from '../engine-v3';
 import type { PjeLiquidacaoResult, PjeIndiceRow, PjeINSSFaixaRow } from '../engine-types';
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -237,7 +237,7 @@ function runIndependentAnalysis(filename: string): AnalysisResult {
   }
 
   try {
-    const engine = new PjeCalcEngine(
+    const engine = new PjeCalcEngineV3(
       inputs.params,
       inputs.historicos,
       inputs.faltas,
