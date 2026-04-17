@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Upload, FileText, Loader2, Check, AlertTriangle, Download, Eye } from "lucide-react";
+import { logger } from "@/lib/logger";
 
 interface RubricaExtraida {
   codigo: string;
@@ -156,7 +157,7 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
           }
         }
       } catch (pipeErr) {
-        console.warn("Pipeline audit persistence failed (non-blocking):", pipeErr);
+        logger.warn("Pipeline audit persistence failed (non-blocking)", { error: pipeErr });
       }
 
       setDados(parsed);
@@ -213,7 +214,7 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
             .single();
 
           if (error) {
-            console.error("Insert historico error:", error);
+            logger.error("Insert historico error", error);
             errorCount++;
             continue;
           }
@@ -233,7 +234,7 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
               .insert(ocorrencias);
             
             if (ocorrErr) {
-              console.error("Insert ocorrencias error:", ocorrErr);
+              logger.error("Insert ocorrencias error", ocorrErr);
               errorCount++;
             } else {
               importedCount++;
@@ -251,7 +252,7 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
       ]);
 
       // Auto-sync removed (sync-from-validation deleted)
-      console.warn('syncFromValidation removed');
+      logger.warn('syncFromValidation removed');
 
       if (errorCount > 0) {
         toast.warning(`${importedCount} rubrica(s) importada(s), ${errorCount} com erro. Verifique o console.`);

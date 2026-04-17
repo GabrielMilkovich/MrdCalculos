@@ -52,6 +52,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { logger } from "@/lib/logger";
 
 interface Document {
   id: string;
@@ -156,7 +157,7 @@ export function DocumentProcessor({
       onDocumentsChange();
       toast.success(`${files.length} documento(s) enviado(s)! Clique em "Processar" para indexar.`);
     } catch (error) {
-      console.error("Upload error:", error);
+      logger.error("Upload error", error);
       toast.error("Erro ao enviar documento: " + (error as Error).message);
     } finally {
       setIsUploading(false);
@@ -179,7 +180,7 @@ export function DocumentProcessor({
       toast.success(`Documento processado: ${data.chunks_created} chunks criados`);
       onDocumentsChange();
     } catch (err) {
-      console.error("Processing error:", err);
+      logger.error("Processing error", err);
       toast.error("Erro no processamento: " + (err as Error).message);
     } finally {
       setProcessingDocId(null);

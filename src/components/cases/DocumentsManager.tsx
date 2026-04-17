@@ -73,6 +73,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { logger } from "@/lib/logger";
 
 interface Document {
   id: string;
@@ -260,7 +261,7 @@ export function DocumentsManager({
         });
 
         if (error) {
-          console.error("Upload function error:", error);
+          logger.error("Upload function error", error);
           toast.error(`Erro ao enviar: ${file.name}`);
           continue;
         }
@@ -279,7 +280,7 @@ export function DocumentsManager({
         toast.success(`${successCount} documento(s) enviado(s)! Clique em "Processar" para OCR e indexação.`);
       }
     } catch (error) {
-      console.error("Upload error:", error);
+      logger.error("Upload error", error);
       toast.error("Erro ao enviar documento: " + (error as Error).message);
     } finally {
       setIsUploading(false);
@@ -302,7 +303,7 @@ export function DocumentsManager({
       toast.success(`Documento processado: ${data.chunks_created || 0} chunks criados`);
       onDocumentsChange();
     } catch (err) {
-      console.error("Processing error:", err);
+      logger.error("Processing error", err);
       toast.error("Erro no processamento: " + (err as Error).message);
     } finally {
       setProcessingDocId(null);
@@ -346,7 +347,7 @@ export function DocumentsManager({
       queryClient.invalidateQueries({ queryKey: ['cases'] });
       onDocumentsChange();
     } catch (err) {
-      console.error("Extract and fill error:", err);
+      logger.error("Extract and fill error", err);
       toast.error("Erro na extração: " + (err as Error).message);
     } finally {
       setProcessingDocId(null);
@@ -392,7 +393,7 @@ export function DocumentsManager({
         });
         if (error) throw error;
       } catch (err) {
-        console.error(`Trigger error for ${docId}:`, err);
+        logger.error(`Trigger error for ${docId}`, err);
         setBatchResults(prev => ({ ...prev, [docId]: "error" }));
         errorCount++;
         continue; // Skip to next document
@@ -442,7 +443,7 @@ export function DocumentsManager({
 
     // After all documents processed, run full sync to configure all modules
     if (successCount > 0) {
-      console.warn('syncFromValidation removed');
+      logger.warn('syncFromValidation removed');
       queryClient.invalidateQueries({ queryKey: ['pjecalc_case_data'] });
     }
 

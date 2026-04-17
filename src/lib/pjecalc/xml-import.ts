@@ -8,6 +8,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { DOMParser as NodeDOMParser } from '@xmldom/xmldom';
+import { logger } from "@/lib/logger";
 
 // Polyfill: usar xmldom no Node.js, DOMParser nativo no browser
 const getParser = (): DOMParser => {
@@ -40,7 +41,7 @@ function getNumAttr(el: Element, attr: string): number {
 
 /** @deprecated Use analyzePJC from pjc-analyzer.ts */
 export function parseXML(xmlString: string): XmlParseResult {
-  console.warn('[DEPRECATED] parseXML() is deprecated. Use analyzePJC() from pjc-analyzer.ts for real PJC parsing.');
+  logger.warn('[DEPRECATED] parseXML() is deprecated. Use analyzePJC() from pjc-analyzer.ts for real PJC parsing.');
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -121,7 +122,7 @@ export function parseXML(xmlString: string): XmlParseResult {
 
 /** @deprecated Use convertPjcToEngineInputs from pjc-to-engine.ts */
 export async function importarXMLParaCalculo(caseId: string, xmlString: string): Promise<{ success: boolean; message: string; warnings: string[] }> {
-  console.warn('[DEPRECATED] importarXMLParaCalculo() is deprecated. Use analyzePJC() + convertPjcToEngineInputs().');
+  logger.warn('[DEPRECATED] importarXMLParaCalculo() is deprecated. Use analyzePJC() + convertPjcToEngineInputs().');
   const parsed = parseXML(xmlString);
   if (!parsed.success) {
     return { success: false, message: parsed.errors.join('; '), warnings: parsed.warnings };
@@ -204,7 +205,7 @@ function getNumAttr(el: Element, attr: string): number {
 
 /** @deprecated Use analyzePJC from pjc-analyzer.ts */
 export function parseXML(xmlString: string): XmlParseResult {
-  console.warn('[DEPRECATED] parseXML() is deprecated. Use analyzePJC() from pjc-analyzer.ts for real PJC parsing.');
+  logger.warn('[DEPRECATED] parseXML() is deprecated. Use analyzePJC() from pjc-analyzer.ts for real PJC parsing.');
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -285,7 +286,7 @@ export function parseXML(xmlString: string): XmlParseResult {
 
 /** @deprecated Use convertPjcToEngineInputs from pjc-to-engine.ts */
 export async function importarXMLParaCalculo(caseId: string, xmlString: string): Promise<{ success: boolean; message: string; warnings: string[] }> {
-  console.warn('[DEPRECATED] importarXMLParaCalculo() is deprecated. Use analyzePJC() + convertPjcToEngineInputs().');
+  logger.warn('[DEPRECATED] importarXMLParaCalculo() is deprecated. Use analyzePJC() + convertPjcToEngineInputs().');
   const parsed = parseXML(xmlString);
   if (!parsed.success) {
     return { success: false, message: parsed.errors.join('; '), warnings: parsed.warnings };
