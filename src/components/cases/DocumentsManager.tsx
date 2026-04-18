@@ -320,19 +320,29 @@ export function DocumentsManager({
     }
   }, [caseId, selectedType, onDocumentsChange]);
 
-  // Processar documento (pipeline básico - OCR + chunks)
+  // Processar documento (pipeline Mistral OCR + chunking + embeddings)
+  // Usa `process-document-mistral` que orquestra:
+  //   1. ocr-document (Mistral OCR com split de PDF para cartões grandes)
+  //   2. chunk-and-embed (OpenAI embeddings)
   const processDocument = useCallback(async (documentId: string) => {
     setProcessingDocId(documentId);
-    toast.info("Iniciando processamento: OCR → Chunking...");
+    toast.info("Iniciando: OCR Mistral → Chunking → Embeddings...");
 
     try {
-      const { data, error } = await supabase.functions.invoke("process-document", {
+      const { data, error } = await supabase.functions.invoke("process-document-mistral", {
         body: { document_id: documentId },
       });
 
       if (error) throw error;
 
-      toast.success(`Documento processado: ${data.chunks_created || 0} chunks criados`);
+      const pageCount = data?.ocr?.page_count ?? "?";
+      const chunksCreated = data?.chunking?.chunks_created ?? 0;
+      const provider = data?.ocr?.provider ?? "mistral";
+      if (data?.partial) {
+        toast.warning(`OCR concluído (${pageCount} pg, ${provider}), mas chunking falhou. Revise manualmente.`);
+      } else {
+        toast.success(`Documento processado: ${pageCount} pg via ${provider}, ${chunksCreated} chunks.`);
+      }
       onDocumentsChange();
     } catch (err) {
       logger.error("Processing error", err);

@@ -1,316 +1,368 @@
 // =====================================================
-// EDGE FUNCTION: OCR DE DOCUMENTOS (HARDENED)
-// Extrai texto usando Vision AI com retry, validação
-// e fallback de modelos para ZERO falhas
+// EDGE FUNCTION: OCR DE DOCUMENTOS (MISTRAL OCR + CHUNKING)
+// =====================================================
+// Pipeline resiliente para extrair texto de documentos trabalhistas
+// (cartão de ponto, holerite, TRCT, CTPS, etc.) usando Mistral OCR.
+//
+// Arquitetura:
+//   1. Baixar documento do Supabase Storage (signed URL, 2 buckets de fallback)
+//   2. Detectar MIME. Se PDF:
+//        a. Inspecionar páginas
+//        b. Se > 8 páginas OU > 12MB: dividir em chunks (pdf-lib em memória)
+//        c. Para cada chunk: upload p/ Mistral Files + OCR + delete
+//        d. Merge preservando numeração original de páginas
+//      Se imagem (PNG/JPG/WEBP/TIFF): OCR direto (sem split)
+//   3. Concatenar markdown + emitir metadados estruturados
+//   4. Persistir em `documents` com progresso (ocr_chunks_total/done)
+//   5. Tratar falhas parciais: chunks que falharem são preservados como
+//      placeholder `[CHUNK N-M: falha: ...]` e o documento fica `partial`.
+//
+// Antecipações de erro implementadas:
+//   - Rate limit 429: backoff exponencial + jitter (mistral-ocr.ts)
+//   - Timeout: AbortController por request, timeout de 3min p/ OCR
+//   - PDF criptografado: ignoreEncryption=true, se ainda falhar → erro claro
+//   - PDF corrupto: fallback para vision API em chunk único
+//   - Arquivo muito grande (> 50MB): rejeitado com mensagem clara
+//   - Muitas páginas (> 500): rejeitado p/ evitar custo runaway
+//   - Concorrência: máximo 4 chunks simultâneos
+//   - Ordem dos chunks: preservada por índice, não por completude
+//   - Caracteres especiais: UTF-8 forçado em todas as respostas
+//   - Vazios: chunk sem texto vira `[PÁGINA N: vazia]` em vez de sumir
+//   - Falha total: retorna 500 mas sempre atualiza `documents.status='failed'`
+//   - Retry idempotente: função pode ser chamada N vezes com mesmo document_id
 // =====================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
+import {
+  inspectPdf,
+  splitPdfIntoChunks,
+  decidePagesPerChunk,
+  arrayBufferToBase64,
+} from "../_shared/pdf-utils.ts";
+import {
+  ocrBytes,
+  runOcr,
+  runInParallel,
+  type MistralOcrResult,
+  type MistralOcrPage,
+  type MistralOcrOptions,
+} from "../_shared/mistral-ocr.ts";
 
-// Modelos em ordem de prioridade (fallback automático)
-const AI_MODELS = [
-  "gpt-4o-mini",
-  "gpt-4o",
-  "gpt-4o-mini",
-];
+// =====================================================
+// Configurações
+// =====================================================
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 2000;
+/** Máximo de chunks em paralelo para não estourar rate limit. */
+const MAX_CONCURRENT_CHUNKS = 4;
 
-const OCR_PROMPT = `Você é um sistema de OCR de altíssima precisão para documentos trabalhistas brasileiros.
+/** Tamanho acima do qual SEMPRE dividimos PDFs. */
+const SIZE_SPLIT_THRESHOLD_BYTES = 12 * 1024 * 1024; // 12 MB
 
-TAREFA CRÍTICA: Extraia ABSOLUTAMENTE TODO o texto deste documento. A precisão é OBRIGATÓRIA — este dado será usado em cálculos judiciais.
+/** Tamanho absoluto máximo aceito pela função. */
+const ABSOLUTE_MAX_BYTES = 100 * 1024 * 1024; // 100 MB
 
-REGRAS INVIOLÁVEIS:
-1. Mantenha EXATAMENTE a formatação original (parágrafos, listas, tabelas, cabeçalhos)
-2. Para documentos com múltiplas páginas: marque "--- PÁGINA X ---" antes de cada página
-3. Para tabelas: use formato markdown com | para colunas. EXTRAIA TODOS os valores numéricos de TODAS as colunas e linhas
-4. Para texto manuscrito: transcreva e marque com [manuscrito: texto]
-5. Para carimbos/assinaturas: marque [carimbo] ou [assinatura]
-6. Para valores monetários: mantenha formatação brasileira (R$ 1.234,56) — NUNCA arredonde
-7. Para datas: mantenha formato brasileiro (DD/MM/AAAA)
-8. NÃO resuma, interprete ou omita NADA
-9. Se algum texto estiver ilegível: marque [ilegível] e tente uma segunda leitura
-10. Extraia TODOS os números, mesmo de tabelas complexas com muitas colunas
-11. Para holerites: extraia TODAS as verbas (código, descrição, referência, vencimentos, descontos)
-12. Para cartões de ponto: extraia TODAS as marcações de TODOS os dias
-13. Para TRCT: extraia TODOS os campos incluindo bases de cálculo, médias e totais
-14. Para contracheques: extraia cabeçalho completo (empresa, CNPJ, funcionário, CPF, cargo, admissão, competência)
+/** Páginas absolutas máximas (proteção contra custo). */
+const ABSOLUTE_MAX_PAGES = 500;
 
-CAMPOS CRÍTICOS QUE NUNCA PODEM FALTAR (quando presentes no documento):
-- Nome completo do empregado e empregador
-- CPF/CNPJ
-- Data de admissão e demissão
-- Cargo/Função
-- Salário base e remuneração total
-- Todos os códigos e valores de verbas
-- Período de referência
-- Jornada de trabalho
-- FGTS depositado e saldo
-- Férias (períodos aquisitivo e concessivo)
+/** Formatos de imagem processados sem split. */
+const IMAGE_MIMES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/tiff",
+  "image/tif",
+]);
 
-Após o texto, adicione OBRIGATORIAMENTE:
----METADADOS---
-páginas_detectadas: N
-confiança_ocr: 0.XX (sua estimativa de 0 a 1, seja HONESTO)
-tipo_documento: (holerite/ctps/contrato/ponto/fgts/trct/peticao/sentenca/extrato/outro)
-campos_extraidos: lista dos campos principais encontrados separados por vírgula
-texto_ilegivel: sim/não
-qualidade_imagem: boa/media/ruim
+// =====================================================
+// Helpers
+// =====================================================
 
-Responda APENAS com o texto extraído e metadados, sem explicações adicionais.`;
-
-// Delay helper
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+/** Detecta MIME a partir do file_name quando não vier no registro. */
+function detectMimeFromName(name: string | undefined | null): string {
+  const n = (name || "").toLowerCase();
+  if (n.endsWith(".pdf")) return "application/pdf";
+  if (n.endsWith(".png")) return "image/png";
+  if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+  if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".tif") || n.endsWith(".tiff")) return "image/tiff";
+  return "application/pdf";
 }
 
-// Função para converter ArrayBuffer para base64 de forma segura
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  // Processar em chunks para evitar stack overflow em arquivos grandes
-  const chunkSize = 8192;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-    binary += String.fromCharCode(...chunk);
-  }
-  return btoa(binary);
+/** Detecta o "tipo de documento" a partir do texto extraído (heurística). */
+function detectDocType(text: string): string {
+  const t = text.toLowerCase();
+  if (/t\.?r\.?c\.?t|termo\s+de\s+rescis[aã]o/i.test(t)) return "trct";
+  if (/cart[aã]o\s+de\s+ponto|ponto\s+eletr[oô]nico|registro\s+de\s+jornada|folha\s+de\s+frequ[eê]ncia/i.test(t)) return "cartao_ponto";
+  if (/contrach|holerite|recibo\s+de\s+pag/i.test(t)) return "holerite";
+  if (/carteira\s+de\s+trabalho|c\.?t\.?p\.?s/i.test(t)) return "ctps";
+  if (/f\.?g\.?t\.?s|fundo\s+de\s+garantia/i.test(t)) return "fgts";
+  if (/peti[çc][aã]o|exce[çc][aã]o|contesta[çc][aã]o|recurso/i.test(t)) return "peticao";
+  if (/senten[cç]a|ac[oó]rd[aã]o|despacho/i.test(t)) return "sentenca";
+  if (/conven[cç][aã]o\s+coletiva|c\.?c\.?t/i.test(t)) return "cct";
+  if (/contrato\s+de\s+trabalho/i.test(t)) return "contrato";
+  return "outro";
 }
 
-// Validação do resultado do OCR
-function validateOcrResult(text: string, mimeType: string): { valid: boolean; issues: string[] } {
-  const issues: string[] = [];
-  
-  if (!text || text.trim().length < 20) {
-    issues.push("Texto extraído muito curto (menos de 20 caracteres)");
-  }
-  
-  // Se for PDF/imagem de documento trabalhista, deve ter dados mínimos
-  if (text.length > 0 && text.length < 100) {
-    issues.push("Texto suspeitamente curto para um documento");
-  }
-  
-  // Verificar se não é resposta do modelo em vez de OCR
-  const aiPhrases = ["como posso ajudar", "não consigo", "sou um modelo", "desculpe"];
-  for (const phrase of aiPhrases) {
-    if (text.toLowerCase().includes(phrase)) {
-      issues.push(`Resposta do modelo detectada em vez de OCR: "${phrase}"`);
-    }
-  }
-  
-  return { valid: issues.length === 0, issues };
+/** Confiança default do Mistral OCR, com penalidades para sinais ruins. */
+function estimateConfidence(pages: MistralOcrPage[]): number {
+  let conf = 0.95;
+  const totalLen = pages.reduce((s, p) => s + p.markdown.length, 0);
+  if (totalLen < 200) conf -= 0.2;
+  const emptyPages = pages.filter((p) => !p.markdown.trim()).length;
+  if (emptyPages > 0) conf -= Math.min(0.3, emptyPages * 0.05);
+  return Math.max(0.1, Math.min(1, conf));
 }
 
-// Extração de metadados estruturados do resultado
-function parseOcrMetadata(extractedContent: string): {
-  text: string;
-  pageCount: number;
-  confidence: number;
-  docType: string;
-  fieldsExtracted: string[];
-  imageQuality: string;
-} {
-  const metadataSplit = extractedContent.split("---METADADOS---");
-  const text = metadataSplit[0].trim();
-  const metadataText = metadataSplit[1] || "";
-  
-  // Contagem de páginas
-  const pageMatches = text.match(/---\s*PÁGINA\s*\d+\s*---/gi) || [];
-  let pageCount = pageMatches.length;
-  const paginasMatch = metadataText.match(/páginas_detectadas:\s*(\d+)/i);
-  if (paginasMatch) {
-    pageCount = Math.max(pageCount, parseInt(paginasMatch[1], 10));
-  }
-  pageCount = Math.max(pageCount, 1);
-  
-  // Confiança
-  let confidence = 0.85;
-  const confiancaMatch = metadataText.match(/confiança_ocr:\s*([\d.]+)/i);
-  if (confiancaMatch) {
-    confidence = parseFloat(confiancaMatch[1]);
-  }
-  
-  // Tipo de documento
-  let docType = "outro";
-  const tipoMatch = metadataText.match(/tipo_documento:\s*(\S+)/i);
-  if (tipoMatch) {
-    docType = tipoMatch[1].trim();
-  }
-  
-  // Campos extraídos
-  let fieldsExtracted: string[] = [];
-  const camposMatch = metadataText.match(/campos_extraidos:\s*(.+)/i);
-  if (camposMatch) {
-    fieldsExtracted = camposMatch[1].split(",").map(s => s.trim()).filter(Boolean);
-  }
-  
-  // Qualidade da imagem
-  let imageQuality = "media";
-  const qualidadeMatch = metadataText.match(/qualidade_imagem:\s*(\S+)/i);
-  if (qualidadeMatch) {
-    imageQuality = qualidadeMatch[1].trim();
-  }
-  
-  return { text, pageCount, confidence, docType, fieldsExtracted, imageQuality };
-}
-
-// Função principal de OCR com retry e fallback de modelos
-async function extractTextWithVision(
-  fileUrl: string,
-  mimeType: string,
-  apiKey: string
-): Promise<{
-  text: string;
-  pageCount: number;
-  confidence: number;
-  docType: string;
-  fieldsExtracted: string[];
-  imageQuality: string;
-  modelUsed: string;
-  attempts: number;
-}> {
-  console.log(`[OCR] Starting extraction for ${mimeType}`);
-  
-  // Baixar o arquivo com retry
-  let fileBuffer: ArrayBuffer | null = null;
-  for (let dl = 0; dl < 3; dl++) {
+/** Baixa um arquivo HTTP com retry simples. */
+async function downloadWithRetry(url: string, tries = 3): Promise<ArrayBuffer> {
+  let lastErr: Error | null = null;
+  for (let i = 0; i < tries; i++) {
     try {
-      const fileResponse = await fetch(fileUrl);
-      if (!fileResponse.ok) {
-        throw new Error(`Download failed: ${fileResponse.status}`);
-      }
-      fileBuffer = await fileResponse.arrayBuffer();
-      console.log(`[OCR] File downloaded: ${fileBuffer.byteLength} bytes`);
-      break;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const buf = await resp.arrayBuffer();
+      if (buf.byteLength === 0) throw new Error("arquivo vazio");
+      return buf;
     } catch (err) {
-      console.error(`[OCR] Download attempt ${dl + 1} failed:`, err);
-      if (dl === 2) throw new Error(`Failed to download file after 3 attempts: ${err}`);
-      await delay(1000);
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      await new Promise((r) => setTimeout(r, 1000 * (i + 1)));
     }
   }
-  
-  if (!fileBuffer || fileBuffer.byteLength === 0) {
-    throw new Error("Downloaded file is empty");
-  }
-  
-  // Validar tamanho (Gemini aceita até ~20MB em base64)
-  if (fileBuffer.byteLength > 20 * 1024 * 1024) {
-    console.warn(`[OCR] File is large: ${(fileBuffer.byteLength / 1024 / 1024).toFixed(1)}MB`);
-  }
-  
-  const base64Data = arrayBufferToBase64(fileBuffer);
-  console.log(`[OCR] Base64 encoded: ${base64Data.length} chars`);
-  
-  let lastError: Error | null = null;
-  let totalAttempts = 0;
-  
-  // Tentar cada modelo com retries
-  for (const model of AI_MODELS) {
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      totalAttempts++;
-      console.log(`[OCR] Attempt ${totalAttempts}: model=${model}, retry=${attempt}/${MAX_RETRIES}`);
-      
-      try {
-        const visionResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  { type: "text", text: OCR_PROMPT },
-                  {
-                    type: "image_url",
-                    image_url: {
-                      url: `data:${mimeType};base64,${base64Data}`,
-                    },
-                  },
-                ],
-              },
-            ],
-            max_tokens: 64000,
-            temperature: 0.02,
-          }),
-        });
-        
-        if (!visionResponse.ok) {
-          const errorText = await visionResponse.text();
-          console.error(`[OCR] API error ${visionResponse.status}: ${errorText.substring(0, 200)}`);
-          
-          // Se for rate limit, esperar mais
-          if (visionResponse.status === 429) {
-            await delay(RETRY_DELAY_MS * attempt * 2);
-            continue;
-          }
-          
-          // Se for erro do servidor, tentar de novo
-          if (visionResponse.status >= 500) {
-            await delay(RETRY_DELAY_MS * attempt);
-            continue;
-          }
-          
-          // Erro 4xx diferente de 429 — trocar modelo
-          lastError = new Error(`API ${visionResponse.status}: ${errorText.substring(0, 100)}`);
-          break;
-        }
-        
-        const visionData = await visionResponse.json();
-        const extractedContent = visionData.choices?.[0]?.message?.content || "";
-        
-        if (!extractedContent) {
-          console.warn(`[OCR] Empty response from ${model}`);
-          lastError = new Error("Empty response from Vision API");
-          await delay(RETRY_DELAY_MS);
-          continue;
-        }
-        
-        // Validar resultado
-        const metadata = parseOcrMetadata(extractedContent);
-        const validation = validateOcrResult(metadata.text, mimeType);
-        
-        if (!validation.valid) {
-          console.warn(`[OCR] Validation failed: ${validation.issues.join("; ")}`);
-          lastError = new Error(`Validation: ${validation.issues.join("; ")}`);
-          
-          // Se texto muito curto, pode ser problema do modelo — tentar outro
-          if (metadata.text.length < 20) {
-            break; // próximo modelo
-          }
-          await delay(RETRY_DELAY_MS);
-          continue;
-        }
-        
-        console.log(`[OCR] SUCCESS: ${metadata.text.length} chars, ${metadata.pageCount} pages, confidence=${metadata.confidence}, type=${metadata.docType}, model=${model}`);
-        
-        return {
-          ...metadata,
-          modelUsed: model,
-          attempts: totalAttempts,
-        };
-        
-      } catch (err) {
-        console.error(`[OCR] Exception on attempt ${totalAttempts}:`, err);
-        lastError = err instanceof Error ? err : new Error(String(err));
-        await delay(RETRY_DELAY_MS * attempt);
-      }
-    }
-    
-    console.warn(`[OCR] Model ${model} exhausted retries, trying next model...`);
-  }
-  
-  throw new Error(`OCR failed after ${totalAttempts} attempts across ${AI_MODELS.length} models. Last error: ${lastError?.message}`);
+  throw lastErr ?? new Error("download falhou");
 }
+
+// =====================================================
+// OCR real com Mistral
+// =====================================================
+
+interface OcrChunkInput {
+  /** Primeira página ORIGINAL no PDF completo (1-indexed). */
+  firstPage: number;
+  /** Última página ORIGINAL no PDF completo (1-indexed). */
+  lastPage: number;
+  /** Bytes do sub-PDF. */
+  bytes: Uint8Array;
+  /** Label p/ logs. */
+  label: string;
+}
+
+interface OcrChunkOutput {
+  firstPage: number;
+  lastPage: number;
+  /** Markdown concatenado das páginas do chunk, com cabeçalhos de página. */
+  markdown: string;
+  /** Contagem de páginas efetivamente retornadas pelo Mistral. */
+  pagesReturned: number;
+}
+
+async function ocrPdfChunk(
+  input: OcrChunkInput,
+  opts: MistralOcrOptions,
+): Promise<OcrChunkOutput> {
+  const result = await ocrBytes(input.bytes, `${input.label}.pdf`, opts);
+  return materializeChunkPages(result, input.firstPage, input.lastPage);
+}
+
+/** Junta as pages do Mistral em um único markdown, preservando numeração original. */
+function materializeChunkPages(
+  result: MistralOcrResult,
+  firstPage: number,
+  lastPage: number,
+): OcrChunkOutput {
+  const expected = lastPage - firstPage + 1;
+  const received = result.pages.length;
+  const parts: string[] = [];
+
+  for (let i = 0; i < expected; i++) {
+    const originalPage = firstPage + i;
+    const page = result.pages[i];
+    if (!page) {
+      parts.push(`--- PÁGINA ${originalPage} ---\n[página ausente na resposta do OCR]`);
+      continue;
+    }
+    const body = page.markdown.trim();
+    parts.push(`--- PÁGINA ${originalPage} ---\n${body || "[vazia]"}`);
+  }
+
+  return {
+    firstPage,
+    lastPage,
+    markdown: parts.join("\n\n"),
+    pagesReturned: received,
+  };
+}
+
+// =====================================================
+// Pipeline principal
+// =====================================================
+
+interface PipelineResult {
+  markdown: string;
+  pageCount: number;
+  confidence: number;
+  docType: string;
+  chunksTotal: number;
+  chunksDone: number;
+  chunksFailed: number;
+  chunksErrors: string[];
+  provider: string;
+  durationMs: number;
+}
+
+async function runPipeline(
+  buffer: ArrayBuffer,
+  mimeType: string,
+  mistralOpts: MistralOcrOptions,
+  onProgress?: (done: number, total: number) => Promise<void>,
+): Promise<PipelineResult> {
+  const t0 = Date.now();
+
+  if (buffer.byteLength > ABSOLUTE_MAX_BYTES) {
+    throw new Error(
+      `Arquivo excede limite absoluto de ${(ABSOLUTE_MAX_BYTES / 1024 / 1024).toFixed(0)}MB`,
+    );
+  }
+
+  const isPdf = mimeType === "application/pdf";
+  const isImage = IMAGE_MIMES.has(mimeType);
+
+  if (!isPdf && !isImage) {
+    // Tenta tratar como PDF como fallback (alguns uploads têm octet-stream)
+    console.warn(`[ocr] MIME desconhecido '${mimeType}' — tentando como PDF`);
+  }
+
+  // Caminho de imagem: OCR direto via data URL (sem upload).
+  if (isImage) {
+    const base64 = arrayBufferToBase64(buffer);
+    const result = await runOcr(
+      { type: "image_url", image_url: `data:${mimeType};base64,${base64}` },
+      mistralOpts,
+    );
+    const out = materializeChunkPages(result, 1, Math.max(1, result.pages.length));
+    if (onProgress) await onProgress(1, 1);
+    const text = out.markdown;
+    return {
+      markdown: text,
+      pageCount: out.pagesReturned || 1,
+      confidence: estimateConfidence(result.pages),
+      docType: detectDocType(text),
+      chunksTotal: 1,
+      chunksDone: 1,
+      chunksFailed: 0,
+      chunksErrors: [],
+      provider: "mistral-ocr",
+      durationMs: Date.now() - t0,
+    };
+  }
+
+  // Caminho de PDF: inspecionar + dividir se necessário.
+  const info = await inspectPdf(buffer);
+  if (!info.isPdf) {
+    throw new Error("Arquivo não tem header PDF válido e não é imagem suportada");
+  }
+  if (info.pageCount > ABSOLUTE_MAX_PAGES) {
+    throw new Error(
+      `PDF tem ${info.pageCount} páginas, acima do limite absoluto ${ABSOLUTE_MAX_PAGES}`,
+    );
+  }
+
+  const pagesPerChunk =
+    buffer.byteLength > SIZE_SPLIT_THRESHOLD_BYTES
+      ? decidePagesPerChunk(info.pageCount) || 10
+      : decidePagesPerChunk(info.pageCount);
+
+  if (pagesPerChunk === 0) {
+    // PDF pequeno: OCR único via upload Mistral.
+    const result = await ocrBytes(new Uint8Array(buffer), "documento.pdf", mistralOpts);
+    const out = materializeChunkPages(result, 1, info.pageCount);
+    if (onProgress) await onProgress(1, 1);
+    return {
+      markdown: out.markdown,
+      pageCount: info.pageCount,
+      confidence: estimateConfidence(result.pages),
+      docType: detectDocType(out.markdown),
+      chunksTotal: 1,
+      chunksDone: 1,
+      chunksFailed: 0,
+      chunksErrors: [],
+      provider: "mistral-ocr",
+      durationMs: Date.now() - t0,
+    };
+  }
+
+  // Split.
+  const rawChunks = await splitPdfIntoChunks(buffer, pagesPerChunk);
+  const chunks: OcrChunkInput[] = rawChunks.map((c, i) => ({
+    firstPage: c.firstPage,
+    lastPage: c.lastPage,
+    bytes: c.bytes,
+    label: `chunk-${String(i + 1).padStart(3, "0")}`,
+  }));
+  console.log(`[ocr] PDF split em ${chunks.length} chunks (${pagesPerChunk} pg/chunk)`);
+
+  // Progress tracking compartilhado (atômico não garantido, mas aproxima).
+  let completedCount = 0;
+  const total = chunks.length;
+  if (onProgress) await onProgress(0, total);
+
+  const results = await runInParallel(
+    chunks,
+    async (chunk) => {
+      const r = await ocrPdfChunk(chunk, mistralOpts);
+      completedCount++;
+      if (onProgress) await onProgress(completedCount, total);
+      return r;
+    },
+    MAX_CONCURRENT_CHUNKS,
+  );
+
+  // Merge preservando ordem original (pelos indices) e tratando falhas parciais.
+  const parts: string[] = [];
+  const errors: string[] = [];
+  let ok = 0;
+  let fail = 0;
+  let pagesReturned = 0;
+
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const c = chunks[i];
+    if (r.ok) {
+      parts.push(r.value.markdown);
+      pagesReturned += r.value.pagesReturned;
+      ok++;
+    } else {
+      const label = `páginas ${c.firstPage}-${c.lastPage}`;
+      errors.push(`${label}: ${r.error}`);
+      parts.push(
+        `--- PÁGINA ${c.firstPage} ---\n[OCR FALHOU para ${label}: ${r.error}]`,
+      );
+      fail++;
+    }
+  }
+
+  const markdown = parts.join("\n\n");
+
+  return {
+    markdown,
+    pageCount: info.pageCount,
+    confidence: fail > 0 ? Math.max(0.3, 0.9 - fail * 0.1) : 0.95,
+    docType: detectDocType(markdown),
+    chunksTotal: total,
+    chunksDone: ok,
+    chunksFailed: fail,
+    chunksErrors: errors,
+    provider: "mistral-ocr",
+    durationMs: Date.now() - t0,
+  };
+}
+
+// =====================================================
+// HTTP handler
+// =====================================================
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -318,193 +370,149 @@ serve(async (req) => {
   }
 
   try {
-    const { document_id } = await req.json();
+    const { document_id } = await req.json().catch(() => ({}));
+    if (!document_id) return jsonResponse({ error: "document_id é obrigatório" }, 400);
 
-    if (!document_id) {
-      return new Response(
-        JSON.stringify({ error: "document_id is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
+    if (!MISTRAL_API_KEY) {
+      return jsonResponse(
+        { error: "MISTRAL_API_KEY não configurado. Adicione a variável nas Edge Function Secrets." },
+        500,
       );
-    }
-
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization header required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (!authHeader) return jsonResponse({ error: "Authorization header obrigatório" }, 401);
 
     const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
-    
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid authorization token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (authError || !user) return jsonResponse({ error: "Token inválido" }, 401);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Buscar documento
+    // Carrega documento e valida permissão.
     const { data: document, error: docError } = await supabase
       .from("documents")
       .select("*, cases!inner(criado_por)")
       .eq("id", document_id)
       .single();
-
-    if (docError || !document) {
-      return new Response(
-        JSON.stringify({ error: "Document not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Verificar permissão
+    if (docError || !document) return jsonResponse({ error: "Documento não encontrado" }, 404);
     if (document.cases.criado_por !== user.id) {
-      return new Response(
-        JSON.stringify({ error: "You don't have access to this document" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return jsonResponse({ error: "Sem acesso a este documento" }, 403);
     }
 
-    // Obter URL do arquivo (com fallback para signed URL)
-    let fileUrl = document.arquivo_url;
+    // Resolve signed URL com fallback entre buckets conhecidos.
+    let fileUrl = document.arquivo_url as string | null;
     if (!fileUrl && document.storage_path) {
-      const { data: signedUrlData } = await supabase.storage
-        .from("juriscalculo-documents")
-        .createSignedUrl(document.storage_path, 3600);
-      fileUrl = signedUrlData?.signedUrl;
+      const buckets = ["juriscalculo-documents", "case-documents", "documents"];
+      for (const b of buckets) {
+        const { data } = await supabase.storage.from(b).createSignedUrl(document.storage_path, 3600);
+        if (data?.signedUrl) { fileUrl = data.signedUrl; break; }
+      }
     }
-    if (!fileUrl && document.storage_path) {
-      // Fallback: tentar bucket alternativo
-      const { data: signedUrlData2 } = await supabase.storage
-        .from("case-documents")
-        .createSignedUrl(document.storage_path, 3600);
-      fileUrl = signedUrlData2?.signedUrl;
-    }
+    if (!fileUrl) return jsonResponse({ error: "Sem URL de download para o documento" }, 400);
 
-    if (!fileUrl) {
-      return new Response(
-        JSON.stringify({ error: "No file URL available for this document" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log(`[OCR] Starting for document ${document_id}, file: ${document.file_name}`);
-
-    // Atualizar status para em processamento
-    await supabase
-      .from("documents")
-      .update({
-        status: "ocr_running",
-        processing_started_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        error_message: null,
-      })
-      .eq("id", document_id);
+    // Marca como em processamento (estado intermediário).
+    await supabase.from("documents").update({
+      status: "ocr_running",
+      processing_started_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      error_message: null,
+      ocr_chunks_total: null,
+      ocr_chunks_done: null,
+    }).eq("id", document_id);
 
     try {
-      // Detectar MIME type com fallback
-      let mimeType = document.mime_type || "application/pdf";
-      if (!mimeType || mimeType === "application/octet-stream") {
-        const fileName = (document.file_name || document.storage_path || "").toLowerCase();
-        if (fileName.endsWith(".pdf")) mimeType = "application/pdf";
-        else if (fileName.endsWith(".png")) mimeType = "image/png";
-        else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) mimeType = "image/jpeg";
-        else if (fileName.endsWith(".webp")) mimeType = "image/webp";
-        else if (fileName.endsWith(".tiff") || fileName.endsWith(".tif")) mimeType = "image/tiff";
-        else mimeType = "application/pdf";
-      }
+      const buffer = await downloadWithRetry(fileUrl);
+      const mimeType = document.mime_type || detectMimeFromName(document.file_name);
 
-      // Executar OCR blindado
-      const result = await extractTextWithVision(fileUrl, mimeType, OPENAI_API_KEY);
+      const mistralOpts: MistralOcrOptions = { apiKey: MISTRAL_API_KEY };
 
-      console.log(`[OCR] COMPLETED: ${result.text.length} chars, ${result.pageCount} pages, confidence=${result.confidence}, model=${result.modelUsed}, attempts=${result.attempts}`);
+      const progress = async (done: number, total: number) => {
+        try {
+          await supabase.from("documents").update({
+            ocr_chunks_total: total,
+            ocr_chunks_done: done,
+            updated_at: new Date().toISOString(),
+          }).eq("id", document_id);
+        } catch (e) {
+          console.warn("[ocr] progress update falhou:", e);
+        }
+      };
 
-      // Atualizar documento com resultado completo
-      await supabase
-        .from("documents")
-        .update({
-          status: "ocr_done",
-          page_count: result.pageCount,
-          ocr_confidence: result.confidence,
-          ocr_confianca: result.confidence,
-          processing_completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          error_message: null,
-          metadata: {
-            ...(document.metadata || {}),
-            ocr_completed_at: new Date().toISOString(),
-            text_length: result.text.length,
-            extracted_text_preview: result.text.substring(0, 500),
-            ocr_model_used: result.modelUsed,
-            ocr_attempts: result.attempts,
-            ocr_doc_type: result.docType,
-            ocr_fields_extracted: result.fieldsExtracted,
-            ocr_image_quality: result.imageQuality,
-          },
-        })
-        .eq("id", document_id);
+      const result = await runPipeline(buffer, mimeType, mistralOpts, progress);
 
-      return new Response(
-        JSON.stringify({
-          success: true,
-          document_id,
-          status: "ocr_done",
-          page_count: result.pageCount,
-          text_length: result.text.length,
-          confidence: result.confidence,
-          doc_type: result.docType,
-          fields_extracted: result.fieldsExtracted,
-          image_quality: result.imageQuality,
-          model_used: result.modelUsed,
-          attempts: result.attempts,
-          extracted_text: result.text,
-          message: "OCR completed successfully. Call chunk-and-embed to continue.",
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      const finalStatus = result.chunksFailed === 0 ? "ocr_done" : "ocr_partial";
 
-    } catch (ocrError) {
-      console.error("[OCR] FINAL FAILURE:", ocrError);
-      
-      const errorMsg = ocrError instanceof Error ? ocrError.message : "OCR failed after all retries";
-      
-      await supabase
-        .from("documents")
-        .update({
-          status: "failed",
-          error_message: errorMsg,
-          processing_completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          retry_count: (document.retry_count || 0) + 1,
-          metadata: {
-            ...(document.metadata || {}),
-            ocr_failed_at: new Date().toISOString(),
-            ocr_error: errorMsg,
-          },
-        })
-        .eq("id", document_id);
+      await supabase.from("documents").update({
+        status: finalStatus,
+        page_count: result.pageCount,
+        ocr_confidence: result.confidence,
+        ocr_confianca: result.confidence,
+        ocr_chunks_total: result.chunksTotal,
+        ocr_chunks_done: result.chunksDone,
+        ocr_chunks_failed: result.chunksFailed,
+        processing_completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        error_message: result.chunksFailed > 0 ? result.chunksErrors.join(" | ").slice(0, 1000) : null,
+        metadata: {
+          ...(document.metadata || {}),
+          ocr_provider: result.provider,
+          ocr_completed_at: new Date().toISOString(),
+          ocr_duration_ms: result.durationMs,
+          ocr_doc_type: result.docType,
+          ocr_chunks_errors: result.chunksErrors.slice(0, 10),
+          text_length: result.markdown.length,
+          extracted_text_preview: result.markdown.slice(0, 500),
+        },
+      }).eq("id", document_id);
 
-      throw ocrError;
+      return jsonResponse({
+        success: true,
+        document_id,
+        status: finalStatus,
+        provider: result.provider,
+        page_count: result.pageCount,
+        text_length: result.markdown.length,
+        confidence: result.confidence,
+        doc_type: result.docType,
+        chunks: {
+          total: result.chunksTotal,
+          done: result.chunksDone,
+          failed: result.chunksFailed,
+          errors: result.chunksErrors,
+        },
+        duration_ms: result.durationMs,
+        extracted_text: result.markdown,
+        message:
+          result.chunksFailed === 0
+            ? "OCR concluído. Execute chunk-and-embed para indexação."
+            : "OCR parcialmente concluído. Algumas páginas falharam; revise error_message.",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[ocr] pipeline falhou:", err);
+      await supabase.from("documents").update({
+        status: "failed",
+        error_message: msg.slice(0, 500),
+        processing_completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        retry_count: (document.retry_count || 0) + 1,
+        metadata: {
+          ...(document.metadata || {}),
+          ocr_failed_at: new Date().toISOString(),
+          ocr_provider: "mistral-ocr",
+          ocr_error: msg.slice(0, 500),
+        },
+      }).eq("id", document_id);
+      return jsonResponse({ error: msg }, 500);
     }
-
-  } catch (error) {
-    console.error("[OCR] Fatal error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+  } catch (err) {
+    console.error("[ocr] erro fatal:", err);
+    return jsonResponse({ error: err instanceof Error ? err.message : "Erro desconhecido" }, 500);
   }
 });
