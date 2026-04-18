@@ -15,7 +15,7 @@ import Decimal from 'decimal.js';
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias, PjeVerba,
   PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig, PjeIRConfig,
-  PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
+  PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig, PjeMultasConfig,
   PjeIndiceRow, PjeINSSFaixaRow, PjeIRFaixaRow,
   PjeLiquidacaoResult, PjeVerbaResult, PjeOcorrenciaResult, PjeResumo,
   PjeFGTSResult, PjeCSResult, PjeIRResult, PjeSeguroResult,
@@ -98,6 +98,7 @@ export class PjeCalcEngineV3 {
   private salarioFamiliaDB: PjeSalarioFamiliaDB[];
   private excecoesSabado: PjeExcecaoSabado[];
   private salarioMinimoDB: PjeSalarioMinimoRow[];
+  private multasConfig: PjeMultasConfig;
 
   constructor(
     params: PjeParametros,
@@ -125,6 +126,9 @@ export class PjeCalcEngineV3 {
     salarioFamiliaDB: PjeSalarioFamiliaDB[] = [],
     excecoesSabado: PjeExcecaoSabado[] = [],
     salarioMinimoDB: PjeSalarioMinimoRow[] = [],
+    /** Multas CLT (467/477) + multas/indenizações individuais. Opcional para
+     *  retrocompatibilidade: chamadas antigas não quebram. */
+    multasConfig: PjeMultasConfig = { apurar_467: false, apurar_477: false },
   ) {
     this.params = params;
     this.historicos = historicos;
@@ -151,6 +155,7 @@ export class PjeCalcEngineV3 {
     this.salarioFamiliaDB = salarioFamiliaDB;
     this.excecoesSabado = excecoesSabado;
     this.salarioMinimoDB = salarioMinimoDB;
+    this.multasConfig = multasConfig;
   }
 
   /**
@@ -486,8 +491,35 @@ export class PjeCalcEngineV3 {
     }
     const salFamNoLiquido = this.salarioFamiliaConfig.compor_principal !== false ? valorSalarioFamilia : 0;
 
+    // Multas/Indenizações individuais (PJe-Calc > Multas e Indenizações).
+    // Cada item tem devedor/credor independentes:
+    //   devedor=reclamado + credor=reclamante → SOMA ao líquido (verba favorável ao trabalhador)
+    //   devedor=reclamante + credor=reclamado → SUBTRAI do líquido
+    //   credor=terceiro → nao afeta líquido_reclamante (é um destino à parte)
+    let multasIndenizacoesNoLiquido = 0;
+    const multasItens = this.multasConfig.multas_indenizacoes ?? [];
+    for (const m of multasItens) {
+      let valor = 0;
+      if (m.valor_tipo === 'informado' && m.valor != null) {
+        valor = m.valor;
+      } else if (m.valor_tipo === 'calculado' && m.aliquota != null) {
+        const basePct = m.base === 'principal'
+          ? principalCorrigido
+          : m.base === 'bruto'
+            ? principalBruto
+            : (principalCorrigido + jurosMora);
+        valor = basePct * m.aliquota / 100;
+      }
+      if (m.credor === 'reclamante' && m.devedor === 'reclamado') {
+        multasIndenizacoesNoLiquido += valor;
+      } else if (m.credor === 'reclamado' && m.devedor === 'reclamante') {
+        multasIndenizacoesNoLiquido -= valor;
+      }
+      // credor=terceiro não afeta líquido do reclamante
+    }
+
     const liquidoReclamante = +(principalCorrigido + jurosMora + fgtsNoLiquido + multa467 + multa523
-      + seguroNoLiquido + salFamNoLiquido
+      + seguroNoLiquido + salFamNoLiquido + multasIndenizacoesNoLiquido
       - csReclamante - irRetido - honorariosContratuais).toFixed(2);
 
     const resumo: PjeResumo = {

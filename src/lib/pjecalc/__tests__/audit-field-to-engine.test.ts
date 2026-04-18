@@ -351,6 +351,88 @@ describe('AUDITORIA: cada campo afeta o engine', () => {
     });
   });
 
+  describe('Multas e Indenizações items[]', () => {
+    function runWithMultas(multas: Parameters<typeof PjeCalcEngineV3>[28]['multas_indenizacoes']): number {
+      const engine = new PjeCalcEngineV3(
+        baselineParams(), [], [], [],
+        [baselineVerba()], [],
+        baselineFGTS(), baselineCS(), baselineIR(), baselineCorrecao(),
+        baselineHonorarios(), baselineCustas(), baselineSeguro(),
+        INDICES, FAIXAS,
+        [], [], [], undefined, undefined, undefined, [], [], [], [],
+        { apurar_467: false, apurar_477: false, multas_indenizacoes: multas },
+      );
+      return engine.liquidar().resumo.liquido_reclamante;
+    }
+
+    it('multa credor=reclamante + devedor=reclamado SOMA ao líquido', () => {
+      const b = baseline();
+      const com = runWithMultas([{
+        descricao: 'DANOS MORAIS',
+        devedor: 'reclamado',
+        credor: 'reclamante',
+        valor_tipo: 'informado',
+        base: 'principal',
+        valor: 5000,
+        indice: 'trabalhista',
+        aplicar_juros: false,
+        apurar_ir: false,
+      }]);
+      expect(com).toBeGreaterThan(b.liquido);
+      expect(com - b.liquido).toBeCloseTo(5000, 0);
+    });
+
+    it('multa calculada com alíquota 10% sobre principal', () => {
+      const b = baseline();
+      const com = runWithMultas([{
+        descricao: 'MULTA CONVENCIONAL',
+        devedor: 'reclamado',
+        credor: 'reclamante',
+        valor_tipo: 'calculado',
+        aliquota: 10,
+        base: 'principal',
+        indice: 'trabalhista',
+        aplicar_juros: false,
+        apurar_ir: false,
+      }]);
+      // Principal corrigido (do baseline) × 10% soma ao líquido
+      expect(com).toBeGreaterThan(b.liquido);
+    });
+
+    it('multa credor=reclamado + devedor=reclamante SUBTRAI do líquido', () => {
+      const b = baseline();
+      const com = runWithMultas([{
+        descricao: 'LITIGÂNCIA MÁ-FÉ',
+        devedor: 'reclamante',
+        credor: 'reclamado',
+        valor_tipo: 'informado',
+        base: 'principal',
+        valor: 2000,
+        indice: 'trabalhista',
+        aplicar_juros: false,
+        apurar_ir: false,
+      }]);
+      expect(com).toBeLessThan(b.liquido);
+    });
+
+    it('multa credor=terceiro NÃO afeta líquido', () => {
+      const b = baseline();
+      const com = runWithMultas([{
+        descricao: 'HONORÁRIO PERITO',
+        devedor: 'reclamado',
+        credor: 'terceiro',
+        terceiro_nome: 'Dr. Perito',
+        valor_tipo: 'informado',
+        base: 'principal',
+        valor: 3000,
+        indice: 'trabalhista',
+        aplicar_juros: false,
+        apurar_ir: false,
+      }]);
+      expect(com).toBeCloseTo(b.liquido, 0);
+    });
+  });
+
   describe('Honorários', () => {
     it('apurar_contratuais=true reduz liquido (desconta honor. contratuais)', () => {
       const off = runEngine({ honorarios: { apurar_contratuais: false } });
