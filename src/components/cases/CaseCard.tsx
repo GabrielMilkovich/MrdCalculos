@@ -51,7 +51,9 @@ const statusConfig = {
   em_analise: { label: "Em Análise", icon: Sparkles, step: 1 },
   calculado: { label: "Calculado", icon: Calculator, step: 2 },
   revisado: { label: "Revisado", icon: CheckCircle2, step: 3 },
-};
+} as const;
+
+const DEFAULT_STATUS_CFG = statusConfig.rascunho;
 
 export function CaseCard({
   id, cliente, numeroProcesso, tribunal, status, criadoEm,
@@ -59,9 +61,10 @@ export function CaseCard({
   snapshotCount = 0, totalBruto,
   arquivado = false, onArchive, onDelete,
 }: CaseCardProps) {
-  const cfg = statusConfig[status];
+  const cfg = (status && statusConfig[status]) || DEFAULT_STATUS_CFG;
   const progressPercent = Math.min(100, ((cfg.step + 1) / 4) * 100);
   const StatusIcon = cfg.icon;
+  const effectiveStatus = (status && statusConfig[status]) ? status : "rascunho";
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Para que o clique no menu/dropdown não dispare o Link.
@@ -76,10 +79,10 @@ export function CaseCard({
             <div
               className={cn(
                 "h-full transition-all duration-500 rounded-r-full",
-                status === "rascunho" && "bg-muted-foreground/30",
-                status === "em_analise" && "bg-accent",
-                status === "calculado" && "bg-[hsl(var(--success))]",
-                status === "revisado" && "bg-primary",
+                effectiveStatus === "rascunho" && "bg-muted-foreground/30",
+                effectiveStatus === "em_analise" && "bg-accent",
+                effectiveStatus === "calculado" && "bg-[hsl(var(--success))]",
+                effectiveStatus === "revisado" && "bg-primary",
               )}
               style={{ width: `${progressPercent}%` }}
             />
@@ -109,7 +112,7 @@ export function CaseCard({
                     <Archive className="h-3 w-3" /> Arquivado
                   </span>
                 )}
-                <span className={`status-badge status-${status} gap-1`}>
+                <span className={`status-badge status-${effectiveStatus} gap-1`}>
                   <StatusIcon className="h-3 w-3" />
                   {cfg.label}
                 </span>

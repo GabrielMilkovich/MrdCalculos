@@ -224,7 +224,7 @@ export default function Index() {
               ) : (
                 <div className="space-y-1">
                   {cases.slice(0, 6).map((c) => {
-                    const cfg = statusConfig[c.status];
+                    const cfg = statusConfig[c.status as keyof typeof statusConfig] || statusConfig.rascunho;
                     return (
                       <Link
                         key={c.id}
