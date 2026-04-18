@@ -13,6 +13,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ocrBytes } from "../_shared/mistral-ocr.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -897,57 +898,46 @@ O campo texto_ocr_completo DEVE conter o texto integral do documento.`;
 
 async function mistralOcrPdf(
   documentUrl: string,
-  mistralApiKey: string
+  mistralApiKey: string,
+  filename: string = "document.pdf"
 ): Promise<string> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    console.log(`[OCR] Mistral OCR API attempt ${attempt} (PDF via URL)`);
-    try {
-      const response = await fetch("https://api.mistral.ai/v1/ocr", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${mistralApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "mistral-ocr-latest",
-          document: {
-            type: "document_url",
-            document_url: documentUrl,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error(`[OCR] Mistral OCR API ${response.status}:`, errText.substring(0, 500));
-        if (response.status === 429) {
-          await delay(RETRY_DELAY_MS * attempt * 3);
-          continue;
-        }
-        // Inclui o body da resposta no Error para surgir no documents.error_message
-        // (ajuda a diferenciar "URL inacessível" de "PDF inválido" etc.)
-        lastError = new Error(`Mistral OCR API ${response.status}: ${errText.substring(0, 250)}`);
-        if (response.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
-        break;
-      }
-
-      const data = await response.json();
-      const pages = data.pages || [];
-      const fullText = pages.map((p: any) => p.markdown || p.text || "").join("\n\n---PAGE BREAK---\n\n");
-      if (fullText.length > 50) {
-        console.log(`[OCR] Mistral OCR API success: ${fullText.length} chars, ${pages.length} pages`);
-        return fullText;
-      }
-      lastError = new Error("OCR returned too little text");
-      continue;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      await delay(RETRY_DELAY_MS * attempt);
-    }
+  // Estratégia correta (doc Mistral): baixa o PDF da nossa storage, faz upload
+  // no Files API da Mistral (`purpose=ocr`), e manda OCR com `file_id`.
+  // Vantagens vs passar document_url direto:
+  //   - Zero latência Mistral → Supabase (Mistral já tem o arquivo)
+  //   - Funciona mesmo se a URL assinada expirar entre upload e OCR
+  //   - Evita edge cases com caracteres especiais na URL
+  //   - Mistral pode processar imediatamente sem TLS handshake adicional
+  const tDownload = Date.now();
+  const resp = await fetch(documentUrl);
+  if (!resp.ok) {
+    throw new Error(`Download do PDF falhou: HTTP ${resp.status} ${resp.statusText}`);
   }
-  throw new Error(`Mistral OCR failed: ${lastError?.message}`);
+  const buf = new Uint8Array(await resp.arrayBuffer());
+  console.log(`[OCR] PDF baixado em ${Date.now() - tDownload}ms (${buf.byteLength} bytes)`);
+
+  if (buf.byteLength === 0) throw new Error("PDF vazio após download");
+  if (buf.byteLength > 50 * 1024 * 1024) {
+    throw new Error(`PDF muito grande: ${(buf.byteLength / 1024 / 1024).toFixed(1)}MB (limite Mistral: 50MB)`);
+  }
+
+  const tOcr = Date.now();
+  const result = await ocrBytes(buf, filename, {
+    apiKey: mistralApiKey,
+    model: "mistral-ocr-latest",
+    timeoutMs: 180_000,
+    maxRetries: 3,
+    retryBaseMs: 1500,
+  });
+  console.log(`[OCR] Mistral upload+OCR em ${Date.now() - tOcr}ms (${result.pages.length} páginas)`);
+
+  const fullText = result.pages
+    .map((p) => p.markdown || "")
+    .join("\n\n---PAGE BREAK---\n\n");
+  if (fullText.length < 50) {
+    throw new Error(`OCR retornou pouco texto (${fullText.length} chars)`);
+  }
+  return fullText;
 }
 
 async function mistralOcrImage(
@@ -1715,7 +1705,7 @@ async function processDocumentInBackground(
         // Fallback to Mistral OCR
         console.log(`[EXTRACT] Native extraction insufficient, using Mistral OCR`);
         const tOcr = Date.now();
-        ocrText = await mistralOcrPdf(fileUrl, MISTRAL_API_KEY);
+        ocrText = await mistralOcrPdf(fileUrl, MISTRAL_API_KEY, doc.file_name || "document.pdf");
         console.log(`[TIMING] mistral_ocr_pdf=${Date.now() - tOcr}ms chars=${ocrText.length}`);
         extractionMethod = "mistral_ocr";
       }
