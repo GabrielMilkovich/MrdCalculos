@@ -23,6 +23,24 @@ import {
 } from "lucide-react";
 import { logger } from "@/lib/logger";
 
+/** Extrai mensagem real do FunctionsHttpError do supabase-js (body JSON). */
+async function unwrapFunctionsError(err: unknown): Promise<Error> {
+  try {
+    const anyErr = err as { message?: string; context?: Response };
+    if (anyErr?.context && typeof anyErr.context.json === "function") {
+      const body = await anyErr.context.json().catch(() => null);
+      if (body && typeof body === "object") {
+        const parts = [(body as any).error, (body as any).hint].filter(Boolean);
+        if (parts.length > 0) return new Error(parts.join(" — "));
+      }
+      const text = await anyErr.context.text().catch(() => "");
+      if (text) return new Error(text.slice(0, 500));
+    }
+    if (anyErr?.message) return new Error(anyErr.message);
+  } catch { /* fallthrough */ }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -136,7 +154,7 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
       const { data, error } = await supabase.functions.invoke("ocr-document", {
         body: { document_id: documentId },
       });
-      if (error) throw error;
+      if (error) throw await unwrapFunctionsError(error);
       if (!data?.success) throw new Error(data?.error || "OCR falhou");
       toast.success(`OCR concluído: ${data.page_count} páginas, ${data.text_length} caracteres`);
       await load();
@@ -163,7 +181,7 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
           mark_validated: true,
         },
       });
-      if (invokeErr) throw invokeErr;
+      if (invokeErr) throw await unwrapFunctionsError(invokeErr);
       toast.success("Validação enviada. A extração estruturada está rodando em background.");
       onValidated?.();
       onOpenChange(false);

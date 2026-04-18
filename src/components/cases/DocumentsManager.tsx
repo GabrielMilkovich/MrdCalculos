@@ -77,6 +77,31 @@ import {
 } from "@/components/ui/alert-dialog";
 import { logger } from "@/lib/logger";
 
+/**
+ * Extrai a mensagem real de um erro de supabase.functions.invoke.
+ *
+ * Quando a edge function retorna 4xx/5xx com JSON `{ error, hint }`, o cliente
+ * supabase-js levanta um FunctionsHttpError cuja `context` é uma Response.
+ * Por padrão, o `.message` é apenas "Edge Function returned a non-2xx status code".
+ * Este helper lê o body e constrói uma Error com a mensagem real do backend.
+ */
+async function unwrapFunctionsError(err: unknown): Promise<Error> {
+  try {
+    const anyErr = err as { message?: string; context?: Response };
+    if (anyErr?.context && typeof anyErr.context.json === "function") {
+      const body = await anyErr.context.json().catch(() => null);
+      if (body && typeof body === "object") {
+        const parts = [body.error, body.hint].filter(Boolean);
+        if (parts.length > 0) return new Error(parts.join(" — "));
+      }
+      const text = await anyErr.context.text().catch(() => "");
+      if (text) return new Error(text.slice(0, 500));
+    }
+    if (anyErr?.message) return new Error(anyErr.message);
+  } catch { /* fallthrough */ }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 interface Document {
   id: string;
   tipo: string;
@@ -376,7 +401,7 @@ export function DocumentsManager({
       const { error: invokeError } = await supabase.functions.invoke("extract-and-fill", {
         body: { document_id: documentId },
       });
-      if (invokeError) throw invokeError;
+      if (invokeError) throw await unwrapFunctionsError(invokeError);
 
       // Polling: aguarda status terminal (ready/failed) em até 3 minutos.
       // Intervalo cresce de 2s → 5s → 8s p/ não martelar o banco.
