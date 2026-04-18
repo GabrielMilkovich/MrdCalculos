@@ -402,7 +402,44 @@ export function DocumentsManager({
       setProcessingDocId(docId);
 
       try {
-        const { data, error } = await supabase.functions.invoke("extract-and-fill", {
+        // Step 1: Se doc não tem ocr_text, roda OCR primeiro (ocr-document)
+        const { data: docCheck } = await supabase
+          .from("documents")
+          .select("ocr_text, status")
+          .eq("id", docId)
+          .maybeSingle();
+
+        const hasOcr = docCheck && (docCheck as any).ocr_text &&
+                       ((docCheck as any).ocr_text as string).length >= 50;
+
+        if (!hasOcr) {
+          const { error: ocrErr } = await supabase.functions.invoke("ocr-document", {
+            body: { document_id: docId },
+          });
+          if (ocrErr) throw ocrErr;
+
+          // Aguarda OCR concluir antes de chamar extract-and-fill
+          let ocrDone = false;
+          for (let p = 0; p < 90 && !ocrDone; p++) {
+            await new Promise(r => setTimeout(r, 2000));
+            const { data: d } = await supabase
+              .from("documents")
+              .select("status, ocr_text")
+              .eq("id", docId)
+              .maybeSingle();
+            if (!d) continue;
+            if ((d as any).status === "failed") {
+              throw new Error("OCR falhou");
+            }
+            if ((d as any).ocr_text && ((d as any).ocr_text as string).length >= 50) {
+              ocrDone = true;
+            }
+          }
+          if (!ocrDone) throw new Error("OCR timeout (3min)");
+        }
+
+        // Step 2: extract-and-fill (usa ocr_text persistido no doc automaticamente)
+        const { error } = await supabase.functions.invoke("extract-and-fill", {
           body: { document_id: docId },
         });
         if (error) throw error;
