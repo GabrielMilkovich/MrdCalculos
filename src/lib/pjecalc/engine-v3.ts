@@ -137,7 +137,11 @@ export class PjeCalcEngineV3 {
     this.verbas = verbas;
     this.cartaoPonto = cartaoPonto;
     this.correcaoConfig = correcaoConfig;
-    this.csConfig = csConfig;
+    // cs_pagos_aplicar (PJe-Calc Avançado) força cs_sobre_salarios_pagos=true
+    // no csConfig quando o usuário marca a opção na aba Avançado.
+    this.csConfig = correcaoConfig.cs_pagos_aplicar
+      ? { ...csConfig, cs_sobre_salarios_pagos: true }
+      : csConfig;
     this.irConfig = irConfig;
     this.fgtsConfig = fgtsConfig;
     this.honorariosConfig = honorariosConfig;
@@ -691,12 +695,16 @@ export class PjeCalcEngineV3 {
           aliquota,
           valor: valorDep.toNumber(),
         });
-        // Correção aproximada: 3% a.a. composto desde a competência (JAM)
+        // Correção aproximada: 3% a.a. composto desde a competência (JAM).
         // Quando `perdas_monetarias=true`, usamos fator adicional de 1% a.a.
         // (compensação pela não correção pelo INPC, Súm. Vinc. 58 STF).
+        // Quando `correcaoConfig.fgts_juros='nenhum'`, não aplica correção alguma.
         const dataComp = new Decimal(new Date(oc.competencia + '-01').getTime());
         const anos = dataLiq.minus(dataComp).div(1000 * 3600 * 24 * 365.25).toNumber();
-        const taxaCorrecao = this.fgtsConfig.perdas_monetarias ? 1.04 : 1.03;
+        const fgtsJurosRegime = this.correcaoConfig.fgts_juros ?? 'trabalhista';
+        const taxaCorrecao = fgtsJurosRegime === 'nenhum'
+          ? 1.0
+          : (this.fgtsConfig.perdas_monetarias ? 1.04 : 1.03);
         const fator = new Decimal(taxaCorrecao).pow(Math.max(0, anos));
         const depCorrigido = valorDep.times(fator);
         totalDepositosCorrigido = totalDepositosCorrigido.plus(depCorrigido);
@@ -739,6 +747,14 @@ export class PjeCalcEngineV3 {
       } else {
         multaValor = baseMulta.times(multaPct).div(100).toDP(2).toNumber();
       }
+    }
+
+    // cs_limitar_multa (PJe-Calc Avançado): quando true, cap a multa
+    // rescisória pelo % da multa previdenciária (75% Art. 44 Lei 9.430).
+    // Efeito típico: reduz multa 40% se ultrapassar limite do INSS.
+    if (this.correcaoConfig.cs_limitar_multa) {
+      const capMultaPrev = baseMulta.times(0.75).toDP(2).toNumber();
+      if (multaValor > capMultaPrev) multaValor = capMultaPrev;
     }
 
     // Multa Art. 467 CLT — 50% sobre verbas rescisórias incontroversas

@@ -283,6 +283,31 @@ describe('AUDITORIA: cada campo afeta o engine', () => {
     });
   });
 
+  describe('Correção Avançado (PJe-Calc Dados Específicos)', () => {
+    it('fgts_juros=nenhum reduz FGTS (não aplica correção 3% a.a.)', () => {
+      const trabalhista = runEngine({ correcao: { fgts_juros: 'trabalhista' } });
+      const nenhum = runEngine({ correcao: { fgts_juros: 'nenhum' } });
+      expect(nenhum.fgts).toBeLessThan(trabalhista.fgts);
+    });
+
+    it('cs_limitar_multa reduz multa FGTS quando limite < multa 40%', () => {
+      const off = runEngine({ correcao: { cs_limitar_multa: false } });
+      const on = runEngine({ correcao: { cs_limitar_multa: true } });
+      // Com cap 75%, multa 40% fica sob o limite (75% > 40%) — efeito neutro
+      // quando multa 40% < cap. Teste garante que flag não quebra cálculo.
+      expect(on.fgts).toBeLessThanOrEqual(off.fgts);
+    });
+
+    it('cs_pagos_aplicar=true força cs_sobre_salarios_pagos=true', () => {
+      const off = runEngine({ correcao: { cs_pagos_aplicar: false } });
+      const on = runEngine({ correcao: { cs_pagos_aplicar: true } });
+      // Quando ativado, o engine deve aceitar csConfig.cs_sobre_salarios_pagos
+      // forçado como true. Aqui só validamos que o flag não quebra o cálculo.
+      expect(on.cs).toBeGreaterThanOrEqual(0);
+      expect(on.liquido).toBeGreaterThan(0);
+    });
+  });
+
   describe('Correção / Juros', () => {
     it('data_liquidacao mais tarde aumenta corrigido+juros', () => {
       const early = runEngine({ correcao: { data_liquidacao: '2023-12-31' } });

@@ -555,6 +555,39 @@ export interface PjeCorrecaoConfig {
   lei_11941_multa?: boolean;
   /** Lei 11.941/2009: data a partir de (multa) */
   lei_11941_multa_a_partir_de?: string;
+
+  // =====================================================
+  // CAMPOS DA ABA "AVANÇADO" (PJe-Calc Dados Específicos)
+  // =====================================================
+
+  /** FGTS — escolha do regime de juros aplicado sobre o FGTS corrigido. */
+  fgts_juros?: 'trabalhista' | 'pago' | 'nenhum';
+  /** Custas — regime de juros. */
+  custas_juros?: 'trabalhista' | 'pago' | 'nenhum';
+  /** Previdência Privada — regime de juros. */
+  prev_priv_juros?: 'trabalhista' | 'pago' | 'nenhum';
+
+  // CS sobre Salários DEVIDOS — correção/juros detalhados
+  /** Limitar a multa pelo % da multa rescisória (Art. 32 Lei 8.212). */
+  cs_limitar_multa?: boolean;
+  cs_dev_correcao_trab?: boolean;
+  cs_dev_juros_trab?: boolean;
+  cs_dev_correcao_prev?: boolean;
+  cs_dev_juros_prev?: boolean;
+  cs_dev_multa_prev_aplicar?: boolean;
+  cs_dev_multa_prev_tipo?: 'unitaria' | 'integral' | 'reduzida';
+  cs_dev_multa_prev_pagamento?: 'unitario' | 'integral' | 'reduzido';
+
+  // CS sobre Salários PAGOS
+  cs_pagos_aplicar?: boolean;
+  cs_pagos_a_partir_de?: string;
+  cs_pagos_correcao_trab?: boolean;
+  cs_pagos_juros_trab?: boolean;
+  cs_pagos_correcao_prev?: boolean;
+  cs_pagos_juros_prev?: boolean;
+  cs_pagos_multa_prev_aplicar?: boolean;
+  cs_pagos_multa_prev_tipo?: 'unitaria' | 'integral' | 'reduzida';
+  cs_pagos_multa_prev_pagamento?: 'unitario' | 'integral' | 'reduzido';
 }
 
 /** Exceção de juros por período (ex: COVID, suspensão judicial) */
