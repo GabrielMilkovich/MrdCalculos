@@ -451,8 +451,18 @@ serve(async (req) => {
 
       const finalStatus = result.chunksFailed === 0 ? "ocr_done" : "ocr_partial";
 
+      // Auto-classifica `tipo` baseado no texto OCR, mas SO quando o
+      // usuario nao fez escolha especifica (tipo atual e "outro" ou null).
+      // Nunca sobrescreve uma classificacao explicita do usuario.
+      const currentTipo = (document as any).tipo as string | null | undefined;
+      const shouldAutoSetTipo =
+        result.docType !== "outro" &&
+        (!currentTipo || currentTipo === "outro");
+      const newTipo = shouldAutoSetTipo ? result.docType : currentTipo;
+
       await supabase.from("documents").update({
         status: finalStatus,
+        ...(shouldAutoSetTipo ? { tipo: newTipo } : {}),
         page_count: result.pageCount,
         ocr_confidence: result.confidence,
         ocr_confianca: result.confidence,
