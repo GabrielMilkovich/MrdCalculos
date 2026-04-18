@@ -169,7 +169,11 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
       });
       if (error) throw await unwrapFunctionsError(error);
       if (!data?.success) throw new Error(data?.error || "OCR falhou");
-      toast.success(`OCR concluído: ${data.page_count} páginas, ${data.text_length} caracteres`);
+      toast.success(
+        data.status === "ocr_running"
+          ? "OCR iniciado. Aguarde — o texto aparece assim que concluir."
+          : `OCR concluído: ${data.page_count ?? "?"} páginas, ${data.text_length ?? "?"} caracteres`
+      );
       await load();
     } catch (err) {
       logger.error("OCR error", err);

@@ -508,7 +508,7 @@ async function retryWeakPages(
   nativePages?: string[],
   openaiApiKey?: string | null,
 ): Promise<{ markdown: string; recovered: number; recoveredBy: Record<string, number> }> {
-  const MAX_RETRIES_PER_DOC = 8;
+  const MAX_RETRIES_PER_DOC = 4;
   const weak = findWeakPages(markdown, totalPages);
   const recoveredBy: Record<string, number> = { native: 0, mistral: 0, gpt_vision: 0 };
   if (weak.length === 0) return { markdown, recovered: 0, recoveredBy };
@@ -753,113 +753,123 @@ serve(async (req) => {
       ocr_chunks_done: null,
     }).eq("id", document_id);
 
-    try {
-      const buffer = await downloadWithRetry(fileUrl);
-      const mimeType = document.mime_type || detectMimeFromName(document.file_name);
+    // ============================================================
+    // PROCESSAMENTO EM BACKGROUND via EdgeRuntime.waitUntil
+    //
+    // Motivo: OCR + retryWeakPages (native + Mistral individual +
+    // gpt-vision fallback) pode demorar muito (>150s wall-time
+    // limite do runtime Supabase). Se nao usar waitUntil, o runtime
+    // mata a invocacao antes do status virar 'ocr_done' e o doc
+    // fica preso em 'ocr_running' para sempre.
+    //
+    // Com waitUntil, a resposta HTTP volta em <1s e o background
+    // continua executando ate concluir. Cliente faz polling no
+    // documents.status pra saber quando terminou.
+    // ============================================================
+    const runInBackground = async () => {
+      try {
+        const buffer = await downloadWithRetry(fileUrl);
+        const mimeType = document.mime_type || detectMimeFromName(document.file_name);
 
-      const mistralOpts: MistralOcrOptions = { apiKey: MISTRAL_API_KEY };
+        const mistralOpts: MistralOcrOptions = { apiKey: MISTRAL_API_KEY };
 
-      const progress = async (done: number, total: number) => {
+        const progress = async (done: number, total: number) => {
+          try {
+            await supabase.from("documents").update({
+              ocr_chunks_total: total,
+              ocr_chunks_done: done,
+              updated_at: new Date().toISOString(),
+            }).eq("id", document_id);
+          } catch (e) {
+            console.warn("[ocr] progress update falhou:", e);
+          }
+        };
+
+        const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || null;
+        const result = await runPipeline(buffer, mimeType, mistralOpts, progress, OPENAI_API_KEY);
+
+        const finalStatus = result.chunksFailed === 0 ? "ocr_done" : "ocr_partial";
+
+        // Auto-classifica `tipo` so quando usuario nao fez escolha
+        // especifica (tipo atual e "outro" ou null).
+        const currentTipo = (document as any).tipo as string | null | undefined;
+        const shouldAutoSetTipo =
+          result.docType !== "outro" &&
+          (!currentTipo || currentTipo === "outro");
+        const newTipo = shouldAutoSetTipo ? result.docType : currentTipo;
+
+        await supabase.from("documents").update({
+          status: finalStatus,
+          ...(shouldAutoSetTipo ? { tipo: newTipo } : {}),
+          page_count: result.pageCount,
+          ocr_confidence: result.confidence,
+          ocr_confianca: result.confidence,
+          ocr_chunks_total: result.chunksTotal,
+          ocr_chunks_done: result.chunksDone,
+          ocr_chunks_failed: result.chunksFailed,
+          ocr_text: result.markdown.length > 10_000_000
+            ? result.markdown.slice(0, 10_000_000) + "\n\n[... truncado ...]"
+            : result.markdown,
+          ocr_validated: false,
+          ocr_validated_at: null,
+          ocr_validated_by: null,
+          processing_completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          error_message: result.chunksFailed > 0 ? result.chunksErrors.join(" | ").slice(0, 1000) : null,
+          metadata: {
+            ...(document.metadata || {}),
+            ocr_provider: result.provider,
+            ocr_completed_at: new Date().toISOString(),
+            ocr_duration_ms: result.durationMs,
+            ocr_doc_type: result.docType,
+            ocr_chunks_errors: result.chunksErrors.slice(0, 10),
+            text_length: result.markdown.length,
+            extracted_text_preview: result.markdown.slice(0, 500),
+          },
+        }).eq("id", document_id);
+        console.log(`[ocr] doc ${document_id} concluido: ${finalStatus} em ${result.durationMs}ms`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[ocr] pipeline falhou para doc ${document_id}:`, err);
         try {
           await supabase.from("documents").update({
-            ocr_chunks_total: total,
-            ocr_chunks_done: done,
+            status: "failed",
+            error_message: msg.slice(0, 500),
+            processing_completed_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
+            retry_count: (document.retry_count || 0) + 1,
+            metadata: {
+              ...(document.metadata || {}),
+              ocr_failed_at: new Date().toISOString(),
+              ocr_provider: "mistral-ocr",
+              ocr_error: msg.slice(0, 500),
+            },
           }).eq("id", document_id);
-        } catch (e) {
-          console.warn("[ocr] progress update falhou:", e);
+        } catch (updateErr) {
+          console.error(`[ocr] falha ao marcar doc como failed:`, updateErr);
         }
-      };
+      }
+    };
 
-      const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || null;
-      const result = await runPipeline(buffer, mimeType, mistralOpts, progress, OPENAI_API_KEY);
-
-      const finalStatus = result.chunksFailed === 0 ? "ocr_done" : "ocr_partial";
-
-      // Auto-classifica `tipo` baseado no texto OCR, mas SO quando o
-      // usuario nao fez escolha especifica (tipo atual e "outro" ou null).
-      // Nunca sobrescreve uma classificacao explicita do usuario.
-      const currentTipo = (document as any).tipo as string | null | undefined;
-      const shouldAutoSetTipo =
-        result.docType !== "outro" &&
-        (!currentTipo || currentTipo === "outro");
-      const newTipo = shouldAutoSetTipo ? result.docType : currentTipo;
-
-      await supabase.from("documents").update({
-        status: finalStatus,
-        ...(shouldAutoSetTipo ? { tipo: newTipo } : {}),
-        page_count: result.pageCount,
-        ocr_confidence: result.confidence,
-        ocr_confianca: result.confidence,
-        ocr_chunks_total: result.chunksTotal,
-        ocr_chunks_done: result.chunksDone,
-        ocr_chunks_failed: result.chunksFailed,
-        // Persiste o texto completo para o fluxo de validação no split-view.
-        // Limite de 10MB no banco (texto markdown raramente passa disso;
-        // se passar, trunca com aviso no final).
-        ocr_text: result.markdown.length > 10_000_000
-          ? result.markdown.slice(0, 10_000_000) + "\n\n[... truncado ...]"
-          : result.markdown,
-        ocr_validated: false, // sempre reseta validação em nova rodada de OCR
-        ocr_validated_at: null,
-        ocr_validated_by: null,
-        processing_completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        error_message: result.chunksFailed > 0 ? result.chunksErrors.join(" | ").slice(0, 1000) : null,
-        metadata: {
-          ...(document.metadata || {}),
-          ocr_provider: result.provider,
-          ocr_completed_at: new Date().toISOString(),
-          ocr_duration_ms: result.durationMs,
-          ocr_doc_type: result.docType,
-          ocr_chunks_errors: result.chunksErrors.slice(0, 10),
-          text_length: result.markdown.length,
-          extracted_text_preview: result.markdown.slice(0, 500),
-        },
-      }).eq("id", document_id);
-
-      return jsonResponse({
-        success: true,
-        document_id,
-        status: finalStatus,
-        provider: result.provider,
-        page_count: result.pageCount,
-        text_length: result.markdown.length,
-        confidence: result.confidence,
-        doc_type: result.docType,
-        chunks: {
-          total: result.chunksTotal,
-          done: result.chunksDone,
-          failed: result.chunksFailed,
-          errors: result.chunksErrors,
-        },
-        duration_ms: result.durationMs,
-        extracted_text: result.markdown,
-        message:
-          result.chunksFailed === 0
-            ? "OCR concluído. Execute chunk-and-embed para indexação."
-            : "OCR parcialmente concluído. Algumas páginas falharam; revise error_message.",
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[ocr] pipeline falhou:", err);
-      await supabase.from("documents").update({
-        status: "failed",
-        error_message: msg.slice(0, 500),
-        processing_completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        retry_count: (document.retry_count || 0) + 1,
-        metadata: {
-          ...(document.metadata || {}),
-          ocr_failed_at: new Date().toISOString(),
-          ocr_provider: "mistral-ocr",
-          ocr_error: msg.slice(0, 500),
-        },
-      }).eq("id", document_id);
-      return jsonResponse({ error: msg }, 500);
+    // Dispara em background. Fallback: se EdgeRuntime.waitUntil nao
+    // existir (dev local fora do runtime Supabase), roda síncrono.
+    const edgeRuntime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    if (edgeRuntime?.waitUntil) {
+      edgeRuntime.waitUntil(runInBackground());
+    } else {
+      // Nao bloqueia a resposta; dispara sem await.
+      runInBackground().catch((e) => console.error("[ocr] background sem waitUntil falhou:", e));
     }
+
+    // Resposta imediata — cliente faz polling em documents.status.
+    return jsonResponse({
+      success: true,
+      document_id,
+      status: "ocr_running",
+      message: "OCR iniciado em background. Faça polling em documents.status até ficar 'ocr_done'/'ocr_partial'/'failed'.",
+    });
   } catch (err) {
-    console.error("[ocr] erro fatal:", err);
+    console.error("[ocr] erro fatal no handler:", err);
     return jsonResponse({ error: err instanceof Error ? err.message : "Erro desconhecido" }, 500);
   }
 });

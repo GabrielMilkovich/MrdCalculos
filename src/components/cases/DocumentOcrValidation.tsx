@@ -188,7 +188,11 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
       });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "OCR falhou");
-      toast.success(`OCR concluído: ${data.page_count} pg, ${data.text_length} chars`);
+      toast.success(
+        data.status === "ocr_running"
+          ? "OCR rodando em background. Aguarde a conclusão..."
+          : `OCR concluído: ${data.page_count ?? "?"} pg, ${data.text_length ?? "?"} chars`
+      );
       await loadDocs();
     } catch (err) {
       logger.error("runOcr error", err);
