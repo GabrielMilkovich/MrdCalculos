@@ -148,15 +148,13 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
   }, [open, doc, dirty]);
 
   // Auto-dispara OCR ao abrir o modal se ainda não tem texto extraído.
-  // Garante que o usuário NUNCA vê tela vazia — OCR roda automaticamente
-  // nos casos em que o upload falhou em triggar o auto-OCR.
+  // Inclusive quando o doc está `failed` porque o erro tipicamente é
+  // "sem ocr_text" — nesse caso retentar OCR é exatamente o que queremos.
   useEffect(() => {
     if (!open || !doc || runningOcr) return;
     const hasText = !!(doc.ocr_text && doc.ocr_text.length >= 20);
     const isProcessing = doc.status === "ocr_running" || doc.status === "extracting";
-    const alreadyFailed = doc.status === "failed" && !!doc.error_message;
-    if (!hasText && !isProcessing && !alreadyFailed) {
-      // Status tipicamente "uploaded" — nunca rodou OCR. Dispara agora.
+    if (!hasText && !isProcessing) {
       runOcr();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

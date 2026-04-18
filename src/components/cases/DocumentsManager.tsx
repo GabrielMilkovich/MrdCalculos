@@ -402,7 +402,10 @@ export function DocumentsManager({
       setProcessingDocId(docId);
 
       try {
-        // Step 1: Se doc não tem ocr_text, roda OCR primeiro (ocr-document)
+        // Roda SOMENTE OCR. A extração estruturada (auto-preenchimento do
+        // pjecalc) NÃO é disparada aqui — o usuário precisa abrir o split
+        // view, revisar o texto e clicar "Confirmar e Extrair Dados" para
+        // cada documento quando estiver pronto.
         const { data: docCheck } = await supabase
           .from("documents")
           .select("ocr_text, status")
@@ -412,47 +415,28 @@ export function DocumentsManager({
         const hasOcr = docCheck && (docCheck as any).ocr_text &&
                        ((docCheck as any).ocr_text as string).length >= 50;
 
-        if (!hasOcr) {
-          const { error: ocrErr } = await supabase.functions.invoke("ocr-document", {
-            body: { document_id: docId },
-          });
-          if (ocrErr) throw ocrErr;
-
-          // Aguarda OCR concluir antes de chamar extract-and-fill
-          let ocrDone = false;
-          for (let p = 0; p < 90 && !ocrDone; p++) {
-            await new Promise(r => setTimeout(r, 2000));
-            const { data: d } = await supabase
-              .from("documents")
-              .select("status, ocr_text")
-              .eq("id", docId)
-              .maybeSingle();
-            if (!d) continue;
-            if ((d as any).status === "failed") {
-              throw new Error("OCR falhou");
-            }
-            if ((d as any).ocr_text && ((d as any).ocr_text as string).length >= 50) {
-              ocrDone = true;
-            }
-          }
-          if (!ocrDone) throw new Error("OCR timeout (3min)");
+        if (hasOcr) {
+          // Já tem OCR — nada a fazer nesse doc.
+          setBatchResults(prev => ({ ...prev, [docId]: "done" }));
+          successCount++;
+          onDocumentsChange();
+          continue;
         }
 
-        // Step 2: extract-and-fill (usa ocr_text persistido no doc automaticamente)
-        const { error } = await supabase.functions.invoke("extract-and-fill", {
+        const { error: ocrErr } = await supabase.functions.invoke("ocr-document", {
           body: { document_id: docId },
         });
-        if (error) throw error;
+        if (ocrErr) throw ocrErr;
       } catch (err) {
-        logger.error(`Trigger error for ${docId}`, err);
+        logger.error(`OCR trigger error for ${docId}`, err);
         setBatchResults(prev => ({ ...prev, [docId]: "error" }));
         errorCount++;
-        continue; // Skip to next document
+        continue;
       }
 
-      // Wait for THIS document to finish before starting the next one
+      // Aguarda OCR concluir (status = ocr_done / ocr_partial) ou falhar.
       const pollInterval = 3000;
-      const maxPolls = 80; // ~4 minutes max per document
+      const maxPolls = 100; // ~5 min max por documento (OCR longos são comuns)
       let finished = false;
 
       for (let poll = 0; poll < maxPolls && !finished; poll++) {
@@ -460,26 +444,26 @@ export function DocumentsManager({
 
         const { data: docStatus } = await supabase
           .from("documents")
-          .select("id, status")
+          .select("id, status, ocr_text")
           .eq("id", docId)
           .maybeSingle();
 
         if (!docStatus) continue;
 
-        if (docStatus.status === "extracted") {
+        const s = (docStatus as any).status;
+        const ocrLen = ((docStatus as any).ocr_text as string | null)?.length ?? 0;
+        if (s === "ocr_done" || s === "ocr_partial" || (s === "extracted" && ocrLen >= 50)) {
           setBatchResults(prev => ({ ...prev, [docId]: "done" }));
           successCount++;
           finished = true;
-        } else if (docStatus.status === "failed") {
+        } else if (s === "failed") {
           setBatchResults(prev => ({ ...prev, [docId]: "error" }));
           errorCount++;
           finished = true;
         }
-        // Still extracting — continue polling
       }
 
       if (!finished) {
-        // Timeout — mark as error and continue to next
         setBatchResults(prev => ({ ...prev, [docId]: "error" }));
         errorCount++;
       }
@@ -488,22 +472,13 @@ export function DocumentsManager({
     }
 
     setProcessingDocId(null);
-
     setIsBatchProcessing(false);
-    setProcessingDocId(null);
-
-    // After all documents processed, run full sync to configure all modules
-    if (successCount > 0) {
-      logger.warn('syncFromValidation removed');
-      queryClient.invalidateQueries({ queryKey: ['pjecalc_case_data'] });
-    }
 
     if (errorCount === 0) {
-      toast.success(`✅ Todos os ${successCount} documento(s) processados e dados preenchidos!`);
+      toast.success(`✅ OCR concluído em ${successCount} documento(s). Abra cada um no split view para revisar e extrair.`);
     } else {
-      toast.warning(`${successCount} processado(s), ${errorCount} com erro.`);
+      toast.warning(`OCR: ${successCount} ok, ${errorCount} com erro.`);
     }
-    queryClient.invalidateQueries({ queryKey: ['pjecalc_case_data'] });
     queryClient.invalidateQueries({ queryKey: ['cases'] });
     onDocumentsChange();
   }, [documents, caseId, onDocumentsChange, queryClient]);
@@ -813,7 +788,7 @@ export function DocumentsManager({
                 ) : (
                   <Sparkles className="h-4 w-4" />
                 )}
-                {isBatchProcessing ? "Extraindo..." : `Extrair Todos (${stats.pending})`}
+                {isBatchProcessing ? "Rodando OCR..." : `Rodar OCR de todos (${stats.pending})`}
               </Button>
             )}
           </div>
