@@ -1701,32 +1701,30 @@ async function processDocumentInBackground(
       console.log(`[EXTRACT] Using validated OCR text from user (${ocrTextOverride.length} chars) — skipping OCR`);
       ocrText = ocrTextOverride;
       extractionMethod = "validated_ocr";
+    } else if (doc.ocr_text && typeof doc.ocr_text === "string" && doc.ocr_text.length >= 50) {
+      // Se já tem OCR persistido no documento (rodado anteriormente), reusa.
+      // Evita re-OCR desnecessário e aproveita o trabalho do ocr-document.
+      console.log(`[EXTRACT] Using persisted ocr_text from documents row (${doc.ocr_text.length} chars)`);
+      ocrText = doc.ocr_text;
+      extractionMethod = "persisted_ocr";
     } else if (isPdf) {
-      // Baixa o PDF UMA vez e reusa bytes para native extract + OCR.
-      // Antes: downloadNative (file fetch) + downloadOCR (file fetch) = 2x fetch
-      // Agora: downloadOnce → native reuse → OCR reuse (se fallback)
-      const tDown = Date.now();
-      const resp = await fetch(fileUrl);
-      if (!resp.ok) throw new Error(`Download do PDF falhou: HTTP ${resp.status}`);
-      const pdfBytes = new Uint8Array(await resp.arrayBuffer());
-      console.log(`[TIMING] pdf_download=${Date.now() - tDown}ms size=${pdfBytes.byteLength}`);
-
-      const tNative = Date.now();
-      const nativeResult = await tryNativePdfExtraction(pdfBytes);
-      console.log(`[TIMING] native_pdf_extract=${Date.now() - tNative}ms method=${nativeResult.method} quality=${nativeResult.quality}`);
-
-      if (nativeResult.method === "native" && nativeResult.quality === "good") {
-        console.log(`[EXTRACT] Using NATIVE text extraction (${nativeResult.text.length} chars) — NO OCR NEEDED`);
-        ocrText = nativeResult.text;
-        extractionMethod = "native_pdf";
-      } else {
-        // Fallback to Mistral OCR — reusa bytes em memória, sem re-download.
-        console.log(`[EXTRACT] Native extraction insufficient, using Mistral OCR`);
-        const tOcr = Date.now();
-        ocrText = await mistralOcrPdfFromBytes(pdfBytes, MISTRAL_API_KEY, doc.file_name || "document.pdf");
-        console.log(`[TIMING] mistral_ocr_pdf=${Date.now() - tOcr}ms chars=${ocrText.length}`);
-        extractionMethod = "mistral_ocr";
+      // DELEGATE para ocr-document — essa função tem chunking inteligente de PDF
+      // (split de arquivos grandes em sub-PDFs, OCR paralelo, retry por chunk,
+      // tolera falha parcial). Essencial pra cartões de ponto de vários meses.
+      console.log(`[EXTRACT] Delegando OCR para ocr-document (com chunking)...`);
+      const tOcr = Date.now();
+      const { data: ocrData, error: ocrErr } = await supabase.functions.invoke("ocr-document", {
+        body: { document_id },
+      });
+      if (ocrErr) throw new Error(`ocr-document falhou: ${ocrErr.message || JSON.stringify(ocrErr)}`);
+      if (!ocrData?.success) throw new Error(`ocr-document sem sucesso: ${ocrData?.error || "erro desconhecido"}`);
+      const extractedText = ocrData.extracted_text as string;
+      if (!extractedText || extractedText.length < 20) {
+        throw new Error(`OCR retornou texto insuficiente (${extractedText?.length || 0} chars)`);
       }
+      console.log(`[TIMING] ocr_document_delegated=${Date.now() - tOcr}ms chars=${extractedText.length} pages=${ocrData.page_count}`);
+      ocrText = extractedText;
+      extractionMethod = "delegated_ocr_document";
     } else {
       // Images: download and use chat API with base64
       console.log(`[EXTRACT] Using Mistral chat API for image: ${doc.file_name}`);
