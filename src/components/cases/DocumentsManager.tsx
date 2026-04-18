@@ -14,7 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DocumentValidation } from "@/components/cases/DocumentValidation";
 import {
   Select,
   SelectContent,
@@ -56,7 +55,7 @@ import {
   Clock,
   Percent,
   Sparkles,
-  FileCheck2,
+  ShieldCheck,
 } from "lucide-react";
 import {
   Tooltip,
@@ -103,6 +102,8 @@ interface DocumentsManagerProps {
   caseId: string;
   documents: Document[];
   onDocumentsChange: () => void;
+  /** Navega para a aba Validação (preview + confirmar OCR por documento). */
+  onGoToValidation?: () => void;
 }
 
 const docTypeOptions = [
@@ -140,10 +141,11 @@ const statusConfig: Record<string, { label: string; icon: typeof Loader2; color:
   completed: { label: "Concluído", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
 };
 
-export function DocumentsManager({ 
-  caseId, 
-  documents, 
-  onDocumentsChange 
+export function DocumentsManager({
+  caseId,
+  documents,
+  onDocumentsChange,
+  onGoToValidation,
 }: DocumentsManagerProps) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -151,7 +153,6 @@ export function DocumentsManager({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingDocId, setProcessingDocId] = useState<string | null>(null);
-  const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string>("outro");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -795,6 +796,30 @@ export function DocumentsManager({
         </div>
       )}
 
+      {/* Banner: OCR concluído em pelo menos 1 doc → sugere ir para Validação */}
+      {onGoToValidation && documents.some(d => {
+        const s = (d.processing_status || d.status || "uploaded") as string;
+        return ["ocr_done", "ocr_partial", "extracted"].includes(s);
+      }) && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4 flex items-center gap-3">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            <div className="flex-1">
+              <div className="text-sm font-medium">OCR concluído em {documents.filter(d => {
+                const s = (d.processing_status || d.status || "uploaded") as string;
+                return ["ocr_done", "ocr_partial", "extracted"].includes(s);
+              }).length} documento(s)</div>
+              <div className="text-xs text-muted-foreground">
+                Revise o texto extraído na aba Validação antes de seguir para o cálculo.
+              </div>
+            </div>
+            <Button size="sm" onClick={onGoToValidation}>
+              Ir para Validação
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Lista de Documentos em Tabela */}
       {filteredDocuments.length > 0 && (
         <Card>
@@ -918,34 +943,6 @@ export function DocumentsManager({
                               <TooltipContent>Ver documento</TooltipContent>
                             </Tooltip>
                           )}
-                          
-                          {/* Único botão de ação: abre o split view de OCR/validação.
-                              Se OCR ainda não rodou (status=uploaded/failed), o modal
-                              oferece "Rodar OCR" e em seguida permite validar. */}
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-primary"
-                                onClick={() => setValidatingDocId(doc.id)}
-                                disabled={isProcessing}
-                              >
-                                {isProcessing ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <FileCheck2 className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {doc.ocr_validated
-                                ? "OCR validado — abrir split view"
-                                : ["ocr_done", "ocr_partial", "extracted"].includes(effectiveStatus)
-                                  ? "Validar OCR e extrair dados"
-                                  : "Abrir split view (rodar OCR + validar)"}
-                            </TooltipContent>
-                          </Tooltip>
 
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -994,18 +991,6 @@ export function DocumentsManager({
         </Card>
       )}
 
-      {/* Modal de validação OCR (split view: texto | PDF) */}
-      <DocumentValidation
-        open={validatingDocId !== null}
-        onOpenChange={(open) => !open && setValidatingDocId(null)}
-        documentId={validatingDocId}
-        onValidated={() => {
-          setValidatingDocId(null);
-          queryClient.invalidateQueries({ queryKey: ['pjecalc_case_data'] });
-          queryClient.invalidateQueries({ queryKey: ['cases'] });
-          onDocumentsChange();
-        }}
-      />
     </div>
   );
 }

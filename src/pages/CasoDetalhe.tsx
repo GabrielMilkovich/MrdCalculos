@@ -41,6 +41,7 @@ import { FactValidationView } from "@/components/cases/FactValidationView";
 import { ValidationViewV2 } from "@/components/cases/ValidationViewV2";
 import { CalculatorSuggestions } from "@/components/cases/CalculatorSuggestions";
 import { DocumentsManager } from "@/components/cases/DocumentsManager";
+import { DocumentOcrValidation } from "@/components/cases/DocumentOcrValidation";
 import { ProcessingMonitorPanel } from "@/components/cases/ProcessingMonitorPanel";
 import { CalculationDetailView } from "@/components/cases/CalculationDetailView";
 import { PetitionGenerator } from "@/components/cases/PetitionGenerator";
@@ -815,14 +816,49 @@ export default function CasoDetalhe() {
       case "documentos":
         return (
           <div className="space-y-5">
-            <DocumentsManager caseId={id!} documents={documents as any} onDocumentsChange={() => queryClient.invalidateQueries({ queryKey: ["documents", id] })} />
+            <DocumentsManager
+              caseId={id!}
+              documents={documents as any}
+              onDocumentsChange={() => queryClient.invalidateQueries({ queryKey: ["documents", id] })}
+              onGoToValidation={() => setActiveTab("validacao")}
+            />
           </div>
         );
 
       case "validacao":
         return (
           <div className="space-y-5">
-            {/* Extraction Controls */}
+            {/* OCR validation: revisão documento por documento */}
+            <DocumentOcrValidation
+              caseId={id!}
+              onGoToCalculo={async () => {
+                const toExtract = (documents as any[]).filter(
+                  (d) => d.ocr_validated && d.status !== "extracted"
+                );
+                if (toExtract.length === 0) {
+                  setActiveTab("calculo");
+                  return;
+                }
+                const t = toast.loading(`Preenchendo módulos com ${toExtract.length} documento(s)...`);
+                try {
+                  await Promise.allSettled(
+                    toExtract.map((d) =>
+                      supabase.functions.invoke("extract-and-fill", {
+                        body: { document_id: d.id },
+                      })
+                    )
+                  );
+                  toast.success("Dados enviados ao pjecalc. Abrindo aba Cálculo...", { id: t });
+                  queryClient.invalidateQueries({ queryKey: ["pjecalc_case_data"] });
+                  queryClient.invalidateQueries({ queryKey: ["documents", id] });
+                  setActiveTab("calculo");
+                } catch (err) {
+                  toast.error("Erro ao preencher: " + (err as Error).message, { id: t });
+                }
+              }}
+            />
+
+            {/* Extraction Controls (fatos) */}
             <Card className="bg-card/80">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between gap-4">
