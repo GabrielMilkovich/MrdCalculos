@@ -347,6 +347,8 @@ export interface PjeFGTSConfig {
   apurar: boolean;
   destino: 'pagar_reclamante' | 'recolher_conta';
   compor_principal: boolean;
+  /** Alíquota FGTS. 8% (padrão CLT Art. 15) ou 2% (aprendiz Lei 10.097/2000 Art. 15). */
+  aliquota?: 8 | 2;
   multa_apurar: boolean;
   multa_tipo: 'calculada' | 'informada';
   multa_percentual: number;
@@ -356,6 +358,13 @@ export interface PjeFGTSConfig {
   deduzir_saldo: boolean;
   lc110_10: boolean;
   lc110_05: boolean;
+  /** Multa Art. 467 CLT: 50% sobre verbas rescisórias incontroversas não pagas
+   *  até a 1ª audiência. Aplicada na base do FGTS quando apurada aqui. */
+  multa_art_467?: boolean;
+  /** Art. 477 §6 CLT: excluir o aviso prévio da base de cálculo da multa 40%. */
+  excluir_aviso_multa?: boolean;
+  /** Perdas monetárias sobre FGTS (correção JAM + 3% a.a. quando ativado). */
+  perdas_monetarias?: boolean;
 }
 
 export interface PjeCNAEAliquotas {

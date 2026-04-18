@@ -570,12 +570,23 @@ export class PjeCalcEngineV3 {
     const dataLiq = new Decimal(new Date(this.correcaoConfig.data_liquidacao).getTime());
     const depositos: { competencia: string; base: number; aliquota: number; valor: number }[] = [];
     let totalDepositosCorrigido = new Decimal(0);
-    const aliquota = 8;
+    // Alíquota configurável (8% padrão CLT, 2% aprendiz Lei 10.097/2000).
+    const aliquota = this.fgtsConfig.aliquota ?? 8;
+
+    // Rastreamos separadamente depósitos de AVISO PRÉVIO — Art. 477 §6 CLT
+    // permite excluí-los da base da multa 40% quando `excluir_aviso_multa=true`.
+    let totalDepositosAvisoCorrigido = new Decimal(0);
+    // Rastreamos verbas INCONTROVERSAS (não-disputadas) para multa Art. 467.
+    // No PJe-Calc, uma ocorrência é incontroversa quando `compor_principal=true`
+    // E a verba tem flag equivalente; aqui usamos compor_principal como proxy.
+    let baseArt467 = new Decimal(0);
 
     for (let i = 0; i < verbaResults.length; i++) {
       const vResult = verbaResults[i];
       const vUI = this.verbas[i];
       if (vUI.incidencias?.fgts === false) continue;
+
+      const isAviso = vUI.caracteristica === 'aviso_previo';
 
       for (const oc of vResult.ocorrencias) {
         if (oc.diferenca <= 0) continue;
@@ -586,11 +597,26 @@ export class PjeCalcEngineV3 {
           aliquota,
           valor: valorDep.toNumber(),
         });
-        // Correção aproximada: 3% a.a. composto desde a competência
+        // Correção aproximada: 3% a.a. composto desde a competência (JAM)
+        // Quando `perdas_monetarias=true`, usamos fator adicional de 1% a.a.
+        // (compensação pela não correção pelo INPC, Súm. Vinc. 58 STF).
         const dataComp = new Decimal(new Date(oc.competencia + '-01').getTime());
         const anos = dataLiq.minus(dataComp).div(1000 * 3600 * 24 * 365.25).toNumber();
-        const fator = new Decimal(1.03).pow(Math.max(0, anos));
-        totalDepositosCorrigido = totalDepositosCorrigido.plus(valorDep.times(fator));
+        const taxaCorrecao = this.fgtsConfig.perdas_monetarias ? 1.04 : 1.03;
+        const fator = new Decimal(taxaCorrecao).pow(Math.max(0, anos));
+        const depCorrigido = valorDep.times(fator);
+        totalDepositosCorrigido = totalDepositosCorrigido.plus(depCorrigido);
+
+        if (isAviso) {
+          totalDepositosAvisoCorrigido = totalDepositosAvisoCorrigido.plus(depCorrigido);
+        }
+
+        // Verbas "compor_principal=true" que não foram pagas até a audiência
+        // são base da multa Art. 467 (50%). Aproximamos "até audiência" como
+        // sendo todas as ocorrências com pago<devido (diferença>0).
+        if (vUI.compor_principal) {
+          baseArt467 = baseArt467.plus(oc.diferenca);
+        }
       }
     }
 
@@ -602,8 +628,12 @@ export class PjeCalcEngineV3 {
       ? saldoSaques.reduce((s, sq) => s + (sq.valor ?? 0), 0)
       : 0;
 
-    // Base da multa
+    // Base da multa — padrão: depósitos corrigidos
     let baseMulta = totalDepositosCorrigido;
+    // Art. 477 §6 CLT: excluir depósitos de aviso prévio da base da multa 40%.
+    if (this.fgtsConfig.excluir_aviso_multa) {
+      baseMulta = baseMulta.minus(totalDepositosAvisoCorrigido);
+    }
     if (this.fgtsConfig.multa_base === 'nominal') baseMulta = new Decimal(totalDepositos);
     else if (this.fgtsConfig.multa_base === 'devido_menos_saldo') baseMulta = baseMulta.minus(saldoDeduzido);
 
@@ -617,11 +647,17 @@ export class PjeCalcEngineV3 {
       }
     }
 
+    // Multa Art. 467 CLT — 50% sobre verbas rescisórias incontroversas
+    // não pagas até a 1ª audiência. Aplicada sobre a base DIFERENCA (nominal).
+    const multa467 = this.fgtsConfig.multa_art_467
+      ? baseArt467.times(0.5).toDP(2).toNumber()
+      : 0;
+
     // LC 110/2001 — incide sobre base FGTS corrigida
     const lc110_10 = this.fgtsConfig.lc110_10 ? totalDepositosCorrigido.times(10).div(100).toDP(2).toNumber() : 0;
     const lc110_05 = this.fgtsConfig.lc110_05 ? totalDepositosCorrigido.times(5).div(100).toDP(2).toNumber() : 0;
 
-    const totalFgts = +(totalDepositosCorrigido.toNumber() - saldoDeduzido + multaValor + lc110_10 + lc110_05).toFixed(2);
+    const totalFgts = +(totalDepositosCorrigido.toNumber() - saldoDeduzido + multaValor + multa467 + lc110_10 + lc110_05).toFixed(2);
 
     return {
       depositos,

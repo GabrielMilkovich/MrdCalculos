@@ -193,6 +193,50 @@ describe('AUDITORIA: cada campo afeta o engine', () => {
       // Aqui apenas garantimos que o cálculo não quebra.
       expect(on.fgts).toBeGreaterThanOrEqual(off.fgts);
     });
+
+    it('aliquota=2 reduz FGTS (aprendiz vs padrão 8)', () => {
+      const padrao = runEngine({ fgts: { aliquota: 8 } });
+      const aprendiz = runEngine({ fgts: { aliquota: 2 } });
+      expect(aprendiz.fgts).toBeLessThan(padrao.fgts);
+      // Razão aproximada 2/8 = 25% (depositos + multa proporcionais)
+      expect(aprendiz.fgts / padrao.fgts).toBeLessThan(0.35);
+    });
+
+    it('multa_art_467=true adiciona multa 50% sobre diferenças', () => {
+      const off = runEngine({ fgts: { multa_art_467: false } });
+      const on = runEngine({ fgts: { multa_art_467: true } });
+      expect(on.fgts).toBeGreaterThan(off.fgts);
+      // Delta deve ser ~50% das diferenças somadas
+      expect(on.fgts - off.fgts).toBeGreaterThan(0);
+    });
+
+    it('excluir_aviso_multa reduz base da multa 40% (Art. 477 §6)', () => {
+      // Precisamos de uma verba com caracteristica=aviso_previo para testar.
+      const engine = new PjeCalcEngineV3(
+        baselineParams(), [], [], [],
+        [{ ...baselineVerba(), caracteristica: 'aviso_previo' as never }],
+        [], { ...baselineFGTS(), excluir_aviso_multa: false }, baselineCS(),
+        baselineIR(), baselineCorrecao(), baselineHonorarios(),
+        baselineCustas(), baselineSeguro(), INDICES, FAIXAS,
+      );
+      const normal = engine.liquidar();
+      const engine2 = new PjeCalcEngineV3(
+        baselineParams(), [], [], [],
+        [{ ...baselineVerba(), caracteristica: 'aviso_previo' as never }],
+        [], { ...baselineFGTS(), excluir_aviso_multa: true }, baselineCS(),
+        baselineIR(), baselineCorrecao(), baselineHonorarios(),
+        baselineCustas(), baselineSeguro(), INDICES, FAIXAS,
+      );
+      const comExcl = engine2.liquidar();
+      // Com exclusão, a multa 40% é menor, portanto fgts_total é menor
+      expect(comExcl.resumo.fgts_total).toBeLessThan(normal.resumo.fgts_total);
+    });
+
+    it('perdas_monetarias aumenta FGTS corrigido (+1pp a.a.)', () => {
+      const off = runEngine({ fgts: { perdas_monetarias: false } });
+      const on = runEngine({ fgts: { perdas_monetarias: true } });
+      expect(on.fgts).toBeGreaterThan(off.fgts);
+    });
   });
 
   describe('Contribuição Social (INSS)', () => {

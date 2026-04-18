@@ -687,6 +687,8 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
     // compõe o liquido_exequente. Default false por compatibilidade, mas quando
     // o PJC diz SIM, o engine deve incluir FGTS no líquido do reclamante.
     compor_principal: fgtsConf?.compor_principal ?? false,
+    // Alíquota: 8% padrão, 2% quando PJC indicar aprendiz.
+    aliquota: (fgtsConf as unknown as { aliquota?: 8 | 2 })?.aliquota ?? 8,
     multa_apurar: true,
     multa_tipo: 'calculada',
     multa_percentual: fgtsConf?.multa_percentual ?? 40,
@@ -695,6 +697,10 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
     deduzir_saldo: false,
     lc110_10: fgtsConf?.lc110_10 ?? false,
     lc110_05: fgtsConf?.lc110_05 ?? false,
+    // Campos novos lidos do PJC XML (quando presentes) — default false.
+    multa_art_467: (fgtsConf as unknown as { multa_art_467?: boolean })?.multa_art_467 ?? false,
+    excluir_aviso_multa: (fgtsConf as unknown as { excluir_aviso_multa?: boolean })?.excluir_aviso_multa ?? false,
+    perdas_monetarias: (fgtsConf as unknown as { perdas_monetarias?: boolean })?.perdas_monetarias ?? false,
   };
 }
 
