@@ -1711,12 +1711,26 @@ async function processDocumentInBackground(
       // DELEGATE para ocr-document — essa função tem chunking inteligente de PDF
       // (split de arquivos grandes em sub-PDFs, OCR paralelo, retry por chunk,
       // tolera falha parcial). Essencial pra cartões de ponto de vários meses.
+      // IMPORTANTE: ocr-document exige Authorization header do usuário (valida
+      // ownership do case). Repassamos o header que recebemos.
       console.log(`[EXTRACT] Delegando OCR para ocr-document (com chunking)...`);
       const tOcr = Date.now();
       const { data: ocrData, error: ocrErr } = await supabase.functions.invoke("ocr-document", {
         body: { document_id },
+        headers: userAuthHeader ? { Authorization: userAuthHeader } : undefined,
       });
-      if (ocrErr) throw new Error(`ocr-document falhou: ${ocrErr.message || JSON.stringify(ocrErr)}`);
+      if (ocrErr) {
+        // Tenta ler body pra surfar mensagem mais detalhada (ex.: "Token inválido").
+        let detail = ocrErr.message || JSON.stringify(ocrErr);
+        try {
+          const ctx = (ocrErr as any).context;
+          if (ctx?.json) {
+            const b = await ctx.json().catch(() => null);
+            if (b?.error) detail = `${b.error}${b.hint ? " — " + b.hint : ""}`;
+          }
+        } catch { /* ignore */ }
+        throw new Error(`ocr-document falhou: ${detail}`);
+      }
       if (!ocrData?.success) throw new Error(`ocr-document sem sucesso: ${ocrData?.error || "erro desconhecido"}`);
       const extractedText = ocrData.extracted_text as string;
       if (!extractedText || extractedText.length < 20) {
@@ -1938,6 +1952,9 @@ serve(async (req) => {
     const ocr_text_override: string | undefined = body?.ocr_text;
     // Flag opcional: marcar o documento como validado ao concluir.
     const mark_validated: boolean = body?.mark_validated === true;
+    // Captura o auth header do usuário (precisa repassar p/ ocr-document que
+    // exige Bearer token válido de usuário para validar ownership do case).
+    const userAuthHeader = req.headers.get("Authorization") || "";
 
     if (!document_id) {
       return new Response(
