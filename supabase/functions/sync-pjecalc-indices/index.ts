@@ -1,16 +1,23 @@
 /**
  * sync-pjecalc-indices — Edge Function
  *
- * Fetches official monetary correction indices from BCB (SELIC, TR) and IBGE (IPCA-E)
- * and writes directly to `pjecalc_correcao_monetaria`, the table the engine reads.
+ * Fetches official monetary correction indices from BCB (SELIC, TR) and IBGE (IPCA-E, IPCA,
+ * INPC) / FGV (IGP-M, IGP-DI) via BCB API and writes directly to `pjecalc_correcao_monetaria`.
  *
  * BCB Open Data series:
- *   - SELIC efetiva mensal: série 4390
- *   - IPCA-E (IBGE via BCB portal): série 10764
- *   - TR mensal: série 226 (acumulada mensal)
+ *   - SELIC efetiva mensal:  4390
+ *   - IPCA-E (IBGE, mensal): 10764
+ *   - IPCA (IBGE, mensal):     433
+ *   - INPC (IBGE, mensal):     188
+ *   - IGP-M (FGV, mensal):     189
+ *   - IGP-DI (FGV, mensal):    190
+ *   - TR mensal:               226
+ *
+ * Also derives:
+ *   - TR_FGTS = TR + 3%a.a. compound (FGTS JAM approximation)
  *
  * Called by:
- *   - pg_cron schedule (1st of every month at 08:00 BRT)
+ *   - pg_cron schedule (5th of every month at 11:00 UTC)
  *   - Manual trigger from admin UI
  *
  * Returns JSON: { ok: boolean, results: Record<string, SyncResult> }
@@ -25,11 +32,16 @@ const corsHeaders = {
 
 const BCB_API = "https://api.bcb.gov.br/dados/serie/bcdata.sgs";
 
-// BCB series IDs mapped to pjecalc_correcao_monetaria indice names
-const SERIES: Array<{ serieId: number; indice: string; fonte: string; scaleFactor?: number }> = [
-  { serieId: 4390,  indice: 'SELIC',  fonte: 'BCB' },    // SELIC efetiva mensal (%)
-  { serieId: 10764, indice: 'IPCA-E', fonte: 'IBGE' },   // IPCA-E mensal (%)
-  { serieId: 226,   indice: 'TR',     fonte: 'BCB' },    // TR mensal (%) — acumulada mensal
+// BCB series IDs mapped to pjecalc_correcao_monetaria indice names.
+// All series below publish monthly variation percentages (e.g. 0.42 = 0.42%).
+const SERIES: Array<{ serieId: number; indice: string; fonte: string }> = [
+  { serieId: 4390,  indice: 'SELIC',  fonte: 'BCB'  }, // SELIC efetiva mensal
+  { serieId: 10764, indice: 'IPCA-E', fonte: 'IBGE' }, // IPCA-E mensal
+  { serieId: 433,   indice: 'IPCA',   fonte: 'IBGE' }, // IPCA mensal
+  { serieId: 188,   indice: 'INPC',   fonte: 'IBGE' }, // INPC mensal
+  { serieId: 189,   indice: 'IGP-M',  fonte: 'FGV'  }, // IGP-M mensal
+  { serieId: 190,   indice: 'IGP-DI', fonte: 'FGV'  }, // IGP-DI mensal
+  { serieId: 226,   indice: 'TR',     fonte: 'BCB'  }, // TR mensal
 ];
 
 interface BcbPoint { data: string; valor: string; }
