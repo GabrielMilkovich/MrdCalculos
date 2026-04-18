@@ -550,9 +550,14 @@ export class PjeCalcEngineV3 {
    * - LC 110/2001: +10% (Art. 1°) e +5% (Art. 2°) opcionais
    */
   private calcularFGTS(verbaResults: PjeVerbaResult[]): PjeFGTSResult {
-    // Sempre calcula se houver verba com incidência FGTS + diferença positiva.
-    // O flag fgtsConfig.apurar indica se HÁ SALDO INICIAL; mas as diferenças
-    // reconhecidas no processo geram FGTS+multa mesmo sem saldo prévio.
+    // Respeita o flag `apurar` explicitamente: quando o usuário desmarca
+    // "Apurar FGTS" na UI, NENHUM depósito é gerado (apurar=false vira zero).
+    // Esse comportamento espelha o PJe-Calc original: o módulo FGTS pode ser
+    // desligado inteiro para casos como PLR pura, indenizações sem vínculo, etc.
+    if (this.fgtsConfig.apurar === false) {
+      return { depositos: [], total_depositos: 0, multa_valor: 0, lc110_10: 0, lc110_05: 0, saldo_deduzido: 0, total_fgts: 0 };
+    }
+    // Caso contrário, calcula se houver verba com incidência FGTS + diferença positiva.
     const temIncidenciaFgts = this.verbas.some((v, i) => {
       const inc = v.incidencias?.fgts !== false;
       const temDif = (verbaResults[i]?.total_diferenca ?? 0) > 0;

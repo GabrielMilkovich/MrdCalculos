@@ -5,11 +5,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import * as svc from "@/lib/pjecalc/service";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Calculator, Upload, Download } from "lucide-react";
+import { Trash2, Loader2, Calculator, Upload, Download } from "lucide-react";
 import { parseCartaoPontoCSV, gerarCSVModelo } from "@/lib/pjecalc/csv-import";
 
 interface Props { caseId: string; dataAdmissao?: string; dataDemissao?: string; }
 
+/**
+ * Cartão de Ponto — layout PJe-Calc (apuração mensal por competência).
+ *
+ * Colunas (conforme tela "Ocorrências do Cartão de Ponto"):
+ *   Período | Dias Trabalhados | Feriados e Repousos Trab.
+ *   Hs Ext Diárias | Hs Ext em Feriados | Hs Ext em Repousos | Hs Ext em F+R
+ *   Hs Interjornada | Hs Interjornada Feriado | Hs Interjornada Repouso
+ *   Hs Interjornada Trabalhadas | Repousos Trabalhados
+ *
+ * Todas as colunas são editáveis inline. Mantemos os campos legados
+ * (horas_extras_50/100, dsr_horas) para retrocompatibilidade com CSVs
+ * existentes; eles são derivados a partir das colunas situacionais.
+ */
 export function ModuloCartaoPonto({ caseId, dataAdmissao, dataDemissao }: Props) {
   const qc = useQueryClient();
   const [generating, setGenerating] = useState(false);
@@ -79,11 +92,36 @@ export function ModuloCartaoPonto({ caseId, dataAdmissao, dataDemissao }: Props)
     URL.revokeObjectURL(url);
   };
 
+  // Colunas situacionais PJe-Calc + legadas (compatibilidade)
+  const COLUMNS: Array<{ key: string; label: string; hint?: string; legacy?: boolean }> = [
+    { key: 'dias_trabalhados', label: 'Dias Trab.' },
+    { key: 'feriados_repousos_trabalhados', label: 'Fer. + Rep. Trab.' },
+    { key: 'hs_ext_diarias', label: 'Hs Ext Diárias' },
+    { key: 'hs_ext_feriados', label: 'Hs Ext em Feriados' },
+    { key: 'hs_ext_repousos', label: 'Hs Ext em Repousos' },
+    { key: 'hs_ext_feriados_repousos', label: 'Hs Ext em F+R' },
+    { key: 'hs_interjornada', label: 'Hs Interjornada' },
+    { key: 'hs_interjornada_feriado', label: 'Hs Interj. Feriado' },
+    { key: 'hs_interjornada_repouso', label: 'Hs Interj. Repouso' },
+    { key: 'hs_interjornada_trabalhada', label: 'Hs Interj. Trab.' },
+    { key: 'repousos_trabalhados', label: 'Repousos Trab.' },
+    // Legados mantidos p/ CSVs existentes; ficam colapsáveis em segunda linha
+    { key: 'horas_extras_50', label: 'HE 50% (legado)', legacy: true },
+    { key: 'horas_extras_100', label: 'HE 100% (legado)', legacy: true },
+    { key: 'dsr_horas', label: 'DSR (legado)', legacy: true },
+  ];
+
+  const [showLegacy, setShowLegacy] = useState(false);
+  const visibleColumns = COLUMNS.filter(c => !c.legacy || showLegacy);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Cartão de Ponto</h2>
+        <h2 className="text-lg font-semibold">Cartão de Ponto — Ocorrências por Competência</h2>
         <div className="flex gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setShowLegacy(!showLegacy)} title="Mostrar/ocultar colunas legadas">
+            {showLegacy ? 'Ocultar' : 'Mostrar'} legadas
+          </Button>
           <Button size="sm" variant="ghost" onClick={downloadModelo} title="Baixar modelo CSV">
             <Download className="h-4 w-4 mr-1" /> Modelo
           </Button>
@@ -99,30 +137,33 @@ export function ModuloCartaoPonto({ caseId, dataAdmissao, dataDemissao }: Props)
         </div>
       </div>
       {registros.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Clique em "Gerar Competências" para criar o cartão de ponto.</CardContent></Card>
+        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Clique em "Gerar" para criar o cartão de ponto.</CardContent></Card>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto border border-border rounded">
           <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="bg-muted/50">
-                <th className="p-2 text-left font-medium">Comp.</th>
-                <th className="p-2 text-center font-medium">D.Úteis</th>
-                <th className="p-2 text-center font-medium">D.Trab.</th>
-                <th className="p-2 text-center font-medium">HE 50%</th>
-                <th className="p-2 text-center font-medium">HE 100%</th>
-                <th className="p-2 text-center font-medium">H.Not.</th>
-                <th className="p-2 text-center font-medium">Int.Supr.</th>
-                <th className="p-2 text-center font-medium">DSR</th>
+              <tr className="bg-muted/50 border-b border-border">
+                <th className="p-2 text-left font-medium sticky left-0 bg-muted/50 z-10">Período</th>
+                {visibleColumns.map(col => (
+                  <th key={col.key} className={`p-2 text-center font-medium ${col.legacy ? 'text-muted-foreground italic' : ''}`}>
+                    {col.label}
+                  </th>
+                ))}
                 <th className="p-2 w-8"></th>
               </tr>
             </thead>
             <tbody>
               {registros.map((r) => (
                 <tr key={r.id} className="border-b border-border/50 hover:bg-muted/20">
-                  <td className="p-2 font-mono font-medium">{r.competencia}</td>
-                  {(["dias_uteis","dias_trabalhados","horas_extras_50","horas_extras_100","horas_noturnas","intervalo_suprimido","dsr_horas"] as const).map(field => (
-                    <td key={field} className="p-1 text-center">
-                      <Input type="number" step="0.01" defaultValue={r[field] || 0} className="h-7 text-xs w-16 text-center mx-auto" onBlur={e => updateField(r.id, field, parseFloat(e.target.value) || 0)} />
+                  <td className="p-2 font-mono font-medium sticky left-0 bg-background">{r.competencia}</td>
+                  {visibleColumns.map(col => (
+                    <td key={col.key} className="p-1 text-center">
+                      <Input
+                        type="number" step="0.01"
+                        defaultValue={(r as Record<string, unknown>)[col.key] as number ?? 0}
+                        className="h-7 text-xs w-16 text-center mx-auto"
+                        onBlur={e => updateField(r.id, col.key, parseFloat(e.target.value) || 0)}
+                      />
                     </td>
                   ))}
                   <td className="p-1">
@@ -136,6 +177,11 @@ export function ModuloCartaoPonto({ caseId, dataAdmissao, dataDemissao }: Props)
           </table>
         </div>
       )}
+      <p className="text-[10px] text-muted-foreground">
+        Colunas situacionais (PJe-Calc): horas extras discriminadas por dia normal vs feriado/repouso, permitindo aplicação de
+        alíquotas específicas (100% em repouso/feriado conforme Súm. 146 TST + art. 9° Lei 605/49). Colunas legadas
+        (HE 50%/100%) permanecem para compatibilidade com CSVs antigos.
+      </p>
     </div>
   );
 }

@@ -166,17 +166,11 @@ const baseline = () => runEngine({});
 
 describe('AUDITORIA: cada campo afeta o engine', () => {
   describe('FGTS', () => {
-    it('apurar=false → fgts_total é menor que com apurar=true', () => {
-      // KNOWN ISSUE: a flag `apurar` isoladamente não zera o fgts_total
-      // quando há verbas com `incidencias.fgts=true`. O engine sempre
-      // computa 8% para compor o resumo. Para ZERAR FGTS, seta-se
-      // verba.incidencias.fgts=false. Este teste verifica que o flag
-      // ainda afeta o resultado final (através de cadeias secundárias).
+    it('apurar=false zera fgts_total', () => {
       const b = baseline();
-      const off = runEngine({ fgts: { apurar: false, multa_apurar: false } });
+      const off = runEngine({ fgts: { apurar: false } });
       expect(b.fgts).toBeGreaterThan(0);
-      // sem multa ao menos o valor deve cair
-      expect(off.fgts).toBeLessThan(b.fgts);
+      expect(off.fgts).toBe(0);
     });
 
     it('compor_principal=true inclui FGTS no líquido', () => {
