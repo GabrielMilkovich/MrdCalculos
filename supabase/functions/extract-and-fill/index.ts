@@ -1671,26 +1671,15 @@ async function autoConfigureModules(supabase: any, caseId: string, extracted: an
 
 async function processDocumentInBackground(
   document_id: string,
-  fileUrl: string,
+  _fileUrl: string,
   doc: any,
-  MISTRAL_API_KEY: string,
+  _MISTRAL_API_KEY: string,
   OPENAI_API_KEY: string,
   supabase: any,
   ocrTextOverride?: string,
   markValidated?: boolean,
-  userAuthHeader?: string,
 ) {
   try {
-    let mimeType = doc.mime_type || "application/pdf";
-    if (!mimeType || mimeType === "application/octet-stream") {
-      const fn = (doc.file_name || "").toLowerCase();
-      if (fn.endsWith(".pdf")) mimeType = "application/pdf";
-      else if (fn.endsWith(".png")) mimeType = "image/png";
-      else if (fn.endsWith(".jpg") || fn.endsWith(".jpeg")) mimeType = "image/jpeg";
-      else mimeType = "application/pdf";
-    }
-
-    const isPdf = mimeType === "application/pdf";
     let ocrText: string;
     let extractionMethod = "ocr";
     const tPipeline0 = Date.now();
@@ -1698,68 +1687,25 @@ async function processDocumentInBackground(
     // ============ SHORTCUT: OCR texto validado pelo usuário ============
     // Quando vem do split view de validação, já temos o texto finalizado
     // — pula OCR completamente e vai direto pra extração estruturada.
+    // Arquitetura simples: extract-and-fill só roda com ocr_text já disponível.
+    // O OCR é responsabilidade SEPARADA do `ocr-document`, chamado diretamente
+    // pelo frontend (com auth do usuário) antes do split view de validação.
+    //
+    // Isso evita toda a complexidade de delegação entre edge functions
+    // (auth forwarding, scope de variáveis, RLS, etc.) que estava causando
+    // cascata de bugs.
     if (ocrTextOverride && ocrTextOverride.trim().length >= 20) {
-      console.log(`[EXTRACT] Using validated OCR text from user (${ocrTextOverride.length} chars) — skipping OCR`);
+      console.log(`[EXTRACT] Using validated OCR text from user (${ocrTextOverride.length} chars)`);
       ocrText = ocrTextOverride;
       extractionMethod = "validated_ocr";
     } else if (doc.ocr_text && typeof doc.ocr_text === "string" && doc.ocr_text.length >= 50) {
-      // Se já tem OCR persistido no documento (rodado anteriormente), reusa.
-      // Evita re-OCR desnecessário e aproveita o trabalho do ocr-document.
       console.log(`[EXTRACT] Using persisted ocr_text from documents row (${doc.ocr_text.length} chars)`);
       ocrText = doc.ocr_text;
       extractionMethod = "persisted_ocr";
-    } else if (isPdf) {
-      // DELEGATE para ocr-document — essa função tem chunking inteligente de PDF
-      // (split de arquivos grandes em sub-PDFs, OCR paralelo, retry por chunk,
-      // tolera falha parcial). Essencial pra cartões de ponto de vários meses.
-      // IMPORTANTE: ocr-document exige Authorization header do usuário (valida
-      // ownership do case). Repassamos o header que recebemos.
-      console.log(`[EXTRACT] Delegando OCR para ocr-document (com chunking)...`);
-      const tOcr = Date.now();
-      const { data: ocrData, error: ocrErr } = await supabase.functions.invoke("ocr-document", {
-        body: { document_id },
-        headers: userAuthHeader ? { Authorization: userAuthHeader } : undefined,
-      });
-      if (ocrErr) {
-        // Tenta ler body pra surfar mensagem mais detalhada (ex.: "Token inválido").
-        let detail = ocrErr.message || JSON.stringify(ocrErr);
-        try {
-          const ctx = (ocrErr as any).context;
-          if (ctx?.json) {
-            const b = await ctx.json().catch(() => null);
-            if (b?.error) detail = `${b.error}${b.hint ? " — " + b.hint : ""}`;
-          }
-        } catch { /* ignore */ }
-        throw new Error(`ocr-document falhou: ${detail}`);
-      }
-      if (!ocrData?.success) throw new Error(`ocr-document sem sucesso: ${ocrData?.error || "erro desconhecido"}`);
-      const extractedText = ocrData.extracted_text as string;
-      if (!extractedText || extractedText.length < 20) {
-        throw new Error(`OCR retornou texto insuficiente (${extractedText?.length || 0} chars)`);
-      }
-      console.log(`[TIMING] ocr_document_delegated=${Date.now() - tOcr}ms chars=${extractedText.length} pages=${ocrData.page_count}`);
-      ocrText = extractedText;
-      extractionMethod = "delegated_ocr_document";
     } else {
-      // Images: download and use chat API with base64
-      console.log(`[EXTRACT] Using Mistral chat API for image: ${doc.file_name}`);
-      let fileBuffer: ArrayBuffer | null = null;
-      for (let dl = 0; dl < 3; dl++) {
-        try {
-          const resp = await fetch(fileUrl);
-          if (!resp.ok) throw new Error(`Download ${resp.status}`);
-          fileBuffer = await resp.arrayBuffer();
-          break;
-        } catch (err) {
-          if (dl === 2) throw err;
-          await delay(1000);
-        }
-      }
-      if (!fileBuffer || fileBuffer.byteLength === 0) throw new Error("Empty file downloaded");
-      const base64Data = arrayBufferToBase64(fileBuffer);
-      fileBuffer = null;
-      ocrText = await mistralOcrImage(base64Data, mimeType, MISTRAL_API_KEY);
-      extractionMethod = "mistral_ocr_image";
+      throw new Error(
+        "Documento ainda não tem texto OCR. Rode o OCR primeiro (botão 'Rodar OCR' no split view) e só depois confirme a extração."
+      );
     }
     console.log(`[EXTRACT] Text ready: ${ocrText.length} chars via ${extractionMethod}`);
 
@@ -1953,9 +1899,6 @@ serve(async (req) => {
     const ocr_text_override: string | undefined = body?.ocr_text;
     // Flag opcional: marcar o documento como validado ao concluir.
     const mark_validated: boolean = body?.mark_validated === true;
-    // Captura o auth header do usuário (precisa repassar p/ ocr-document que
-    // exige Bearer token válido de usuário para validar ownership do case).
-    const userAuthHeader = req.headers.get("Authorization") || "";
 
     if (!document_id) {
       return new Response(
@@ -2044,8 +1987,8 @@ serve(async (req) => {
     }).eq("id", document_id);
 
     (globalThis as any).EdgeRuntime?.waitUntil?.(
-      processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated, userAuthHeader)
-    ) ?? processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated, userAuthHeader);
+      processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated)
+    ) ?? processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated);
 
     return new Response(
       JSON.stringify({
