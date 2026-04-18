@@ -195,7 +195,6 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const queryClient = useQueryClient();
   const [activeModule, setActiveModule] = useState('dados_processo');
   const [saving, setSaving] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [autoSyncDone, setAutoSyncDone] = useState(false);
 
   // Expand all sections by default so sidebar tree is usable on first render
@@ -350,19 +349,6 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
       })();
     }
   }, [params, contract, autoSyncDone, caseId, queryClient]);
-
-  // ── SINCRONIZAR DADOS ──
-  const syncFromOCR = async () => {
-    setSyncing(true);
-    try {
-      logger.warn('syncFromValidation removed');
-      toast.info("Sincronização removida temporariamente.");
-    } catch (e) {
-      toast.error("Erro ao sincronizar: " + (e as Error).message);
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const saveParams = async () => {
     setSaving(true);
@@ -903,22 +889,6 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
 
   return (
     <div className="space-y-3">
-      {/* OCR Sync Bar */}
-      <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
-        <CardContent className="p-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            <span className="text-xs font-medium">Sincronização Automática de Dados</span>
-          </div>
-           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={syncFromOCR} disabled={syncing}>
-              {syncing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Zap className="h-4 w-4 mr-1" />}
-              Sincronizar Dados
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="flex flex-col md:flex-row gap-4">
         {/* Hierarchical sidebar — PJe-Calc style */}
         <aside className="w-full md:w-72 flex-shrink-0 border rounded-sm bg-card">

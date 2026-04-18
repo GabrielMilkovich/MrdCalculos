@@ -143,7 +143,27 @@ interface RegexExtractionResult {
   _regex_fields: string[];
 }
 
-function tryRegexExtraction(text: string): RegexExtractionResult {
+/**
+ * Detecta tipo_documento a partir do nome do arquivo.
+ * Usado como fallback quando o texto OCR nao tem cabecalho claro.
+ */
+function detectTipoFromFilename(fileName: string | null | undefined): string | null {
+  if (!fileName) return null;
+  const n = fileName.toLowerCase();
+  if (/trct|rescis/i.test(n)) return "trct";
+  if (/ctps|carteira[-_\s]*de[-_\s]*trabalho/i.test(n)) return "ctps";
+  if (/cart[aã]o[-_\s]*ponto|registro[-_\s]*ponto|frequ[êe]ncia|ponto\s*\d/i.test(n)) return "cartao_ponto";
+  if (/holerite|contracheque|recibo[-_\s]*pagamento|folha[-_\s]*pagamento|demonstrativo/i.test(n)) return "holerite";
+  if (/ficha[-_\s]*financeira/i.test(n)) return "ficha_financeira";
+  if (/fgts|fundo[-_\s]*garantia|extrato[-_\s]*fgts/i.test(n)) return "extrato_fgts";
+  if (/senten[cç]a|ac[oó]rd[aã]o|decis[aã]o/i.test(n)) return "sentenca";
+  if (/peti[cç][aã]o|inicial/i.test(n)) return "peticao";
+  if (/contrato|termo[-_\s]*contrato/i.test(n)) return "contrato";
+  if (/cct|conven[cç][aã]o[-_\s]*coletiva/i.test(n)) return "cct";
+  return null;
+}
+
+function tryRegexExtraction(text: string, fileName?: string | null): RegexExtractionResult {
   const fields: string[] = [];
   const result: RegexExtractionResult = { _regex_fields: fields };
 
@@ -250,6 +270,15 @@ function tryRegexExtraction(text: string): RegexExtractionResult {
     result.tipo_documento = "extrato_fgts";
   } else if (/SENTEN[ÇC]A|AC[ÓO]RD[ÃA]O|DECIS[ÃA]O/i.test(text)) {
     result.tipo_documento = "sentenca";
+  }
+
+  // Fallback: se nao achou pelo texto, tenta deduzir pelo nome do arquivo.
+  if (!result.tipo_documento) {
+    const fromName = detectTipoFromFilename(fileName);
+    if (fromName) {
+      result.tipo_documento = fromName;
+      fields.push("tipo_documento_from_filename");
+    }
   }
 
   // Extract monetary values from tables (holerite/ficha financeira patterns)
@@ -987,7 +1016,8 @@ async function mistralOcrImage(
 
 async function extractStructured(
   ocrText: string,
-  openaiApiKey: string
+  openaiApiKey: string,
+  fileName?: string | null,
 ): Promise<any> {
   // Separação de responsabilidades:
   //   - Mistral OCR: apenas OCR (PDF → texto)
@@ -1025,7 +1055,11 @@ async function extractStructured(
               { role: "system", content: SYSTEM_PROMPT },
               {
                 role: "user",
-                content: `Analise o texto abaixo extraído por OCR de um documento trabalhista e extraia os dados usando a função extrair_dados_documento. NÃO repita o texto OCR na resposta. Para cartão de ponto, extraia no máximo os 60 primeiros registros diários como amostra.\n\n--- TEXTO DO DOCUMENTO ---\n${truncatedOcr}\n--- FIM DO TEXTO ---`
+                content: `Analise o texto abaixo extraído por OCR de um documento trabalhista e extraia os dados usando a função extrair_dados_documento. NÃO repita o texto OCR na resposta. Para cartão de ponto, extraia no máximo os 60 primeiros registros diários como amostra.${
+                  fileName
+                    ? `\n\nDICA — nome original do arquivo: "${fileName}". Use como PISTA ADICIONAL para classificar o tipo_documento quando o cabeçalho do texto for ambíguo, mas NÃO sobreponha evidência explícita do próprio texto.`
+                    : ""
+                }\n\n--- TEXTO DO DOCUMENTO ---\n${truncatedOcr}\n--- FIM DO TEXTO ---`
               },
             ],
             tools: EXTRACTION_TOOLS,
@@ -1710,7 +1744,7 @@ async function processDocumentInBackground(
     console.log(`[EXTRACT] Text ready: ${ocrText.length} chars via ${extractionMethod}`);
 
     // ============ IMPROVEMENT #2: Try regex extraction first ============
-    const regexResult = tryRegexExtraction(ocrText);
+    const regexResult = tryRegexExtraction(ocrText, doc.file_name);
     console.log(`[EXTRACT] Regex pre-extraction: ${regexResult._regex_fields.length} fields found: [${regexResult._regex_fields.join(", ")}]`);
 
     // ============ IMPROVEMENT #3: Try template cache ============
@@ -1723,7 +1757,7 @@ async function processDocumentInBackground(
     // Stage 2: AI structured extraction (always run for complete data)
     const fullOcrText = ocrText;
     const tExtract = Date.now();
-    const extracted = await extractStructured(ocrText, OPENAI_API_KEY);
+    const extracted = await extractStructured(ocrText, OPENAI_API_KEY, doc.file_name);
     console.log(`[TIMING] extract_structured_total=${Date.now() - tExtract}ms`);
     extracted.texto_ocr_completo = fullOcrText;
     ocrText = "";
