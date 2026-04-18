@@ -707,6 +707,28 @@ serve(async (req) => {
       return jsonResponse({ error: "Sem acesso a este documento" }, 403);
     }
 
+    // --- Idempotencia / stale detection ---
+    // Se o doc ja esta `ocr_running`, decide: duplicata concorrente (<3min)
+    // ou travado (>= 3min). Duplicatas retornam 409 pra nao sobrescrever
+    // processamento em andamento. Travados sao recuperados (reprocessa).
+    if (document.status === "ocr_running") {
+      const startedAt = document.processing_started_at
+        ? new Date(document.processing_started_at).getTime()
+        : 0;
+      const elapsedMs = Date.now() - startedAt;
+      const STALE_AFTER_MS = 3 * 60 * 1000; // 3 min
+      if (elapsedMs < STALE_AFTER_MS) {
+        return jsonResponse(
+          {
+            error: "OCR ja em execucao",
+            hint: `Processamento iniciou ha ${Math.round(elapsedMs / 1000)}s. Aguarde ou tente novamente em ${Math.ceil((STALE_AFTER_MS - elapsedMs) / 1000)}s.`,
+          },
+          409,
+        );
+      }
+      console.warn(`[ocr] doc ${document_id} esta 'ocr_running' ha ${Math.round(elapsedMs / 1000)}s -- considerando stale, reprocessando`);
+    }
+
     // SEMPRE regenera signed URL a partir de storage_path — `arquivo_url` salvo
     // em upload-document expira em 1h. Só cai no valor armazenado se não há
     // storage_path (caso raro).

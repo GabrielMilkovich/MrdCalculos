@@ -309,12 +309,21 @@ export function DocumentsManager({
           continue;
         }
 
-        // Auto-dispara OCR em background (fire-and-forget). O usuário verá o
-        // status mudar para "ocr_running" → "ocr_done" na lista. Depois pode
-        // abrir o split-view de validação.
-        supabase.functions
-          .invoke("ocr-document", { body: { document_id: docData.id } })
-          .catch((err) => logger.warn("auto-OCR trigger falhou (pode re-executar manualmente)", err));
+        // Auto-dispara OCR SEQUENCIALMENTE (await). Evita que N uploads
+        // em lote disparem N OCRs paralelos — runtime do Supabase Edge tem
+        // pool limitado de isolates e chama concorrentes sao killed mid-
+        // execucao, deixando docs travados em status='ocr_running'.
+        // Aguardar cada um iniciar tambem permite que o backend devolva
+        // erro acionavel (401/404/etc.) ao usuario.
+        try {
+          await supabase.functions.invoke("ocr-document", {
+            body: { document_id: docData.id },
+          });
+        } catch (err) {
+          logger.warn(`auto-OCR trigger falhou para ${file.name}:`, err);
+          // Não bloqueia o upload dos próximos — o usuario pode rodar OCR
+          // manualmente no split-view da aba Validação.
+        }
 
         successCount++;
         setUploadProgress(((i + 1) / files.length) * 100);

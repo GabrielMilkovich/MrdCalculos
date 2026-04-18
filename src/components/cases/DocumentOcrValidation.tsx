@@ -46,7 +46,11 @@ interface DocRow {
   page_count: number | null;
   error_message: string | null;
   tipo: string | null;
+  processing_started_at: string | null;
 }
+
+/** Apos quantos ms em 'ocr_running' consideramos o doc travado. */
+const OCR_STALE_MS = 3 * 60 * 1000;
 
 interface Props {
   caseId: string;
@@ -92,6 +96,8 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
   const [savingId, setSavingId] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** IDs que ja foram auto-retriados nesta sessao (evita loop). */
+  const autoRetriedRef = useRef<Set<string>>(new Set());
 
   const selected = useMemo(() => docs.find((d) => d.id === selectedId) || null, [docs, selectedId]);
 
@@ -99,7 +105,7 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
   const loadDocs = useCallback(async () => {
     const { data, error } = await supabase
       .from("documents")
-      .select("id, file_name, mime_type, storage_path, arquivo_url, status, ocr_text, ocr_confidence, ocr_validated, page_count, error_message, tipo")
+      .select("id, file_name, mime_type, storage_path, arquivo_url, status, ocr_text, ocr_confidence, ocr_validated, page_count, error_message, tipo, processing_started_at")
       .eq("case_id", caseId)
       .order("uploaded_em", { ascending: true });
     if (error) {
@@ -123,6 +129,36 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
     pollRef.current = setTimeout(() => loadDocs(), 3000);
     return () => { if (pollRef.current) clearTimeout(pollRef.current); };
   }, [docs, loadDocs]);
+
+  // Watchdog: detecta docs travados em 'ocr_running' ha > 3 min e
+  // auto-retenta (uma vez por sessao, o backend eh idempotente).
+  // Causa tipica: runtime do Edge Function killed mid-execucao sem
+  // atualizar o status -> doc fica "OCR em andamento" pra sempre.
+  useEffect(() => {
+    const now = Date.now();
+    for (const d of docs) {
+      if (d.status !== "ocr_running") continue;
+      if (!d.processing_started_at) continue;
+      const elapsed = now - new Date(d.processing_started_at).getTime();
+      if (elapsed < OCR_STALE_MS) continue;
+      if (autoRetriedRef.current.has(d.id)) continue;
+      autoRetriedRef.current.add(d.id);
+      console.warn(`[ocr-watchdog] doc ${d.id} (${d.file_name}) parado em ocr_running ha ${Math.round(elapsed / 1000)}s — auto-retry`);
+      toast.info(`OCR de "${d.file_name}" parecia travado. Retentando...`);
+      // fire-and-forget — runOcr ja recarrega a lista ao terminar
+      (async () => {
+        try {
+          await supabase.functions.invoke("ocr-document", {
+            body: { document_id: d.id },
+          });
+          await loadDocs();
+        } catch (err) {
+          logger.warn("[ocr-watchdog] retry falhou:", err);
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs]);
 
   // Quando seleciona um doc, carrega texto + gera signed URL fresca.
   useEffect(() => {
