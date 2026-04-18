@@ -1013,14 +1013,16 @@ async function extractStructured(
   ocrText: string,
   mistralApiKey: string
 ): Promise<any> {
-  // Mistral Chat API com function calling nativo. Models em ordem de preferência
-  // (tenta grande primeiro, cai para médio se falhar).
+  // Mistral Chat API com function calling nativo.
+  // Ordem: small (rápido, ~5s) → large (potente, ~25s) como fallback.
+  // mistral-medium foi removido — na prática o small resolve a maioria dos
+  // docs trabalhistas, e se falhar vale pular direto pro large.
   let lastError: Error | null = null;
   const models = [
-    "mistral-large-latest",
-    "mistral-medium-latest",
     "mistral-small-latest",
+    "mistral-large-latest",
   ];
+  const MAX_EXTRACT_RETRIES = 2; // por modelo (era 3)
 
   const maxChars = 80000;
   const truncatedOcr = ocrText.length > maxChars
@@ -1028,7 +1030,8 @@ async function extractStructured(
     : ocrText;
 
   for (const model of models) {
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 1; attempt <= MAX_EXTRACT_RETRIES; attempt++) {
+      const t0 = Date.now();
       console.log(`[EXTRACT] ${model} attempt ${attempt}`);
       try {
         const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
@@ -1048,7 +1051,7 @@ async function extractStructured(
             ],
             tools: EXTRACTION_TOOLS,
             tool_choice: "any",
-            max_tokens: 32000,
+            max_tokens: 8192, // era 32000; extractions de doc trabalhista cabem tranquilo em 8k
             temperature: 0.05,
           }),
         });
@@ -1081,7 +1084,7 @@ async function extractStructured(
           try {
             const extracted = JSON.parse(toolCall.function.arguments);
             extracted.texto_ocr_completo = ocrText;
-            console.log(`[EXTRACT] SUCCESS with ${model}: tipo=${extracted.tipo_documento}, rubricas=${extracted.rubricas?.length || 0}`);
+            console.log(`[EXTRACT] SUCCESS with ${model} in ${Date.now() - t0}ms: tipo=${extracted.tipo_documento}, rubricas=${extracted.rubricas?.length || 0}`);
             return extracted;
           } catch (parseErr) {
             console.error(`[EXTRACT] JSON parse error from ${model}:`, parseErr);
@@ -1096,7 +1099,7 @@ async function extractStructured(
           try {
             const parsed = JSON.parse(jsonMatch[0]);
             if (!parsed.texto_ocr_completo) parsed.texto_ocr_completo = ocrText;
-            console.log(`[EXTRACT] SUCCESS (content fallback) with ${model}`);
+            console.log(`[EXTRACT] SUCCESS (content fallback) with ${model} in ${Date.now() - t0}ms`);
             return parsed;
           } catch { /* ignore */ }
         }
@@ -1696,11 +1699,14 @@ async function processDocumentInBackground(
     const isPdf = mimeType === "application/pdf";
     let ocrText: string;
     let extractionMethod = "ocr";
+    const tPipeline0 = Date.now();
 
     // ============ IMPROVEMENT #1: Try native PDF extraction first ============
     if (isPdf) {
+      const tNative = Date.now();
       const nativeResult = await tryNativePdfExtraction(fileUrl);
-      
+      console.log(`[TIMING] native_pdf_extract=${Date.now() - tNative}ms method=${nativeResult.method} quality=${nativeResult.quality}`);
+
       if (nativeResult.method === "native" && nativeResult.quality === "good") {
         console.log(`[EXTRACT] Using NATIVE text extraction (${nativeResult.text.length} chars) — NO OCR NEEDED`);
         ocrText = nativeResult.text;
@@ -1708,7 +1714,9 @@ async function processDocumentInBackground(
       } else {
         // Fallback to Mistral OCR
         console.log(`[EXTRACT] Native extraction insufficient, using Mistral OCR`);
+        const tOcr = Date.now();
         ocrText = await mistralOcrPdf(fileUrl, MISTRAL_API_KEY);
+        console.log(`[TIMING] mistral_ocr_pdf=${Date.now() - tOcr}ms chars=${ocrText.length}`);
         extractionMethod = "mistral_ocr";
       }
     } else {
@@ -1747,7 +1755,9 @@ async function processDocumentInBackground(
 
     // Stage 2: AI structured extraction (always run for complete data)
     const fullOcrText = ocrText;
+    const tExtract = Date.now();
     const extracted = await extractStructured(ocrText, MISTRAL_API_KEY);
+    console.log(`[TIMING] extract_structured_total=${Date.now() - tExtract}ms`);
     extracted.texto_ocr_completo = fullOcrText;
     ocrText = "";
 
@@ -1797,7 +1807,10 @@ async function processDocumentInBackground(
     }
 
     // Auto-fill pjecalc tables
+    const tFill = Date.now();
     const fills = await autoFill(supabase, doc.case_id, extracted);
+    console.log(`[TIMING] auto_fill=${Date.now() - tFill}ms fills=${fills.length}`);
+    console.log(`[TIMING] PIPELINE_TOTAL=${Date.now() - tPipeline0}ms`);
 
     // ============ IMPROVEMENT #3b: Save template cache ============
     const cnpjForCache = extracted.reclamada?.cnpj || detectedCnpj;
