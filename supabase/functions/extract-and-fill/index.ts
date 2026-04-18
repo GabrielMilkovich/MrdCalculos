@@ -1009,13 +1009,15 @@ async function mistralOcrImage(
 
 async function extractStructured(
   ocrText: string,
-  openaiApiKey: string
+  mistralApiKey: string
 ): Promise<any> {
+  // Mistral Chat API com function calling nativo. Models em ordem de preferência
+  // (tenta grande primeiro, cai para médio se falhar).
   let lastError: Error | null = null;
   const models = [
-    "google/gemini-3-flash-preview",
-    "google/gemini-2.5-flash",
-    "google/gemini-2.5-pro",
+    "mistral-large-latest",
+    "mistral-medium-latest",
+    "mistral-small-latest",
   ];
 
   const maxChars = 80000;
@@ -1027,10 +1029,10 @@ async function extractStructured(
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       console.log(`[EXTRACT] ${model} attempt ${attempt}`);
       try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${openaiApiKey}`,
+            Authorization: `Bearer ${mistralApiKey}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -1043,7 +1045,7 @@ async function extractStructured(
               },
             ],
             tools: EXTRACTION_TOOLS,
-            tool_choice: { type: "function", function: { name: "extrair_dados_documento" } },
+            tool_choice: "any",
             max_tokens: 32000,
             temperature: 0.05,
           }),
@@ -1051,15 +1053,22 @@ async function extractStructured(
 
         if (!response.ok) {
           const errText = await response.text();
-          console.error(`[EXTRACT] ${model} ${response.status}:`, errText.substring(0, 200));
-          if (response.status === 402) {
-            console.warn(`[EXTRACT] ${model} returned 402 (no credits), skipping to next model`);
-            lastError = new Error(`Créditos insuficientes (${model})`);
-            break;
+          console.error(`[EXTRACT] ${model} ${response.status}:`, errText.substring(0, 300));
+          if (response.status === 401 || response.status === 403) {
+            // Credencial inválida — não adianta tentar outros modelos.
+            throw new Error(`Mistral ${response.status}: credencial inválida (${errText.substring(0, 150)})`);
           }
-          if (response.status === 429) { await delay(RETRY_DELAY_MS * attempt * 3); continue; }
-          if (response.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
-          lastError = new Error(`API ${response.status}`);
+          if (response.status === 402 || response.status === 429) {
+            await delay(RETRY_DELAY_MS * attempt * 3);
+            lastError = new Error(`Mistral ${response.status} (${model})`);
+            continue;
+          }
+          if (response.status >= 500) {
+            await delay(RETRY_DELAY_MS * attempt);
+            lastError = new Error(`Mistral ${response.status} (${model})`);
+            continue;
+          }
+          lastError = new Error(`Mistral ${response.status}: ${errText.substring(0, 150)}`);
           break;
         }
 
@@ -1095,12 +1104,14 @@ async function extractStructured(
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         console.error(`[EXTRACT] ${model} exception:`, lastError.message);
+        // Credencial inválida é fatal — aborta imediatamente.
+        if (lastError.message.includes("credencial inválida")) throw lastError;
         await delay(RETRY_DELAY_MS * attempt);
       }
     }
     console.warn(`[EXTRACT] Model ${model} exhausted, trying next...`);
   }
-  throw new Error(`Extração falhou em todos os modelos. Último erro: ${lastError?.message}`);
+  throw new Error(`Extração falhou em todos os modelos Mistral. Último erro: ${lastError?.message}`);
 }
 
 // =====================================================
@@ -1668,7 +1679,6 @@ async function processDocumentInBackground(
   fileUrl: string,
   doc: any,
   MISTRAL_API_KEY: string,
-  OPENAI_API_KEY: string,
   supabase: any
 ) {
   try {
@@ -1735,7 +1745,7 @@ async function processDocumentInBackground(
 
     // Stage 2: AI structured extraction (always run for complete data)
     const fullOcrText = ocrText;
-    const extracted = await extractStructured(ocrText, OPENAI_API_KEY);
+    const extracted = await extractStructured(ocrText, MISTRAL_API_KEY);
     extracted.texto_ocr_completo = fullOcrText;
     ocrText = "";
 
@@ -1894,11 +1904,16 @@ serve(async (req) => {
       );
     }
 
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
-
     const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
-    if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY not configured");
+    if (!MISTRAL_API_KEY) {
+      return new Response(
+        JSON.stringify({
+          error: "MISTRAL_API_KEY não configurada no Supabase",
+          hint: "Adicione a secret MISTRAL_API_KEY em Edge Functions → Secrets.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -1947,8 +1962,8 @@ serve(async (req) => {
     }).eq("id", document_id);
 
     (globalThis as any).EdgeRuntime?.waitUntil?.(
-      processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase)
-    ) ?? processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase);
+      processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, supabase)
+    ) ?? processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, supabase);
 
     return new Response(
       JSON.stringify({
