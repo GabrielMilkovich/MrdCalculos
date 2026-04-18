@@ -921,12 +921,14 @@ async function mistralOcrPdf(
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error(`[OCR] Mistral OCR API ${response.status}:`, errText.substring(0, 300));
+        console.error(`[OCR] Mistral OCR API ${response.status}:`, errText.substring(0, 500));
         if (response.status === 429) {
           await delay(RETRY_DELAY_MS * attempt * 3);
           continue;
         }
-        lastError = new Error(`Mistral OCR API ${response.status}`);
+        // Inclui o body da resposta no Error para surgir no documents.error_message
+        // (ajuda a diferenciar "URL inacessível" de "PDF inválido" etc.)
+        lastError = new Error(`Mistral OCR API ${response.status}: ${errText.substring(0, 250)}`);
         if (response.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
         break;
       }
@@ -1933,22 +1935,26 @@ serve(async (req) => {
       );
     }
 
-    let fileUrl = doc.arquivo_url;
-    if (!fileUrl && doc.storage_path) {
+    // SEMPRE regenera signed URL a partir de storage_path — `arquivo_url` pode
+    // estar expirado (URLs assinadas do upload-document têm TTL de 1h).
+    // Só usa `arquivo_url` se storage_path estiver ausente.
+    let fileUrl: string | null = null;
+    if (doc.storage_path) {
       for (const bucket of ["juriscalculo-documents", "case-documents"]) {
         const { data: signed } = await supabase.storage
           .from(bucket)
-          .createSignedUrl(doc.storage_path, 3600);
+          .createSignedUrl(doc.storage_path, 7200); // 2h para processamento longo
         if (signed?.signedUrl) {
           fileUrl = signed.signedUrl;
           break;
         }
       }
     }
+    if (!fileUrl) fileUrl = doc.arquivo_url;
 
     if (!fileUrl) {
       return new Response(
-        JSON.stringify({ error: "No file URL available" }),
+        JSON.stringify({ error: "No file URL available (storage_path e arquivo_url ambos ausentes)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

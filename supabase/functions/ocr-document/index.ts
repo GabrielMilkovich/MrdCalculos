@@ -405,15 +405,18 @@ serve(async (req) => {
       return jsonResponse({ error: "Sem acesso a este documento" }, 403);
     }
 
-    // Resolve signed URL com fallback entre buckets conhecidos.
-    let fileUrl = document.arquivo_url as string | null;
-    if (!fileUrl && document.storage_path) {
+    // SEMPRE regenera signed URL a partir de storage_path — `arquivo_url` salvo
+    // em upload-document expira em 1h. Só cai no valor armazenado se não há
+    // storage_path (caso raro).
+    let fileUrl: string | null = null;
+    if (document.storage_path) {
       const buckets = ["juriscalculo-documents", "case-documents", "documents"];
       for (const b of buckets) {
-        const { data } = await supabase.storage.from(b).createSignedUrl(document.storage_path, 3600);
+        const { data } = await supabase.storage.from(b).createSignedUrl(document.storage_path, 7200);
         if (data?.signedUrl) { fileUrl = data.signedUrl; break; }
       }
     }
+    if (!fileUrl) fileUrl = (document.arquivo_url as string | null) ?? null;
     if (!fileUrl) return jsonResponse({ error: "Sem URL de download para o documento" }, 400);
 
     // Marca como em processamento (estado intermediário).
