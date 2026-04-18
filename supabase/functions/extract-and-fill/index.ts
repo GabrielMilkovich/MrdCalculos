@@ -43,22 +43,16 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 // Detect digital PDFs and extract text without OCR
 // =====================================================
 
-async function tryNativePdfExtraction(fileUrl: string): Promise<{
+async function tryNativePdfExtraction(pdfBytes: Uint8Array): Promise<{
   text: string;
   method: "native" | "ocr-needed";
   quality: "good" | "poor";
   pageCount: number;
 }> {
   try {
-    // Download the PDF
-    const resp = await fetch(fileUrl);
-    if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
-    const buffer = await resp.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-
     // Simple PDF text extraction: look for text streams in the PDF
     // This works for digitally-created PDFs (not scanned)
-    const pdfStr = new TextDecoder("latin1").decode(bytes);
+    const pdfStr = new TextDecoder("latin1").decode(pdfBytes);
     
     // Count pages
     const pageMatches = pdfStr.match(/\/Type\s*\/Page[^s]/g) || [];
@@ -896,40 +890,32 @@ O campo texto_ocr_completo DEVE conter o texto integral do documento.`;
 // STAGE 1: Mistral OCR
 // =====================================================
 
-async function mistralOcrPdf(
-  documentUrl: string,
+async function mistralOcrPdfFromBytes(
+  pdfBytes: Uint8Array,
   mistralApiKey: string,
   filename: string = "document.pdf"
 ): Promise<string> {
-  // Estratégia correta (doc Mistral): baixa o PDF da nossa storage, faz upload
-  // no Files API da Mistral (`purpose=ocr`), e manda OCR com `file_id`.
-  // Vantagens vs passar document_url direto:
-  //   - Zero latência Mistral → Supabase (Mistral já tem o arquivo)
-  //   - Funciona mesmo se a URL assinada expirar entre upload e OCR
-  //   - Evita edge cases com caracteres especiais na URL
-  //   - Mistral pode processar imediatamente sem TLS handshake adicional
-  const tDownload = Date.now();
-  const resp = await fetch(documentUrl);
-  if (!resp.ok) {
-    throw new Error(`Download do PDF falhou: HTTP ${resp.status} ${resp.statusText}`);
-  }
-  const buf = new Uint8Array(await resp.arrayBuffer());
-  console.log(`[OCR] PDF baixado em ${Date.now() - tDownload}ms (${buf.byteLength} bytes)`);
-
-  if (buf.byteLength === 0) throw new Error("PDF vazio após download");
-  if (buf.byteLength > 50 * 1024 * 1024) {
-    throw new Error(`PDF muito grande: ${(buf.byteLength / 1024 / 1024).toFixed(1)}MB (limite Mistral: 50MB)`);
+  // Pipeline Mistral OCR (padrão comprovado em produção n8n):
+  //   1. POST /v1/files purpose=ocr  → file_id
+  //   2. GET  /v1/files/{id}/url      → signed URL do Mistral (expiry=1h)
+  //   3. POST /v1/ocr document_url    → pages markdown
+  //   4. DELETE /v1/files/{id}        (cleanup async)
+  //
+  // NÃO passa document_url apontando para Supabase — Mistral teria de baixar
+  // da Supabase a cada call, somando latência de TLS+download remoto.
+  if (pdfBytes.byteLength === 0) throw new Error("PDF vazio");
+  if (pdfBytes.byteLength > 50 * 1024 * 1024) {
+    throw new Error(`PDF muito grande: ${(pdfBytes.byteLength / 1024 / 1024).toFixed(1)}MB (limite Mistral: 50MB)`);
   }
 
-  const tOcr = Date.now();
-  const result = await ocrBytes(buf, filename, {
+  const result = await ocrBytes(pdfBytes, filename, {
     apiKey: mistralApiKey,
     model: "mistral-ocr-latest",
     timeoutMs: 180_000,
     maxRetries: 3,
     retryBaseMs: 1500,
   });
-  console.log(`[OCR] Mistral upload+OCR em ${Date.now() - tOcr}ms (${result.pages.length} páginas)`);
+  console.log(`[OCR] Mistral retornou ${result.pages.length} páginas`);
 
   const fullText = result.pages
     .map((p) => p.markdown || "")
@@ -1693,8 +1679,17 @@ async function processDocumentInBackground(
 
     // ============ IMPROVEMENT #1: Try native PDF extraction first ============
     if (isPdf) {
+      // Baixa o PDF UMA vez e reusa bytes para native extract + OCR.
+      // Antes: downloadNative (file fetch) + downloadOCR (file fetch) = 2x fetch
+      // Agora: downloadOnce → native reuse → OCR reuse (se fallback)
+      const tDown = Date.now();
+      const resp = await fetch(fileUrl);
+      if (!resp.ok) throw new Error(`Download do PDF falhou: HTTP ${resp.status}`);
+      const pdfBytes = new Uint8Array(await resp.arrayBuffer());
+      console.log(`[TIMING] pdf_download=${Date.now() - tDown}ms size=${pdfBytes.byteLength}`);
+
       const tNative = Date.now();
-      const nativeResult = await tryNativePdfExtraction(fileUrl);
+      const nativeResult = await tryNativePdfExtraction(pdfBytes);
       console.log(`[TIMING] native_pdf_extract=${Date.now() - tNative}ms method=${nativeResult.method} quality=${nativeResult.quality}`);
 
       if (nativeResult.method === "native" && nativeResult.quality === "good") {
@@ -1702,10 +1697,10 @@ async function processDocumentInBackground(
         ocrText = nativeResult.text;
         extractionMethod = "native_pdf";
       } else {
-        // Fallback to Mistral OCR
+        // Fallback to Mistral OCR — reusa bytes em memória, sem re-download.
         console.log(`[EXTRACT] Native extraction insufficient, using Mistral OCR`);
         const tOcr = Date.now();
-        ocrText = await mistralOcrPdf(fileUrl, MISTRAL_API_KEY, doc.file_name || "document.pdf");
+        ocrText = await mistralOcrPdfFromBytes(pdfBytes, MISTRAL_API_KEY, doc.file_name || "document.pdf");
         console.log(`[TIMING] mistral_ocr_pdf=${Date.now() - tOcr}ms chars=${ocrText.length}`);
         extractionMethod = "mistral_ocr";
       }

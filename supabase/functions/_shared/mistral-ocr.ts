@@ -149,15 +149,19 @@ export async function uploadFile(
 /**
  * Obtém uma URL assinada Mistral para um file_id (alternativa a passar file_id direto).
  * Usado quando a OCR API exige document_url em vez de file reference.
+ *
+ * IMPORTANTE: `expiry` na Mistral é em HORAS (não segundos). Range: 1..24.
  */
 export async function getFileSignedUrl(
   fileId: string,
   opts: MistralOcrOptions,
-  expiresInSec = 3600,
+  expiryHours = 1,
 ): Promise<string> {
   const { apiKey, timeoutMs = 30_000 } = opts;
+  // Clamp entre 1 e 24h (limites da API Mistral).
+  const clamped = Math.max(1, Math.min(24, Math.floor(expiryHours)));
   const resp = await fetchWithTimeout(
-    `${MISTRAL_API}/v1/files/${fileId}/url?expiry=${expiresInSec}`,
+    `${MISTRAL_API}/v1/files/${fileId}/url?expiry=${clamped}`,
     { headers: { Authorization: `Bearer ${apiKey}` } },
     timeoutMs,
   );
@@ -280,8 +284,16 @@ export async function runOcr(
 }
 
 /**
- * Pipeline conveniência: faz upload + OCR + delete em uma call só.
- * Recomendado para chunks de PDF (uploads rápidos, OCR demorado, delete async).
+ * Pipeline conveniência: faz upload + obtém URL assinada Mistral + OCR + delete.
+ * Pattern comprovado (doc cookbook + workflows n8n em produção):
+ *   1. POST /v1/files?purpose=ocr                 → file_id
+ *   2. GET  /v1/files/{id}/url?expiry=N           → signed URL do Mistral
+ *   3. POST /v1/ocr { type: "document_url", ... } → resultado
+ *   4. DELETE /v1/files/{id}                      (cleanup async, best-effort)
+ *
+ * Em testes internos, esse caminho via document_url com URL do próprio
+ * Mistral é mais rápido e robusto que `type: "file" + file_id` direto,
+ * que às vezes tem latência adicional.
  */
 export async function ocrBytes(
   bytes: Uint8Array,
@@ -290,8 +302,12 @@ export async function ocrBytes(
 ): Promise<MistralOcrResult> {
   const fileId = await uploadFile(bytes, filename, opts);
   try {
-    // Mistral OCR aceita file_id direto (não precisa URL intermediária).
-    const result = await runOcr({ type: "file", file_id: fileId }, opts);
+    // Pega URL assinada Mistral (expiry em HORAS; 1h basta para OCR rodar).
+    const mistralUrl = await getFileSignedUrl(fileId, opts, 1);
+    const result = await runOcr(
+      { type: "document_url", document_url: mistralUrl },
+      opts,
+    );
     // Fire-and-forget cleanup.
     deleteFile(fileId, opts).catch(() => { /* ignore */ });
     return result;
