@@ -1037,7 +1037,12 @@ async function extractStructured(
           console.error(`[EXTRACT] ${model} ${response.status}:`, errText.substring(0, 300));
           if (response.status === 401 || response.status === 403) {
             // Credencial inválida — não adianta tentar outros modelos.
-            throw new Error(`Mistral ${response.status}: credencial inválida (${errText.substring(0, 150)})`);
+            throw new Error(
+              `MISTRAL_API_KEY inválida ou sem permissão para Chat API (${response.status}). ` +
+              `Verifique em https://console.mistral.ai/api-keys — a key precisa ter ` +
+              `acesso tanto a /v1/ocr quanto a /v1/chat/completions. ` +
+              `Detalhe API: ${errText.substring(0, 100)}`
+            );
           }
           if (response.status === 402 || response.status === 429) {
             await delay(RETRY_DELAY_MS * attempt * 3);

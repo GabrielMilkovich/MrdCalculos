@@ -355,42 +355,93 @@ export function DocumentsManager({
   // Extrair dados e preencher automaticamente os campos do cálculo
   const extractAndFill = useCallback(async (documentId: string) => {
     setProcessingDocId(documentId);
-    toast.info("🤖 Extraindo dados com IA e preenchendo TODOS os campos do cálculo...");
+    const startToast = toast.loading("🤖 Extraindo dados com IA...", { duration: Infinity });
 
     try {
-      const { data, error } = await supabase.functions.invoke("extract-and-fill", {
+      // A edge function retorna 200 imediatamente (enfileira em background).
+      // O processamento real (OCR + extração estruturada + auto-fill) roda
+      // asyncronamente e atualiza documents.status para ready/failed.
+      const { error: invokeError } = await supabase.functions.invoke("extract-and-fill", {
         body: { document_id: documentId },
       });
+      if (invokeError) throw invokeError;
 
-      if (error) throw error;
+      // Polling: aguarda status terminal (ready/failed) em até 3 minutos.
+      // Intervalo cresce de 2s → 5s → 8s p/ não martelar o banco.
+      const terminalStatuses = new Set(["ready", "failed", "extracted", "completed"]);
+      const POLL_TIMEOUT_MS = 3 * 60 * 1000;
+      const t0 = Date.now();
+      let lastStatus = "extracting";
+      let lastError: string | null = null;
+      let extractedData: any = null;
 
-      const fills = data.auto_fill || [];
-      const rubricas = data.rubricas_extraidas || 0;
-      const tipo = data.tipo_documento || "documento";
-      const dados = data.dados_extraidos || {};
+      while (Date.now() - t0 < POLL_TIMEOUT_MS) {
+        const elapsedSec = Math.floor((Date.now() - t0) / 1000);
+        const interval = elapsedSec < 10 ? 2000 : elapsedSec < 30 ? 3000 : 5000;
+        await new Promise(r => setTimeout(r, interval));
 
+        const { data: docRow, error: selErr } = await supabase
+          .from("documents")
+          .select("status, error_message, metadata")
+          .eq("id", documentId)
+          .maybeSingle();
+        if (selErr) continue; // transient, retry next tick
+        if (!docRow) continue;
+
+        lastStatus = docRow.status || "extracting";
+        lastError = docRow.error_message || null;
+        // A edge function armazena os campos extraídos direto no metadata
+        // (tipo_detectado, rubricas_extraidas, auto_fill_fields, has_*, ...)
+        extractedData = docRow.metadata || null;
+
+        // Atualiza toast com progresso visual
+        toast.loading(`🤖 Processando... ${elapsedSec}s (${lastStatus})`, { id: startToast, duration: Infinity });
+
+        if (terminalStatuses.has(lastStatus)) break;
+        if (lastStatus === "failed") break;
+      }
+
+      toast.dismiss(startToast);
+
+      if (lastStatus === "failed" || lastError) {
+        throw new Error(lastError || `Extração falhou (status=${lastStatus})`);
+      }
+
+      if (!terminalStatuses.has(lastStatus)) {
+        toast.warning(
+          `⏱ Extração ainda rodando após 3min. Status atual: ${lastStatus}. Verifique em alguns minutos.`,
+          { duration: 10000 }
+        );
+        return;
+      }
+
+      // Sucesso real — lê metadata populada pela edge function
+      const meta = extractedData || {};
+      const fills: string[] = meta.auto_fill_fields || [];
+      const rubricas: number = meta.rubricas_extraidas || 0;
+      const tipo: string = meta.tipo_detectado || "documento";
       const detalhes = [
-        dados.tem_contrato && "contrato",
-        dados.tem_rubricas && `${rubricas} rubricas`,
-        dados.tem_trct && "TRCT",
-        dados.tem_cartao_ponto && "cartão de ponto",
-        dados.tem_ferias && "férias",
-        dados.tem_fgts && "FGTS",
-        dados.tem_sentenca && "sentença",
+        meta.has_contrato && "contrato",
+        rubricas > 0 && `${rubricas} rubricas`,
+        meta.has_trct && "TRCT",
+        meta.has_cartao_ponto && "cartão de ponto",
+        meta.has_ferias && "férias",
+        meta.has_sentenca && "sentença",
       ].filter(Boolean).join(", ");
 
       toast.success(
-        `✅ ${tipo} processado! Dados extraídos: ${detalhes || "nenhum"}. Campos preenchidos: ${fills.length}`,
+        `✅ ${tipo} processado! ${detalhes ? "Dados: " + detalhes + ". " : ""}Campos preenchidos: ${fills.length}`,
         { duration: 10000 }
       );
-      
-      // Invalidate ALL queries to refresh everything
+
       queryClient.invalidateQueries({ queryKey: ['pjecalc_case_data'] });
       queryClient.invalidateQueries({ queryKey: ['cases'] });
       onDocumentsChange();
     } catch (err) {
+      toast.dismiss(startToast);
       logger.error("Extract and fill error", err);
-      toast.error("Erro na extração: " + (err as Error).message);
+      toast.error("Erro na extração: " + (err as Error).message, { duration: 10000 });
+      onDocumentsChange(); // refresh para mostrar badge "failed"
     } finally {
       setProcessingDocId(null);
     }
