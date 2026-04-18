@@ -50,6 +50,7 @@ import {
   type MistralOcrPage,
   type MistralOcrOptions,
 } from "../_shared/mistral-ocr.ts";
+import { extractNativeText } from "../_shared/native-pdf.ts";
 
 // =====================================================
 // Configurações
@@ -238,6 +239,7 @@ async function runPipeline(
   mimeType: string,
   mistralOpts: MistralOcrOptions,
   onProgress?: (done: number, total: number) => Promise<void>,
+  openaiApiKey?: string | null,
 ): Promise<PipelineResult> {
   const t0 = Date.now();
 
@@ -290,6 +292,34 @@ async function runPipeline(
     );
   }
 
+  // ============================================================
+  // SHORT-CIRCUIT: se o PDF é digital (texto embebido), usa
+  // extração nativa. Zero OCR necessário → 100% preciso e
+  // instantâneo. So cai pra Mistral se quality != "good".
+  // ============================================================
+  let nativeResult: Awaited<ReturnType<typeof extractNativeText>> | null = null;
+  try {
+    nativeResult = await extractNativeText(new Uint8Array(buffer));
+    console.log(`[ocr] native extraction: quality=${nativeResult.quality} (${nativeResult.reason})`);
+    if (nativeResult.quality === "good") {
+      if (onProgress) await onProgress(1, 1);
+      return {
+        markdown: nativeResult.text,
+        pageCount: nativeResult.pageCount || info.pageCount,
+        confidence: 1.0, // extração nativa é perfeita
+        docType: detectDocType(nativeResult.text),
+        chunksTotal: 1,
+        chunksDone: 1,
+        chunksFailed: 0,
+        chunksErrors: [],
+        provider: "native-pdf",
+        durationMs: Date.now() - t0,
+      };
+    }
+  } catch (err) {
+    console.warn(`[ocr] native extraction lançou:`, err);
+  }
+
   const pagesPerChunk =
     buffer.byteLength > SIZE_SPLIT_THRESHOLD_BYTES
       ? decidePagesPerChunk(info.pageCount) || 10
@@ -302,9 +332,12 @@ async function runPipeline(
     if (onProgress) await onProgress(1, 1);
     let markdown = out.markdown;
     try {
-      const retried = await retryWeakPages(buffer, markdown, info.pageCount, mistralOpts);
+      const retried = await retryWeakPages(
+        buffer, markdown, info.pageCount, mistralOpts,
+        nativeResult?.pages, openaiApiKey,
+      );
       if (retried.recovered > 0) {
-        console.log(`[ocr] (small) retry individual recuperou ${retried.recovered} pagina(s) fraca(s)`);
+        console.log(`[ocr] (small) retry recuperou ${retried.recovered} pagina(s): ${JSON.stringify(retried.recoveredBy)}`);
         markdown = retried.markdown;
       }
     } catch (err) {
@@ -377,13 +410,15 @@ async function runPipeline(
   let markdown = parts.join("\n\n");
 
   // ============================================================
-  // Retry de paginas fracas: re-roda OCR individualmente para
-  // paginas que vieram vazias ou com muito pouco texto.
+  // Retry de paginas fracas com cascata: native -> Mistral -> gpt-vision
   // ============================================================
   try {
-    const retried = await retryWeakPages(buffer, markdown, info.pageCount, mistralOpts);
+    const retried = await retryWeakPages(
+      buffer, markdown, info.pageCount, mistralOpts,
+      nativeResult?.pages, openaiApiKey,
+    );
     if (retried.recovered > 0) {
-      console.log(`[ocr] retry individual recuperou ${retried.recovered} pagina(s) fraca(s)`);
+      console.log(`[ocr] retry recuperou ${retried.recovered} pagina(s): ${JSON.stringify(retried.recoveredBy)}`);
       markdown = retried.markdown;
     }
   } catch (err) {
@@ -449,32 +484,63 @@ function replacePageSection(markdown: string, pageNum: number, newBody: string):
   return `${markdown}\n\n${replacement}`;
 }
 
+/** Contéudo útil por página? (ignorando placeholders). */
+function hasUsefulBody(body: string): boolean {
+  if (!body) return false;
+  if (WEAK_PAGE_MARKERS.some((m) => body.includes(m))) return false;
+  return body.replace(/\s+/g, "").length >= WEAK_PAGE_MIN_CHARS;
+}
+
 /**
- * Re-roda OCR individualmente para cada pagina considerada fraca.
- * Extrai a pagina do PDF original (chunk de 1 pagina) e OCRiza.
- * Max 8 retries por documento para limitar custo.
+ * Re-roda OCR individualmente para cada pagina considerada fraca, com
+ * cascata de fallbacks:
+ *   1. Se houver texto nativo util pra essa pagina (PDF digital) → usar (grátis)
+ *   2. Senão, retry Mistral individual (chunk de 1 pagina)
+ *   3. Senão, fallback gpt-4o-mini vision (via PDF de 1 pagina como document)
+ *
+ * Max 8 retries por documento pra limitar custo.
  */
 async function retryWeakPages(
   buffer: ArrayBuffer,
   markdown: string,
   totalPages: number,
   opts: MistralOcrOptions,
-): Promise<{ markdown: string; recovered: number }> {
+  nativePages?: string[],
+  openaiApiKey?: string | null,
+): Promise<{ markdown: string; recovered: number; recoveredBy: Record<string, number> }> {
   const MAX_RETRIES_PER_DOC = 8;
   const weak = findWeakPages(markdown, totalPages);
-  if (weak.length === 0) return { markdown, recovered: 0 };
+  const recoveredBy: Record<string, number> = { native: 0, mistral: 0, gpt_vision: 0 };
+  if (weak.length === 0) return { markdown, recovered: 0, recoveredBy };
   const toRetry = weak.slice(0, MAX_RETRIES_PER_DOC);
-  console.log(`[ocr] ${weak.length} pagina(s) fraca(s) detectada(s); retry individual nas primeiras ${toRetry.length}: [${toRetry.join(", ")}]`);
-
-  // Extrai cada pagina individualmente.
-  const singles = await splitPdfIntoChunks(buffer, 1);
+  console.log(`[ocr] ${weak.length} pagina(s) fraca(s); retry nas ${toRetry.length}: [${toRetry.join(", ")}]`);
 
   let out = markdown;
   let recovered = 0;
 
-  // Roda em paralelo com concorrencia limitada (reusa runInParallel via worker).
-  const results = await runInParallel(
-    toRetry,
+  // --- FASE 1: native PDF para as paginas fracas (grátis) ---
+  const stillWeak: number[] = [];
+  for (const pageNum of toRetry) {
+    const native = nativePages?.[pageNum - 1] || "";
+    if (hasUsefulBody(native.trim())) {
+      out = replacePageSection(out, pageNum, native.trim());
+      recovered++;
+      recoveredBy.native++;
+    } else {
+      stillWeak.push(pageNum);
+    }
+  }
+  if (stillWeak.length === 0) {
+    console.log(`[ocr] todas as paginas fracas recuperadas via native (${recoveredBy.native})`);
+    return { markdown: out, recovered, recoveredBy };
+  }
+
+  // Extrai cada pagina individualmente (sub-PDF de 1 pagina).
+  const singles = await splitPdfIntoChunks(buffer, 1);
+
+  // --- FASE 2: retry Mistral individual ---
+  const mistralResults = await runInParallel(
+    stillWeak,
     async (pageNum) => {
       const single = singles[pageNum - 1];
       if (!single) throw new Error(`pagina ${pageNum} ausente no split`);
@@ -482,18 +548,118 @@ async function retryWeakPages(
       const bodyRaw = r.pages[0]?.markdown?.trim() || "";
       return { pageNum, body: bodyRaw };
     },
-    Math.min(MAX_CONCURRENT_CHUNKS, toRetry.length),
+    Math.min(MAX_CONCURRENT_CHUNKS, stillWeak.length),
   );
 
-  for (const r of results) {
-    if (!r.ok) continue;
-    const { pageNum, body } = r.value;
-    if (body.replace(/\s+/g, "").length < WEAK_PAGE_MIN_CHARS) continue; // ainda fraca
-    out = replacePageSection(out, pageNum, body);
-    recovered++;
+  const stillWeakAfterMistral: number[] = [];
+  for (let i = 0; i < mistralResults.length; i++) {
+    const r = mistralResults[i];
+    const pageNum = stillWeak[i];
+    if (r.ok && hasUsefulBody(r.value.body)) {
+      out = replacePageSection(out, pageNum, r.value.body);
+      recovered++;
+      recoveredBy.mistral++;
+    } else {
+      stillWeakAfterMistral.push(pageNum);
+    }
+  }
+  if (stillWeakAfterMistral.length === 0 || !openaiApiKey) {
+    console.log(`[ocr] retry done. recovered: native=${recoveredBy.native} mistral=${recoveredBy.mistral}`);
+    return { markdown: out, recovered, recoveredBy };
   }
 
-  return { markdown: out, recovered };
+  // --- FASE 3: LLM-vision (gpt-4o-mini) para as que ainda resistiram ---
+  console.log(`[ocr] fase 3 (gpt-4o-mini vision) para ${stillWeakAfterMistral.length} pagina(s)`);
+  const visionResults = await runInParallel(
+    stillWeakAfterMistral,
+    async (pageNum) => {
+      const single = singles[pageNum - 1];
+      if (!single) throw new Error(`pagina ${pageNum} ausente no split`);
+      const text = await ocrPageWithGptVision(single.bytes, pageNum, openaiApiKey);
+      return { pageNum, body: text };
+    },
+    Math.min(3, stillWeakAfterMistral.length), // 3 simultâneos pro OpenAI
+  );
+
+  for (let i = 0; i < visionResults.length; i++) {
+    const r = visionResults[i];
+    const pageNum = stillWeakAfterMistral[i];
+    if (r.ok && hasUsefulBody(r.value.body)) {
+      out = replacePageSection(out, pageNum, r.value.body);
+      recovered++;
+      recoveredBy.gpt_vision++;
+    }
+  }
+  console.log(`[ocr] retry done. recovered: native=${recoveredBy.native} mistral=${recoveredBy.mistral} gpt_vision=${recoveredBy.gpt_vision}`);
+  return { markdown: out, recovered, recoveredBy };
+}
+
+/**
+ * Fallback LLM-vision: manda o PDF de 1 pagina pra OpenAI Files API +
+ * gpt-4o-mini pedindo transcricao literal. Ultimo recurso quando o
+ * Mistral falha repetidamente numa pagina.
+ */
+async function ocrPageWithGptVision(
+  pdfBytes: Uint8Array,
+  pageNum: number,
+  openaiApiKey: string,
+): Promise<string> {
+  // 1) Upload do PDF de 1 pagina na Files API
+  const form = new FormData();
+  form.append("purpose", "user_data");
+  form.append("file", new Blob([pdfBytes], { type: "application/pdf" }), `pagina-${pageNum}.pdf`);
+
+  const upResp = await fetch("https://api.openai.com/v1/files", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${openaiApiKey}` },
+    body: form,
+  });
+  if (!upResp.ok) {
+    const t = await upResp.text();
+    throw new Error(`OpenAI files upload ${upResp.status}: ${t.slice(0, 200)}`);
+  }
+  const upJson = await upResp.json();
+  const fileId: string | undefined = upJson.id;
+  if (!fileId) throw new Error(`OpenAI files sem id: ${JSON.stringify(upJson).slice(0, 200)}`);
+
+  try {
+    // 2) Chama chat completions com file como input
+    const chatResp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openaiApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Transcreva ABSOLUTAMENTE TODO o texto deste documento brasileiro (trabalhista, em português). Preserve tabelas em markdown, valores monetários (R$ 1.234,56), datas (DD/MM/AAAA), códigos e totais. Não resuma, não interprete. Apenas o texto extraído, nada mais.",
+            },
+            { type: "file", file: { file_id: fileId } },
+          ],
+        }],
+        temperature: 0,
+        max_tokens: 16000,
+      }),
+    });
+    if (!chatResp.ok) {
+      const t = await chatResp.text();
+      throw new Error(`OpenAI chat ${chatResp.status}: ${t.slice(0, 200)}`);
+    }
+    const chatJson = await chatResp.json();
+    const text: string = chatJson.choices?.[0]?.message?.content || "";
+    return text.trim();
+  } finally {
+    // Cleanup best-effort
+    fetch(`https://api.openai.com/v1/files/${fileId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${openaiApiKey}` },
+    }).catch(() => { /* ignore */ });
+  }
 }
 
 // =====================================================
@@ -583,7 +749,8 @@ serve(async (req) => {
         }
       };
 
-      const result = await runPipeline(buffer, mimeType, mistralOpts, progress);
+      const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || null;
+      const result = await runPipeline(buffer, mimeType, mistralOpts, progress, OPENAI_API_KEY);
 
       const finalStatus = result.chunksFailed === 0 ? "ocr_done" : "ocr_partial";
 

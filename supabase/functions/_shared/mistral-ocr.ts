@@ -209,7 +209,7 @@ export async function runOcr(
   const {
     apiKey,
     model = "mistral-ocr-latest",
-    timeoutMs = 180_000,
+    timeoutMs = 300_000, // 5 min — PDFs densos com tabelas grandes podem demorar
     maxRetries = 4,
     retryBaseMs = 2000,
   } = opts;
