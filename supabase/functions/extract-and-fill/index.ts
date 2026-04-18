@@ -1678,6 +1678,7 @@ async function processDocumentInBackground(
   supabase: any,
   ocrTextOverride?: string,
   markValidated?: boolean,
+  userAuthHeader?: string,
 ) {
   try {
     let mimeType = doc.mime_type || "application/pdf";
@@ -2043,8 +2044,8 @@ serve(async (req) => {
     }).eq("id", document_id);
 
     (globalThis as any).EdgeRuntime?.waitUntil?.(
-      processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated)
-    ) ?? processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated);
+      processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated, userAuthHeader)
+    ) ?? processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated, userAuthHeader);
 
     return new Response(
       JSON.stringify({
