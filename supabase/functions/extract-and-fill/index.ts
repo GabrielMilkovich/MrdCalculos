@@ -1675,7 +1675,9 @@ async function processDocumentInBackground(
   doc: any,
   MISTRAL_API_KEY: string,
   OPENAI_API_KEY: string,
-  supabase: any
+  supabase: any,
+  ocrTextOverride?: string,
+  markValidated?: boolean,
 ) {
   try {
     let mimeType = doc.mime_type || "application/pdf";
@@ -1692,8 +1694,14 @@ async function processDocumentInBackground(
     let extractionMethod = "ocr";
     const tPipeline0 = Date.now();
 
-    // ============ IMPROVEMENT #1: Try native PDF extraction first ============
-    if (isPdf) {
+    // ============ SHORTCUT: OCR texto validado pelo usuário ============
+    // Quando vem do split view de validação, já temos o texto finalizado
+    // — pula OCR completamente e vai direto pra extração estruturada.
+    if (ocrTextOverride && ocrTextOverride.trim().length >= 20) {
+      console.log(`[EXTRACT] Using validated OCR text from user (${ocrTextOverride.length} chars) — skipping OCR`);
+      ocrText = ocrTextOverride;
+      extractionMethod = "validated_ocr";
+    } else if (isPdf) {
       // Baixa o PDF UMA vez e reusa bytes para native extract + OCR.
       // Antes: downloadNative (file fetch) + downloadOCR (file fetch) = 2x fetch
       // Agora: downloadOnce → native reuse → OCR reuse (se fallback)
@@ -1821,7 +1829,7 @@ async function processDocumentInBackground(
     console.log(`[EXTRACT] Completeness: ${completeness.score}%, missing: [${completeness.missing.join(", ")}], ready: ${completeness.ready_for_liquidation}`);
 
     const extractedOcrText = extracted.texto_ocr_completo || "";
-    await supabase.from("documents").update({
+    const updatePayload: Record<string, unknown> = {
       status: "extracted",
       tipo: extracted.tipo_documento || doc.tipo,
       page_count: extracted.paginas_detectadas || 1,
@@ -1829,6 +1837,21 @@ async function processDocumentInBackground(
       ocr_confianca: extracted.confianca_geral || 0.9,
       processing_completed_at: new Date().toISOString(),
       error_message: null,
+    };
+    // Se o usuário mandou ocr_text_override + mark_validated, marca validação
+    // (e preserva o texto validado para referência futura).
+    if (markValidated) {
+      updatePayload.ocr_validated = true;
+      updatePayload.ocr_validated_at = new Date().toISOString();
+      updatePayload.ocr_validated_by = doc.owner_user_id || null;
+    }
+    // Se veio texto validado pelo usuário, atualiza ocr_text com a versão final
+    // (usuário pode ter editado o texto no split view).
+    if (ocrTextOverride) {
+      updatePayload.ocr_text = ocrTextOverride.slice(0, 10_000_000);
+    }
+    await supabase.from("documents").update({
+      ...updatePayload,
       metadata: {
         ...(doc.metadata || {}),
         extraction_completed_at: new Date().toISOString(),
@@ -1910,7 +1933,13 @@ serve(async (req) => {
   }
 
   try {
-    const { document_id } = await req.json();
+    const body = await req.json();
+    const document_id: string | undefined = body?.document_id;
+    // Texto OCR validado pelo usuário no split view — quando presente,
+    // pula a fase de OCR (já foi feita antes) e usa este texto direto.
+    const ocr_text_override: string | undefined = body?.ocr_text;
+    // Flag opcional: marcar o documento como validado ao concluir.
+    const mark_validated: boolean = body?.mark_validated === true;
 
     if (!document_id) {
       return new Response(
@@ -1992,8 +2021,8 @@ serve(async (req) => {
     }).eq("id", document_id);
 
     (globalThis as any).EdgeRuntime?.waitUntil?.(
-      processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase)
-    ) ?? processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase);
+      processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated)
+    ) ?? processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated);
 
     return new Response(
       JSON.stringify({

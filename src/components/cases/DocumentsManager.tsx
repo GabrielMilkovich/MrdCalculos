@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DocumentValidation } from "@/components/cases/DocumentValidation";
 import {
   Select,
   SelectContent,
@@ -56,6 +57,7 @@ import {
   Clock,
   Percent,
   Sparkles,
+  FileCheck2,
 } from "lucide-react";
 import {
   Tooltip,
@@ -150,6 +152,7 @@ export function DocumentsManager({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingDocId, setProcessingDocId] = useState<string | null>(null);
+  const [validatingDocId, setValidatingDocId] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string>("outro");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -278,7 +281,7 @@ export function DocumentsManager({
           .from("juriscalculo-documents")
           .createSignedUrl(storagePath, 3600);
 
-        const { error: docError } = await supabase
+        const { data: docData, error: docError } = await supabase
           .from("documents")
           .insert({
             case_id: caseId,
@@ -294,14 +297,23 @@ export function DocumentsManager({
               size: file.size,
               uploaded_at: new Date().toISOString(),
             },
-          });
+          })
+          .select("id")
+          .single();
 
-        if (docError) {
+        if (docError || !docData) {
           logger.error("Document insert error", docError);
           await supabase.storage.from("juriscalculo-documents").remove([storagePath]);
           toast.error(`Erro ao registrar: ${file.name}`);
           continue;
         }
+
+        // Auto-dispara OCR em background (fire-and-forget). O usuário verá o
+        // status mudar para "ocr_running" → "ocr_done" na lista. Depois pode
+        // abrir o split-view de validação.
+        supabase.functions
+          .invoke("ocr-document", { body: { document_id: docData.id } })
+          .catch((err) => logger.warn("auto-OCR trigger falhou (pode re-executar manualmente)", err));
 
         successCount++;
         setUploadProgress(((i + 1) / files.length) * 100);
@@ -309,7 +321,7 @@ export function DocumentsManager({
 
       if (successCount > 0) {
         onDocumentsChange();
-        toast.success(`${successCount} documento(s) enviado(s)! Clique em "Processar" para OCR e indexação.`);
+        toast.success(`${successCount} documento(s) enviado(s). OCR rodando automaticamente...`);
       }
     } catch (error) {
       logger.error("Upload error", error);
@@ -986,11 +998,35 @@ export function DocumentsManager({
                             </Tooltip>
                           )}
                           
+                          {/* Botão primário: Validar OCR (split view) — aparece quando OCR já rodou */}
+                          {["ocr_done", "ocr_partial", "extracted"].includes(effectiveStatus) && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-primary"
+                                  onClick={() => setValidatingDocId(doc.id)}
+                                  disabled={isProcessing}
+                                >
+                                  <FileCheck2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {doc.ocr_validated
+                                  ? "OCR já validado — rever / re-extrair"
+                                  : "Validar OCR e extrair dados"}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+
+                          {/* Fallback: Extrair direto (OCR + extração em um passo) — aparece
+                              só para uploaded/failed quando o auto-OCR não rodou. */}
                           {(["uploaded", "failed", "error"].includes(effectiveStatus) || !doc.status) && (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
+                                <Button
+                                  variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-primary"
                                   onClick={() => extractAndFill(doc.id)}
@@ -1003,7 +1039,7 @@ export function DocumentsManager({
                                   )}
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Extrair e Preencher com IA</TooltipContent>
+                              <TooltipContent>Extrair tudo (OCR + IA em um passo)</TooltipContent>
                             </Tooltip>
                           )}
 
@@ -1070,6 +1106,19 @@ export function DocumentsManager({
           </CardContent>
         </Card>
       )}
+
+      {/* Modal de validação OCR (split view: texto | PDF) */}
+      <DocumentValidation
+        open={validatingDocId !== null}
+        onOpenChange={(open) => !open && setValidatingDocId(null)}
+        documentId={validatingDocId}
+        onValidated={() => {
+          setValidatingDocId(null);
+          queryClient.invalidateQueries({ queryKey: ['pjecalc_case_data'] });
+          queryClient.invalidateQueries({ queryKey: ['cases'] });
+          onDocumentsChange();
+        }}
+      />
     </div>
   );
 }

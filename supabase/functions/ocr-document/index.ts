@@ -459,6 +459,15 @@ serve(async (req) => {
         ocr_chunks_total: result.chunksTotal,
         ocr_chunks_done: result.chunksDone,
         ocr_chunks_failed: result.chunksFailed,
+        // Persiste o texto completo para o fluxo de validação no split-view.
+        // Limite de 10MB no banco (texto markdown raramente passa disso;
+        // se passar, trunca com aviso no final).
+        ocr_text: result.markdown.length > 10_000_000
+          ? result.markdown.slice(0, 10_000_000) + "\n\n[... truncado ...]"
+          : result.markdown,
+        ocr_validated: false, // sempre reseta validação em nova rodada de OCR
+        ocr_validated_at: null,
+        ocr_validated_by: null,
         processing_completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         error_message: result.chunksFailed > 0 ? result.chunksErrors.join(" | ").slice(0, 1000) : null,
