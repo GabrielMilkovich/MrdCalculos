@@ -124,6 +124,8 @@ export interface PJCAnalysis {
     lc110_10: boolean;
     lc110_05: boolean;
     destino: string;
+    /** compor_principal from PJC <Fgts><comporPrincipal>SIM|NAO</> */
+    compor_principal?: boolean;
   };
   /** Pensão alimentícia config */
   pensao_alimenticia?: { apurar: boolean; percentual: number; base?: string };
@@ -801,6 +803,8 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     root.getElementsByTagName('ModuloFGTS')[0],
     root.getElementsByTagName('moduloFgts')[0],
     root.getElementsByTagName('FGTS')[0],
+    root.getElementsByTagName('Fgts')[0],
+    root.getElementsByTagName('fgts')[0],
   ];
   const fgtsEl = fgtsCandidates.find(el => {
     if (!el) return false;
@@ -809,11 +813,16 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       || getTextContent(el, 'multaPercentual')
       || getTextContent(el, 'apurar')
       || getTextContent(el, 'baseMulta')
-      || getTextContent(el, 'multaBase'));
+      || getTextContent(el, 'multaBase')
+      || getTextContent(el, 'multaDoFgts')
+      || getTextContent(el, 'destinoDoFgts')
+      || getTextContent(el, 'tipoDoValorDaMulta')
+      || getTextContent(el, 'indiceDeCorrecaoDoFGTS'));
   });
   let fgts_config: PJCAnalysis['fgts_config'] = undefined;
   if (fgtsEl) {
     const multa_pct_raw = getTextContent(fgtsEl, 'percentualMulta') || getTextContent(fgtsEl, 'multaPercentual');
+    const comporRaw = getTextContent(fgtsEl, 'comporPrincipal');
     fgts_config = {
       apurar: getTextContent(fgtsEl, 'apurar') !== 'false',
       multa_percentual: parseNum(multa_pct_raw) || 40,
@@ -821,6 +830,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       lc110_10: getTextContent(fgtsEl, 'lc110_10') === 'true' || getTextContent(fgtsEl, 'contribuicaoSocial10') === 'true',
       lc110_05: getTextContent(fgtsEl, 'lc110_05') === 'true' || getTextContent(fgtsEl, 'contribuicaoSocial05') === 'true',
       destino: getTextContent(fgtsEl, 'destino') || getTextContent(fgtsEl, 'destinoFGTS') || 'pagar_reclamante',
+      compor_principal: comporRaw === 'SIM' || comporRaw === 'true',
     };
   }
   // If resultado shows FGTS deposit > 0 but no config element, create default

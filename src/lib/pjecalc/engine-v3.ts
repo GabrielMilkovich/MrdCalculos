@@ -673,16 +673,24 @@ export class PjeCalcEngineV3 {
     const valor = new Decimal(valorCorrigido);
     const combs = this.correcaoConfig.combinacoes_juros ?? [];
 
-    // Quando combinacoes_juros tem entrada-base (sem 'de') e entrada com 'de',
-    // ha juros PRE-JUDICIAIS (competencia -> ajuizamento) na base, depois o outro
-    // tipo pos-ajuizamento. Nesse caso, inicio e a competencia, nao o ajuizamento.
+    // PJe-Calc TabelaDeJurosDoCalculo.calcularDataInicialDoPrimeiroPeriodoDeJuros
+    // (ref Java linhas 42-70): OCORRENCIAS_VENCIDAS + aplicarJurosFasePreJudicial=true
+    // → juros iniciam em dataFim+1 dia (ou 1º dia do mês seguinte se dataFim null).
     const temBase = combs.some(c => !c.de);
     const temPeriodoExplicito = combs.some(c => !!c.de);
     const aplicaPreJudicial = temBase && temPeriodoExplicito;
 
-    const inicio = aplicaPreJudicial
-      ? dataComp  // pre-judicial: conta desde a competencia
-      : (dataComp.getTime() > inicioJuros.getTime() ? dataComp : inicioJuros);
+    let inicio: Date;
+    if (aplicaPreJudicial) {
+      const dataFim = oc.getDataFinal();
+      if (dataFim) {
+        inicio = new Date(dataFim.getTime() + 24 * 60 * 60 * 1000);
+      } else {
+        inicio = new Date(dataComp.getFullYear(), dataComp.getMonth() + 1, 1);
+      }
+    } else {
+      inicio = dataComp.getTime() > inicioJuros.getTime() ? dataComp : inicioJuros;
+    }
     if (inicio.getTime() >= dataLiq.getTime()) return 0;
     if (combs.length > 0) {
       return valor.times(this.pctJurosCombinado(inicio, dataLiq, tipo, combs)).div(100).toDP(2).toNumber();
@@ -692,14 +700,28 @@ export class PjeCalcEngineV3 {
 
   /**
    * Retorna o percentual de juros acumulado em um segmento [inicio, fim] sob um tipo único.
-   * Tipos: 'selic' soma SELIC mensal pro-rata. 'simples_mensal' e 'taxa_legal' = 1%/mês.
-   * 'composto' retorna percentual equivalente (1 + r)^meses - 1. 'trd_simples' = 1%/mês.
-   * 'um_porcento' = 1%/mês. 'meio_porcento' = 0.5%/mês. 'nenhum'/'sem_juros' = 0.
+   * Tipos:
+   *   'selic'/'selic_bacen'/'selic_fazenda' — soma SELIC mensal pro-rata.
+   *   'trd_simples' — Taxa Referencial Diária simples (ref Java
+   *     TabelaDeJuros.montarPeriodosTRD linha 163: taxa_dia × dias_no_mês).
+   *     Usa tabela TR_MENSAL (pós-2017 ≈ 0, praticamente extinta).
+   *   'simples_mensal'/'taxa_legal'/'um_porcento'/padrão — 1%/mês.
+   *   'meio_porcento' — 0.5%/mês.
+   *   'composto' — (1 + r)^meses - 1 em %.
+   *   'nenhum'/'sem_juros' — 0.
+   *
+   * NOTA: antes TRD_SIMPLES caía em 1%/mês junto com TAXA_LEGAL. Isso causava
+   * overshoot sistêmico de juros pré-judiciais em cálculos ADC 58/59, porque o
+   * PJe-Calc real usa Taxa Referencial (TR) como base do TRD_SIMPLES. Com TR
+   * ≈ 0 pós Lei 12.703/2012, o juros pré-judicial efetivo é quase zero.
    */
   private pctJurosSegmento(inicio: Date, fim: Date, tipo: string): Decimal {
     if (inicio.getTime() >= fim.getTime()) return new Decimal(0);
     const t = tipo.toLowerCase();
     if (t === 'nenhum' || t === 'sem_juros') return new Decimal(0);
+    if (t === 'trd_simples' || t === 'trd' || t === 'trd_compostos') {
+      return new Decimal(this.somarTRSimples(inicio, fim));
+    }
     if (t === 'selic' || t === 'selic_bacen' || t === 'selic_fazenda') {
       return new Decimal(this.somarSelicSimples(inicio, fim));
     }

@@ -683,7 +683,10 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
   return {
     apurar: fgtsConf?.apurar ?? (fgtsDeposito > 0),
     destino: destMap[fgtsConf?.destino || ''] || 'pagar_reclamante',
-    compor_principal: false,
+    // PJC <Fgts><comporPrincipal>SIM|NAO</comporPrincipal> — decide se o FGTS
+    // compõe o liquido_exequente. Default false por compatibilidade, mas quando
+    // o PJC diz SIM, o engine deve incluir FGTS no líquido do reclamante.
+    compor_principal: fgtsConf?.compor_principal ?? false,
     multa_apurar: true,
     multa_tipo: 'calculada',
     multa_percentual: fgtsConf?.multa_percentual ?? 40,
