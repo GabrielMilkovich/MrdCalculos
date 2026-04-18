@@ -857,54 +857,6 @@ export default function CasoDetalhe() {
                 }
               }}
             />
-
-            {/* Extraction Controls (fatos) */}
-            <Card className="bg-card/80">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold">Extração de Fatos via IA</div>
-                      <div className="text-xs text-muted-foreground">
-                        {chunksCount} chunks disponíveis • {facts.length} fatos extraídos
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={runFactExtraction} disabled={isExtractingFacts || chunksCount === 0}>
-                      {isExtractingFacts ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
-                      Extrair
-                    </Button>
-                    {facts.length > 0 && (
-                      <Button size="sm" variant="outline" onClick={restartFactExtraction} disabled={isExtractingFacts}>
-                        <RefreshCw className="h-4 w-4 mr-1" /> Reiniciar
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                {chunksCount === 0 && (
-                  <div className="flex items-center gap-2 mt-3 p-2 rounded-md bg-accent/5 border border-accent/20 text-xs text-accent">
-                    <AlertTriangle className="h-3 w-3" />
-                    Nenhum chunk indexado. Processe os documentos primeiro.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {extractionsCount > 0 && (
-              <ValidationViewV2 caseId={id!} onValidationComplete={() => setActiveTab("calculo")} />
-            )}
-
-            <FactValidationView
-              caseId={id!} facts={facts} documents={documents}
-              onFactsChange={() => queryClient.invalidateQueries({ queryKey: ["facts", id] })}
-              onValidationComplete={() => setActiveTab("calculo")}
-              createCriticalKeyRequest={createCriticalKeyRequest}
-              createCriticalNonce={createCriticalNonce}
-            />
           </div>
         );
 
