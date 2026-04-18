@@ -108,12 +108,32 @@ function detectDocType(text: string): string {
 }
 
 /** Confiança default do Mistral OCR, com penalidades para sinais ruins. */
-function estimateConfidence(pages: MistralOcrPage[]): number {
+function estimateConfidence(pages: MistralOcrPage[], markdownOverride?: string): number {
   let conf = 0.95;
-  const totalLen = pages.reduce((s, p) => s + p.markdown.length, 0);
+  const joined = markdownOverride ?? pages.map((p) => p.markdown || "").join("\n");
+  const totalLen = joined.length;
   if (totalLen < 200) conf -= 0.2;
-  const emptyPages = pages.filter((p) => !p.markdown.trim()).length;
-  if (emptyPages > 0) conf -= Math.min(0.3, emptyPages * 0.05);
+  if (pages.length > 0) {
+    const emptyPages = pages.filter((p) => !p.markdown.trim()).length;
+    if (emptyPages > 0) conf -= Math.min(0.3, emptyPages * 0.05);
+  }
+
+  // Detecta sinais de OCR degradado (texto ruim):
+  //  - excesso de simbolos estranhos (�, ?, sequencias de pontuacao)
+  //  - paginas com densidade baixa de palavras reais
+  if (totalLen > 0) {
+    // Caracteres "garbage": placeholder unicode, sequencias de pontuacao
+    const garbage = (joined.match(/�|\?{3,}|[^\w\sÀ-ÿ.,;:()/\\*#%&@+\-"'$!?|[\]{}°ºª=<>]{3,}/g) || [])
+      .reduce((s, m) => s + m.length, 0);
+    const garbageRatio = garbage / totalLen;
+    if (garbageRatio > 0.02) conf -= Math.min(0.2, garbageRatio * 3);
+
+    // Palavras minimas (3+ letras latin): doc razoavel tem 1 palavra por 10 chars
+    const words = (joined.match(/[A-Za-zÀ-ÿ]{3,}/g) || []).length;
+    const wordsPerChar = words / Math.max(1, totalLen);
+    if (wordsPerChar < 0.05) conf -= 0.15; // texto muito fragmentado
+  }
+
   return Math.max(0.1, Math.min(1, conf));
 }
 
@@ -280,11 +300,21 @@ async function runPipeline(
     const result = await ocrBytes(new Uint8Array(buffer), "documento.pdf", mistralOpts);
     const out = materializeChunkPages(result, 1, info.pageCount);
     if (onProgress) await onProgress(1, 1);
+    let markdown = out.markdown;
+    try {
+      const retried = await retryWeakPages(buffer, markdown, info.pageCount, mistralOpts);
+      if (retried.recovered > 0) {
+        console.log(`[ocr] (small) retry individual recuperou ${retried.recovered} pagina(s) fraca(s)`);
+        markdown = retried.markdown;
+      }
+    } catch (err) {
+      console.warn(`[ocr] (small) retry de paginas fracas falhou:`, err);
+    }
     return {
-      markdown: out.markdown,
+      markdown,
       pageCount: info.pageCount,
-      confidence: estimateConfidence(result.pages),
-      docType: detectDocType(out.markdown),
+      confidence: estimateConfidence(result.pages, markdown),
+      docType: detectDocType(markdown),
       chunksTotal: 1,
       chunksDone: 1,
       chunksFailed: 0,
@@ -344,12 +374,28 @@ async function runPipeline(
     }
   }
 
-  const markdown = parts.join("\n\n");
+  let markdown = parts.join("\n\n");
+
+  // ============================================================
+  // Retry de paginas fracas: re-roda OCR individualmente para
+  // paginas que vieram vazias ou com muito pouco texto.
+  // ============================================================
+  try {
+    const retried = await retryWeakPages(buffer, markdown, info.pageCount, mistralOpts);
+    if (retried.recovered > 0) {
+      console.log(`[ocr] retry individual recuperou ${retried.recovered} pagina(s) fraca(s)`);
+      markdown = retried.markdown;
+    }
+  } catch (err) {
+    console.warn(`[ocr] retry de paginas fracas falhou (seguindo com resultado original):`, err);
+  }
 
   return {
     markdown,
     pageCount: info.pageCount,
-    confidence: fail > 0 ? Math.max(0.3, 0.9 - fail * 0.1) : 0.95,
+    confidence: fail > 0
+      ? Math.max(0.3, 0.9 - fail * 0.1)
+      : estimateConfidence([], markdown),
     docType: detectDocType(markdown),
     chunksTotal: total,
     chunksDone: ok,
@@ -358,6 +404,96 @@ async function runPipeline(
     provider: "mistral-ocr",
     durationMs: Date.now() - t0,
   };
+}
+
+// =====================================================
+// Retry de paginas fracas
+// =====================================================
+
+/** Marcadores que indicam uma pagina que nao teve OCR util. */
+const WEAK_PAGE_MARKERS = ["[vazia]", "[OCR FALHOU", "[pagina ausente", "[página ausente"];
+/** Texto minimo (chars) para considerar que a pagina teve OCR util. */
+const WEAK_PAGE_MIN_CHARS = 80;
+
+/** Detecta, no markdown com cabecalhos `--- PÁGINA N ---`, as paginas fracas. */
+function findWeakPages(markdown: string, totalPages: number): number[] {
+  const weak: number[] = [];
+  // Particiona por cabecalho de pagina.
+  const sections = new Map<number, string>();
+  const re = /---\s*P[ÁA]GINA\s+(\d+)\s*---\s*\n([\s\S]*?)(?=---\s*P[ÁA]GINA\s+\d+|$)/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(markdown)) !== null) {
+    const pageNum = parseInt(m[1], 10);
+    sections.set(pageNum, m[2].trim());
+  }
+  for (let p = 1; p <= totalPages; p++) {
+    const body = sections.get(p) || "";
+    if (!body) { weak.push(p); continue; }
+    if (WEAK_PAGE_MARKERS.some((marker) => body.includes(marker))) { weak.push(p); continue; }
+    // remove espaços/quebras para contar chars "uteis"
+    if (body.replace(/\s+/g, "").length < WEAK_PAGE_MIN_CHARS) { weak.push(p); continue; }
+  }
+  return weak;
+}
+
+/** Substitui a secao de uma pagina especifica no markdown. */
+function replacePageSection(markdown: string, pageNum: number, newBody: string): string {
+  const header = `--- PÁGINA ${pageNum} ---`;
+  const re = new RegExp(
+    `---\\s*P[ÁA]GINA\\s+${pageNum}\\s*---\\s*\\n([\\s\\S]*?)(?=---\\s*P[ÁA]GINA\\s+\\d+|$)`,
+    "i",
+  );
+  const replacement = `${header}\n${newBody.trim()}\n\n`;
+  if (re.test(markdown)) return markdown.replace(re, replacement);
+  // se nao encontrou a secao, concatena
+  return `${markdown}\n\n${replacement}`;
+}
+
+/**
+ * Re-roda OCR individualmente para cada pagina considerada fraca.
+ * Extrai a pagina do PDF original (chunk de 1 pagina) e OCRiza.
+ * Max 8 retries por documento para limitar custo.
+ */
+async function retryWeakPages(
+  buffer: ArrayBuffer,
+  markdown: string,
+  totalPages: number,
+  opts: MistralOcrOptions,
+): Promise<{ markdown: string; recovered: number }> {
+  const MAX_RETRIES_PER_DOC = 8;
+  const weak = findWeakPages(markdown, totalPages);
+  if (weak.length === 0) return { markdown, recovered: 0 };
+  const toRetry = weak.slice(0, MAX_RETRIES_PER_DOC);
+  console.log(`[ocr] ${weak.length} pagina(s) fraca(s) detectada(s); retry individual nas primeiras ${toRetry.length}: [${toRetry.join(", ")}]`);
+
+  // Extrai cada pagina individualmente.
+  const singles = await splitPdfIntoChunks(buffer, 1);
+
+  let out = markdown;
+  let recovered = 0;
+
+  // Roda em paralelo com concorrencia limitada (reusa runInParallel via worker).
+  const results = await runInParallel(
+    toRetry,
+    async (pageNum) => {
+      const single = singles[pageNum - 1];
+      if (!single) throw new Error(`pagina ${pageNum} ausente no split`);
+      const r = await ocrBytes(single.bytes, `pagina-${pageNum}.pdf`, opts);
+      const bodyRaw = r.pages[0]?.markdown?.trim() || "";
+      return { pageNum, body: bodyRaw };
+    },
+    Math.min(MAX_CONCURRENT_CHUNKS, toRetry.length),
+  );
+
+  for (const r of results) {
+    if (!r.ok) continue;
+    const { pageNum, body } = r.value;
+    if (body.replace(/\s+/g, "").length < WEAK_PAGE_MIN_CHARS) continue; // ainda fraca
+    out = replacePageSection(out, pageNum, body);
+    recovered++;
+  }
+
+  return { markdown: out, recovered };
 }
 
 // =====================================================

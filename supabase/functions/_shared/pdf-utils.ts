@@ -118,18 +118,20 @@ export async function splitPdfIntoChunks(
 /**
  * Decide o número ideal de páginas por chunk com base em heurísticas.
  *
- * - PDFs pequenos (≤ 8 pg): 1 chunk só (sem split).
- * - PDFs médios (9-30 pg): chunks de 8 páginas.
- * - PDFs grandes (> 30 pg): chunks de 10 páginas.
- * - Cartão de ponto (suspeita por tamanho grande + muitas páginas):
- *   10 páginas por chunk; cada página do cartão é densa em dados.
+ * Chunks menores = qualidade melhor em PDFs densos (tabelas, cartões
+ * de ponto) e menos risco de truncamento na resposta do Mistral.
+ * O tradeoff é mais chamadas à API, mas rodamos em paralelo (4x).
+ *
+ * - PDFs pequenos (≤ 6 pg): 1 chunk só (sem split).
+ * - PDFs médios (7-30 pg): chunks de 5 páginas.
+ * - PDFs grandes (> 30 pg): chunks de 6 páginas.
  *
  * Retorna 0 quando o PDF é pequeno e NÃO precisa split.
  */
 export function decidePagesPerChunk(pageCount: number): number {
-  if (pageCount <= 8) return 0; // sem split
-  if (pageCount <= 30) return 8;
-  return 10;
+  if (pageCount <= 6) return 0; // sem split
+  if (pageCount <= 30) return 5;
+  return 6;
 }
 
 /**
