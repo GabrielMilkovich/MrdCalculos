@@ -1,15 +1,13 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { MainLayoutPremium } from "@/components/layout/MainLayoutPremium";
 import { CaseCard } from "@/components/cases/CaseCard";
 import { CreateCaseDialog } from "@/components/cases/CreateCaseDialog";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Search, Loader2, Briefcase, TrendingUp, FileStack,
-  CheckCircle2, Clock, Calculator, Scale
+  CheckCircle2, Clock, Calculator, Scale, Archive
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,6 +21,7 @@ interface CaseWithMetrics {
   tribunal: string | null;
   status: "rascunho" | "em_analise" | "calculado" | "revisado";
   criado_em: string;
+  arquivado: boolean;
   doc_count: number;
   fact_count: number;
   confirmed_fact_count: number;
@@ -36,10 +35,10 @@ const STATUS_TABS = [
   { value: "em_analise", label: "Em Análise", icon: Scale },
   { value: "calculado", label: "Calculado", icon: Calculator },
   { value: "revisado", label: "Revisado", icon: CheckCircle2 },
+  { value: "arquivado", label: "Arquivados", icon: Archive },
 ];
 
 export default function Casos() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -84,6 +83,7 @@ export default function Casos() {
 
       return casesData.map(c => ({
         ...c,
+        arquivado: (c as any).arquivado === true,
         doc_count: docCounts.get(c.id) || 0,
         fact_count: factCounts.get(c.id) || 0,
         confirmed_fact_count: confirmedCounts.get(c.id) || 0,
@@ -93,23 +93,57 @@ export default function Casos() {
     },
   });
 
-  const filteredCases = cases.filter((c) => {
+  // Separa ativos de arquivados. Lista principal (statusFilter != "arquivado")
+  // sempre filtra arquivados fora; tab "Arquivados" mostra apenas arquivados.
+  const activeCases = cases.filter(c => !c.arquivado);
+  const archivedCases = cases.filter(c => c.arquivado);
+
+  const visibleCases = statusFilter === "arquivado" ? archivedCases : activeCases;
+
+  const filteredCases = visibleCases.filter((c) => {
     const matchesSearch = !searchQuery ||
       c.cliente.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.numero_processo?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || c.status === statusFilter;
+    const matchesStatus =
+      statusFilter === "all" || statusFilter === "arquivado" || c.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const statusCounts = STATUS_TABS.reduce((acc, tab) => {
-    acc[tab.value] = tab.value === "all" ? cases.length : cases.filter(c => c.status === tab.value).length;
+    if (tab.value === "arquivado") acc[tab.value] = archivedCases.length;
+    else if (tab.value === "all") acc[tab.value] = activeCases.length;
+    else acc[tab.value] = activeCases.filter(c => c.status === tab.value).length;
     return acc;
   }, {} as Record<string, number>);
 
-  // KPIs
-  const totalValue = cases.reduce((sum, c) => sum + (c.total_bruto || 0), 0);
-  const totalDocs = cases.reduce((sum, c) => sum + c.doc_count, 0);
-  const pendingCases = cases.filter(c => c.status === "em_analise").length;
+  // KPIs — apenas casos ativos
+  const totalValue = activeCases.reduce((sum, c) => sum + (c.total_bruto || 0), 0);
+  const totalDocs = activeCases.reduce((sum, c) => sum + c.doc_count, 0);
+  const pendingCases = activeCases.filter(c => c.status === "em_analise").length;
+
+  // Handlers arquivar/desarquivar/excluir
+  const archiveCase = async (caseId: string, archive: boolean) => {
+    const { error } = await supabase
+      .from("cases")
+      .update({ arquivado: archive, arquivado_em: archive ? new Date().toISOString() : null } as any)
+      .eq("id", caseId);
+    if (error) {
+      toast.error(`Erro ao ${archive ? "arquivar" : "desarquivar"}: ${error.message}`);
+      return;
+    }
+    toast.success(archive ? "Caso arquivado." : "Caso desarquivado.");
+    queryClient.invalidateQueries({ queryKey: ["cases-with-metrics"] });
+  };
+
+  const deleteCase = async (caseId: string) => {
+    const { error } = await supabase.from("cases").delete().eq("id", caseId);
+    if (error) {
+      toast.error(`Erro ao excluir: ${error.message}`);
+      return;
+    }
+    toast.success("Caso excluído.");
+    queryClient.invalidateQueries({ queryKey: ["cases-with-metrics"] });
+  };
 
   return (
     <MainLayoutPremium breadcrumbs={[{ label: "Casos" }]} title="Casos">
@@ -189,14 +223,6 @@ export default function Casos() {
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Button
-              variant="outline" size="sm"
-              onClick={() => navigate("/novo-calculo")}
-              className="gap-1.5 h-9 text-sm"
-            >
-              <Calculator className="h-4 w-4" />
-              Wizard Completo
-            </Button>
             <CreateCaseDialog />
           </div>
         </div>
@@ -246,10 +272,6 @@ export default function Casos() {
             </p>
             {cases.length === 0 && (
               <div className="flex gap-3">
-                <Button onClick={() => navigate("/novo-calculo")} className="gap-2">
-                  <Calculator className="h-4 w-4" />
-                  Wizard Completo
-                </Button>
                 <CreateCaseDialog />
               </div>
             )}
@@ -270,6 +292,9 @@ export default function Casos() {
                 confirmedFactCount={c.confirmed_fact_count}
                 snapshotCount={c.snapshot_count}
                 totalBruto={c.total_bruto}
+                arquivado={c.arquivado}
+                onArchive={() => archiveCase(c.id, !c.arquivado)}
+                onDelete={() => deleteCase(c.id)}
               />
             ))}
           </div>
