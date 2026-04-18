@@ -55,8 +55,8 @@ export function CaseWorkspace({
             <h1 className="text-xl font-bold tracking-tight text-foreground truncate">
               {cliente}
             </h1>
-            <Badge className={cn("flex-shrink-0", statusConfig[status].className)}>
-              {statusConfig[status].label}
+            <Badge className={cn("flex-shrink-0", (statusConfig[status] || statusConfig.rascunho).className)}>
+              {(statusConfig[status] || statusConfig.rascunho).label}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground font-mono mt-0.5">

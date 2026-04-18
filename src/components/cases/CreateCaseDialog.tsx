@@ -44,6 +44,7 @@ export function CreateCaseDialog() {
       numero_processo: numeroProcesso.trim() || null,
       tribunal: tribunal.trim() || null,
       criado_por: user.id,
+      status: "rascunho",
     }).select("id").single();
 
     setLoading(false);
@@ -57,6 +58,7 @@ export function CreateCaseDialog() {
       setTribunal("");
       setOpen(false);
       queryClient.invalidateQueries({ queryKey: ["cases"] });
+      queryClient.invalidateQueries({ queryKey: ["cases-with-metrics"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-cases"] });
       if (data?.id) navigate(`/casos/${data.id}`);
     }
