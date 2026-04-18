@@ -1948,32 +1948,39 @@ serve(async (req) => {
       );
     }
 
-    const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
-    if (!MISTRAL_API_KEY) {
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Helper: registra o erro no documento para que a UI veja a causa real
+    // mesmo se o cliente supabase-js mostrar só "non-2xx status code".
+    const bail400 = async (payload: { error: string; hint?: string }) => {
+      await supabase.from("documents").update({
+        status: "failed",
+        error_message: [payload.error, payload.hint].filter(Boolean).join(" — ").slice(0, 1000),
+        processing_completed_at: new Date().toISOString(),
+      }).eq("id", document_id);
       return new Response(
-        JSON.stringify({
-          error: "MISTRAL_API_KEY não configurada no Supabase",
-          hint: "Adicione a secret MISTRAL_API_KEY (usada para OCR) em Edge Functions → Secrets.",
-        }),
+        JSON.stringify(payload),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    };
+
+    const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
+    if (!MISTRAL_API_KEY) {
+      return bail400({
+        error: "MISTRAL_API_KEY não configurada no Supabase",
+        hint: "Adicione a secret MISTRAL_API_KEY (usada para OCR) em Edge Functions → Secrets.",
+      });
     }
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) {
-      return new Response(
-        JSON.stringify({
-          error: "OPENAI_API_KEY não configurada no Supabase",
-          hint: "Adicione a secret OPENAI_API_KEY (usada para extração estruturada) em Edge Functions → Secrets. Gere em https://platform.openai.com/api-keys",
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return bail400({
+        error: "OPENAI_API_KEY não configurada no Supabase",
+        hint: "Adicione a secret OPENAI_API_KEY (usada para extração estruturada) em Edge Functions → Secrets. Gere em https://platform.openai.com/api-keys",
+      });
     }
-
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const { data: doc, error: docErr } = await supabase
       .from("documents")
