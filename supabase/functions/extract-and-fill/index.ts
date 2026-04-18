@@ -1235,7 +1235,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       const c = extracted.contrato;
       const dp = extracted.dados_processo || {};
 
-      await safeOp("parametros", () =>
+      await safeOp("parametros_calculos", () =>
         supabase.from("pjecalc_calculos").update({
           data_admissao: c.data_admissao || undefined,
           data_demissao: c.data_demissao || undefined,
@@ -1244,6 +1244,27 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
           tipo_demissao: mapTipoDemissao(c.tipo_demissao),
         }).eq("id", calculoId)
       );
+
+      // UPSERT TAMBEM em pjecalc_parametros — tabela SEPARADA de onde o
+      // PjeCalcInline popula `formParams` via useQuery. Sem isso, a UI
+      // abre com todos os campos vazios mesmo que o autoFill tenha
+      // persistido em pjecalc_calculos.
+      const paramsPayload: Record<string, unknown> = { case_id: caseId };
+      if (c.data_admissao) paramsPayload.data_admissao = c.data_admissao;
+      if (c.data_demissao) paramsPayload.data_demissao = c.data_demissao;
+      if (c.carga_horaria_mensal) paramsPayload.carga_horaria_padrao = c.carga_horaria_mensal;
+
+      await safeOp("parametros", async () => {
+        const { data: existing } = await supabase
+          .from("pjecalc_parametros")
+          .select("id")
+          .eq("case_id", caseId)
+          .maybeSingle();
+        if (existing?.id) {
+          return supabase.from("pjecalc_parametros").update(paramsPayload).eq("id", existing.id);
+        }
+        return supabase.from("pjecalc_parametros").insert(paramsPayload);
+      });
 
       if (c.data_admissao) {
         await safeOp("contrato_emprego", () =>

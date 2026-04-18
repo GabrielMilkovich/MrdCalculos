@@ -831,25 +831,61 @@ export default function CasoDetalhe() {
             {/* OCR validation: revisão documento por documento */}
             <DocumentOcrValidation
               caseId={id!}
+              onValidated={() => queryClient.invalidateQueries({ queryKey: ["documents", id] })}
               onGoToCalculo={async () => {
-                const toExtract = (documents as any[]).filter(
-                  (d) => d.ocr_validated && d.status !== "extracted"
+                // Le fresh do DB (documents prop pode estar stale — o
+                // DocumentOcrValidation faz UPDATE direto e pode haver
+                // race com a invalidacao).
+                const { data: freshDocs } = await supabase
+                  .from("documents")
+                  .select("id, ocr_validated, status")
+                  .eq("case_id", id!);
+                const toExtract = (freshDocs || []).filter(
+                  (d: any) => d.ocr_validated === true && d.status !== "extracted",
                 );
                 if (toExtract.length === 0) {
-                  setActiveTab("calculo");
+                  toast.info("Nenhum documento validado para extrair. Confirme o OCR primeiro.");
                   return;
                 }
-                const t = toast.loading(`Preenchendo módulos com ${toExtract.length} documento(s)...`);
+
+                const t = toast.loading(`Extraindo dados de ${toExtract.length} documento(s)...`);
                 try {
+                  // Dispara todos em paralelo (extract-and-fill retorna 200
+                  // imediatamente e roda o processamento em background).
                   await Promise.allSettled(
-                    toExtract.map((d) =>
+                    toExtract.map((d: any) =>
                       supabase.functions.invoke("extract-and-fill", {
                         body: { document_id: d.id },
-                      })
-                    )
+                      }),
+                    ),
                   );
-                  toast.success("Dados enviados ao pjecalc. Abrindo aba Cálculo...", { id: t });
+
+                  // Espera cada doc virar `extracted` (ou `failed`) antes de
+                  // navegar. Polling com timeout de 4 min por doc.
+                  const pollIds = toExtract.map((d: any) => d.id as string);
+                  const maxPolls = 80; // ~4 min com 3s por poll
+                  let done = 0;
+                  for (let i = 0; i < maxPolls; i++) {
+                    await new Promise((r) => setTimeout(r, 3000));
+                    const { data: statuses } = await supabase
+                      .from("documents")
+                      .select("id, status")
+                      .in("id", pollIds);
+                    done = (statuses || []).filter((s: any) =>
+                      s.status === "extracted" || s.status === "failed",
+                    ).length;
+                    toast.loading(`Extraindo... ${done}/${pollIds.length} concluído(s)`, { id: t });
+                    if (done >= pollIds.length) break;
+                  }
+
+                  toast.success(`Extração concluída (${done}/${pollIds.length}). Abrindo aba Cálculo...`, { id: t });
                   queryClient.invalidateQueries({ queryKey: ["pjecalc_case_data"] });
+                  queryClient.invalidateQueries({ queryKey: ["pjecalc_parametros", id] });
+                  queryClient.invalidateQueries({ queryKey: ["pjecalc_historico", id] });
+                  queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", id] });
+                  queryClient.invalidateQueries({ queryKey: ["pjecalc_faltas", id] });
+                  queryClient.invalidateQueries({ queryKey: ["pjecalc_ferias", id] });
+                  queryClient.invalidateQueries({ queryKey: ["pjecalc_dados_processo", id] });
                   queryClient.invalidateQueries({ queryKey: ["documents", id] });
                   setActiveTab("calculo");
                 } catch (err) {

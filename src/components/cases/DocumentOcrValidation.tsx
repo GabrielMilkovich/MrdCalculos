@@ -52,6 +52,8 @@ interface Props {
   caseId: string;
   /** Callback disparado quando o usuário clica "Seguir para Cálculo". */
   onGoToCalculo: () => Promise<void> | void;
+  /** Disparado após qualquer mudança validada (Confirmar OCR, OCR executado, etc.). */
+  onValidated?: () => void;
 }
 
 async function getFreshSignedUrl(storagePath: string): Promise<string | null> {
@@ -80,7 +82,7 @@ function exportTextAsCsv(text: string, fileName: string) {
   URL.revokeObjectURL(a.href);
 }
 
-export function DocumentOcrValidation({ caseId, onGoToCalculo }: Props) {
+export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Props) {
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -184,13 +186,14 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo }: Props) {
       toast.success("OCR confirmado.");
       setDirty(false);
       await loadDocs();
+      onValidated?.();
     } catch (err) {
       logger.error("confirmOcr error", err);
       toast.error("Erro ao confirmar: " + (err as Error).message);
     } finally {
       setSavingId(null);
     }
-  }, [selected, editedText, dirty, loadDocs]);
+  }, [selected, editedText, dirty, loadDocs, onValidated]);
 
   const validatedCount = docs.filter((d) => d.ocr_validated).length;
   const ocrReadyCount = docs.filter((d) => d.ocr_text && (d.ocr_text.length >= 20)).length;
