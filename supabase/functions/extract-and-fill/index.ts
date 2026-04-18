@@ -897,14 +897,69 @@ O campo texto_ocr_completo DEVE conter o texto integral do documento.`;
 
 async function mistralOcrPdf(
   documentUrl: string,
-  mistralApiKey: string
+  mistralApiKey: string,
+  fileName: string = "document.pdf"
 ): Promise<string> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    console.log(`[OCR] Mistral OCR API attempt ${attempt} (PDF via URL)`);
+    console.log(`[OCR] Mistral OCR flow attempt ${attempt} (upload → signed URL → OCR)`);
     try {
-      const response = await fetch("https://api.mistral.ai/v1/ocr", {
+      // STEP 1: baixa PDF da origem (Supabase signed URL)
+      const srcResp = await fetch(documentUrl);
+      if (!srcResp.ok) throw new Error(`Source download ${srcResp.status}`);
+      const pdfBuffer = await srcResp.arrayBuffer();
+      if (pdfBuffer.byteLength === 0) throw new Error("Empty source PDF");
+      const pdfBlob = new Blob([pdfBuffer], { type: "application/pdf" });
+
+      // STEP 2: upload para Mistral /v1/files (multipart, purpose=ocr)
+      const form = new FormData();
+      form.append("purpose", "ocr");
+      form.append("file", pdfBlob, fileName || "document.pdf");
+
+      const uploadResp = await fetch("https://api.mistral.ai/v1/files", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${mistralApiKey}` },
+        body: form,
+      });
+      if (!uploadResp.ok) {
+        const errText = await uploadResp.text();
+        console.error(`[OCR] Mistral files upload ${uploadResp.status}:`, errText.substring(0, 300));
+        if (uploadResp.status === 429) { await delay(RETRY_DELAY_MS * attempt * 3); continue; }
+        lastError = new Error(`Mistral files upload ${uploadResp.status}`);
+        if (uploadResp.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
+        break;
+      }
+      const uploadJson = await uploadResp.json();
+      const fileId = uploadJson.id;
+      if (!fileId) throw new Error("No file ID returned from Mistral upload");
+      console.log(`[OCR] Mistral file uploaded: ${fileId}`);
+
+      // STEP 3: gera signed URL (expiry 24h)
+      const urlResp = await fetch(
+        `https://api.mistral.ai/v1/files/${fileId}/url?expiry=24`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${mistralApiKey}`,
+          },
+        }
+      );
+      if (!urlResp.ok) {
+        const errText = await urlResp.text();
+        console.error(`[OCR] Mistral files URL ${urlResp.status}:`, errText.substring(0, 300));
+        if (urlResp.status === 429) { await delay(RETRY_DELAY_MS * attempt * 3); continue; }
+        lastError = new Error(`Mistral files URL ${urlResp.status}`);
+        if (urlResp.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
+        break;
+      }
+      const urlJson = await urlResp.json();
+      const signedUrl = urlJson.url;
+      if (!signedUrl) throw new Error("No signed URL returned from Mistral");
+
+      // STEP 4: chama OCR com o signed URL Mistral-hosted
+      const ocrResp = await fetch("https://api.mistral.ai/v1/ocr", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${mistralApiKey}`,
@@ -914,24 +969,22 @@ async function mistralOcrPdf(
           model: "mistral-ocr-latest",
           document: {
             type: "document_url",
-            document_url: documentUrl,
+            document_url: signedUrl,
           },
+          include_image_base64: false,
         }),
       });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error(`[OCR] Mistral OCR API ${response.status}:`, errText.substring(0, 300));
-        if (response.status === 429) {
-          await delay(RETRY_DELAY_MS * attempt * 3);
-          continue;
-        }
-        lastError = new Error(`Mistral OCR API ${response.status}`);
-        if (response.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
+      if (!ocrResp.ok) {
+        const errText = await ocrResp.text();
+        console.error(`[OCR] Mistral OCR API ${ocrResp.status}:`, errText.substring(0, 300));
+        if (ocrResp.status === 429) { await delay(RETRY_DELAY_MS * attempt * 3); continue; }
+        lastError = new Error(`Mistral OCR API ${ocrResp.status}`);
+        if (ocrResp.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
         break;
       }
 
-      const data = await response.json();
+      const data = await ocrResp.json();
       const pages = data.pages || [];
       const fullText = pages.map((p: any) => p.markdown || p.text || "").join("\n\n---PAGE BREAK---\n\n");
       if (fullText.length > 50) {
@@ -942,6 +995,7 @@ async function mistralOcrPdf(
       continue;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
+      console.error(`[OCR] attempt ${attempt} error:`, lastError.message);
       await delay(RETRY_DELAY_MS * attempt);
     }
   }
@@ -1696,7 +1750,7 @@ async function processDocumentInBackground(
       } else {
         // Fallback to Mistral OCR
         console.log(`[EXTRACT] Native extraction insufficient, using Mistral OCR`);
-        ocrText = await mistralOcrPdf(fileUrl, MISTRAL_API_KEY);
+        ocrText = await mistralOcrPdf(fileUrl, MISTRAL_API_KEY, doc.file_name);
         extractionMethod = "mistral_ocr";
       }
     } else {
