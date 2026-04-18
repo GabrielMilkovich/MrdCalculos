@@ -316,6 +316,17 @@ export interface PjeSalarioFamiliaConfig {
   apurar: boolean;
   numero_filhos: number;
   filhos_detalhes?: { nome: string; nascimento: string; ate_14: boolean }[];
+  /** FGTS integra o líquido_reclamante quando true */
+  compor_principal?: boolean;
+  /** Período de apuração (MM/AAAA). Se não informado, usa (admissão, demissão). */
+  competencia_inicial?: string;
+  competencia_final?: string;
+  /** Variação de qtd de filhos ≤14 ao longo do período (novas competências que mudam a quantidade). */
+  variacoes_qtd?: { competencia: string; quantidade: number }[];
+  /** Valor da cota legal (override). Default usa cota vigente 2025 (R$ 62,04). */
+  valor_cota?: number;
+  /** Teto salarial — elegível se remuneração ≤ teto. Default 2025 (R$ 1.819,26). */
+  teto_salarial?: number;
 }
 
 export interface PjeSalarioFamiliaResult {
@@ -347,6 +358,8 @@ export interface PjeFGTSConfig {
   apurar: boolean;
   destino: 'pagar_reclamante' | 'recolher_conta';
   compor_principal: boolean;
+  /** Alíquota FGTS. 8% (padrão CLT Art. 15) ou 2% (aprendiz Lei 10.097/2000 Art. 15). */
+  aliquota?: 8 | 2;
   multa_apurar: boolean;
   multa_tipo: 'calculada' | 'informada';
   multa_percentual: number;
@@ -356,6 +369,13 @@ export interface PjeFGTSConfig {
   deduzir_saldo: boolean;
   lc110_10: boolean;
   lc110_05: boolean;
+  /** Multa Art. 467 CLT: 50% sobre verbas rescisórias incontroversas não pagas
+   *  até a 1ª audiência. Aplicada na base do FGTS quando apurada aqui. */
+  multa_art_467?: boolean;
+  /** Art. 477 §6 CLT: excluir o aviso prévio da base de cálculo da multa 40%. */
+  excluir_aviso_multa?: boolean;
+  /** Perdas monetárias sobre FGTS (correção JAM + 3% a.a. quando ativado). */
+  perdas_monetarias?: boolean;
 }
 
 export interface PjeCNAEAliquotas {
@@ -535,6 +555,39 @@ export interface PjeCorrecaoConfig {
   lei_11941_multa?: boolean;
   /** Lei 11.941/2009: data a partir de (multa) */
   lei_11941_multa_a_partir_de?: string;
+
+  // =====================================================
+  // CAMPOS DA ABA "AVANÇADO" (PJe-Calc Dados Específicos)
+  // =====================================================
+
+  /** FGTS — escolha do regime de juros aplicado sobre o FGTS corrigido. */
+  fgts_juros?: 'trabalhista' | 'pago' | 'nenhum';
+  /** Custas — regime de juros. */
+  custas_juros?: 'trabalhista' | 'pago' | 'nenhum';
+  /** Previdência Privada — regime de juros. */
+  prev_priv_juros?: 'trabalhista' | 'pago' | 'nenhum';
+
+  // CS sobre Salários DEVIDOS — correção/juros detalhados
+  /** Limitar a multa pelo % da multa rescisória (Art. 32 Lei 8.212). */
+  cs_limitar_multa?: boolean;
+  cs_dev_correcao_trab?: boolean;
+  cs_dev_juros_trab?: boolean;
+  cs_dev_correcao_prev?: boolean;
+  cs_dev_juros_prev?: boolean;
+  cs_dev_multa_prev_aplicar?: boolean;
+  cs_dev_multa_prev_tipo?: 'unitaria' | 'integral' | 'reduzida';
+  cs_dev_multa_prev_pagamento?: 'unitario' | 'integral' | 'reduzido';
+
+  // CS sobre Salários PAGOS
+  cs_pagos_aplicar?: boolean;
+  cs_pagos_a_partir_de?: string;
+  cs_pagos_correcao_trab?: boolean;
+  cs_pagos_juros_trab?: boolean;
+  cs_pagos_correcao_prev?: boolean;
+  cs_pagos_juros_prev?: boolean;
+  cs_pagos_multa_prev_aplicar?: boolean;
+  cs_pagos_multa_prev_tipo?: 'unitaria' | 'integral' | 'reduzida';
+  cs_pagos_multa_prev_pagamento?: 'unitario' | 'integral' | 'reduzido';
 }
 
 /** Exceção de juros por período (ex: COVID, suspensão judicial) */
@@ -546,6 +599,42 @@ export interface PjeExcecaoJuros {
   motivo?: string;
 }
 
+export interface PjeMultaItem {
+  descricao: string;
+  devedor: 'reclamante' | 'reclamado';
+  credor: 'reclamante' | 'reclamado' | 'terceiro';
+  terceiro_nome?: string;
+  valor_tipo: 'calculado' | 'informado';
+  base: 'principal' | 'liquido' | 'bruto';
+  aliquota?: number; // % quando valor_tipo=calculado
+  valor?: number;    // R$ quando valor_tipo=informado
+  vencimento?: string;
+  indice: 'trabalhista' | 'outro';
+  indice_outro?: string;
+  aplicar_juros: boolean;
+  apurar_ir: boolean;
+}
+
+export interface PjeMultasConfig {
+  apurar_467: boolean;
+  apurar_477: boolean;
+  valor_477_tipo?: 'salario' | 'informado';
+  valor_477_informado?: number;
+  /** Multas/indenizações individuais cadastradas na tela do PJe-Calc. */
+  multas_indenizacoes?: PjeMultaItem[];
+}
+
+export interface PjeHonorarioItem {
+  descricao: string;
+  devedor: 'reclamante' | 'reclamado';
+  credor: string;
+  tipo: 'percentual' | 'valor_fixo';
+  percentual: number;
+  valor_fixo?: number;
+  base: 'condenacao' | 'causa' | 'proveito';
+  apurar_ir: boolean;
+}
+
 export interface PjeHonorariosConfig {
   apurar_sucumbenciais: boolean;
   percentual_sucumbenciais: number;
@@ -553,6 +642,10 @@ export interface PjeHonorariosConfig {
   apurar_contratuais: boolean;
   percentual_contratuais: number;
   valor_fixo?: number;
+  /** Itens individuais de honorários. Quando presente e não-vazio,
+   *  SOBRESCREVE os percentuais sucumbenciais/contratuais padrão.
+   *  Permite múltiplos advogados com credores e percentuais distintos. */
+  items?: PjeHonorarioItem[];
 }
 
 export interface PjeCustaItem {
@@ -581,6 +674,19 @@ export interface PjeSeguroConfig {
   parcelas: number;
   valor_parcela?: number;
   recebeu: boolean;
+  /** Tipo de valor: 'informado' (usuário passa valor total) ou 'calculado' (com base na última remuneração). */
+  valor_tipo?: 'informado' | 'calculado';
+  /** Total informado quando valor_tipo='informado'. */
+  valor_informado?: number;
+  /** Categoria — afeta elegibilidade e regras. */
+  tipo_solicitacao?: 'trabalhador_urbano' | 'trabalhador_rural' | 'empregado_domestico' | 'pescador_artesanal';
+  empregado_domestico?: boolean;
+  /** Fonte da remuneração mensal para cálculo automático do valor por parcela. */
+  remuneracao_fonte?: 'nenhum' | 'maior' | 'historico';
+  historico_id?: string;
+  integralizar?: boolean;
+  /** Quando true, a indenização substitutiva compõe o líquido do reclamante. */
+  compor_principal?: boolean;
 }
 
 // =====================================================

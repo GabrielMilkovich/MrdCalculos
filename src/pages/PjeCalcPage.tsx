@@ -49,7 +49,7 @@ import { ModuloDanosMorais } from "@/components/cases/pjecalc/ModuloDanosMorais"
 import { ModuloEquiparacaoSalarial } from "@/components/cases/pjecalc/ModuloEquiparacaoSalarial";
 import { ModuloEstabilidade } from "@/components/cases/pjecalc/ModuloEstabilidade";
 import { EvolucaoDebito } from "@/components/cases/pjecalc/EvolucaoDebito";
-import { ExportacaoExcel } from "@/components/cases/pjecalc/ExportacaoExcel";
+import { ExportacaoUnificada } from "@/components/cases/pjecalc/ExportacaoUnificada";
 import { ModuloGuiasRecolhimento } from "@/components/cases/pjecalc/ModuloGuiasRecolhimento";
 import { ModuloTerceiros } from "@/components/cases/pjecalc/ModuloTerceiros";
 import { ClassificacaoPrecatorio } from "@/components/cases/pjecalc/ClassificacaoPrecatorio";
@@ -114,7 +114,7 @@ const MODULOS = [
   { id: 'atualizacao', label: 'Atualização', icon: TrendingUp, desc: 'Atualização pós-pagamento' },
   { id: 'resumo', label: 'Resumo', icon: FileBarChart, desc: 'Resultado da liquidação' },
   { id: 'evolucao_debito', label: 'Evolução do Débito', icon: TrendingUp, desc: 'Gráfico mensal do débito' },
-  { id: 'exportacao', label: 'Exportar Excel', icon: FileBarChart, desc: 'Planilha de cálculo' },
+  { id: 'exportacao', label: 'Exportação', icon: FileBarChart, desc: 'PDF, Excel e .PJC (XML)' },
   { id: 'fidelidade', label: 'Fidelidade/Paridade', icon: GitCompareArrows, desc: 'Auditoria PJC vs Engine' },
   { id: 'esocial', label: 'eSocial', icon: Building2, desc: 'Exportação S-2500/S-2501' },
   { id: 'tabelas_regionais', label: 'Tabelas Regionais', icon: MapPin, desc: 'Pisos, VT e Sal. Família' },
@@ -344,7 +344,7 @@ export default function PjeCalcPage() {
             )}
           </>);
         case 'evolucao_debito': return calc.rawResultado?.resultado ? <EvolucaoDebito result={calc.rawResultado.resultado as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
-        case 'exportacao': return calc.rawResultado?.resultado ? <ExportacaoExcel result={calc.rawResultado.resultado as any} params={formParams as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
+        case 'exportacao': return calc.rawResultado?.resultado ? <ExportacaoUnificada result={calc.rawResultado.resultado as any} params={formParams as any} verbas={calc.verbas as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
         case 'fidelidade':
           return calc.rawResultado?.resultado
             ? <FidelidadePanel

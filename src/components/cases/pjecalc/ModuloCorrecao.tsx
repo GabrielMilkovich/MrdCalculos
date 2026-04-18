@@ -60,6 +60,32 @@ export function ModuloCorrecao({ caseId }: Props) {
     multa_523: false,
     multa_523_percentual: 10,
     acumular_indices_correcao: 'mensal' as 'mensal' | 'anual' | 'periodo',
+    // Aba "Avançado" — espelha "Dados Específicos" do PJe-Calc
+    base_de_juros_das_verbas: 'DIFERENCA' as 'DIFERENCA' | 'DEVIDO' | 'CORRIGIDO' | 'VERBA_INSS',
+    fgts_juros: 'trabalhista' as 'trabalhista' | 'pago' | 'nenhum',
+    custas_juros: 'trabalhista' as 'trabalhista' | 'pago' | 'nenhum',
+    prev_priv_juros: 'trabalhista' as 'trabalhista' | 'pago' | 'nenhum',
+    // CS sobre salários devidos
+    cs_lc11941: false,
+    cs_lc11941_a_partir_de: '',
+    cs_limitar_multa: false,
+    cs_dev_correcao_trab: true,
+    cs_dev_juros_trab: true,
+    cs_dev_correcao_prev: false,
+    cs_dev_juros_prev: false,
+    cs_dev_multa_prev_aplicar: false,
+    cs_dev_multa_prev_tipo: 'unitaria' as 'unitaria' | 'integral' | 'reduzida',
+    cs_dev_multa_prev_pagamento: 'unitario' as 'unitario' | 'integral' | 'reduzido',
+    // CS sobre salários pagos
+    cs_pagos_correcao_trab: false,
+    cs_pagos_juros_trab: false,
+    cs_pagos_correcao_prev: true,
+    cs_pagos_juros_prev: true,
+    cs_pagos_aplicar: false,
+    cs_pagos_a_partir_de: '',
+    cs_pagos_multa_prev_aplicar: false,
+    cs_pagos_multa_prev_tipo: 'unitaria' as 'unitaria' | 'integral' | 'reduzida',
+    cs_pagos_multa_prev_pagamento: 'unitario' as 'unitario' | 'integral' | 'reduzido',
   });
 
   useEffect(() => {
@@ -72,20 +98,45 @@ export function ModuloCorrecao({ caseId }: Props) {
       if (combIndice.length === 0 && Array.isArray(d.combinacoes_indice)) {
         combIndice = (d.combinacoes_indice as Array<Record<string, string>>).map(c => ({ indice: c.indice || c.ate, a_partir_de: c.ate || '' }));
       }
-      setForm({
+      setForm(prev => ({
+        ...prev,
         indice: (d.indice as string) || 'IPCA-E',
         combinar_indice: combIndice.length > 0 || !!(d.transicao_adc58),
         combinacoes_indice: combIndice.length > 0 ? combIndice : [{ indice: 'SEM_CORRECAO', a_partir_de: '' }, { indice: 'IPCA', a_partir_de: '' }],
-        ignorar_taxa_negativa: true, juros_pre_judicial: true,
-        tabela_juros: 'TRD_SIMPLES',
+        ignorar_taxa_negativa: (d.ignorar_taxa_negativa as boolean) ?? true,
+        juros_pre_judicial: (d.aplicar_juros_fase_pre_judicial as boolean) ?? true,
+        tabela_juros: (d.tabela_juros as string) || 'TRD_SIMPLES',
         combinar_juros: combJuros.length > 0,
         combinacoes_juros: combJuros.length > 0 ? combJuros : [{ indice: 'SELIC_RF', a_partir_de: '' }, { indice: 'TAXA_LEGAL', a_partir_de: '' }],
         data_liquidacao: (d.data_liquidacao as string) || new Date().toISOString().slice(0, 10),
         juros_inicio: ((d.juros_inicio as string) || 'ajuizamento') as 'ajuizamento' | 'citacao' | 'distribuicao',
+        base_de_juros_das_verbas: ((d.base_de_juros_das_verbas as string) || 'DIFERENCA') as typeof prev.base_de_juros_das_verbas,
+        fgts_juros: ((d.fgts_juros as string) || 'trabalhista') as typeof prev.fgts_juros,
+        custas_juros: ((d.custas_juros as string) || 'trabalhista') as typeof prev.custas_juros,
+        prev_priv_juros: ((d.prev_priv_juros as string) || 'trabalhista') as typeof prev.prev_priv_juros,
+        cs_lc11941: (d.cs_lc11941 as boolean) ?? false,
+        cs_lc11941_a_partir_de: (d.cs_lc11941_a_partir_de as string) || '',
+        cs_limitar_multa: (d.cs_limitar_multa as boolean) ?? false,
+        cs_dev_correcao_trab: (d.cs_dev_correcao_trab as boolean) ?? true,
+        cs_dev_juros_trab: (d.cs_dev_juros_trab as boolean) ?? true,
+        cs_dev_correcao_prev: (d.cs_dev_correcao_prev as boolean) ?? false,
+        cs_dev_juros_prev: (d.cs_dev_juros_prev as boolean) ?? false,
+        cs_dev_multa_prev_aplicar: (d.cs_dev_multa_prev_aplicar as boolean) ?? false,
+        cs_dev_multa_prev_tipo: ((d.cs_dev_multa_prev_tipo as string) || 'unitaria') as typeof prev.cs_dev_multa_prev_tipo,
+        cs_dev_multa_prev_pagamento: ((d.cs_dev_multa_prev_pagamento as string) || 'unitario') as typeof prev.cs_dev_multa_prev_pagamento,
+        cs_pagos_correcao_trab: (d.cs_pagos_correcao_trab as boolean) ?? false,
+        cs_pagos_juros_trab: (d.cs_pagos_juros_trab as boolean) ?? false,
+        cs_pagos_correcao_prev: (d.cs_pagos_correcao_prev as boolean) ?? true,
+        cs_pagos_juros_prev: (d.cs_pagos_juros_prev as boolean) ?? true,
+        cs_pagos_aplicar: (d.cs_pagos_aplicar as boolean) ?? false,
+        cs_pagos_a_partir_de: (d.cs_pagos_a_partir_de as string) || '',
+        cs_pagos_multa_prev_aplicar: (d.cs_pagos_multa_prev_aplicar as boolean) ?? false,
+        cs_pagos_multa_prev_tipo: ((d.cs_pagos_multa_prev_tipo as string) || 'unitaria') as typeof prev.cs_pagos_multa_prev_tipo,
+        cs_pagos_multa_prev_pagamento: ((d.cs_pagos_multa_prev_pagamento as string) || 'unitario') as typeof prev.cs_pagos_multa_prev_pagamento,
         multa_523: (d.multa_523 as boolean) ?? false,
         multa_523_percentual: (d.multa_523_percentual as number) ?? 10,
         acumular_indices_correcao: ((d.acumular_indices_correcao as string) || 'mensal') as 'mensal' | 'anual' | 'periodo',
-      });
+      }));
     }
   }, [data]);
 
@@ -102,7 +153,34 @@ export function ModuloCorrecao({ caseId }: Props) {
         combinacoes_indice: form.combinar_indice ? JSON.stringify(form.combinacoes_indice) : undefined,
         combinacoes_juros: form.combinar_juros ? JSON.stringify(form.combinacoes_juros) : undefined,
         transicao_adc58: form.combinar_indice,
-      });
+        ignorar_taxa_negativa: form.ignorar_taxa_negativa,
+        aplicar_juros_fase_pre_judicial: form.juros_pre_judicial,
+        tabela_juros: form.tabela_juros,
+        // Dados Específicos — espelho PJe-Calc
+        base_de_juros_das_verbas: form.base_de_juros_das_verbas,
+        fgts_juros: form.fgts_juros,
+        custas_juros: form.custas_juros,
+        prev_priv_juros: form.prev_priv_juros,
+        cs_lc11941: form.cs_lc11941,
+        cs_lc11941_a_partir_de: form.cs_lc11941_a_partir_de || null,
+        cs_limitar_multa: form.cs_limitar_multa,
+        cs_dev_correcao_trab: form.cs_dev_correcao_trab,
+        cs_dev_juros_trab: form.cs_dev_juros_trab,
+        cs_dev_correcao_prev: form.cs_dev_correcao_prev,
+        cs_dev_juros_prev: form.cs_dev_juros_prev,
+        cs_dev_multa_prev_aplicar: form.cs_dev_multa_prev_aplicar,
+        cs_dev_multa_prev_tipo: form.cs_dev_multa_prev_tipo,
+        cs_dev_multa_prev_pagamento: form.cs_dev_multa_prev_pagamento,
+        cs_pagos_correcao_trab: form.cs_pagos_correcao_trab,
+        cs_pagos_juros_trab: form.cs_pagos_juros_trab,
+        cs_pagos_correcao_prev: form.cs_pagos_correcao_prev,
+        cs_pagos_juros_prev: form.cs_pagos_juros_prev,
+        cs_pagos_aplicar: form.cs_pagos_aplicar,
+        cs_pagos_a_partir_de: form.cs_pagos_a_partir_de || null,
+        cs_pagos_multa_prev_aplicar: form.cs_pagos_multa_prev_aplicar,
+        cs_pagos_multa_prev_tipo: form.cs_pagos_multa_prev_tipo,
+        cs_pagos_multa_prev_pagamento: form.cs_pagos_multa_prev_pagamento,
+      } as never);
       qc.invalidateQueries({ queryKey: ["pjecalc_correcao_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
       toast.success("Correção/Juros configurados!");
@@ -150,6 +228,7 @@ export function ModuloCorrecao({ caseId }: Props) {
             <TabsList className="h-8 mb-3">
               <TabsTrigger value="gerais" className="text-xs h-7">Dados Gerais</TabsTrigger>
               <TabsTrigger value="especificos" className="text-xs h-7">Dados Específicos</TabsTrigger>
+              <TabsTrigger value="avancado" className="text-xs h-7">Avançado (PJe-Calc)</TabsTrigger>
             </TabsList>
             <TabsContent value="gerais" className="space-y-3">
               <div><Label className="text-xs">Data da Liquidação</Label><Input type="date" value={form.data_liquidacao} onChange={e => setForm(p => ({ ...p, data_liquidacao: e.target.value }))} className="mt-1 h-8 text-xs w-48" /></div>
@@ -197,6 +276,184 @@ export function ModuloCorrecao({ caseId }: Props) {
                   {form.combinar_juros && <CombTable items={form.combinacoes_juros} onChange={items => setForm(p => ({ ...p, combinacoes_juros: items }))} options={[...TABELAS_JUROS, ...INDICES.filter(i => i.value === 'SELIC')]} label="Tabela Juros *  /  A partir de *" />}
                 </div>
               </div>
+            </TabsContent>
+            <TabsContent value="avancado" className="space-y-4">
+              <p className="text-[10px] text-muted-foreground">
+                Configurações avançadas PJe-Calc (tela "Dados Específicos"). Refinam como correção/juros são
+                aplicados sobre FGTS, Custas, Previdência Privada e Contribuição Social.
+              </p>
+
+              {/* Linha 1: Verbas / FGTS / Custas / PrevPriv */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <Label className="text-[11px] font-semibold">Verbas — Base de Juros</Label>
+                  <Select value={form.base_de_juros_das_verbas} onValueChange={v => setForm(p => ({ ...p, base_de_juros_das_verbas: v as typeof p.base_de_juros_das_verbas }))}>
+                    <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DIFERENCA">Diferença</SelectItem>
+                      <SelectItem value="DEVIDO">Devido</SelectItem>
+                      <SelectItem value="CORRIGIDO">Corrigido</SelectItem>
+                      <SelectItem value="VERBA_INSS">Verba - INSS (Súmula 200 TST)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[11px] font-semibold">FGTS — Juros</Label>
+                  <Select value={form.fgts_juros} onValueChange={v => setForm(p => ({ ...p, fgts_juros: v as typeof p.fgts_juros }))}>
+                    <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="trabalhista">Valor Trabalhista</SelectItem>
+                      <SelectItem value="pago">Valor Pago</SelectItem>
+                      <SelectItem value="nenhum">Não Aplicar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[11px] font-semibold">Custas — Juros</Label>
+                  <Select value={form.custas_juros} onValueChange={v => setForm(p => ({ ...p, custas_juros: v as typeof p.custas_juros }))}>
+                    <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="trabalhista">Valor Trabalhista</SelectItem>
+                      <SelectItem value="pago">Valor Pago</SelectItem>
+                      <SelectItem value="nenhum">Não Aplicar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[11px] font-semibold">Prev. Privada — Juros</Label>
+                  <Select value={form.prev_priv_juros} onValueChange={v => setForm(p => ({ ...p, prev_priv_juros: v as typeof p.prev_priv_juros }))}>
+                    <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="trabalhista">Valor Trabalhista</SelectItem>
+                      <SelectItem value="pago">Valor Pago</SelectItem>
+                      <SelectItem value="nenhum">Não Aplicar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Bloco CS — Salários Devidos */}
+              <Card className="bg-muted/20">
+                <CardHeader className="pb-2 pt-3"><CardTitle className="text-xs">Contribuição Social — Salários Devidos</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2"><Checkbox checked={form.cs_lc11941} onCheckedChange={v => setForm(p => ({ ...p, cs_lc11941: !!v }))} /><Label className="text-xs">LC nº 11.941/2009 (MP 449/2008)</Label></div>
+                    {form.cs_lc11941 && <div><Label className="text-[11px]">A partir de</Label><Input type="date" value={form.cs_lc11941_a_partir_de} onChange={e => setForm(p => ({ ...p, cs_lc11941_a_partir_de: e.target.value }))} className="mt-1 h-7 text-xs" /></div>}
+                  </div>
+                  <div className="flex items-center gap-2"><Checkbox checked={form.cs_limitar_multa} onCheckedChange={v => setForm(p => ({ ...p, cs_limitar_multa: !!v }))} /><Label className="text-xs">Limitar multa pelo % da multa rescisória</Label></div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-[11px] font-semibold">Trabalhista</Label>
+                      <div className="mt-1 space-y-1.5">
+                        <div className="flex items-center gap-2"><Checkbox checked={form.cs_dev_correcao_trab} onCheckedChange={v => setForm(p => ({ ...p, cs_dev_correcao_trab: !!v }))} /><Label className="text-xs">Correção</Label></div>
+                        <div className="flex items-center gap-2"><Checkbox checked={form.cs_dev_juros_trab} onCheckedChange={v => setForm(p => ({ ...p, cs_dev_juros_trab: !!v }))} /><Label className="text-xs">Juros</Label></div>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-semibold">Previdenciária</Label>
+                      <div className="mt-1 space-y-1.5">
+                        <div className="flex items-center gap-2"><Checkbox checked={form.cs_dev_correcao_prev} onCheckedChange={v => setForm(p => ({ ...p, cs_dev_correcao_prev: !!v }))} /><Label className="text-xs">Correção</Label></div>
+                        <div className="flex items-center gap-2"><Checkbox checked={form.cs_dev_juros_prev} onCheckedChange={v => setForm(p => ({ ...p, cs_dev_juros_prev: !!v }))} /><Label className="text-xs">Juros</Label></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border/50 pt-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Checkbox checked={form.cs_dev_multa_prev_aplicar} onCheckedChange={v => setForm(p => ({ ...p, cs_dev_multa_prev_aplicar: !!v }))} />
+                      <Label className="text-xs font-medium">Aplicar Multa Previdenciária</Label>
+                    </div>
+                    {form.cs_dev_multa_prev_aplicar && (
+                      <div className="grid grid-cols-2 gap-3 ml-5">
+                        <div>
+                          <Label className="text-[11px]">Tipo</Label>
+                          <Select value={form.cs_dev_multa_prev_tipo} onValueChange={v => setForm(p => ({ ...p, cs_dev_multa_prev_tipo: v as typeof p.cs_dev_multa_prev_tipo }))}>
+                            <SelectTrigger className="mt-1 h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unitaria">Unitária</SelectItem>
+                              <SelectItem value="integral">Integral</SelectItem>
+                              <SelectItem value="reduzida">Reduzida</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-[11px]">Pagamento</Label>
+                          <Select value={form.cs_dev_multa_prev_pagamento} onValueChange={v => setForm(p => ({ ...p, cs_dev_multa_prev_pagamento: v as typeof p.cs_dev_multa_prev_pagamento }))}>
+                            <SelectTrigger className="mt-1 h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unitario">Unitário</SelectItem>
+                              <SelectItem value="integral">Integral</SelectItem>
+                              <SelectItem value="reduzido">Reduzido</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Bloco CS — Salários Pagos */}
+              <Card className="bg-muted/20">
+                <CardHeader className="pb-2 pt-3"><CardTitle className="text-xs">Contribuição Social — Salários Pagos</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2"><Checkbox checked={form.cs_pagos_aplicar} onCheckedChange={v => setForm(p => ({ ...p, cs_pagos_aplicar: !!v }))} /><Label className="text-xs">Aplicar CS sobre Salários Pagos</Label></div>
+                    {form.cs_pagos_aplicar && <div><Label className="text-[11px]">A partir de</Label><Input type="date" value={form.cs_pagos_a_partir_de} onChange={e => setForm(p => ({ ...p, cs_pagos_a_partir_de: e.target.value }))} className="mt-1 h-7 text-xs" /></div>}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-[11px] font-semibold">Trabalhista</Label>
+                      <div className="mt-1 space-y-1.5">
+                        <div className="flex items-center gap-2"><Checkbox checked={form.cs_pagos_correcao_trab} onCheckedChange={v => setForm(p => ({ ...p, cs_pagos_correcao_trab: !!v }))} /><Label className="text-xs">Correção</Label></div>
+                        <div className="flex items-center gap-2"><Checkbox checked={form.cs_pagos_juros_trab} onCheckedChange={v => setForm(p => ({ ...p, cs_pagos_juros_trab: !!v }))} /><Label className="text-xs">Juros</Label></div>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-semibold">Previdenciária</Label>
+                      <div className="mt-1 space-y-1.5">
+                        <div className="flex items-center gap-2"><Checkbox checked={form.cs_pagos_correcao_prev} onCheckedChange={v => setForm(p => ({ ...p, cs_pagos_correcao_prev: !!v }))} /><Label className="text-xs">Correção</Label></div>
+                        <div className="flex items-center gap-2"><Checkbox checked={form.cs_pagos_juros_prev} onCheckedChange={v => setForm(p => ({ ...p, cs_pagos_juros_prev: !!v }))} /><Label className="text-xs">Juros</Label></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border/50 pt-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Checkbox checked={form.cs_pagos_multa_prev_aplicar} onCheckedChange={v => setForm(p => ({ ...p, cs_pagos_multa_prev_aplicar: !!v }))} />
+                      <Label className="text-xs font-medium">Aplicar Multa Previdenciária</Label>
+                    </div>
+                    {form.cs_pagos_multa_prev_aplicar && (
+                      <div className="grid grid-cols-2 gap-3 ml-5">
+                        <div>
+                          <Label className="text-[11px]">Tipo</Label>
+                          <Select value={form.cs_pagos_multa_prev_tipo} onValueChange={v => setForm(p => ({ ...p, cs_pagos_multa_prev_tipo: v as typeof p.cs_pagos_multa_prev_tipo }))}>
+                            <SelectTrigger className="mt-1 h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unitaria">Unitária</SelectItem>
+                              <SelectItem value="integral">Integral</SelectItem>
+                              <SelectItem value="reduzida">Reduzida</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-[11px]">Pagamento</Label>
+                          <Select value={form.cs_pagos_multa_prev_pagamento} onValueChange={v => setForm(p => ({ ...p, cs_pagos_multa_prev_pagamento: v as typeof p.cs_pagos_multa_prev_pagamento }))}>
+                            <SelectTrigger className="mt-1 h-7 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="unitario">Unitário</SelectItem>
+                              <SelectItem value="integral">Integral</SelectItem>
+                              <SelectItem value="reduzido">Reduzido</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </CardContent>

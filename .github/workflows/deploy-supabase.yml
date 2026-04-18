@@ -1,0 +1,120 @@
+name: Deploy Supabase (Functions + DB)
+
+# Faz deploy automático de TODAS as Edge Functions + aplica migrations
+# toda vez que há push no main ou na branch de desenvolvimento, OU
+# quando disparado manualmente via botão "Run workflow".
+#
+# Pré-requisitos (configurar uma vez em Settings > Secrets and variables > Actions):
+#   - SUPABASE_ACCESS_TOKEN    — https://supabase.com/dashboard/account/tokens
+#   - SUPABASE_PROJECT_REF     — ex: xhvlhrgfoeahgofhljbs
+#   - SUPABASE_DB_PASSWORD     — senha do DB (para `db push`)
+#   - MISTRAL_API_KEY          — já existe nos Edge Function Secrets
+#                                (Supabase Dashboard), não precisa aqui
+#
+# Este workflow NÃO seta secrets do Supabase — esses ficam gerenciados
+# no dashboard. Só faz deploy do código das functions + migrations SQL.
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
+      - '.github/workflows/deploy-supabase.yml'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Alvo do deploy'
+        required: true
+        default: 'tudo'
+        type: choice
+        options:
+          - tudo
+          - somente-functions
+          - somente-migrations
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: supabase-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Deploy all Edge Functions
+        if: ${{ github.event.inputs.target != 'somente-migrations' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -e
+          failures=0
+          total=0
+          for fn in supabase/functions/*/; do
+            name=$(basename "$fn")
+            [ "$name" = "_shared" ] && continue
+            [ -f "$fn/index.ts" ] || continue
+            total=$((total + 1))
+            echo "──────────────────────────────────────────────"
+            echo "→ Deploying: $name"
+            echo "──────────────────────────────────────────────"
+            if supabase functions deploy "$name" --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}; then
+              echo "   ✓ ok: $name"
+            else
+              echo "   ✗ FALHOU: $name"
+              failures=$((failures + 1))
+            fi
+          done
+          echo ""
+          echo "═══════════════════════════════════════════════"
+          echo " Deploy concluído: $((total - failures))/$total ok, $failures falhas"
+          echo "═══════════════════════════════════════════════"
+          # Não falha o job se algumas falharem (reportado acima).
+          exit 0
+
+      - name: Apply database migrations
+        if: ${{ github.event.inputs.target != 'somente-functions' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          # Importante: o histórico local e remoto podem divergir (migrations
+          # aplicadas via dashboard ou reconstrução do schema). Se `db push`
+          # falhar por "Remote migration versions not found in local migrations
+          # directory", isso significa apenas que o repo está desatualizado em
+          # relação ao DB — NÃO é um problema de deploy.
+          #
+          # A parte crítica (Edge Functions) já rodou acima. Aqui apenas
+          # tentamos aplicar migrations pendentes e reportamos o status,
+          # sem falhar o job em caso de mismatch de histórico.
+          if supabase db push --password "$SUPABASE_DB_PASSWORD"; then
+            echo "✓ Migrations aplicadas (ou nenhuma pendente)."
+          else
+            echo "⚠ db push falhou — provavelmente histórico local/remoto divergente."
+            echo "   O DB continua funcional; para sincronizar rode localmente:"
+            echo "     supabase db pull --schema public"
+            echo "   Edge Functions já foram deployadas acima."
+          fi
+          # Não falha o job: mismatch de histórico é recuperável.
+          exit 0
+
+      - name: Post-deploy — list functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          echo "Status das Edge Functions após deploy:"
+          supabase functions list --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}

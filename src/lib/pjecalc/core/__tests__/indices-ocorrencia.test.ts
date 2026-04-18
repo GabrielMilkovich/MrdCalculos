@@ -17,14 +17,14 @@ import {
 } from '../index';
 
 describe('IndiceIPCAE', () => {
-  it('TABELA_IPCAE tem entradas de 2015-01 a 2026-02', () => {
+  it('TABELA_IPCAE cobre 2005-01 até 2026-02', () => {
     const first = TABELA_IPCAE[0];
     const last = TABELA_IPCAE[TABELA_IPCAE.length - 1];
-    expect(first.ano).toBe(2015);
+    expect(first.ano).toBe(2005);
     expect(first.mes).toBe(1);
     expect(last.ano).toBe(2026);
     expect(last.mes).toBe(2);
-    expect(TABELA_IPCAE.length).toBeGreaterThanOrEqual(130);
+    expect(TABELA_IPCAE.length).toBeGreaterThanOrEqual(250);
   });
 
   it('obterTabela devolve período corretamente', () => {

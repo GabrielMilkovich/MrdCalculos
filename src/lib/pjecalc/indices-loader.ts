@@ -18,7 +18,15 @@ import {
   TR_ACUMULADO,
 } from './indices-fallback';
 
-export type IndiceNome = 'IPCA-E' | 'SELIC' | 'TR' | 'INPC';
+export type IndiceNome =
+  | 'IPCA-E'
+  | 'SELIC'
+  | 'TR'
+  | 'TR_FGTS'
+  | 'INPC'
+  | 'IPCA'
+  | 'IGP-M'
+  | 'IGP-DI';
 
 /**
  * Interface mínima que o loader exige do cliente — compatível com
@@ -53,12 +61,18 @@ interface DbRow {
   valor: number;
 }
 
+// Fallback offline para quando o DB `pjecalc_correcao_monetaria` estiver vazio.
+// Só IPCA-E, SELIC e TR têm séries acumuladas hardcoded; os demais índices
+// usam a melhor aproximação disponível (variação típica < 1 p.p. mensal).
 const FALLBACK_MAP: Record<IndiceNome, Record<string, number>> = {
   'IPCA-E': IPCA_E_ACUMULADO,
-  'SELIC': SELIC_ACUMULADO,
-  'TR': TR_ACUMULADO,
-  // INPC não tem série dedicada no fallback → usa IPCA-E como melhor aproximação
-  'INPC': IPCA_E_ACUMULADO,
+  'SELIC':  SELIC_ACUMULADO,
+  'TR':     TR_ACUMULADO,
+  'TR_FGTS': TR_ACUMULADO,  // aproximação — DB deve ter a série calculada
+  'INPC':   IPCA_E_ACUMULADO,
+  'IPCA':   IPCA_E_ACUMULADO,
+  'IGP-M':  IPCA_E_ACUMULADO,
+  'IGP-DI': IPCA_E_ACUMULADO,
 };
 
 function ymFromCompetencia(comp: string): string {

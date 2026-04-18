@@ -124,6 +124,8 @@ export interface PJCAnalysis {
     lc110_10: boolean;
     lc110_05: boolean;
     destino: string;
+    /** compor_principal from PJC <Fgts><comporPrincipal>SIM|NAO</> */
+    compor_principal?: boolean;
   };
   /** Pensão alimentícia config */
   pensao_alimenticia?: { apurar: boolean; percentual: number; base?: string };
@@ -182,7 +184,7 @@ export interface ApuracaoJurosEntry {
 
 export interface VerbaAnalysis {
   id: string;
-  tipo: 'Calculada' | 'Reflexo';
+  tipo: 'Calculada' | 'Reflexo' | 'Informada';
   nome: string;
   descricao?: string;
   variacao: string;
@@ -199,6 +201,8 @@ export interface VerbaAnalysis {
     quantidade: { tipo: string; valor: number };
     dobra: boolean;
     valor_pago?: { tipo: string; valor: number };
+    /** Informada-only: constante mensal (PJe-Calc <Constante>) */
+    constante_mensal?: number;
   };
   // Reflexo-specific
   comportamento_reflexo?: string;
@@ -483,6 +487,23 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       if (!id || id === '' || verbaMap.has(id)) continue;
 
       const v = parseVerbaReflexo(el, verbaMap);
+      if (v) {
+        verbas.push(v);
+        verbaMap.set(v.id, v);
+      }
+    }
+
+    // All Informada elements (user-provided per-competência verbas —
+    // PJe-Calc <Informada> class: value comes from ocorrências, no formula)
+    const infEls = verbasSet.getElementsByTagName('Informada');
+    for (const el of Array.from(infEls)) {
+      const id = getTextContent(el, 'id');
+      if (!id || id === '' || verbaMap.has(id)) continue;
+      // Skip internalRef-only elements (they're references inside other verbas)
+      const internalRef = getTextContent(el, 'internalRef');
+      if (internalRef && !getTextContent(el, 'nome')) continue;
+
+      const v = parseVerbaInformada(el);
       if (v) {
         verbas.push(v);
         verbaMap.set(v.id, v);
@@ -782,6 +803,8 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     root.getElementsByTagName('ModuloFGTS')[0],
     root.getElementsByTagName('moduloFgts')[0],
     root.getElementsByTagName('FGTS')[0],
+    root.getElementsByTagName('Fgts')[0],
+    root.getElementsByTagName('fgts')[0],
   ];
   const fgtsEl = fgtsCandidates.find(el => {
     if (!el) return false;
@@ -790,11 +813,16 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       || getTextContent(el, 'multaPercentual')
       || getTextContent(el, 'apurar')
       || getTextContent(el, 'baseMulta')
-      || getTextContent(el, 'multaBase'));
+      || getTextContent(el, 'multaBase')
+      || getTextContent(el, 'multaDoFgts')
+      || getTextContent(el, 'destinoDoFgts')
+      || getTextContent(el, 'tipoDoValorDaMulta')
+      || getTextContent(el, 'indiceDeCorrecaoDoFGTS'));
   });
   let fgts_config: PJCAnalysis['fgts_config'] = undefined;
   if (fgtsEl) {
     const multa_pct_raw = getTextContent(fgtsEl, 'percentualMulta') || getTextContent(fgtsEl, 'multaPercentual');
+    const comporRaw = getTextContent(fgtsEl, 'comporPrincipal');
     fgts_config = {
       apurar: getTextContent(fgtsEl, 'apurar') !== 'false',
       multa_percentual: parseNum(multa_pct_raw) || 40,
@@ -802,6 +830,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       lc110_10: getTextContent(fgtsEl, 'lc110_10') === 'true' || getTextContent(fgtsEl, 'contribuicaoSocial10') === 'true',
       lc110_05: getTextContent(fgtsEl, 'lc110_05') === 'true' || getTextContent(fgtsEl, 'contribuicaoSocial05') === 'true',
       destino: getTextContent(fgtsEl, 'destino') || getTextContent(fgtsEl, 'destinoFGTS') || 'pagar_reclamante',
+      compor_principal: comporRaw === 'SIM' || comporRaw === 'true',
     };
   }
   // If resultado shows FGTS deposit > 0 but no config element, create default
@@ -1094,6 +1123,94 @@ function parseVerbaCalculada(el: Element): VerbaAnalysis | null {
       quantidade,
       dobra: formulaEl ? getTextContent(formulaEl, 'dobra') === 'true' : false,
       valor_pago,
+    },
+    excluir_falta_justificada: getTextContent(el, 'excluirFaltaJustificada') === 'true',
+    excluir_falta_nao_justificada: getTextContent(el, 'excluirFaltaNaoJustificada') === 'true',
+    excluir_ferias_gozadas: getTextContent(el, 'excluirFeriasGozadas') === 'true',
+    juros_do_ajuizamento: getTextContent(el, 'jurosDoAjuizamento') || 'OCORRENCIAS_VENCIDAS',
+    ordem: parseInt(getTextContent(el, 'ordem')) || 0,
+    ativo: getTextContent(el, 'ativo') !== 'false',
+    gerar_principal: getTextContent(el, 'gerarPrincipal'),
+    gerar_reflexo: getTextContent(el, 'gerarReflexo'),
+    compor_principal: getTextContent(el, 'comporPrincipal'),
+    ocorrencias_count: ocorrencias.length,
+    ocorrencias_all: ocorrencias,
+    ocorrencias_sample: ocorrencias.slice(0, 5),
+    total_devido,
+    total_pago,
+    total_diferenca,
+  };
+}
+
+function parseVerbaInformada(el: Element): VerbaAnalysis | null {
+  const id = getTextContent(el, 'id');
+  const nome = getTextContent(el, 'nome');
+  if (!nome) return null;
+
+  const formulaEl = el.getElementsByTagName('FormulaInformada')[0] || el.getElementsByTagName('formula')[0];
+
+  // Informada may optionally reference base verbas (rare but allowed)
+  const base_verbas: { id: string; nome: string; integralizar: string }[] = [];
+  if (formulaEl) {
+    const baseVerbaEl = formulaEl.getElementsByTagName('BaseVerba')[0];
+    if (baseVerbaEl) {
+      const items = baseVerbaEl.getElementsByTagName('ItemBaseVerba');
+      for (const item of Array.from(items)) {
+        const calcRef = item.getElementsByTagName('Calculada')[0]
+          || item.getElementsByTagName('Reflexo')[0]
+          || item.getElementsByTagName('Informada')[0];
+        if (calcRef) {
+          const refId = getTextContent(calcRef, 'id') || getTextContent(calcRef, 'internalRef');
+          const refNome = getTextContent(calcRef, 'nome');
+          if (refId) {
+            base_verbas.push({
+              id: refId,
+              nome: refNome || `ref:${refId}`,
+              integralizar: getTextContent(item, 'integralizar') || 'NAO',
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // ValorPago (fixed or per-ocorrência)
+  const pagoEl = formulaEl?.getElementsByTagName('ValorPago')[0];
+  const valor_pago = pagoEl ? {
+    tipo: getTextContent(pagoEl, 'tipo') || 'INFORMADO',
+    valor: parseNum(getTextContent(pagoEl, 'valorInformado')),
+  } : undefined;
+
+  // Constante mensal (rare — fixed value per month)
+  const constanteEl = formulaEl?.getElementsByTagName('Constante')[0];
+  const constante_mensal = constanteEl ? parseNum(getTextContent(constanteEl, 'valor')) : undefined;
+
+  const { ocorrencias, total_devido, total_pago, total_diferenca } = parseOcorrencias(el);
+
+  return {
+    id,
+    tipo: 'Informada',
+    nome,
+    descricao: getTextContent(el, 'descricao'),
+    variacao: getTextContent(el, 'tipoVariacaoParcela'),
+    caracteristica: getTextContent(el, 'caracteristica'),
+    ocorrencia_pagamento: getTextContent(el, 'ocorrenciaDePagamento'),
+    periodo_inicio: tsToDate(getTextContent(el, 'periodoInicial')),
+    periodo_fim: tsToDate(getTextContent(el, 'periodoFinal')),
+    incidencias: {
+      inss: getTextContent(el, 'incidenciaINSS') === 'true',
+      irpf: getTextContent(el, 'incidenciaIRPF') === 'true',
+      fgts: getTextContent(el, 'incidenciaFGTS') === 'true',
+    },
+    formula: {
+      base_tabelada: undefined,
+      base_verbas,
+      divisor: { tipo: 'OUTRO_VALOR', valor: 1 },
+      multiplicador: { valor: 1 },
+      quantidade: { tipo: 'INFORMADA', valor: 1 },
+      dobra: false,
+      valor_pago,
+      constante_mensal,
     },
     excluir_falta_justificada: getTextContent(el, 'excluirFaltaJustificada') === 'true',
     excluir_falta_nao_justificada: getTextContent(el, 'excluirFaltaNaoJustificada') === 'true',

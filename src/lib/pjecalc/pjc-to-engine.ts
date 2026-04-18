@@ -506,26 +506,45 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
     // erroneamente valores legítimos (ex: 4483 13° SOBRE HORAS EXTRAS 1800 -> 439).
     // Mantem as flags precisaConsolidar/consolidarParcial para logging/debug futuro.
     void precisaConsolidar; void consolidarParcial;
+    const isInformada = v.tipo === 'Informada';
     let ocorrenciasPrecomputadas: PjeVerba['ocorrencias_precomputadas'] | undefined = undefined;
     if (v.ocorrencias_all.length > 0) {
-      ocorrenciasPrecomputadas = v.ocorrencias_all.map(oc => ({
-        competencia: oc.competencia.slice(0, 7),
-        base: oc.base,
-        divisor: oc.divisor,
-        multiplicador: oc.multiplicador,
-        quantidade: oc.quantidade,
-        dobra: oc.dobra,
-        devido: oc.devido,
-        pago: oc.pago,
-        indice_acumulado: oc.indice_acumulado,
-      }));
+      ocorrenciasPrecomputadas = v.ocorrencias_all.map(oc => {
+        // Informada verbas store devido directly (base/div/mult/qty are null in PJC XML).
+        // Normalize to base=devido, div=1, mult=1, qty=1 so engine's calcularDevidoFromScratch
+        // yields the correct devido.
+        if (isInformada) {
+          return {
+            competencia: oc.competencia.slice(0, 7),
+            base: oc.devido || 0,
+            divisor: 1,
+            multiplicador: 1,
+            quantidade: 1,
+            dobra: false,
+            devido: oc.devido || 0,
+            pago: oc.pago || 0,
+            indice_acumulado: oc.indice_acumulado,
+          };
+        }
+        return {
+          competencia: oc.competencia.slice(0, 7),
+          base: oc.base,
+          divisor: oc.divisor,
+          multiplicador: oc.multiplicador,
+          quantidade: oc.quantidade,
+          dobra: oc.dobra,
+          devido: oc.devido,
+          pago: oc.pago,
+          indice_acumulado: oc.indice_acumulado,
+        };
+      });
     }
 
     return {
       id: v.id,
       nome: v.nome,
       tipo: isReflexo ? 'reflexa' as const : 'principal' as const,
-      valor: 'calculado' as const,
+      valor: (isInformada ? 'informado' : 'calculado') as 'informado' | 'calculado',
       caracteristica,
       ocorrencia_pagamento: ocorrenciaPagamento,
       compor_principal: v.compor_principal !== 'NAO_COMPOR',
@@ -664,7 +683,12 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
   return {
     apurar: fgtsConf?.apurar ?? (fgtsDeposito > 0),
     destino: destMap[fgtsConf?.destino || ''] || 'pagar_reclamante',
-    compor_principal: false,
+    // PJC <Fgts><comporPrincipal>SIM|NAO</comporPrincipal> — decide se o FGTS
+    // compõe o liquido_exequente. Default false por compatibilidade, mas quando
+    // o PJC diz SIM, o engine deve incluir FGTS no líquido do reclamante.
+    compor_principal: fgtsConf?.compor_principal ?? false,
+    // Alíquota: 8% padrão, 2% quando PJC indicar aprendiz.
+    aliquota: (fgtsConf as unknown as { aliquota?: 8 | 2 })?.aliquota ?? 8,
     multa_apurar: true,
     multa_tipo: 'calculada',
     multa_percentual: fgtsConf?.multa_percentual ?? 40,
@@ -673,6 +697,10 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
     deduzir_saldo: false,
     lc110_10: fgtsConf?.lc110_10 ?? false,
     lc110_05: fgtsConf?.lc110_05 ?? false,
+    // Campos novos lidos do PJC XML (quando presentes) — default false.
+    multa_art_467: (fgtsConf as unknown as { multa_art_467?: boolean })?.multa_art_467 ?? false,
+    excluir_aviso_multa: (fgtsConf as unknown as { excluir_aviso_multa?: boolean })?.excluir_aviso_multa ?? false,
+    perdas_monetarias: (fgtsConf as unknown as { perdas_monetarias?: boolean })?.perdas_monetarias ?? false,
   };
 }
 

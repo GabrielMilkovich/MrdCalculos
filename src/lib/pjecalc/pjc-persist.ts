@@ -4,7 +4,9 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import type { PJCAnalysis, VerbaAnalysis, OcorrenciaAnalysis } from './pjc-analyzer';
+import type { PJCAnalysis, OcorrenciaAnalysis } from './pjc-analyzer';
+import { convertPjcToEngineInputs } from './pjc-to-engine';
+import * as svc from './service';
 
 export interface PersistResult {
   calculo_id: string;
@@ -312,6 +314,200 @@ export async function persistirPJCAnalysis(
     })),
     engine_version: 'PJC_IMPORT',
   }, { onConflict: 'calculo_id' });
+
+  // 10. Popula TODAS as tabelas de configuração (parametros, correcao, fgts, cs,
+  //     ir, honorarios, multas, pensao, prev_privada, salario_familia, seguro,
+  //     custas) usando o conversor PJC→engine que já normaliza os valores.
+  //
+  // Isso garante que, ao importar um .PJC, TODOS os módulos da UI venham
+  // preenchidos automaticamente — não só verbas/ocorrências.
+  try {
+    const inputs = convertPjcToEngineInputs(analysis, `pjc-import-${calculoId}`);
+
+    // 10.1 Parâmetros gerais (pjecalc_parametros)
+    await svc.upsertParametros({
+      case_id: caseId,
+      data_admissao: inputs.params.data_admissao,
+      data_demissao: inputs.params.data_demissao ?? null,
+      data_ajuizamento: inputs.params.data_ajuizamento,
+      data_citacao: inputs.params.data_citacao ?? null,
+      data_inicial: inputs.params.data_inicial ?? null,
+      data_final: inputs.params.data_final ?? null,
+      carga_horaria_padrao: inputs.params.carga_horaria_padrao ?? 220,
+      regime_trabalho: inputs.params.regime_trabalho ?? 'tempo_integral',
+      estado: inputs.params.estado ?? '',
+      municipio: inputs.params.municipio ?? '',
+      prescricao_quinquenal: inputs.params.prescricao_quinquenal ?? true,
+      prescricao_fgts: inputs.params.prescricao_fgts ?? false,
+      projetar_aviso_indenizado: inputs.params.projetar_aviso_indenizado ?? false,
+    } as never);
+
+    // 10.2 Correção / Juros (pjecalc_correcao_config)
+    await svc.upsertCorrecaoConfig({
+      case_id: caseId,
+      indice: inputs.correcaoConfig.indice,
+      epoca: inputs.correcaoConfig.epoca,
+      juros_tipo: inputs.correcaoConfig.juros_tipo,
+      juros_percentual: inputs.correcaoConfig.juros_percentual,
+      juros_inicio: inputs.correcaoConfig.juros_inicio,
+      multa_523: inputs.correcaoConfig.multa_523,
+      multa_523_percentual: inputs.correcaoConfig.multa_523_percentual,
+      data_liquidacao: inputs.correcaoConfig.data_liquidacao,
+      combinacoes_indice: inputs.correcaoConfig.combinacoes_indice
+        ? JSON.stringify(inputs.correcaoConfig.combinacoes_indice)
+        : undefined,
+      combinacoes_juros: inputs.correcaoConfig.combinacoes_juros
+        ? JSON.stringify(inputs.correcaoConfig.combinacoes_juros)
+        : undefined,
+      ignorar_taxa_negativa: inputs.correcaoConfig.ignorar_taxa_negativa,
+      aplicar_juros_fase_pre_judicial: inputs.correcaoConfig.aplicar_juros_fase_pre_judicial,
+      base_de_juros_das_verbas: inputs.correcaoConfig.base_de_juros_das_verbas,
+      ente_publico: inputs.correcaoConfig.ente_publico,
+    } as never);
+
+    // 10.3 FGTS (pjecalc_fgts_config)
+    await svc.upsertFgtsConfig({
+      case_id: caseId,
+      apurar: inputs.fgtsConfig.apurar,
+      destino: inputs.fgtsConfig.destino,
+      compor_principal: inputs.fgtsConfig.compor_principal,
+      aliquota: inputs.fgtsConfig.aliquota ?? 8,
+      multa_apurar: inputs.fgtsConfig.multa_apurar,
+      multa_tipo: inputs.fgtsConfig.multa_tipo,
+      multa_percentual: inputs.fgtsConfig.multa_percentual,
+      multa_base: inputs.fgtsConfig.multa_base,
+      multa_valor_informado: inputs.fgtsConfig.multa_valor_informado ?? null,
+      deduzir_saldo: inputs.fgtsConfig.deduzir_saldo,
+      lc110_10: inputs.fgtsConfig.lc110_10,
+      lc110_05: inputs.fgtsConfig.lc110_05,
+      multa_art_467: inputs.fgtsConfig.multa_art_467 ?? false,
+      excluir_aviso_multa: inputs.fgtsConfig.excluir_aviso_multa ?? false,
+      perdas_monetarias: inputs.fgtsConfig.perdas_monetarias ?? false,
+    } as never);
+
+    // 10.4 Contribuição Social (pjecalc_cs_config)
+    await svc.upsertCsConfig({
+      case_id: caseId,
+      apurar_segurado: inputs.csConfig.apurar_segurado,
+      cobrar_reclamante: inputs.csConfig.cobrar_reclamante,
+      cs_sobre_salarios_pagos: inputs.csConfig.cs_sobre_salarios_pagos,
+      aliquota_segurado_tipo: inputs.csConfig.aliquota_segurado_tipo,
+      aliquota_segurado_fixa: inputs.csConfig.aliquota_segurado_fixa ?? null,
+      limitar_teto: inputs.csConfig.limitar_teto,
+      apurar_empresa: inputs.csConfig.apurar_empresa,
+      apurar_sat: inputs.csConfig.apurar_sat,
+      apurar_terceiros: inputs.csConfig.apurar_terceiros,
+      aliquota_empresa_fixa: inputs.csConfig.aliquota_empresa_fixa,
+      aliquota_sat_fixa: inputs.csConfig.aliquota_sat_fixa,
+      aliquota_terceiros_fixa: inputs.csConfig.aliquota_terceiros_fixa,
+      periodos_simples: inputs.csConfig.periodos_simples ?? [],
+      cnae: inputs.csConfig.cnae ?? null,
+    } as never);
+
+    // 10.5 Imposto de Renda (pjecalc_ir_config)
+    await svc.upsertIrConfig({
+      case_id: caseId,
+      apurar: inputs.irConfig.apurar,
+      incidir_sobre_juros: inputs.irConfig.incidir_sobre_juros ?? false,
+      cobrar_reclamado: inputs.irConfig.cobrar_reclamado ?? false,
+      tributacao_exclusiva_13: inputs.irConfig.tributacao_exclusiva_13 ?? false,
+      tributacao_separada_ferias: inputs.irConfig.tributacao_separada_ferias ?? false,
+      aplicar_regime_caixa: inputs.irConfig.aplicar_regime_caixa ?? false,
+      deduzir_cs: inputs.irConfig.deduzir_cs ?? true,
+      deduzir_prev_privada: inputs.irConfig.deduzir_prev_privada ?? true,
+      deduzir_pensao: inputs.irConfig.deduzir_pensao ?? true,
+      deduzir_honorarios: inputs.irConfig.deduzir_honorarios ?? true,
+      aposentado_65: inputs.irConfig.aposentado_65 ?? false,
+      dependentes: inputs.irConfig.dependentes ?? 0,
+    } as never);
+
+    // 10.6 Honorários (pjecalc_honorarios)
+    await svc.upsertHonorarios({
+      case_id: caseId,
+      apurar_sucumbenciais: inputs.honorariosConfig.apurar_sucumbenciais,
+      percentual_sucumbenciais: inputs.honorariosConfig.percentual_sucumbenciais,
+      base_sucumbenciais: inputs.honorariosConfig.base_sucumbenciais,
+      apurar_contratuais: inputs.honorariosConfig.apurar_contratuais,
+      percentual_contratuais: inputs.honorariosConfig.percentual_contratuais,
+      valor_fixo: inputs.honorariosConfig.valor_fixo ?? null,
+      items: inputs.honorariosConfig.items ?? [],
+    } as never);
+
+    // 10.7 Custas (pjecalc_custas_config)
+    await svc.upsertCustasConfig({
+      case_id: caseId,
+      apurar: inputs.custasConfig.apurar,
+      tipo_custas: inputs.custasConfig.tipo_custas,
+      percentual_custas: inputs.custasConfig.percentual_custas,
+      valor_informado: inputs.custasConfig.valor_informado ?? null,
+      pagar_reclamado: inputs.custasConfig.pagar_reclamado ?? true,
+      isento: inputs.custasConfig.isento ?? false,
+    } as never);
+
+    // 10.8 Seguro-Desemprego (pjecalc_seguro_config)
+    await svc.upsertSeguroConfig(caseId, {
+      apurar: inputs.seguroConfig.apurar,
+      parcelas: inputs.seguroConfig.parcelas,
+      valor_parcela: inputs.seguroConfig.valor_parcela ?? null,
+      recebeu: inputs.seguroConfig.recebeu,
+      valor_tipo: (inputs.seguroConfig as Record<string, unknown>).valor_tipo ?? 'calculado',
+      empregado_domestico: (inputs.seguroConfig as Record<string, unknown>).empregado_domestico ?? false,
+      tipo_solicitacao: (inputs.seguroConfig as Record<string, unknown>).tipo_solicitacao ?? 'trabalhador_urbano',
+      compor_principal: (inputs.seguroConfig as Record<string, unknown>).compor_principal ?? true,
+    });
+
+    // 10.9 Pensão Alimentícia (pjecalc_pensao_config)
+    if (inputs.pensaoConfig) {
+      await svc.upsertPensaoConfig(caseId, {
+        apurar: inputs.pensaoConfig.apurar,
+        percentual: inputs.pensaoConfig.percentual,
+        incidir_sobre_juros: inputs.pensaoConfig.incidir_sobre_juros ?? false,
+        base: inputs.pensaoConfig.base ?? 'liquido',
+        beneficiario: inputs.pensaoConfig.beneficiario ?? '',
+        observacoes: inputs.pensaoConfig.observacoes ?? '',
+        valor_fixo: inputs.pensaoConfig.valor_fixo ?? null,
+      });
+    }
+
+    // 10.10 Previdência Privada (pjecalc_prev_priv_config)
+    if (inputs.prevPrivadaConfig) {
+      await svc.upsertPrevPrivConfig(caseId, {
+        apurar: inputs.prevPrivadaConfig.apurar,
+        percentual: inputs.prevPrivadaConfig.percentual,
+        base_calculo: inputs.prevPrivadaConfig.base_calculo ?? 'diferenca',
+        deduzir_ir: inputs.prevPrivadaConfig.deduzir_ir ?? true,
+        periodos: (inputs.prevPrivadaConfig as Record<string, unknown>).periodos ?? [],
+        observacao: null,
+      });
+    }
+
+    // 10.11 Salário-Família (pjecalc_salario_familia_config)
+    if (inputs.salarioFamiliaConfig) {
+      await svc.upsertSalarioFamiliaConfig(caseId, {
+        apurar: inputs.salarioFamiliaConfig.apurar,
+        numero_filhos: inputs.salarioFamiliaConfig.numero_filhos,
+        filhos_detalhes: inputs.salarioFamiliaConfig.filhos_detalhes ?? [],
+        observacoes: '',
+      });
+    }
+
+    // 10.12 Multas CLT / Indenizações (pjecalc_multas_config).
+    // O PJCAnalysis atual não extrai multas explicitamente. Inicializamos
+    // com defaults seguros. As multas 467/477 são inferidas pelo usuário
+    // via UI (ModuloMultasCLT). Preserva o registro existente caso haja.
+    const multasRaw = (analysis as unknown as { multas?: Record<string, unknown> }).multas;
+    await svc.upsertMultasConfig(caseId, {
+      apurar_467: Boolean(multasRaw?.apurar_467),
+      apurar_477: Boolean(multasRaw?.apurar_477),
+      valor_467: (multasRaw?.valor_467 as number) ?? 0,
+      valor_477_tipo: (multasRaw?.valor_477_tipo as string) ?? 'salario',
+      valor_477_informado: (multasRaw?.valor_477_informado as number | null) ?? null,
+      observacoes: '',
+      multas_indenizacoes: (multasRaw?.items as unknown[]) ?? [],
+    });
+  } catch (cfgErr) {
+    warnings.push(`Configurações: ${cfgErr instanceof Error ? cfgErr.message : String(cfgErr)}`);
+  }
 
   return {
     calculo_id: calculoId,

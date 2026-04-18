@@ -15,7 +15,7 @@ import Decimal from 'decimal.js';
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias, PjeVerba,
   PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig, PjeIRConfig,
-  PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
+  PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig, PjeMultasConfig,
   PjeIndiceRow, PjeINSSFaixaRow, PjeIRFaixaRow,
   PjeLiquidacaoResult, PjeVerbaResult, PjeOcorrenciaResult, PjeResumo,
   PjeFGTSResult, PjeCSResult, PjeIRResult, PjeSeguroResult,
@@ -98,6 +98,7 @@ export class PjeCalcEngineV3 {
   private salarioFamiliaDB: PjeSalarioFamiliaDB[];
   private excecoesSabado: PjeExcecaoSabado[];
   private salarioMinimoDB: PjeSalarioMinimoRow[];
+  private multasConfig: PjeMultasConfig;
 
   constructor(
     params: PjeParametros,
@@ -125,6 +126,9 @@ export class PjeCalcEngineV3 {
     salarioFamiliaDB: PjeSalarioFamiliaDB[] = [],
     excecoesSabado: PjeExcecaoSabado[] = [],
     salarioMinimoDB: PjeSalarioMinimoRow[] = [],
+    /** Multas CLT (467/477) + multas/indenizações individuais. Opcional para
+     *  retrocompatibilidade: chamadas antigas não quebram. */
+    multasConfig: PjeMultasConfig = { apurar_467: false, apurar_477: false },
   ) {
     this.params = params;
     this.historicos = historicos;
@@ -133,7 +137,11 @@ export class PjeCalcEngineV3 {
     this.verbas = verbas;
     this.cartaoPonto = cartaoPonto;
     this.correcaoConfig = correcaoConfig;
-    this.csConfig = csConfig;
+    // cs_pagos_aplicar (PJe-Calc Avançado) força cs_sobre_salarios_pagos=true
+    // no csConfig quando o usuário marca a opção na aba Avançado.
+    this.csConfig = correcaoConfig.cs_pagos_aplicar
+      ? { ...csConfig, cs_sobre_salarios_pagos: true }
+      : csConfig;
     this.irConfig = irConfig;
     this.fgtsConfig = fgtsConfig;
     this.honorariosConfig = honorariosConfig;
@@ -151,6 +159,7 @@ export class PjeCalcEngineV3 {
     this.salarioFamiliaDB = salarioFamiliaDB;
     this.excecoesSabado = excecoesSabado;
     this.salarioMinimoDB = salarioMinimoDB;
+    this.multasConfig = multasConfig;
   }
 
   /**
@@ -423,12 +432,98 @@ export class PjeCalcEngineV3 {
     // FGTS entra no liquido APENAS quando compor_principal=true. PJe-Calc com
     // destino=pagar_reclamante ainda separa FGTS do liquido no resultado "liquido_exequente".
     const fgtsNoLiquido = this.fgtsConfig.compor_principal ? fgtsResult.total_fgts : 0;
-    // Honorarios contratuais: descontados do liquido do reclamante
-    const honorariosContratuais = this.honorariosConfig.apurar_contratuais
-      ? (this.honorariosConfig.valor_fixo ??
-         (principalCorrigido + jurosMora) * (this.honorariosConfig.percentual_contratuais ?? 0) / 100)
-      : 0;
+
+    // Honorários — itens individuais (items[]) têm precedência sobre
+    // percentual_sucumbenciais/contratuais quando presentes. Isso suporta
+    // múltiplos advogados/credores com percentuais e bases distintas.
+    const baseHonorarios = principalCorrigido + jurosMora;
+    let honorariosContratuais = 0;
+    let honorariosSucumbenciaisList = 0;
+    const itens = this.honorariosConfig.items ?? [];
+
+    if (itens.length > 0) {
+      for (const it of itens) {
+        const valor = it.tipo === 'valor_fixo'
+          ? (it.valor_fixo ?? 0)
+          : baseHonorarios * (it.percentual ?? 0) / 100;
+        // Devedor=reclamante → deduz do líquido (honorários contratuais)
+        // Devedor=reclamado → soma à condenação (sucumbenciais pagos pela parte vencida)
+        if (it.devedor === 'reclamante') honorariosContratuais += valor;
+        else honorariosSucumbenciaisList += valor;
+      }
+    } else {
+      // Fallback: usa os percentuais globais
+      honorariosContratuais = this.honorariosConfig.apurar_contratuais
+        ? (this.honorariosConfig.valor_fixo ?? baseHonorarios * (this.honorariosConfig.percentual_contratuais ?? 0) / 100)
+        : 0;
+    }
+
+    // Seguro-Desemprego (indenização substitutiva quando não recebido).
+    // Quando apurar=true e recebeu=false, calcula o valor total com base em:
+    //   - valor_tipo='informado' → usa valor_informado direto
+    //   - valor_tipo='calculado' → parcelas × valor_parcela (com override)
+    // Composição no líquido controlada por compor_principal.
+    let valorSeguroDesemprego = 0;
+    if (this.seguroConfig.apurar && !this.seguroConfig.recebeu) {
+      if (this.seguroConfig.valor_tipo === 'informado' && this.seguroConfig.valor_informado) {
+        valorSeguroDesemprego = this.seguroConfig.valor_informado;
+      } else {
+        const valorParcela = this.seguroConfig.valor_parcela ?? 0;
+        valorSeguroDesemprego = (this.seguroConfig.parcelas ?? 5) * valorParcela;
+      }
+    }
+    const seguroNoLiquido = this.seguroConfig.compor_principal !== false ? valorSeguroDesemprego : 0;
+
+    // Salário-Família (cotas por filho ≤14 anos quando remuneração ≤ teto).
+    // Cálculo aproximado por meses × qtd filhos × cota legal.
+    // PJe-Calc faz cálculo diário ligado a cartão ponto; aqui fazemos
+    // aproximação mensal para consistência com o nível de detalhe atual do engine.
+    let valorSalarioFamilia = 0;
+    if (this.salarioFamiliaConfig.apurar) {
+      const cota = this.salarioFamiliaConfig.valor_cota ?? 62.04;
+      const qtd = this.salarioFamiliaConfig.numero_filhos ?? 0;
+      const ci = this.salarioFamiliaConfig.competencia_inicial || this.params.data_admissao;
+      const cf = this.salarioFamiliaConfig.competencia_final
+        || this.params.data_demissao
+        || this.correcaoConfig.data_liquidacao;
+      if (ci && cf && qtd > 0) {
+        const d1 = new Date(ci + (ci.length === 7 ? '-01' : ''));
+        const d2 = new Date(cf + (cf.length === 7 ? '-01' : ''));
+        const meses = Math.max(0, (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + 1);
+        valorSalarioFamilia = meses * qtd * cota;
+      }
+    }
+    const salFamNoLiquido = this.salarioFamiliaConfig.compor_principal !== false ? valorSalarioFamilia : 0;
+
+    // Multas/Indenizações individuais (PJe-Calc > Multas e Indenizações).
+    // Cada item tem devedor/credor independentes:
+    //   devedor=reclamado + credor=reclamante → SOMA ao líquido (verba favorável ao trabalhador)
+    //   devedor=reclamante + credor=reclamado → SUBTRAI do líquido
+    //   credor=terceiro → nao afeta líquido_reclamante (é um destino à parte)
+    let multasIndenizacoesNoLiquido = 0;
+    const multasItens = this.multasConfig.multas_indenizacoes ?? [];
+    for (const m of multasItens) {
+      let valor = 0;
+      if (m.valor_tipo === 'informado' && m.valor != null) {
+        valor = m.valor;
+      } else if (m.valor_tipo === 'calculado' && m.aliquota != null) {
+        const basePct = m.base === 'principal'
+          ? principalCorrigido
+          : m.base === 'bruto'
+            ? principalBruto
+            : (principalCorrigido + jurosMora);
+        valor = basePct * m.aliquota / 100;
+      }
+      if (m.credor === 'reclamante' && m.devedor === 'reclamado') {
+        multasIndenizacoesNoLiquido += valor;
+      } else if (m.credor === 'reclamado' && m.devedor === 'reclamante') {
+        multasIndenizacoesNoLiquido -= valor;
+      }
+      // credor=terceiro não afeta líquido do reclamante
+    }
+
     const liquidoReclamante = +(principalCorrigido + jurosMora + fgtsNoLiquido + multa467 + multa523
+      + seguroNoLiquido + salFamNoLiquido + multasIndenizacoesNoLiquido
       - csReclamante - irRetido - honorariosContratuais).toFixed(2);
 
     const resumo: PjeResumo = {
@@ -439,14 +534,17 @@ export class PjeCalcEngineV3 {
       cs_segurado: +csSegurado.toFixed(2),
       cs_empregador: +csEmpregador.toFixed(2),
       ir_retido: +irRetido.toFixed(2),
-      seguro_desemprego: 0,
+      seguro_desemprego: +valorSeguroDesemprego.toFixed(2),
       previdencia_privada: 0,
-      salario_familia: 0,
+      salario_familia: +valorSalarioFamilia.toFixed(2),
       multa_523: +multa523.toFixed(2),
       multa_467: +multa467.toFixed(2),
-      honorarios_sucumbenciais: +(this.honorariosConfig.apurar_sucumbenciais
-        ? (principalCorrigido + jurosMora) * (this.honorariosConfig.percentual_sucumbenciais ?? 0) / 100
-        : 0).toFixed(2),
+      honorarios_sucumbenciais: +(itens.length > 0
+        ? honorariosSucumbenciaisList
+        : (this.honorariosConfig.apurar_sucumbenciais
+            ? baseHonorarios * (this.honorariosConfig.percentual_sucumbenciais ?? 0) / 100
+            : 0)
+      ).toFixed(2),
       honorarios_contratuais: +honorariosContratuais.toFixed(2),
       custas: 0,
       custas_detalhadas: [],
@@ -550,9 +648,14 @@ export class PjeCalcEngineV3 {
    * - LC 110/2001: +10% (Art. 1°) e +5% (Art. 2°) opcionais
    */
   private calcularFGTS(verbaResults: PjeVerbaResult[]): PjeFGTSResult {
-    // Sempre calcula se houver verba com incidência FGTS + diferença positiva.
-    // O flag fgtsConfig.apurar indica se HÁ SALDO INICIAL; mas as diferenças
-    // reconhecidas no processo geram FGTS+multa mesmo sem saldo prévio.
+    // Respeita o flag `apurar` explicitamente: quando o usuário desmarca
+    // "Apurar FGTS" na UI, NENHUM depósito é gerado (apurar=false vira zero).
+    // Esse comportamento espelha o PJe-Calc original: o módulo FGTS pode ser
+    // desligado inteiro para casos como PLR pura, indenizações sem vínculo, etc.
+    if (this.fgtsConfig.apurar === false) {
+      return { depositos: [], total_depositos: 0, multa_valor: 0, lc110_10: 0, lc110_05: 0, saldo_deduzido: 0, total_fgts: 0 };
+    }
+    // Caso contrário, calcula se houver verba com incidência FGTS + diferença positiva.
     const temIncidenciaFgts = this.verbas.some((v, i) => {
       const inc = v.incidencias?.fgts !== false;
       const temDif = (verbaResults[i]?.total_diferenca ?? 0) > 0;
@@ -565,12 +668,23 @@ export class PjeCalcEngineV3 {
     const dataLiq = new Decimal(new Date(this.correcaoConfig.data_liquidacao).getTime());
     const depositos: { competencia: string; base: number; aliquota: number; valor: number }[] = [];
     let totalDepositosCorrigido = new Decimal(0);
-    const aliquota = 8;
+    // Alíquota configurável (8% padrão CLT, 2% aprendiz Lei 10.097/2000).
+    const aliquota = this.fgtsConfig.aliquota ?? 8;
+
+    // Rastreamos separadamente depósitos de AVISO PRÉVIO — Art. 477 §6 CLT
+    // permite excluí-los da base da multa 40% quando `excluir_aviso_multa=true`.
+    let totalDepositosAvisoCorrigido = new Decimal(0);
+    // Rastreamos verbas INCONTROVERSAS (não-disputadas) para multa Art. 467.
+    // No PJe-Calc, uma ocorrência é incontroversa quando `compor_principal=true`
+    // E a verba tem flag equivalente; aqui usamos compor_principal como proxy.
+    let baseArt467 = new Decimal(0);
 
     for (let i = 0; i < verbaResults.length; i++) {
       const vResult = verbaResults[i];
       const vUI = this.verbas[i];
       if (vUI.incidencias?.fgts === false) continue;
+
+      const isAviso = vUI.caracteristica === 'aviso_previo';
 
       for (const oc of vResult.ocorrencias) {
         if (oc.diferenca <= 0) continue;
@@ -581,11 +695,30 @@ export class PjeCalcEngineV3 {
           aliquota,
           valor: valorDep.toNumber(),
         });
-        // Correção aproximada: 3% a.a. composto desde a competência
+        // Correção aproximada: 3% a.a. composto desde a competência (JAM).
+        // Quando `perdas_monetarias=true`, usamos fator adicional de 1% a.a.
+        // (compensação pela não correção pelo INPC, Súm. Vinc. 58 STF).
+        // Quando `correcaoConfig.fgts_juros='nenhum'`, não aplica correção alguma.
         const dataComp = new Decimal(new Date(oc.competencia + '-01').getTime());
         const anos = dataLiq.minus(dataComp).div(1000 * 3600 * 24 * 365.25).toNumber();
-        const fator = new Decimal(1.03).pow(Math.max(0, anos));
-        totalDepositosCorrigido = totalDepositosCorrigido.plus(valorDep.times(fator));
+        const fgtsJurosRegime = this.correcaoConfig.fgts_juros ?? 'trabalhista';
+        const taxaCorrecao = fgtsJurosRegime === 'nenhum'
+          ? 1.0
+          : (this.fgtsConfig.perdas_monetarias ? 1.04 : 1.03);
+        const fator = new Decimal(taxaCorrecao).pow(Math.max(0, anos));
+        const depCorrigido = valorDep.times(fator);
+        totalDepositosCorrigido = totalDepositosCorrigido.plus(depCorrigido);
+
+        if (isAviso) {
+          totalDepositosAvisoCorrigido = totalDepositosAvisoCorrigido.plus(depCorrigido);
+        }
+
+        // Verbas "compor_principal=true" que não foram pagas até a audiência
+        // são base da multa Art. 467 (50%). Aproximamos "até audiência" como
+        // sendo todas as ocorrências com pago<devido (diferença>0).
+        if (vUI.compor_principal) {
+          baseArt467 = baseArt467.plus(oc.diferenca);
+        }
       }
     }
 
@@ -597,8 +730,12 @@ export class PjeCalcEngineV3 {
       ? saldoSaques.reduce((s, sq) => s + (sq.valor ?? 0), 0)
       : 0;
 
-    // Base da multa
+    // Base da multa — padrão: depósitos corrigidos
     let baseMulta = totalDepositosCorrigido;
+    // Art. 477 §6 CLT: excluir depósitos de aviso prévio da base da multa 40%.
+    if (this.fgtsConfig.excluir_aviso_multa) {
+      baseMulta = baseMulta.minus(totalDepositosAvisoCorrigido);
+    }
     if (this.fgtsConfig.multa_base === 'nominal') baseMulta = new Decimal(totalDepositos);
     else if (this.fgtsConfig.multa_base === 'devido_menos_saldo') baseMulta = baseMulta.minus(saldoDeduzido);
 
@@ -612,11 +749,25 @@ export class PjeCalcEngineV3 {
       }
     }
 
+    // cs_limitar_multa (PJe-Calc Avançado): quando true, cap a multa
+    // rescisória pelo % da multa previdenciária (75% Art. 44 Lei 9.430).
+    // Efeito típico: reduz multa 40% se ultrapassar limite do INSS.
+    if (this.correcaoConfig.cs_limitar_multa) {
+      const capMultaPrev = baseMulta.times(0.75).toDP(2).toNumber();
+      if (multaValor > capMultaPrev) multaValor = capMultaPrev;
+    }
+
+    // Multa Art. 467 CLT — 50% sobre verbas rescisórias incontroversas
+    // não pagas até a 1ª audiência. Aplicada sobre a base DIFERENCA (nominal).
+    const multa467 = this.fgtsConfig.multa_art_467
+      ? baseArt467.times(0.5).toDP(2).toNumber()
+      : 0;
+
     // LC 110/2001 — incide sobre base FGTS corrigida
     const lc110_10 = this.fgtsConfig.lc110_10 ? totalDepositosCorrigido.times(10).div(100).toDP(2).toNumber() : 0;
     const lc110_05 = this.fgtsConfig.lc110_05 ? totalDepositosCorrigido.times(5).div(100).toDP(2).toNumber() : 0;
 
-    const totalFgts = +(totalDepositosCorrigido.toNumber() - saldoDeduzido + multaValor + lc110_10 + lc110_05).toFixed(2);
+    const totalFgts = +(totalDepositosCorrigido.toNumber() - saldoDeduzido + multaValor + multa467 + lc110_10 + lc110_05).toFixed(2);
 
     return {
       depositos,
@@ -673,16 +824,24 @@ export class PjeCalcEngineV3 {
     const valor = new Decimal(valorCorrigido);
     const combs = this.correcaoConfig.combinacoes_juros ?? [];
 
-    // Quando combinacoes_juros tem entrada-base (sem 'de') e entrada com 'de',
-    // ha juros PRE-JUDICIAIS (competencia -> ajuizamento) na base, depois o outro
-    // tipo pos-ajuizamento. Nesse caso, inicio e a competencia, nao o ajuizamento.
+    // PJe-Calc TabelaDeJurosDoCalculo.calcularDataInicialDoPrimeiroPeriodoDeJuros
+    // (ref Java linhas 42-70): OCORRENCIAS_VENCIDAS + aplicarJurosFasePreJudicial=true
+    // → juros iniciam em dataFim+1 dia (ou 1º dia do mês seguinte se dataFim null).
     const temBase = combs.some(c => !c.de);
     const temPeriodoExplicito = combs.some(c => !!c.de);
     const aplicaPreJudicial = temBase && temPeriodoExplicito;
 
-    const inicio = aplicaPreJudicial
-      ? dataComp  // pre-judicial: conta desde a competencia
-      : (dataComp.getTime() > inicioJuros.getTime() ? dataComp : inicioJuros);
+    let inicio: Date;
+    if (aplicaPreJudicial) {
+      const dataFim = oc.getDataFinal();
+      if (dataFim) {
+        inicio = new Date(dataFim.getTime() + 24 * 60 * 60 * 1000);
+      } else {
+        inicio = new Date(dataComp.getFullYear(), dataComp.getMonth() + 1, 1);
+      }
+    } else {
+      inicio = dataComp.getTime() > inicioJuros.getTime() ? dataComp : inicioJuros;
+    }
     if (inicio.getTime() >= dataLiq.getTime()) return 0;
     if (combs.length > 0) {
       return valor.times(this.pctJurosCombinado(inicio, dataLiq, tipo, combs)).div(100).toDP(2).toNumber();
@@ -692,14 +851,28 @@ export class PjeCalcEngineV3 {
 
   /**
    * Retorna o percentual de juros acumulado em um segmento [inicio, fim] sob um tipo único.
-   * Tipos: 'selic' soma SELIC mensal pro-rata. 'simples_mensal' e 'taxa_legal' = 1%/mês.
-   * 'composto' retorna percentual equivalente (1 + r)^meses - 1. 'trd_simples' = 1%/mês.
-   * 'um_porcento' = 1%/mês. 'meio_porcento' = 0.5%/mês. 'nenhum'/'sem_juros' = 0.
+   * Tipos:
+   *   'selic'/'selic_bacen'/'selic_fazenda' — soma SELIC mensal pro-rata.
+   *   'trd_simples' — Taxa Referencial Diária simples (ref Java
+   *     TabelaDeJuros.montarPeriodosTRD linha 163: taxa_dia × dias_no_mês).
+   *     Usa tabela TR_MENSAL (pós-2017 ≈ 0, praticamente extinta).
+   *   'simples_mensal'/'taxa_legal'/'um_porcento'/padrão — 1%/mês.
+   *   'meio_porcento' — 0.5%/mês.
+   *   'composto' — (1 + r)^meses - 1 em %.
+   *   'nenhum'/'sem_juros' — 0.
+   *
+   * NOTA: antes TRD_SIMPLES caía em 1%/mês junto com TAXA_LEGAL. Isso causava
+   * overshoot sistêmico de juros pré-judiciais em cálculos ADC 58/59, porque o
+   * PJe-Calc real usa Taxa Referencial (TR) como base do TRD_SIMPLES. Com TR
+   * ≈ 0 pós Lei 12.703/2012, o juros pré-judicial efetivo é quase zero.
    */
   private pctJurosSegmento(inicio: Date, fim: Date, tipo: string): Decimal {
     if (inicio.getTime() >= fim.getTime()) return new Decimal(0);
     const t = tipo.toLowerCase();
     if (t === 'nenhum' || t === 'sem_juros') return new Decimal(0);
+    if (t === 'trd_simples' || t === 'trd' || t === 'trd_compostos') {
+      return new Decimal(this.somarTRSimples(inicio, fim));
+    }
     if (t === 'selic' || t === 'selic_bacen' || t === 'selic_fazenda') {
       return new Decimal(this.somarSelicSimples(inicio, fim));
     }

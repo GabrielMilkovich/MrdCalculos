@@ -13,6 +13,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { ocrBytes } from "../_shared/mistral-ocr.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,22 +43,16 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 // Detect digital PDFs and extract text without OCR
 // =====================================================
 
-async function tryNativePdfExtraction(fileUrl: string): Promise<{
+async function tryNativePdfExtraction(pdfBytes: Uint8Array): Promise<{
   text: string;
   method: "native" | "ocr-needed";
   quality: "good" | "poor";
   pageCount: number;
 }> {
   try {
-    // Download the PDF
-    const resp = await fetch(fileUrl);
-    if (!resp.ok) throw new Error(`Download failed: ${resp.status}`);
-    const buffer = await resp.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-
     // Simple PDF text extraction: look for text streams in the PDF
     // This works for digitally-created PDFs (not scanned)
-    const pdfStr = new TextDecoder("latin1").decode(bytes);
+    const pdfStr = new TextDecoder("latin1").decode(pdfBytes);
     
     // Count pages
     const pageMatches = pdfStr.match(/\/Type\s*\/Page[^s]/g) || [];
@@ -895,111 +890,40 @@ O campo texto_ocr_completo DEVE conter o texto integral do documento.`;
 // STAGE 1: Mistral OCR
 // =====================================================
 
-async function mistralOcrPdf(
-  documentUrl: string,
+async function mistralOcrPdfFromBytes(
+  pdfBytes: Uint8Array,
   mistralApiKey: string,
-  fileName: string = "document.pdf"
+  filename: string = "document.pdf"
 ): Promise<string> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    console.log(`[OCR] Mistral OCR flow attempt ${attempt} (upload → signed URL → OCR)`);
-    try {
-      // STEP 1: baixa PDF da origem (Supabase signed URL)
-      const srcResp = await fetch(documentUrl);
-      if (!srcResp.ok) throw new Error(`Source download ${srcResp.status}`);
-      const pdfBuffer = await srcResp.arrayBuffer();
-      if (pdfBuffer.byteLength === 0) throw new Error("Empty source PDF");
-      const pdfBlob = new Blob([pdfBuffer], { type: "application/pdf" });
-
-      // STEP 2: upload para Mistral /v1/files (multipart, purpose=ocr)
-      const form = new FormData();
-      form.append("purpose", "ocr");
-      form.append("file", pdfBlob, fileName || "document.pdf");
-
-      const uploadResp = await fetch("https://api.mistral.ai/v1/files", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${mistralApiKey}` },
-        body: form,
-      });
-      if (!uploadResp.ok) {
-        const errText = await uploadResp.text();
-        console.error(`[OCR] Mistral files upload ${uploadResp.status}:`, errText.substring(0, 300));
-        if (uploadResp.status === 429) { await delay(RETRY_DELAY_MS * attempt * 3); continue; }
-        lastError = new Error(`Mistral files upload ${uploadResp.status}`);
-        if (uploadResp.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
-        break;
-      }
-      const uploadJson = await uploadResp.json();
-      const fileId = uploadJson.id;
-      if (!fileId) throw new Error("No file ID returned from Mistral upload");
-      console.log(`[OCR] Mistral file uploaded: ${fileId}`);
-
-      // STEP 3: gera signed URL (expiry 24h)
-      const urlResp = await fetch(
-        `https://api.mistral.ai/v1/files/${fileId}/url?expiry=24`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${mistralApiKey}`,
-          },
-        }
-      );
-      if (!urlResp.ok) {
-        const errText = await urlResp.text();
-        console.error(`[OCR] Mistral files URL ${urlResp.status}:`, errText.substring(0, 300));
-        if (urlResp.status === 429) { await delay(RETRY_DELAY_MS * attempt * 3); continue; }
-        lastError = new Error(`Mistral files URL ${urlResp.status}`);
-        if (urlResp.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
-        break;
-      }
-      const urlJson = await urlResp.json();
-      const signedUrl = urlJson.url;
-      if (!signedUrl) throw new Error("No signed URL returned from Mistral");
-
-      // STEP 4: chama OCR com o signed URL Mistral-hosted
-      const ocrResp = await fetch("https://api.mistral.ai/v1/ocr", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${mistralApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "mistral-ocr-latest",
-          document: {
-            type: "document_url",
-            document_url: signedUrl,
-          },
-          include_image_base64: false,
-        }),
-      });
-
-      if (!ocrResp.ok) {
-        const errText = await ocrResp.text();
-        console.error(`[OCR] Mistral OCR API ${ocrResp.status}:`, errText.substring(0, 300));
-        if (ocrResp.status === 429) { await delay(RETRY_DELAY_MS * attempt * 3); continue; }
-        lastError = new Error(`Mistral OCR API ${ocrResp.status}`);
-        if (ocrResp.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
-        break;
-      }
-
-      const data = await ocrResp.json();
-      const pages = data.pages || [];
-      const fullText = pages.map((p: any) => p.markdown || p.text || "").join("\n\n---PAGE BREAK---\n\n");
-      if (fullText.length > 50) {
-        console.log(`[OCR] Mistral OCR API success: ${fullText.length} chars, ${pages.length} pages`);
-        return fullText;
-      }
-      lastError = new Error("OCR returned too little text");
-      continue;
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      console.error(`[OCR] attempt ${attempt} error:`, lastError.message);
-      await delay(RETRY_DELAY_MS * attempt);
-    }
+  // Pipeline Mistral OCR (padrão comprovado em produção n8n):
+  //   1. POST /v1/files purpose=ocr  → file_id
+  //   2. GET  /v1/files/{id}/url      → signed URL do Mistral (expiry=1h)
+  //   3. POST /v1/ocr document_url    → pages markdown
+  //   4. DELETE /v1/files/{id}        (cleanup async)
+  //
+  // NÃO passa document_url apontando para Supabase — Mistral teria de baixar
+  // da Supabase a cada call, somando latência de TLS+download remoto.
+  if (pdfBytes.byteLength === 0) throw new Error("PDF vazio");
+  if (pdfBytes.byteLength > 50 * 1024 * 1024) {
+    throw new Error(`PDF muito grande: ${(pdfBytes.byteLength / 1024 / 1024).toFixed(1)}MB (limite Mistral: 50MB)`);
   }
-  throw new Error(`Mistral OCR failed: ${lastError?.message}`);
+
+  const result = await ocrBytes(pdfBytes, filename, {
+    apiKey: mistralApiKey,
+    model: "mistral-ocr-latest",
+    timeoutMs: 180_000,
+    maxRetries: 3,
+    retryBaseMs: 1500,
+  });
+  console.log(`[OCR] Mistral retornou ${result.pages.length} páginas`);
+
+  const fullText = result.pages
+    .map((p) => p.markdown || "")
+    .join("\n\n---PAGE BREAK---\n\n");
+  if (fullText.length < 50) {
+    throw new Error(`OCR retornou pouco texto (${fullText.length} chars)`);
+  }
+  return fullText;
 }
 
 async function mistralOcrImage(
@@ -1065,12 +989,19 @@ async function extractStructured(
   ocrText: string,
   openaiApiKey: string
 ): Promise<any> {
+  // Separação de responsabilidades:
+  //   - Mistral OCR: apenas OCR (PDF → texto)
+  //   - OpenAI Chat: extração estruturada via function calling
+  //
+  // Cascata: gpt-4o-mini (rápido ~3-5s, custo baixo) → gpt-4o (fallback).
+  // gpt-4o-mini resolve >95% dos docs trabalhistas com accuracy comparável
+  // ao 4o para extração estruturada via tools.
   let lastError: Error | null = null;
   const models = [
-    "google/gemini-3-flash-preview",
-    "google/gemini-2.5-flash",
-    "google/gemini-2.5-pro",
+    "gpt-4o-mini",
+    "gpt-4o",
   ];
+  const MAX_EXTRACT_RETRIES = 2;
 
   const maxChars = 80000;
   const truncatedOcr = ocrText.length > maxChars
@@ -1078,7 +1009,8 @@ async function extractStructured(
     : ocrText;
 
   for (const model of models) {
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 1; attempt <= MAX_EXTRACT_RETRIES; attempt++) {
+      const t0 = Date.now();
       console.log(`[EXTRACT] ${model} attempt ${attempt}`);
       try {
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -1098,22 +1030,40 @@ async function extractStructured(
             ],
             tools: EXTRACTION_TOOLS,
             tool_choice: { type: "function", function: { name: "extrair_dados_documento" } },
-            max_tokens: 32000,
+            max_tokens: 8192,
             temperature: 0.05,
           }),
         });
 
         if (!response.ok) {
           const errText = await response.text();
-          console.error(`[EXTRACT] ${model} ${response.status}:`, errText.substring(0, 200));
-          if (response.status === 402) {
-            console.warn(`[EXTRACT] ${model} returned 402 (no credits), skipping to next model`);
-            lastError = new Error(`Créditos insuficientes (${model})`);
-            break;
+          console.error(`[EXTRACT] ${model} ${response.status}:`, errText.substring(0, 300));
+          if (response.status === 401 || response.status === 403) {
+            throw new Error(
+              `OPENAI_API_KEY inválida ou sem permissão (${response.status}). ` +
+              `Verifique em https://platform.openai.com/api-keys — confirme que a key ` +
+              `tem acesso a Chat Completions e que há créditos/billing configurado. ` +
+              `Detalhe API: ${errText.substring(0, 100)}`
+            );
           }
-          if (response.status === 429) { await delay(RETRY_DELAY_MS * attempt * 3); continue; }
-          if (response.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
-          lastError = new Error(`API ${response.status}`);
+          if (response.status === 402) {
+            throw new Error(
+              `OpenAI sem créditos/billing (402). ` +
+              `Adicione método de pagamento em https://platform.openai.com/settings/organization/billing. ` +
+              `Detalhe: ${errText.substring(0, 100)}`
+            );
+          }
+          if (response.status === 429) {
+            await delay(RETRY_DELAY_MS * attempt * 3);
+            lastError = new Error(`OpenAI 429 rate limit (${model})`);
+            continue;
+          }
+          if (response.status >= 500) {
+            await delay(RETRY_DELAY_MS * attempt);
+            lastError = new Error(`OpenAI ${response.status} (${model})`);
+            continue;
+          }
+          lastError = new Error(`OpenAI ${response.status}: ${errText.substring(0, 150)}`);
           break;
         }
 
@@ -1124,7 +1074,7 @@ async function extractStructured(
           try {
             const extracted = JSON.parse(toolCall.function.arguments);
             extracted.texto_ocr_completo = ocrText;
-            console.log(`[EXTRACT] SUCCESS with ${model}: tipo=${extracted.tipo_documento}, rubricas=${extracted.rubricas?.length || 0}`);
+            console.log(`[EXTRACT] SUCCESS with ${model} in ${Date.now() - t0}ms: tipo=${extracted.tipo_documento}, rubricas=${extracted.rubricas?.length || 0}`);
             return extracted;
           } catch (parseErr) {
             console.error(`[EXTRACT] JSON parse error from ${model}:`, parseErr);
@@ -1139,7 +1089,7 @@ async function extractStructured(
           try {
             const parsed = JSON.parse(jsonMatch[0]);
             if (!parsed.texto_ocr_completo) parsed.texto_ocr_completo = ocrText;
-            console.log(`[EXTRACT] SUCCESS (content fallback) with ${model}`);
+            console.log(`[EXTRACT] SUCCESS (content fallback) with ${model} in ${Date.now() - t0}ms`);
             return parsed;
           } catch { /* ignore */ }
         }
@@ -1149,12 +1099,14 @@ async function extractStructured(
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         console.error(`[EXTRACT] ${model} exception:`, lastError.message);
+        // Credencial inválida é fatal — aborta imediatamente.
+        if (lastError.message.includes("credencial inválida")) throw lastError;
         await delay(RETRY_DELAY_MS * attempt);
       }
     }
     console.warn(`[EXTRACT] Model ${model} exhausted, trying next...`);
   }
-  throw new Error(`Extração falhou em todos os modelos. Último erro: ${lastError?.message}`);
+  throw new Error(`Extração falhou em todos os modelos OpenAI. Último erro: ${lastError?.message}`);
 }
 
 // =====================================================
@@ -1719,60 +1671,41 @@ async function autoConfigureModules(supabase: any, caseId: string, extracted: an
 
 async function processDocumentInBackground(
   document_id: string,
-  fileUrl: string,
+  _fileUrl: string,
   doc: any,
-  MISTRAL_API_KEY: string,
+  _MISTRAL_API_KEY: string,
   OPENAI_API_KEY: string,
-  supabase: any
+  supabase: any,
+  ocrTextOverride?: string,
+  markValidated?: boolean,
 ) {
   try {
-    let mimeType = doc.mime_type || "application/pdf";
-    if (!mimeType || mimeType === "application/octet-stream") {
-      const fn = (doc.file_name || "").toLowerCase();
-      if (fn.endsWith(".pdf")) mimeType = "application/pdf";
-      else if (fn.endsWith(".png")) mimeType = "image/png";
-      else if (fn.endsWith(".jpg") || fn.endsWith(".jpeg")) mimeType = "image/jpeg";
-      else mimeType = "application/pdf";
-    }
-
-    const isPdf = mimeType === "application/pdf";
     let ocrText: string;
     let extractionMethod = "ocr";
+    const tPipeline0 = Date.now();
 
-    // ============ IMPROVEMENT #1: Try native PDF extraction first ============
-    if (isPdf) {
-      const nativeResult = await tryNativePdfExtraction(fileUrl);
-      
-      if (nativeResult.method === "native" && nativeResult.quality === "good") {
-        console.log(`[EXTRACT] Using NATIVE text extraction (${nativeResult.text.length} chars) — NO OCR NEEDED`);
-        ocrText = nativeResult.text;
-        extractionMethod = "native_pdf";
-      } else {
-        // Fallback to Mistral OCR
-        console.log(`[EXTRACT] Native extraction insufficient, using Mistral OCR`);
-        ocrText = await mistralOcrPdf(fileUrl, MISTRAL_API_KEY, doc.file_name);
-        extractionMethod = "mistral_ocr";
-      }
+    // ============ SHORTCUT: OCR texto validado pelo usuário ============
+    // Quando vem do split view de validação, já temos o texto finalizado
+    // — pula OCR completamente e vai direto pra extração estruturada.
+    // Arquitetura simples: extract-and-fill só roda com ocr_text já disponível.
+    // O OCR é responsabilidade SEPARADA do `ocr-document`, chamado diretamente
+    // pelo frontend (com auth do usuário) antes do split view de validação.
+    //
+    // Isso evita toda a complexidade de delegação entre edge functions
+    // (auth forwarding, scope de variáveis, RLS, etc.) que estava causando
+    // cascata de bugs.
+    if (ocrTextOverride && ocrTextOverride.trim().length >= 20) {
+      console.log(`[EXTRACT] Using validated OCR text from user (${ocrTextOverride.length} chars)`);
+      ocrText = ocrTextOverride;
+      extractionMethod = "validated_ocr";
+    } else if (doc.ocr_text && typeof doc.ocr_text === "string" && doc.ocr_text.length >= 50) {
+      console.log(`[EXTRACT] Using persisted ocr_text from documents row (${doc.ocr_text.length} chars)`);
+      ocrText = doc.ocr_text;
+      extractionMethod = "persisted_ocr";
     } else {
-      // Images: download and use chat API with base64
-      console.log(`[EXTRACT] Using Mistral chat API for image: ${doc.file_name}`);
-      let fileBuffer: ArrayBuffer | null = null;
-      for (let dl = 0; dl < 3; dl++) {
-        try {
-          const resp = await fetch(fileUrl);
-          if (!resp.ok) throw new Error(`Download ${resp.status}`);
-          fileBuffer = await resp.arrayBuffer();
-          break;
-        } catch (err) {
-          if (dl === 2) throw err;
-          await delay(1000);
-        }
-      }
-      if (!fileBuffer || fileBuffer.byteLength === 0) throw new Error("Empty file downloaded");
-      const base64Data = arrayBufferToBase64(fileBuffer);
-      fileBuffer = null;
-      ocrText = await mistralOcrImage(base64Data, mimeType, MISTRAL_API_KEY);
-      extractionMethod = "mistral_ocr_image";
+      throw new Error(
+        "Documento ainda não tem texto OCR. Rode o OCR primeiro (botão 'Rodar OCR' no split view) e só depois confirme a extração."
+      );
     }
     console.log(`[EXTRACT] Text ready: ${ocrText.length} chars via ${extractionMethod}`);
 
@@ -1789,7 +1722,9 @@ async function processDocumentInBackground(
 
     // Stage 2: AI structured extraction (always run for complete data)
     const fullOcrText = ocrText;
+    const tExtract = Date.now();
     const extracted = await extractStructured(ocrText, OPENAI_API_KEY);
+    console.log(`[TIMING] extract_structured_total=${Date.now() - tExtract}ms`);
     extracted.texto_ocr_completo = fullOcrText;
     ocrText = "";
 
@@ -1839,7 +1774,10 @@ async function processDocumentInBackground(
     }
 
     // Auto-fill pjecalc tables
+    const tFill = Date.now();
     const fills = await autoFill(supabase, doc.case_id, extracted);
+    console.log(`[TIMING] auto_fill=${Date.now() - tFill}ms fills=${fills.length}`);
+    console.log(`[TIMING] PIPELINE_TOTAL=${Date.now() - tPipeline0}ms`);
 
     // ============ IMPROVEMENT #3b: Save template cache ============
     const cnpjForCache = extracted.reclamada?.cnpj || detectedCnpj;
@@ -1850,7 +1788,7 @@ async function processDocumentInBackground(
     console.log(`[EXTRACT] Completeness: ${completeness.score}%, missing: [${completeness.missing.join(", ")}], ready: ${completeness.ready_for_liquidation}`);
 
     const extractedOcrText = extracted.texto_ocr_completo || "";
-    await supabase.from("documents").update({
+    const updatePayload: Record<string, unknown> = {
       status: "extracted",
       tipo: extracted.tipo_documento || doc.tipo,
       page_count: extracted.paginas_detectadas || 1,
@@ -1858,6 +1796,21 @@ async function processDocumentInBackground(
       ocr_confianca: extracted.confianca_geral || 0.9,
       processing_completed_at: new Date().toISOString(),
       error_message: null,
+    };
+    // Se o usuário mandou ocr_text_override + mark_validated, marca validação
+    // (e preserva o texto validado para referência futura).
+    if (markValidated) {
+      updatePayload.ocr_validated = true;
+      updatePayload.ocr_validated_at = new Date().toISOString();
+      updatePayload.ocr_validated_by = doc.owner_user_id || null;
+    }
+    // Se veio texto validado pelo usuário, atualiza ocr_text com a versão final
+    // (usuário pode ter editado o texto no split view).
+    if (ocrTextOverride) {
+      updatePayload.ocr_text = ocrTextOverride.slice(0, 10_000_000);
+    }
+    await supabase.from("documents").update({
+      ...updatePayload,
       metadata: {
         ...(doc.metadata || {}),
         extraction_completed_at: new Date().toISOString(),
@@ -1939,7 +1892,13 @@ serve(async (req) => {
   }
 
   try {
-    const { document_id } = await req.json();
+    const body = await req.json();
+    const document_id: string | undefined = body?.document_id;
+    // Texto OCR validado pelo usuário no split view — quando presente,
+    // pula a fase de OCR (já foi feita antes) e usa este texto direto.
+    const ocr_text_override: string | undefined = body?.ocr_text;
+    // Flag opcional: marcar o documento como validado ao concluir.
+    const mark_validated: boolean = body?.mark_validated === true;
 
     if (!document_id) {
       return new Response(
@@ -1948,16 +1907,39 @@ serve(async (req) => {
       );
     }
 
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
-
-    const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
-    if (!MISTRAL_API_KEY) throw new Error("MISTRAL_API_KEY not configured");
-
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Helper: registra o erro no documento para que a UI veja a causa real
+    // mesmo se o cliente supabase-js mostrar só "non-2xx status code".
+    const bail400 = async (payload: { error: string; hint?: string }) => {
+      await supabase.from("documents").update({
+        status: "failed",
+        error_message: [payload.error, payload.hint].filter(Boolean).join(" — ").slice(0, 1000),
+        processing_completed_at: new Date().toISOString(),
+      }).eq("id", document_id);
+      return new Response(
+        JSON.stringify(payload),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    };
+
+    const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
+    if (!MISTRAL_API_KEY) {
+      return bail400({
+        error: "MISTRAL_API_KEY não configurada no Supabase",
+        hint: "Adicione a secret MISTRAL_API_KEY (usada para OCR) em Edge Functions → Secrets.",
+      });
+    }
+
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      return bail400({
+        error: "OPENAI_API_KEY não configurada no Supabase",
+        hint: "Adicione a secret OPENAI_API_KEY (usada para extração estruturada) em Edge Functions → Secrets. Gere em https://platform.openai.com/api-keys",
+      });
+    }
 
     const { data: doc, error: docErr } = await supabase
       .from("documents")
@@ -1972,22 +1954,26 @@ serve(async (req) => {
       );
     }
 
-    let fileUrl = doc.arquivo_url;
-    if (!fileUrl && doc.storage_path) {
+    // SEMPRE regenera signed URL a partir de storage_path — `arquivo_url` pode
+    // estar expirado (URLs assinadas do upload-document têm TTL de 1h).
+    // Só usa `arquivo_url` se storage_path estiver ausente.
+    let fileUrl: string | null = null;
+    if (doc.storage_path) {
       for (const bucket of ["juriscalculo-documents", "case-documents"]) {
         const { data: signed } = await supabase.storage
           .from(bucket)
-          .createSignedUrl(doc.storage_path, 3600);
+          .createSignedUrl(doc.storage_path, 7200); // 2h para processamento longo
         if (signed?.signedUrl) {
           fileUrl = signed.signedUrl;
           break;
         }
       }
     }
+    if (!fileUrl) fileUrl = doc.arquivo_url;
 
     if (!fileUrl) {
       return new Response(
-        JSON.stringify({ error: "No file URL available" }),
+        JSON.stringify({ error: "No file URL available (storage_path e arquivo_url ambos ausentes)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -2001,8 +1987,8 @@ serve(async (req) => {
     }).eq("id", document_id);
 
     (globalThis as any).EdgeRuntime?.waitUntil?.(
-      processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase)
-    ) ?? processDocumentInBackground(document_id, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase);
+      processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated)
+    ) ?? processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated);
 
     return new Response(
       JSON.stringify({
