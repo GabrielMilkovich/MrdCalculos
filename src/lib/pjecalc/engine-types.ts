@@ -316,6 +316,17 @@ export interface PjeSalarioFamiliaConfig {
   apurar: boolean;
   numero_filhos: number;
   filhos_detalhes?: { nome: string; nascimento: string; ate_14: boolean }[];
+  /** FGTS integra o líquido_reclamante quando true */
+  compor_principal?: boolean;
+  /** Período de apuração (MM/AAAA). Se não informado, usa (admissão, demissão). */
+  competencia_inicial?: string;
+  competencia_final?: string;
+  /** Variação de qtd de filhos ≤14 ao longo do período (novas competências que mudam a quantidade). */
+  variacoes_qtd?: { competencia: string; quantidade: number }[];
+  /** Valor da cota legal (override). Default usa cota vigente 2025 (R$ 62,04). */
+  valor_cota?: number;
+  /** Teto salarial — elegível se remuneração ≤ teto. Default 2025 (R$ 1.819,26). */
+  teto_salarial?: number;
 }
 
 export interface PjeSalarioFamiliaResult {
@@ -555,6 +566,42 @@ export interface PjeExcecaoJuros {
   motivo?: string;
 }
 
+export interface PjeMultaItem {
+  descricao: string;
+  devedor: 'reclamante' | 'reclamado';
+  credor: 'reclamante' | 'reclamado' | 'terceiro';
+  terceiro_nome?: string;
+  valor_tipo: 'calculado' | 'informado';
+  base: 'principal' | 'liquido' | 'bruto';
+  aliquota?: number; // % quando valor_tipo=calculado
+  valor?: number;    // R$ quando valor_tipo=informado
+  vencimento?: string;
+  indice: 'trabalhista' | 'outro';
+  indice_outro?: string;
+  aplicar_juros: boolean;
+  apurar_ir: boolean;
+}
+
+export interface PjeMultasConfig {
+  apurar_467: boolean;
+  apurar_477: boolean;
+  valor_477_tipo?: 'salario' | 'informado';
+  valor_477_informado?: number;
+  /** Multas/indenizações individuais cadastradas na tela do PJe-Calc. */
+  multas_indenizacoes?: PjeMultaItem[];
+}
+
+export interface PjeHonorarioItem {
+  descricao: string;
+  devedor: 'reclamante' | 'reclamado';
+  credor: string;
+  tipo: 'percentual' | 'valor_fixo';
+  percentual: number;
+  valor_fixo?: number;
+  base: 'condenacao' | 'causa' | 'proveito';
+  apurar_ir: boolean;
+}
+
 export interface PjeHonorariosConfig {
   apurar_sucumbenciais: boolean;
   percentual_sucumbenciais: number;
@@ -562,6 +609,10 @@ export interface PjeHonorariosConfig {
   apurar_contratuais: boolean;
   percentual_contratuais: number;
   valor_fixo?: number;
+  /** Itens individuais de honorários. Quando presente e não-vazio,
+   *  SOBRESCREVE os percentuais sucumbenciais/contratuais padrão.
+   *  Permite múltiplos advogados com credores e percentuais distintos. */
+  items?: PjeHonorarioItem[];
 }
 
 export interface PjeCustaItem {
@@ -590,6 +641,19 @@ export interface PjeSeguroConfig {
   parcelas: number;
   valor_parcela?: number;
   recebeu: boolean;
+  /** Tipo de valor: 'informado' (usuário passa valor total) ou 'calculado' (com base na última remuneração). */
+  valor_tipo?: 'informado' | 'calculado';
+  /** Total informado quando valor_tipo='informado'. */
+  valor_informado?: number;
+  /** Categoria — afeta elegibilidade e regras. */
+  tipo_solicitacao?: 'trabalhador_urbano' | 'trabalhador_rural' | 'empregado_domestico' | 'pescador_artesanal';
+  empregado_domestico?: boolean;
+  /** Fonte da remuneração mensal para cálculo automático do valor por parcela. */
+  remuneracao_fonte?: 'nenhum' | 'maior' | 'historico';
+  historico_id?: string;
+  integralizar?: boolean;
+  /** Quando true, a indenização substitutiva compõe o líquido do reclamante. */
+  compor_principal?: boolean;
 }
 
 // =====================================================

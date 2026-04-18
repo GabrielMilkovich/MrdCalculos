@@ -423,12 +423,71 @@ export class PjeCalcEngineV3 {
     // FGTS entra no liquido APENAS quando compor_principal=true. PJe-Calc com
     // destino=pagar_reclamante ainda separa FGTS do liquido no resultado "liquido_exequente".
     const fgtsNoLiquido = this.fgtsConfig.compor_principal ? fgtsResult.total_fgts : 0;
-    // Honorarios contratuais: descontados do liquido do reclamante
-    const honorariosContratuais = this.honorariosConfig.apurar_contratuais
-      ? (this.honorariosConfig.valor_fixo ??
-         (principalCorrigido + jurosMora) * (this.honorariosConfig.percentual_contratuais ?? 0) / 100)
-      : 0;
+
+    // Honorários — itens individuais (items[]) têm precedência sobre
+    // percentual_sucumbenciais/contratuais quando presentes. Isso suporta
+    // múltiplos advogados/credores com percentuais e bases distintas.
+    const baseHonorarios = principalCorrigido + jurosMora;
+    let honorariosContratuais = 0;
+    let honorariosSucumbenciaisList = 0;
+    const itens = this.honorariosConfig.items ?? [];
+
+    if (itens.length > 0) {
+      for (const it of itens) {
+        const valor = it.tipo === 'valor_fixo'
+          ? (it.valor_fixo ?? 0)
+          : baseHonorarios * (it.percentual ?? 0) / 100;
+        // Devedor=reclamante → deduz do líquido (honorários contratuais)
+        // Devedor=reclamado → soma à condenação (sucumbenciais pagos pela parte vencida)
+        if (it.devedor === 'reclamante') honorariosContratuais += valor;
+        else honorariosSucumbenciaisList += valor;
+      }
+    } else {
+      // Fallback: usa os percentuais globais
+      honorariosContratuais = this.honorariosConfig.apurar_contratuais
+        ? (this.honorariosConfig.valor_fixo ?? baseHonorarios * (this.honorariosConfig.percentual_contratuais ?? 0) / 100)
+        : 0;
+    }
+
+    // Seguro-Desemprego (indenização substitutiva quando não recebido).
+    // Quando apurar=true e recebeu=false, calcula o valor total com base em:
+    //   - valor_tipo='informado' → usa valor_informado direto
+    //   - valor_tipo='calculado' → parcelas × valor_parcela (com override)
+    // Composição no líquido controlada por compor_principal.
+    let valorSeguroDesemprego = 0;
+    if (this.seguroConfig.apurar && !this.seguroConfig.recebeu) {
+      if (this.seguroConfig.valor_tipo === 'informado' && this.seguroConfig.valor_informado) {
+        valorSeguroDesemprego = this.seguroConfig.valor_informado;
+      } else {
+        const valorParcela = this.seguroConfig.valor_parcela ?? 0;
+        valorSeguroDesemprego = (this.seguroConfig.parcelas ?? 5) * valorParcela;
+      }
+    }
+    const seguroNoLiquido = this.seguroConfig.compor_principal !== false ? valorSeguroDesemprego : 0;
+
+    // Salário-Família (cotas por filho ≤14 anos quando remuneração ≤ teto).
+    // Cálculo aproximado por meses × qtd filhos × cota legal.
+    // PJe-Calc faz cálculo diário ligado a cartão ponto; aqui fazemos
+    // aproximação mensal para consistência com o nível de detalhe atual do engine.
+    let valorSalarioFamilia = 0;
+    if (this.salarioFamiliaConfig.apurar) {
+      const cota = this.salarioFamiliaConfig.valor_cota ?? 62.04;
+      const qtd = this.salarioFamiliaConfig.numero_filhos ?? 0;
+      const ci = this.salarioFamiliaConfig.competencia_inicial || this.params.data_admissao;
+      const cf = this.salarioFamiliaConfig.competencia_final
+        || this.params.data_demissao
+        || this.correcaoConfig.data_liquidacao;
+      if (ci && cf && qtd > 0) {
+        const d1 = new Date(ci + (ci.length === 7 ? '-01' : ''));
+        const d2 = new Date(cf + (cf.length === 7 ? '-01' : ''));
+        const meses = Math.max(0, (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + 1);
+        valorSalarioFamilia = meses * qtd * cota;
+      }
+    }
+    const salFamNoLiquido = this.salarioFamiliaConfig.compor_principal !== false ? valorSalarioFamilia : 0;
+
     const liquidoReclamante = +(principalCorrigido + jurosMora + fgtsNoLiquido + multa467 + multa523
+      + seguroNoLiquido + salFamNoLiquido
       - csReclamante - irRetido - honorariosContratuais).toFixed(2);
 
     const resumo: PjeResumo = {
@@ -439,14 +498,17 @@ export class PjeCalcEngineV3 {
       cs_segurado: +csSegurado.toFixed(2),
       cs_empregador: +csEmpregador.toFixed(2),
       ir_retido: +irRetido.toFixed(2),
-      seguro_desemprego: 0,
+      seguro_desemprego: +valorSeguroDesemprego.toFixed(2),
       previdencia_privada: 0,
-      salario_familia: 0,
+      salario_familia: +valorSalarioFamilia.toFixed(2),
       multa_523: +multa523.toFixed(2),
       multa_467: +multa467.toFixed(2),
-      honorarios_sucumbenciais: +(this.honorariosConfig.apurar_sucumbenciais
-        ? (principalCorrigido + jurosMora) * (this.honorariosConfig.percentual_sucumbenciais ?? 0) / 100
-        : 0).toFixed(2),
+      honorarios_sucumbenciais: +(itens.length > 0
+        ? honorariosSucumbenciaisList
+        : (this.honorariosConfig.apurar_sucumbenciais
+            ? baseHonorarios * (this.honorariosConfig.percentual_sucumbenciais ?? 0) / 100
+            : 0)
+      ).toFixed(2),
       honorarios_contratuais: +honorariosContratuais.toFixed(2),
       custas: 0,
       custas_detalhadas: [],

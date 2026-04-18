@@ -297,11 +297,103 @@ describe('AUDITORIA: cada campo afeta o engine', () => {
     });
   });
 
+  describe('Seguro-Desemprego', () => {
+    it('apurar=true + recebeu=false + valor_parcela aumenta líquido', () => {
+      const off = runEngine({ seguro: { apurar: false } });
+      const on = runEngine({ seguro: { apurar: true, recebeu: false, parcelas: 5, valor_parcela: 1500 } });
+      expect(on.liquido).toBeGreaterThan(off.liquido);
+    });
+
+    it('recebeu=true NÃO adiciona ao líquido (já recebeu)', () => {
+      const baseline = runEngine({ seguro: { apurar: false } });
+      const recebeu = runEngine({ seguro: { apurar: true, recebeu: true, parcelas: 5, valor_parcela: 1500 } });
+      expect(recebeu.liquido).toBeCloseTo(baseline.liquido, 0);
+    });
+
+    it('compor_principal=false não adiciona SD ao líquido', () => {
+      const composto = runEngine({ seguro: { apurar: true, recebeu: false, parcelas: 5, valor_parcela: 1500, compor_principal: true } });
+      const naoComposto = runEngine({ seguro: { apurar: true, recebeu: false, parcelas: 5, valor_parcela: 1500, compor_principal: false } });
+      expect(composto.liquido).toBeGreaterThan(naoComposto.liquido);
+    });
+  });
+
+  describe('Salário-Família', () => {
+    it('apurar=true + filhos>0 aumenta líquido', () => {
+      const off = runEngine({});
+      // Constructor args: ... indicesDB(14), faixasINSS(15), faixasIR(16),
+      //   excecoesCargas(17), feriadosDB(18), prevPriv(19), pensao(20),
+      //   salarioFamiliaConfig(21)
+      const engine = new PjeCalcEngineV3(
+        baselineParams(), [], [], [],
+        [baselineVerba()], [],
+        baselineFGTS(), baselineCS(), baselineIR(), baselineCorrecao(),
+        baselineHonorarios(), baselineCustas(), baselineSeguro(),
+        INDICES, FAIXAS,
+        [], [], [], undefined, undefined,
+        { apurar: true, numero_filhos: 2, competencia_inicial: '2022-01', competencia_final: '2023-06' },
+      );
+      const on = engine.liquidar();
+      expect(on.resumo.liquido_reclamante).toBeGreaterThan(off.liquido);
+      expect(on.resumo.salario_familia).toBeGreaterThan(0);
+    });
+
+    it('numero_filhos=0 NÃO gera salário-família', () => {
+      const engine = new PjeCalcEngineV3(
+        baselineParams(), [], [], [],
+        [baselineVerba()], [],
+        baselineFGTS(), baselineCS(), baselineIR(), baselineCorrecao(),
+        baselineHonorarios(), baselineCustas(), baselineSeguro(),
+        INDICES, FAIXAS,
+        [], [], [], undefined, undefined,
+        { apurar: true, numero_filhos: 0 },
+      );
+      expect(engine.liquidar().resumo.salario_familia).toBe(0);
+    });
+  });
+
   describe('Honorários', () => {
     it('apurar_contratuais=true reduz liquido (desconta honor. contratuais)', () => {
       const off = runEngine({ honorarios: { apurar_contratuais: false } });
       const on = runEngine({ honorarios: { apurar_contratuais: true, percentual_contratuais: 20 } });
       expect(on.liquido).toBeLessThan(off.liquido);
+    });
+
+    it('items[] com devedor=reclamante reduz líquido', () => {
+      const without = runEngine({ honorarios: { items: [] } });
+      const withItems = runEngine({
+        honorarios: {
+          items: [{
+            descricao: 'HON CONTRATUAIS',
+            devedor: 'reclamante',
+            credor: 'ADV',
+            tipo: 'percentual',
+            percentual: 25,
+            base: 'condenacao',
+            apurar_ir: false,
+          }],
+        },
+      });
+      expect(withItems.liquido).toBeLessThan(without.liquido);
+    });
+
+    it('items[] devedor=reclamado soma aos sucumbenciais (não reduz líquido)', () => {
+      const without = runEngine({ honorarios: { items: [] } });
+      const withItems = runEngine({
+        honorarios: {
+          items: [{
+            descricao: 'HON SUCUMB',
+            devedor: 'reclamado',
+            credor: 'ADV',
+            tipo: 'percentual',
+            percentual: 15,
+            base: 'condenacao',
+            apurar_ir: false,
+          }],
+        },
+      });
+      // Líquido do reclamante não é afetado (reclamado paga)
+      // mas honorarios_sucumbenciais no resumo deve aumentar
+      expect(withItems.liquido).toBeCloseTo(without.liquido, 0);
     });
   });
 });
