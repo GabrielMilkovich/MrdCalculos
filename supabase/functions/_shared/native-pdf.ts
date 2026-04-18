@@ -1,38 +1,31 @@
 /**
- * Extrator de texto nativo de PDFs (sem OCR).
+ * Extrator de texto nativo de PDFs (sem OCR e sem dependências externas).
  *
- * Quando o PDF é "digital" (gerado por software, não scaneado),
- * ele já tem texto embebido no stream de objetos — não precisa OCR.
- * Extração nativa é:
- *   - 100% precisa (nenhum erro de reconhecimento)
- *   - instantânea (~50ms vs ~10s do OCR)
- *   - gratuita (zero call ao Mistral)
+ * Quando o PDF é "digital" (gerado por software, não scaneado), ele já tem
+ * texto embebido nos streams de objetos. Esta função faz parsing regex-based
+ * do stream `BT ... ET` (text objects) e dos operadores Tj/TJ, sem precisar
+ * de pdfjs/unpdf/canvas — roda no Deno runtime do Supabase sem boot-error.
  *
- * Usa `unpdf` (port leve do pdfjs-dist para runtimes serverless/Deno).
+ * Limitações conhecidas (aceitáveis no trade-off):
+ *  - Não extrai texto de streams comprimidos com Flate (pega só os uncompressed)
+ *  - Não mapeia texto por página (retorna texto completo concatenado)
+ *  - Não decodifica encodings complexos (CMap); o texto vem como está no PDF
  *
- * Heuristica de qualidade:
- *   - "good": >= 500 chars úteis E >= 0.05 palavras/char
- *   - "poor": menos que isso → precisa OCR
+ * Se o PDF NÃO for digital (escaneado), retorna quality="none" e o pipeline
+ * cai pro OCR Mistral.
  */
-
-import { extractText, getDocumentProxy } from "https://esm.sh/unpdf@0.12.1";
 
 export interface NativeExtractionResult {
   /** Texto extraído completo (concatenação das páginas com cabeçalhos). */
   text: string;
-  /** Array por página (mesma indexação que o PDF, 0-based). */
+  /** Array por página — vazio nesta impl. (sem mapeamento por página). */
   pages: string[];
-  /** Quantas páginas o PDF tem. */
+  /** Quantas páginas o PDF tem (detectado via /Type /Page). */
   pageCount: number;
-  /** Qualidade avaliada: "good" = pode pular OCR; "poor" = precisa OCR. */
+  /** Qualidade: "good" = pode pular OCR; "poor" = precisa OCR; "none" = scan. */
   quality: "good" | "poor" | "none";
   /** Detalhes pra log. */
   reason: string;
-}
-
-/** Texto util por pagina (chars nao-whitespace). */
-function usefulCharsCount(s: string): number {
-  return s.replace(/\s+/g, "").length;
 }
 
 /** Palavras "reais" (3+ letras latin). */
@@ -41,99 +34,143 @@ function realWordCount(s: string): number {
 }
 
 /**
- * Extrai texto do PDF de forma nativa (sem OCR) quando possivel.
- * Retorna `quality: "poor"` se o texto extraido é tao pouco/ruim
- * que vale mais rodar OCR.
+ * Extrai texto do PDF via parsing regex do stream.
+ * NÃO usa dependências externas — só TextDecoder builtin.
  */
 export async function extractNativeText(
   bytes: Uint8Array,
 ): Promise<NativeExtractionResult> {
-  let doc;
   try {
-    // unpdf aceita Uint8Array direto.
-    doc = await getDocumentProxy(bytes);
+    const pdfStr = new TextDecoder("latin1").decode(bytes);
+
+    // Detecta páginas via marcador /Type /Page (não /Pages)
+    const pageMatches = pdfStr.match(/\/Type\s*\/Page[^s]/g) || [];
+    const pageCount = Math.max(pageMatches.length, 1);
+
+    const textObjects: string[] = [];
+
+    // BT/ET são marcadores de "text object" no PDF
+    const btEtRegex = /BT\s([\s\S]*?)ET/g;
+    let match: RegExpExecArray | null;
+    while ((match = btEtRegex.exec(pdfStr)) !== null) {
+      const block = match[1];
+
+      // Tj = show string; TJ = show array of strings
+      const tjMatches = block.match(/\(((?:\\.|[^)])*)\)\s*Tj/g) || [];
+      const tjArrMatches = block.match(/\[((?:\\.|[^\]])*)\]\s*TJ/gi) || [];
+
+      for (const tj of tjMatches) {
+        const m = tj.match(/\(((?:\\.|[^)])*)\)/);
+        if (m) textObjects.push(decodePdfString(m[1]));
+      }
+      for (const tjArr of tjArrMatches) {
+        const inner = tjArr.match(/\(((?:\\.|[^)])*)\)/g) || [];
+        for (const it of inner) {
+          const m = it.match(/\(((?:\\.|[^)])*)\)/);
+          if (m) textObjects.push(decodePdfString(m[1]));
+        }
+      }
+    }
+
+    // Também tenta pegar strings de streams uncompressed (fallback)
+    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+    let streamMatch: RegExpExecArray | null;
+    while ((streamMatch = streamRegex.exec(pdfStr)) !== null) {
+      const content = streamMatch[1];
+      // só streams pequenos e sem indicador de compressão Flate
+      if (content.length < 50_000 && !/^\x78[\x01\x5e\x9c\xda]/.test(content)) {
+        const strings = content.match(/\(((?:\\.|[^)]){2,})\)/g) || [];
+        for (const s of strings) {
+          const m = s.match(/\(((?:\\.|[^)])+)\)/);
+          if (m && /[A-Za-zÀ-ÿ]/.test(m[1])) textObjects.push(decodePdfString(m[1]));
+        }
+      }
+    }
+
+    const text = textObjects.join(" ").replace(/\s+/g, " ").trim();
+    const usefulChars = text.replace(/\s+/g, "").length;
+    const words = realWordCount(text);
+    const wordsPerChar = text.length > 0 ? words / text.length : 0;
+
+    // Palavras-chave comuns de documentos trabalhistas brasileiros
+    const laborKeywords = [
+      "salário", "salario", "admissão", "admissao", "demissão", "demissao",
+      "CTPS", "FGTS", "INSS", "remuneração", "remuneracao", "férias", "ferias",
+      "contrato", "empregado", "empregador", "CLT", "rescisão", "rescisao",
+      "competência", "competencia", "processo", "reclamante", "reclamada",
+      "holerite", "contracheque", "trct", "cartão", "ponto",
+    ];
+    const hasLaborContent = laborKeywords.some((kw) =>
+      text.toLowerCase().includes(kw.toLowerCase())
+    );
+
+    const hasGoodText = usefulChars >= 500 && words >= 30 && wordsPerChar >= 0.04;
+
+    // Constrói texto final com um cabeçalho unico (sem paginas individuais)
+    const finalText = text
+      ? `--- PÁGINA 1 ---\n${text}`
+      : "";
+
+    if (usefulChars < 50) {
+      return {
+        text: "",
+        pages: [],
+        pageCount,
+        quality: "none",
+        reason: `apenas ${usefulChars} chars uteis (PDF provavelmente escaneado)`,
+      };
+    }
+
+    if (hasGoodText && hasLaborContent) {
+      return {
+        text: finalText,
+        pages: [],
+        pageCount,
+        quality: "good",
+        reason: `${usefulChars} chars, ${words} palavras, keywords trabalhistas detectadas`,
+      };
+    }
+
+    if (hasGoodText) {
+      return {
+        text: finalText,
+        pages: [],
+        pageCount,
+        quality: "good",
+        reason: `${usefulChars} chars, ${words} palavras (sem keywords especificas)`,
+      };
+    }
+
+    return {
+      text: finalText,
+      pages: [],
+      pageCount,
+      quality: "poor",
+      reason: `${usefulChars} chars uteis, ${words} palavras, ratio=${wordsPerChar.toFixed(3)}`,
+    };
   } catch (err) {
     return {
       text: "",
       pages: [],
       pageCount: 0,
       quality: "none",
-      reason: `getDocumentProxy falhou: ${err instanceof Error ? err.message : String(err)}`,
+      reason: `extracao falhou: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
+}
 
-  const pageCount = doc.numPages;
-  if (pageCount === 0) {
-    return { text: "", pages: [], pageCount: 0, quality: "none", reason: "PDF sem paginas" };
-  }
-
-  let pages: string[] = [];
-  try {
-    // `extractText` retorna { text: string, totalPages: number } ou arrays por pagina.
-    // Usamos mergePages=false para manter separado por pagina.
-    const result = await extractText(doc, { mergePages: false });
-    // result.text pode ser string[] (uma por pagina) ou string dependendo da versao.
-    if (Array.isArray(result.text)) {
-      pages = result.text as string[];
-    } else if (typeof result.text === "string") {
-      pages = [result.text];
-    }
-  } catch (err) {
-    return {
-      text: "",
-      pages: [],
-      pageCount,
-      quality: "none",
-      reason: `extractText falhou: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
-
-  // Normaliza tamanho do array de paginas ao pageCount
-  while (pages.length < pageCount) pages.push("");
-
-  // Qualidade por pagina
-  const totalUseful = pages.reduce((s, p) => s + usefulCharsCount(p), 0);
-  const totalWords = pages.reduce((s, p) => s + realWordCount(p), 0);
-  const joined = pages.join(" ");
-  const totalChars = joined.length;
-  const wordsPerChar = totalChars > 0 ? totalWords / totalChars : 0;
-
-  // Monta texto final com cabeçalhos (compativel com o formato que o OCR produz)
-  const parts: string[] = [];
-  for (let i = 0; i < pages.length; i++) {
-    const body = (pages[i] || "").trim();
-    parts.push(`--- PÁGINA ${i + 1} ---\n${body || "[vazia]"}`);
-  }
-  const text = parts.join("\n\n");
-
-  // Classificação de qualidade:
-  //  - zero texto util → quality "none" (PDF totalmente escaneado)
-  //  - pouco texto util ou densidade ruim de palavras → "poor" (precisa OCR)
-  //  - senão → "good"
-  if (totalUseful < 50) {
-    return {
-      text,
-      pages,
-      pageCount,
-      quality: "none",
-      reason: `apenas ${totalUseful} chars uteis no PDF inteiro (provavelmente escaneado)`,
-    };
-  }
-  if (totalUseful < 500 || wordsPerChar < 0.05) {
-    return {
-      text,
-      pages,
-      pageCount,
-      quality: "poor",
-      reason: `${totalUseful} chars uteis, ${totalWords} palavras, ${wordsPerChar.toFixed(3)} palavras/char`,
-    };
-  }
-
-  return {
-    text,
-    pages,
-    pageCount,
-    quality: "good",
-    reason: `${totalUseful} chars uteis, ${totalWords} palavras em ${pageCount} pg`,
-  };
+/**
+ * Decodifica strings PDF (escapes basicos). Não lida com CMap / encodings
+ * complexos — mas cobre a maioria dos PDFs digitais em português.
+ */
+function decodePdfString(s: string): string {
+  return s
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/\\t/g, "\t")
+    .replace(/\\\(/g, "(")
+    .replace(/\\\)/g, ")")
+    .replace(/\\\\/g, "\\")
+    // Octal escapes \ddd
+    .replace(/\\([0-7]{1,3})/g, (_m, oct) => String.fromCharCode(parseInt(oct, 8)));
 }
