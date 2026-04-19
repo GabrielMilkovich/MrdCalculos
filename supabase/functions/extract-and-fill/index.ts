@@ -1025,12 +1025,12 @@ async function extractStructured(
               { role: "system", content: SYSTEM_PROMPT },
               {
                 role: "user",
-                content: `Analise o texto abaixo extraído por OCR de um documento trabalhista e extraia os dados usando a função extrair_dados_documento. NÃO repita o texto OCR na resposta. Para cartão de ponto, extraia no máximo os 60 primeiros registros diários como amostra.\n\n--- TEXTO DO DOCUMENTO ---\n${truncatedOcr}\n--- FIM DO TEXTO ---`
+                content: `Analise o texto abaixo extraído por OCR de um documento trabalhista e extraia os dados usando a função extrair_dados_documento. NÃO repita o texto OCR na resposta. Para cartão de ponto, extraia TODOS os registros diários presentes no texto (NÃO amostre — extraia 30, 100, 365+ dias se estiverem no documento). Cada linha da tabela de ponto vira 1 registro com data + batidas.\n\n--- TEXTO DO DOCUMENTO ---\n${truncatedOcr}\n--- FIM DO TEXTO ---`
               },
             ],
             tools: EXTRACTION_TOOLS,
             tool_choice: { type: "function", function: { name: "extrair_dados_documento" } },
-            max_tokens: 8192,
+            max_tokens: 16384,
             temperature: 0.05,
           }),
         });
