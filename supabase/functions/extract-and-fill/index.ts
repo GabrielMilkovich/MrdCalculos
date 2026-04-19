@@ -1240,6 +1240,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
           .from("pjecalc_hist_salarial")
           .upsert({
             calculo_id: calculoId,
+            case_id: caseId,
             nome: rub.denominacao,
             tipo_variacao: tipoVar,
             valor_fixo: firstVal,
@@ -1263,6 +1264,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
 
             await supabase.from("pjecalc_hist_salarial_mes").upsert({
               calculo_id: calculoId,
+              case_id: caseId,
               hist_salarial_id: histId,
               competencia: vm.competencia.length === 7 ? vm.competencia + "-01" : vm.competencia,
               valor: vm.valor,
@@ -1293,6 +1295,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
 
         await supabase.from("pjecalc_verba_base").upsert({
           calculo_id: calculoId,
+          case_id: caseId,
           nome: rub.denominacao,
           codigo: rub.codigo || null,
           caracteristica: rub.categoria === "salario_base" ? "FIXA" : "COMUM",
@@ -1343,6 +1346,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
           const isFalta = !r.entrada1 && /falta|ausencia|ausência/i.test(r.observacao || "");
           return {
             calculo_id: calculoId,
+            case_id: caseId,
             data: r.data,
             frequencia_str: [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean).join(" | ") || null,
             horas_trabalhadas: horasNormais,
@@ -1468,6 +1472,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
           const pedido = sent.pedidos_deferidos[i];
           await supabase.from("pjecalc_verba_base").upsert({
             calculo_id: calculoId,
+            case_id: caseId,
             nome: pedido,
             caracteristica: "COMUM",
             periodicidade: "MENSAL",
