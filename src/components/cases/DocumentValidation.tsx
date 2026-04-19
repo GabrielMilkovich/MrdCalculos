@@ -61,6 +61,7 @@ interface DocRow {
   ocr_validated: boolean | null;
   page_count: number | null;
   error_message: string | null;
+  case_id: string | null;
 }
 
 async function getFreshSignedUrl(storagePath: string): Promise<string | null> {
@@ -89,7 +90,7 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
     try {
       const { data, error } = await supabase
         .from("documents")
-        .select("id, file_name, mime_type, storage_path, arquivo_url, status, ocr_text, ocr_confidence, ocr_validated, page_count, error_message")
+        .select("id, file_name, mime_type, storage_path, arquivo_url, status, ocr_text, ocr_confidence, ocr_validated, page_count, error_message, case_id")
         .eq("id", documentId)
         .maybeSingle();
       if (error) throw error;
@@ -133,7 +134,7 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
     pollRef.current = setTimeout(async () => {
       const { data } = await supabase
         .from("documents")
-        .select("id, file_name, mime_type, storage_path, arquivo_url, status, ocr_text, ocr_confidence, ocr_validated, page_count, error_message")
+        .select("id, file_name, mime_type, storage_path, arquivo_url, status, ocr_text, ocr_confidence, ocr_validated, page_count, error_message, case_id")
         .eq("id", doc.id)
         .maybeSingle();
       if (data) {
@@ -208,7 +209,32 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
       onValidated?.();
       onOpenChange(false);
 
-      // PASSO 2: Dispara extract-and-fill em background (fire-and-forget).
+      // PASSO 2: Se é cartão de ponto, roda parser SQL determinístico
+      // (não depende de LLM — extrai TODOS os dias direto do ocr_text).
+      if (doc?.mime_type !== undefined && (
+        /ponto/i.test(doc.file_name || "") ||
+        /cartao/i.test(doc.file_name || "")
+      )) {
+        supabase
+          .rpc("parse_cartao_ponto_from_ocr", {
+            p_case_id: (doc as any).case_id || null,
+            p_document_id: documentId,
+          })
+          .then(({ data: rpcData, error: rpcErr }) => {
+            if (rpcErr) {
+              logger.warn("parse_cartao_ponto_from_ocr falhou", rpcErr);
+            } else if (Array.isArray(rpcData) && rpcData[0]) {
+              const days = (rpcData[0] as any).parsed_days || 0;
+              const months = (rpcData[0] as any).parsed_months || 0;
+              if (days > 0) {
+                toast.success(`📋 Cartão de ponto: ${days} dias em ${months} meses`, { duration: 6000 });
+              }
+            }
+          })
+          .catch((e) => logger.warn("RPC error", e));
+      }
+
+      // PASSO 3: Dispara extract-and-fill em background (fire-and-forget).
       // Se falhar, a validação já ficou persistida; o user pode re-tentar
       // só a extração estruturada sem re-validar.
       supabase.functions
