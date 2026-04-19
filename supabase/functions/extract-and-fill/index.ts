@@ -1501,6 +1501,7 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
         for (const verba of trct.verbas_rescisorias) {
           await supabase.from("pjecalc_ocorrencias").insert({
             case_id: caseId,
+            calculo_id: calculoId,
             verba_nome: verba.descricao,
             competencia: extracted.contrato?.data_demissao || new Date().toISOString().slice(0, 10),
             base_valor: verba.valor || 0,
