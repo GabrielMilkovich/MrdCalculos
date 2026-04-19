@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MainLayoutPremium } from "@/components/layout/MainLayoutPremium";
 import { CaseWorkspace } from "@/components/cases/CaseWorkspace";
+import { OcrValidationList } from "@/components/cases/OcrValidationList";
 import { ImportPJCDialog } from "@/components/cases/pjecalc/ImportPJCDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -822,6 +823,9 @@ export default function CasoDetalhe() {
       case "validacao":
         return (
           <div className="space-y-5">
+            {/* OCR Validation (split view) — primeiro passo: user valida o OCR */}
+            <OcrValidationList caseId={id!} />
+
             {/* Extraction Controls */}
             <Card className="bg-card/80">
               <CardContent className="p-4">

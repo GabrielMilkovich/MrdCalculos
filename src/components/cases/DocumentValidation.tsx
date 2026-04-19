@@ -189,17 +189,48 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
     }
     setSubmitting(true);
     try {
-      const { error: invokeErr } = await supabase.functions.invoke("extract-and-fill", {
-        body: {
-          document_id: documentId,
+      // PASSO 1: Persiste validação IMEDIATAMENTE (sem depender de extract-and-fill
+      // que pode falhar por timeout/credencial/etc.). Assim o user vê o ✅ verde
+      // assim que clica Confirmar, sem precisar reconfirmar.
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error: updErr } = await supabase
+        .from("documents")
+        .update({
           ocr_text: editedText,
-          mark_validated: true,
-        },
-      });
-      if (invokeErr) throw await unwrapFunctionsError(invokeErr);
-      toast.success("Validação enviada. A extração estruturada está rodando em background.");
+          ocr_validated: true,
+          ocr_validated_at: new Date().toISOString(),
+          ocr_validated_by: user?.id || null,
+        })
+        .eq("id", documentId);
+      if (updErr) throw updErr;
+
+      toast.success("✅ OCR validado e salvo.");
       onValidated?.();
       onOpenChange(false);
+
+      // PASSO 2: Dispara extract-and-fill em background (fire-and-forget).
+      // Se falhar, a validação já ficou persistida; o user pode re-tentar
+      // só a extração estruturada sem re-validar.
+      supabase.functions
+        .invoke("extract-and-fill", {
+          body: { document_id: documentId, ocr_text: editedText, mark_validated: true },
+        })
+        .then(({ error: invokeErr }) => {
+          if (invokeErr) {
+            unwrapFunctionsError(invokeErr).then((e) => {
+              logger.warn("Extract-and-fill falhou (validação preservada)", e);
+              toast.warning(
+                `Validação salva, mas extração estruturada falhou: ${e.message}. Você pode re-executar a extração mais tarde.`,
+                { duration: 12000 }
+              );
+            });
+          }
+        })
+        .catch((e) => {
+          logger.warn("Extract-and-fill error (validação preservada)", e);
+        });
+
+      return;
     } catch (err) {
       logger.error("Validation submit error", err);
       toast.error("Erro ao confirmar: " + (err as Error).message);
