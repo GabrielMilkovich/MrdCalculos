@@ -307,12 +307,13 @@ export function DocumentsManager({
           continue;
         }
 
-        // Auto-dispara OCR em background (fire-and-forget). O usuário verá o
-        // status mudar para "ocr_running" → "ocr_done" na lista. Depois pode
-        // abrir o split-view de validação.
-        supabase.functions
-          .invoke("ocr-document", { body: { document_id: docData.id } })
-          .catch((err) => logger.warn("auto-OCR trigger falhou (pode re-executar manualmente)", err));
+        // Auto-OCR REMOVIDO: disparar ocr-document pra cada upload em paralelo
+        // causava rate-limit no Mistral + concorrência no edge runtime → todos
+        // os docs travavam em "ocr_running" sem progresso.
+        //
+        // Novo comportamento: user escolhe quando rodar OCR:
+        //   a) Botão FileCheck2 no doc → auto-OCR no split view (1 por vez)
+        //   b) Botão "Extrair Todos" → batch SEQUENCIAL (OCR + extract por doc)
 
         successCount++;
         setUploadProgress(((i + 1) / files.length) * 100);
@@ -320,7 +321,10 @@ export function DocumentsManager({
 
       if (successCount > 0) {
         onDocumentsChange();
-        toast.success(`${successCount} documento(s) enviado(s). OCR rodando automaticamente...`);
+        toast.success(
+          `${successCount} documento(s) enviado(s). Clique em "Extrair Todos" ou no ícone de validação de cada documento para processar.`,
+          { duration: 8000 }
+        );
       }
     } catch (error) {
       logger.error("Upload error", error);
