@@ -254,18 +254,36 @@ async function uploadToMistral(
 }
 
 async function getMistralSignedUrl(fileId: string, apiKey: string): Promise<string> {
-  const resp = await fetchWithTimeout(
-    `${MISTRAL_API}/v1/files/${fileId}/url?expiry=1`,
-    { headers: { Authorization: `Bearer ${apiKey}` } },
-    URL_TIMEOUT,
-  );
-  if (!resp.ok) {
+  // Retry com backoff: Mistral às vezes retorna 404 imediatamente após upload
+  // (race entre storage write e index). 3 tentativas com 1s/2s/4s de delay
+  // resolve na maioria dos casos sem esperar desnecessariamente.
+  const encodedId = encodeURIComponent(fileId);
+  let lastErr: Error | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) {
+      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    }
+    const resp = await fetchWithTimeout(
+      `${MISTRAL_API}/v1/files/${encodedId}/url?expiry=1`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+      URL_TIMEOUT,
+    );
+    if (resp.ok) {
+      const data = await resp.json();
+      if (!data.url) throw new Error("Mistral URL endpoint sem url na resposta");
+      return data.url as string;
+    }
     const txt = await resp.text().catch(() => "");
-    throw new Error(`Mistral signed URL falhou (${resp.status}): ${txt.slice(0, 200)}`);
+    // 404 = arquivo ainda não indexado (race). Retry.
+    // 429 = rate limit. Retry.
+    // Outros erros = falha definitiva, não adianta retry.
+    if (resp.status !== 404 && resp.status !== 429) {
+      throw new Error(`Mistral signed URL falhou (${resp.status}): ${txt.slice(0, 200)}`);
+    }
+    lastErr = new Error(`Mistral signed URL ${resp.status}: ${txt.slice(0, 150)}`);
+    console.warn(`[ocr] getMistralSignedUrl attempt ${attempt + 1} falhou (${resp.status}), vai retry`);
   }
-  const data = await resp.json();
-  if (!data.url) throw new Error("Mistral URL endpoint sem url na resposta");
-  return data.url as string;
+  throw lastErr || new Error("Mistral signed URL falhou após retries");
 }
 
 async function runMistralOcr(documentUrl: string, apiKey: string): Promise<{ pages: any[] }> {
