@@ -209,25 +209,26 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
       onValidated?.();
       onOpenChange(false);
 
-      // PASSO 2: Se é cartão de ponto, roda parser SQL determinístico
-      // (não depende de LLM — extrai TODOS os dias direto do ocr_text).
-      if (doc?.mime_type !== undefined && (
-        /ponto/i.test(doc.file_name || "") ||
-        /cartao/i.test(doc.file_name || "")
-      )) {
+      // PASSO 2: Roda auto_populate_case_params (RPC): sincroniza parâmetros,
+      // detecta férias/licenças do cartão de ponto, cria configs FGTS/CS/IR
+      // default, re-parseia cartão de ponto. Tudo via SQL determinístico.
+      if (doc?.case_id) {
         supabase
-          .rpc("parse_cartao_ponto_from_ocr", {
-            p_case_id: (doc as any).case_id || null,
-            p_document_id: documentId,
-          })
+          .rpc("auto_populate_case_params", { p_case_id: doc.case_id })
           .then(({ data: rpcData, error: rpcErr }) => {
             if (rpcErr) {
-              logger.warn("parse_cartao_ponto_from_ocr falhou", rpcErr);
-            } else if (Array.isArray(rpcData) && rpcData[0]) {
-              const days = (rpcData[0] as any).parsed_days || 0;
-              const months = (rpcData[0] as any).parsed_months || 0;
-              if (days > 0) {
-                toast.success(`📋 Cartão de ponto: ${days} dias em ${months} meses`, { duration: 6000 });
+              logger.warn("auto_populate_case_params falhou", rpcErr);
+            } else if (rpcData && typeof rpcData === "object") {
+              const d = rpcData as any;
+              const parts: string[] = [];
+              if (d.parametros_synced) parts.push("parâmetros");
+              if (d.ferias_detectadas > 0) parts.push(`${d.ferias_detectadas} férias`);
+              if (d.configs_default_criadas || d.fgts_config_ok || d.cs_config_ok || d.ir_config_ok) {
+                parts.push("configs FGTS/CS/IR");
+              }
+              if (d.cartao_ponto_reparsed) parts.push("cartão de ponto");
+              if (parts.length > 0) {
+                toast.success(`⚙️ Parâmetros do cálculo populados: ${parts.join(", ")}`, { duration: 6000 });
               }
             }
           })
