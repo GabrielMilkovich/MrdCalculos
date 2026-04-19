@@ -1338,35 +1338,153 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
     // 6. CARTÃO DE PONTO
     if (extracted.cartao_ponto?.registros?.length > 0) {
       const registros = extracted.cartao_ponto.registros;
-      for (let i = 0; i < registros.length; i += 50) {
-        const batch = registros.slice(i, i + 50).map((r: any) => {
-          const horasNormais = parseFloat(r.horas_normais) || 0;
-          const horasExtras = parseFloat(r.horas_extras) || 0;
-          const horasNoturnas = parseFloat(r.horas_noturnas) || 0;
-          const isFalta = !r.entrada1 && /falta|ausencia|ausência/i.test(r.observacao || "");
-          return {
+
+      // Helper: parse "HH:MM" para minutos desde 00:00
+      const parseMin = (t: string | null | undefined): number | null => {
+        if (!t) return null;
+        const m = String(t).match(/^(\d{1,2}):(\d{2})$/);
+        if (!m) return null;
+        const h = parseInt(m[1], 10); const mm = parseInt(m[2], 10);
+        if (isNaN(h) || isNaN(mm) || h < 0 || h > 23 || mm < 0 || mm > 59) return null;
+        return h * 60 + mm;
+      };
+
+      // Calcula minutos trabalhados a partir das batidas (pares entrada/saída)
+      const calcMinutosTrabalhados = (r: any): number => {
+        const pairs: Array<[number | null, number | null]> = [
+          [parseMin(r.entrada1), parseMin(r.saida1)],
+          [parseMin(r.entrada2), parseMin(r.saida2)],
+          [parseMin(r.entrada3), parseMin(r.saida3)],
+        ];
+        let total = 0;
+        for (const [e, s] of pairs) {
+          if (e !== null && s !== null && s > e) total += s - e;
+        }
+        return total;
+      };
+
+      // Carga horária padrão em minutos (prefer da extração; default 8h = 480min)
+      const cargaHoraria = parseFloat(extracted.parametros?.carga_horaria_padrao || "8") || 8;
+      const minutosJornadaPadrao = Math.round(cargaHoraria * 60);
+
+      // === 6.1. Inserts diários em pjecalc_apuracao_diaria ===
+      const diariosComputed = registros.map((r: any) => {
+        const minutosTrab = r.horas_normais
+          ? Math.round(parseFloat(r.horas_normais) * 60)
+          : calcMinutosTrabalhados(r);
+        const minutosExtra = r.horas_extras
+          ? Math.round(parseFloat(r.horas_extras) * 60)
+          : Math.max(0, minutosTrab - minutosJornadaPadrao);
+        const minutosNoturno = r.horas_noturnas
+          ? Math.round(parseFloat(r.horas_noturnas) * 60)
+          : 0;
+        const isFalta = !r.entrada1 && /falta|ausencia|ausência/i.test(r.observacao || "");
+        const isFeriado = /feriado/i.test(r.observacao || "");
+        const isDsr = /dsr|domingo|repouso/i.test(r.observacao || "");
+        const competencia = typeof r.data === "string" && r.data.length >= 7
+          ? r.data.slice(0, 7)  // "YYYY-MM"
+          : null;
+
+        return {
+          row: {
             calculo_id: calculoId,
             case_id: caseId,
             data: r.data,
-            frequencia_str: [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean).join(" | ") || null,
-            horas_trabalhadas: horasNormais,
-            horas_extras_diaria: horasExtras,
-            horas_noturnas: horasNoturnas,
-            minutos_trabalhados: Math.round(horasNormais * 60),
-            minutos_extra_diaria: Math.round(horasExtras * 60),
-            minutos_noturno: Math.round(horasNoturnas * 60),
+            frequencia_str: [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3]
+              .filter(Boolean).join(" | ") || null,
+            horas_trabalhadas: minutosTrab / 60,
+            horas_extras_diaria: minutosExtra / 60,
+            horas_noturnas: minutosNoturno / 60,
+            minutos_trabalhados: minutosTrab,
+            minutos_extra_diaria: minutosExtra,
+            minutos_noturno: minutosNoturno,
             is_falta: isFalta,
-            is_dsr: /dsr|domingo|repouso/i.test(r.observacao || ""),
-            is_feriado: /feriado/i.test(r.observacao || ""),
+            is_dsr: isDsr,
+            is_feriado: isFeriado,
             origem: "OCR",
-          };
-        });
+          },
+          competencia,
+          minutosTrab,
+          minutosExtra,
+          minutosNoturno,
+          isFalta,
+          isFeriado,
+          isDsr,
+        };
+      });
 
+      // Insert diário em lotes
+      for (let i = 0; i < diariosComputed.length; i += 50) {
+        const batch = diariosComputed.slice(i, i + 50).map(d => d.row);
         await supabase.from("pjecalc_apuracao_diaria").insert(batch).then(({ error }: any) => {
-          if (error) console.error("[FILL] cartao_ponto batch:", error.message);
+          if (error) console.error("[FILL] cartao_ponto diario batch:", error.message);
         });
       }
-      fills.push(`cartao_ponto (${registros.length} dias)`);
+
+      // === 6.2. Agrega por competência e popula pjecalc_cartao_ponto (UI lê daqui) ===
+      const porCompetencia = new Map<string, {
+        dias_trabalhados: number;
+        minutos_extra_diaria: number;
+        minutos_extra_feriado: number;
+        minutos_extra_repouso: number;
+        minutos_noturno: number;
+        feriados_repousos_trabalhados: number;
+      }>();
+
+      for (const d of diariosComputed) {
+        if (!d.competencia) continue;
+        const key = d.competencia;
+        if (!porCompetencia.has(key)) {
+          porCompetencia.set(key, {
+            dias_trabalhados: 0,
+            minutos_extra_diaria: 0,
+            minutos_extra_feriado: 0,
+            minutos_extra_repouso: 0,
+            minutos_noturno: 0,
+            feriados_repousos_trabalhados: 0,
+          });
+        }
+        const agg = porCompetencia.get(key)!;
+        if (d.minutosTrab > 0 && !d.isFalta) agg.dias_trabalhados += 1;
+        if (d.isFeriado || d.isDsr) {
+          agg.minutos_extra_feriado += d.minutosExtra;
+          if (d.minutosTrab > 0) agg.feriados_repousos_trabalhados += 1;
+        } else {
+          agg.minutos_extra_diaria += d.minutosExtra;
+        }
+        agg.minutos_noturno += d.minutosNoturno;
+      }
+
+      if (porCompetencia.size > 0) {
+        const competRows = [...porCompetencia.entries()].map(([comp, agg]) => ({
+          calculo_id: calculoId,
+          case_id: caseId,
+          competencia: comp,
+          dias_trabalhados: agg.dias_trabalhados,
+          feriados_repousos_trabalhados: agg.feriados_repousos_trabalhados,
+          hs_ext_diarias: +(agg.minutos_extra_diaria / 60).toFixed(2),
+          hs_ext_feriados: +(agg.minutos_extra_feriado / 60).toFixed(2),
+          hs_ext_repousos: 0,
+          hs_ext_f_r: 0,
+          hs_interjornada: 0,
+          hs_interjornada_feriado: 0,
+          hs_interjornada_repouso: 0,
+          hs_interjornada_trabalhadas: 0,
+          repousos_trabalhados: 0,
+          horas_extras_50: +(agg.minutos_extra_diaria / 60).toFixed(2),
+          horas_extras_100: +(agg.minutos_extra_feriado / 60).toFixed(2),
+          dsr_horas: 0,
+          origem: "OCR",
+        }));
+        // Upsert por case_id + competencia
+        await supabase.from("pjecalc_cartao_ponto")
+          .upsert(competRows, { onConflict: 'case_id,competencia' })
+          .then(({ error }: any) => {
+            if (error) console.error("[FILL] cartao_ponto competencias upsert:", error.message);
+          });
+      }
+
+      fills.push(`cartao_ponto (${registros.length} dias, ${porCompetencia.size} competências)`);
     }
 
     // 7. TRCT
