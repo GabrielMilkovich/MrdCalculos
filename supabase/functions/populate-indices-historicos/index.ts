@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { fetchWithTimeout } from '../_shared/fetch-timeout.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,7 +40,7 @@ async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false, windo
       const jsonUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=json&dataInicial=${start}&dataFinal=${end}`;
       console.log(`Fetching daily ${serieId} window ${start}-${end} (JSON)...`);
       try {
-        const jsonResp = await fetch(jsonUrl, { headers });
+        const jsonResp = await fetchWithTimeout(jsonUrl, { headers, timeoutMs: 45_000 });
         if (jsonResp.ok) {
           const contentType = jsonResp.headers.get('content-type') || '';
           if (contentType.includes('json')) {
@@ -65,7 +66,7 @@ async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false, windo
       const csvUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=csv&dataInicial=${start}&dataFinal=${end}`;
       console.log(`  Trying CSV fallback...`);
       try {
-        const csvResp = await fetch(csvUrl, { headers: { 'User-Agent': 'Mozilla/5.0 PjeCalc/1.0' } });
+        const csvResp = await fetchWithTimeout(csvUrl, { headers: { 'User-Agent': 'Mozilla/5.0 PjeCalc/1.0' }, timeoutMs: 45_000 });
         if (csvResp.ok) {
           const csvText = await csvResp.text();
           const lines = csvText.trim().split('\n');
@@ -92,8 +93,9 @@ async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false, windo
 
   // Non-daily series: single request
   const jsonUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=json&dataInicial=01/01/1995&dataFinal=31/12/2025`;
-  const jsonResp = await fetch(jsonUrl, {
+  const jsonResp = await fetchWithTimeout(jsonUrl, {
     headers: { 'Accept': 'application/json' },
+    timeoutMs: 60_000,
   });
   
   if (jsonResp.ok) {
@@ -105,7 +107,7 @@ async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false, windo
 
   // Fallback: CSV format
   const csvUrl = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=csv&dataInicial=01/01/1995&dataFinal=31/12/2025`;
-  const csvResp = await fetch(csvUrl);
+  const csvResp = await fetchWithTimeout(csvUrl, { timeoutMs: 60_000 });
   if (!csvResp.ok) {
     const body = await csvResp.text();
     throw new Error(`BCB API returned ${csvResp.status} for both JSON and CSV: ${body.slice(0, 200)}`);

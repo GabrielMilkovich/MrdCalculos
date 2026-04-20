@@ -47,8 +47,7 @@ interface LiquidacaoRow {
   created_at: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const sb = (table: string): any => supabase.from(table as any);
+const sb = () => supabase.from('pjecalc_liquidacao_resultado');
 
 /**
  * Normaliza o JSON para hash estável (chaves ordenadas).
@@ -99,7 +98,7 @@ function rowToVersao(row: LiquidacaoRow): CalculoVersao {
 }
 
 async function proximaVersao(caseId: string): Promise<number> {
-  const { data, error } = await sb('pjecalc_liquidacao_resultado')
+  const { data, error } = await sb()
     .select('resultado')
     .eq('case_id', caseId);
   if (error) throw error;
@@ -142,7 +141,7 @@ export async function salvarVersao(
     fgts_depositar: resultado.resumo?.fgts_total,
   };
 
-  const { data, error } = await sb('pjecalc_liquidacao_resultado')
+  const { data, error } = await sb()
     .insert(insert)
     .select('id, case_id, resultado, created_at')
     .single();
@@ -151,7 +150,7 @@ export async function salvarVersao(
 }
 
 export async function listarVersoes(caseId: string): Promise<CalculoVersao[]> {
-  const { data, error } = await sb('pjecalc_liquidacao_resultado')
+  const { data, error } = await sb()
     .select('id, case_id, resultado, created_at')
     .eq('case_id', caseId)
     .order('created_at', { ascending: false });
@@ -161,7 +160,7 @@ export async function listarVersoes(caseId: string): Promise<CalculoVersao[]> {
 }
 
 export async function obterVersao(versaoId: string): Promise<CalculoVersao | null> {
-  const { data, error } = await sb('pjecalc_liquidacao_resultado')
+  const { data, error } = await sb()
     .select('id, case_id, resultado, created_at')
     .eq('id', versaoId)
     .maybeSingle();

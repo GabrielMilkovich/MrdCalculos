@@ -23,6 +23,7 @@ import { FileBarChart, Download, Loader2, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import type { PjeLiquidacaoResult, PjeParametros } from "@/lib/pjecalc/engine-types";
 import type { DadosProcesso } from "@/lib/pjecalc/pdf/types";
+import { logger } from '@/lib/logger';
 import {
   buildMemoriaDeCalculo,
   buildResumo,
@@ -96,7 +97,7 @@ export function RelatorioPDFDownload({
       const html = buildReport(type, result, params, dadosProcesso);
       openAndPrint(html);
     } catch (err) {
-      console.error('PDF generation error:', err);
+      logger.error('PDF generation error:', err)
       toast.error('Erro ao gerar relatório PDF. Tente novamente.');
     } finally {
       setLoading(false);
@@ -116,7 +117,7 @@ export function RelatorioPDFDownload({
       downloadHTML(html, filename);
       toast.success('Relatório baixado com sucesso.');
     } catch (err) {
-      console.error('PDF download error:', err);
+      logger.error('PDF download error:', err)
       toast.error('Erro ao baixar relatório. Tente novamente.');
     } finally {
       setLoading(false);

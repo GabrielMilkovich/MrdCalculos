@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 // =====================================================
 // PWA Service Worker Registration
 // =====================================================
@@ -39,9 +40,9 @@ export function registerServiceWorker(): void {
         });
       });
 
-      console.log('[PWA] Service Worker registered successfully');
+      logger.info('[PWA] Service Worker registered successfully')
     } catch (error) {
-      console.warn('[PWA] Service Worker registration failed:', error);
+      logger.warn('[PWA] Service Worker registration failed:', error)
     }
   });
 }

@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from '@/lib/logger';
 import {
   Banknote, Scale, Percent, Users, TrendingUp, CalendarDays,
   Receipt, DollarSign, Bus, ShieldCheck, BookOpen, Search, Info,
@@ -55,7 +56,7 @@ function useTableQuery(tableName: string, orderBy: string, ascending = true) {
       const q = (supabase as any).from(tableName).select("*").order(orderBy, { ascending });
       const { data, error } = await q;
       if (error) {
-        console.warn(`[TabelasGlobais] ${tableName}:`, error.message);
+        logger.warn(`[TabelasGlobais] ${tableName}:`, error.message)
         return [];
       }
       return (data || []) as Record<string, unknown>[];

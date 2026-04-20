@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchWithTimeout } from "../_shared/fetch-timeout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,7 +32,7 @@ async function fetchBCBSeries(serieId: number, anoInicio: number, anoFim: number
   const dataFim = `31/12/${anoFim}`;
   const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=json&dataInicial=${dataInicio}&dataFinal=${dataFim}`;
 
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url, { timeoutMs: 45_000 });
   if (!response.ok) {
     throw new Error(`BCB API error for serie ${serieId}: ${response.status} ${response.statusText}`);
   }

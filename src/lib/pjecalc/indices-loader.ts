@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 /**
  * =====================================================
  * INDICES LOADER — Supabase com fallback offline
@@ -100,7 +101,7 @@ function sliceFallback(
 function logWarn(silent: boolean | undefined, msg: string): void {
   if (silent) return;
   // eslint-disable-next-line no-console
-  console.warn(`[indices-loader] ${msg}`);
+  logger.warn(`[indices-loader] ${msg}`)
 }
 
 /**

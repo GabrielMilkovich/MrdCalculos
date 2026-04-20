@@ -9,6 +9,7 @@
 
 import Decimal from 'decimal.js';
 import type { CalculationItem, CalculationItemOffset, AuditTrailEntry, DocumentSourceType } from './types';
+import { logger } from '@/lib/logger';
 
 // =====================================================
 // STUB TYPES (previously from lib/pjecalc/offset-engine)
@@ -70,7 +71,7 @@ export interface DomainOffsetResult {
 // =====================================================
 
 export function applyDomainOffsets(ctx: DomainOffsetContext): DomainOffsetResult {
-  console.warn('applyDomainOffsets: offset-engine removed, returning items unchanged');
+  logger.warn('applyDomainOffsets: offset-engine removed, returning items unchanged')
 
   const summary: OffsetSummary = {
     total_devido: 0,

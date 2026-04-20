@@ -170,15 +170,50 @@ export interface ConsolidatedResult {
   };
 }
 
+import Decimal from 'decimal.js';
+
 // Utilitários para parsing de fatos
-export function parseFactAsNumber(fact: FactValue | undefined): number {
-  if (!fact) return 0;
-  if (typeof fact.valor === 'number') return fact.valor;
-  if (typeof fact.valor === 'string') {
-    const cleaned = fact.valor.replace(/[^\d.,\-]/g, '').replace(',', '.');
-    return parseFloat(cleaned) || 0;
+// Parser BR-aware: trata "1.234,56" (pt-BR) e "1,234.56" (en-US) sem perder centavos.
+export function parseFactAsDecimal(fact: FactValue | undefined): Decimal {
+  if (!fact) return new Decimal(0);
+  if (fact.valor instanceof Decimal) return fact.valor;
+  if (typeof fact.valor === 'number') {
+    return Number.isFinite(fact.valor) ? new Decimal(fact.valor) : new Decimal(0);
   }
-  return 0;
+  if (typeof fact.valor !== 'string') return new Decimal(0);
+
+  const raw = fact.valor.trim();
+  if (!raw) return new Decimal(0);
+
+  const cleaned = raw.replace(/[^\d.,\-]/g, '');
+  if (!cleaned) return new Decimal(0);
+
+  const lastComma = cleaned.lastIndexOf(',');
+  const lastDot = cleaned.lastIndexOf('.');
+  let normalized: string;
+
+  if (lastComma === -1 && lastDot === -1) {
+    normalized = cleaned;
+  } else if (lastComma > lastDot) {
+    // pt-BR: "1.234,56" → "1234.56"
+    normalized = cleaned.replace(/\./g, '').replace(',', '.');
+  } else {
+    // en-US: "1,234.56" → "1234.56"
+    normalized = cleaned.replace(/,/g, '');
+  }
+
+  try {
+    const d = new Decimal(normalized);
+    return d.isFinite() ? d : new Decimal(0);
+  } catch {
+    return new Decimal(0);
+  }
+}
+
+// Mantido para compatibilidade: retorna number para callers que não acumulam.
+// Internamente usa parseFactAsDecimal para preservar precisão de centavos.
+export function parseFactAsNumber(fact: FactValue | undefined): number {
+  return parseFactAsDecimal(fact).toNumber();
 }
 
 export function parseFactAsDate(fact: FactValue | undefined): Date | null {

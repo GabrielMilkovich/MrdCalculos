@@ -193,7 +193,11 @@ export function createVerbasRescisoriasCalculator(rules: CalculatorRules): Calcu
       const salarioFromFacts = parseFactAsNumber(salarioFact);
       const salarioFromInput = typeof inputs.salario_base === 'number'
         ? inputs.salario_base
-        : Number(inputs.salario_base || 0);
+        : parseFactAsNumber({
+            valor: String(inputs.salario_base ?? 0),
+            tipo: 'moeda',
+            confirmado: true,
+          });
       const salarioBase = salarioFromFacts > 0 ? salarioFromFacts : salarioFromInput;
       
       if (!dataAdmissao || !dataDemissao) {
@@ -534,7 +538,13 @@ export function createVerbasRescisoriasCalculator(rules: CalculatorRules): Calcu
       }
       
       // ═══ 7. MULTA FGTS (40% ou 20%) ═══
-      const totalFGTS = Number(inputs.total_fgts || 0);
+      const totalFGTS = typeof inputs.total_fgts === 'number'
+        ? inputs.total_fgts
+        : parseFactAsNumber({
+            valor: String(inputs.total_fgts ?? 0),
+            tipo: 'moeda',
+            confirmado: true,
+          });
       // Soma o saldo depositado + FGTS sobre rescisão
       const baseFGTSMulta = totalFGTS + (baseFGTSRescisorio > 0 ? arredondarMoeda(baseFGTSRescisorio * 0.08) : 0);
       

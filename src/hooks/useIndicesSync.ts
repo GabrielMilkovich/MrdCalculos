@@ -8,6 +8,21 @@ export interface SyncState {
   error: string | null;
 }
 
+// Linha da view/tabela sync_status (não tipada em supabase.ts)
+interface SyncStatusRow {
+  serie_id: number;
+  status?: string | null;
+  last_sync_attempt?: string | null;
+  last_processed_date?: string | null;
+  error_message?: string | null;
+}
+
+// Resultado por série retornado pela edge function sync-indices
+interface SyncIndicesResult {
+  inserted?: number;
+  error?: string | null;
+}
+
 export function useIndicesSync() {
   const [state, setState] = useState<SyncState>({
     status: "loading",
@@ -18,28 +33,38 @@ export function useIndicesSync() {
 
   const checkStatus = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("sync_status" as any)
+      // sync_status não está em supabase.ts gerado; cast explícito e localizado.
+      const { data, error } = await (supabase as unknown as {
+        from: (t: string) => {
+          select: (cols: string) => {
+            in: (col: string, vals: number[]) => Promise<{
+              data: SyncStatusRow[] | null;
+              error: { message: string } | null;
+            }>;
+          };
+        };
+      })
+        .from("sync_status")
         .select("*")
         .in("serie_id", [10764, 4390]);
 
       if (error) throw error;
 
-      const rows = data as any[];
-      if (!rows || rows.length === 0) {
+      const rows: SyncStatusRow[] = data ?? [];
+      if (rows.length === 0) {
         setState({ status: "stale", lastSync: null, error: null });
         return;
       }
 
-      const hasError = rows.some((r: any) => r.status === "error");
+      const hasError = rows.some((r) => r.status === "error");
       const lastSyncDate = rows
-        .map((r: any) => r.last_sync_attempt)
-        .filter(Boolean)
+        .map((r) => r.last_sync_attempt)
+        .filter((v): v is string => !!v)
         .sort()
-        .pop();
+        .pop() ?? null;
 
       // Check if indices are stale (last sync > 30 days ago)
-      const isStale = rows.some((r: any) => {
+      const isStale = rows.some((r) => {
         if (!r.last_processed_date) return true;
         const lastDate = new Date(r.last_processed_date);
         const thirtyDaysAgo = new Date();
@@ -48,7 +73,7 @@ export function useIndicesSync() {
       });
 
       if (hasError) {
-        const errorMsg = rows.find((r: any) => r.status === "error")?.error_message;
+        const errorMsg = rows.find((r) => r.status === "error")?.error_message ?? null;
         setState({ status: "error", lastSync: lastSyncDate, error: errorMsg });
       } else if (isStale) {
         setState({ status: "stale", lastSync: lastSyncDate, error: null });
@@ -67,18 +92,20 @@ export function useIndicesSync() {
   const triggerSync = useCallback(async () => {
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("sync-indices", {
+      const { data, error } = await supabase.functions.invoke<{
+        results?: Record<string, SyncIndicesResult>;
+      }>("sync-indices", {
         body: { serie_ids: [10764, 4390] },
       });
 
       if (error) throw error;
 
-      const results = data?.results || {};
-      const totalInserted: number = Object.values(results).reduce(
-        (sum: number, r: any) => sum + (r.inserted || 0),
-        0 as number
-      ) as number;
-      const hasErrors = Object.values(results).some((r: any) => r.error);
+      const results = data?.results ?? {};
+      const totalInserted = Object.values(results).reduce(
+        (sum, r) => sum + (r.inserted ?? 0),
+        0,
+      );
+      const hasErrors = Object.values(results).some((r) => !!r.error);
 
       if (hasErrors) {
         toast.warning(

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { logger } from '@/lib/logger';
 import {
   Tabs,
   TabsContent,
@@ -171,7 +172,7 @@ export function PetitionGenerator({
         throw new Error(data?.error || "Erro ao gerar petição");
       }
     } catch (err) {
-      console.error("Generation error:", err);
+      logger.error("Generation error:", err)
       toast.error("Erro ao gerar petição: " + (err as Error).message);
     } finally {
       setIsGenerating(false);

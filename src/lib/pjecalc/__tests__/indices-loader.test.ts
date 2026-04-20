@@ -4,6 +4,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { loadIndices, type IndicesSupabaseClient } from '../indices-loader';
 import { IPCA_E_ACUMULADO, SELIC_ACUMULADO } from '../indices-fallback';
+import { logger } from '@/lib/logger';
 
 interface FakeRow {
   competencia: string;
@@ -77,7 +78,7 @@ describe('indices-loader', () => {
       data: null,
       error: { message: 'network failure' },
     });
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const out = await loadIndices('IPCA-E', '2023-06', '2023-08', { client });
     expect(out['2023-06']).toBe(IPCA_E_ACUMULADO['2023-06']);
     expect(out['2023-07']).toBe(IPCA_E_ACUMULADO['2023-07']);
@@ -90,7 +91,7 @@ describe('indices-loader', () => {
     const client = fakeClient(() => {
       throw new Error('boom');
     });
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
     const out = await loadIndices('SELIC', '2023-01', '2023-02', { client });
     expect(out['2023-01']).toBe(SELIC_ACUMULADO['2023-01']);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('exceção DB'));

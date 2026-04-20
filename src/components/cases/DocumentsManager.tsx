@@ -276,9 +276,12 @@ export function DocumentsManager({
           continue;
         }
 
-        const { data: signedUrlData } = await supabase.storage
+        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
           .from("juriscalculo-documents")
           .createSignedUrl(storagePath, 3600);
+        if (signedUrlError) {
+          logger.warn("createSignedUrl falhou; seguindo sem arquivo_url", { error: signedUrlError.message });
+        }
 
         const { data: docData, error: docError } = await supabase
           .from("documents")
@@ -537,9 +540,11 @@ export function DocumentsManager({
   // Excluir documento
   const deleteDocument = useCallback(async (documentId: string, storagePath?: string) => {
     try {
-      // Excluir chunks primeiro
-      await supabase.from("document_chunks").delete().eq("document_id", documentId);
-      await supabase.from("doc_chunks").delete().eq("document_id", documentId);
+      // Excluir chunks primeiro (errors são best-effort — logam mas não abortam)
+      const { error: chunksErr } = await supabase.from("document_chunks").delete().eq("document_id", documentId);
+      if (chunksErr) logger.warn("Falha ao excluir document_chunks", { documentId, error: chunksErr.message });
+      const { error: chunksLegacyErr } = await supabase.from("doc_chunks").delete().eq("document_id", documentId);
+      if (chunksLegacyErr) logger.warn("Falha ao excluir doc_chunks", { documentId, error: chunksLegacyErr.message });
 
       // Excluir documento
       const { error } = await supabase.from("documents").delete().eq("id", documentId);
@@ -547,7 +552,9 @@ export function DocumentsManager({
 
       // Tentar excluir do storage
       if (storagePath) {
-        await supabase.storage.from("juriscalculo-documents").remove([storagePath]);
+        const { error: removeErr } = await supabase.storage
+          .from("juriscalculo-documents").remove([storagePath]);
+        if (removeErr) logger.warn("Falha ao remover storage", { storagePath, error: removeErr.message });
       }
 
       toast.success("Documento excluído");

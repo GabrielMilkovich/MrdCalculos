@@ -5,6 +5,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import type { LegalBasisEntry, LegalRule, ReferenceTable } from './types';
+import { logger } from '@/lib/logger';
 
 // Cache em memória para sessão
 let rulesCache: LegalRule[] | null = null;
@@ -20,7 +21,7 @@ export async function loadLegalRules(): Promise<LegalRule[]> {
     .order('prioridade', { ascending: false });
   
   if (error) {
-    console.error('Erro ao carregar regras legais:', error);
+    logger.error('Erro ao carregar regras legais:', error)
     return [];
   }
   
@@ -49,7 +50,7 @@ export async function loadReferenceTables(nome: string, competencia?: string): P
   const { data, error } = await query.limit(1);
   
   if (error) {
-    console.error('Erro ao carregar tabela de referência:', error);
+    logger.error('Erro ao carregar tabela de referência:', error)
     return [];
   }
   

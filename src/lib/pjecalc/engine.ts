@@ -82,7 +82,7 @@ export class PjeCalcEngine {
     if (this.emittedWarningKeys.has(key)) return;
     this.emittedWarningKeys.add(key);
     this.calculationWarnings.push({ code, module, message, competencia });
-    console.warn(`[PjeCalcEngine] ${code}: ${message}`);
+    logger.warn(`[PjeCalcEngine] ${code}: ${message}`)
   }
 
   constructor(
@@ -4504,6 +4504,7 @@ export class PjeCalcEngine {
 // =====================================================
 
 import type { PjeMultiVinculo } from './engine-types';
+import { logger } from '@/lib/logger';
 
 export interface MultiVinculoResult {
   vinculos: { vinculo_id: string; label: string; resultado: PjeLiquidacaoResult }[];

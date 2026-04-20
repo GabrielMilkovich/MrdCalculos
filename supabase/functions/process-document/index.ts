@@ -5,6 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchWithTimeout } from "../_shared/fetch-timeout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -85,8 +86,8 @@ async function extractTextWithVision(
 ): Promise<{ text: string; pageCount: number }> {
   console.log(`Extracting text from ${mimeType} using Vision AI...`);
   
-  // Baixar o arquivo
-  const fileResponse = await fetch(fileUrl);
+  // Baixar o arquivo (timeout para evitar travar a função 600s)
+  const fileResponse = await fetchWithTimeout(fileUrl, { timeoutMs: 60_000 });
   if (!fileResponse.ok) {
     throw new Error(`Failed to download file: ${fileResponse.status}`);
   }
@@ -96,8 +97,9 @@ async function extractTextWithVision(
     new Uint8Array(fileBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
   );
   
-  // Usar Gemini Vision para OCR
-  const visionResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+  // Usar Vision para OCR (timeout para evitar travar na LLM)
+  const visionResponse = await fetchWithTimeout("https://api.openai.com/v1/chat/completions", {
+    timeoutMs: 120_000,
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

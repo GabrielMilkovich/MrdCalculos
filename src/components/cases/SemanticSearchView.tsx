@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { logger } from '@/lib/logger';
 import {
   Select,
   SelectContent,
@@ -129,7 +130,7 @@ export function SemanticSearchView({ caseId, onFactCreated }: SemanticSearchView
         toast.info("Nenhum resultado encontrado");
       }
     } catch (err) {
-      console.error("Search error:", err);
+      logger.error("Search error:", err)
       toast.error("Erro na busca: " + (err as Error).message);
     } finally {
       setIsSearching(false);
@@ -200,7 +201,7 @@ export function SemanticSearchView({ caseId, onFactCreated }: SemanticSearchView
       onFactCreated();
 
     } catch (err) {
-      console.error("Create fact error:", err);
+      logger.error("Create fact error:", err)
       toast.error("Erro ao criar fato: " + (err as Error).message);
     }
   }, [caseId, selectedChunk, newFact, onFactCreated]);

@@ -10,7 +10,7 @@ const LEGACY_ENGINE_DEPRECATION_WARNING = '[DEPRECATED] Motor V1 (src/lib/calcul
 
 // Runtime guard: warn loudly when this module is used
 if (typeof console !== 'undefined') {
-  console.warn(LEGACY_ENGINE_DEPRECATION_WARNING);
+  logger.warn(LEGACY_ENGINE_DEPRECATION_WARNING)
 }
 
 import {
@@ -38,6 +38,7 @@ import { createINSSCalculator } from './calculators/inss';
 import { createAtualizacaoMonetariaCalculator } from './calculators/atualizacao-monetaria';
 import { createVerbasRescisoriasCalculator } from './calculators/verbas-rescisorias';
 import { createIntrajornadaCalculator } from './calculators/intrajornada';
+import { logger } from '@/lib/logger';
 
 // Registry de calculadoras disponíveis
 const calculatorRegistry: Map<string, (rules: CalculatorRules) => Calculator> = new Map([
@@ -71,7 +72,7 @@ export function createCalculator(
 ): Calculator | null {
   const factory = calculatorRegistry.get(nome);
   if (!factory) {
-    console.warn(`Calculadora "${nome}" não encontrada no registry`);
+    logger.warn(`Calculadora "${nome}" não encontrada no registry`)
     return null;
   }
   return factory(rules);

@@ -298,9 +298,12 @@ serve(async (req) => {
         console.log(`[QUEUE] Completed: ${processed} success, ${failed} failed`);
       };
 
-      // Iniciar processamento em background
-      // @ts-ignore - EdgeRuntime é disponível no ambiente de execução
-      (globalThis as any).EdgeRuntime?.waitUntil?.(processQueue()) ?? processQueue();
+      // Iniciar processamento em background com catch de defesa
+      const bg = processQueue().catch((err) => {
+        console.error("[QUEUE] Unhandled error:", err);
+      });
+      (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+        .EdgeRuntime?.waitUntil?.(bg);
 
       return new Response(
         JSON.stringify({

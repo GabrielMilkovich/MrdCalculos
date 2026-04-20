@@ -2110,9 +2110,23 @@ serve(async (req) => {
       error_message: null,
     }).eq("id", document_id);
 
-    (globalThis as any).EdgeRuntime?.waitUntil?.(
-      processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated)
-    ) ?? processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated);
+    // Defense-in-depth: background task should be self-healing via its own
+    // try/catch (ver processDocumentInBackground), but um .catch() aqui
+    // garante que nada escape como unhandled rejection.
+    const bgTask = processDocumentInBackground(
+      document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY,
+      supabase, ocr_text_override, mark_validated,
+    ).catch((err) => {
+      console.error(`[EXTRACT] Unhandled bg error for ${document_id}:`, err);
+      return supabase.from("documents").update({
+        status: "failed",
+        error_message: err instanceof Error ? err.message : "Unhandled error",
+        processing_completed_at: new Date().toISOString(),
+      }).eq("id", document_id).then(() => {}, () => {});
+    });
+
+    (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } })
+      .EdgeRuntime?.waitUntil?.(bgTask);
 
     return new Response(
       JSON.stringify({

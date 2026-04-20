@@ -48,6 +48,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/logger';
 // syncFromValidation removed (deleted module)
 
 interface Extraction {
@@ -228,7 +229,7 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
           title: 'Sincronizando dados...',
           description: 'Todas as extrações foram validadas. Sincronizando com os módulos de cálculo.',
         });
-        console.warn('syncFromValidation removed');
+        logger.warn('syncFromValidation removed')
         onValidationComplete?.();
       }
     },

@@ -24,6 +24,7 @@ import { orchestrateCalculation, type OrchestratorResult } from '@/lib/pjecalc/d
 import type { DomainPaidItem } from '@/domain/offset-engine';
 import type { PjeVerba, PjeHistoricoSalarial, PjeCartaoPonto, PjeFalta, PjeFerias } from '@/lib/pjecalc/engine-types';
 import Decimal from 'decimal.js';
+import { logger } from '@/lib/logger';
 
 export interface DomainOrchestratorInput {
   laborCase: LaborCase;
@@ -79,7 +80,7 @@ export function useDomainOrchestrator() {
       // Step 2: Apply offsets (offset-engine removed — no-op)
       const offsetCount = 0;
       if (input.paidItems && input.paidItems.length > 0) {
-        console.warn('applyDomainOffsets removed — offsets not applied');
+        logger.warn('applyDomainOffsets removed — offsets not applied')
       }
 
       // Step 3: Calculate totals

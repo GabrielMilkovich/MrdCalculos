@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { logger } from '@/lib/logger';
 import {
   ChevronRight, ChevronLeft, Check, FileText, Calendar, Clock,
   Shield, Scale, Calculator, AlertTriangle, Plus, Trash2, Loader2,
@@ -246,7 +247,7 @@ export default function NovoCalculo() {
       toast.success('Caso criado com sucesso! Redirecionando...');
       navigate(`/casos/${caso.id}`);
     } catch (err) {
-      console.error(err);
+      logger.error(err)
       toast.error('Erro ao criar caso: ' + (err as Error).message);
     } finally {
       setIsSubmitting(false);

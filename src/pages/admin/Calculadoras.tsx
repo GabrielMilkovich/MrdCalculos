@@ -91,7 +91,7 @@ export default function Calculadoras() {
         codigo_ref: data.codigo_ref || null,
         ativo: data.ativo,
         criado_por: session?.session?.user.id,
-      }] as any);
+      }]);
 
       if (error) throw error;
     },

@@ -6,6 +6,7 @@
  * @deprecated Use exportPJCXml() from pjc-xml-real.ts for real PJC format.
  */
 import type { PjeLiquidacaoResult } from "./engine-types";
+import { logger } from '@/lib/logger';
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -25,7 +26,7 @@ export function exportarXML(
     engineVersion?: string;
   }
 ): string {
-  console.warn('[DEPRECATED] exportarXML() generates simplified XML. Use exportPJCXml() for real PJC format.');
+  logger.warn('[DEPRECATED] exportarXML() generates simplified XML. Use exportPJCXml() for real PJC format.')
   const now = new Date().toISOString();
 
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -86,7 +87,7 @@ export function downloadXML(
   result: PjeLiquidacaoResult,
   meta: { processo?: string; cliente?: string; dataLiquidacao?: string; engineVersion?: string }
 ) {
-  console.warn('[DEPRECATED] downloadXML() generates simplified XML. Use exportPJCXml() from pjc-xml-real.ts.');
+  logger.warn('[DEPRECATED] downloadXML() generates simplified XML. Use exportPJCXml() from pjc-xml-real.ts.')
   const xml = exportarXML(result, meta);
   const blob = new Blob([xml], { type: "application/xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);

@@ -59,6 +59,7 @@ import { PjeCalcInline } from "@/components/cases/PjeCalcInline";
 import { AuditDrillDown } from "@/components/cases/pjecalc/AuditDrillDown";
 import { orchestrateCalculation } from "@/lib/pjecalc/domain-orchestrator";
 import { buildDomainExecutionConfig, loadDomainAuditData, persistDomainAuditSnapshot } from "@/lib/pjecalc/domain-audit";
+import { logger } from '@/lib/logger';
 
 // =====================================================
 // TYPES
@@ -527,7 +528,7 @@ export default function CasoDetalhe() {
       setReviewResult(buildReviewFromDomain(domainResult));
       setShowReviewDialog(true);
     } catch (e) {
-      console.error("Domain pre-calc review error:", e);
+      logger.error("Domain pre-calc review error:", e)
       toast.error("Erro na revisão: " + (e as Error).message);
     } finally {
       setIsReviewing(false);
@@ -671,7 +672,7 @@ export default function CasoDetalhe() {
       updateStatusMutation.mutate("calculado");
       setActiveTab("calculo");
     } catch (e) {
-      console.error(e);
+      logger.error(e)
       toast.error("Falha: " + (e as Error).message);
     } finally {
       setIsCalculating(false);
