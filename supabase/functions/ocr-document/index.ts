@@ -29,8 +29,18 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { document_id } = await req.json().catch(() => ({}));
-    if (!document_id) return jsonResponse({ error: "document_id é obrigatório" }, 400);
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: "Body JSON inválido" }, 400);
+    }
+    const document_id = typeof body === "object" && body !== null
+      ? (body as { document_id?: unknown }).document_id
+      : undefined;
+    if (typeof document_id !== "string" || !document_id) {
+      return jsonResponse({ error: "document_id é obrigatório" }, 400);
+    }
 
     const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
     if (!MISTRAL_API_KEY) {
@@ -158,10 +168,19 @@ serve(async (req) => {
 
           console.log(`[ocr] ${document_id}: CONCLUÍDO em ${Date.now()-t0}ms, ${fullText.length} chars`);
         } finally {
-          // cleanup Mistral file (async, best-effort)
-          deleteMistralFile(fileId, MISTRAL_API_KEY).catch((e) =>
-            console.warn(`[ocr] ${document_id}: delete file falhou:`, e)
-          );
+          // cleanup Mistral file (awaited dentro do bg task para evitar órfão).
+          // Limitado a 10s para não atrasar marcação de conclusão em caso de lentidão.
+          try {
+            const cleanupCtrl = new AbortController();
+            const cleanupTimer = setTimeout(() => cleanupCtrl.abort(), 10_000);
+            try {
+              await deleteMistralFile(fileId, MISTRAL_API_KEY, cleanupCtrl.signal);
+            } finally {
+              clearTimeout(cleanupTimer);
+            }
+          } catch (e) {
+            console.warn(`[ocr] ${document_id}: delete file falhou:`, e);
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -219,6 +238,12 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(new Error(`Timeout após ${timeoutMs}ms`)), timeoutMs);
+  // Propaga signal do caller (ex.: cleanup timer externo) para o mesmo controller.
+  const userSignal = init.signal;
+  if (userSignal) {
+    if (userSignal.aborted) ctrl.abort();
+    else userSignal.addEventListener("abort", () => ctrl.abort(), { once: true });
+  }
   try {
     return await fetch(url, { ...init, signal: ctrl.signal });
   } finally {
@@ -311,10 +336,10 @@ async function runMistralOcr(documentUrl: string, apiKey: string): Promise<{ pag
   return data;
 }
 
-async function deleteMistralFile(fileId: string, apiKey: string): Promise<void> {
+async function deleteMistralFile(fileId: string, apiKey: string, signal?: AbortSignal): Promise<void> {
   await fetchWithTimeout(
     `${MISTRAL_API}/v1/files/${fileId}`,
-    { method: "DELETE", headers: { Authorization: `Bearer ${apiKey}` } },
+    { method: "DELETE", headers: { Authorization: `Bearer ${apiKey}` }, signal },
     10_000,
   );
 }

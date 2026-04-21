@@ -1091,7 +1091,10 @@ async function extractStructured(
             if (!parsed.texto_ocr_completo) parsed.texto_ocr_completo = ocrText;
             console.log(`[EXTRACT] SUCCESS (content fallback) with ${model} in ${Date.now() - t0}ms`);
             return parsed;
-          } catch { /* ignore */ }
+          } catch (parseErr) {
+            // JSON do fallback veio malformado — registra e tenta próximo modelo.
+            console.warn(`[EXTRACT] content fallback JSON.parse falhou com ${model}:`, parseErr);
+          }
         }
 
         lastError = new Error("Modelo não retornou dados estruturados");

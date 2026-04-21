@@ -805,9 +805,17 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                     </Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" title="Excluir"
                       onClick={async () => {
-                        // Delete reflexas first, then principal
-                        for (const r of reflexas) await supabase.from("pjecalc_verbas" as any).delete().eq("id", r.id);
-                        await supabase.from("pjecalc_verbas" as any).delete().eq("id", principal.id);
+                        // Delete reflexas + principal em batch (evita N+1 queries).
+                        const idsToDelete = [...reflexas.map((r) => r.id), principal.id];
+                        const { error } = await supabase
+                          .from("pjecalc_verbas")
+                          .delete()
+                          .in("id", idsToDelete);
+                        if (error) {
+                          logger.error("Falha ao excluir verba + reflexas", error, { principalId: principal.id });
+                          toast.error("Erro ao excluir verba");
+                          return;
+                        }
                         queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
                       }}>
                       <Trash2 className="h-3 w-3" />

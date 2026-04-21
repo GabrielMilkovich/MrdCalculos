@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Decimal from "decimal.js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,32 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 import { Calculator, Loader2, Trash2 } from "lucide-react";
+
+// Parser BR-aware: preserva centavos de "1.234,56". Undefined/null → null (não 0).
+function parseCurrency(v: unknown): Decimal | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "number") return Number.isFinite(v) ? new Decimal(v) : null;
+  const raw = String(v).trim();
+  if (!raw) return null;
+  const cleaned = raw.replace(/[^\d.,\-]/g, "");
+  if (!cleaned) return null;
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  const normalized = lastComma > lastDot
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned.replace(/,/g, "");
+  try {
+    const d = new Decimal(normalized);
+    return d.isFinite() ? d : null;
+  } catch {
+    return null;
+  }
+}
+function or(val: Decimal | null, fallback: number): Decimal {
+  return val ?? new Decimal(fallback);
+}
 
 interface Props {
   caseId: string;
@@ -63,23 +89,45 @@ export function ModuloOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, p
     finally { setGenerating(false); }
   };
 
-  const updateField = async (id: string, field: string, value: any) => {
-    await supabase.from("pjecalc_verba_ocorrencias" as any).update({ [field]: value }).eq("id", id);
+  const updateField = async (id: string, field: string, value: unknown) => {
+    const { error } = await supabase
+      .from("pjecalc_verba_ocorrencias" as never)
+      .update({ [field]: value })
+      .eq("id", id);
+    if (error) {
+      logger.error("updateField falhou", error, { id, field });
+      toast.error("Não foi possível salvar a alteração");
+    }
   };
 
-  const recalcRow = async (row: any) => {
-    const base = parseFloat(row.valor_base) || 0;
-    const div = parseFloat(row.divisor) || 30;
-    const mult = parseFloat(row.multiplicador) || 1;
-    const qtd = parseFloat(row.quantidade) || 1;
-    const dobra = parseFloat(row.dobra) || 1;
-    const devido = (base * mult / div) * qtd * dobra;
-    const pago = parseFloat(row.pago) || 0;
-    const diferenca = devido - pago;
-    await supabase.from("pjecalc_verba_ocorrencias" as any).update({
-      devido: Math.round(devido * 100) / 100,
-      diferenca: Math.round(diferenca * 100) / 100,
-    }).eq("id", row.id);
+  const recalcRow = async (row: Record<string, unknown>) => {
+    // Usa Decimal.js para preservar precisão monetária (valor_base pode conter "1.234,56").
+    const base = or(parseCurrency(row.valor_base), 0);
+    const div = or(parseCurrency(row.divisor), 30);
+    const mult = or(parseCurrency(row.multiplicador), 1);
+    const qtd = or(parseCurrency(row.quantidade), 1);
+    const dobra = or(parseCurrency(row.dobra), 1);
+    const pago = or(parseCurrency(row.pago), 0);
+    if (div.isZero()) {
+      logger.warn("recalcRow: divisor zero, abortando", { rowId: row.id });
+      return;
+    }
+    const devido = base.times(mult).dividedBy(div).times(qtd).times(dobra);
+    const diferenca = devido.minus(pago);
+    const rowId = typeof row.id === "string" ? row.id : null;
+    if (!rowId) return;
+    const { error } = await supabase
+      .from("pjecalc_verba_ocorrencias" as never)
+      .update({
+        devido: Number(devido.toDecimalPlaces(2).toString()),
+        diferenca: Number(diferenca.toDecimalPlaces(2).toString()),
+      })
+      .eq("id", rowId);
+    if (error) {
+      logger.error("recalcRow update falhou", error, { rowId });
+      toast.error("Falha ao recalcular ocorrência");
+      return;
+    }
     qc.invalidateQueries({ queryKey: ["pjecalc_verba_ocorrencias", verbaId] });
   };
 
@@ -139,19 +187,57 @@ export function ModuloOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, p
                 {ocorrencias.map((o: any) => (
                   <tr key={o.id} className={`border-b border-border/30 hover:bg-muted/20 ${!o.ativa ? 'opacity-40' : ''}`}>
                     <td className="p-1 text-center">
-                      <Checkbox checked={o.ativa} onCheckedChange={v => { updateField(o.id, 'ativa', !!v); qc.invalidateQueries({ queryKey: ["pjecalc_verba_ocorrencias", verbaId] }); }} />
+                      <Checkbox
+                        checked={o.ativa}
+                        onCheckedChange={async (v) => {
+                          await updateField(o.id, 'ativa', !!v);
+                          qc.invalidateQueries({ queryKey: ["pjecalc_verba_ocorrencias", verbaId] });
+                        }}
+                      />
                     </td>
                     <td className="p-2 font-mono font-medium">{o.competencia}</td>
                     {['valor_base', 'divisor', 'multiplicador', 'quantidade', 'dobra'].map(field => (
                       <td key={field} className="p-1 text-center">
-                        <Input type="number" step="0.01" defaultValue={o[field] || 0} className="h-7 text-xs w-20 text-center mx-auto"
-                          onBlur={e => { updateField(o.id, field, parseFloat(e.target.value) || 0); recalcRow({ ...o, [field]: e.target.value }); }} />
+                        <Input
+                          type="number" step="0.01"
+                          defaultValue={o[field] || 0}
+                          className="h-7 text-xs w-20 text-center mx-auto"
+                          onBlur={async (e) => {
+                            const parsed = parseCurrency(e.target.value);
+                            const valorNum = parsed ? Number(parsed.toString()) : 0;
+                            // Persist field, depois recalcula devido/diferenca com base no novo valor
+                            await updateField(o.id, field, valorNum);
+                            await recalcRow({ ...o, [field]: e.target.value });
+                          }}
+                        />
                       </td>
                     ))}
                     <td className="p-2 text-right font-mono">{(o.devido || 0).toFixed(2)}</td>
                     <td className="p-1 text-center">
-                      <Input type="number" step="0.01" defaultValue={o.pago || 0} className="h-7 text-xs w-20 text-center mx-auto"
-                        onBlur={e => { const pago = parseFloat(e.target.value) || 0; updateField(o.id, 'pago', pago); updateField(o.id, 'diferenca', (o.devido || 0) - pago); qc.invalidateQueries({ queryKey: ["pjecalc_verba_ocorrencias", verbaId] }); }} />
+                      <Input
+                        type="number" step="0.01"
+                        defaultValue={o.pago || 0}
+                        className="h-7 text-xs w-20 text-center mx-auto"
+                        onBlur={async (e) => {
+                          const pago = or(parseCurrency(e.target.value), 0);
+                          const devidoDec = or(parseCurrency(o.devido), 0);
+                          const diferenca = devidoDec.minus(pago);
+                          // Persist pago+diferenca atomicamente em um único UPDATE.
+                          const { error } = await supabase
+                            .from("pjecalc_verba_ocorrencias" as never)
+                            .update({
+                              pago: Number(pago.toDecimalPlaces(2).toString()),
+                              diferenca: Number(diferenca.toDecimalPlaces(2).toString()),
+                            })
+                            .eq("id", o.id);
+                          if (error) {
+                            logger.error("Falha ao atualizar pago/diferenca", error, { id: o.id });
+                            toast.error("Não foi possível salvar");
+                            return;
+                          }
+                          qc.invalidateQueries({ queryKey: ["pjecalc_verba_ocorrencias", verbaId] });
+                        }}
+                      />
                     </td>
                     <td className="p-2 text-right font-mono font-medium">{(o.diferenca || 0).toFixed(2)}</td>
                     <td className="p-1">

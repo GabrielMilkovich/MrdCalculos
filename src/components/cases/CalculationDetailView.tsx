@@ -336,14 +336,14 @@ export function CalculationDetailView({ caseId, facts, onExecuteCalc }: Calculat
   const demFact = facts.find(f => f.chave === "data_demissao");
   let duracaoTexto = "";
   if (admFact && demFact) {
-    try {
-      const a = new Date(admFact.valor);
-      const d = new Date(demFact.valor);
+    const a = new Date(admFact.valor);
+    const d = new Date(demFact.valor);
+    if (!isNaN(a.getTime()) && !isNaN(d.getTime())) {
       const diffMs = d.getTime() - a.getTime();
       const anos = Math.floor(diffMs / (365.25 * 24 * 60 * 60 * 1000));
       const meses = Math.floor((diffMs % (365.25 * 24 * 60 * 60 * 1000)) / (30 * 24 * 60 * 60 * 1000));
       duracaoTexto = `${anos > 0 ? anos + " ano(s) e " : ""}${meses} mês(es)`;
-    } catch { /* ignore */ }
+    }
   }
 
   const executadoEm = latestRun.executado_em

@@ -367,7 +367,9 @@ Deno.serve(async (req) => {
           await sb.rpc("pjecalc_recompute_acumulado", {
             p_indice: "TR_FGTS",
           });
-        } catch {}
+        } catch (e) {
+          console.warn("[sync-indices] recompute_acumulado TR_FGTS falhou:", e);
+        }
       }
 
       // Also write to indices_oficiais for the generic sync_status tracking
