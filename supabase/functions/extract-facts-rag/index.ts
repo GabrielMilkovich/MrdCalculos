@@ -6,6 +6,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAuthedUser, requireCaseOwnership, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -143,15 +144,11 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization header required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Auth + ownership guard (escreve facts/fact_evidences atrelados ao case_id)
+    const auth = await requireAuthedUser(req, supabase);
+    await requireCaseOwnership(supabase, auth.user.id, case_id);
 
     console.log(`Starting RAG extraction for case ${case_id}`);
 
@@ -610,6 +607,8 @@ Liste inconsistências em "alertas".`;
     );
 
   } catch (error) {
+    const authResp = authErrorResponse(error, corsHeaders);
+    if (authResp) return authResp;
     console.error("extract-facts-rag error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),

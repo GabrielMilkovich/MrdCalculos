@@ -234,10 +234,9 @@ export async function deleteVerba(id: string): Promise<void> {
 
 export async function insertVerbasBatch(payloads: PjecalcVerbaInsert[]): Promise<void> {
   if (payloads.length === 0) return;
-  for (const p of payloads) {
-    const { error } = await fromView('pjecalc_verbas').insert(p);
-    if (error) throw error;
-  }
+  // Single batch insert — evita N+1 queries em importações de 50+ verbas.
+  const { error } = await fromView('pjecalc_verbas').insert(payloads);
+  if (error) throw error;
 }
 
 export async function getCaseBasic(caseId: string): Promise<{ id: string; cliente: string; numero_processo: string | null; status: string; tags: string[] | null } | null> {

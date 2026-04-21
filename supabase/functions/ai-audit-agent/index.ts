@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAuthedUser, requireCaseOwnership, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -222,9 +223,11 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { action, case_id, calculo_id, agents, context } = await req.json();
+    // Auth + ownership guard ANTES de qualquer mutação
+    const auth = await requireAuthedUser(req, supabase);
 
-    if (!case_id) throw new Error("case_id is required");
+    const { action, case_id, calculo_id, agents, context } = await req.json();
+    await requireCaseOwnership(supabase, auth.user.id, case_id);
 
     const startTime = Date.now();
 
@@ -422,6 +425,8 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    const authResp = authErrorResponse(e, corsHeaders);
+    if (authResp) return authResp;
     console.error("ai-audit-agent error:", e);
     const msg = e instanceof Error ? e.message : "Unknown error";
     return new Response(JSON.stringify({ error: msg }), {

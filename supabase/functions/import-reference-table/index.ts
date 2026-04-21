@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireAuthedUser, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,13 +23,16 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceKey);
 
   try {
-    const { table_slug, trigger = "manual", performed_by } = await req.json();
+    // Auth obrigatória: performed_by vem do user autenticado, não do body (evita spoof)
+    const auth = await requireAuthedUser(req, supabase);
+
+    const { table_slug, trigger = "manual" } = await req.json();
     if (!table_slug) throw new Error("table_slug is required");
 
-    // Create import run
+    // Create import run — performed_by sempre do JWT
     const { data: run, error: runErr } = await supabase
       .from("reference_import_runs")
-      .insert({ table_slug, trigger, performed_by, result: "pending" })
+      .insert({ table_slug, trigger, performed_by: auth.user.id, result: "pending" })
       .select("id")
       .single();
     if (runErr) throw runErr;
@@ -90,8 +94,11 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ success: true, run_id: runId, ...result }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), {
+  } catch (err) {
+    const authResp = authErrorResponse(err, corsHeaders);
+    if (authResp) return authResp;
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return new Response(JSON.stringify({ error: msg }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

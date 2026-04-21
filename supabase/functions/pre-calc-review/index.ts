@@ -5,6 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireAuthedUser, requireCaseOwnership, authErrorResponse } from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -138,6 +139,10 @@ serve(async (req) => {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error("Supabase config missing");
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Auth + ownership (responde dados sensíveis do caso — exige JWT válido)
+    const auth = await requireAuthedUser(req, supabase);
+    await requireCaseOwnership(supabase, auth.user.id, case_id);
 
     // 1. Fetch ALL document chunks (raw OCR text)
     const { data: chunks, error: chunksErr } = await supabase
@@ -324,6 +329,8 @@ NÃO INVENTE dados. Se algo não está nos documentos, diga que não encontrou.`
     });
 
   } catch (error) {
+    const authResp = authErrorResponse(error, corsHeaders);
+    if (authResp) return authResp;
     console.error("pre-calc-review error:", error);
     return new Response(JSON.stringify({
       error: error instanceof Error ? error.message : "Erro desconhecido"

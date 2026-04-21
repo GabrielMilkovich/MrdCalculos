@@ -5,6 +5,12 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  requireAuthedUser,
+  requireCaseOwnership,
+  requireDocumentOwnership,
+  authErrorResponse,
+} from "../_shared/auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -75,15 +81,12 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization header required" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Auth + ownership guard: exige JWT válido e valida case/document_id recebidos
+    const auth = await requireAuthedUser(req, supabase);
+    if (case_id) await requireCaseOwnership(supabase, auth.user.id, case_id);
+    if (document_id) await requireDocumentOwnership(supabase, auth.user.id, document_id);
 
     console.log(`Semantic search: "${query}" (case: ${case_id || 'any'}, threshold: ${threshold})`);
 
@@ -189,6 +192,8 @@ serve(async (req) => {
     );
 
   } catch (error) {
+    const authResp = authErrorResponse(error, corsHeaders);
+    if (authResp) return authResp;
     console.error("semantic-search error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
