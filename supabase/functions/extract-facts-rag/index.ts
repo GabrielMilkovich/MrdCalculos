@@ -7,6 +7,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuthedUser, requireCaseOwnership, authErrorResponse } from "../_shared/auth.ts";
+import { checkRateLimit } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -149,6 +150,14 @@ serve(async (req) => {
     // Auth + ownership guard (escreve facts/fact_evidences atrelados ao case_id)
     const auth = await requireAuthedUser(req, supabase);
     await requireCaseOwnership(supabase, auth.user.id, case_id);
+
+    // Rate limit: 20 extrações RAG/hora (embeddings + LLM + retrieval)
+    await checkRateLimit(supabase, {
+      userId: auth.user.id,
+      bucket: "extract-facts-rag",
+      maxRequests: 20,
+      windowSeconds: 3600,
+    });
 
     console.log(`Starting RAG extraction for case ${case_id}`);
 

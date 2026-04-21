@@ -6,6 +6,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuthedUser, requireCaseOwnership, authErrorResponse } from "../_shared/auth.ts";
+import { checkRateLimit } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -143,6 +144,14 @@ serve(async (req) => {
     // Auth + ownership (responde dados sensíveis do caso — exige JWT válido)
     const auth = await requireAuthedUser(req, supabase);
     await requireCaseOwnership(supabase, auth.user.id, case_id);
+
+    // Rate limit: 15 reviews/hora (LLM call + chunks completos)
+    await checkRateLimit(supabase, {
+      userId: auth.user.id,
+      bucket: "pre-calc-review",
+      maxRequests: 15,
+      windowSeconds: 3600,
+    });
 
     // 1. Fetch ALL document chunks (raw OCR text)
     const { data: chunks, error: chunksErr } = await supabase

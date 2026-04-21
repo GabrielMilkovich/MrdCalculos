@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuthedUser, requireCaseOwnership, authErrorResponse } from "../_shared/auth.ts";
+import { checkRateLimit } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -228,6 +229,14 @@ serve(async (req) => {
 
     const { action, case_id, calculo_id, agents, context } = await req.json();
     await requireCaseOwnership(supabase, auth.user.id, case_id);
+
+    // Rate limit: 10 auditorias/hora (endpoint caro — LLM calls em cascata)
+    await checkRateLimit(supabase, {
+      userId: auth.user.id,
+      bucket: "ai-audit-agent",
+      maxRequests: 10,
+      windowSeconds: 3600,
+    });
 
     const startTime = Date.now();
 
