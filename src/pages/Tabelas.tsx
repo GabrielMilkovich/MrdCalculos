@@ -44,6 +44,9 @@ const TABELA_CONFIG: Record<string, { title: string; description: string; slug: 
   "imposto-renda": { title: "Imposto de Renda", description: "Tabela progressiva do IRRF e deduções", slug: "imposto_renda" },
   "correcao-monetaria": { title: "Correção Monetária", description: "Índices IPCA-E, INPC, TR e SELIC", slug: "correcao_monetaria" },
   "juros-mora": { title: "Juros de Mora", description: "Tabelas de juros conforme ADC 58/59 STF", slug: "juros_mora" },
+  "pisos-salariais": { title: "Pisos Salariais", description: "Pisos salariais estaduais e por categoria", slug: "pisos_salariais" },
+  "vale-transporte": { title: "Vale-transporte", description: "Tarifas de vale-transporte por UF/município/linha", slug: "vale_transporte" },
+  "custas-judiciais": { title: "Custas Judiciais", description: "Custas processuais trabalhistas (Lei 8.620/1993 e atualizações dos TRTs)", slug: "custas_judiciais" },
   "atualizacao-indices": { title: "Atualização de Tabelas e Índices", description: "Gestão e importação de séries de índices", slug: "" },
 };
 
