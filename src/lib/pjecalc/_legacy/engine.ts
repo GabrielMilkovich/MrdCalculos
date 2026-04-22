@@ -112,6 +112,18 @@ export class PjeCalcEngine {
     excecoesSabado: PjeExcecaoSabado[] = [],
     salarioMinimoDB: PjeSalarioMinimoRow[] = [],
   ) {
+    // [DEPRECATION WARNING — adicionado em consolidação V3 (2026-04-22)]
+    // Silenciado em testes para não poluir output dos parity tests legados.
+    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+      const stack = new Error().stack?.split('\n').slice(2, 5).join('\n') ?? '';
+      console.warn(
+        '[DEPRECATED] PjeCalcEngine (motor legado V1, src/lib/pjecalc/_legacy/engine.ts) foi instanciado. ' +
+        'Use PjeCalcEngineV3 em @/lib/pjecalc/engine-v3. ' +
+        'Este motor será removido após 2026-05-20.\n' +
+        'Stack:\n' + stack,
+      );
+    }
+
     this.params = params;
     this.historicos = historicos;
     this.faltas = faltas;

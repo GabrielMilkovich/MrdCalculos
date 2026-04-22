@@ -50,6 +50,16 @@ export class PjeCalcEngineV4 extends PjeCalcEngineV3 {
     super(params, historicos, faltas, ferias, verbas, cartaoPonto,
       fgtsConfig, csConfig, irConfig, correcaoConfig,
       honorariosConfig, custasConfig, seguroConfig, indicesDB, faixasINSSDB, faixasIRDB);
+    // [DEPRECATION WARNING — adicionado em consolidação V3 (2026-04-22)]
+    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+      const stack = new Error().stack?.split('\n').slice(2, 5).join('\n') ?? '';
+      console.warn(
+        '[DEPRECATED] PjeCalcEngineV4 (motor experimental, src/lib/pjecalc/_legacy/engine-v4.ts) foi instanciado. ' +
+        'Use PjeCalcEngineV3 em @/lib/pjecalc/engine-v3 (a funcionalidade INSS proporcionalizado foi absorvida). ' +
+        'Este motor será removido após 2026-05-20.\n' +
+        'Stack:\n' + stack,
+      );
+    }
     this.historicosSal = historicos;
     this.verbasSal = verbas;
     this.csConfigV4 = csConfig;
