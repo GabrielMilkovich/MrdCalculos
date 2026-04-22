@@ -194,7 +194,7 @@ async function main() {
         console.log('[DIAG]   ir: PJC=R$' + pjc_ir.toFixed(0) + ' ENG=R$' + r.ir_retido.toFixed(0) + ' delta=' + irDelta.toFixed(1) + '%');
         console.log('[DIAG]   bruto: PJC=R$' + pjc_bruto.toFixed(0) + ' ENG=R$' + (r.liquido_reclamante + r.cs_segurado + r.ir_retido).toFixed(0));
         // INSS-DEBUG: Show GT data for INSS diagnosis
-        const gtEntries = a.apuracao_juros || [];
+        const gtEntries: { cs_normal?: number; cs_base_normal?: number }[] = analysis.apuracao_juros || [];
         const gtCSNormalTotal = gtEntries.reduce((s, e) => s + (e.cs_normal || 0), 0);
         const gtCSBaseTotal = gtEntries.reduce((s, e) => s + (e.cs_base_normal || 0), 0);
         const hasPrecomputedCS = gtEntries.some(e => (e.cs_normal || 0) > 0);
