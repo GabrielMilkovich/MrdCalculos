@@ -69,3 +69,35 @@ Preservar bug (fidelidade semântica durante o port). Teste golden freeze docume
 
 **Observação:**
 O PJe-Calc original (Java) lê do banco `TBIPCA` e `TBIPCAE` separadamente — provavelmente com valores corretos. A divergência é exclusiva do port TS atual. Correção requer apenas reseedar `TABELA_IPCA` com valores oficiais IBGE série 433 + atualizar o hash no teste golden + remover o teste de igualdade.
+
+---
+
+## DV-002 — `Verba.isTipoDaQuantidadeImportadaDoCartaoDePonto()` sempre retorna false
+
+**Data descoberta:** 2026-04-22
+**Fase:** 3
+**Arquivo Java:** `pjecalc-fonte/negocio/br/jus/trt8/pjecalc/negocio/dominio/verba/Verba.java:678-680`
+**Método:** `isTipoDaQuantidadeImportadaDoCartaoDePonto()`
+
+**Descrição:**
+```java
+public boolean isTipoDaQuantidadeImportadaDoCartaoDePonto() {
+    return false;
+}
+```
+
+O método ignora o campo `tipoDaQuantidade` e devolve `false` sempre. Os outros três predicados análogos (`isTipoDaQuantidadeInformada`, `isTipoDaQuantidadeAvos`, `isTipoDaQuantidadeImportadaDoCalendario`) comparam corretamente contra o `TipoDeQuantidadeEnum`.
+
+**Comportamento correto esperado:**
+Deveria ser `return TipoDeQuantidadeEnum.IMPORTADA_DO_CARTAO_DE_PONTO.equals(this.tipoDaQuantidade);` — simétrico aos demais predicados.
+
+**Hipótese:** o valor `IMPORTADA_DO_CARTAO_DE_PONTO` pode ter sido removido do enum entre versões do PJe-Calc; o método ficou como stub e nunca foi deletado. O TS preserva o stub.
+
+**Impacto medido:**
+Hoje zero (método nunca é chamado no caminho quente do cálculo dos 14 casos). Se verbas com quantidade importada do cartão passarem a ser usadas, o bug pode afetar o engine. A detecção real de importação do cartão-ponto é feita via `Verba.getTipoImportadadoDoCartaoDePonto()` (campo separado), então o bug não tem efeito prático conhecido.
+
+**Decisão do port:**
+Preservar bug (fidelidade semântica). Port TS tem comentário inline linkando a este DV-002.
+
+**Caso de teste:**
+`src/lib/pjecalc/core/dominio/verba/__tests__/verba.golden.test.ts` — describe `Verba — helpers de enums` → teste `isTipoDaQuantidadeImportadaDoCartaoDePonto SEMPRE retorna false (DV-002)`.

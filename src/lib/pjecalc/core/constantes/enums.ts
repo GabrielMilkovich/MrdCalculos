@@ -312,12 +312,17 @@ export enum TipoValorEnum {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Base de cálculo do principal — BaseDeCalculoDoPrincipalEnum.java
+// Valores string espelham exatamente os do Java. Os 6 casos do enum original:
+// ULTIMA_REMUNERACAO(UR), MAIOR_REMUNERACAO(MR), HISTORICO_SALARIAL(HS),
+// SALARIO_DA_CATEGORIA(SC), SALARIO_MINIMO(SM), VALE_TRANSPORTE(VT).
 // ─────────────────────────────────────────────────────────────────────────────
 export enum BaseDeCalculoDoPrincipalEnum {
   SALARIO_MINIMO = 'SM',
   SALARIO_CATEGORIA = 'SC',
   MAIOR_REMUNERACAO = 'MR',
   ULTIMA_REMUNERACAO = 'UR',
+  HISTORICO_SALARIAL = 'HS',
+  VALE_TRANSPORTE = 'VT',
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
