@@ -643,3 +643,87 @@ classes-tipo ficam para sessão(ões) dedicadas.
 **Impacto no calibrate:** nulo. `ratearValor` é o helper crítico onde
 mora parte do delta de arredondamento entre Java e a implementação
 atual do engine TS — mas ativação só virá na Fase 9.
+
+---
+
+## 2026-04-22 — Fase 8 — Sessão #1 (Calculo.java — orquestrador, predicados e períodos)
+
+**Escopo:** `Calculo.java` (3.087 linhas, 239 métodos — orquestrador central).
+Ter cobertura TS atual em ~26%. Esta sessão porta **11 predicados e helpers
+de período/prescrição** que são puros e não dependem dos motores de
+cálculo (esses ficam para sessão de integração).
+
+**Métodos/campos portados:**
+
+- `isPrazoAvisoCalculado()` — Java L1263-1265. Predicado sobre enum.
+- `isPrazoAvisoInfo()` — Java L1267-1269. Simétrico.
+- `isLiquidado()` — Java L2561-2563. `dataDeLiquidacao != null`.
+- `existeDataDeDemissao()` — Java L2731-2733. `dataDemissao != null`.
+- **Campo novo:** `relatorioAtualizacao: boolean`
+- `isRelatorioAtualizacao()` + `setRelatorioAtualizacao()` — Java L2503-2509.
+- `getDataPrescricaoQuinquenal()` — Java L2626-2629. 5 anos antes de
+  `dataAjuizamento` (CLT art. 11, EC 28/2000). Alias semântico de
+  `getDataDePrescricao` existente.
+- `getDataPrescricaoFgts()` — Java L2631-2640. **Regras STF ARE 709.212:**
+  - Antes de 13/11/2014 ou admissão ≤ 13/11/1989 → trintenária (30 anos).
+  - Transição 13/11/2014 → 13/11/2019 + adm > 13/11/1989 → quinquenal.
+  - A partir de 13/11/2019 → quinquenal universal.
+- `isDataDemissaoAnteriorADataPrescricaoQuinquenal()` — Java L2855-2860.
+  Detecta "prescrição total" (demissão antes do limite).
+- `isDataTerminoCalculoAnteriorADemissao()` — Java L2862-2866. Detecta
+  cálculo intermediário (liquidação antes da rescisão).
+- `obterPeriodoDoCalculo()` — Java L2595-2620. Período natural:
+  `max(admissão, início)` → `min(demissão, término)`. Sem labels.
+- `obterPeriodoSugestivoDoCalculo(verificarPrescr?, verificarFgts?)`
+  — Java L2642-2668 (+ delegated L2622). Preferência por `inicioCalculo`
+  (com label), ou admissão quando `verificarPeriodoParaFgts=true`. Se
+  `verificarPrescricaoQuinquenal=true`, substitui inicial por data
+  prescricional se esta for maior. Seta labels em todas as etapas.
+
+**Constantes adicionadas no módulo:**
+- `TREZE_NOVEMBRO_2014` — STF ARE 709.212.
+- `TREZE_NOVEMBRO_2019` — fim do regime de transição.
+- `TREZE_NOVEMBRO_1989` — data-corte CF/88 + Lei 8.036/90 para FGTS.
+
+**Decisões operacionais (NÃO portados):**
+- `isTemFGTSApurado` (L2565, 9L) — requer `HelperIterate` com predicates
+  compostos. Pode ser reescrito com `.some()` nativo na sessão Fase 9.
+- `isTemMultaInformada` (L2581) — idem.
+- `isApurarPrevidenciaPrivada` (L2591) — requer `Calculo.getPrevidenciaPrivada()`
+  que não existe no TS atual como objeto (só stub).
+- `obterFaltasNaoJustificadas`, `obterPeriodosDeFaltasNaoJustificadas`,
+  `obterFaltasJustificadas`, `obterPeriodosDeFaltasJustificadas`,
+  `obterDiasFerias`, `obterPeriodosDeFeriasGozadas` — todos dependem de
+  `Calculo.getFaltas()` e `Calculo.getListaDeFerias()` que são stubs.
+  Postergado para Fase 9.
+- `getVerbasParaLiquidacao`, `adicionarVerbas` — requerem classes
+  `Principal`/`Reflexo` com relação bidirecional completa. Postergado.
+- `hasCartaoDePontoComJornadaSemanalOuEscala` — consulta repositório.
+- `calcularHashCodeDaLiquidacao` (80+ linhas) — complexo, postergado.
+- `calcularBrutoDevidoAoReclamante` (22L) — agregador, postergado.
+- **`liquidar()` completo** — orquestrador principal (L1475-1537).
+  Esta é a fundação da Fase 9 (integração); requer todos os módulos
+  já portados + wiring via feature flags.
+
+**Testes adicionados:** **34 golden tests novos**
+- 2 `isPrazoAvisoCalculado`/`isPrazoAvisoInfo`
+- 2 `isLiquidado` (sem/com data)
+- 2 `existeDataDeDemissao` (sem/com)
+- 2 `isRelatorioAtualizacao` (default + setter)
+- 2 `getDataPrescricaoQuinquenal` (null + cálculo)
+- 7 `getDataPrescricaoFgts` (todas as 5 regras STF ARE 709.212 + 2 bordas)
+- 4 `isDataDemissaoAnteriorADataPrescricaoQuinquenal`
+- 4 `isDataTerminoCalculoAnteriorADemissao`
+- 5 `obterPeriodoDoCalculo` (caso base, 3 branches, parcial)
+- 4 `obterPeriodoSugestivoDoCalculo` (default, FGTS flag, prescrição, sem demissão)
+
+**Gate Fase 8:**
+- Vitest: **997 passed** | 6 skipped | 0 failed (72 suites,
+  **+34 testes vs Fase 7**).
+- `tsc --noEmit`: limpo.
+- `npm run calibrate`: 13/13 válidos, delta médio **-30,68%** (idêntico
+  baseline — port de helpers puros/predicados; zero regressão).
+- `npm run audit:port:check`: OK.
+
+**Impacto no calibrate:** nulo. Helpers portados são utilidades que só
+serão acionadas a partir da Fase 9 (integração com liquidar()).

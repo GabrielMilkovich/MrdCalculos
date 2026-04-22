@@ -65,6 +65,13 @@ export interface IModuloLiquidavel {
 
 const ZERO = new Decimal(0);
 
+/** Marco jurisprudencial: 13/novembro/2014 — STF ARE 709.212 (prescrição FGTS). */
+const TREZE_NOVEMBRO_2014 = new Date(Date.UTC(2014, 10, 13));
+/** 13/novembro/2019 — fim do regime de transição quinquenal/trintenal. */
+const TREZE_NOVEMBRO_2019 = new Date(Date.UTC(2019, 10, 13));
+/** 13/novembro/1989 — CF de 1988 + Lei 8.036/90: 13/11/89 como data-corte FGTS. */
+const TREZE_NOVEMBRO_1989 = new Date(Date.UTC(1989, 10, 13));
+
 export class Calculo {
   // ─── Identidade + versionamento ───
   private id: number | null = null;
@@ -77,6 +84,7 @@ export class Calculo {
   private validado: boolean = false;
   private hashCalculoCorreto: boolean = false;
   private hashAtualizacaoCorreto: boolean = false;
+  private relatorioAtualizacao: boolean = false;
   private comentarios: string | null = null;
   private versaoDoSistema: string | null = null;
   private idSetor: number | null = null;
@@ -248,6 +256,29 @@ export class Calculo {
   getDataDeLiquidacao(): Date { return this.dataDeLiquidacao!; }
   setDataDeLiquidacao(v: Date): void { this.dataDeLiquidacao = v; }
 
+  /**
+   * `isLiquidado` — porte 1-a-1 de Calculo.java:2561-2563.
+   * Predicado: cálculo já foi liquidado (dataDeLiquidacao preenchida).
+   */
+  isLiquidado(): boolean {
+    return this.dataDeLiquidacao != null;
+  }
+
+  /**
+   * `existeDataDeDemissao` — porte 1-a-1 de Calculo.java:2731-2733.
+   */
+  existeDataDeDemissao(): boolean {
+    return this.dataDemissao != null;
+  }
+
+  /**
+   * `isRelatorioAtualizacao` / `setRelatorioAtualizacao` — Calculo.java:2503-2509.
+   * Flag transient que ativa o modo "relatório de atualização"
+   * (exibe apenas valores atualizados, oculta detalhe do cálculo original).
+   */
+  isRelatorioAtualizacao(): boolean { return this.relatorioAtualizacao; }
+  setRelatorioAtualizacao(v: boolean): void { this.relatorioAtualizacao = v; }
+
   getInicioFeriasColetivas(): Date | null { return this.inicioFeriasColetivas; }
   setInicioFeriasColetivas(v: Date | null): void { this.inicioFeriasColetivas = v; }
 
@@ -308,6 +339,22 @@ export class Calculo {
   }
   setApuracaoPrazoDoAvisoPrevio(v: TipoDeApuracaoPrazoDoAvisoPrevioEnum): void {
     this.apuracaoPrazoDoAvisoPrevio = v;
+  }
+
+  /**
+   * `isPrazoAvisoCalculado` — porte 1-a-1 de Calculo.java:1263-1265.
+   * Returns true se `apuracaoPrazoDoAvisoPrevio === APURACAO_CALCULADA`.
+   */
+  isPrazoAvisoCalculado(): boolean {
+    return this.apuracaoPrazoDoAvisoPrevio === TipoDeApuracaoPrazoDoAvisoPrevioEnum.APURACAO_CALCULADA;
+  }
+
+  /**
+   * `isPrazoAvisoInfo` — porte 1-a-1 de Calculo.java:1267-1269.
+   * Returns true se `apuracaoPrazoDoAvisoPrevio === APURACAO_INFORMADA`.
+   */
+  isPrazoAvisoInfo(): boolean {
+    return this.apuracaoPrazoDoAvisoPrevio === TipoDeApuracaoPrazoDoAvisoPrevioEnum.APURACAO_INFORMADA;
   }
 
   getPrazoAvisoInformado(): number | null { return this.prazoAvisoInformado; }
@@ -491,6 +538,158 @@ export class Calculo {
     const d = new Date(this.dataAjuizamento);
     d.setFullYear(d.getFullYear() - 5);
     return d;
+  }
+
+  /**
+   * `getDataPrescricaoQuinquenal` — porte 1-a-1 de Calculo.java:2626-2629.
+   * Alias semântico de `getDataDePrescricao` (prescrição de 5 anos da CLT
+   * art. 11 — EC 28/2000). Nome alternativo é o mais usado no código Java.
+   */
+  getDataPrescricaoQuinquenal(): Date | null {
+    if (!this.dataAjuizamento) return null;
+    return HelperDate.getInstance(this.dataAjuizamento).addYear(-5).getDate();
+  }
+
+  /**
+   * `getDataPrescricaoFgts` — porte 1-a-1 de Calculo.java:2631-2640.
+   *
+   * Prescrição trintenária (30 anos) do FGTS — **regra geral histórica**
+   * até decisão do STF no ARE 709.212 (13/nov/2014). A partir dessa data:
+   *   - Ajuizamento **entre 13/11/2014 e 13/11/2019** E admissão
+   *     **após 13/11/1989** → prescrição quinquenal (5 anos).
+   *   - Ajuizamento **a partir de 13/11/2019** → prescrição quinquenal
+   *     integral (regime de transição terminou).
+   *   - Demais casos (ajuizamento anterior a 13/11/2014 ou admissão
+   *     anterior a 13/11/1989): **trintenária** — 30 anos.
+   */
+  getDataPrescricaoFgts(): Date | null {
+    if (!this.dataAjuizamento) return null;
+    const ajuiz = this.dataAjuizamento;
+    const admiss = this.dataAdmissao;
+    let anosPrescricao = -30;
+    if (
+      HelperDate.dateAfterOrEquals(ajuiz, TREZE_NOVEMBRO_2014) &&
+      HelperDate.dateBefore(ajuiz, TREZE_NOVEMBRO_2019) &&
+      admiss != null &&
+      HelperDate.dateAfter(admiss, TREZE_NOVEMBRO_1989)
+    ) {
+      anosPrescricao = -5;
+    } else if (HelperDate.dateAfterOrEquals(ajuiz, TREZE_NOVEMBRO_2019)) {
+      anosPrescricao = -5;
+    }
+    return HelperDate.getInstance(ajuiz).addYear(anosPrescricao).getDate();
+  }
+
+  /**
+   * `isDataDemissaoAnteriorADataPrescricaoQuinquenal` — porte 1-a-1 de
+   * Calculo.java:2855-2860.
+   *
+   * True se:
+   *   1. `dataDemissao` existe
+   *   2. `prescricaoQuinquenal` está habilitada
+   *   3. `dataDemissao < dataPrescricaoQuinquenal`
+   *
+   * Usado para decidir se todas as verbas estão prescritas (cálculo
+   * deve gerar relatório de "prescrição total").
+   */
+  isDataDemissaoAnteriorADataPrescricaoQuinquenal(): boolean {
+    if (this.dataDemissao == null || !this.prescricaoQuinquenal) return false;
+    const dataPrescr = this.getDataPrescricaoQuinquenal();
+    if (dataPrescr == null) return false;
+    return HelperDate.getInstance(this.dataDemissao).lessThen(dataPrescr);
+  }
+
+  /**
+   * `isDataTerminoCalculoAnteriorADemissao` — porte 1-a-1 de
+   * Calculo.java:2862-2866.
+   *
+   * True se ambas as datas existem e `dataTerminoCalculo < dataDemissao`.
+   * Caso típico: cálculo intermediário (ex.: liquidação antes da
+   * rescisão efetiva).
+   */
+  isDataTerminoCalculoAnteriorADemissao(): boolean {
+    if (this.dataDemissao == null || this.dataTerminoCalculo == null) return false;
+    return HelperDate.dateBefore(this.dataTerminoCalculo, this.dataDemissao);
+  }
+
+  /**
+   * `obterPeriodoDoCalculo` — porte 1-a-1 de Calculo.java:2595-2620.
+   *
+   * Monta um `Periodo` respeitando os limites naturais:
+   *   - Inicial = max(dataAdmissao, dataInicioCalculo) — quando ambos existem.
+   *     Se apenas um dos dois existir, usa esse.
+   *   - Final   = min(dataDemissao, dataTerminoCalculo) — análogo.
+   *
+   * Não seta labels (diferente de `obterPeriodoSugestivoDoCalculo`).
+   */
+  obterPeriodoDoCalculo(): Periodo {
+    const periodo = new Periodo();
+    if (this.dataAdmissao != null && this.dataInicioCalculo != null) {
+      if (HelperDate.getInstance(this.dataAdmissao).greaterThenOrEquals(this.dataInicioCalculo)) {
+        periodo.setInicial(this.dataAdmissao);
+      } else {
+        periodo.setInicial(this.dataInicioCalculo);
+      }
+    } else if (this.dataAdmissao != null) {
+      periodo.setInicial(this.dataAdmissao);
+    } else if (this.dataInicioCalculo != null) {
+      periodo.setInicial(this.dataInicioCalculo);
+    }
+    if (this.dataDemissao != null && this.dataTerminoCalculo != null) {
+      if (HelperDate.getInstance(this.dataDemissao).lessThanOrEqualsTo(this.dataTerminoCalculo)) {
+        periodo.setFinal(this.dataDemissao);
+      } else {
+        periodo.setFinal(this.dataTerminoCalculo);
+      }
+    } else if (this.dataDemissao != null) {
+      periodo.setFinal(this.dataDemissao);
+    } else if (this.dataTerminoCalculo != null) {
+      periodo.setFinal(this.dataTerminoCalculo);
+    }
+    return periodo;
+  }
+
+  /**
+   * `obterPeriodoSugestivoDoCalculo` — porte 1-a-1 de
+   * Calculo.java:2642-2668 (overload com 2 args) + L2622-2624 (zero args).
+   *
+   * Diferença para `obterPeriodoDoCalculo`: este **seta labels** de
+   * origem em cada data (usado em mensagens de erro), aplica regra de
+   * prescrição quinquenal quando `verificarPrescricaoQuinquenal=true`, e
+   * troca admissão por início do cálculo se `verificarPeriodoParaFgts=false`.
+   *
+   * Quando `verificarPeriodoParaFgts=true`, a data inicial é sempre a
+   * admissão (relevante para FGTS onde a prescrição histórica é de 30
+   * anos a partir da admissão).
+   */
+  obterPeriodoSugestivoDoCalculo(
+    verificarPrescricaoQuinquenal = false,
+    verificarPeriodoParaFgts = false,
+  ): Periodo {
+    const periodo = new Periodo();
+    if (this.dataInicioCalculo != null && !verificarPeriodoParaFgts) {
+      periodo.setInicial(this.dataInicioCalculo);
+      periodo.setLabelDataIncial('Data Início do Cálculo');
+    } else if (this.dataAdmissao != null) {
+      periodo.setInicial(this.dataAdmissao);
+      periodo.setLabelDataIncial('Data de Admissão');
+    }
+    if (verificarPrescricaoQuinquenal && this.prescricaoQuinquenal && this.dataAjuizamento != null) {
+      const dataPrescr = HelperDate.getInstance(this.dataAjuizamento).addYear(-5);
+      const inicial = periodo.getInicial();
+      if (inicial != null && dataPrescr.greaterThen(inicial)) {
+        periodo.setInicial(dataPrescr.getDate());
+        periodo.setLabelDataIncial('Data de Prescrição Quinquenal');
+      }
+    }
+    if (this.dataDemissao != null) {
+      periodo.setFinal(this.dataDemissao);
+      periodo.setLabelDataFinal('Data de Demissão');
+    } else if (this.dataTerminoCalculo != null) {
+      periodo.setFinal(this.dataTerminoCalculo);
+      periodo.setLabelDataFinal('Data Fim do Cálculo');
+    }
+    return periodo;
   }
 
   // ═══════════════════════════════════════════════════════════════════════
