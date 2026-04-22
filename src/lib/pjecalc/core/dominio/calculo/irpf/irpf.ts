@@ -26,6 +26,9 @@
 import Decimal from 'decimal.js';
 import { arredondarValorMonetario } from '../../../base/comum/utils';
 import { Periodo } from '../../../base/comum/periodo';
+import { MensagemDeRecurso } from '../../../comum/mensagem-de-recurso';
+import { Mensagens } from '../../../comum/mensagens';
+import { NegocioException } from '../../../comum/exceptions/negocio-exception';
 import type { IModuloLiquidavel } from '../calculo';
 import type { Calculo } from '../calculo';
 import { OcorrenciaDeIrpf } from './ocorrencia-de-irpf';
@@ -310,6 +313,23 @@ export class Irpf implements IModuloLiquidavel {
   liquidar(): void {
     this.periodoDasOcorrencias = null;
     this.maquinaDeCalculoDeIrpf.liquidar();
+  }
+
+  /**
+   * `validarQuantidadeDependentes` — porte 1-a-1 de Irpf.java:486-490.
+   *
+   * Se `possuiDependentes == true` e `quantidadeDependentes == 0` lança
+   * NegocioException (MSG0004 em "quantidadeDependentes"). Invariante lógica:
+   * marcar que tem dependentes obriga informar ao menos 1.
+   *
+   * Chamado pelo `salvar()` do Java antes de persistir (L408-411).
+   */
+  validarQuantidadeDependentes(): void {
+    if (this.possuiDependentes && this.quantidadeDependentes === 0) {
+      throw new NegocioException(
+        new MensagemDeRecurso('quantidadeDependentes', Mensagens.MSG0004, 'Dependentes'),
+      );
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────

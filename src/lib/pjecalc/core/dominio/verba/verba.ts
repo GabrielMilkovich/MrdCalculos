@@ -252,7 +252,6 @@ export class Verba implements VerbaComOcorrencia {
       } else if (this._multiplicador.equals(0)) {
         // Java: lança diretamente (não acumula)
         throw new NegocioException(
-          null,
           new MensagemDeRecurso(this, 'multiplicador', Mensagens.MSG0004, 'Multiplicador'),
         );
       }

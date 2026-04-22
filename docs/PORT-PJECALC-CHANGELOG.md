@@ -345,3 +345,90 @@ abaixo).
 
 **Impacto no calibrate:** nulo (helpers não conectadas ao orquestrador).
 Ativação virá na Fase 9 via feature flag `USE_PORTED_CARTAO`.
+
+---
+
+## 2026-04-22 — Fase 5 — Sessão #1 (INSS + IRPF — validações e helpers)
+
+**Escopo:** port focado nas validações de negócio e helpers de data que
+estavam ausentes nas classes de domínio de INSS e IRPF. Os motores
+`MaquinaDeCalculoDoInss` (1.640 linhas Java) e `MaquinaDeCalculoDeIrpf`
+(1.675 linhas Java), ambos ~25% e ~7% cobertos respectivamente, ficam
+para sessão dedicada — exigem reformulação estrutural que sai do
+escopo single-session.
+
+**Classes portadas:**
+
+- `calculo/inss/AliquotasDoEmpregadorPorPeriodo.java:170-184`
+  → `aliquotas-do-empregador-por-periodo.ts` — método `validar()`.
+  Regras: (1) pelo menos uma das 3 alíquotas (empresa/RAT/terceiros)
+  deve ser informada — senão 3 MensagemDeRecurso MSG0045; (2) período
+  não pode coincidir com outro do mesmo Inss — MSG0024.
+
+- `calculo/inss/PeriodoDoINSSComOpcaoSimples.java:140-163`
+  → `periodo-do-inss-com-opcao-simples.ts` — método `validar()`.
+  Regras: (1) datas inicial/final dentro de [Admissão, Demissão??
+  DataTérminoCalculo] — senão MSG0004; (2) sem coincidência com outro
+  período Simples — MSG0024.
+
+- `calculo/inss/sobresalarios/InssSobreSalarios.java:166-216`
+  → `inss-sobre-salarios.ts` — métodos
+  `getDataParaRestricaoSalarioDevido()` e `getDataParaRestricaoSalarioPago()`.
+  Constroem `Periodo` com labels para uso em mensagens de erro. Devido
+  aplica regra da maior data entre Admissão, InícioCálculo e Prescrição
+  Quinquenal; Pago vai direto de Admissão → (Demissão ?? TérminoCalc).
+
+- `calculo/inss/sobresalarios/InssSobreSalariosDevidos.java:240-250`
+  → `inss-sobre-salarios-devidos.ts` — método
+  `sugerirDataTerminoCalculo()`. Sub-variante de `sugerirDatas` que
+  atualiza apenas `dataTerminoPeriodo` sem tocar no início. Preferência
+  por `dataTerminoCalculo` em caso de empate (semântica Java
+  `greaterThenOrEquals`).
+
+- `calculo/irpf/Irpf.java:486-490` → `irpf.ts` — método
+  `validarQuantidadeDependentes()`. Valida invariante: se
+  `possuiDependentes == true`, `quantidadeDependentes` deve ser > 0.
+  Chamado pelo `salvar()` do Java antes de persistir.
+
+**Bug corrigido** (descoberto nesta sessão):
+- Uso incorreto do construtor `NegocioException(null, msgDeRecurso)` em
+  `verba.ts` (Fase 3) e em vários pontos novos. O construtor ignora o
+  2º parâmetro quando o 1º é null (não-Error). Corrigido para
+  `new NegocioException(msgDeRecurso)` (single-arg). Teste de Fase 3
+  que validava apenas `toThrow` não detectou a ausência de mensagem.
+
+**Classes NÃO portadas nesta sessão (decisão operacional):**
+
+- `MaquinaDeCalculoDoInss.java` (1.640 Java vs 423 TS) — maior gap
+  absoluto do módulo INSS. `liquidarInssSobreSalariosDevidos/Pagos`
+  (~200 linhas cada) são núcleos complexos com loops recursivos +
+  juros + multa. Exige sessão dedicada.
+- `MaquinaDeCalculoDeIrpf.java` (1.675 Java vs 118 TS) — 93% ausente.
+  `calcularIrpf`, `aplicarPagamento`, `calcularJurosEMulta` dependem
+  de tabela histórica IRPF + RRA art. 12-A + SELIC. Exige sessão
+  dedicada.
+- `InssSobreSalarios.validar(NegocioException, boolean)` (~40 linhas) —
+  validação agregada de período com regras Lei 11941/2009. Porte
+  adiado por complexidade / dependência cruzada com `NegocioException`
+  acumulador passado por parâmetro (semântica não-idiomática em TS).
+- `AliquotasDoEmpregadorPorPeriodo.compareTo` — reconnaissance
+  indicou presença mas inspeção direta do Java não achou. Skipped.
+
+**Testes adicionados:** **28 golden tests novos**
+- 7 em `aliquotas-do-empregador-por-periodo.golden.test.ts`
+- 6 em `periodo-do-inss-com-opcao-simples.golden.test.ts`
+- 11 em `inss-sobre-salarios-helpers.golden.test.ts`
+  (getDataParaRestricaoSalarioDevido 5 + getDataParaRestricaoSalarioPago 2
+  + sugerirDataTerminoCalculo 4)
+- 4 em `irpf-validar-dependentes.golden.test.ts`
+
+**Gate Fase 5:**
+- Vitest: **883 passed** | 6 skipped | 0 failed (66 suites,
+  **+28 testes vs Fase 4**).
+- `tsc --noEmit`: limpo.
+- `npm run calibrate`: 13/13 válidos, delta médio **-30,68%** (idêntico
+  baseline — port de validações/helpers puros, sem wiring; zero regressão).
+- `npm run audit:port:check`: OK.
+
+**Impacto no calibrate:** nulo. Ativação virá na Fase 9 via
+`USE_PORTED_INSS` e `USE_PORTED_IRPF`.
