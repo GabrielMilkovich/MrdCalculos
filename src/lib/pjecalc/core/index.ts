@@ -10,6 +10,20 @@ export { HelperDate, JANUARY, FEBRUARY, MARCH, APRIL, MAY, JUNE, JULY, AUGUST,
          SEPTEMBER, OCTOBER, NOVEMBER, DECEMBER } from './base/comum/helper-date';
 export { Periodo } from './base/comum/periodo';
 export {
+  STR_ESPACO,
+  STR_E,
+  STR_SOBRE,
+  STR_VIRGULA,
+  STR_TRACO,
+  QUANTIDADE_PADRAO_AVISO_PREVIO,
+  QUANTIDADE_MAXIMA_DE_HISTORICOS,
+  DATA_LIMITE_COM_DEMISSAO_PARA_AVISO_PREVIO_CALCULADO,
+  DATA_REFORMA_TRABALHISTA,
+  DATA_REFORMA_PREVIDENCIA,
+} from './base/comum/constantes';
+export { HelperIterate } from './base/comum/helper-iterate';
+export type { Where } from './base/comum/helper-iterate';
+export {
   PORTED_MODULES,
   envVarForModule,
   isPortedEnabled,
