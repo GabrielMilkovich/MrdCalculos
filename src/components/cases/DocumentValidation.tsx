@@ -374,7 +374,6 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
                 {!pdfUrl ? (
                   <span className="text-sm text-muted-foreground">URL do documento indisponível.</span>
                 ) : doc?.mime_type?.startsWith("image/") ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={pdfUrl} alt={doc.file_name} className="max-w-full max-h-full object-contain" />
                 ) : (
                   <object data={pdfUrl} type="application/pdf" className="w-full h-full">
