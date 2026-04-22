@@ -554,3 +554,92 @@ intactos — porte completo dos motores requer sessão dedicada.
 
 **Impacto no calibrate:** nulo. Ativação virá na Fase 9 via
 `USE_PORTED_FGTS`, `USE_PORTED_CUSTAS`, `USE_PORTED_HONORARIOS`.
+
+---
+
+## 2026-04-22 — Fase 7 — Sessão #1 (Pagamento — rateio + análises)
+
+**Escopo:** módulo Pagamento tem 16.863 linhas Java (maior categoria em
+gap absoluto do projeto; coração do delta -30% do calibrate). Esta
+sessão porta **helpers puros e validações** reutilizáveis sem
+reestruturar as classes centrais (`Pagamento` 1.643L, `Atualizacao`,
+`MaquinaDeRateioDoPagamento`, `CreditosDoReclamante`). Motores e
+classes-tipo ficam para sessão(ões) dedicadas.
+
+**Classes/métodos portados:**
+
+- **`pagamento-utils.ts::ratearValor(valor, parcelas)`** — porte 1-a-1 de
+  `PagamentoUtils.java:338-357`. Distribui `valor` proporcionalmente
+  entre `parcelas`. Regras preservadas:
+  - Soma das parcelas zero → vetor zerado (evita div/0)
+  - Parcelas nulas tratadas como zero
+  - `arredondarValorMonetario` em cada fração
+  - `arrumarArredondamento` no final para soma = valor exata
+
+- **`pagamento-utils.ts::arrumarArredondamento(rateios, valor)`** —
+  porte 1-a-1 de `PagamentoUtils.java:359-387`. Ajuste centavo-a-centavo
+  nas **maiores parcelas (por |valor|)**, sem repetir índices. Guarda-
+  limite adicionado em TS: máx iterações = N parcelas (evita loop
+  infinito caso o delta exceda N × 1 centavo). Comportamento prático
+  idêntico ao Java.
+
+- **`pagamento-utils.ts::analisarMultas(multas)`** — porte 1-a-1 de
+  `PagamentoUtils.java:233-269`. Categoriza multas por
+  `tipoCredorDevedor` em 4 dimensões + 3 listas (devidas p/ terceiros
+  pelo reclamante/reclamado, e a cobrar do reclamante quando
+  `tipoCobrancaReclamante=COBRAR`). Retorna tipo estruturado
+  `AnaliseDeMultas` em vez de `Object[]` do Java.
+
+- **`pagamento-utils.ts::analisarHonorarios(honorarios)`** — porte 1-a-1
+  de `PagamentoUtils.java:271-297`. Análogo a `analisarMultas` para
+  honorários (3 dimensões + 3 listas). Retorna
+  `AnaliseDeHonorarios`.
+
+- **`pagamento.ts`** — 3 campos adicionados (`valorParcelaOutrosDebitos`,
+  `valorParcelaDebitosCobrarDoReclamante` + getters/setters) e método
+  **`verificarRateioInicial()`** — porte 1-a-1 de
+  `Pagamento.java:425-432`. Valida que soma das 3 parcelas bate com
+  `valorPagamento`; retorna `NegocioException` acumulador (não lança).
+
+**Decisões operacionais (NÃO portados):**
+
+- `PagamentoUtils.verificaSeExiste*` (26 métodos predicados) — dependem
+  de getters não-triviais de `Calculo`, `Honorario.obterTodosPor()`,
+  `Multa.obterTodosPor()` e módulos ausentes. Mantidos como stub
+  `return false`. Port completo exige Fase 10 (integração).
+- `Pagamento.consistirCamposObrigatorios` (~61L) — validação em cascata
+  envolvendo ~50 verificações sobre campos que em parte só existirão
+  após `Pagamento.ts` ser completamente expandido. Sessão dedicada.
+- `Pagamento.consistirRecolhimentosDeDebitosDoReclamante` — depende de
+  `MultaDoPagamento.getValorMulta()` e `HonorarioDoPagamento.getValorHonorario()`.
+  Postergado.
+- `MaquinaDeRateioDoPagamento.calcularRateio*` (~200L, complexo) —
+  orquestrador com 9 getters internos e estado. Sessão dedicada.
+- `Atualizacao.liquidarParaCadaEvento`, `CreditosDoReclamante`,
+  `DebitosDoReclamante`, `OutrosDebitosReclamado`, `HonorarioDaAtualizacao`,
+  `CustasJudiciaisDaAtualizacao` (2.185 linhas — maior classe do módulo),
+  `PensaoAlimenticiaDaAtualizacao` — todos postergados.
+
+**Testes adicionados:** **27 golden tests novos**
+- 7 em `pagamento-utils.golden.test.ts::ratearValor` (iguais, proporcionais,
+  soma zero, ajuste de arredondamento, parcela única, nulas, decimais)
+- 3 em `pagamento-utils.golden.test.ts::arrumarArredondamento` (positivo,
+  negativo, zero)
+- 7 em `pagamento-utils.golden.test.ts::analisarMultas` (vazio, cada
+  variante do enum `CredorDevedorMultaEnum`, cobrar, múltiplas)
+- 5 em `pagamento-utils.golden.test.ts::analisarHonorarios` (vazio,
+  cada variante, misto)
+- 5 em `pagamento-verificar-rateio.golden.test.ts` (soma bate, divergente,
+  nulas, valorPagamento null, não lança)
+
+**Gate Fase 7:**
+- Vitest: **963 passed** | 6 skipped | 0 failed (71 suites,
+  **+27 testes vs Fase 6**).
+- `tsc --noEmit`: limpo.
+- `npm run calibrate`: 13/13 válidos, delta médio **-30,68%** (idêntico
+  baseline — port de helpers puros, sem wiring; zero regressão).
+- `npm run audit:port:check`: OK.
+
+**Impacto no calibrate:** nulo. `ratearValor` é o helper crítico onde
+mora parte do delta de arredondamento entre Java e a implementação
+atual do engine TS — mas ativação só virá na Fase 9.
