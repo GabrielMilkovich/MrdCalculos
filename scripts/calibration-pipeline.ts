@@ -23,7 +23,7 @@ const __dirname = path.dirname(__filename);
 async function loadEngine() {
   const { analyzePJC } = await import('../src/lib/pjecalc/pjc-analyzer.js');
   const { convertPjcToEngineInputs } = await import('../src/lib/pjecalc/pjc-to-engine.js');
-  const { PjeCalcEngine } = await import('../src/lib/pjecalc/engine.js');
+  const { PjeCalcEngine } = await import('../src/lib/pjecalc/_legacy/engine.js');
   const { IPCA_E_ACUMULADO, SELIC_ACUMULADO } = await import('../src/lib/pjecalc/indices-fallback.js');
   return { analyzePJC, convertPjcToEngineInputs, PjeCalcEngine, IPCA_E_ACUMULADO, SELIC_ACUMULADO };
 }

@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { analyzePJC } from '../src/lib/pjecalc/pjc-analyzer.ts';
 import { convertPjcToEngineInputs } from '../src/lib/pjecalc/pjc-to-engine.ts';
-import { PjeCalcEngine } from '../src/lib/pjecalc/engine.ts';
+import { PjeCalcEngine } from '../src/lib/pjecalc/_legacy/engine.ts';
 import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, SELIC_MENSAL, TR_ACUMULADO } from '../src/lib/pjecalc/indices-fallback.ts';
 
 const file = process.argv[2];

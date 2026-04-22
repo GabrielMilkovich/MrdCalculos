@@ -10,17 +10,17 @@
  * Uso: substitui PjeCalcEngineV3 no orchestrator.
  */
 import Decimal from 'decimal.js';
-import { PjeCalcEngineV3 } from './engine-v3';
-import { CalculoDoProporcionalizar } from './core/comum/rotinasdecalculo/calculo-do-proporcionalizar';
-import { Periodo } from './core/base/comum/periodo';
-import { HelperDate } from './core/base/comum/helper-date';
+import { PjeCalcEngineV3 } from '../engine-v3';
+import { CalculoDoProporcionalizar } from '../core/comum/rotinasdecalculo/calculo-do-proporcionalizar';
+import { Periodo } from '../core/base/comum/periodo';
+import { HelperDate } from '../core/base/comum/helper-date';
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias, PjeVerba,
   PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig, PjeIRConfig,
   PjeCorrecaoConfig, PjeHonorariosConfig, PjeCustasConfig, PjeSeguroConfig,
   PjeIndiceRow, PjeINSSFaixaRow, PjeIRFaixaRow,
   PjeLiquidacaoResult, PjeCSResult,
-} from './engine-types';
+} from '../engine-types';
 
 export class PjeCalcEngineV4 extends PjeCalcEngineV3 {
   private historicosSal: PjeHistoricoSalarial[];

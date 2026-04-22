@@ -14,7 +14,7 @@ import {
   parseFactAsNumber,
   parseFactAsDate,
   arredondarMoeda,
-} from '../types';
+} from '../../types';
 
 interface Reflexos13Rules {
   divisor_meses: number; // 12 meses

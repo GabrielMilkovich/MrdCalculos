@@ -7,7 +7,7 @@ import * as path from 'path';
 import { analyzePJC } from '../pjc-analyzer';
 import { convertPjcToEngineInputs } from '../pjc-to-engine';
 import { PjeCalcEngineV3 } from '../engine-v3';
-import { PjeCalcEngineV4 } from '../engine-v4';
+import { PjeCalcEngineV4 } from '../_legacy/engine-v4';
 import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, SELIC_MENSAL, TR_ACUMULADO } from '../indices-fallback';
 import type { PjeIndiceRow, PjeINSSFaixaRow } from '../engine-types';
 

@@ -20,7 +20,7 @@ import {
   toDecimal,
   hashObject,
   getMonthsBetween,
-} from '../types/index';
+} from '../../types/index';
 import {
   ExecutionContext,
   Rubrica,

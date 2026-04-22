@@ -29,7 +29,7 @@ import {
   Warning,
   AuditLine,
   arredondarMoeda,
-} from './types';
+} from '../types';
 import { createHorasExtrasCalculator } from './calculators/horas-extras';
 import { createReflexos13Calculator } from './calculators/reflexos-13';
 import { createReflexosFeriasCalculator } from './calculators/reflexos-ferias';

@@ -38,7 +38,7 @@ import {
   runTestScenario,
   type TestScenario,
   type TestResult,
-} from "@/lib/calculation/engine/TestScenarios";
+} from "@/lib/calculation/_legacy/engine/TestScenarios";
 import { cn } from "@/lib/utils";
 
 const formatCurrency = (value: number) => {
