@@ -9,6 +9,14 @@ export * from './base/comum/utils';
 export { HelperDate, JANUARY, FEBRUARY, MARCH, APRIL, MAY, JUNE, JULY, AUGUST,
          SEPTEMBER, OCTOBER, NOVEMBER, DECEMBER } from './base/comum/helper-date';
 export { Periodo } from './base/comum/periodo';
+export {
+  PORTED_MODULES,
+  envVarForModule,
+  isPortedEnabled,
+  isAnyPortedEnabled,
+  snapshotPortedFlags,
+} from './base/comum/feature-flags';
+export type { PortedModule } from './base/comum/feature-flags';
 
 // ────────────── constantes ──────────────
 export * from './constantes/enums';
