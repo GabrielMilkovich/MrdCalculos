@@ -432,3 +432,125 @@ escopo single-session.
 
 **Impacto no calibrate:** nulo. Ativação virá na Fase 9 via
 `USE_PORTED_INSS` e `USE_PORTED_IRPF`.
+
+---
+
+## 2026-04-22 — Fase 6 — Sessão #1 (FGTS + Custas + Honorários)
+
+**Escopo:** port focado nos métodos de domínio FGTS (com prioridade para
+classe `OcorrenciaDeFgts` que estava 100% AUSENTE), no helper estático de
+custas (teto previdenciário × 4) e nas validações `Honorario`. Os
+motores `MaquinaDeCalculoDoFgts` (274 Java vs 216 TS — já parcial),
+`MaquinaDeCalculoDeCustas` e `MaquinaDeCalculoDeHonorarios` ficam
+intactos — porte completo dos motores requer sessão dedicada.
+
+**Classes portadas:**
+
+- **NOVA**: `dominio/calculo/fgts/OcorrenciaDeFgts.java` (441 linhas Java,
+  ANTES **100% AUSENTE** no TS) → `ocorrencia-de-fgts.ts` (305 linhas TS).
+  Cobre todos os getters/setters (~30), predicados (`isOriginal`,
+  `isValorCalculado`, `isValorInformado`, `isDepositadoInformado`),
+  cópia (`copiar`, `recuperarValorOriginal`,
+  `copiarValoresInformadosAnteriormente`), e **toda a cadeia de cálculo
+  derivado**:
+  - `getSomaDasBases(excluirAviso?)` — Java L309-318
+  - `getValorDevido` / `getValorDevidoSemAviso` — Java L293-299
+  - `getValorDevidoCorrigido` / `getValorDevidoSemAvisoCorrigido` — L320-326
+  - `getDiferenca(excluiAviso?)` com clamp 0 — L339-358
+  - `getDiferencaCorrigida` — L360-371
+  - `getJuros` / `getTotal` — L377-390
+  - `getValorDaContribuicaoSocialDe05` — L328-333 (LC 110/2001, janela
+    01/01/2002 → 01/12/2006, alíquota 0,5% sobre as bases)
+  - `getValorDaContribuicaoSocialDe05Corrigido`, `getJurosDaContribuicaoSocialDe05`,
+    `getTotalDaContribuicaoSocialDe05` — L335-401
+  - `equalsOcorrencia` (variante TS de `equals` Java EqualsBuilder) — L427-439
+
+- **NOVA**: `constantes/aliquota-do-fgts-operadores.ts` — strategy
+  `calcularAliquotaDoFgts(aliquota, valor)` que substitui o método
+  polimórfico `calcular()` de `AliquotaDoFgtsEnum.java:9-30`. Mesmo
+  padrão de `caracteristica-da-verba-operadores` (Fase 3).
+
+- `constantes/enums.ts` — alinhamento com Java:
+  - **`TipoDeBaseDoFgtsEnum`** corrigido: trocados valores `DEVIDO/CORRIGIDO`
+    (que não existiam no Java e não eram usados em lugar algum) por
+    `CALCULADA/INFORMADA` conforme Java.
+  - **NOVO** `TipoDeDepositadoDoFgtsEnum` (CALCULADA/INFORMADA) —
+    estava AUSENTE no TS.
+  - `IndiceDeCorrecaoDoFGTSEnum` recebe valores reais do Java
+    (`UTILIZAR_INDICE_TRABALHISTA=UIT`, `UTILIZAR_INDICE_JAM=UIJ`,
+    `UTILIZAR_INDICE_JAM_E_TRABALHISTA=UJT`) com `@deprecated` nos
+    valores antigos para compat com `parametros-de-atualizacao.ts`.
+
+- `dominio/calculo/custas/CustasJudiciais.java:262-272`
+  → `custas-judiciais.ts::calcularValorTetoCustasConhecimento` — antes
+  era **stub que retornava `null`**. Implementado com **estratégia
+  injetável** `tetoBeneficioFinder(competencia)`: o orquestrador
+  injeta o loader real de `TabelaPrevidenciariaSeguradoEmpregado`
+  quando aquela classe for portada (futura). Multiplica teto × 4 (CLT
+  art. 789 §1º + Resolução CSJT 219/2018).
+
+- `dominio/calculo/honorarios/Honorario.java:524-560`
+  → `honorario.ts::validar()` + `validarDocumentoFiscal()`. Antes a
+  classe tinha apenas `consistirDados`. Validações:
+  - `validar`: 5 regras (origemRegistro=ATUALIZACAO sem data → MSG0003;
+    dataEvento anterior à liquidação → MSG0127; futura → MSG0128;
+    apurarIRRF=true sem tipoIR → MSG0003; baseVerbasNãoCompõem sem
+    verbas selecionadas → MSG0167)
+  - `validarDocumentoFiscal`: apurarIRRF=true exige `numeroDocumentoFiscalCredor`
+    não-nulo/não-branco → MSG0003
+
+**Decisões operacionais (sem port):**
+
+- `Fgts.isSomenteJurosJAM`, `isDeveCobrarMulta`, `isMultaCalculada/Informada`
+  e `isComporOPrincipal` (Java L481-525, L848-858) — `Fgts.ts` atual NÃO
+  tem os campos necessários (`calculo`, `tipoDoValorDaMulta`, `comporPrincipal`,
+  `multaDoArtigo467`). Adicionar exigiria reestruturação significativa do
+  Fgts.ts existente que é usado pelo engine V3 atual. Postergado para
+  sessão dedicada de "Fgts.ts completo".
+- `MaquinaDeCalculoDoFgts.liquidarFgts` complexo, `TotalizadorDoFgts` (176L
+  Java vs 0 TS), `LegendaDaFormulaDoFgts` (75L vs 0), `TabelaDeJurosDeFgts`
+  (17L vs 0) — postergados.
+- `CustasJudiciais.encontrarValorConsolidadoDoReclamado` — depende de 4
+  totalizadores `getTotalCustasConhecimento*` que não existem no TS.
+  Portar agora exigiria implementar a cadeia inteira. Postergado.
+- `CustasJudiciaisDaAtualizacao` (2.185 linhas Java) — maior gap absoluto
+  da Fase 6. Sessão dedicada.
+- `HonorarioDaAtualizacao` (732 linhas) — postergado.
+- `MaquinaDeCalculoDeHonorarios` complexo — postergado.
+
+**Bug corrigido:**
+- Construtor `MensagemDeRecurso` quando recebe **dois argumentos string**
+  trata como `(atributo, chave)`, mas o Java usa `(chave, paramFormatado)`.
+  Em TS resolvido passando 4 args explícitos
+  `new MensagemDeRecurso(null, null, chave, param)` no caso MSG0127.
+  (Bug não impacta retroativamente: nenhum port anterior usava esse
+  padrão duplo-string.)
+
+**Testes adicionados:** **53 golden tests novos**
+- 38 em `ocorrencia-de-fgts.golden.test.ts`:
+  - 5 defaults (alíquota 8%, tipo CALCULADA, predicado isOriginal)
+  - 3 predicados (isValorCalculado/Informado, isDepositadoInformado, isOriginal)
+  - 4 getSomaDasBases (com/sem aviso, nulos, todos nulos)
+  - 2 getValorDevido (8% e 2%)
+  - 4 getDiferenca (positivo, negativo→0, depositado null, sem aviso)
+  - 2 getDiferencaCorrigida (com índice, diferença 0)
+  - 3 juros/total (cálculo, taxa null, total = soma)
+  - 5 Contribuição Social LC 110/2001 (fora janela, dentro, borda final, depois, corrigida)
+  - 1 total CS = corrigido + juros
+  - 5 cópia (replicar campos, recuperar, valores informados, calculados, null no-op)
+  - 4 igualdade (mesma instância, outro tipo, mesmo id, ids diferentes)
+- 4 em `custas-judiciais-teto.golden.test.ts` (stub null, finder×4, finder
+  null, normalização da data para dia-1)
+- 11 em `honorario-validar.golden.test.ts` (4 ATUALIZACAO + 2 IRRF + 1
+  base verbas + 4 documento fiscal)
+
+**Gate Fase 6:**
+- Vitest: **936 passed** | 6 skipped | 0 failed (69 suites,
+  **+53 testes vs Fase 5**).
+- `tsc --noEmit`: limpo.
+- `npm run calibrate`: 13/13 válidos, delta médio **-30,68%** (idêntico
+  baseline — port de domínio puro, sem wiring; zero regressão).
+- `npm run audit:port:check`: OK.
+
+**Impacto no calibrate:** nulo. Ativação virá na Fase 9 via
+`USE_PORTED_FGTS`, `USE_PORTED_CUSTAS`, `USE_PORTED_HONORARIOS`.
