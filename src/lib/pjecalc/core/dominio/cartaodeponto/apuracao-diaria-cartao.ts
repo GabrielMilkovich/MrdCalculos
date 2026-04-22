@@ -89,4 +89,55 @@ export class ApuracaoDiariaCartao {
 
   getSabadoDomingo(): boolean { return this.sabadoDomingo; }
   setSabadoDomingo(v: boolean): void { this.sabadoDomingo = v; }
+
+  /**
+   * `getDataOcorrencia` — alias de `getData()` para paridade com o Java, onde
+   * o campo se chama `dataOcorrencia`. Mantemos os dois getters; o TS já usa
+   * `data` por convenção local.
+   */
+  getDataOcorrencia(): Date | null {
+    return this.data;
+  }
+
+  /**
+   * `equals` — igualdade por `id` (paridade ApuracaoDiariaCartao.java:385-394).
+   *
+   * Regras Java preservadas:
+   *   - mesma instância → true
+   *   - outro null → false
+   *   - ambos `id == null` → false (seguindo `other.id != null` → o `!=`
+   *     retorna false, então o `return !(false)` = true ... ATENÇÃO:
+   *     a lógica Java `!(this.id == null ? other.id != null : !this.id.equals(other.id))`
+   *     quando ambos são null: `this.id == null` → ramo true, valor = `other.id != null`
+   *     = false, então `!false` = true. Duas instâncias com id null SÃO iguais).
+   *   - ambos não-nulos → comparação por `id`.
+   */
+  equalsApuracaoDiaria(obj: unknown): boolean {
+    if (this === obj) return true;
+    if (obj == null) return false;
+    if (!(obj instanceof ApuracaoDiariaCartao)) return false;
+    if (this.id == null) {
+      return obj.id == null;
+    }
+    return this.id === obj.id;
+  }
+
+  /**
+   * `compareTo` — ordena por `dataOcorrencia` ascendente (paridade
+   * ApuracaoDiariaCartao.java:397-399).
+   *
+   * Retorna -1, 0 ou 1 conforme Date.getTime(). Se ambas as datas forem null
+   * consideramos empate 0; se só uma for null, a nula vai ao fim (maior) —
+   * Java quebraria com NPE; TS preserva semântica estável sem throw.
+   */
+  compareTo(other: ApuracaoDiariaCartao): number {
+    const a = this.data?.getTime();
+    const b = other.data?.getTime();
+    if (a == null && b == null) return 0;
+    if (a == null) return 1;
+    if (b == null) return -1;
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  }
 }

@@ -240,3 +240,108 @@ ao orquestrador). Ativação condicional virá na Fase 9 via feature flags
 `claude/audit-pjecalc-mrdcalc-2A322` (Fases 0+1+2). As mudanças continuam
 isoladas em `src/lib/pjecalc/core/` — nenhum código fora do core foi
 tocado (nem pipeline v3, nem engine v3, nem `verba-modules/*`).
+
+---
+
+## 2026-04-22 — Fase 4 — Sessão #1 (cartaodeponto — helpers + comparação)
+
+**Escopo:** port focado nas helpers puras e métodos de comparação dos
+domínios de cartão de ponto que geram bang-for-buck sem obrigar refatoração
+estrutural do modelo de turnos. O grosso do trabalho restante
+(`MaquinaDeCalculoDeCartaoDePonto` 1.435 linhas, `ApuracaoCartaoDePonto`
+1.214 linhas, `getQuantidadeHorasNoturnas`) permanece para sessões futuras
+e exige refatoração de `Turno` do modelo `Decimal` para `Date` (explicado
+abaixo).
+
+**Classes portadas:**
+
+- `dominio/cartaodeponto/ApuracaoCartaoDePonto.java` — **2 métodos novos**
+  em `apuracao-cartao-de-ponto.ts`:
+  - `obterInicioAtividadeHorarioNoturno()` — devolve "21:00" (agrícola),
+    "20:00" (pecuária) ou "22:00" (urbana). Porte 1-a-1 das linhas
+    809-817. Base legal: CLT art. 73 §2º (urbana) e Lei 5.889/73 art. 7º
+    (agrícola/pecuária).
+  - `obterFimAtividadeHorarioNoturno()` — devolve "05:00" (urbana/agrícola)
+    ou "04:00" (pecuária). Porte 1-a-1 das linhas 819-827. Paridade Java
+    preserva o fato de urbana e agrícola compartilharem `05:00` apesar de
+    ramos distintos no switch Java.
+
+- `dominio/cartaodeponto/CartaoDePontoUtils.java` — **5 helpers puras**
+  em `cartao-de-ponto-utils.ts`:
+  - `isPeriodosSemDescanso(Jornada)` — linhas 203-220. Detecta colagem
+    entre turnos (saída do turno N ≡ entrada do turno N+1, com `trim()`).
+  - `hasEntradaNoPeriodoNoturnoDaMadrugada(Jornada)` — linhas 453-482.
+    Verifica se alguma das 6 entradas cai antes do fim do horário noturno.
+    Relevante para Súmula 60 TST.
+  - `getInicioAtividadeNoturna(ApuracaoCartaoDePontoLike)` — linhas 130-144.
+    Parseia "HH:mm" de início do noturno em `Date` (epoch-relative).
+    Fallback para 22:00 em dia-1 em caso de parse error.
+  - `getFimAtividadeNoturna(ApuracaoCartaoDePontoLike)` — linhas 112-128.
+    Parseia fim do noturno e adiciona 24h (porque "05:00" é amanhã).
+    Fallback para 05:00 em dia-2.
+  - `isJornadaDeMaisDeDoisDias(Jornada)` — linhas 628-637. Compara a última
+    saída (busca reversa dos 6 turnos) contra 47:59 (172.740.000 ms).
+
+- `dominio/cartaodeponto/ApuracaoDiariaCartao.java` — **3 métodos novos**:
+  - `equalsApuracaoDiaria(unknown)` — linhas 385-394. Igualdade por `id`.
+    Preserva semântica Java: dois transientes (ambos `id==null`) são
+    tratados como iguais.
+  - `compareTo(ApuracaoDiariaCartao)` — linhas 397-399. Ordena ascendente
+    por `dataOcorrencia`. Caso `null` é ancorado no fim (Java quebra com
+    NPE; TS preserva estabilidade sem throw).
+  - `getDataOcorrencia()` — alias de `getData()` para compatibilidade com
+    o nome do campo Java (mantém ambos para o caller local).
+
+- `dominio/cartaodeponto/JornadaDiaria.Turno` — 1 método:
+  - `getQuantidadeHorasTrabalhadas()` — linhas 211-213. Alias algébrico de
+    `getDuracaoMillis()` (soma diurnas+noturnas = duração total quando
+    não há overlap, o que é invariante de como turnos são construídos).
+
+**Classes NÃO portadas nesta sessão (decisão operacional):**
+
+- `Turno.getQuantidadeHorasNoturnas()` e `calcularQuantidadeHorasDiurnas()`
+  — portar exige **refatorar `Turno` de `Decimal` (millis) para `Date`** e
+  adicionar `getFatorHoraFicta()` + `isProrrogarHorarioNoturno()` ao
+  `JornadaDiaria`. Porte tractável mas requer sessão dedicada com cuidado
+  de regressão nos callers atuais. Ficou documentado inline.
+- `CartaoDePontoUtils.isPeriodoCorrenteDentroDePeriodoJaLancado` /
+  `...DentroDePeriodoDeDescanso` — funções de validação (~50 linhas cada)
+  com alta lógica booleana embaralhada. Port adiado por complexidade /
+  baixo retorno nos 13 casos de calibrate (validações UI, não cálculo).
+- `validarListaDeJornadas`, `validarJornadasRelativas`,
+  `montarHorariosParaValidacoes`, `checarPrimeiroTurnoParaMontagem` e
+  variantes — pipeline de validação cruzada entre jornadas consecutivas.
+  Adiado; mesmo critério anterior.
+- `MaquinaDeCalculoDeCartaoDePonto.java` (1.435 linhas, hoje ~5%) —
+  **maior gap do projeto.** Exige sessão dedicada com foco em jornada
+  CLT (intrajornada art. 71, DSR, feriados, Súmula 60). Fica para a
+  próxima sessão da Fase 4 ou para a Fase 8 junto com `Calculo.java`.
+- `ApuracaoCartaoDePonto.java` métodos de cálculo (1.214 linhas, hoje
+  ~21%) — complementares ao MaquinaDeCalculo; mesma faixa de adiamento.
+- `HistoricoSalarial.java` — reconnaissance confirmou que os métodos
+  faltantes em TS são **persistência/repository** (salvar, obter,
+  obterVerbasVinculadas) — sem ação nesta sessão; ficam encobertos
+  pelo Supabase adapter no MRD.
+- `CartaoDePonto.java` — idem: métodos faltantes são estáticos de
+  repositório.
+
+**Divergências descobertas:** nenhuma nova.
+
+**Testes adicionados:** **51 golden tests novos**
+- 31 em `cartao-de-ponto-utils.golden.test.ts` (helpers + constantes +
+  obterInicio/FimAtividadeHorarioNoturno da Apuracao)
+- 16 em `apuracao-diaria-cartao.golden.test.ts` (equals 7 + compareTo 7
+  + getDataOcorrencia 2)
+- 4 em `jornada-diaria-turno.golden.test.ts` (getQuantidadeHorasTrabalhadas)
+
+**Gate Fase 4:**
+- Vitest: **855 passed** | 6 skipped | 0 failed (62 suites, **+51 testes
+  vs Fase 3**).
+- `tsc --noEmit`: limpo.
+- `npm run calibrate`: 13/13 válidos, delta médio **-30,68%** (idêntico
+  baseline Fase 0/1/2/3 — port de helpers puros, sem wiring; zero
+  regressão).
+- `npm run audit:port:check`: OK.
+
+**Impacto no calibrate:** nulo (helpers não conectadas ao orquestrador).
+Ativação virá na Fase 9 via feature flag `USE_PORTED_CARTAO`.
