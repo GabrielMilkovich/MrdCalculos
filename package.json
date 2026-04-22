@@ -17,7 +17,9 @@
     "test:e2e:ui": "playwright test --ui",
     "update-indices": "npx tsx scripts/update-indices.ts",
     "calibrate": "npx tsx scripts/calibration-pipeline.ts",
-    "calibrate:dir": "npx tsx scripts/calibration-pipeline.ts --dir"
+    "calibrate:dir": "npx tsx scripts/calibration-pipeline.ts --dir",
+    "calibrate:v3": "npx tsx scripts/calibration-pipeline-v3.ts",
+    "calibrate:v3:dir": "npx tsx scripts/calibration-pipeline-v3.ts --dir"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
