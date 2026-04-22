@@ -1640,7 +1640,8 @@ export default function Tabelas() {
   const config = tipo ? TABELA_CONFIG[tipo] : null;
   const ViewComponent = tipo ? VIEW_MAP[tipo] : null;
 
-  if (!config || !ViewComponent) {
+  // Dashboard (sem tipo na URL)
+  if (!tipo) {
     return (
       <MainLayoutPremium title="Tabelas" breadcrumbs={[{ label: "Tabelas" }]}>
         <div className="space-y-6">
@@ -1654,8 +1655,35 @@ export default function Tabelas() {
     );
   }
 
+  // Fallback VISÍVEL (não cai silenciosamente no dashboard):
+  // se tipo está na URL mas não tem config/view, mostra erro explícito
+  if (!config || !ViewComponent) {
+    return (
+      <MainLayoutPremium
+        title="Tabela desconhecida"
+        breadcrumbs={[{ label: "Tabelas" }, { label: "Erro" }]}
+      >
+        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-6">
+          <h1 className="text-xl font-bold text-destructive">Tabela não encontrada</h1>
+          <p className="text-sm text-muted-foreground mt-2">
+            A rota <code className="px-1 py-0.5 bg-muted rounded">/tabelas/{tipo}</code> não tem
+            configuração correspondente em <code>TABELA_CONFIG</code> ou <code>VIEW_MAP</code>.
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">
+            {!config && "• TABELA_CONFIG ausente para este tipo"}
+            {!ViewComponent && <>{!config && <br />}• VIEW_MAP ausente para este tipo</>}
+          </p>
+          <div className="mt-4">
+            <Link to="/tabelas" className="text-sm text-primary underline">← Voltar ao dashboard</Link>
+          </div>
+        </div>
+      </MainLayoutPremium>
+    );
+  }
+
   return (
     <MainLayoutPremium
+      key={tipo}
       title={config.title}
       breadcrumbs={[{ label: "Tabelas" }, { label: config.title }]}
     >
