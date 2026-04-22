@@ -727,3 +727,105 @@ cálculo (esses ficam para sessão de integração).
 
 **Impacto no calibrate:** nulo. Helpers portados são utilidades que só
 serão acionadas a partir da Fase 9 (integração com liquidar()).
+
+---
+
+## 2026-04-22 — Fase 9 — Sessão #1 (integração piloto — feature flag + primeiro adapter)
+
+**Escopo:** Fase 9 é a **integração final**: wiring dos ~600 métodos portados
+nas fases 1–8 ao engine existente via feature flags, e reescrita do
+`liquidar()` orquestrador. A sessão de hoje entrega o **piloto**: prova
+o padrão de adapter + feature-flag em 1 ponto real do engine, deixando
+a base pronta para o resto do wiring ser mecânico.
+
+**Arquitetura de integração:**
+
+- **Arquivo novo:** `src/lib/pjecalc/core-adapters.ts` — ponto único de
+  integração **port ↔ engine legado**. Cada função é uma fachada que:
+  1. Consulta `isPortedEnabled(modulo)` (flag `VITE_USE_PORTED_<MOD>`).
+  2. Se ativa: delega ao core portado (classes de `core/dominio/**`).
+  3. Se off (default): reproduz o comportamento legado bit-a-bit.
+  4. **Fail-safe**: se o core lançar exception, cai para o legado + log
+     `console.warn`. Nunca quebra o engine em produção.
+- Tipos simples trafegados na fachada (`string`, `Date`, `number`) —
+  caller nunca precisa importar `Calculo`, `Decimal`, etc.
+- Rollback instantâneo: `.env` flag off + redeploy.
+
+**Ponto-piloto: prescrição FGTS (STF ARE 709.212)**
+
+O `engine.ts:1823-1829` calculava prescrição FGTS como `ajuiz − 5 anos`
+(quinquenal universal — incorreto para casos pré-13/11/2014 onde a
+trintenária STF ainda se aplica). Esta fase substitui por adapter
+`calcularDataPrescricaoFgts(ajuiz, adm?)`:
+
+- **Flag `USE_PORTED_CALCULO` off (default):** comportamento legado
+  (quinquenal universal) → **zero regressão**.
+- **Flag on:** delega a `Calculo.getDataPrescricaoFgts()` (Fase 8),
+  aplicando as 3 regras STF:
+  - Ajuiz < 13/11/2014 ou adm ≤ 13/11/1989 → trintenária (30 anos).
+  - Transição 13/11/2014–13/11/2019 + adm > 1989 → quinquenal.
+  - Ajuiz ≥ 13/11/2019 → quinquenal universal.
+
+Esta é a **primeira correção real** que o port traz para o engine — um
+caso em que o legado retorna 2008 e o portado 1983 (26 anos de diferença
+no horizonte de depósitos FGTS).
+
+**Arquivos modificados:**
+- `src/lib/pjecalc/core-adapters.ts` — **NOVO** (95 linhas).
+- `src/lib/pjecalc/engine.ts` — 1 import + 5-linha bloco refactorado.
+- `src/lib/pjecalc/__tests__/core-adapters.test.ts` — **NOVO** (12 tests).
+
+**Padrão de parity test estabelecido:**
+
+Cada adapter tem **4 grupos** de tests:
+  1. **Flag off** — retorno bate com o legado.
+  2. **Flag on** — novas regras aplicam corretamente.
+  3. **Paridade documentada** — captura a diferença entre as versões
+     (ex.: 2008 vs 1983) como teste explícito.
+  4. **Fail-safe** — inputs inválidos não quebram o processo.
+
+Este padrão deve ser seguido em todos os adapters futuros.
+
+**Decisões operacionais:**
+- Só **1 adapter piloto** nesta sessão. O objetivo é validar o padrão —
+  o wiring em massa (rateio, analisarMultas, isLiquidado, períodos,
+  verba binding, etc.) sai em sessões dedicadas, cada uma com seu
+  próprio golden test de paridade.
+- Calibrate **continuará em -30,68%** enquanto as flags estiverem off
+  em CI/prod. Só vai mover quando alguém ligar as flags manualmente
+  ou quando a Fase 9 completa substituir os defaults.
+- Refatoração de `engine-v3.ts`, `orchestrator.ts`, `pjc-to-engine.ts`
+  (reescrita como fachadas finas) — **fora de escopo desta sessão**.
+  Fica para sessões seguintes da Fase 9.
+
+**Testes adicionados:** **12 integration tests**
+- 3 "flag off" (legado, ignora admissão, ajuiz null/undefined/vazio)
+- 5 "flag on" (4 regras STF + borda 13/11/2014 + adm null)
+- 2 "paridade documentada" (mesmo input → resultados diferentes)
+- 2 "fail-safe" (data inválida → lança limpo)
+
+**Gate Fase 9 — piloto:**
+- Vitest: **1009 passed** | 6 skipped | 0 failed (73 suites,
+  **+12 testes vs Fase 8**).
+- `tsc --noEmit`: limpo.
+- `npm run calibrate`: 13/13 válidos, delta médio **-30,68%** (flag off
+  em default → **ZERO regressão confirmada com wiring real**).
+- `npm run audit:port:check`: OK.
+
+**Impacto no calibrate:**
+- **Com flag off (CI/prod padrão):** zero — idêntico ao baseline das
+  fases 0–8. Isso prova que o adapter é seguro.
+- **Com flag on (`VITE_USE_PORTED_CALCULO=true` local):** melhoria em
+  casos pré-ADC 58/59 com ajuiz < 13/11/2014 ou adm < 13/11/1989, que
+  antes não computavam corretamente. Quantificação real exige rodar
+  calibrate com flag on em cada caso — próxima sessão.
+
+**Progresso rumo à meta (Fase 9 completa):**
+- [x] Padrão de adapter estabelecido (`core-adapters.ts`).
+- [x] Feature flag do Fase 0 efetivamente usada em código de produção.
+- [x] Primeiro ponto real do engine legado delega ao core portado.
+- [x] Test pattern de paridade (on/off/documentada/fail-safe).
+- [ ] Wiring dos demais ~600 métodos (incremental).
+- [ ] `engine-v3.ts`/`orchestrator.ts` como fachadas finas.
+- [ ] `pjc-to-engine.ts` mapeia 100% das verbas.
+- [ ] Calibrate < ±0,01% com flags todas ativadas.

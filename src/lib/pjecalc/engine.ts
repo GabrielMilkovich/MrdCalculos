@@ -8,6 +8,7 @@ import Decimal from 'decimal.js';
 import { getReformaRules, REFORMA_DATE } from './reforma-trabalhista';
 import { getFPASByCodigo } from './terceiros-contributions';
 import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO } from './indices-fallback';
+import { calcularDataPrescricaoFgts } from './core-adapters';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
 
@@ -1821,11 +1822,16 @@ export class PjeCalcEngine {
 
     const depositos: PjeFGTSResult['depositos'] = [];
     
-    // Prescrição FGTS diferenciada
+    // Prescrição FGTS diferenciada — delega a `core-adapters` quando a flag
+    // `VITE_USE_PORTED_CALCULO=true` está ativa, trazendo as 3 regras do STF
+    // ARE 709.212 (Fase 9 port). Quando off, mantém quinquenal universal
+    // (comportamento legado, zero regressão por default).
     let dataPrescricaoFGTS: Date | null = null;
     if (this.params.prescricao_fgts && this.params.data_ajuizamento) {
-      const ajuiz = new Date(this.params.data_ajuizamento);
-      dataPrescricaoFGTS = new Date(ajuiz.getFullYear() - 5, ajuiz.getMonth(), ajuiz.getDate());
+      dataPrescricaoFGTS = calcularDataPrescricaoFgts(
+        this.params.data_ajuizamento,
+        this.params.data_admissao,
+      );
     }
     
     const basesPorComp: Record<string, number> = {};
