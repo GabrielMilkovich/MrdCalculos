@@ -34,6 +34,22 @@ export type { PortedModule } from './base/comum/feature-flags';
 
 // ────────────── constantes ──────────────
 export * from './constantes/enums';
+export { TipoDeVerbaEnum, TipoDeVerbaEnumNomes } from './constantes/tipo-de-verba-enum';
+export { TipoFeriadoEnum, TipoFeriadoEnumNomes } from './constantes/tipo-feriado-enum';
+export {
+  AbrangenciaDoFeriadoEnum,
+  AbrangenciaDoFeriadoEnumNomes,
+} from './constantes/abrangencia-do-feriado-enum';
+export {
+  TipoSalarioPagoEnum,
+  TipoSalarioPagoEnumNomes,
+} from './constantes/tipo-salario-pago-enum';
+export { TipoValorCalculadoEnum } from './constantes/tipo-valor-calculado-enum';
+export {
+  DestinoDoFgtsEnum,
+  DestinoDoFgtsEnumNomes,
+  DestinoDoFgtsEnumMensagens,
+} from './constantes/destino-do-fgts-enum';
 
 // ────────────── comum ──────────────
 export * from './comum/rotinasdecalculo/calculador-de-indices';

@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-04-22T02:50:10.489Z",
+  "generatedAt": "2026-04-22T03:08:54.097Z",
   "repoRoot": "MrdCalculos",
   "totals": {
     "javaFiles": 645,
-    "tsFilesMatched": 262,
+    "tsFilesMatched": 268,
     "javaLoc": 98241,
-    "tsLoc": 17293,
-    "coveragePct": 17.602630266385724
+    "tsLoc": 17349,
+    "coveragePct": 17.65963294347574
   },
   "categories": [
     {
@@ -29,9 +29,9 @@
       "category": "3-DOMINIO-SUPORTE",
       "fileCount": 238,
       "javaLoc": 12106,
-      "tsLoc": 1199,
-      "coveragePct": 9.904179745580704,
-      "missingCount": 204
+      "tsLoc": 1255,
+      "coveragePct": 10.366760284156616,
+      "missingCount": 198
     },
     {
       "category": "5-SERVICOS",
@@ -154,9 +154,9 @@
       "category": "3-DOMINIO-SUPORTE",
       "fileCount": 103,
       "javaLoc": 3014,
-      "tsLoc": 66,
-      "coveragePct": 2.18978102189781,
-      "missingCount": 102
+      "tsLoc": 122,
+      "coveragePct": 4.04777704047777,
+      "missingCount": 96
     },
     {
       "moduleKey": "calculo/custas",
