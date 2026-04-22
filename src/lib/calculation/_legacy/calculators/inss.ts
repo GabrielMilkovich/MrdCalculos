@@ -16,7 +16,7 @@ import {
   parseFactAsDate,
   arredondarMoeda,
   getMonthsBetween,
-} from '../types';
+} from '../../types';
 
 // Inputs específicos para INSS
 interface INSSInputs extends CalculatorInputs {

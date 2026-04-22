@@ -12,7 +12,7 @@ import {
   ConsistencyAlert,
   formatCurrency,
   ContractData,
-} from '../types/index';
+} from '../../types/index';
 import { AnaliseResult, SituacaoDetectada } from './SituationAnalyzer';
 import { FUNDAMENTOS_LEGAIS } from './RubricaEngine';
 

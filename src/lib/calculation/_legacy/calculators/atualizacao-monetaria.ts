@@ -13,7 +13,7 @@ import {
   VerbaOutput,
   CompetenciaOutput,
   arredondarMoeda,
-} from '../types';
+} from '../../types';
 import { getIndexValue } from '../engine';
 
 interface AtualizacaoRules {

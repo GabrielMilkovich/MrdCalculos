@@ -6,7 +6,7 @@
 // =====================================================
 
 import Decimal from 'decimal.js';
-import { ContractData, MonthlyData, ValidatedInput } from '../types/index';
+import { ContractData, MonthlyData, ValidatedInput } from '../../types/index';
 
 // =====================================================
 // TIPOS

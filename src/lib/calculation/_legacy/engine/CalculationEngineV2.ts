@@ -20,7 +20,7 @@ import {
   toDecimal,
   hashObject,
   getMonthsBetween,
-} from '../types/index';
+} from '../../types/index';
 import {
   ExecutionContext,
   Rubrica,
@@ -69,6 +69,17 @@ export class CalculationEngineV2 {
   private analise!: AnaliseResult;
   
   constructor(private input: EngineInput) {
+    // [DEPRECATION WARNING — adicionado em consolidação V3 (2026-04-22)]
+    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+      const stack = new Error().stack?.split('\n').slice(2, 5).join('\n') ?? '';
+      console.warn(
+        '[DEPRECATED] CalculationEngineV2 (motor legado V2, src/lib/calculation/_legacy/engine/CalculationEngineV2.ts) foi instanciado. ' +
+        'Use PjeCalcEngineV3 em @/lib/pjecalc/engine-v3. ' +
+        'Este motor será removido após 2026-05-20.\n' +
+        'Stack:\n' + stack,
+      );
+    }
+
     // Construir contexto
     this.ctx = {
       contrato: input.contrato,

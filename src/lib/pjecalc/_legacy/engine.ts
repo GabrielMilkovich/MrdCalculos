@@ -5,15 +5,15 @@
 // =====================================================
 
 import Decimal from 'decimal.js';
-import { getReformaRules, REFORMA_DATE } from './reforma-trabalhista';
-import { getFPASByCodigo } from './terceiros-contributions';
-import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO } from './indices-fallback';
+import { getReformaRules, REFORMA_DATE } from '../reforma-trabalhista';
+import { getFPASByCodigo } from '../terceiros-contributions';
+import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO } from '../indices-fallback';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
 
 // Re-export all types and constants for backward compatibility
-export * from './engine-types';
-export { CNAE_ALIQUOTAS_COMUNS } from './engine-constants';
+export * from '../engine-types';
+export { CNAE_ALIQUOTAS_COMUNS } from '../engine-constants';
 
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias,
@@ -29,12 +29,12 @@ import type {
   PjePrevidenciaPrivadaResult, PjeSalarioFamiliaResult,
   PjeCombinacaoIndice, PjeCombinacaoJuros,
   PjeSeguroDesempregoDB, PjeSalarioFamiliaDB, PjeSalarioMinimoRow,
-} from './engine-types';
+} from '../engine-types';
 
 import {
   DEFAULT_FAIXAS_INSS, DEFAULT_FAIXAS_IR, DEFAULT_DEDUCAO_DEPENDENTE,
   SEGURO_DESEMP_2025, SALARIO_FAMILIA_2025,
-} from './engine-constants';
+} from '../engine-constants';
 
 // =====================================================
 // MOTOR DE CÁLCULO
@@ -112,6 +112,18 @@ export class PjeCalcEngine {
     excecoesSabado: PjeExcecaoSabado[] = [],
     salarioMinimoDB: PjeSalarioMinimoRow[] = [],
   ) {
+    // [DEPRECATION WARNING — adicionado em consolidação V3 (2026-04-22)]
+    // Silenciado em testes para não poluir output dos parity tests legados.
+    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+      const stack = new Error().stack?.split('\n').slice(2, 5).join('\n') ?? '';
+      console.warn(
+        '[DEPRECATED] PjeCalcEngine (motor legado V1, src/lib/pjecalc/_legacy/engine.ts) foi instanciado. ' +
+        'Use PjeCalcEngineV3 em @/lib/pjecalc/engine-v3. ' +
+        'Este motor será removido após 2026-05-20.\n' +
+        'Stack:\n' + stack,
+      );
+    }
+
     this.params = params;
     this.historicos = historicos;
     this.faltas = faltas;
@@ -4503,7 +4515,7 @@ export class PjeCalcEngine {
 // MULTI-VÍNCULO: Execute engine per contract and merge
 // =====================================================
 
-import type { PjeMultiVinculo } from './engine-types';
+import type { PjeMultiVinculo } from '../engine-types';
 
 export interface MultiVinculoResult {
   vinculos: { vinculo_id: string; label: string; resultado: PjeLiquidacaoResult }[];

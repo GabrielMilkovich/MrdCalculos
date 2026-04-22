@@ -48,8 +48,8 @@ import {
   Info,
   Ban,
 } from "lucide-react";
-import type { RelatorioCompleto, SecaoRelatorio, DetalheRubrica } from "@/lib/calculation/engine/ReportGenerator";
-import type { AnaliseResult, SituacaoDetectada } from "@/lib/calculation/engine/SituationAnalyzer";
+import type { RelatorioCompleto, SecaoRelatorio, DetalheRubrica } from "@/lib/calculation/_legacy/engine/ReportGenerator";
+import type { AnaliseResult, SituacaoDetectada } from "@/lib/calculation/_legacy/engine/SituationAnalyzer";
 
 // =====================================================
 // PROPS

@@ -4,6 +4,20 @@ Histórico das entregas da branch `claude/analyze-pje-calc-migration-ORJxJ`, agr
 
 ---
 
+## 🧹 [2026-04-22] — Consolidação V3 como motor único
+
+**Objetivo:** isolar motores legados (V1, V2, V4) e consagrar `PjeCalcEngineV3` como motor canônico em produção. Sem mudança de comportamento de cálculo.
+
+- **Motores legados em quarentena** — `PjeCalcEngine` (V1), `PjeCalcEngineV4`, `CalculationEngine` (V1), `CalculationEngineV2` movidos para `src/lib/pjecalc/_legacy/` e `src/lib/calculation/_legacy/` com README de política e remoção planejada para 2026-05-20.
+- **Warnings de runtime** — cada um dos 4 construtores legados emite `console.warn` com stacktrace quando instanciado fora de `NODE_ENV=test`, facilitando detecção de uso residual em produção.
+- **Barrel público preservado** — `@/lib/calculation` continua exportando os mesmos 7 símbolos (`CalculationEngine`, `registerCalculator`, etc.), apenas re-exportados de `_legacy/`.
+- **Zero alteração de cálculo** — `npm run calibrate` produz JSON byte-idêntico antes/depois (modulo timestamp). Vitest: 658 = 658 testes.
+- **Arquivos protegidos intocados** — `engine-v3.ts`, `core/`, `orchestrator.ts`, `pjc-to-engine.ts`, `verba-modules/`, `pdf-report-*.ts` com `git diff = 0`.
+- **Documento dedicado** — ver `docs/MOTOR-UNICO-V3.md` com decisão arquitetural, política de uso, gates da PR e três notas importantes (calibrate ainda mede V1, ajustes mecânicos de path foram neutros, estado de paridade é V1-vs-PJC).
+- Próxima PR: migrar `scripts/calibration-pipeline.ts` para medir V3 (não V1).
+
+---
+
 ## 🚀 [2026-04-17] — Onda 3: Features Avançadas
 
 **Objetivo:** recursos cross-cutting para produtividade e auditoria.

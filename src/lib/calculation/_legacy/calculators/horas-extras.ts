@@ -17,7 +17,7 @@ import {
   getMonthsBetween,
   formatCompetencia,
   arredondarMoeda,
-} from '../types';
+} from '../../types';
 
 interface HorasExtrasRules {
   divisor: number;

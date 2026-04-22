@@ -13,7 +13,7 @@ import {
   VerbaOutput,
   parseFactAsDate,
   arredondarMoeda,
-} from '../types';
+} from '../../types';
 
 interface ReflexosFeriasRules {
   adicional_constitucional: number; // 1/3

@@ -28,7 +28,7 @@ import {
   parseFactAsDate,
   getMonthsBetween,
   arredondarMoeda,
-} from '../types';
+} from '../../types';
 
 interface IntrajornadaRules {
   divisor: number;
