@@ -17,7 +17,10 @@
     "test:e2e:ui": "playwright test --ui",
     "update-indices": "npx tsx scripts/update-indices.ts",
     "calibrate": "npx tsx scripts/calibration-pipeline.ts",
-    "calibrate:dir": "npx tsx scripts/calibration-pipeline.ts --dir"
+    "calibrate:dir": "npx tsx scripts/calibration-pipeline.ts --dir",
+    "audit:port": "npx tsx scripts/audit-java-vs-ts.ts",
+    "audit:port:check": "npx tsx scripts/audit-java-vs-ts.ts --check",
+    "audit:port:baseline": "npx tsx scripts/audit-java-vs-ts.ts --out docs/baselines/audit-port-baseline.json"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

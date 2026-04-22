@@ -1,0 +1,1253 @@
+{
+  "generatedAt": "2026-04-22T02:50:10.489Z",
+  "repoRoot": "MrdCalculos",
+  "totals": {
+    "javaFiles": 645,
+    "tsFilesMatched": 262,
+    "javaLoc": 98241,
+    "tsLoc": 17293,
+    "coveragePct": 17.602630266385724
+  },
+  "categories": [
+    {
+      "category": "1-CORE-CALCULO",
+      "fileCount": 259,
+      "javaLoc": 60809,
+      "tsLoc": 14905,
+      "coveragePct": 24.511174332746798,
+      "missingCount": 77
+    },
+    {
+      "category": "4-RELATORIOS",
+      "fileCount": 87,
+      "javaLoc": 17723,
+      "tsLoc": 540,
+      "coveragePct": 3.0468882243412514,
+      "missingCount": 63
+    },
+    {
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 238,
+      "javaLoc": 12106,
+      "tsLoc": 1199,
+      "coveragePct": 9.904179745580704,
+      "missingCount": 204
+    },
+    {
+      "category": "5-SERVICOS",
+      "fileCount": 21,
+      "javaLoc": 3767,
+      "tsLoc": 22,
+      "coveragePct": 0.5840191133528007,
+      "missingCount": 20
+    },
+    {
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 26,
+      "javaLoc": 2282,
+      "tsLoc": 627,
+      "coveragePct": 27.47589833479404,
+      "missingCount": 5
+    },
+    {
+      "category": "6-META-DADOS",
+      "fileCount": 14,
+      "javaLoc": 1554,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 14
+    }
+  ],
+  "modules": [
+    {
+      "moduleKey": "relatorio",
+      "category": "4-RELATORIOS",
+      "fileCount": 87,
+      "javaLoc": 17723,
+      "tsLoc": 540,
+      "coveragePct": 3.0468882243412514,
+      "missingCount": 63
+    },
+    {
+      "moduleKey": "pagamento",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 21,
+      "javaLoc": 14207,
+      "tsLoc": 1140,
+      "coveragePct": 8.024213415921729,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "cartaodeponto",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 11,
+      "javaLoc": 4924,
+      "tsLoc": 592,
+      "coveragePct": 12.022745735174654,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "calculo/inss/sobresalarios",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 18,
+      "javaLoc": 4260,
+      "tsLoc": 1683,
+      "coveragePct": 39.50704225352113,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "verbacalculo",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 18,
+      "javaLoc": 4258,
+      "tsLoc": 1747,
+      "coveragePct": 41.02865194927196,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "calculo",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 11,
+      "javaLoc": 3870,
+      "tsLoc": 775,
+      "coveragePct": 20.025839793281655,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "servicos",
+      "category": "5-SERVICOS",
+      "fileCount": 21,
+      "javaLoc": 3767,
+      "tsLoc": 22,
+      "coveragePct": 0.5840191133528007,
+      "missingCount": 20
+    },
+    {
+      "moduleKey": "comum",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 31,
+      "javaLoc": 3427,
+      "tsLoc": 458,
+      "coveragePct": 13.364458710242195,
+      "missingCount": 25
+    },
+    {
+      "moduleKey": "calculo/irpf",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 9,
+      "javaLoc": 3335,
+      "tsLoc": 974,
+      "coveragePct": 29.205397301349326,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "calculoexterno",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 15,
+      "javaLoc": 3066,
+      "tsLoc": 1161,
+      "coveragePct": 37.86692759295499,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "constantes",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 103,
+      "javaLoc": 3014,
+      "tsLoc": 66,
+      "coveragePct": 2.18978102189781,
+      "missingCount": 102
+    },
+    {
+      "moduleKey": "calculo/custas",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 7,
+      "javaLoc": 2240,
+      "tsLoc": 786,
+      "coveragePct": 35.089285714285715,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "calculo/atualizacao",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 10,
+      "javaLoc": 2087,
+      "tsLoc": 670,
+      "coveragePct": 32.10349784379492,
+      "missingCount": 3
+    },
+    {
+      "moduleKey": "termo",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 17,
+      "javaLoc": 1807,
+      "tsLoc": 623,
+      "coveragePct": 34.4770337576093,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "calculo/fgts",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 9,
+      "javaLoc": 1781,
+      "tsLoc": 249,
+      "coveragePct": 13.980909601347557,
+      "missingCount": 6
+    },
+    {
+      "moduleKey": "calculo/salariofamilia",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 8,
+      "javaLoc": 1206,
+      "tsLoc": 30,
+      "coveragePct": 2.487562189054726,
+      "missingCount": 7
+    },
+    {
+      "moduleKey": "calculo/inss",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 4,
+      "javaLoc": 1101,
+      "tsLoc": 799,
+      "coveragePct": 72.57039055404178,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "calculo/segurodesemprego",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 5,
+      "javaLoc": 1035,
+      "tsLoc": 26,
+      "coveragePct": 2.5120772946859904,
+      "missingCount": 4
+    },
+    {
+      "moduleKey": "calculo/honorarios",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 5,
+      "javaLoc": 994,
+      "tsLoc": 484,
+      "coveragePct": 48.69215291750503,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "termo/comportamento",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 5,
+      "javaLoc": 877,
+      "tsLoc": 825,
+      "coveragePct": 94.07069555302166,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "ocorrenciaverba",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 4,
+      "javaLoc": 791,
+      "tsLoc": 241,
+      "coveragePct": 30.467762326169407,
+      "missingCount": 3
+    },
+    {
+      "moduleKey": "calculo/previdenciaprivada",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 7,
+      "javaLoc": 747,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 7
+    },
+    {
+      "moduleKey": "verba",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 661,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "calculo/multa",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 3,
+      "javaLoc": 649,
+      "tsLoc": 354,
+      "coveragePct": 54.54545454545455,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "proc",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 5,
+      "javaLoc": 615,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 5
+    },
+    {
+      "moduleKey": "historicosalarial",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 3,
+      "javaLoc": 591,
+      "tsLoc": 272,
+      "coveragePct": 46.02368866328257,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "validators",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 19,
+      "javaLoc": 568,
+      "tsLoc": 405,
+      "coveragePct": 71.30281690140845,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "processo",
+      "category": "6-META-DADOS",
+      "fileCount": 3,
+      "javaLoc": 551,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 3
+    },
+    {
+      "moduleKey": "calculo/pensaoalimenticia",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 3,
+      "javaLoc": 510,
+      "tsLoc": 35,
+      "coveragePct": 6.862745098039215,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "rotinasdecalculo",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 7,
+      "javaLoc": 464,
+      "tsLoc": 166,
+      "coveragePct": 35.775862068965516,
+      "missingCount": 4
+    },
+    {
+      "moduleKey": "inss/atividadeeconomica",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 4,
+      "javaLoc": 430,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 4
+    },
+    {
+      "moduleKey": "meta",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 7,
+      "javaLoc": 428,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 7
+    },
+    {
+      "moduleKey": "usuario",
+      "category": "6-META-DADOS",
+      "fileCount": 3,
+      "javaLoc": 418,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 3
+    },
+    {
+      "moduleKey": "salariocategoria",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 3,
+      "javaLoc": 401,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 3
+    },
+    {
+      "moduleKey": "formaters",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 11,
+      "javaLoc": 390,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 11
+    },
+    {
+      "moduleKey": "feriado",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 2,
+      "javaLoc": 389,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "calculo/ferias",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 382,
+      "tsLoc": 177,
+      "coveragePct": 46.33507853403141,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "legendas",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 4,
+      "javaLoc": 366,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 4
+    },
+    {
+      "moduleKey": "valetransporte",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 2,
+      "javaLoc": 347,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "indices/tabelaunica",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 3,
+      "javaLoc": 337,
+      "tsLoc": 82,
+      "coveragePct": 24.33234421364985,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "justificativa",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 3,
+      "javaLoc": 336,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 3
+    },
+    {
+      "moduleKey": "juros/selicirpf",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 2,
+      "javaLoc": 320,
+      "tsLoc": 32,
+      "coveragePct": 10,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "calculo/ferias/regras",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 4,
+      "javaLoc": 312,
+      "tsLoc": 159,
+      "coveragePct": 50.96153846153846,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "inss/multa",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 2,
+      "javaLoc": 304,
+      "tsLoc": 280,
+      "coveragePct": 92.10526315789474,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "indices/precatorios",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 3,
+      "javaLoc": 303,
+      "tsLoc": 56,
+      "coveragePct": 18.48184818481848,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "formula",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 4,
+      "javaLoc": 291,
+      "tsLoc": 52,
+      "coveragePct": 17.869415807560138,
+      "missingCount": 3
+    },
+    {
+      "moduleKey": "calculo/juros",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 2,
+      "javaLoc": 271,
+      "tsLoc": 136,
+      "coveragePct": 50.18450184501845,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "custas",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 270,
+      "tsLoc": 94,
+      "coveragePct": 34.81481481481482,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "validadores",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 7,
+      "javaLoc": 258,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 7
+    },
+    {
+      "moduleKey": "inss",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 2,
+      "javaLoc": 255,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "irpf",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 239,
+      "tsLoc": 141,
+      "coveragePct": 58.99581589958159,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "inss/faixas",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 7,
+      "javaLoc": 237,
+      "tsLoc": 74,
+      "coveragePct": 31.223628691983123,
+      "missingCount": 6
+    },
+    {
+      "moduleKey": "exceptions",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 6,
+      "javaLoc": 218,
+      "tsLoc": 35,
+      "coveragePct": 16.05504587155963,
+      "missingCount": 5
+    },
+    {
+      "moduleKey": "irpf/faixas",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 6,
+      "javaLoc": 214,
+      "tsLoc": 51,
+      "coveragePct": 23.83177570093458,
+      "missingCount": 5
+    },
+    {
+      "moduleKey": "indices",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 2,
+      "javaLoc": 198,
+      "tsLoc": 53,
+      "coveragePct": 26.767676767676768,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "segurodesemprego",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 184,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "salariofamilia",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 181,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "indices/selic",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 2,
+      "javaLoc": 178,
+      "tsLoc": 55,
+      "coveragePct": 30.89887640449438,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "calculo/atualizacao/regras",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 3,
+      "javaLoc": 177,
+      "tsLoc": 138,
+      "coveragePct": 77.96610169491525,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "calculo/faltas",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 175,
+      "tsLoc": 29,
+      "coveragePct": 16.571428571428573,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "constantes",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 4,
+      "javaLoc": 170,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 4
+    },
+    {
+      "moduleKey": "calculo/custas/regras",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 2,
+      "javaLoc": 165,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "scan",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 1,
+      "javaLoc": 148,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "juros/selicinss",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 136,
+      "tsLoc": 26,
+      "coveragePct": 19.11764705882353,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "juros",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 135,
+      "tsLoc": 34,
+      "coveragePct": 25.185185185185187,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "indices/coeficienteufir",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 2,
+      "javaLoc": 134,
+      "tsLoc": 52,
+      "coveragePct": 38.80597014925373,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "indices/ufir",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 2,
+      "javaLoc": 134,
+      "tsLoc": 50,
+      "coveragePct": 37.3134328358209,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "auditoria",
+      "category": "6-META-DADOS",
+      "fileCount": 1,
+      "javaLoc": 129,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "inss/seguradoempregado",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 2,
+      "javaLoc": 129,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "inss/empregadodomestico",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 2,
+      "javaLoc": 128,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "juros/precatorios",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 122,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "nacional",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 2,
+      "javaLoc": 116,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "indices/jam",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 114,
+      "tsLoc": 27,
+      "coveragePct": 23.68421052631579,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "calculo",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 4,
+      "javaLoc": 113,
+      "tsLoc": 39,
+      "coveragePct": 34.51327433628319,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "participante",
+      "category": "6-META-DADOS",
+      "fileCount": 3,
+      "javaLoc": 104,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 3
+    },
+    {
+      "moduleKey": "indices/tr",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 98,
+      "tsLoc": 28,
+      "coveragePct": 28.571428571428573,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "loginfra",
+      "category": "6-META-DADOS",
+      "fileCount": 1,
+      "javaLoc": 97,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "salariominimo",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 1,
+      "javaLoc": 95,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "juros/taxalegal",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 92,
+      "tsLoc": 12,
+      "coveragePct": 13.043478260869565,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "perfil",
+      "category": "6-META-DADOS",
+      "fileCount": 1,
+      "javaLoc": 90,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "calculo/honorarios/regras",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 2,
+      "javaLoc": 89,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 2
+    },
+    {
+      "moduleKey": "controle",
+      "category": "6-META-DADOS",
+      "fileCount": 1,
+      "javaLoc": 89,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "calculo/salariofamilia/regras",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 86,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "indices/dfp",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 86,
+      "tsLoc": 28,
+      "coveragePct": 32.55813953488372,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "indices/dnfp",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 86,
+      "tsLoc": 28,
+      "coveragePct": 32.55813953488372,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "indices/igpm",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 86,
+      "tsLoc": 28,
+      "coveragePct": 32.55813953488372,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "indices/inpc",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 86,
+      "tsLoc": 28,
+      "coveragePct": 32.55813953488372,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "indices/ipc",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 86,
+      "tsLoc": 28,
+      "coveragePct": 32.55813953488372,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "indices/ipca",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 86,
+      "tsLoc": 28,
+      "coveragePct": 32.55813953488372,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "indices/ipcae",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 86,
+      "tsLoc": 28,
+      "coveragePct": 32.55813953488372,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "indices/ipcatr",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 86,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "indices/it",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 86,
+      "tsLoc": 28,
+      "coveragePct": 32.55813953488372,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "api",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 11,
+      "javaLoc": 78,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 11
+    },
+    {
+      "moduleKey": "regras",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 1,
+      "javaLoc": 76,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "assuntocnj",
+      "category": "6-META-DADOS",
+      "fileCount": 1,
+      "javaLoc": 76,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "municipio",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 1,
+      "javaLoc": 75,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "calculo/fgts/regras",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 66,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "estado",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 1,
+      "javaLoc": 65,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "juros/fazendapublica",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 61,
+      "tsLoc": 2,
+      "coveragePct": 3.278688524590164,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "juros/padrao",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 61,
+      "tsLoc": 2,
+      "coveragePct": 3.278688524590164,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "calculo/faltas/regras",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 52,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "calculo/multa/regras",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 45,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "annotations",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 3,
+      "javaLoc": 43,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 3
+    },
+    {
+      "moduleKey": "cargainicial",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 1,
+      "javaLoc": 40,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "rules",
+      "category": "3-DOMINIO-SUPORTE",
+      "fileCount": 2,
+      "javaLoc": 36,
+      "tsLoc": 30,
+      "coveragePct": 83.33333333333333,
+      "missingCount": 0
+    },
+    {
+      "moduleKey": "calculo/verba",
+      "category": "1-CORE-CALCULO",
+      "fileCount": 1,
+      "javaLoc": 33,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    },
+    {
+      "moduleKey": "indices/api",
+      "category": "2-TABELAS-INDICES",
+      "fileCount": 1,
+      "javaLoc": 12,
+      "tsLoc": 0,
+      "coveragePct": 0,
+      "missingCount": 1
+    }
+  ],
+  "topGaps": [
+    {
+      "className": "Calculo",
+      "pkg": "negocio.dominio.calculo",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 2756,
+      "tsLoc": 518,
+      "gap": 2238,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/calculo/calculo.ts"
+    },
+    {
+      "className": "CustasJudiciaisDaAtualizacao",
+      "pkg": "negocio.dominio.pagamento",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1911,
+      "tsLoc": 45,
+      "gap": 1866,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/pagamento/custas-judiciais-da-atualizacao.ts"
+    },
+    {
+      "className": "DebitosDoReclamante",
+      "pkg": "negocio.dominio.pagamento",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1713,
+      "tsLoc": 74,
+      "gap": 1639,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/pagamento/debitos-do-reclamante.ts"
+    },
+    {
+      "className": "CreditosDoReclamante",
+      "pkg": "negocio.dominio.pagamento",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1751,
+      "tsLoc": 117,
+      "gap": 1634,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/pagamento/creditos-do-reclamante.ts"
+    },
+    {
+      "className": "MaquinaDeCalculoDeIrpf",
+      "pkg": "negocio.dominio.calculo.irpf",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1642,
+      "tsLoc": 52,
+      "gap": 1590,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/calculo/irpf/maquina-de-calculo-de-irpf.ts"
+    },
+    {
+      "className": "Atualizacao",
+      "pkg": "negocio.dominio.pagamento",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1480,
+      "tsLoc": 85,
+      "gap": 1395,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/pagamento/atualizacao.ts"
+    },
+    {
+      "className": "MaquinaDeCalculoDeCartaoDePonto",
+      "pkg": "negocio.dominio.cartaodeponto",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1364,
+      "tsLoc": 35,
+      "gap": 1329,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/cartaodeponto/maquina-de-calculo-de-cartao-de-ponto.ts"
+    },
+    {
+      "className": "VerbaDeCalculo",
+      "pkg": "negocio.dominio.verbacalculo",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1375,
+      "tsLoc": 92,
+      "gap": 1283,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/verbacalculo/verba-de-calculo.ts"
+    },
+    {
+      "className": "MaquinaDeCalculoDoInss",
+      "pkg": "negocio.dominio.calculo.inss.sobresalarios",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1599,
+      "tsLoc": 321,
+      "gap": 1278,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/calculo/inss/sobresalarios/maquina-de-calculo-do-inss.ts"
+    },
+    {
+      "className": "Pagamento",
+      "pkg": "negocio.dominio.pagamento",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1392,
+      "tsLoc": 129,
+      "gap": 1263,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/pagamento/pagamento.ts"
+    },
+    {
+      "className": "OutrosDebitosReclamado",
+      "pkg": "negocio.dominio.pagamento",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1332,
+      "tsLoc": 110,
+      "gap": 1222,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/pagamento/outros-debitos-reclamado.ts"
+    },
+    {
+      "className": "ResumoPorProcessoAtualizacaoJRAdapterPadrao",
+      "pkg": "negocio.dominio.processo.relatorio.resumo",
+      "category": "4-RELATORIOS",
+      "javaLoc": 1056,
+      "tsLoc": 0,
+      "gap": 1056,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/processo/relatorio/resumo/resumo-por-processo-atualizacao-jr-adapter-padrao.ts"
+    },
+    {
+      "className": "CustasAtualizacaoJRAdapterPadrao",
+      "pkg": "negocio.dominio.calculo.relatorio",
+      "category": "4-RELATORIOS",
+      "javaLoc": 906,
+      "tsLoc": 0,
+      "gap": 906,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/calculo/relatorio/custas-atualizacao-jr-adapter-padrao.ts"
+    },
+    {
+      "className": "ResumoPorProcessoJRAdapterPadrao",
+      "pkg": "negocio.dominio.processo.relatorio.resumo",
+      "category": "4-RELATORIOS",
+      "javaLoc": 882,
+      "tsLoc": 0,
+      "gap": 882,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/processo/relatorio/resumo/resumo-por-processo-jr-adapter-padrao.ts"
+    },
+    {
+      "className": "DebitosCobrarDoReclamante",
+      "pkg": "negocio.dominio.pagamento",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 916,
+      "tsLoc": 35,
+      "gap": 881,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/pagamento/debitos-cobrar-do-reclamante.ts"
+    },
+    {
+      "className": "ApuracaoCartaoDePonto",
+      "pkg": "negocio.dominio.cartaodeponto",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 1023,
+      "tsLoc": 163,
+      "gap": 860,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/cartaodeponto/apuracao-cartao-de-ponto.ts"
+    },
+    {
+      "className": "DemonstrativoAtualizacaoJRAdapterPadrao",
+      "pkg": "negocio.dominio.calculo.relatorio",
+      "category": "4-RELATORIOS",
+      "javaLoc": 839,
+      "tsLoc": 0,
+      "gap": 839,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/calculo/relatorio/demonstrativo-atualizacao-jr-adapter-padrao.ts"
+    },
+    {
+      "className": "InssJRAdapterPadrao",
+      "pkg": "negocio.dominio.calculo.relatorio",
+      "category": "4-RELATORIOS",
+      "javaLoc": 745,
+      "tsLoc": 0,
+      "gap": 745,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/calculo/relatorio/inss-jr-adapter-padrao.ts"
+    },
+    {
+      "className": "MaquinaDeRateioDoPagamento",
+      "pkg": "negocio.dominio.pagamento",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 785,
+      "tsLoc": 40,
+      "gap": 745,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/pagamento/maquina-de-rateio-do-pagamento.ts"
+    },
+    {
+      "className": "ResumoJRAdapterPagamentoPadrao",
+      "pkg": "negocio.dominio.calculo.relatorio",
+      "category": "4-RELATORIOS",
+      "javaLoc": 712,
+      "tsLoc": 0,
+      "gap": 712,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/calculo/relatorio/resumo-jr-adapter-pagamento-padrao.ts"
+    },
+    {
+      "className": "Verba",
+      "pkg": "negocio.dominio.verba",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 661,
+      "tsLoc": 0,
+      "gap": 661,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/verba/verba.ts"
+    },
+    {
+      "className": "ServicoDeSincronizacaoDeTabelas",
+      "pkg": "negocio.servicos",
+      "category": "5-SERVICOS",
+      "javaLoc": 658,
+      "tsLoc": 0,
+      "gap": 658,
+      "expectedTsRelPath": "src/lib/pjecalc/core/servicos/servico-de-sincronizacao-de-tabelas.ts"
+    },
+    {
+      "className": "Fgts",
+      "pkg": "negocio.dominio.calculo.fgts",
+      "category": "1-CORE-CALCULO",
+      "javaLoc": 714,
+      "tsLoc": 63,
+      "gap": 651,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/calculo/fgts/fgts.ts"
+    },
+    {
+      "className": "ServicoDeEnvioPJe",
+      "pkg": "negocio.servicos",
+      "category": "5-SERVICOS",
+      "javaLoc": 649,
+      "tsLoc": 0,
+      "gap": 649,
+      "expectedTsRelPath": "src/lib/pjecalc/core/servicos/servico-de-envio-p-je.ts"
+    },
+    {
+      "className": "ResumoPrecatorioJrAdapterPadrao",
+      "pkg": "negocio.dominio.calculo.relatorio",
+      "category": "4-RELATORIOS",
+      "javaLoc": 646,
+      "tsLoc": 0,
+      "gap": 646,
+      "expectedTsRelPath": "src/lib/pjecalc/core/dominio/calculo/relatorio/resumo-precatorio-jr-adapter-padrao.ts"
+    }
+  ]
+}
