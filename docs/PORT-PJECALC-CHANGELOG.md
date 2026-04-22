@@ -88,3 +88,38 @@ Log de classes portadas por sessão. Cada entrada: data, fase, classe Java, linh
 **Impacto no calibrate:** nulo (fundação; impacto real começa a Fase 3).
 
 **Divergências descobertas:** nenhuma.
+
+---
+
+## 2026-04-22 — Fase 2 — Sessão #1 (tabelas de índices)
+
+**Escopo:** golden tests para as 7 tabelas de índices já populadas (Jan/2005 → Fev/2026, 254 competências cada).
+
+**Atividades:**
+- Novo arquivo `src/lib/pjecalc/core/dominio/indices/__tests__/tabelas-indices.golden.test.ts` com 4 camadas de validação por tabela:
+  1. Snapshot SHA-256 da tabela inteira (detecta mudanças acidentais).
+  2. Amostra longitudinal (≥50 competências) com `toBeCloseTo(taxa, 10)`.
+  3. Validação de cálculo acumulado (multiplicativo para IPCA-E, somatório simples para SELIC).
+  4. Integridade estrutural (sem buracos entre meses) + range plausível.
+
+**Tabelas validadas:**
+- `TABELA_IPCAE` — 50+ competências, acumulado Jan-Dez/2020 ≈ 4,52% (IBGE oficial).
+- `TABELA_IPCA` — 15+ competências, snapshot.
+- `TABELA_TR` — período zero-TR 2017-2021 validado.
+- `TABELA_SELIC_MENSAL` — mínimo pandemia 2020-08, pico SELIC 2023, acumulado ≈ 12% em 2023.
+- `TABELA_INPC` / `TABELA_IGPM` / `TABELA_IPC` — sanity (integridade + range + hash).
+
+**Divergências descobertas:**
+- **DV-001** — `TABELA_IPCA` é cópia byte-a-byte de `TABELA_IPCAE` (mesmo hash SHA-256). IBGE publica IPCA e IPCA-E como séries distintas com diferenças de 0,01 a 0,5% em picos. Afeta casos com combinações `"indice":"IPCA"` (ex: leide-santana pós-2024-08-30). Preservada por fidelidade; correção pós-Fase 9. Ver `PORT-PJECALC-KNOWN-DIVERGENCES.md` DV-001.
+
+**Classes fora desta sessão (decisão explícita):**
+- `JurosTaxaLegal.java` (TAXA_LEGAL): Warning W047 do calibrate indica que o engine atual já tolera ausência dos dados via fallback. Port adiado para Fase 6 (FGTS) onde os dados seriam populados com Lei 14.905/2024.
+- SELIC diária, SELIC Fazenda, JAM, DFP, DNFP, IT, Tabela Única, precatórios — tabelas com esqueleto mas sem dados populados; port adiado até haver caso que as acione.
+
+**Gate Fase 2:**
+- Vitest: 734 passed | 6 skipped | 0 failed (+27 testes novos vs Fase 1).
+- `tsc --noEmit`: limpo.
+- `npm run calibrate`: 13/13 válidos, delta médio **-30,68%** (idêntico Fase 0/1 — sem regressão).
+- `npm run audit:port:check`: OK.
+
+**Impacto no calibrate:** nulo (adicionar testes não muda comportamento do engine).

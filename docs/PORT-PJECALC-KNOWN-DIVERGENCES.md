@@ -31,3 +31,41 @@ Registro de divergências encontradas entre o comportamento do PJe-Calc v2.15.1 
 ---
 
 *(vazio — divergências serão adicionadas conforme o port avança)*
+
+---
+
+## DV-001 — TABELA_IPCA é cópia byte-a-byte da TABELA_IPCA-E
+
+**Data descoberta:** 2026-04-22
+**Fase:** 2
+**Arquivo TS:** `src/lib/pjecalc/core/dominio/indices/ipca/tabela-ipca.ts`
+**Arquivo TS referência:** `src/lib/pjecalc/core/dominio/indices/ipcae/tabela-ipcae.ts`
+
+**Descrição:**
+Hash SHA-256 das duas tabelas é idêntico (`9637805fae75b1683331c0c49eb27608292856c18c46b99334b8b45d9f02dd15`). `TABELA_IPCA` foi populada como cópia de `TABELA_IPCA-E`, não com valores do IPCA oficial do IBGE.
+
+**Comportamento correto esperado:**
+IPCA e IPCA-E são séries distintas do IBGE:
+- **IPCA** (série 433): coleta 1º ao último dia do mês de referência.
+- **IPCA-E** (série 10764 / 10844): coleta do dia 15 do mês anterior ao dia 15 do mês de referência.
+
+Divergências entre séries (valores públicos IBGE em % mensal):
+
+| Competência | IPCA (IBGE) | IPCA-E (IBGE) | TABELA_IPCA (TS) |
+|---|---:|---:|---:|
+| 2018-04 | 0,22 | 0,21 | 0,21 |
+| 2020-04 | -0,31 | -0,01 | -0,05 |
+| 2020-05 | -0,38 | -0,59 | -0,13 |
+| 2022-04 | 1,06 | 1,73 | 1,73 |
+
+**Impacto medido:**
+Casos `.pjc` com combinações contendo `"indice": "IPCA"` (ex: `leide-santana.pjc`, onde `{"de":"2024-08-30","indice":"IPCA"}`) recebem índice errado. Impacto numérico difere caso a caso; provavelmente contribui com fração do delta -30% observado.
+
+**Decisão do port:**
+Preservar bug (fidelidade semântica durante o port). Teste golden freeze documenta o estado atual; correção planejada para **pós-Fase 9** com migração `seed-indices-oficiais.ts` atualizada.
+
+**Caso de teste:**
+`src/lib/pjecalc/core/dominio/indices/__tests__/tabelas-indices.golden.test.ts` — describe `TABELA_IPCA — golden` → teste `TABELA_IPCA tem hash idêntico à TABELA_IPCAE (DV-001 preservada)`.
+
+**Observação:**
+O PJe-Calc original (Java) lê do banco `TBIPCA` e `TBIPCAE` separadamente — provavelmente com valores corretos. A divergência é exclusiva do port TS atual. Correção requer apenas reseedar `TABELA_IPCA` com valores oficiais IBGE série 433 + atualizar o hash no teste golden + remover o teste de igualdade.
