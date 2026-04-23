@@ -1,64 +1,74 @@
 project_id = "cbtabmvplmkslwabpvqf"
 
+# =============================================================================
+# PR-SEC-1 (Commit 1): todas as Edge Functions exigem JWT.
+# Funções não listadas aqui usam o default `verify_jwt = true` do Supabase.
+# Categorias:
+#   frontend     — chamada direta via supabase.functions.invoke() no src/
+#   interna      — invocada por outra Edge Function (com service_role JWT)
+#   órfã-legacy  — sem call-site mapeado; flipada para true em modo fail-safe
+#                  (candidata a deleção em PR futura — ver docs/SEC-1-CHANGES.md)
+# =============================================================================
+
 [functions.populate-bcb-indices]
-verify_jwt = false
+verify_jwt = true  # órfã-legacy (admin one-shot, não usada; fail-safe)
 
 [functions.extract-facts]
-verify_jwt = false
+verify_jwt = true  # órfã-legacy (substituída por extract-facts-rag)
 
 [functions.plan-calculation]
-verify_jwt = false
+verify_jwt = true  # frontend (CalculatorSelector)
 
 [functions.review-calculation]
-verify_jwt = false
+verify_jwt = true  # órfã-legacy (sem call-site mapeado)
 
 [functions.explain-result]
-verify_jwt = false
+verify_jwt = true  # órfã-legacy (sem call-site mapeado)
 
 [functions.process-document]
-verify_jwt = false
+verify_jwt = true  # frontend (DocumentProcessor)
 
 [functions.semantic-search]
-verify_jwt = false
+verify_jwt = true  # frontend (SemanticSearchView)
 
 [functions.extract-facts-rag]
-verify_jwt = false
+verify_jwt = true  # frontend (DocumentProcessor, CasoDetalhe)
 
 [functions.upload-document]
-verify_jwt = false
+verify_jwt = true  # frontend (helper de upload)
 
 [functions.process-document-start]
-verify_jwt = false
+verify_jwt = true  # frontend (entrada assíncrona de processamento)
 
 [functions.ocr-document]
-verify_jwt = false
+verify_jwt = true  # frontend (DocumentValidation, DocumentOcrValidation, CTPSUploader, etc.)
 
 [functions.chunk-and-embed]
-verify_jwt = false
+verify_jwt = true  # interna (chamada por process-document-mistral)
 
 [functions.run-extraction-task]
-verify_jwt = false
+verify_jwt = true  # frontend (ExtractionWizard)
 
 [functions.review-extraction]
-verify_jwt = false
+verify_jwt = true  # frontend (ExtractionWizard)
 
 [functions.process-document-async]
-verify_jwt = false
+verify_jwt = true  # interna (chamada por process-document)
 
 [functions.generate-petition]
-verify_jwt = false
+verify_jwt = true  # frontend (PetitionGenerator)
 
 [functions.pre-calc-review]
-verify_jwt = false
+verify_jwt = true  # órfã-legacy (sem call-site mapeado)
 
 [functions.generate-case-briefing]
-verify_jwt = false
+verify_jwt = true  # órfã-legacy (sem call-site mapeado)
 
 [functions.import-reference-table]
-verify_jwt = false
+verify_jwt = true  # frontend (Tabelas)
 
 [functions.extract-and-fill]
-verify_jwt = false
+verify_jwt = true  # frontend (DocumentValidation, CasoDetalhe)
 
 [functions.parse-sentenca-jornada]
-verify_jwt = false
+verify_jwt = true  # frontend (ModuloAjusteSentenca)
