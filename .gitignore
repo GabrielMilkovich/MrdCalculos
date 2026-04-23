@@ -40,6 +40,8 @@ pjc-corpus/*.PJC
 pjc-corpus/*.pjc
 pjc-corpus/calibration-*.json
 calibration-*.json
+# Output do `npm run calibrate:compare` (gerado a cada execução)
+calibrate-compare.json
 
 # PJC files (dados de processos reais — nunca commitar)
 *.PJC
