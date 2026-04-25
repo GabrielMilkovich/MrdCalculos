@@ -8,6 +8,7 @@
  */
 
 import Decimal from 'decimal.js';
+import { logger } from '@/lib/logger';
 import type { CalculationItem, CalculationItemOffset, AuditTrailEntry, DocumentSourceType } from './types';
 
 // =====================================================
@@ -70,7 +71,7 @@ export interface DomainOffsetResult {
 // =====================================================
 
 export function applyDomainOffsets(ctx: DomainOffsetContext): DomainOffsetResult {
-  console.warn('applyDomainOffsets: offset-engine removed, returning items unchanged');
+  logger.warn('applyDomainOffsets: offset-engine removed, returning items unchanged');
 
   const summary: OffsetSummary = {
     total_devido: 0,

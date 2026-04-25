@@ -39,7 +39,7 @@ async function seedInss(): Promise<void> {
   if (delErr) throw delErr;
   const { error } = await supabase.from('pjecalc_inss_faixas').insert(rows);
   if (error) throw error;
-  // eslint-disable-next-line no-console
+   
   console.log(`INSS: ${rows.length} faixas inseridas`);
 }
 
@@ -63,7 +63,7 @@ async function seedIr(): Promise<void> {
   if (delErr) throw delErr;
   const { error } = await supabase.from('pjecalc_ir_faixas').insert(rows);
   if (error) throw error;
-  // eslint-disable-next-line no-console
+   
   console.log(`IR: ${rows.length} faixas inseridas`);
 }
 
@@ -75,7 +75,7 @@ async function seedSalarioMinimo(): Promise<void> {
     .from('pjecalc_salario_minimo')
     .upsert(rows, { onConflict: 'competencia' });
   if (error) throw error;
-  // eslint-disable-next-line no-console
+   
   console.log(`Salário Mínimo: ${rows.length} entradas upserted`);
 }
 
@@ -83,12 +83,12 @@ async function main(): Promise<void> {
   await seedInss();
   await seedIr();
   await seedSalarioMinimo();
-  // eslint-disable-next-line no-console
+   
   console.log('Seed concluído.');
 }
 
 main().catch((err: unknown) => {
-  // eslint-disable-next-line no-console
+   
   console.error(err);
   process.exit(1);
 });

@@ -6,6 +6,7 @@ import { CustomValidator } from './custom-validator';
 import type { ValidRule } from './valid-rule';
 import type { ValidValue_ } from './valid-value';
 import type { ValidatorContext } from './validator-context';
+import { logger } from '@/lib/logger';
 
 export class ValidValueValidator extends CustomValidator<ValidValue_> {
   private validRule: ValidRule | null = null;
@@ -42,8 +43,8 @@ export class ValidValueValidator extends CustomValidator<ValidValue_> {
       this.validRule = new this.spec.validRule();
       return this.validRule.isValid(this, context);
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error(e);
+       
+      logger.error('ValidValueValidator error', { error: String(e) });
       return false;
     }
   }

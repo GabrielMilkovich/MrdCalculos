@@ -255,7 +255,7 @@ export class CalculationEngine {
 
     // Acumuladores para passar entre calculadoras
     const verbasPorCompetencia: Record<string, number> = {};
-    let accumulatedInputs: CalculatorInputs = {};
+    const accumulatedInputs: CalculatorInputs = {};
 
     // Executar na ordem
     for (const nome of executionOrder) {

@@ -275,8 +275,8 @@ export class PjeCalcEngine {
         const periodo = this.getPeriodoCalculo();
         const periodoInicio = new Date(periodo.inicio);
         const periodoFim = new Date(periodo.fim);
-        let efetInicio = admDate > periodoInicio ? admDate : periodoInicio;
-        let efetFim = demDate < periodoFim ? demDate : periodoFim;
+        const efetInicio = admDate > periodoInicio ? admDate : periodoInicio;
+        const efetFim = demDate < periodoFim ? demDate : periodoFim;
         if (efetInicio > efetFim) return 0;
         let avos = 0;
         for (let m = efetInicio.getMonth(); m <= efetFim.getMonth(); m++) {

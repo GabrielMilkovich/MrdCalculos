@@ -46,6 +46,7 @@ import { fecharCalculo, reabrirCalculo, duplicarCalculo } from "@/lib/pjecalc/ca
 import { RelatorioConsolidado } from "./RelatorioConsolidado";
 import { RelatorioPDFDownload } from "./RelatorioPDFDownload";
 import type { DadosProcesso } from "@/lib/pjecalc/pdf/types";
+import { logger } from "@/lib/logger";
 
 interface Props { caseId: string; onBeforeLiquidar?: () => Promise<void>; }
 
@@ -437,7 +438,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         resumo_verbas: result as any,
       });
       if (resError) {
-        console.error("Erro ao persistir resultado:", resError);
+        logger.error("ModuloResumo persistir resultado falhou", { error: String(resError) });
         toast.error("Erro ao salvar resultado no banco de dados. O cálculo foi executado mas pode não ter sido salvo.");
       }
 
@@ -477,7 +478,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         for (let i = 0; i < ocRows.length; i += 500) {
           const { error: ocErr } = await supabase.from("pjecalc_ocorrencia_calculo" as any).insert(ocRows.slice(i, i + 500));
           if (ocErr) {
-            console.error("Erro ao persistir ocorrências:", ocErr);
+            logger.error("ModuloResumo persistir ocorrencias falhou", { error: String(ocErr) });
             toast.warning("Algumas ocorrências podem não ter sido salvas. Tente recalcular.");
           }
         }

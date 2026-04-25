@@ -25,7 +25,7 @@ function calcHorasEntre(h1: string, h2: string): number {
   if (!h1 || !h2) return 0;
   const [h1h, h1m] = h1.split(':').map(Number);
   const [h2h, h2m] = h2.split(':').map(Number);
-  let min1 = h1h * 60 + h1m;
+  const min1 = h1h * 60 + h1m;
   let min2 = h2h * 60 + h2m;
   if (min2 < min1) min2 += 1440; // meia-noite
   return (min2 - min1) / 60;
