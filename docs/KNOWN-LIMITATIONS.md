@@ -21,48 +21,39 @@ Atualize quando algo for resolvido.
 - `caso-real-v2` — INSS −22,15% (73 meses)
 - `francisco-pablo` — INSS −25,72% (28 meses)
 
-**Causa-raiz** (parcialmente identificada após investigação aprofundada
-em 2026-04-25):
+**Causa-raiz** (investigação aprofundada de 2026-04-25 — múltiplas hipóteses
+descartadas após inspeção dos PJCs reais):
 
-1. `InssModuloAdapter.calcularINSSProgressivo(comp, bNormal)` calcula
-   alíquota com base na **diferença das verbas alone**. Java original
-   (`MaquinaDeCalculoDoInss.liquidarInssSobreSalariosDevidos` linha
-   704-835) calcula alíquota com base no **TOTAL = histórico salarial
-   pago + diferença** e aplica essa alíquota apenas sobre a diferença,
-   capada pelo teto.
+**Hipótese 1 (DESCARTADA):** "histórico salarial não filtrado por tipo
+infla `basePaga` acima do teto, zerando INSS marginal" — falha porque
+joseli tem TODOS os 5 históricos com `incidenciaINSS=false`
+(comissões/prêmios/mínimo garantido). Base histórica seria 0 mesmo.
 
-2. **MAS:** investigação dos PJC reais de joseli-silva mostra que TODOS
-   os 5 `<HistoricoSalarial>` têm `incidenciaINSS=false`
-   (COMISSÕES PAGAS, DSR S/COMISSÃO, MÍNIMO GARANTIDO, PRÊMIOS PAGOS,
-   SAL. SUBSTITUIÇÃO PAGO). Não há histórico com incidência INSS, então
-   somar histórico-INSS daria 0 e a fórmula marginal seria igual à atual.
-   Isso descarta a hipótese de "fix simples por filtro de histórico".
+**Hipótese 2 (DESCARTADA):** "PJC computa base INSS 'fantasma' a partir
+do salário base contratual implícito" — falha porque inspeção do .pjc
+de joseli mostra `<valorBase>0E-25</valorBase>` em TODAS as 49
+`OcorrenciaDeInssSobreSalariosDevidos`. Java também usa valorBase=0.
 
-3. **Hipótese refinada:** PJC computa uma base INSS "fantasma" implícita
-   a partir do salário base contratual (não do histórico salarial
-   declarado), provavelmente via `OcorrenciaDoHistoricoSalarial` ou
-   `BaseHistorico` no Java. Diferenciais detectados:
-   - PJC `inssReclamante` (total verbas) vs `inssBeneficiario` (após
-     desconto de INSS já recolhido) tem diferença de 25-35% nos casos
-     PRE_ADC58 longos.
-   - Para joseli: `inssReclamante = R$42.357`, `inssBeneficiario = R$27.265`,
-     diff = R$15.092 (= INSS sobre base histórica fantasma).
+**Hipótese 3 (atual, requer ler `obterAliquotaParaValor` do Java):**
+Java aplica alíquota efetiva ~13,4% sobre `valorBaseVerbas` total
+(R$42.358 / R$315.898). Nosso TS aplica ~9,0% (R$28.478 / R$315.898).
+Faixas INSS pré-2020 são 8%, 9%, 11% — Java está chegando em 13,4%
+através de combinação por competência + 13o + composição com teto que
+nosso código não replica.
 
-**Trabalho necessário (revisado):**
-1. Localizar onde no Java a base INSS implícita é calculada quando
-   `incidenciaINSS=false` em todos os históricos
-2. Reproduzir essa lógica no TS (provavelmente envolve
-   `RepositorioDeInss.calculaAvosInssDecimoTerceiro` ou similar)
-3. Plumbar dados de `params.ultima_remuneracao` ou `dados_processo`
-   para o adapter
+**Trabalho necessário (revisado novamente):**
+1. Ler `pjecalc-fonte/.../sobresalarios/MaquinaDeCalculoDoInss.java`
+   linhas 779-835 (cálculo após `valorBase` e `valorBaseVerbas` setados)
+2. Ler `TabelaPrevidenciariaSeguradoEmpregado.obterAliquotaParaValor`
+   para entender como alíquota é selecionada
+3. Comparar com `Inss.apurarInss` no TS, especialmente para regime
+   `aliquotaUnica=true` (PRE_ADC58)
+4. Identificar diferença na aplicação por competência + 13o separado
+5. Implementar fix com auto-revert por caso
 
-**Risco:** alto. Tentativa anterior (β híbrido) falhou. Investigação
-desta sessão (2026-04-25) confirmou que NÃO é possível atacar com
-filtros simples no histórico salarial.
-
-**Estimativa revisada:** 12-20h, com instrumentação dedicada lendo o
-Java decompilado linha-a-linha do método `calcularValorBaseVerbas`
-em `MaquinaDeCalculoDoInss.java`.
+**Risco:** alto. Nenhum teste anterior teve sucesso parcial. Gap de
+4,4 pontos percentuais na alíquota efetiva (9% vs 13,4%) sugere
+diferença estrutural na seleção de faixa, não em filtro de base.
 
 ### 2. IR overshoot em francisco-pablo (-79,79%)
 
