@@ -661,7 +661,7 @@ async function loadSeguroConfig(caseId: string): Promise<{ apurar: boolean; parc
   }
 }
 
-async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeguroDesempregoDB[]> {
+export async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeguroDesempregoDB[]> {
   try {
     const { data } = await supabase
       .from('pjecalc_seguro_desemprego')
@@ -684,7 +684,7 @@ async function loadSeguroDesempregoDB(): Promise<import('./engine-types').PjeSeg
   }
 }
 
-async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalarioMinimoRow[]> {
+export async function loadSalarioMinimoDB(): Promise<import('./engine-types').PjeSalarioMinimoRow[]> {
   try {
     const { data } = await supabase
       .from('pjecalc_salario_minimo')
@@ -725,7 +725,7 @@ async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types
   }
 }
 
-async function loadExcecoesSabado(caseId: string): Promise<import('./engine-types').PjeExcecaoSabado[]> {
+export async function loadExcecoesSabado(caseId: string): Promise<import('./engine-types').PjeExcecaoSabado[]> {
   try {
     const { data } = await supabase
       .from('pjecalc_excecoes_sabado' as any)
@@ -746,7 +746,7 @@ async function loadExcecoesSabado(caseId: string): Promise<import('./engine-type
   }
 }
 
-async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeSalarioFamiliaDB[]> {
+export async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types').PjeSalarioFamiliaDB[]> {
   try {
     const { data } = await supabase
       .from('pjecalc_salario_familia')
