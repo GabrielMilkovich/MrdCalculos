@@ -15,6 +15,16 @@ import { ComparacaoCenarios } from "./ComparacaoCenarios";
 import { calcularCompletude } from "@/lib/pjecalc/completude";
 import * as svc from "@/lib/pjecalc/service";
 import { PjeCalcEngineV3 } from "@/lib/pjecalc/engine-v3";
+// Engine unification (P-prod): UI manual deve carregar os mesmos 4 DBs
+// históricos que o orchestrator usa, para evitar fallbacks hardcoded em
+// casos PRE_ADC58 longos. Ver docs sobre divergência de inputs UI vs
+// orchestrator vs calibrate.
+import {
+  loadSeguroDesempregoDB,
+  loadSalarioFamiliaDBRows,
+  loadExcecoesSabado,
+  loadSalarioMinimoDB,
+} from "@/lib/pjecalc/orchestrator";
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias,
   PjeVerba, PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig,
@@ -132,8 +142,13 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       ]);
 
       // ── Fase 1: Carregar dados do banco (séries históricas e tabelas versionadas) ──
+      // Inclui 4 DBs históricos (seguroDesemprego, salarioFamilia, excecoesSabado,
+      // salarioMinimo) para alinhar inputs UI ↔ orchestrator. Sem isso, motor
+      // caía em fallbacks hardcoded de 2025 para casos PRE_ADC58 longos.
       const [indicesData, inssFaixasData, irFaixasData, dadosProcessoLocal,
-             prevPrivadaData, pensaoData, sfData, feriadosData, multasData] = await Promise.all([
+             prevPrivadaData, pensaoData, sfData, feriadosData, multasData,
+             seguroDesempregoDBRows, salarioFamiliaDBRows, excecoesSabadoRows,
+             salarioMinimoDBRows] = await Promise.all([
         svc.getIndicesCorrecao(),
         svc.getInssFaixas(),
         svc.getIrFaixas(),
@@ -143,6 +158,10 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         svc.getSalarioFamiliaConfig(caseId).then(r => (r || {}) as Record<string, unknown>),
         svc.getFeriados(),
         svc.getMultasConfig(caseId).then(r => (r || {}) as Record<string, unknown>),
+        loadSeguroDesempregoDB(),
+        loadSalarioFamiliaDBRows(),
+        loadExcecoesSabado(caseId),
+        loadSalarioMinimoDB(),
       ]);
 
       if (!paramsRes) throw new Error("Configure os Parâmetros primeiro.");
@@ -346,18 +365,27 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         deducao: Number(f.deducao), deducao_dependente: Number(f.deducao_dependente),
       }));
 
-      // Execute engine com TODOS os dados
+      // Execute engine com TODOS os dados (26 args — alinhado com orchestrator)
       const verbasCast = verbas.map(v => ({ ...v, valor: v.valor as "calculado" | "informado" }));
       const engine = new PjeCalcEngineV3(
         params, historicos, faltas, ferias, verbasCast, cartaoPonto,
         fgtsConfig, csConfig, irConfig, correcaoConfigLocal,
         honorariosConfig, custasConfigLocal, seguroConfig,
         indicesDB, faixasINSSDB, faixasIRDB,
-        [], // excecoesCargas
+        [], // excecoesCargas (TODO: carregar via loadExcecoesCarga quando disponível)
         feriadosDB.map(f => ({ ...f, tipo: f.tipo as "estadual" | "facultativo" | "municipal" | "nacional" })),
         prevPrivadaConfig,
         pensaoConfig,
         salarioFamiliaConfig,
+        // Engine unification: 4 DBs históricos antes ausentes na UI manual
+        seguroDesempregoDBRows,
+        salarioFamiliaDBRows,
+        excecoesSabadoRows,
+        salarioMinimoDBRows,
+        // multasConfig: as multas 467/477 já são propagadas via correcaoConfigLocal
+        // (linhas multa_467/multa_477 acima). Aqui passa multas_indenizacoes
+        // individuais quando disponíveis (não há UI hoje — array vazio é OK).
+        { apurar_467: false, apurar_477: false, multas_indenizacoes: [] },
       );
 
       // ── Validação pré-liquidação ──
