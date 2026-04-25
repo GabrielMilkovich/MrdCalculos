@@ -23,8 +23,12 @@ dist-ssr
 *.sln
 *.sw?
 
-# Claude Code worktrees
-.claude/
+# Claude Code worktrees (incluindo state efêmero dos agentes)
+.claude/*
+# Exceções: configuração dos 7 agentes versionada para auditoria via PR
+!.claude/agents
+.claude/agents/state/locks/
+.claude/agents/state/archive/
 
 # Environment variables (NEVER commit credentials)
 .env
