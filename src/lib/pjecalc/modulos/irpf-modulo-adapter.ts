@@ -105,8 +105,16 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
       }
     }
 
-    // ─── 2. Art. 12-A: NM = span de meses do período ───
-    const mesesTotal = this.computeSpanMeses(compsNormal);
+    // ─── 2. Art. 12-A: NM = span de meses do período + stretch capado até dataLiq ───
+    // PARITY ALVO 2: PJC v2.15.1 considera o NM como o período de "recebimento
+    // acumulado" até a data de liquidação (Lei 7.713/88 art. 12-A). Para casos
+    // onde o gap entre última competência e dataLiquidacao é grande (ex:
+    // rosicleia 13 meses), estender o NM aproxima nosso IR ao PJC.
+    //
+    // Cap conservador (12 meses além da última competência) evita overshoot
+    // em casos com gap muito grande entre última verba e dataLiq (ex: leandro
+    // 47 meses, tiago 34 meses) onde o stretch full subestima IR drasticamente.
+    const mesesTotal = this.computeSpanMesesAteLiquidacao(compsNormal, 12);
 
     // ─── 3. Deduções ───
     let deducoes = 0;
@@ -212,6 +220,29 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     const [y1, m1] = arr[0].split('-').map(Number);
     const [y2, m2] = arr[arr.length - 1].split('-').map(Number);
     return Math.max(1, (y2 - y1) * 12 + (m2 - m1) + 1);
+  }
+
+  /**
+   * computeSpanMesesAteLiquidacao — span da primeira competência até
+   * `dataLiquidacao`, capado em `maxStretch` meses além da última competência.
+   *
+   * PJe-Calc v2.15.1: o NM em RRA reflete o período de acumulação até a
+   * quitação. O cap evita overshoot quando o gap entre última competência
+   * e dataLiquidacao é muito grande (caso de contratos antigos em demanda
+   * judicial demorada).
+   */
+  private computeSpanMesesAteLiquidacao(comps: Set<string>, maxStretch: number): number {
+    if (comps.size === 0) return 1;
+    const arr = [...comps].sort();
+    const [y1, m1] = arr[0].split('-').map(Number);
+    const [y2, m2] = arr[arr.length - 1].split('-').map(Number);
+    const spanCompetencias = (y2 - y1) * 12 + (m2 - m1) + 1;
+
+    const [yL, mL] = this.dataLiquidacao.slice(0, 7).split('-').map(Number);
+    const monthsBetweenLastCompAndLiq = (yL - y2) * 12 + (mL - m2);
+    const stretchPermitido = Math.max(0, Math.min(monthsBetweenLastCompAndLiq, maxStretch));
+
+    return Math.max(1, spanCompetencias + stretchPermitido);
   }
 
   private getTabelaParaCompetencia(comp: string): {
