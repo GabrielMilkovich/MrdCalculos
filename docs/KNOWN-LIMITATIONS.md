@@ -21,27 +21,48 @@ Atualize quando algo for resolvido.
 - `caso-real-v2` — INSS −22,15% (73 meses)
 - `francisco-pablo` — INSS −25,72% (28 meses)
 
-**Causa-raiz** (já identificada lendo Java):
-`InssModuloAdapter.calcularINSSProgressivo(comp, bNormal)` calcula a alíquota
-com base na **diferença das verbas alone**. O Java original
-(`MaquinaDeCalculoDoInss.liquidarInssSobreSalariosDevidos` linha 704-835)
-calcula a alíquota com base no **TOTAL = histórico salarial pago + diferença**
-e aplica essa alíquota apenas sobre a diferença, capada pelo teto.
+**Causa-raiz** (parcialmente identificada após investigação aprofundada
+em 2026-04-25):
 
-Em PRE_ADC58 longos com salário base alto, isso cria gap real de 20-33%.
+1. `InssModuloAdapter.calcularINSSProgressivo(comp, bNormal)` calcula
+   alíquota com base na **diferença das verbas alone**. Java original
+   (`MaquinaDeCalculoDoInss.liquidarInssSobreSalariosDevidos` linha
+   704-835) calcula alíquota com base no **TOTAL = histórico salarial
+   pago + diferença** e aplica essa alíquota apenas sobre a diferença,
+   capada pelo teto.
 
-**Trabalho necessário:**
-- Plumb `baseInssPagaPorCompetencia` do histórico salarial filtrado por tipo
-  (sem somar 13o proporcional/adicionais)
-- Aplicar formula marginal: `INSS(base + dif) − INSS(base)`
-- Tratar 13o com teto separado (Lei 8.212/91)
+2. **MAS:** investigação dos PJC reais de joseli-silva mostra que TODOS
+   os 5 `<HistoricoSalarial>` têm `incidenciaINSS=false`
+   (COMISSÕES PAGAS, DSR S/COMISSÃO, MÍNIMO GARANTIDO, PRÊMIOS PAGOS,
+   SAL. SUBSTITUIÇÃO PAGO). Não há histórico com incidência INSS, então
+   somar histórico-INSS daria 0 e a fórmula marginal seria igual à atual.
+   Isso descarta a hipótese de "fix simples por filtro de histórico".
 
-**Risco:** alto. Tentativa anterior (β híbrido) falhou — somação naive de
-todos os ocorrências do histórico inflou `basePaga` acima do teto, zerando
-o INSS marginal em todos os 13 casos. Precisa de filtro por tipo +
-proporcionalidade (férias/faltas).
+3. **Hipótese refinada:** PJC computa uma base INSS "fantasma" implícita
+   a partir do salário base contratual (não do histórico salarial
+   declarado), provavelmente via `OcorrenciaDoHistoricoSalarial` ou
+   `BaseHistorico` no Java. Diferenciais detectados:
+   - PJC `inssReclamante` (total verbas) vs `inssBeneficiario` (após
+     desconto de INSS já recolhido) tem diferença de 25-35% nos casos
+     PRE_ADC58 longos.
+   - Para joseli: `inssReclamante = R$42.357`, `inssBeneficiario = R$27.265`,
+     diff = R$15.092 (= INSS sobre base histórica fantasma).
 
-**Estimativa:** 8-12h instrumentadas.
+**Trabalho necessário (revisado):**
+1. Localizar onde no Java a base INSS implícita é calculada quando
+   `incidenciaINSS=false` em todos os históricos
+2. Reproduzir essa lógica no TS (provavelmente envolve
+   `RepositorioDeInss.calculaAvosInssDecimoTerceiro` ou similar)
+3. Plumbar dados de `params.ultima_remuneracao` ou `dados_processo`
+   para o adapter
+
+**Risco:** alto. Tentativa anterior (β híbrido) falhou. Investigação
+desta sessão (2026-04-25) confirmou que NÃO é possível atacar com
+filtros simples no histórico salarial.
+
+**Estimativa revisada:** 12-20h, com instrumentação dedicada lendo o
+Java decompilado linha-a-linha do método `calcularValorBaseVerbas`
+em `MaquinaDeCalculoDoInss.java`.
 
 ### 2. IR overshoot em francisco-pablo (-79,79%)
 
