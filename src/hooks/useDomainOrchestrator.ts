@@ -22,6 +22,7 @@ import type {
 } from '@/domain/types';
 import { orchestrateCalculation, type OrchestratorResult } from '@/lib/pjecalc/domain-orchestrator';
 import type { DomainPaidItem } from '@/domain/offset-engine';
+import { logger } from '@/lib/logger';
 import type { PjeVerba, PjeHistoricoSalarial, PjeCartaoPonto, PjeFalta, PjeFerias } from '@/lib/pjecalc/engine-types';
 import Decimal from 'decimal.js';
 
@@ -72,14 +73,14 @@ export function useDomainOrchestrator() {
         ferias: input.ferias,
       });
 
-      let items = orchResult.items;
+      const items = orchResult.items;
       const audit = [...orchResult.auditSummary];
       const reflectionCount = items.filter(item => item.formula_aplicada.startsWith('reflexo:')).length;
 
       // Step 2: Apply offsets (offset-engine removed — no-op)
       const offsetCount = 0;
       if (input.paidItems && input.paidItems.length > 0) {
-        console.warn('applyDomainOffsets removed — offsets not applied');
+        logger.warn('applyDomainOffsets removed — offsets not applied');
       }
 
       // Step 3: Calculate totals

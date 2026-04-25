@@ -40,7 +40,7 @@ import type {
 // HELPER: typed query wrapper (avoids `as any` everywhere)
 // =====================================================
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function fromView(name: string): any {
   return supabase.from(name as any);
 }

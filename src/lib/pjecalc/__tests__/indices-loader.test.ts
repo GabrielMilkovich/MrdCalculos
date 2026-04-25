@@ -82,7 +82,10 @@ describe('indices-loader', () => {
     expect(out['2023-06']).toBe(IPCA_E_ACUMULADO['2023-06']);
     expect(out['2023-07']).toBe(IPCA_E_ACUMULADO['2023-07']);
     expect(out['2023-08']).toBe(IPCA_E_ACUMULADO['2023-08']);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('erro DB'));
+    // logger.warn em dev formata como console.warn(colorPrefix, color, message)
+    // — verificamos que algum arg da chamada contém 'erro DB'.
+    const calls = warn.mock.calls.flat();
+    expect(calls.some(c => typeof c === 'string' && c.includes('erro DB'))).toBe(true);
     warn.mockRestore();
   });
 
@@ -93,7 +96,8 @@ describe('indices-loader', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const out = await loadIndices('SELIC', '2023-01', '2023-02', { client });
     expect(out['2023-01']).toBe(SELIC_ACUMULADO['2023-01']);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('exceção DB'));
+    const calls2 = warn.mock.calls.flat();
+    expect(calls2.some(c => typeof c === 'string' && c.includes('exceção DB'))).toBe(true);
     warn.mockRestore();
   });
 

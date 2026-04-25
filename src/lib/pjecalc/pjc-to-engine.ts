@@ -814,8 +814,8 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
   const indiceBase = normalizeIndice(a.atualizacao.indice_base || 'IPCAE');
 
   // Build combinations from PJC XML
-  let combinacoes_indice: PjeCombinacaoIndice[] = [];
-  let combinacoes_juros: PjeCombinacaoJuros[] = [];
+  const combinacoes_indice: PjeCombinacaoIndice[] = [];
+  const combinacoes_juros: PjeCombinacaoJuros[] = [];
 
   const validCombIdx = a.atualizacao.combinacoes_indice.filter(ci => ci.a_partir_de && ci.indice);
   const validCombJur = a.atualizacao.combinacoes_juros.filter(cj => cj.a_partir_de && cj.tipo);

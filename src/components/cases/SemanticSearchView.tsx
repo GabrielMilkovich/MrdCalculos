@@ -6,6 +6,7 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -129,7 +130,7 @@ export function SemanticSearchView({ caseId, onFactCreated }: SemanticSearchView
         toast.info("Nenhum resultado encontrado");
       }
     } catch (err) {
-      console.error("Search error:", err);
+      logger.error("SemanticSearch error", { error: String(err) });
       toast.error("Erro na busca: " + (err as Error).message);
     } finally {
       setIsSearching(false);
@@ -200,7 +201,7 @@ export function SemanticSearchView({ caseId, onFactCreated }: SemanticSearchView
       onFactCreated();
 
     } catch (err) {
-      console.error("Create fact error:", err);
+      logger.error("SemanticSearch create fact error", { error: String(err) });
       toast.error("Erro ao criar fato: " + (err as Error).message);
     }
   }, [caseId, selectedChunk, newFact, onFactCreated]);

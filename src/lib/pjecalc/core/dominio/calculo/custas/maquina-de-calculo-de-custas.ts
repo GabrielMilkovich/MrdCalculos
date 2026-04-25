@@ -163,7 +163,7 @@ export class MaquinaDeCalculoDeCustas {
       const periodoArm = new Periodo(armazenamento.getDataInicioArmazenamento()!, dataFinal!);
       const qtDias = periodoArm.totalDeDias();
       armazenamento.setQtdeDias(qtDias);
-      let custaArm = armazenamento.getValorAvaliacaoArmazenamento().times(ZERO_VIRGULA_UM_PORCENTO).times(qtDias);
+      const custaArm = armazenamento.getValorAvaliacaoArmazenamento().times(ZERO_VIRGULA_UM_PORCENTO).times(qtDias);
       armazenamento.setValorCustasArmazenamento(custaArm);
     }
 

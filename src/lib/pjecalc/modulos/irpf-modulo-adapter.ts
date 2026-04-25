@@ -304,7 +304,7 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
       return this.honorariosConfig.valor_fixo;
     }
     let principalCorrigido = new Decimal(0);
-    let jurosMora = new Decimal(0);
+    const jurosMora = new Decimal(0);
     for (const vc of this.verbas) {
       for (const oc of vc.getOcorrenciasAtivas()) {
         const corrigida = oc.getDiferencaCorrigida();

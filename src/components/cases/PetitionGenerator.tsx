@@ -6,6 +6,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -171,7 +172,7 @@ export function PetitionGenerator({
         throw new Error(data?.error || "Erro ao gerar petição");
       }
     } catch (err) {
-      console.error("Generation error:", err);
+      logger.error("PetitionGenerator generation error", { error: String(err) });
       toast.error("Erro ao gerar petição: " + (err as Error).message);
     } finally {
       setIsGenerating(false);

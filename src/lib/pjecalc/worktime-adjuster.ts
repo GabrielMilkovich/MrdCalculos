@@ -104,7 +104,7 @@ function minutesToTime(m: number): string {
 
 function calcHorasEntre(h1: string, h2: string): number {
   if (!h1 || !h2) return 0;
-  let m1 = timeToMinutes(h1);
+  const m1 = timeToMinutes(h1);
   let m2 = timeToMinutes(h2);
   if (m2 < m1) m2 += 1440; // cross midnight
   return (m2 - m1) / 60;
@@ -196,7 +196,7 @@ function adjustSingleDay(
   // Calculate hours
   const horasOriginais = Math.max(0, ((saidaMin - (saidaMin > 1440 ? 0 : 0)) - entradaMin) / 60);
   // Recalculate with original values for comparison
-  let origEntMin = timeToMinutes(entrada);
+  const origEntMin = timeToMinutes(entrada);
   let origSaiMin = timeToMinutes(saida);
   if (origSaiMin < origEntMin) origSaiMin += 1440;
   const horasOriginalCalc = Math.max(0, (origSaiMin - origEntMin - intervaloOriginalMin) / 60);

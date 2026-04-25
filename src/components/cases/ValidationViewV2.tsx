@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/lib/logger';
 import { 
   Check, 
   X, 
@@ -228,7 +229,7 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
           title: 'Sincronizando dados...',
           description: 'Todas as extrações foram validadas. Sincronizando com os módulos de cálculo.',
         });
-        console.warn('syncFromValidation removed');
+        logger.warn('syncFromValidation removed');
         onValidationComplete?.();
       }
     },

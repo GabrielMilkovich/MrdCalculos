@@ -143,7 +143,7 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
       if (elapsed < OCR_STALE_MS) continue;
       if (autoRetriedRef.current.has(d.id)) continue;
       autoRetriedRef.current.add(d.id);
-      console.warn(`[ocr-watchdog] doc ${d.id} (${d.file_name}) parado em ocr_running ha ${Math.round(elapsed / 1000)}s — auto-retry`);
+      logger.warn(`[ocr-watchdog] doc parado em ocr_running, auto-retry`, { id: d.id, file_name: d.file_name, elapsed_s: Math.round(elapsed / 1000) });
       toast.info(`OCR de "${d.file_name}" parecia travado. Retentando...`);
       // fire-and-forget — runOcr ja recarrega a lista ao terminar
       (async () => {

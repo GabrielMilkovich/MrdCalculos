@@ -64,7 +64,7 @@ export interface IVerbaDeCalculoMaqRef extends IVerbaDeCalculoRef {
     obterValorAcumuladoDoIndice(data: Date): Decimal;
   } | null;
   /** Calculo host — necessário para ParametroDoTermo nas subclasses concretas. */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Calculo é raiz e traria ciclo
+   
   getCalculo?(): any;
 }
 
@@ -345,9 +345,9 @@ export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
     // ParametroDoTermo é construído diretamente apenas quando há `calculo`/`verba`
     // concretas (fase atual de integração — subclasses podem sobrescrever).
     // Em cenários sem Calculo, caímos num caminho mínimo: sem base/índice.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- construtor requer tipo concreto
+     
     const parametro: ParametroDoTermo | null = calculo
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idem
+       
       ? new ParametroDoTermo(calculo as any, verba as any, null,
           this.modo, FaseDoCalculoEnum.CALCULANDO_VALOR_DEVIDO, null, null)
       : null;
@@ -419,9 +419,9 @@ export abstract class MaquinaDeCalculo<T extends IVerbaDeCalculoMaqRef> {
     const calculo = verba.getCalculo?.();
     // Quando não há Calculo concreto, usa-se um parâmetro nulo: getters
     // abstratos podem lidar com esse modo (ou subclasses podem sobrescrever).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ctor exige tipo concreto
+     
     const parametro: ParametroDoTermo | null = calculo
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idem
+       
       ? new ParametroDoTermo(calculo as any, verba as any, periodo,
           this.modo ?? ModoDeCalculoEnum.LIQUIDACAO,
           FaseDoCalculoEnum.CALCULANDO_VALOR_DEVIDO,
