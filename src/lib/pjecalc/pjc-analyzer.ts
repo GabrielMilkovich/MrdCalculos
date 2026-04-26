@@ -77,6 +77,9 @@ export interface PJCAnalysis {
   cs_config?: {
     apurar_segurado: boolean;
     apurar_empresa: boolean;
+    /** D1 fix: apurar_sat/terceiros refletem se a alíquota persistida é > 0 */
+    apurar_sat?: boolean;
+    apurar_terceiros?: boolean;
     aliquota_segurado: number;
     aliquota_empresa: number;
     aliquota_sat: number;
@@ -781,6 +784,67 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   // If PJC resultado shows zero CS, disable it
   if (resultado.inss_reclamante === 0 && resultado.inss_reclamado === 0) {
     cs_config = { apurar_segurado: false, apurar_empresa: false, aliquota_segurado: 0, aliquota_empresa: 0, aliquota_sat: 0, aliquota_terceiros: 0 };
+  }
+
+  // D1 fix Bug 1 (2026-04-26): override das alíquotas pelas <OcorrenciaDeInssSobreSalariosDevidos>.
+  // Java persiste em CADA ocorrência os valores `aliquotaEmpresa`, `aliquotaSAT`,
+  // `aliquotaTerceiros` que ele realmente USOU para calcular `inssReclamado`.
+  // Quando o XML não tem `<ContribuicaoSocial>` (caso antonio-harley), as alíquotas
+  // ficam zeradas no fallback e o engine sub-calcula 38% do INSS empregador.
+  // Lemos as alíquotas da primeira ocorrência com `valorBaseVerbas` preenchido
+  // (= top-level, não os "ocorrenciaOriginal" aninhados que vêm como null).
+  // Ref Java: MaquinaDeCalculoDoInss.java:505-540 (calcular valorTotalInssEmpresa,
+  // valorDevidoSAT, valorDevidoTerceiros) — usam aliquotaEmpresa/SAT/Terceiros
+  // direto da OcorrenciaDeInssSobreSalariosDevidos.
+  const inssOcsTopLevel = root.getElementsByTagName('OcorrenciaDeInssSobreSalariosDevidos');
+  let aliqEmpFromOcs: number | null = null;
+  let aliqSatFromOcs: number | null = null;
+  let aliqTercFromOcs: number | null = null;
+  let aliqSegFromOcs: number | null = null;
+  for (const oc of Array.from(inssOcsTopLevel)) {
+    const baseStr = getTextContent(oc, 'valorBaseVerbas');
+    if (!baseStr || baseStr === 'null' || baseStr === '0E-25' || parseNum(baseStr) === 0) continue;
+    const ae = getTextContent(oc, 'aliquotaEmpresa');
+    const as = getTextContent(oc, 'aliquotaSAT');
+    const at = getTextContent(oc, 'aliquotaTerceiros');
+    const asg = getTextContent(oc, 'aliquotaSegurado');
+    if (ae && ae !== 'null') aliqEmpFromOcs = parseNum(ae);
+    if (as && as !== 'null') aliqSatFromOcs = parseNum(as);
+    if (at && at !== 'null') aliqTercFromOcs = parseNum(at);
+    if (asg && asg !== 'null') aliqSegFromOcs = parseNum(asg);
+    // Pega a primeira que serve como referência — alíquotas costumam ser estáveis
+    if (aliqEmpFromOcs !== null) break;
+  }
+  if (aliqEmpFromOcs !== null || aliqSatFromOcs !== null || aliqTercFromOcs !== null) {
+    if (!cs_config) {
+      cs_config = {
+        apurar_segurado: resultado.inss_reclamante > 0,
+        apurar_empresa: resultado.inss_reclamado > 0,
+        aliquota_segurado: 0,
+        aliquota_empresa: 20,
+        aliquota_sat: 0,
+        aliquota_terceiros: 0,
+      };
+    }
+    // Override apenas quando a ocorrência tinha valor não-null/zero.
+    // Convenção Java: aliquotaTerceiros=null → não há contribuição a Terceiros
+    // (apurar_terceiros=false). aliquotaSAT=null não ocorre na prática (sempre
+    // tem RAT base). Cada chave do front-end (Empresa/SAT/Terceiros) reflete
+    // exatamente a alíquota persistida.
+    if (aliqEmpFromOcs !== null) cs_config.aliquota_empresa = aliqEmpFromOcs;
+    if (aliqSatFromOcs !== null) cs_config.aliquota_sat = aliqSatFromOcs;
+    if (aliqTercFromOcs !== null) cs_config.aliquota_terceiros = aliqTercFromOcs;
+    // ATENÇÃO: NÃO sobrescrever aliquota_segurado do override de ocorrência.
+    // `aliquotaSegurado` na <OcorrenciaDeInssSobreSalariosDevidos> é a alíquota
+    // DA FAIXA daquela competência específica (8/9/11% pré-2020 ou 7.5/9/12/14%
+    // pós-2020), NÃO uma alíquota global fixa. Mapear isso para o adapter como
+    // 'fixa' quebra o cálculo progressivo. Mantemos apurar_segurado=true e
+    // deixamos o engine usar a tabela progressiva oficial (csConfig).
+    void aliqSegFromOcs;
+    // apurar_* refletem se a alíquota é > 0.
+    cs_config.apurar_empresa = (cs_config.aliquota_empresa ?? 0) > 0;
+    cs_config.apurar_sat = (cs_config.aliquota_sat ?? 0) > 0;
+    cs_config.apurar_terceiros = (cs_config.aliquota_terceiros ?? 0) > 0;
   }
 
   // --- ApuracaoDeJuros (Ground Truth consolidation) ---

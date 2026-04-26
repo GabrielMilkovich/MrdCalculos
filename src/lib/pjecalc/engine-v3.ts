@@ -629,7 +629,38 @@ export class PjeCalcEngineV3 {
       }, 0);
     }
     const csSegurado = Number(new Decimal(csSeguradoCorrigido).toDP(2, Decimal.ROUND_HALF_EVEN));
-    const csEmpregador = inssAdapter.totalEmpregador;
+
+    // D1 fix Bug 2 (2026-04-26): aplicar correção+juros sobre o EMPREGADOR
+    // Java aplica `(indiceCorrecao + taxaJuros/100 + taxaMulta/100)` em CADA
+    // ocorrência, sobre `valorDevidoEmpresaFinal + valorDevidoSAT + valorDevidoTerceiros`.
+    // Empiricamente verificado em antonio-harley: somando ocorrência-a-ocorrência
+    // com esse fator chega-se a 6 336,27 ≈ PJC 6 336,11 (R$ 0,16 diff).
+    // Antes: `csEmpregador = inssAdapter.totalEmpregador` (NOMINAL puro), gerando
+    // -38% de gap. A taxa de juros usada é a MESMA do segurado (mesma competência,
+    // mesma data de liquidação) — `pctJuros` derivado de SELIC INSS / TabelaDeJurosDeInss.
+    let csEmpregadorCorrigido = 0;
+    for (const item of inssAdapter.empregadorPorCompetencia) {
+      const totalNominal = (item.empresa || 0) + (item.sat || 0) + (item.terceiros || 0);
+      if (totalNominal <= 0) continue;
+      let pctJuros: number;
+      if (taxasJurosFromPJC && taxasJurosFromPJC[item.competencia] !== undefined) {
+        pctJuros = taxasJurosFromPJC[item.competencia];
+      } else if (tabelaSelicInss.has(item.competencia)) {
+        pctJuros = tabelaSelicInss.get(item.competencia) as number;
+      } else {
+        const dataComp = new Date(item.competencia + '-01');
+        const inicioJuros = new Date(dataComp.getFullYear(), dataComp.getMonth() + 1, 1);
+        if (inicioJuros.getTime() >= dataLiqInss.getTime()) {
+          csEmpregadorCorrigido += totalNominal;
+          continue;
+        }
+        pctJuros = combsInss.length > 0
+          ? this.pctJurosCombinado(inicioJuros, dataLiqInss, tipoJurosInss, combsInss).toNumber()
+          : this.pctJurosSegmento(inicioJuros, dataLiqInss, tipoJurosInss).toNumber();
+      }
+      csEmpregadorCorrigido += totalNominal * (1 + pctJuros / 100);
+    }
+    const csEmpregador = Number(new Decimal(csEmpregadorCorrigido).toDP(2, Decimal.ROUND_HALF_EVEN));
     const csReclamante = this.csConfig.cobrar_reclamante ? csSegurado : 0;
     // D2 fix: prefere IR exato do PJC quando disponível.
     const irRetido = this.irTotalPjcOverride !== null
