@@ -88,15 +88,15 @@ export class InssModuloAdapter implements IModuloLiquidavel {
       for (const oc of vc.getOcorrenciasAtivas()) {
         const dataIni = oc.getDataInicial();
         if (!dataIni) continue;
-        // Se flag ativo: usa diferença corrigida (nominal × indiceAcumulado).
-        // Se não setado o indice, faz fallback para nominal.
-        let base: Decimal;
-        if (usarCorrigida) {
-          const corr = oc.getDiferencaCorrigida();
-          base = corr !== null ? corr : oc.getDiferenca();
-        } else {
-          base = oc.getDiferenca();
-        }
+        // D1 (rodada 2): integração de getDiferencaParaCalculoDasIncidencias
+        // (port 1:1 de OcorrenciaDeVerba.java:663-684). O método já cobre:
+        //   - férias indenizadas → null (não compõem base — Lei 8.212/91 art.28 §9 "d")
+        //   - férias com dobra → 50% da diferença (CLT art.137, parte indenizatória)
+        //   - férias com abono (CALCULADO) → retira fator do abono (CLT art.143)
+        //   - escolha entre nominal/corrigida pelo flag corrigido
+        const baseFromIncidencia = oc.getDiferencaParaCalculoDasIncidencias(usarCorrigida);
+        if (baseFromIncidencia === null) continue; // férias indenizadas: não incidem INSS
+        const base = baseFromIncidencia;
         if (base.lte(0)) continue;
         const comp = this.formatCompetencia(dataIni);
         target[comp] = (target[comp] ?? 0) + base.toNumber();

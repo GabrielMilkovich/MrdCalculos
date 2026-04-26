@@ -67,15 +67,28 @@ describe('Inss.apurarInss — cálculo progressivo 1:1', () => {
 describe('InssModuloAdapter — 13º com teto separado', () => {
   function makeVerba(comp: string, devido: number, is13: boolean, indiceAcum?: number) {
     const [y, m] = comp.split('-').map(Number);
+    const diferenca = new Decimal(devido);
+    const corrigida = indiceAcum ? diferenca.times(indiceAcum) : null;
     const oc = {
       getDataInicial: () => new Date(y, m - 1, 1),
-      getDiferenca: () => new Decimal(devido),
-      getDiferencaCorrigida: () => (indiceAcum ? new Decimal(devido).times(indiceAcum) : null),
+      getDiferenca: () => diferenca,
+      getDiferencaCorrigida: () => corrigida,
+      getIndiceAcumulado: () => (indiceAcum ? new Decimal(indiceAcum) : null),
+      // Réplica simplificada do getDiferencaParaCalculoDasIncidencias para o
+      // mock (sem férias indenizadas/dobra/abono — apenas seleciona corrigida ou
+      // nominal). O comportamento é idêntico ao caso normal do método real.
+      getDiferencaParaCalculoDasIncidencias: (corrigido = false): Decimal | null => {
+        if (corrigido) {
+          return corrigida ?? diferenca;
+        }
+        return diferenca;
+      },
     };
     return {
       getIncidenciaINSS: () => true,
       getCaracteristica: () =>
         is13 ? CaracteristicaDaVerbaEnum.DECIMO_TERCEIRO_SALARIO : CaracteristicaDaVerbaEnum.VERBA_SALARIAL,
+      getNome: () => (is13 ? '13' : 'salario'),
       getOcorrenciasAtivas: () => [oc],
     } as never;
   }
