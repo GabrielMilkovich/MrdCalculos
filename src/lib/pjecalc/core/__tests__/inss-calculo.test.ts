@@ -133,9 +133,20 @@ describe('InssModuloAdapter — 13º com teto separado', () => {
     expect(adapter.totalSegurado).toBeCloseTo(inss4000 * 2, 0);
   });
 
-  it('8. Com correção trabalhista — base corrigida > nominal → INSS maior', () => {
-    // Nominal R$ 1.000 × indice 2.0 → base efetiva R$ 2.000.
-    // INSS(1000) = 75. INSS(2000) = 113.85 + 482 × 9% = 113.85 + 43.38 = 157.23
+  it('8. Com correção trabalhista — base INSS NÃO usa IPCA-E (D2 fix 2026-04-26)', () => {
+    // D2 fix (2026-04-26): após confirmação empírica em 10 PJCs reais, Java NÃO
+    // aplica IPCA-E na base do INSS. Confirmamos que
+    // `<OcorrenciaDeInssSobreSalariosDevidos>.indiceDeCorrecaoDoReclamante = 1.0`
+    // em TODOS os casos. A correção real é aplicada APÓS o INSS, via:
+    //   inssReclamante = soma(VDS_F × (1 + taxaJuros/100 + taxaMulta/100))
+    // — implementado em `engine-v3.ts:428` (csSeguradoCorrigido).
+    //
+    // Antes deste fix, `com_correcao_trabalhista=true` aplicava IPCA-E na base
+    // INSS (via `getDiferencaCorrigida`), gerando overshoot quando combinado
+    // com juros pós-ajuizamento. Agora o flag é ignorado pelo adapter — ambos
+    // os casos produzem o mesmo INSS NOMINAL. Os juros entram no engine-v3.
+    //
+    // Nominal R$ 1.000 → INSS faixa 1 = 7.5% × 1000 = R$ 75.
     const verbas = [makeVerba('2025-06', 1000, false, 2.0)];
 
     const semCorrecao = new InssModuloAdapter(verbas, baseCs({ com_correcao_trabalhista: false }), FAIXAS_DB);
@@ -145,8 +156,8 @@ describe('InssModuloAdapter — 13º com teto separado', () => {
     comCorrecao.liquidar();
 
     expect(semCorrecao.totalSegurado).toBeCloseTo(75, 1);
-    expect(comCorrecao.totalSegurado).toBeGreaterThan(semCorrecao.totalSegurado);
-    expect(comCorrecao.totalSegurado).toBeCloseTo(157.23, 0);
+    // Comportamento NOVO: flag não muda a base INSS (paridade Java).
+    expect(comCorrecao.totalSegurado).toBeCloseTo(semCorrecao.totalSegurado, 1);
   });
 
   it('9. Apuração mensal separada — cada competência tem sua faixa', () => {

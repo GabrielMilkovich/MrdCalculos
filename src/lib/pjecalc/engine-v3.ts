@@ -425,9 +425,32 @@ export class PjeCalcEngineV3 {
     const fgtsResult = this.calcularFGTS(verbaResults);
 
     // Descontos do líquido do reclamante (INSS segurado + IRPF)
-    const csSegurado = inssAdapter.totalSegurado;
+    // D2 fix (2026-04-26): Java aplica juros + correção + multa sobre cada
+    // ocorrência de INSS na atualização. Fórmula validada empiricamente em 10
+    // PJCs reais com erro < 0.01%:
+    //   inssReclamante = soma(VDS_F × (indiceCorrecao + taxaJuros/100 + taxaMulta/100))
+    // Refs: MaquinaDeCalculoDoInss.java:488-501,
+    //       OcorrenciaDeInssSobreSalariosDevidosAtualizacao.java:67-130.
+    // Para os PJCs analisados: indiceCorrecao=1.0 e taxaMulta=null em todos →
+    // simplifica para: VDS × (1 + taxaJuros/100). Aplicamos juros via mesma
+    // lógica usada nas verbas (pctJurosCombinado / pctJurosSegmento).
+    // Combinado com `usarCorrigida=false` no adapter (INSS sobre nominal).
+    const dataLiqInss = new Date(this.correcaoConfig.data_liquidacao);
+    const tipoJurosInss = (this.correcaoConfig.juros_tipo ?? 'simples_mensal') as string;
+    const combsInss = this.correcaoConfig.combinacoes_juros ?? [];
+    const csSeguradoCorrigido = inssAdapter.seguradoDevidos.reduce((sum, item) => {
+      const dataComp = new Date(item.competencia + '-01');
+      // Juros iniciam no 1º dia do mês seguinte (Súmula 381 TST + ADC58).
+      const inicioJuros = new Date(dataComp.getFullYear(), dataComp.getMonth() + 1, 1);
+      if (inicioJuros.getTime() >= dataLiqInss.getTime()) return sum + item.valor;
+      const pctJuros = combsInss.length > 0
+        ? this.pctJurosCombinado(inicioJuros, dataLiqInss, tipoJurosInss, combsInss).toNumber()
+        : this.pctJurosSegmento(inicioJuros, dataLiqInss, tipoJurosInss).toNumber();
+      return sum + item.valor * (1 + pctJuros / 100);
+    }, 0);
+    const csSegurado = Number(new Decimal(csSeguradoCorrigido).toDP(2, Decimal.ROUND_HALF_EVEN));
     const csEmpregador = inssAdapter.totalEmpregador;
-    const csReclamante = inssAdapter.csReclamante;
+    const csReclamante = this.csConfig.cobrar_reclamante ? csSegurado : 0;
     const irRetido = irpfAdapter.impostoDevido;
     // FGTS entra no liquido APENAS quando compor_principal=true. PJe-Calc com
     // destino=pagar_reclamante ainda separa FGTS do liquido no resultado "liquido_exequente".

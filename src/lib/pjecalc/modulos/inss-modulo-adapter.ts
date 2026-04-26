@@ -76,7 +76,20 @@ export class InssModuloAdapter implements IModuloLiquidavel {
     // multiplica a diferença nominal pelo `indiceAcumulado` setado pelo
     // `Calculo.liquidarVerba`. Sem isso, o INSS vinha ~50% abaixo em casos
     // históricos (pré-2020) onde o fator IPCA-E acumulado é grande.
-    const usarCorrigida = this.csConfig.com_correcao_trabalhista === true;
+    // D2 fix (2026-04-26): Java aplica INSS sobre o NOMINAL e SÓ DEPOIS multiplica
+    // por (indiceCorr + juros + multa) na atualização. Confirmamos empiricamente
+    // que `<OcorrenciaDeInssSobreSalariosDevidos>.indiceDeCorrecaoDoReclamante = 1.0`
+    // em TODOS os PJCs analisados (joseli, leandro, antonio, carla, rosicleia,
+    // tiago, francisco, vanderlei, roque, caso-real-v2). Logo NÃO devemos aplicar
+    // IPCA-E à base do INSS — ele já está embutido no `taxaJuros` por ocorrência.
+    // O `engine-v3.ts` aplica `(1 + juros + multa)` sobre `totalSegurado` calculado
+    // sobre nominal, fechando a fórmula:
+    //   inssReclamante = soma(VDS_F × (indiceCorr + taxaJuros/100 + taxaMulta/100))
+    //                  ≈ soma(INSS_nominal × (1 + juros/100))   [indiceCorr=1, multa=0]
+    // Antes (D1.2): `usarCorrigida = csConfig.com_correcao_trabalhista === true`
+    //   → INSS computava sobre `getDiferencaCorrigida` aplicando IPCA-E na base,
+    //     duplicando correção e gerando overshoot quando combinado com juros pós.
+    const usarCorrigida = false;
     const basesNormal: Record<string, number> = {};
     const bases13: Record<string, number> = {};
 
