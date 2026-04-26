@@ -501,10 +501,14 @@ export class PjeCalcEngineV3 {
         const indice = oc.getIndiceAcumulado()?.toNumber() ?? 1;
         const corrigida = oc.getDiferencaCorrigida()?.toNumber() ?? diferenca;
         const valorCorrigido = arredondarValorMonetario(new Decimal(corrigida)).toNumber();
-        // Juros aplicados sobre DIFERENCA (nominal) ajustada pelo INSS proporcional
-        // quando base_de_juros_das_verbas = VERBA_INSS (Sumula 200 TST + config PJe).
-        // Sem VERBA_INSS, usa DIFERENCA pura.
-        const jurosBase = Math.max(0, diferenca) * this.getJurosBaseMultiplier(vUI);
+        // D5 fix Etapa A (2026-04-26): Java aplica juros sobre VALOR CORRIGIDO
+        // (com IPCA-E acumulado), não sobre nominal. Validado em antonio:
+        //   Java: juros = (val_corrigido - cs_normal) × taxa_juros = 9 741,87
+        //   Engine antes (nominal): 8 074,19 (-17,12%)
+        //   Engine após (corrigido): ~9 657 (-0,87% — quase paridade)
+        // Ref Java: ApuracaoDeJuros.getJuros() aplica taxa sobre valor_corrigido.
+        // Multiplier (1 - INSS_eff) reflete config base_de_juros_das_verbas=VERBA_INSS.
+        const jurosBase = Math.max(0, valorCorrigido) * this.getJurosBaseMultiplier(vUI);
         const juros = this.calcularJurosOcorrencia(oc, jurosBase);
         const valorFinal = valorCorrigido + juros;
 
@@ -686,18 +690,19 @@ export class PjeCalcEngineV3 {
     //   BRUTO Java           = 41 569,20 = LE + INSS_seg + IR
     //   honorários PJC       =  6 235,38 = 15% × 41 569,20 ✓ EXATO
     //
-    // Antes (bug): `baseHonorarios = principalCorrigido + jurosMora` ignorava FGTS
-    // E ignorava `base_sucumbenciais` config → gerava -8,65% em antonio.
+    // D2 + D5 conciliação (2026-04-26): após D5 (juros sobre val_corrigido),
+    // o engine `principalCorrigido + jurosMora + fgtsNoLiquido` JÁ É equivalente
+    // ao BRUTO Java (`calcularBrutoDevidoAoReclamante` = val_corr_total + juros + FGTS,
+    // ANTES de qualquer dedução fiscal). Antes de D5, o engine sub-estimava juros
+    // em -17%, o que tornava `total_reclamada` ≈ LE PJC (que é bruto - INSS - IR).
+    // Esse era um acidente matemático.
     //
-    // Engine: total_reclamada ≈ liquidoExequente Java. Para reverter ao BRUTO,
-    // somamos cs_segurado_nominal do reclamante (apenas quando cobrar_reclamante=true,
-    // pois caso contrário não há dedução).
-    const brutoSemInss = principalCorrigido + jurosMora + fgtsNoLiquido;
+    // Pós-D5: total_reclamada = BRUTO. NÃO somar cs_segurado_nominal (era compensação
+    // contra juros sub-estimados — agora viraria DUPLA SOMA).
+    const brutoDevidoReclamante = principalCorrigido + jurosMora + fgtsNoLiquido;
     const inssSegNominalReclamante = (this.csConfig.apurar_segurado && this.csConfig.cobrar_reclamante)
       ? inssAdapter.totalSegurado
       : 0;
-    // BRUTO_DEVIDO_RECLAMANTE Java (pré-deduções fiscais).
-    const brutoDevidoReclamante = brutoSemInss + inssSegNominalReclamante;
     // Resolve a base por config. Default 'condenacao' = BRUTO (Java padrão UI).
     // Mapeamento UI → Java (ver BaseParaApuracaoDeHonorarioEnum):
     //   'condenacao' / 'bruto'  → BRUTO  (default)

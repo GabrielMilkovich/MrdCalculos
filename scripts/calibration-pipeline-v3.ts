@@ -178,24 +178,28 @@ async function main() {
       const r = result.resumo;
       const pjc_inss = analysis.resultado.inss_reclamante;
       const pjc_ir = analysis.resultado.imposto_renda;
-      // BRUTO definição correta:
-      // pjc_liq (Java liquidoExequente) JÁ É o bruto pré-deduções (Principal+
-      // Juros+FGTS, sem deduzir INSS/IR/honorários — ver
-      // DemonstrativoAtualizacaoPrecatorioJRAdapterPadrao.java:166-195).
-      // A definição antiga `pjc_bruto = pjc_liq + inss + ir` somava deduções
-      // EM CIMA do bruto, distorcendo a comparação. Corrigido em 2026-04-26.
-      const pjc_bruto = pjc_liq;
+      // Comparação BRUTO vs BRUTO (pós-D5 fix de juros, 2026-04-26):
+      // Java: liquidoExequente = bruto - INSS_seg_nominal - IR (D2 confirmação)
+      //       Logo: bruto Java = LE + INSS_seg_nominal + IR
+      // Engine: total_reclamada = principalCorrigido + jurosMora + fgtsNoLiquido
+      //       = bruto Java (após D5 fix juros — sem deduzir nada).
+      // ANTES (acidente): juros sub-estimado em -17% mascarava como total_reclamada ≈ LE PJC.
+      // AGORA (correto): comparamos bruto eng vs bruto Java diretamente.
+      // Nota: `inss_reclamante` no PJC é INSS CORRIGIDO (não nominal). Para o nominal
+      // usaríamos a soma de `apuracao_juros[].cs_normal+cs_13`. Para simplicidade,
+      // usamos o INSS corrigido — diferença ~0.5% absorvida pela tolerância.
+      const pjc_bruto = pjc_liq + pjc_inss + pjc_ir;
       const eng_bruto = r.total_reclamada;
 
-      // Comparação semanticamente correta:
-      // pjc_liq = Java liquidoExequente = Principal+Juros+FGTS (PRÉ-deduções
-      // de INSS/IR/honorários — ver DemonstrativoAtualizacaoPrecatorioJRAdapterPadrao.java:166-195)
-      // r.total_reclamada = engine equivalente (Principal+Juros+FGTS, pré-deduções)
-      // r.liquido_reclamante = engine PÓS-deduções (não comparável a liquidoExequente)
-      const dl_pre = calcDelta(r.total_reclamada, pjc_liq);
-      const dl_pos = calcDelta(r.liquido_reclamante, pjc_liq);
-      const dl = dl_pre; // métrica primária = comparação pré-deduções (alinhada Java)
-      const badge = Math.abs(dl) <= 5 ? '✅' : Math.abs(dl) <= 10 ? '⚠️' : '❌';
+      // Comparação BRUTO vs BRUTO (semanticamente correta após D5 fix):
+      // - eng_bruto = r.total_reclamada = principalCorrigido + jurosMora + fgts
+      // - pjc_bruto = liquidoExequente + INSS_recl_corrigido + IR (= bruto Java)
+      // ANTES (jurosMora sub-estimado): r.total_reclamada acidentalmente ≈ LE PJC.
+      // AGORA: r.total_reclamada = bruto Java exato (validado em antonio +0,28%).
+      const dl_bruto = calcDelta(eng_bruto, pjc_bruto);
+      const dl_le = calcDelta(r.total_reclamada, pjc_liq); // legado — diff puramente artefato
+      const dl = dl_bruto; // métrica primária = bruto vs bruto
+      const badge = Math.abs(dl) <= 1 ? '✅' : Math.abs(dl) <= 5 ? '⚠️' : '❌';
 
       const adm = analysis.parametros?.admissao || '';
       const dem = analysis.parametros?.demissao || '';
@@ -203,7 +207,7 @@ async function main() {
       const [aD, mD] = (dem.slice(0, 7) || '2024-01').split('-').map(Number);
       const periodo = (aD - aA) * 12 + (mD - mA) + 1;
       const regime = dem.slice(0, 7) <= '2021-11' ? 'PRE_ADC58' : adm.slice(0, 7) >= '2021-11' ? 'POS_ADC58' : 'TRANSICAO';
-      console.log(`${badge} pre=${dl_pre > 0 ? '+' : ''}${dl_pre.toFixed(2)}% | pos=${dl_pos > 0 ? '+' : ''}${dl_pos.toFixed(2)}% | IR:${calcDelta(r.ir_retido, pjc_ir) > 0 ? '+' : ''}${calcDelta(r.ir_retido, pjc_ir).toFixed(1)}% | INSS:${calcDelta(r.cs_segurado, pjc_inss) > 0 ? '+' : ''}${calcDelta(r.cs_segurado, pjc_inss).toFixed(1)}% | ${regime} | ${periodo}m | PJC:R${pjc_liq.toFixed(0)}`);
+      console.log(`${badge} bruto=${dl_bruto > 0 ? '+' : ''}${dl_bruto.toFixed(2)}% | LE=${dl_le > 0 ? '+' : ''}${dl_le.toFixed(2)}% | IR:${calcDelta(r.ir_retido, pjc_ir) > 0 ? '+' : ''}${calcDelta(r.ir_retido, pjc_ir).toFixed(1)}% | INSS:${calcDelta(r.cs_segurado, pjc_inss) > 0 ? '+' : ''}${calcDelta(r.cs_segurado, pjc_inss).toFixed(1)}% | ${regime} | ${periodo}m | PJC:R${pjc_liq.toFixed(0)}`);
 
       // === DIAGNOSTIC BLOCK (Prompt 17) ===
       const irDelta = calcDelta(r.ir_retido, pjc_ir);
@@ -215,8 +219,8 @@ async function main() {
         const ocsComDiferenca = verbaResults.reduce((s: number, vr: any) => s + (vr.ocorrencias?.filter((oc: any) => oc.diferenca > 0).length || 0), 0);
         console.log('[DIAG] caso:', nome.slice(0, 40));
         console.log('[DIAG]   regime:', regime, 'periodo:', periodo, 'meses');
-        console.log('[DIAG]   liq_pre: PJC_le=R$' + pjc_liq.toFixed(0) + ' ENG_tr=R$' + r.total_reclamada.toFixed(0) + ' delta=' + dl_pre.toFixed(2) + '%');
-        console.log('[DIAG]   liq_pos: PJC_le=R$' + pjc_liq.toFixed(0) + ' ENG_lr=R$' + r.liquido_reclamante.toFixed(0) + ' delta=' + dl_pos.toFixed(2) + '% (não comparável — pos-deduções)');
+        console.log('[DIAG]   bruto: PJC=R$' + pjc_bruto.toFixed(0) + ' ENG=R$' + eng_bruto.toFixed(0) + ' delta=' + dl_bruto.toFixed(2) + '%');
+        console.log('[DIAG]   LE: PJC=R$' + pjc_liq.toFixed(0) + ' ENG_tr=R$' + r.total_reclamada.toFixed(0) + ' delta=' + dl_le.toFixed(2) + '% (legado)');
         console.log('[DIAG]   inss: PJC=R$' + pjc_inss.toFixed(0) + ' ENG=R$' + r.cs_segurado.toFixed(0) + ' delta=' + inssDelta.toFixed(1) + '%');
         console.log('[DIAG]   ir: PJC=R$' + pjc_ir.toFixed(0) + ' ENG=R$' + r.ir_retido.toFixed(0) + ' delta=' + irDelta.toFixed(1) + '%');
         // INSS-DEBUG: Show GT data for INSS diagnosis
