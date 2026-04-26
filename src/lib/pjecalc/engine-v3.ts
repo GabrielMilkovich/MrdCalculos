@@ -47,6 +47,7 @@ import { ServicoDeCalculo } from './core/servicos/servico-de-calculo';
 import { InssModuloAdapter } from './modulos/inss-modulo-adapter';
 import { IrpfModuloAdapter } from './modulos/irpf-modulo-adapter';
 import { SELIC_MENSAL, TR_MENSAL } from './indices-fallback';
+import { TABELA_SELIC_MENSAL } from './core/dominio/indices/selic/tabela-selic-mensal';
 import {
   IndiceMonetarioEnum,
   IndicesAcumuladosEnum,
@@ -209,6 +210,84 @@ export class PjeCalcEngineV3 {
    */
   setIrTotalPjcOverride(valor: number | null | undefined): void {
     this.irTotalPjcOverride = valor ?? null;
+  }
+
+  /**
+   * Etapa 1 D2 (2026-04-26): porte do `TabelaDeJurosDeInss.carregarTabelaDeJurosSelic`
+   * (Java linhas 51-125). Algoritmo:
+   *
+   * 1. dataCorrente = primeiro dia do mês de dataFinal (data de liquidação)
+   * 2. Carência: registra taxa=0 nos 2 meses mais recentes (Java linhas 60-61).
+   * 3. Branch Lei 11941: taxaAcumulada = 1 (TAXA_JA_APLICADA_REMOVIDA).
+   * 4. Itera SELIC mensal DECRESCENTE de dataCorrente até dataLimite11941:
+   *    soma cada taxa mensal e registra acumulada na competência.
+   * 5. Preenche meses restantes (até dataInicial) com última taxaAcumulada.
+   *
+   * Refs Java:
+   * - TabelaDeJurosDeInss.java:51-125 (carregarTabelaDeJurosSelic)
+   * - TabelaDeJurosDeInss.java:127-130 (registrarValorDeJurosDoMesNaTabela)
+   * - RepositorioDeJurosSelicInss.java:48-49 (obterTodosPorPeriodo "competencia desc")
+   *
+   * Retorna Map<comp 'YYYY-MM', taxaAcumulada%>. Lookup direto.
+   */
+  private buildTabelaSelicInss(
+    dataInicial: Date,
+    dataFinal: Date,
+    dataLimite11941: Date,
+  ): Map<string, number> {
+    const tabela = new Map<string, number>();
+    const compKey = (y: number, m: number) => `${y}-${String(m + 1).padStart(2, '0')}`;
+    const addMonth = (y: number, m: number, delta: number) => {
+      const total = y * 12 + m + delta;
+      return { y: Math.floor(total / 12), m: ((total % 12) + 12) % 12 };
+    };
+
+    let cur = { y: dataFinal.getFullYear(), m: dataFinal.getMonth() };
+
+    // Carência: 2 meses com taxa 0 (Java linhas 60-61).
+    tabela.set(compKey(cur.y, cur.m), 0);
+    cur = addMonth(cur.y, cur.m, -1);
+    tabela.set(compKey(cur.y, cur.m), 0);
+    cur = addMonth(cur.y, cur.m, -1);
+
+    // Branch Lei 11941 (Java linhas 76-88): aplica reset para 1.
+    let taxaAcumulada = 1;
+    tabela.set(compKey(cur.y, cur.m), taxaAcumulada);
+    cur = addMonth(cur.y, cur.m, -1);
+
+    // CRÍTICO (Java semântica): a tabela SELIC INSS oficial tem 2 MESES DE
+    // DELAY na publicação. Java itera `JurosSelicInss.obterTodosPorPeriodo`
+    // que retorna SOMENTE meses publicados (até `liq - 2 meses` típico).
+    // Os 2 meses mais recentes NÃO TÊM SELIC publicada — o while no Java
+    // os pula registrando taxa=1 (reset value). Replicamos esse comportamento
+    // saltando os 2 meses mais recentes ANTES de começar o loop SELIC.
+    const skipMesesSemPublicacao = 2;
+    for (let i = 0; i < skipMesesSemPublicacao; i++) {
+      tabela.set(compKey(cur.y, cur.m), taxaAcumulada);  // mantém taxa=1
+      cur = addMonth(cur.y, cur.m, -1);
+    }
+
+    // Itera SELIC mensal decrescente de cur até dataLimite11941.
+    const limit = { y: dataLimite11941.getFullYear(), m: dataLimite11941.getMonth() };
+    while (cur.y > limit.y || (cur.y === limit.y && cur.m >= limit.m)) {
+      // Lookup taxa SELIC mensal (em %)
+      const entrada = TABELA_SELIC_MENSAL.find(e => e.ano === cur.y && e.mes === cur.m + 1);
+      const taxaMes = entrada ? entrada.taxa : 0;
+      taxaAcumulada += taxaMes;
+      tabela.set(compKey(cur.y, cur.m), taxaAcumulada);
+      cur = addMonth(cur.y, cur.m, -1);
+    }
+
+    // Preenche meses restantes (de cur até dataInicial) com última taxa.
+    const start = { y: dataInicial.getFullYear(), m: dataInicial.getMonth() };
+    let walk = cur;
+    while (walk.y > start.y || (walk.y === start.y && walk.m >= start.m)) {
+      const k = compKey(walk.y, walk.m);
+      if (!tabela.has(k)) tabela.set(k, taxaAcumulada);
+      walk = addMonth(walk.y, walk.m, -1);
+    }
+
+    return tabela;
   }
 
   /**
@@ -489,10 +568,28 @@ export class PjeCalcEngineV3 {
     const combsInss = this.correcaoConfig.combinacoes_juros ?? [];
     const taxasJurosFromPJC = this.inssTaxaJurosPorCompetencia;
     const overrideCorrigidoFromPJC = this.inssReclamanteCorrigidoPorCompetencia;
+
+    // Etapa 1 D2 (2026-04-26): porte da TabelaDeJurosDeInss (Java) — calcula
+    // taxa SELIC INSS por competência usando algoritmo nativo, sem depender
+    // do PJC. Lei 11941 ativa em 100% dos PJCs do corpus → branch SELIC pura.
+    // dataLimite11941 default = 2009-03-05 (apartirDeLei11941 do PJC; Lei
+    // 11.941/2009 entrou em vigor em 04/12/2009 mas correção INSS data de
+    // 03/2009 conforme tabelaSelic INSS oficial).
+    const dataLimite11941 = new Date('2009-03-05');
+    let dataInicialInss: Date | null = null;
+    for (const item of inssAdapter.seguradoDevidos) {
+      const d = new Date(item.competencia + '-01');
+      if (!dataInicialInss || d.getTime() < dataInicialInss.getTime()) dataInicialInss = d;
+    }
+    const tabelaSelicInss = dataInicialInss
+      ? this.buildTabelaSelicInss(dataInicialInss, dataLiqInss, dataLimite11941)
+      : new Map<string, number>();
+
     // D2 fix: precedência de fontes:
     // 1. `inssReclamanteCorrigidoPorCompetencia` (override total — Java exato).
     // 2. `inssTaxaJurosPorCompetencia` (taxa do PJC, multiplica nosso INSS nominal).
-    // 3. `pctJurosCombinado` (cálculo autônomo via correcaoConfig).
+    // 3. `tabelaSelicInss` (porte autônomo Java — Etapa 1 D2).
+    // 4. `pctJurosCombinado` (cálculo legado via correcaoConfig).
     let csSeguradoCorrigido: number;
     if (overrideCorrigidoFromPJC) {
       csSeguradoCorrigido = Object.values(overrideCorrigidoFromPJC).reduce((s, v) => s + v, 0);
@@ -501,6 +598,9 @@ export class PjeCalcEngineV3 {
         let pctJuros: number;
         if (taxasJurosFromPJC && taxasJurosFromPJC[item.competencia] !== undefined) {
           pctJuros = taxasJurosFromPJC[item.competencia];
+        } else if (tabelaSelicInss.has(item.competencia)) {
+          // Porte autônomo: SELIC INSS via TabelaDeJurosDeInss (Java).
+          pctJuros = tabelaSelicInss.get(item.competencia) as number;
         } else {
           const dataComp = new Date(item.competencia + '-01');
           const inicioJuros = new Date(dataComp.getFullYear(), dataComp.getMonth() + 1, 1);
