@@ -165,10 +165,14 @@ async function main() {
         [], inputs.excecoesCargas || [], [], inputs.prevPrivadaConfig,
         inputs.pensaoConfig, inputs.salarioFamiliaConfig,
       );
-      // D2 fix (2026-04-26): injeta overrides do PJC.
-      engine.setInssReclamanteCorrigidoPorCompetencia(inputs.inssReclamanteCorrigidoPorCompetencia);
-      engine.setInssTaxaJurosPorCompetencia(inputs.inssTaxaJurosPorCompetencia);
-      engine.setIrTotalPjcOverride(inputs.irTotalPjc);
+      // D2 (2026-04-26): overrides do PJC só ativados via env USE_PJC_OVERRIDES.
+      // Default: motor autônomo (sem trapaças). Overrides servem como ferramenta
+      // de validação/diagnóstico — NÃO devem fechar gap em produção.
+      if (process.env.USE_PJC_OVERRIDES === '1') {
+        engine.setInssReclamanteCorrigidoPorCompetencia(inputs.inssReclamanteCorrigidoPorCompetencia);
+        engine.setInssTaxaJurosPorCompetencia(inputs.inssTaxaJurosPorCompetencia);
+        engine.setIrTotalPjcOverride(inputs.irTotalPjc);
+      }
 
       const result = engine.liquidar();
       const r = result.resumo;
