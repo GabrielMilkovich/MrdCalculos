@@ -961,17 +961,50 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
 }
 
 function buildHonorariosConfig(a: PJCAnalysis): PjeHonorariosConfig {
-  const totalHon = a.resultado.honorarios.reduce((s, h) => s + h.valor, 0);
-  // O XML PJC emite apenas o VALOR ABSOLUTO dos honorários (sem percentual).
-  // Usar `valor_fixo` quando existe, evitando recálculo com percentual inventado.
-  // Antes: default 15% — produzia honor inflado quando o PJC usa 6-10% em alguns casos.
+  const honorariosPjc = a.resultado.honorarios || [];
+  const totalHon = honorariosPjc.reduce((s, h) => s + h.valor, 0);
+
+  // D2 fix (2026-04-26): construir items[] com percentual + base do XML
+  // <Honorario> em vez de cair em valor_fixo cego.
+  // Mapeamento Java→engine:
+  //   tipoDeDevedor: RECLAMADO → 'reclamado' (sucumbenciais — soma à condenação)
+  //   tipoDeDevedor: RECLAMANTE → 'reclamante' (contratuais — deduz do líquido)
+  //   baseParaApuracao: BRUTO → 'condenacao' (default, somado de INSS_seg)
+  //                     BRUTO_MENOS_CS → 'bruto_menos_cs'
+  //                     BRUTO_MENOS_CS_MENOS_PP → 'bruto_menos_cs_menos_pp'
+  //   tipoValor: CALCULADO → tipo='percentual' (engine recalcula)
+  //              INFORMADO → tipo='valor_fixo' (engine usa valor direto)
+  const baseMap: Record<string, string> = {
+    'BRUTO': 'condenacao',
+    'BRUTO_MENOS_CONTRIBUICAO_SOCIAL': 'bruto_menos_cs',
+    'BRUTO_MENOS_CONTRIBUICAO_SOCIAL_MENOS_PREVIDENCIA_PRIVADA': 'bruto_menos_cs_menos_pp',
+    'VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL': 'verbas_nao_principal',
+  };
+  const items = honorariosPjc
+    .filter(h => h.valor > 0 || (h.aliquota && h.aliquota > 0))
+    .map(h => {
+      const ehInformado = h.tipo_valor === 'INFORMADO';
+      const tipoEng: 'percentual' | 'valor_fixo' = ehInformado ? 'valor_fixo' : 'percentual';
+      const devedor = h.tipo_devedor === 'RECLAMANTE' ? 'reclamante' : 'reclamado';
+      return {
+        descricao: h.nome ? `Honorários para ${h.nome}` : 'Honorários',
+        devedor,
+        credor: h.nome || '',
+        tipo: tipoEng,
+        percentual: h.aliquota ?? 15,
+        valor_fixo: h.valor,
+        base: baseMap[h.base_para_apuracao || 'BRUTO'] || 'condenacao',
+        apurar_ir: false,
+      };
+    });
   return {
-    apurar_sucumbenciais: totalHon > 0,
-    percentual_sucumbenciais: 15, // Fallback — só aplicado se valor_fixo não vier
-    base_sucumbenciais: 'condenacao',
-    apurar_contratuais: false,
+    apurar_sucumbenciais: items.length > 0 || totalHon > 0,
+    percentual_sucumbenciais: items[0]?.percentual ?? 15,
+    base_sucumbenciais: (items[0]?.base ?? 'condenacao') as PjeHonorariosConfig['base_sucumbenciais'],
+    apurar_contratuais: items.some(i => i.devedor === 'reclamante'),
     percentual_contratuais: 0,
     valor_fixo: totalHon > 0 ? totalHon : undefined,
+    items,
   };
 }
 

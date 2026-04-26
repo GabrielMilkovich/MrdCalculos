@@ -630,6 +630,14 @@ export interface PjeMultasConfig {
   multas_indenizacoes?: PjeMultaItem[];
 }
 
+/** Bases de honorários — paridade com Java BaseParaApuracaoDeHonorarioEnum:
+ *  - 'condenacao' / 'bruto'         → BRUTO (default)
+ *  - 'bruto_menos_cs'                → BRUTO_MENOS_CONTRIBUICAO_SOCIAL
+ *  - 'bruto_menos_cs_menos_pp'       → BRUTO_MENOS_CS_MENOS_PREVIDENCIA_PRIVADA
+ *  - 'verbas_nao_principal'          → VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL
+ *  Mantemos 'causa' / 'proveito' para compatibilidade com casos novos no front. */
+export type PjeHonorarioBase = 'condenacao' | 'causa' | 'proveito' | 'bruto_menos_cs' | 'bruto_menos_cs_menos_pp' | 'verbas_nao_principal';
+
 export interface PjeHonorarioItem {
   descricao: string;
   devedor: 'reclamante' | 'reclamado';
@@ -637,14 +645,14 @@ export interface PjeHonorarioItem {
   tipo: 'percentual' | 'valor_fixo';
   percentual: number;
   valor_fixo?: number;
-  base: 'condenacao' | 'causa' | 'proveito';
+  base: PjeHonorarioBase;
   apurar_ir: boolean;
 }
 
 export interface PjeHonorariosConfig {
   apurar_sucumbenciais: boolean;
   percentual_sucumbenciais: number;
-  base_sucumbenciais: 'condenacao' | 'causa' | 'proveito';
+  base_sucumbenciais: PjeHonorarioBase;
   apurar_contratuais: boolean;
   percentual_contratuais: number;
   valor_fixo?: number;

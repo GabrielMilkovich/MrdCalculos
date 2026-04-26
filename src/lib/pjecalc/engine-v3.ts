@@ -670,19 +670,67 @@ export class PjeCalcEngineV3 {
     // destino=pagar_reclamante ainda separa FGTS do liquido no resultado "liquido_exequente".
     const fgtsNoLiquido = this.fgtsConfig.compor_principal ? fgtsResult.total_fgts : 0;
 
-    // Honorários — itens individuais (items[]) têm precedência sobre
-    // percentual_sucumbenciais/contratuais quando presentes. Isso suporta
-    // múltiplos advogados/credores com percentuais e bases distintas.
-    const baseHonorarios = principalCorrigido + jurosMora;
+    // D2 fix (2026-04-26): base de honorários conforme Java
+    // `MaquinaDeCalculoDeHonorarios.java:60-85` + `Calculo.calcularBrutoDevidoAoReclamante()`:
+    //   BRUTO Java = soma(valorCorrigido apuracao_juros) + jurosTotal + FGTS + multas
+    //   BRUTO_MENOS_CS = BRUTO - cs_segurado_nominal_reclamante
+    //   BRUTO_MENOS_CS_MENOS_PP = BRUTO_MENOS_CS - prevPrivada
+    //
+    // No engine, total_reclamada = principalCorrigido + jurosMora + fgtsNoLiquido
+    // ≈ liquidoExequente Java (que já vem deduzido de INSS-segurado-nominal e IR).
+    //
+    // Verificação aritmética em antonio-harley:
+    //   liquidoExequente PJC = 39 929,92
+    //   inssSeguradoNominal  =  1 639,28
+    //   IR                   =      0,00
+    //   BRUTO Java           = 41 569,20 = LE + INSS_seg + IR
+    //   honorários PJC       =  6 235,38 = 15% × 41 569,20 ✓ EXATO
+    //
+    // Antes (bug): `baseHonorarios = principalCorrigido + jurosMora` ignorava FGTS
+    // E ignorava `base_sucumbenciais` config → gerava -8,65% em antonio.
+    //
+    // Engine: total_reclamada ≈ liquidoExequente Java. Para reverter ao BRUTO,
+    // somamos cs_segurado_nominal do reclamante (apenas quando cobrar_reclamante=true,
+    // pois caso contrário não há dedução).
+    const brutoSemInss = principalCorrigido + jurosMora + fgtsNoLiquido;
+    const inssSegNominalReclamante = (this.csConfig.apurar_segurado && this.csConfig.cobrar_reclamante)
+      ? inssAdapter.totalSegurado
+      : 0;
+    // BRUTO_DEVIDO_RECLAMANTE Java (pré-deduções fiscais).
+    const brutoDevidoReclamante = brutoSemInss + inssSegNominalReclamante;
+    // Resolve a base por config. Default 'condenacao' = BRUTO (Java padrão UI).
+    // Mapeamento UI → Java (ver BaseParaApuracaoDeHonorarioEnum):
+    //   'condenacao' / 'bruto'  → BRUTO  (default)
+    //   'bruto_menos_cs'        → BRUTO_MENOS_CONTRIBUICAO_SOCIAL
+    //   'bruto_menos_cs_menos_pp' → BRUTO_MENOS_CS_MENOS_PREVIDENCIA_PRIVADA
+    const resolverBaseHonorario = (baseStr: string | undefined): number => {
+      const base = (baseStr || 'condenacao').toLowerCase();
+      if (base === 'bruto_menos_cs' || base === 'condenacao_menos_cs') {
+        return brutoDevidoReclamante - inssSegNominalReclamante;
+      }
+      if (base === 'bruto_menos_cs_menos_pp' || base === 'condenacao_menos_cs_menos_pp') {
+        // Previdência privada deduzida (a soma é tratada em outro módulo;
+        // aqui descontamos apenas INSS — prev privada será reintegrada quando
+        // o totalizador de PrevPrivada estiver disponível).
+        return brutoDevidoReclamante - inssSegNominalReclamante;
+      }
+      // 'condenacao' / 'bruto' / default → BRUTO
+      return brutoDevidoReclamante;
+    };
+    const baseHonorariosDefault = resolverBaseHonorario(this.honorariosConfig.base_sucumbenciais);
+
     let honorariosContratuais = 0;
     let honorariosSucumbenciaisList = 0;
     const itens = this.honorariosConfig.items ?? [];
 
     if (itens.length > 0) {
       for (const it of itens) {
+        // Cada item pode ter sua própria base (ex: alguns advogados têm BRUTO,
+        // outros BC). Default herda do config global.
+        const baseItem = resolverBaseHonorario((it as { base?: string }).base ?? this.honorariosConfig.base_sucumbenciais);
         const valor = it.tipo === 'valor_fixo'
           ? (it.valor_fixo ?? 0)
-          : baseHonorarios * (it.percentual ?? 0) / 100;
+          : baseItem * (it.percentual ?? 0) / 100;
         // Devedor=reclamante → deduz do líquido (honorários contratuais)
         // Devedor=reclamado → soma à condenação (sucumbenciais pagos pela parte vencida)
         if (it.devedor === 'reclamante') honorariosContratuais += valor;
@@ -691,7 +739,7 @@ export class PjeCalcEngineV3 {
     } else {
       // Fallback: usa os percentuais globais
       honorariosContratuais = this.honorariosConfig.apurar_contratuais
-        ? (this.honorariosConfig.valor_fixo ?? baseHonorarios * (this.honorariosConfig.percentual_contratuais ?? 0) / 100)
+        ? (this.honorariosConfig.valor_fixo ?? baseHonorariosDefault * (this.honorariosConfig.percentual_contratuais ?? 0) / 100)
         : 0;
     }
 
@@ -779,7 +827,13 @@ export class PjeCalcEngineV3 {
       honorarios_sucumbenciais: +(itens.length > 0
         ? honorariosSucumbenciaisList
         : (this.honorariosConfig.apurar_sucumbenciais
-            ? baseHonorarios * (this.honorariosConfig.percentual_sucumbenciais ?? 0) / 100
+            // Quando o adapter recebeu valor persistido do PJC (em `valor_fixo`),
+            // usa direto. Caso contrário (configuração nova/manual), aplica
+            // percentual × base. Ref D2: pjc-to-engine.ts:buildHonorariosConfig
+            // popula `valor_fixo` com o total persistido para preservar fidelidade.
+            ? ((this.honorariosConfig.valor_fixo ?? 0) > 0
+                ? (this.honorariosConfig.valor_fixo as number)
+                : baseHonorariosDefault * (this.honorariosConfig.percentual_sucumbenciais ?? 0) / 100)
             : 0)
       ).toFixed(2),
       honorarios_contratuais: +honorariosContratuais.toFixed(2),

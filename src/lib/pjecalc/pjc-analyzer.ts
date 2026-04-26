@@ -71,7 +71,23 @@ export interface PJCAnalysis {
     valor_principal?: number;
     /** null quando PJe-Calc nao persistiu juros; 0 significa juros=0 explicito */
     juros_mora_persistido?: number | null;
-    honorarios: { nome: string; cpf: string; valor: number }[];
+    honorarios: {
+      nome: string;
+      cpf: string;
+      valor: number;
+      /** D2 fix: percentual aplicado pelo Java (do XML <Honorario><aliquota>) */
+      aliquota?: number;
+      /** D2 fix: base usada (BRUTO / BRUTO_MENOS_CONTRIBUICAO_SOCIAL / BRUTO_MENOS_CS_MENOS_PREVIDENCIA_PRIVADA) */
+      base_para_apuracao?: 'BRUTO' | 'BRUTO_MENOS_CONTRIBUICAO_SOCIAL' | 'BRUTO_MENOS_CONTRIBUICAO_SOCIAL_MENOS_PREVIDENCIA_PRIVADA' | 'VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL' | string;
+      /** D2 fix: base monetária persistida pelo Java (= valor sobre o qual aplicou o percentual) */
+      base_honorario?: number;
+      /** D2 fix: tipo do valor — CALCULADO (engine recalcula) ou INFORMADO (valor fixo) */
+      tipo_valor?: 'CALCULADO' | 'INFORMADO' | string;
+      /** D2 fix: SUCUMBENCIAIS / CONTRATUAIS / OUT */
+      tipo_honorario?: 'SUCUMBENCIAIS' | 'CONTRATUAIS' | 'OUT' | string;
+      /** D2 fix: RECLAMADO ou RECLAMANTE */
+      tipo_devedor?: 'RECLAMADO' | 'RECLAMANTE' | string;
+    }[];
     custas: number;
   };
   cs_config?: {
@@ -460,20 +476,47 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   // --- Resultado ---
   const gprec = root.getElementsByTagName('gprec')[0];
   const dados = root.getElementsByTagName('dadosEstruturados')[0];
-  const honorarios: { nome: string; cpf: string; valor: number }[] = [];
-  const honEls = root.getElementsByTagName('honorario');
+  const honorarios: PJCAnalysis['resultado']['honorarios'] = [];
   const seen = new Set<string>();
+
+  // D2 fix (2026-04-26): preferir <Honorario> top-level (com aliquota,
+  // baseParaApuracao, baseHonorario), pois é onde Java persiste o cálculo
+  // exato. Fallback para <honorario> (sem ricos detalhes — versão antiga).
+  const honEls = root.getElementsByTagName('Honorario');
   for (const h of Array.from(honEls)) {
-    const nome = getTextContent(h, 'nome') || getTextContent(h, 'nomeCredor');
-    const cpf = getTextContent(h, 'documentoFiscal') || getTextContent(h, 'docFiscalCredor');
+    const nome = getTextContent(h, 'nomeCredor') || getTextContent(h, 'nome');
+    const cpf = getTextContent(h, 'numeroDocumentoFiscalCredor') || getTextContent(h, 'documentoFiscal') || getTextContent(h, 'docFiscalCredor');
+    const valor = parseNum(getTextContent(h, 'valor'));
+    if (!nome && valor === 0) continue;
     const key = `${nome}|${cpf}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    const aliqRaw = getTextContent(h, 'aliquota');
+    const baseRaw = getTextContent(h, 'baseHonorario');
     honorarios.push({
       nome,
       cpf,
-      valor: parseNum(getTextContent(h, 'valor')),
+      valor,
+      aliquota: aliqRaw && aliqRaw !== 'null' ? parseNum(aliqRaw) : undefined,
+      base_para_apuracao: getTextContent(h, 'baseParaApuracao') || undefined,
+      base_honorario: baseRaw && baseRaw !== 'null' ? parseNum(baseRaw) : undefined,
+      tipo_valor: getTextContent(h, 'tipoValor') || undefined,
+      tipo_honorario: getTextContent(h, 'tipoHonorario') || undefined,
+      tipo_devedor: getTextContent(h, 'tipoDeDevedor') || undefined,
     });
+  }
+  // Fallback: ler também <honorario> aninhados em <honorariosReclamado>/<honorariosReclamante>
+  // que aparecem em PJCs antigos sem <Honorario> top-level.
+  if (honorarios.length === 0) {
+    const honFallbackEls = root.getElementsByTagName('honorario');
+    for (const h of Array.from(honFallbackEls)) {
+      const nome = getTextContent(h, 'nome') || getTextContent(h, 'nomeCredor');
+      const cpf = getTextContent(h, 'documentoFiscal') || getTextContent(h, 'docFiscalCredor');
+      const key = `${nome}|${cpf}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      honorarios.push({ nome, cpf, valor: parseNum(getTextContent(h, 'valor')) });
+    }
   }
 
   // jurosMora pode ser null/undefined (PJe-Calc nao persistiu) ou numero
