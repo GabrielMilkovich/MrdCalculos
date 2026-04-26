@@ -15,8 +15,9 @@
  * precisar de juros calculados.
  */
 import type Decimal from 'decimal.js';
-import type { Periodo } from '../../base/comum/periodo';
+import { Periodo } from '../../base/comum/periodo';
 import { JurosDoAjuizamentoEnum } from '../../constantes/enums';
+import type { PeriodoDeJuros } from '../../comum/periodo-de-juros';
 import type { Calculo } from './calculo';
 
 export class TabelaDeJurosDoCalculo {
@@ -54,19 +55,61 @@ export class TabelaDeJurosDoCalculo {
   setJurosDoAjuizamento(v: JurosDoAjuizamentoEnum | null): void { this.jurosDoAjuizamento = v; }
 
   getPeriodoDeJurosPadrao(): Periodo | null {
-    this.definirPeriodosDeJuros();
     return this.periodoDeJurosPadrao;
   }
 
   getPeriodoDeJurosFazendaPublica(): Periodo | null {
-    this.definirPeriodosDeJuros();
     return this.periodoDeJurosFazendaPublica;
   }
 
-  private definirPeriodosDeJuros(): void {
-    if (this.periodoDeJurosCalculado) return;
-    // TODO(fase-10): iterar PeriodoDeJuros encadeados e separar padrão vs Fazenda.
+  /**
+   * definirPeriodosDeJuros — porte 1:1 de
+   * `TabelaDeJurosDoCalculo.definirPeriodosDeJuros` (Java linhas 82-104).
+   *
+   * Percorre a cadeia de PeriodoDeJuros (raiz → proximoPeriodo*) e separa em:
+   *   - `periodoDeJurosPadrao`: bloco contíguo inicial onde isFazendaPublica()=false.
+   *     Período resultante: [primeiro.dataInicial, último_padrao.dataFinal].
+   *   - `periodoDeJurosFazendaPublica`: bloco contíguo subsequente onde
+   *     isFazendaPublica()=true. Período: [primeiro_fp.dataInicial, último_fp.dataFinal].
+   *
+   * Se o primeiro período já é fazenda pública, `periodoDeJurosPadrao` permanece
+   * null (paridade Java linha 86 `if (!periodo.isFazendaPublica())`).
+   *
+   * Idempotente — só recalcula uma vez (`periodoDeJurosCalculado`).
+   *
+   * @param raiz raiz da cadeia de PeriodoDeJuros (vem do parent TabelaDeJuros).
+   */
+  definirPeriodosDeJuros(raiz: PeriodoDeJuros | null): this {
+    if (this.periodoDeJurosCalculado) return this;
+    let periodo: PeriodoDeJuros | null = raiz;
+    if (periodo !== null) {
+      // Bloco padrão (não fazenda pública).
+      if (!periodo.isFazendaPublica()) {
+        const inicial = periodo.getDataInicial();
+        if (inicial !== null) {
+          this.periodoDeJurosPadrao = new Periodo(inicial, null);
+          while (periodo !== null && !periodo.isFazendaPublica()) {
+            const fim: Date | null = periodo.getDataFinal();
+            if (fim !== null) this.periodoDeJurosPadrao.setFinal(fim);
+            periodo = periodo.getProximoPeriodo();
+          }
+        }
+      }
+      // Bloco fazenda pública (após o padrão, ou direto se a cadeia começa em FP).
+      if (periodo !== null && periodo.isFazendaPublica()) {
+        const inicial = periodo.getDataInicial();
+        if (inicial !== null) {
+          this.periodoDeJurosFazendaPublica = new Periodo(inicial, null);
+          while (periodo !== null && periodo.isFazendaPublica()) {
+            const fim: Date | null = periodo.getDataFinal();
+            if (fim !== null) this.periodoDeJurosFazendaPublica.setFinal(fim);
+            periodo = periodo.getProximoPeriodo();
+          }
+        }
+      }
+    }
     this.periodoDeJurosCalculado = true;
+    return this;
   }
 
   /**
