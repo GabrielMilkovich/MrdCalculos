@@ -420,9 +420,19 @@ export class PjeCalcEngineV3 {
           // TRULY INDEPENDENT: calcula `devido` FROM-SCRATCH usando formula oficial
           // PJe-Calc: devido = base * multiplicador * quantidade / divisor * dobra.
           // NAO usa pre.devido do PJC (que seria o resultado ja calculado).
+          //
+          // BUG FIX (Etapa 2.b 2026-04-26): `pre.quantidade || 1` convertia
+          // quantidade=0 em 1 (falsy default), fazendo o motor calcular devido
+          // para competências SEM evento (ex: meses sem feriado laborado).
+          // Causava overshoot massivo em IR (rosicleia +43%, FERIADOS LABORADOS:
+          // input dif=4338 → engine dif=13892, diff +9554).
+          // Fix: usar `?? 1` para preservar 0 quando quantidade explicitamente 0.
           const devidoCalculado = this.calcularDevidoFromScratch(
-            pre.base || 0, pre.divisor || 1, pre.multiplicador || 1,
-            pre.quantidade || 1, pre.dobra || false,
+            pre.base ?? 0,
+            pre.divisor ?? 1,
+            pre.multiplicador ?? 1,
+            pre.quantidade ?? 1,
+            pre.dobra || false,
           );
           oc.setDevido(new Decimal(devidoCalculado));
           oc.setPago(new Decimal(pre.pago || 0)); // pago = dado de entrada (holerite), nao resultado
