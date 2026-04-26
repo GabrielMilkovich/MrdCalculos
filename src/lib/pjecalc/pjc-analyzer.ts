@@ -102,6 +102,9 @@ export interface PJCAnalysis {
     aliquota_terceiros: number;
     /** CAUSA-6: PJe-Calc "Com Correção Trabalhista" — INSS sobre base corrigida */
     com_correcao_trabalhista?: boolean;
+    /** Sprint 1.1: lê <limitarTeto> do XML (Java InssSobreSalariosDevidos).
+     *  45/47 PJCs do corpus têm `false` — engine assumia `true` por default. */
+    limitar_teto?: boolean;
   };
   /** IR config from PJC XML (ImpostoRendaCalculo / impostoDeRenda). */
   ir_config?: {
@@ -858,7 +861,14 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     // Pega a primeira que serve como referência — alíquotas costumam ser estáveis
     if (aliqEmpFromOcs !== null) break;
   }
-  if (aliqEmpFromOcs !== null || aliqSatFromOcs !== null || aliqTercFromOcs !== null) {
+  // Sprint 1.1: ler <limitarTeto> do nível raiz (InssSobreSalariosDevidos).
+  // 45/47 PJCs do corpus têm `false`; engine assumia `true` por default.
+  const limitarTetoRaw = getTextContent(root, 'limitarTeto');
+  const limitarTetoFromXml: boolean | undefined =
+    limitarTetoRaw === 'true' ? true :
+    limitarTetoRaw === 'false' ? false : undefined;
+
+  if (aliqEmpFromOcs !== null || aliqSatFromOcs !== null || aliqTercFromOcs !== null || limitarTetoFromXml !== undefined) {
     if (!cs_config) {
       cs_config = {
         apurar_segurado: resultado.inss_reclamante > 0,
@@ -869,6 +879,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
         aliquota_terceiros: 0,
       };
     }
+    if (limitarTetoFromXml !== undefined) cs_config.limitar_teto = limitarTetoFromXml;
     // Override apenas quando a ocorrência tinha valor não-null/zero.
     // Convenção Java: aliquotaTerceiros=null → não há contribuição a Terceiros
     // (apurar_terceiros=false). aliquotaSAT=null não ocorre na prática (sempre

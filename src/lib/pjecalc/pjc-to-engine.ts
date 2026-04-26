@@ -764,7 +764,9 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
     // PJe-Calc uses "Segurado Empregado" (progressive) or fixed aliquota
     aliquota_segurado_tipo: csConf?.aliquota_segurado && csConf.aliquota_segurado > 0 ? 'fixa' : 'empregado',
     aliquota_segurado_fixa: csConf?.aliquota_segurado || undefined,
-    limitar_teto: true,
+    // Sprint 1.1: respeitar <limitarTeto> do XML quando disponível.
+    // 45/47 PJCs do corpus têm `false`. Default `true` apenas para casos novos.
+    limitar_teto: csConf?.limitar_teto ?? true,
     apurar_empresa: csConf?.apurar_empresa ?? (a.resultado.inss_reclamado > 0),
     // D1 fix: respeitar a flag explícita do parser quando disponível;
     // só usa fallback (aliq>0 OU empregador-ativo) se parser não setou.
