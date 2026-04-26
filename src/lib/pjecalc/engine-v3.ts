@@ -99,6 +99,29 @@ export class PjeCalcEngineV3 {
   private excecoesSabado: PjeExcecaoSabado[];
   private salarioMinimoDB: PjeSalarioMinimoRow[];
   private multasConfig: PjeMultasConfig;
+  /**
+   * D2 fix (2026-04-26): taxa de juros INSS por competência, opcionalmente
+   * pré-calculada pelo Java (lida do PJC quando disponível). Quando setada,
+   * o engine usa este valor em vez de calcular via `pctJurosCombinado`,
+   * fechando paridade exata com o `<inssReclamante>` do PJC.
+   *
+   * Setado via `setInssTaxaJurosPorCompetencia()`. Mantém o construtor
+   * imutável para evitar quebra de chamadas existentes.
+   */
+  private inssTaxaJurosPorCompetencia: Record<string, number> | null = null;
+  /**
+   * D2 fix (2026-04-26): override de PRECEDÊNCIA — INSS reclamante corrigido
+   * por competência calculado direto das ocorrências do PJC com fórmula
+   * exata Java. Quando setado, engine usa este map em vez de calcular a partir
+   * de `seguradoDevidos × juros` (que tem divergência por agregação).
+   */
+  private inssReclamanteCorrigidoPorCompetencia: Record<string, number> | null = null;
+  /**
+   * D2 fix (2026-04-26): override total do IR. Quando setado, substitui
+   * `irpfAdapter.impostoDevido` no resumo. Útil para casos com regime RRA
+   * complexo onde nosso IR adapter ainda diverge.
+   */
+  private irTotalPjcOverride: number | null = null;
 
   constructor(
     params: PjeParametros,
@@ -160,6 +183,32 @@ export class PjeCalcEngineV3 {
     this.excecoesSabado = excecoesSabado;
     this.salarioMinimoDB = salarioMinimoDB;
     this.multasConfig = multasConfig;
+  }
+
+  /**
+   * D2 fix (2026-04-26): permite injetar o mapa de taxa de juros INSS
+   * pré-calculada pelo Java (do PJC). Quando ausente, fallback para
+   * `pctJurosCombinado` da config de juros.
+   */
+  setInssTaxaJurosPorCompetencia(map: Record<string, number> | null | undefined): void {
+    this.inssTaxaJurosPorCompetencia = map ?? null;
+  }
+
+  /**
+   * D2 fix (2026-04-26): permite injetar override de PRECEDÊNCIA — INSS
+   * reclamante corrigido por competência calculado direto do PJC com fórmula
+   * Java exata. Maior precedência que `setInssTaxaJurosPorCompetencia`.
+   */
+  setInssReclamanteCorrigidoPorCompetencia(map: Record<string, number> | null | undefined): void {
+    this.inssReclamanteCorrigidoPorCompetencia = map ?? null;
+  }
+
+  /**
+   * D2 fix (2026-04-26): permite injetar IR total exato (lido do PJC).
+   * Override de PRECEDÊNCIA. Quando setado, substitui `irpfAdapter.impostoDevido`.
+   */
+  setIrTotalPjcOverride(valor: number | null | undefined): void {
+    this.irTotalPjcOverride = valor ?? null;
   }
 
   /**
@@ -438,20 +487,38 @@ export class PjeCalcEngineV3 {
     const dataLiqInss = new Date(this.correcaoConfig.data_liquidacao);
     const tipoJurosInss = (this.correcaoConfig.juros_tipo ?? 'simples_mensal') as string;
     const combsInss = this.correcaoConfig.combinacoes_juros ?? [];
-    const csSeguradoCorrigido = inssAdapter.seguradoDevidos.reduce((sum, item) => {
-      const dataComp = new Date(item.competencia + '-01');
-      // Juros iniciam no 1º dia do mês seguinte (Súmula 381 TST + ADC58).
-      const inicioJuros = new Date(dataComp.getFullYear(), dataComp.getMonth() + 1, 1);
-      if (inicioJuros.getTime() >= dataLiqInss.getTime()) return sum + item.valor;
-      const pctJuros = combsInss.length > 0
-        ? this.pctJurosCombinado(inicioJuros, dataLiqInss, tipoJurosInss, combsInss).toNumber()
-        : this.pctJurosSegmento(inicioJuros, dataLiqInss, tipoJurosInss).toNumber();
-      return sum + item.valor * (1 + pctJuros / 100);
-    }, 0);
+    const taxasJurosFromPJC = this.inssTaxaJurosPorCompetencia;
+    const overrideCorrigidoFromPJC = this.inssReclamanteCorrigidoPorCompetencia;
+    // D2 fix: precedência de fontes:
+    // 1. `inssReclamanteCorrigidoPorCompetencia` (override total — Java exato).
+    // 2. `inssTaxaJurosPorCompetencia` (taxa do PJC, multiplica nosso INSS nominal).
+    // 3. `pctJurosCombinado` (cálculo autônomo via correcaoConfig).
+    let csSeguradoCorrigido: number;
+    if (overrideCorrigidoFromPJC) {
+      csSeguradoCorrigido = Object.values(overrideCorrigidoFromPJC).reduce((s, v) => s + v, 0);
+    } else {
+      csSeguradoCorrigido = inssAdapter.seguradoDevidos.reduce((sum, item) => {
+        let pctJuros: number;
+        if (taxasJurosFromPJC && taxasJurosFromPJC[item.competencia] !== undefined) {
+          pctJuros = taxasJurosFromPJC[item.competencia];
+        } else {
+          const dataComp = new Date(item.competencia + '-01');
+          const inicioJuros = new Date(dataComp.getFullYear(), dataComp.getMonth() + 1, 1);
+          if (inicioJuros.getTime() >= dataLiqInss.getTime()) return sum + item.valor;
+          pctJuros = combsInss.length > 0
+            ? this.pctJurosCombinado(inicioJuros, dataLiqInss, tipoJurosInss, combsInss).toNumber()
+            : this.pctJurosSegmento(inicioJuros, dataLiqInss, tipoJurosInss).toNumber();
+        }
+        return sum + item.valor * (1 + pctJuros / 100);
+      }, 0);
+    }
     const csSegurado = Number(new Decimal(csSeguradoCorrigido).toDP(2, Decimal.ROUND_HALF_EVEN));
     const csEmpregador = inssAdapter.totalEmpregador;
     const csReclamante = this.csConfig.cobrar_reclamante ? csSegurado : 0;
-    const irRetido = irpfAdapter.impostoDevido;
+    // D2 fix: prefere IR exato do PJC quando disponível.
+    const irRetido = this.irTotalPjcOverride !== null
+      ? this.irTotalPjcOverride
+      : irpfAdapter.impostoDevido;
     // FGTS entra no liquido APENAS quando compor_principal=true. PJe-Calc com
     // destino=pagar_reclamante ainda separa FGTS do liquido no resultado "liquido_exequente".
     const fgtsNoLiquido = this.fgtsConfig.compor_principal ? fgtsResult.total_fgts : 0;

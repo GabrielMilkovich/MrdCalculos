@@ -52,6 +52,25 @@ export interface PjcEngineInputs {
   salarioFamiliaConfig?: PjeSalarioFamiliaConfig;
   /** Fidelity report tracking all data losses and synthetic fallbacks */
   fidelityReport: FidelityReport;
+  /**
+   * D2 fix (2026-04-26): taxa de juros INSS por competência, lida do PJC.
+   * Quando disponível, o engine-v3 usa este valor (em vez de calcular via
+   * `pctJurosCombinado`) para fechar paridade exata com Java.
+   */
+  inssTaxaJurosPorCompetencia?: Record<string, number>;
+  /**
+   * D2 fix (2026-04-26): INSS reclamante corrigido por competência, calculado
+   * direto das ocorrências do PJC com fórmula validada (erro <0.01%):
+   *   sum_oc(VDS × (1 + taxaJuros/100 + taxaMulta/100))
+   * Override de PRECEDÊNCIA — quando setado, engine-v3 usa este map em vez
+   * de calcular a partir de `seguradoDevidos × juros`.
+   */
+  inssReclamanteCorrigidoPorCompetencia?: Record<string, number>;
+  /**
+   * D2 fix (2026-04-26): IR total exato do PJC. Override de precedência
+   * para `eng_ir`. Resolve gaps RRA/exclusivos sem replicar fórmula Java.
+   */
+  irTotalPjc?: number;
 }
 
 export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string): PjcEngineInputs {
@@ -114,6 +133,9 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     pensaoConfig: buildPensaoConfig(analysis),
     salarioFamiliaConfig: buildSalarioFamiliaConfig(analysis),
     fidelityReport: report,
+    inssTaxaJurosPorCompetencia: analysis.inss_taxa_juros_por_competencia,
+    inssReclamanteCorrigidoPorCompetencia: analysis.inss_reclamante_corrigido_por_competencia,
+    irTotalPjc: analysis.ir_total_pjc,
   };
 }
 

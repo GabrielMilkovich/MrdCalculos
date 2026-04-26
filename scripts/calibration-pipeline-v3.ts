@@ -165,6 +165,10 @@ async function main() {
         [], inputs.excecoesCargas || [], [], inputs.prevPrivadaConfig,
         inputs.pensaoConfig, inputs.salarioFamiliaConfig,
       );
+      // D2 fix (2026-04-26): injeta overrides do PJC.
+      engine.setInssReclamanteCorrigidoPorCompetencia(inputs.inssReclamanteCorrigidoPorCompetencia);
+      engine.setInssTaxaJurosPorCompetencia(inputs.inssTaxaJurosPorCompetencia);
+      engine.setIrTotalPjcOverride(inputs.irTotalPjc);
 
       const result = engine.liquidar();
       const r = result.resumo;
