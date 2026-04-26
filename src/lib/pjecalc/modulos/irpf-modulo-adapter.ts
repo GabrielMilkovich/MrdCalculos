@@ -73,7 +73,15 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     const base13PorAno: Record<number, number> = {};
     const compsNormal = new Set<string>();
     const compsFerias = new Set<string>();
+    // FIX 4 (IR-FIXER 2026-04-26): NM do RRA (Art. 12-A) =
+    //   |competências de não-13 (com base IR > 0)| + |competências de 13 (idem)|
+    // Sets SEPARADOS, somados por cardinalidade (sobreposições contam 2×).
+    // Ref Java: pjecalc-fonte/.../MaquinaDeCalculoDeIrpf.java:266-282 e :414.
+    // Bate com francisco-pablo: 28 (não-13) + 3 (13) = 31 ✓.
+    const compsNaoTreze = new Set<string>();
+    const compsTreze = new Set<string>();
     const anoLiq = parseInt(this.dataLiquidacao.slice(0, 4));
+    void anoLiq; // reservado para futura segregação ano-liquidação
 
     for (const vc of this.verbas) {
       if (!vc.getIncidenciaIRPF()) continue;
@@ -90,6 +98,9 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
         const corrigida = oc.getDiferencaCorrigida();
         const valorBase = corrigida ? corrigida.toNumber() : dif;
         const comp = this.formatCompetencia(dataIni);
+        // Particionar competência em bucket-13 ou bucket-não-13 (PJC).
+        if (eh13) compsTreze.add(comp);
+        else compsNaoTreze.add(comp);
 
         if (ehFerias && this.irConfig.tributacao_separada_ferias) {
           baseFerias += valorBase;
@@ -105,8 +116,8 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
       }
     }
 
-    // ─── 2. Art. 12-A: NM = span de meses do período ───
-    const mesesTotal = this.computeSpanMeses(compsNormal);
+    // ─── 2. Art. 12-A: NM = |não-13| + |13| (sets separados) ───
+    const mesesTotal = this.computeNMRra(compsNaoTreze, compsTreze);
 
     // ─── 3. Deduções ───
     let deducoes = 0;
@@ -205,13 +216,21 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
 
-  /** Nº meses do span [primeira competência, última competência] inclusive. */
-  private computeSpanMeses(comps: Set<string>): number {
-    if (comps.size === 0) return 1;
-    const arr = [...comps].sort();
-    const [y1, m1] = arr[0].split('-').map(Number);
-    const [y2, m2] = arr[arr.length - 1].split('-').map(Number);
-    return Math.max(1, (y2 - y1) * 12 + (m2 - m1) + 1);
+  /**
+   * NM do RRA (Art. 12-A) = SOMA das cardinalidades de DOIS sets separados:
+   *   1) competências de verbas NÃO-13º (Demais, Aviso, Férias) com base IR > 0
+   *   2) competências de verbas 13º com diferença IR > 0
+   *
+   * Sobreposições entre os dois sets são CONTADAS DUAS VEZES (uma em cada).
+   * Confirmado pelo PJC em `MaquinaDeCalculoDeIrpf.java:266-282` (separa em
+   * dois HashSet<Date>) e `:414`:
+   *   somatorioMesesAnteriores = mesesAnosAnteriores.size + mesesAnosAnterioresDecimoTerceiro.size
+   *
+   * Para francisco-pablo: 28 (não-13) + 3 (13) = 31 ✓ (vs span 28 do código antigo).
+   */
+  private computeNMRra(compsNaoTreze: Set<string>, compsTreze: Set<string>): number {
+    const total = compsNaoTreze.size + compsTreze.size;
+    return Math.max(1, total);
   }
 
   private getTabelaParaCompetencia(comp: string): {

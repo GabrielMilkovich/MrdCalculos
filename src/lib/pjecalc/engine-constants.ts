@@ -12,13 +12,17 @@ export const DEFAULT_FAIXAS_INSS = [
   { ate: 8157.41, aliquota: 0.14 },
 ];
 
-// IRRF 2025 - Tabela mensal
+// IRRF — Tabela mensal vigente a partir de mai/2025
+// Lei 14.973/2024 + MP 1.294/2025 (DOU 14/04/2025): nova faixa de isenção
+// elevada para R$ 2.428,80 (com desconto simplificado de 25% chega a 2 SM).
+// Ground-truth confirmado pelo PJC: dedução faixa 15% = R$ 394,16
+// (calculado por valorDeducao/NM = 12.218,96/31 em RRA do caso francisco-pablo).
 export const DEFAULT_FAIXAS_IR = [
-  { ate: 2259.20, aliquota: 0, deducao: 0 },
-  { ate: 2826.65, aliquota: 0.075, deducao: 169.44 },
-  { ate: 3751.05, aliquota: 0.15, deducao: 381.44 },
-  { ate: 4664.68, aliquota: 0.225, deducao: 662.77 },
-  { ate: Infinity, aliquota: 0.275, deducao: 896.00 },
+  { ate: 2428.80, aliquota: 0, deducao: 0 },
+  { ate: 2826.65, aliquota: 0.075, deducao: 182.16 },
+  { ate: 3751.05, aliquota: 0.15, deducao: 394.16 },
+  { ate: 4664.68, aliquota: 0.225, deducao: 675.49 },
+  { ate: Infinity, aliquota: 0.275, deducao: 908.73 },
 ];
 
 export const DEFAULT_DEDUCAO_DEPENDENTE = 189.59;
@@ -294,6 +298,28 @@ export const HISTORICO_FAIXAS_IR: Record<
       { ate: 3751.05, aliquota: 0.15, deducao: 381.44 },
       { ate: 4664.68, aliquota: 0.225, deducao: 662.77 },
       { ate: Infinity, aliquota: 0.275, deducao: 896.00 },
+    ],
+    deducao_dependente: 189.59,
+  },
+  // 2025 jan–abr: tabela inalterada desde fev/2024 (Lei 14.848/2024)
+  '2025-01': {
+    faixas: [
+      { ate: 2259.20, aliquota: 0, deducao: 0 },
+      { ate: 2826.65, aliquota: 0.075, deducao: 169.44 },
+      { ate: 3751.05, aliquota: 0.15, deducao: 381.44 },
+      { ate: 4664.68, aliquota: 0.225, deducao: 662.77 },
+      { ate: Infinity, aliquota: 0.275, deducao: 896.00 },
+    ],
+    deducao_dependente: 189.59,
+  },
+  // 2025 mai–dez: Lei 14.973/2024 + MP 1.294/2025 — nova isenção R$ 2.428,80
+  '2025-05': {
+    faixas: [
+      { ate: 2428.80, aliquota: 0, deducao: 0 },
+      { ate: 2826.65, aliquota: 0.075, deducao: 182.16 },
+      { ate: 3751.05, aliquota: 0.15, deducao: 394.16 },
+      { ate: 4664.68, aliquota: 0.225, deducao: 675.49 },
+      { ate: Infinity, aliquota: 0.275, deducao: 908.73 },
     ],
     deducao_dependente: 189.59,
   },
