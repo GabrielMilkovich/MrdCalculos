@@ -323,7 +323,18 @@ export class OcorrenciaDeVerba {
     let base: Decimal = new Decimal(0);
     if (corrigido) {
       const corr = this.getDiferencaCorrigida();
-      base = naoNulo(corr) ? corr : new Decimal(0);
+      // Java (OcorrenciaDeVerba.java:673-674) usa `getDiferencaCorrigida()` direto.
+      // Em Java, quando o `indiceAcumulado` não foi setado, `getDiferencaCorrigida()`
+      // retorna null e o método continua propagando null pelas operações
+      // subsequentes (`null.multiply(...)` lança NPE em alguns paths Java, mas a
+      // semântica esperada do PJe-Calc é "ocorrência sem índice → cai no
+      // comportamento legado nominal" — ver `MaquinaDeCalculo.liquidarVerba` que
+      // garante a setagem na maioria dos fluxos. Em TS optamos pelo fallback
+      // não-destrutivo: nominal (`getDiferenca()`), preservando o comportamento
+      // anterior ao port D1 e evitando zerar a base por falta de índice.
+      // (Antes: `?? new Decimal(0)` zerava a base e regredia o INSS quando
+      // alguma ocorrência ficava sem indiceAcumulado.)
+      base = naoNulo(corr) ? corr : this.getDiferenca();
     } else {
       base = this.getDiferenca();
     }

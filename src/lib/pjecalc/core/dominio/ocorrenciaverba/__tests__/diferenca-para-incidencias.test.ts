@@ -114,7 +114,12 @@ describe('OcorrenciaDeVerba.getDiferencaParaCalculoDasIncidencias (D1 — Java 6
     expect(r!.toString()).toBe('1250');
   });
 
-  it('corrigido=true sem indiceAcumulado → fallback para 0 (não propaga null)', () => {
+  it('corrigido=true sem indiceAcumulado → fallback para nominal (preserva base)', () => {
+    // INSS-FIXER R2 (2026-04-26): mudança intencional. Antes do D1 a integração
+    // direta no adapter usava `oc.getDiferencaCorrigida() ?? oc.getDiferenca()`.
+    // O port preservou esse comportamento via fallback nominal quando o
+    // `indiceAcumulado` não está setado, evitando regressão de INSS no
+    // calibrate (ver REGRESSAO-CRITICA-2026-04-26.md). Antes era zero.
     const oc = new OcorrenciaDeVerba();
     oc.setVerbaDeCalculo(mockVerba({ caracteristica: CaracteristicaDaVerbaEnum.COMUM }));
     oc.setDevido(new Decimal('1000'));
@@ -123,7 +128,8 @@ describe('OcorrenciaDeVerba.getDiferencaParaCalculoDasIncidencias (D1 — Java 6
 
     const r = oc.getDiferencaParaCalculoDasIncidencias(true);
     expect(r).not.toBeNull();
-    expect(r!.toString()).toBe('0');
+    // Nominal: 1000 - 0 = 1000 → arredondado a 2 casas: '1000'
+    expect(r!.toString()).toBe('1000');
   });
 
   it('abono com tipoValor=INFORMADO → NÃO aplica retirarAbono (Java linha 678)', () => {
