@@ -94,9 +94,23 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
         if (!dataIni) continue;
         const dif = oc.getDiferenca().toNumber();
         if (dif <= 0) continue;
-        // Base = diferença corrigida (se incidir_sobre_juros=true, soma juros)
-        const corrigida = oc.getDiferencaCorrigida();
-        const valorBase = corrigida ? corrigida.toNumber() : dif;
+        // Etapa 2 D2 (2026-04-26): Java aplica regras especiais para FERIAS
+        // (Ref: ProporcoesIrpf.java:64-69 do PJe-Calc):
+        //   - case FERIAS: usa `getDiferencaCorrigidaParaCalculoDasIncidencias`
+        //     (que aplica dobra ×0.5 e retira abono pecuniário, conforme
+        //     CLT art. 137/143 — partes indenizatórias isentas IR)
+        //   - case 13o e COMUM: usa `getDiferencaCorrigida` puro
+        // Para férias indenizadas, o método retorna null e Java skip.
+        // Para férias com dobra/abono, retorna porção tributável.
+        let valorBase: number;
+        if (ehFerias) {
+          const baseIncid = oc.getDiferencaCorrigidaParaCalculoDasIncidencias();
+          if (baseIncid === null) continue;  // férias indenizadas (sem dobra/abono): skip
+          valorBase = baseIncid.toNumber();
+        } else {
+          const corrigida = oc.getDiferencaCorrigida();
+          valorBase = corrigida ? corrigida.toNumber() : dif;
+        }
         const comp = this.formatCompetencia(dataIni);
         // Particionar competência em bucket-13 ou bucket-não-13 (PJC).
         if (eh13) compsTreze.add(comp);
