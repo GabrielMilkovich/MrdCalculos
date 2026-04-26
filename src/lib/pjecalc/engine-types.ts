@@ -263,6 +263,12 @@ export interface PjeVerba {
     pago: number;
     /** PJC ground truth correction factor (indiceAcumulado from XML) */
     indice_acumulado?: number;
+    /** Etapa 1.bis D2 (2026-04-26): férias indenizadas — Java exclui da base
+     *  INSS (Lei 8.212/91 art. 28 §9 "d" + Súmula 171 TST). Quando true,
+     *  D1 (`getDiferencaParaCalculoDasIncidencias`) retorna null e adapter pula. */
+    ferias_indenizadas?: boolean;
+    /** Para D1: férias com abono pecuniário (CLT art. 143). */
+    ferias_com_abono?: boolean;
   }[];
 }
 

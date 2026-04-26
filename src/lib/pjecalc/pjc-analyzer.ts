@@ -269,6 +269,10 @@ export interface OcorrenciaAnalysis {
   pago_integral?: number;
   indice_acumulado?: number;
   caracteristica: string;
+  /** Etapa 1.bis D2 (2026-04-26): férias indenizadas (Java exclui da base INSS). */
+  ferias_indenizadas?: boolean;
+  /** Etapa 1.bis D2: férias com abono pecuniário (CLT art. 143). */
+  ferias_com_abono?: boolean;
 }
 
 export interface HistoricoAnalysis {
@@ -1520,6 +1524,10 @@ function parseOcorrencias(verbaEl: Element): {
       pago_integral: parseNum(getTextContent(oc, 'pagoIntegral')) || undefined,
       indice_acumulado: indiceAcumulado,
       caracteristica: getTextContent(oc, 'caracteristica'),
+      // Etapa 1.bis D2 (2026-04-26): captura flags férias para D1 excluir
+      // verbas indenizadas da base INSS (Lei 8.212/91 art. 28 §9 "d").
+      ferias_indenizadas: getTextContent(oc, 'feriasIndenizadas') === 'true',
+      ferias_com_abono: getTextContent(oc, 'feriasComAbono') === 'true',
     });
   }
 

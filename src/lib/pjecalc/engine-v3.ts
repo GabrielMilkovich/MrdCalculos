@@ -429,6 +429,12 @@ export class PjeCalcEngineV3 {
           oc.setAtivo(true);
           oc.setValor(ValorDaVerbaEnum.CALCULADO);
           oc.setVerbaDeCalculo(vc);
+          // Etapa 1.bis D2 (2026-04-26): propaga flags do PJC para D1
+          // (`getDiferencaParaCalculoDasIncidencias`) excluir corretamente:
+          // - férias indenizadas: Lei 8.212/91 art. 28 §9 "d" + Súmula 171 TST
+          // - férias com abono: CLT art. 143 (também isento)
+          if (pre.ferias_indenizadas) oc.setFeriasIndenizadas(true);
+          if (pre.ferias_com_abono) oc.setFeriasComAbono(true);
           // INDEPENDENT MODE: NAO importar indice_acumulado pre-computado do PJC.
           // calculo.liquidar() deve calcular fator de correcao from-scratch via
           // ParametrosDeAtualizacao + TabelaDeCorrecaoMonetaria.

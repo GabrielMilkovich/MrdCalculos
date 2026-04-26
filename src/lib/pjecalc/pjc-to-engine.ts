@@ -418,6 +418,8 @@ function consolidarReflexoMediaPelaQuantidade(
     devido: +valorPorMes.toFixed(10),
     pago: 0,
     indice_acumulado: oc.indice_acumulado,
+    ferias_indenizadas: oc.ferias_indenizadas,
+    ferias_com_abono: oc.ferias_com_abono,
   }));
 }
 
@@ -546,6 +548,8 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
             devido: oc.devido || 0,
             pago: oc.pago || 0,
             indice_acumulado: oc.indice_acumulado,
+            ferias_indenizadas: oc.ferias_indenizadas,
+            ferias_com_abono: oc.ferias_com_abono,
           };
         }
         return {
@@ -558,6 +562,8 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
           devido: oc.devido,
           pago: oc.pago,
           indice_acumulado: oc.indice_acumulado,
+          ferias_indenizadas: oc.ferias_indenizadas,
+          ferias_com_abono: oc.ferias_com_abono,
         };
       });
     }
