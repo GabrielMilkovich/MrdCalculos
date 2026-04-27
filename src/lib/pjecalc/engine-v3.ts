@@ -46,7 +46,7 @@ import { Multa } from './core/dominio/calculo/multa/multa';
 import { ServicoDeCalculo } from './core/servicos/servico-de-calculo';
 import { InssModuloAdapter } from './modulos/inss-modulo-adapter';
 import { IrpfModuloAdapter } from './modulos/irpf-modulo-adapter';
-import { SELIC_MENSAL, TR_MENSAL } from './indices-fallback';
+import { SELIC_MENSAL, TR_MENSAL, IPCA_E_ACUMULADO } from './indices-fallback';
 import { TABELA_SELIC_MENSAL } from './core/dominio/indices/selic/tabela-selic-mensal';
 import {
   IndiceMonetarioEnum,
@@ -1213,6 +1213,17 @@ export class PjeCalcEngineV3 {
     if (t === 'selic' || t === 'selic_bacen' || t === 'selic_fazenda') {
       return new Decimal(this.somarSelicSimples(inicio, fim));
     }
+    // TAXA_LEGAL pos Lei 14.905/2024 (vigor 30/08/2024): art. 406 CC = SELIC - IPCA.
+    // Antes de 30/08/2024 mantém comportamento legado (1%/m abaixo).
+    // Ref: Lei 14.905/2024, CC art. 406 nova redação.
+    if (t === 'taxa_legal') {
+      const corte14905 = new Date('2024-08-30').getTime();
+      if (inicio.getTime() >= corte14905) {
+        // Fórmula composta mês-a-mês: taxa_real_m = (1+selic_m)/(1+ipca_m) - 1
+        return new Decimal(this.somarTaxaLegalCompostaMensal(inicio, fim));
+      }
+      // pre-Lei 14.905: cai no fallback 1%/m abaixo (legado).
+    }
     // FAZENDA_PUBLICA pre-EC 113: 0.5%/m (caderneta poupanca sem rendimento real)
     if (t === 'fazenda_publica' || t === 'juros_poupanca') {
       const meses = this.mesesEntre(inicio, fim);
@@ -1293,6 +1304,87 @@ export class PjeCalcEngineV3 {
   private mesesEntre(inicio: Date, fim: Date): number {
     const ms = fim.getTime() - inicio.getTime();
     return new Decimal(ms).div(1000 * 3600 * 24 * 30.4375).toDP(6).toNumber();
+  }
+
+  /**
+   * Soma taxa legal mensal pos-Lei 14.905/2024 (CC art. 406):
+   *   taxa_real_m = max(0, (1+selic_m/100)/(1+ipca_m/100) - 1) × 100
+   * Pro-rata para mes inicial/final parcial. Retorna pontos percentuais.
+   */
+  private somarTaxaLegalCompostaMensal(inicio: Date, fim: Date): number {
+    let total = new Decimal(0);
+    const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+    const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+    while (cursor.getTime() <= fimMes.getTime()) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      const prev = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1);
+      const prevKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+      const selicM = SELIC_MENSAL[key];
+      const acum = IPCA_E_ACUMULADO[key];
+      const acumPrev = IPCA_E_ACUMULADO[prevKey];
+      if (selicM !== undefined && acum !== undefined && acumPrev !== undefined && acumPrev > 0) {
+        const ipcaM = (acum / acumPrev - 1) * 100;
+        const selicDec = new Decimal(selicM).div(100);
+        const ipcaDec = new Decimal(ipcaM).div(100);
+        let taxaReal = new Decimal(1).plus(selicDec).div(new Decimal(1).plus(ipcaDec)).minus(1).times(100);
+        if (taxaReal.lt(0)) taxaReal = new Decimal(0);
+        const ehInicio = cursor.getFullYear() === inicio.getFullYear() && cursor.getMonth() === inicio.getMonth();
+        const ehFim = cursor.getFullYear() === fim.getFullYear() && cursor.getMonth() === fim.getMonth();
+        let fator = 1;
+        if (ehInicio && ehFim) {
+          const dias = fim.getDate() - inicio.getDate();
+          const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+          fator = Math.max(0, dias) / diasMes;
+        } else if (ehInicio) {
+          const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+          fator = (diasMes - inicio.getDate() + 1) / diasMes;
+        } else if (ehFim) {
+          const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+          fator = fim.getDate() / diasMes;
+        }
+        total = total.plus(taxaReal.times(fator));
+      }
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return total.toNumber();
+  }
+
+  /**
+   * Soma IPCA-E mensal pro-rata em [inicio, fim], retornando em pontos percentuais.
+   * Calcula taxa mensal a partir de IPCA_E_ACUMULADO: taxa[m] = (acum[m]/acum[m-1]-1)*100.
+   * Usado pelo branch taxa_legal pos Lei 14.905/2024 (CC art. 406 = SELIC - IPCA).
+   */
+  private somarIpcaSimples(inicio: Date, fim: Date): number {
+    let total = new Decimal(0);
+    const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+    const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+    while (cursor.getTime() <= fimMes.getTime()) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      const prev = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1);
+      const prevKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+      const acum = IPCA_E_ACUMULADO[key];
+      const acumPrev = IPCA_E_ACUMULADO[prevKey];
+      if (acum !== undefined && acumPrev !== undefined && acumPrev > 0) {
+        const taxa = (acum / acumPrev - 1) * 100;
+        const ehInicio = cursor.getFullYear() === inicio.getFullYear() && cursor.getMonth() === inicio.getMonth();
+        const ehFim = cursor.getFullYear() === fim.getFullYear() && cursor.getMonth() === fim.getMonth();
+        let fator = 1;
+        if (ehInicio && ehFim) {
+          const dias = fim.getDate() - inicio.getDate();
+          const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+          fator = Math.max(0, dias) / diasMes;
+        } else if (ehInicio) {
+          const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+          fator = (diasMes - inicio.getDate() + 1) / diasMes;
+        } else if (ehFim) {
+          const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+          fator = fim.getDate() / diasMes;
+        }
+        total = total.plus(new Decimal(taxa).times(fator));
+      }
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return total.toNumber();
   }
 
   private somarSelicSimples(inicio: Date, fim: Date): number {
