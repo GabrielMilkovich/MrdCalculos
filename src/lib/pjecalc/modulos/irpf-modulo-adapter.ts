@@ -66,6 +66,16 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
   liquidar(_dataLiquidacao?: Date): void {
     if (!this.irConfig.apurar) return;
 
+    // ─── Flags de controle (Sprint 4.2-A1) ───
+    // apurar_rra: undefined → auto (mesesTotal > 1); true → forçar RRA; false → forçar tabela
+    const apurarRraFlag = this.irConfig.apurar_rra;
+    // aplicar_regime_caixa: true → tributar tudo no ano da liquidação (mesesTotal=1, tabela mensal)
+    const regimeCaixa = this.irConfig.regime_caixa ?? false;
+    // incidir_sobre_principal_tributavel: default true; false → excluir verbas COMUM/normais
+    const incidirTributavel = this.irConfig.incidir_sobre_principal_tributavel ?? true;
+    // incidir_sobre_principal_nao_tributavel: default false; true → incluir verbas irpf=false
+    const incidirNaoTributavel = this.irConfig.incidir_sobre_principal_nao_tributavel ?? false;
+
     // ─── 1. Coletar bases por característica ───
     let baseBruta = 0;    // normal + demais
     let base13 = 0;        // 13º (tributação exclusiva)
@@ -84,7 +94,14 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     void anoLiq; // reservado para futura segregação ano-liquidação
 
     for (const vc of this.verbas) {
-      if (!vc.getIncidenciaIRPF()) continue;
+      const temIncidenciaIR = vc.getIncidenciaIRPF();
+      // Flag incidir_sobre_principal_nao_tributavel=true: incluir verbas sem incidência IR
+      // Flag incidir_sobre_principal_tributavel=false: excluir verbas com incidência IR (COMUM)
+      if (temIncidenciaIR) {
+        if (!incidirTributavel) continue; // flag explícita: excluir tributáveis
+      } else {
+        if (!incidirNaoTributavel) continue; // default: não incluir não-tributáveis
+      }
       const car = vc.getCaracteristica();
       const ehFerias = car === CaracteristicaDaVerbaEnum.FERIAS;
       const eh13 = car === CaracteristicaDaVerbaEnum.DECIMO_TERCEIRO_SALARIO;
@@ -131,7 +148,18 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     }
 
     // ─── 2. Art. 12-A: NM = |não-13| + |13| (sets separados) ───
-    const mesesTotal = this.computeNMRra(compsNaoTreze, compsTreze);
+    // Regime de caixa (IN RFB 1.500/2014 art. 36): tributar todo o valor no momento
+    // do pagamento, sem divisão por meses. NM=1 → tabela mensal simples.
+    // apurar_rra=false: forçar tabela mensal (sem RRA), NM=1.
+    // apurar_rra=true:  forçar RRA mesmo se NM=1 (raro, mas respeitamos UI).
+    // apurar_rra=undefined: auto — RRA se NM>1.
+    let mesesTotal: number;
+    if (regimeCaixa || apurarRraFlag === false) {
+      // Regime de caixa ou RRA explicitamente desligado: tabela mensal (NM=1)
+      mesesTotal = 1;
+    } else {
+      mesesTotal = this.computeNMRra(compsNaoTreze, compsTreze);
+    }
 
     // ─── 3. Deduções ───
     let deducoes = 0;
@@ -218,7 +246,20 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     );
     this.impostoDevido = imposto.toDP(2, ROUND_CS_IR).toNumber();
     this.mesesRRA = mesesTotal;
-    this.metodo = mesesTotal > 1 ? 'art_12a_rra' : 'tabela_mensal';
+    // Determinar método reportado:
+    // - apurar_rra=true  → forçar art_12a_rra (mesmo NM=1)
+    // - apurar_rra=false → forçar tabela_mensal (mesmo NM>1)
+    // - apurar_rra=undefined (auto) → RRA se NM>1, tabela caso contrário
+    // - regime_caixa=true → sempre tabela_mensal (NM já foi forçado a 1)
+    if (regimeCaixa) {
+      this.metodo = 'tabela_mensal';
+    } else if (apurarRraFlag === true) {
+      this.metodo = 'art_12a_rra';
+    } else if (apurarRraFlag === false) {
+      this.metodo = 'tabela_mensal';
+    } else {
+      this.metodo = mesesTotal > 1 ? 'art_12a_rra' : 'tabela_mensal';
+    }
     this.ir13Exclusivo = ir13.toDP(2, ROUND_CS_IR).toNumber();
     this.irFeriasSeparado = irFerias.toDP(2, ROUND_CS_IR).toNumber();
     this.irAnoLiquidacao = irTotal.toDP(2, ROUND_CS_IR).toNumber();
