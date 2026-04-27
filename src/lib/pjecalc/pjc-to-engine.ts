@@ -575,7 +575,9 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
       valor: (isInformada ? 'informado' : 'calculado') as 'informado' | 'calculado',
       caracteristica,
       ocorrencia_pagamento: ocorrenciaPagamento,
-      compor_principal: v.compor_principal !== 'NAO_COMPOR',
+      // PJC XML usa LogicoEnum: 'SIM' ou 'NAO'. comporPrincipal=NAO significa
+      // que a verba NAO entra no principal (eg. DOMIGO E FERIADO ja pago).
+      compor_principal: v.compor_principal !== 'NAO',
       zerar_valor_negativo: false,
       dobrar_valor_devido: v.formula.dobra,
       periodo_inicio: v.periodo_inicio,

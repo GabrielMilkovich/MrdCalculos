@@ -557,10 +557,15 @@ export class PjeCalcEngineV3 {
       } satisfies PjeVerbaResult;
     });
 
-    // Totais
-    const principalBruto = verbaResults.reduce((s, v) => s + v.total_diferenca, 0);
-    const principalCorrigido = verbaResults.reduce((s, v) => s + v.total_corrigido, 0);
-    const jurosMora = verbaResults.reduce((s, v) => s + v.total_juros, 0);
+    // Totais — respeita flag compor_principal=NAO (Java: comporPrincipal=NAO
+    // exclui verba do principal_corrigido, ex: verbas pagas/quitadas).
+    // Ref calculo.ts:993-994 (calcularTotalCorrigido).
+    const principalBruto = verbaResults.reduce((s, v, i) =>
+      this.verbas[i].compor_principal !== false ? s + v.total_diferenca : s, 0);
+    const principalCorrigido = verbaResults.reduce((s, v, i) =>
+      this.verbas[i].compor_principal !== false ? s + v.total_corrigido : s, 0);
+    const jurosMora = verbaResults.reduce((s, v, i) =>
+      this.verbas[i].compor_principal !== false ? s + v.total_juros : s, 0);
 
     // Multa 467 CLT: 50% sobre verbas RESCISORIAS (aviso, saldo salario, 13, ferias) nao pagas
     const multa467 = this.calcularMulta467(verbaResults);
