@@ -35,7 +35,11 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: BASE_URL,
-    trace: 'on-first-retry',
+    // Trace habilitado para debugging dos fluxos criticos.
+    // 'retain-on-failure' => grava trace para todas as execucoes mas so mantem
+    // o arquivo final em caso de falha. Para forcar gravacao mesmo em sucesso,
+    // rode: `npx playwright test --trace on`.
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
