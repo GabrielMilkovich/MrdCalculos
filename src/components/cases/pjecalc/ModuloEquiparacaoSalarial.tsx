@@ -111,6 +111,7 @@ export function ModuloEquiparacaoSalarial({ caseId }: Props) {
           <CardTitle className="text-sm">Art. 461 CLT - Equiparação Salarial</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <p className="text-[10px] text-amber-700 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — CLT art. 461 + Súmula 6 TST: requer modelo de mercado salarial e validação de identidade de função. UI persiste paradigma e salários, mas engine ainda não consome esses dados para gerar diferenças. Aguarda PJC com equiparação ativa como ground-truth (0/47 no corpus).</p>
           <div className="flex items-center gap-2">
             <Checkbox checked={config.ativo} onCheckedChange={v => update({ ativo: !!v })} />
             <Label className="text-xs">Apurar diferenças por equiparação salarial</Label>

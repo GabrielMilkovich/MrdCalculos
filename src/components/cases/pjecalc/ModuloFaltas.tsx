@@ -91,6 +91,8 @@ export function ModuloFaltas({ caseId }: Props) {
         </Button>
       </div>
 
+      <p className="text-[10px] text-amber-700 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo (campo "Reiniciar Férias") — CLT art. 130 controverso quanto a reiniciar período aquisitivo após falta. Flag persiste mas engine ainda usa redução clássica da tabela do art. 130. Aguarda PJC com <code>reiniciarFerias=true</code> como ground-truth (0/47 no corpus).</p>
+
       {faltas.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-sm text-muted-foreground">

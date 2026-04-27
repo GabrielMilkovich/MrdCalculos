@@ -91,10 +91,12 @@ export function ModuloIR({ caseId }: Props) {
                   <Checkbox checked={form.incidir_sobre_juros} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_juros: !!v }))} />
                   <Label className="text-xs">Incidir sobre Juros de Mora</Label>
                 </div>
+                <p className="text-[10px] text-amber-700 -mt-1 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — Súmula 368 IV TST: IR não incide sobre juros mora trabalhistas. Flag persiste mas engine ainda não distingue. Aguarda PJC com <code>incidirSobreJuros=true</code> + sentença explícita (0/47 no corpus).</p>
                 <div className="flex items-center gap-2" title="Quando marcado, IR é cobrado do reclamado em vez do reclamante (raro, depende de sentença).">
                   <Checkbox checked={form.cobrar_reclamado} onCheckedChange={v => setForm(p => ({ ...p, cobrar_reclamado: !!v }))} />
                   <Label className="text-xs">Cobrar do Reclamado</Label>
                 </div>
+                <p className="text-[10px] text-amber-700 -mt-1 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — Lei 8.541/92 art. 46 vs Súmula 368 STJ. Flag persiste mas engine ainda calcula IR descontando do reclamante. Aguarda PJC com cobrança ao reclamado como ground-truth (0/47 no corpus).</p>
                 <div className="flex items-center gap-2" title="13º salário tributado de forma exclusiva na fonte (separado dos demais rendimentos). Lei 7.713/88 art. 26.">
                   <Checkbox checked={form.tributacao_exclusiva_13} onCheckedChange={v => setForm(p => ({ ...p, tributacao_exclusiva_13: !!v }))} />
                   <Label className="text-xs">Tributação Exclusiva (13º)</Label>

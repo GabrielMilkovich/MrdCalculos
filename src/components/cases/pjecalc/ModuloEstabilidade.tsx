@@ -104,6 +104,7 @@ export function ModuloEstabilidade({ caseId }: Props) {
           <CardTitle className="text-sm">Configuração de Estabilidade</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <p className="text-[10px] text-amber-700 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — gestante (Art. 10 ADCT + Súm. 244 TST), CIPA (Art. 10 ADCT) e acidentária (Art. 118 Lei 8.213) requerem motor próprio de indenização (salários do período + reflexos 13º/férias/FGTS). UI persiste configuração mas engine ainda não gera indenização automática. Aguarda PJC com estabilidade ativa como ground-truth (0/47 no corpus).</p>
           <div className="flex items-center gap-2">
             <Checkbox checked={config.ativo} onCheckedChange={v => update({ ativo: !!v })} />
             <Label className="text-xs">Apurar indenização por estabilidade provisória</Label>
