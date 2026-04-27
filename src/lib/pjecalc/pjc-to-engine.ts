@@ -824,8 +824,12 @@ function buildDefaultIRConfig(a: PJCAnalysis): PjeIRConfig {
       deduzir_honorarios: ic.deduzir_honorarios_reclamante,
       aposentado_65: ic.aposentado_maior_que_65,
       dependentes: ic.possui_dependentes ? ic.quantidade_dependentes : 0,
-      // Sprint 3: RRA art. 12-A
-      apurar_rra: (icExt.rra_meses as number ?? 0) > 0,
+      // Sprint 3/4.2-A1: RRA art. 12-A
+      // apurar_rra=undefined → auto-detect (engine decide por NM > 1)
+      // apurar_rra=true  → PJC XML tem rraMeses > 0 (forçar RRA)
+      // apurar_rra=false → somente quando UI explicitamente desliga (não por rra_meses=0)
+      // Quando rra_meses=0 do PJC, mantemos undefined para preservar auto-detect.
+      apurar_rra: (icExt.rra_meses as number ?? 0) > 0 ? true : undefined,
       rra_meses: (icExt.rra_meses as number) || undefined,
       rra_numero_parcelas: (icExt.rra_numero_parcelas as number) || undefined,
       incidir_sobre_principal_tributavel: (icExt.incidir_sobre_principal_tributavel as boolean) ?? true,
@@ -973,6 +977,13 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     })(),
     combinacoes_indice: hasCombinations ? combinacoes_indice : undefined,
     combinacoes_juros: combinacoes_juros.length > 0 ? combinacoes_juros : undefined,
+    // Sprint 4.2-A2 (ADC 58 STF + Súm.TST 381): explicitar flags TIER 1.
+    // Quando o PJC trouxe combinações, ligamos as flags (default true).
+    // Mantém comportamento atual (96% calibrate) e permite à UI desligar
+    // como override do usuário sem corromper a fonte do PJC.
+    combinar_indice: hasCombinations ? true : undefined,
+    combinar_juros: combinacoes_juros.length > 0 ? true : undefined,
+    juros_pre_judicial: a.atualizacao.aplicar_juros_fase_pre_judicial,
     juros_apos_deducao_cs: a.atualizacao.juros_apos_deducao_cs,
     apuracao_juros_gt: gt,
     gt_closure: (a.resultado.liquido_exequente > 0 || a.resultado.inss_reclamante > 0) ? {

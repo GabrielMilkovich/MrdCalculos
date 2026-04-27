@@ -551,6 +551,30 @@ export interface PjeCorrecaoConfig {
   combinacoes_indice?: PjeCombinacaoIndice[];
   /** Combination-by-date interest regime */
   combinacoes_juros?: PjeCombinacaoJuros[];
+  /**
+   * Sprint 4.2-A2 (ADC 58 STF + Súm.TST 381): gate UI para o regime de
+   * combinação de índice. Quando explicitamente `false`, engine ignora
+   * `combinacoes_indice` e usa SOMENTE `indice` em todo o período.
+   * Default `undefined` ≈ `true` (backward-compatible com 96% calibrate).
+   * Desligar permite ao usuário rodar com regime único mesmo se PJC trouxe
+   * combinações.
+   */
+  combinar_indice?: boolean;
+  /**
+   * Sprint 4.2-A2 (ADC 58 — SELIC engloba juros+correção pós-citação): gate
+   * UI para combinação de juros. Quando `false`, engine ignora
+   * `combinacoes_juros` e usa SOMENTE `juros_tipo` em todo o período.
+   * Default `undefined` ≈ `true` (preserva comportamento atual).
+   */
+  combinar_juros?: boolean;
+  /**
+   * Sprint 4.2-A2 (CC art.406 + ADC 58 — juros pré-judiciais): quando `false`,
+   * juros começam a contar APENAS pós-citação (`data_citacao` ou
+   * `juros_inicio` configurado). Quando `true`/`undefined`, segue regra
+   * atual (juros desde a data inicial da ocorrência se houver combinação
+   * com regime explícito).
+   */
+  juros_pre_judicial?: boolean;
   /** Apply interest after deducting CS from reclamante */
   juros_apos_deducao_cs?: boolean;
   /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, calibrate corrected values */

@@ -362,8 +362,13 @@ export class PjeCalcEngineV3 {
       this.mapBaseJuros(this.correcaoConfig.base_de_juros_das_verbas)
     );
 
-    // Combinações de índice
-    if (this.correcaoConfig.combinacoes_indice?.length) {
+    // Sprint 4.2-A2: gates UI ADC 58 — flag explicit `false` desabilita
+    // combinações; default `undefined` ≈ true (preserva 96% calibrate).
+    const combinarIndiceFlag = this.correcaoConfig.combinar_indice !== false;
+    const combinarJurosFlag = this.correcaoConfig.combinar_juros !== false;
+
+    // Combinações de índice (gate combinar_indice — ADC 58 STF + Súm.TST 381)
+    if (combinarIndiceFlag && this.correcaoConfig.combinacoes_indice?.length) {
       parametros.setCombinarOutroIndice(true);
       for (const ci of this.correcaoConfig.combinacoes_indice) {
         const comb = new CoreCombIndice(
@@ -374,8 +379,8 @@ export class PjeCalcEngineV3 {
       }
     }
 
-    // Combinações de juros
-    if (this.correcaoConfig.combinacoes_juros?.length) {
+    // Combinações de juros (gate combinar_juros — ADC 58 SELIC engloba)
+    if (combinarJurosFlag && this.correcaoConfig.combinacoes_juros?.length) {
       parametros.setCombinarOutroJuros(true);
       for (const cj of this.correcaoConfig.combinacoes_juros) {
         const comb = new CoreCombJuros(
@@ -1164,14 +1169,23 @@ export class PjeCalcEngineV3 {
     if (!dataComp) return 0;
 
     const valor = new Decimal(valorCorrigido);
-    const combs = this.correcaoConfig.combinacoes_juros ?? [];
+    // Sprint 4.2-A2: gate combinar_juros — quando explicitamente false,
+    // ignora combinacoes_juros (mesma rota que setup); usa juros_tipo único.
+    const combinarJurosFlag = this.correcaoConfig.combinar_juros !== false;
+    const combs = combinarJurosFlag ? (this.correcaoConfig.combinacoes_juros ?? []) : [];
 
     // PJe-Calc TabelaDeJurosDoCalculo.calcularDataInicialDoPrimeiroPeriodoDeJuros
     // (ref Java linhas 42-70): OCORRENCIAS_VENCIDAS + aplicarJurosFasePreJudicial=true
     // → juros iniciam em dataFim+1 dia (ou 1º dia do mês seguinte se dataFim null).
     const temBase = combs.some(c => !c.de);
     const temPeriodoExplicito = combs.some(c => !!c.de);
-    const aplicaPreJudicial = temBase && temPeriodoExplicito;
+    // Sprint 4.2-A2: gate juros_pre_judicial (CC art.406 + ADC 58).
+    // Quando flag explícita = false, juros começam APENAS pós-citação
+    // (inicioJuros, ignorando dataComp). Default `undefined` ≈ true:
+    // preserva regra atual (juros desde dataInicial da ocorrência se
+    // houver regime de combinação explícito).
+    const preJudicialPermitido = this.correcaoConfig.juros_pre_judicial !== false;
+    const aplicaPreJudicial = preJudicialPermitido && temBase && temPeriodoExplicito;
 
     let inicio: Date;
     if (aplicaPreJudicial) {
@@ -1183,6 +1197,11 @@ export class PjeCalcEngineV3 {
       }
     } else {
       inicio = dataComp.getTime() > inicioJuros.getTime() ? dataComp : inicioJuros;
+    }
+    // Sprint 4.2-A2: quando juros_pre_judicial=false, força início ≥ inicioJuros
+    // (pós-citação). Sobrepõe qualquer rota acima.
+    if (!preJudicialPermitido && inicio.getTime() < inicioJuros.getTime()) {
+      inicio = inicioJuros;
     }
     if (inicio.getTime() >= dataLiq.getTime()) return 0;
     if (combs.length > 0) {

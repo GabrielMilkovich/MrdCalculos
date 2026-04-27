@@ -286,6 +286,14 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         data_liquidacao: correcaoDataLocal.data_liquidacao || new Date().toISOString().slice(0, 10),
         combinacoes_indice: combinacoesIndice,
         combinacoes_juros: combinacoesJuros,
+        // Sprint 4.2-A2 (ADC 58): gates UI explícitos. Default `undefined` ≈ true
+        // — preserva 96% calibrate. Quando user marca "Combinar com Outro Índice"
+        // OFF na UI, ModuloCorrecao salva combinacoes_indice=undefined no DB +
+        // transicao_adc58=false; aqui também repassamos a flag para sobrepor o
+        // engine caso futuras rotas reintroduzam combinações sem revogar a flag.
+        combinar_indice: combinacoesIndice && combinacoesIndice.length > 0 ? true : undefined,
+        combinar_juros: combinacoesJuros && combinacoesJuros.length > 0 ? true : undefined,
+        juros_pre_judicial: (correcaoDataLocal as Record<string, unknown>).aplicar_juros_fase_pre_judicial as boolean ?? true,
         juros_apos_deducao_cs: true, // PJe-Calc Criterion 8: juros após dedução CS
       } as PjeCorrecaoConfig;
 
