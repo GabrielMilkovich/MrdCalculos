@@ -20,49 +20,28 @@ test.describe('smoke: pjecalc-basic (wizard liquidacao)', () => {
 
     const response = await page.goto('/novo-calculo', { waitUntil: 'domcontentloaded' });
 
-    // Se o ProtectedRoute redirecionou para /auth, pulamos (dependencia externa).
-    if (page.url().includes('/auth')) {
-      test.skip(true, 'ProtectedRoute redirecionou para /auth — mock de sessao nao ativo.');
-      return;
-    }
+    // Com mock ativo nao deve redirecionar; se cair, ha bug no setup.
+    expect(page.url(), 'mock de sessao deveria liberar /novo-calculo').not.toContain('/auth');
 
     expect(response?.ok() ?? true).toBeTruthy();
     await expect(page.locator('#root')).toBeVisible();
 
-    // Etapa 1 — Contrato. Preenche "Nome do cliente" (label acessivel).
-    const nomeCliente = page.getByLabel(/nome.*(cliente|parte)/i).first();
-    if (await nomeCliente.isVisible().catch(() => false)) {
-      await nomeCliente.fill('Cliente E2E');
-    }
+    // Etapa 1 — Contrato. O wizard usa <Label> sem `htmlFor`, entao getByLabel
+    // nao funciona. Usamos placeholder do Input, que e estavel ("Ex: Joao da Silva").
+    const nomeCliente = page.getByPlaceholder(/Jo(a|ã)o da Silva|nome do cliente|reclamante/i).first();
+    await expect(nomeCliente).toBeVisible({ timeout: 5_000 });
+    await nomeCliente.fill('Cliente E2E');
 
-    // Avanca para Etapa 2 — botao "Proximo" ou "Avancar".
-    const proximo = page.getByRole('button', { name: /pr(o|ó)ximo|avan(c|ç)ar|seguinte/i }).first();
-    if (await proximo.isVisible().catch(() => false)) {
-      await proximo.click();
-    }
+    // Botao "Proximo" no wizard fica disabled ate canProceed === true.
+    // Step 0: clienteNome + tipoContrato + categoria (defaults preenchidos).
+    const proximo = page.getByRole('button', { name: /pr(o|ó)ximo/i }).first();
+    await expect(proximo).toBeEnabled({ timeout: 5_000 });
+    await proximo.click();
 
-    // Etapa 2 — Periodos. Datas e salario. Usa seletores por label.
-    const dataAdmissao = page.getByLabel(/admiss(a|ã)o/i).first();
-    const dataDemissao = page.getByLabel(/demiss(a|ã)o/i).first();
-    const salario = page.getByLabel(/sal(a|á)rio/i).first();
-
-    if (await dataAdmissao.isVisible().catch(() => false)) {
-      await dataAdmissao.fill('2020-01-01');
-    }
-    if (await dataDemissao.isVisible().catch(() => false)) {
-      await dataDemissao.fill('2023-12-31');
-    }
-    if (await salario.isVisible().catch(() => false)) {
-      await salario.fill('3000');
-    }
-
-    // Verifica que algum indicador de progresso do wizard esta visivel.
-    // O wizard usa steps horizontais; aceitamos qualquer texto de step.
-    const wizardStep = page
-      .getByText(/contrato|per(i|í)odos|jornada|adicionais|teses|calcular/i)
-      .first();
-    await expect(wizardStep).toBeVisible({ timeout: 5_000 }).catch(() => {
-      // Wizard pode nao ter renderizado — ainda assim o teste serve como smoke.
-    });
+    // Verifica que o wizard avancou — heading da etapa 2 ("Periodos").
+    // Os steps tem label visivel no header. Aceitamos tanto pela aba ativa
+    // quanto pelo titulo "Datas e salarios".
+    const etapa2 = page.getByText(/per(i|í)odos|datas e sal(a|á)rios/i).first();
+    await expect(etapa2).toBeVisible({ timeout: 5_000 });
   });
 });

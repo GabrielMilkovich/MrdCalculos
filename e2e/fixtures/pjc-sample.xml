@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+  Fixture E2E — schema PJe-Calc minimo.
+  Derivado de public/reports/antonio-harley.pjc com PII redatada.
+  NAO usar em producao. Usado por specs Playwright para validar parsers
+  e fluxo de upload sem expor dados reais.
+-->
+<Calculo>
+  <gprec>
+    <dataCalculo>1761879600000</dataCalculo>
+    <nomeBeneficiario>RECLAMANTE FIXTURE E2E</nomeBeneficiario>
+    <documentoFiscalBeneficiario>000.000.000-00</documentoFiscalBeneficiario>
+    <liquidoExequente>10000.00</liquidoExequente>
+    <inssBeneficiario>500.00</inssBeneficiario>
+    <inssExecutado>1500.00</inssExecutado>
+    <impostoRenda>0.00</impostoRenda>
+    <depositoFgts>0</depositoFgts>
+    <custasJudiciais>200.00</custasJudiciais>
+    <honorariosReclamante></honorariosReclamante>
+    <honorariosReclamado>
+      <honorario>
+        <nome>ADVOGADO FIXTURE</nome>
+        <documentoFiscal>000.000.000-00</documentoFiscal>
+        <valor>1500.00</valor>
+        <impostoRenda>null</impostoRenda>
+        <tipo>OUT</tipo>
+      </honorario>
+    </honorariosReclamado>
+  </gprec>
+  <dadosEstruturados>
+    <dataLiquidacao>1761879600000</dataLiquidacao>
+    <hashLiquidacao>FIXTUREE2EHASH00000000000000000000</hashLiquidacao>
+    <contrSocialDezPorcento>0</contrSocialDezPorcento>
+    <contrSocialMeioPorcento>0</contrSocialMeioPorcento>
+    <custasReclamado>200.00</custasReclamado>
+    <custasReclamante>0</custasReclamante>
+    <debitoReclamantePensaoAlimenticia>0</debitoReclamantePensaoAlimenticia>
+    <debitoReclamantePrevidenciaPrivada>0</debitoReclamantePrevidenciaPrivada>
+    <fgtsDepositoContaVinculada>0</fgtsDepositoContaVinculada>
+    <impostoRenda>0.00</impostoRenda>
+    <inssReclamado>1500.00</inssReclamado>
+    <inssReclamante>500.00</inssReclamante>
+    <jurosMora>null</jurosMora>
+    <jurosPrevidenciaPrivada>null</jurosPrevidenciaPrivada>
+    <valorPrincipal>10000.00</valorPrincipal>
+    <tipoRegistroCalculo>CALCULO</tipoRegistroCalculo>
+    <multas></multas>
+    <honorarios>
+      <honorario>
+        <descricao>HONORARIOS LIQUIDOS PARA ADVOGADO FIXTURE</descricao>
+        <docFiscalCredor>000.000.000-00</docFiscalCredor>
+        <docFiscalDevedor>00.000.000/0001-00</docFiscalDevedor>
+        <impostoRendaHonorario>0.00</impostoRendaHonorario>
+        <nomeCredor>ADVOGADO FIXTURE</nomeCredor>
+        <nomeDevedor>EMPRESA FIXTURE LTDA</nomeDevedor>
+        <valor>1500.00</valor>
+      </honorario>
+    </honorarios>
+  </dadosEstruturados>
+  <id>9999</id>
+  <versao>13</versao>
+  <atualizacao>null</atualizacao>
+  <hashCodeLiquidacao>FIXTUREE2EHASH00000000000000000000</hashCodeLiquidacao>
+  <dataCriacao>1759892400000</dataCriacao>
+  <dataAdmissao>1577836800000</dataAdmissao>
+  <dataDemissao>1640908800000</dataDemissao>
+  <dataAjuizamento>1672531200000</dataAjuizamento>
+  <valorUltimaRemuneracao>null</valorUltimaRemuneracao>
+  <valorMaiorRemuneracao>3000.00</valorMaiorRemuneracao>
+  <dataInicioCalculo>1577836800000</dataInicioCalculo>
+  <dataTerminoCalculo>1640908800000</dataTerminoCalculo>
+</Calculo>
