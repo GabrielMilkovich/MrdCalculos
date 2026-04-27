@@ -21,7 +21,16 @@ export function ModuloPensaoAlimenticia({ caseId }: Props) {
     queryFn: () => svc.getPensaoConfig(caseId),
   });
 
-  const [form, setForm] = useState({ apurar: false, percentual: '', incidir_sobre_juros: false, base: 'liquido' as 'liquido' | 'bruto' | 'principal' });
+  const [form, setForm] = useState({
+    apurar: false, percentual: '',
+    incidir_sobre_juros: false,
+    base: 'liquido' as 'liquido' | 'bruto' | 'principal',
+    // Sprint 2: campos novos
+    incidencia_sobre_fgts: false,
+    incidencia_sobre_multa_fgts: false,
+    descontar_antes_ir: true,
+    beneficiario: '',
+  });
 
   useEffect(() => {
     if (data) {
@@ -31,6 +40,10 @@ export function ModuloPensaoAlimenticia({ caseId }: Props) {
         percentual: d.percentual?.toString() || '',
         incidir_sobre_juros: (d.incidir_sobre_juros as boolean) ?? false,
         base: ((d.base_incidencia as string) || 'liquido') as 'liquido' | 'bruto' | 'principal',
+        incidencia_sobre_fgts: (d.incidencia_sobre_fgts as boolean) ?? false,
+        incidencia_sobre_multa_fgts: (d.incidencia_sobre_multa_fgts as boolean) ?? false,
+        descontar_antes_ir: (d.descontar_antes_ir as boolean) ?? true,
+        beneficiario: (d.beneficiario as string) ?? '',
       });
     }
   }, [data]);
@@ -39,9 +52,18 @@ export function ModuloPensaoAlimenticia({ caseId }: Props) {
     setSaving(true);
     try {
       await svc.upsertPensaoConfig(caseId, {
-        apurar: form.apurar, percentual: form.percentual ? parseFloat(form.percentual) : 0,
-        incidir_sobre_juros: form.incidir_sobre_juros, base: form.base, beneficiario: '', observacoes: '', valor_fixo: null,
-      });
+        apurar: form.apurar,
+        percentual: form.percentual ? parseFloat(form.percentual) : 0,
+        incidir_sobre_juros: form.incidir_sobre_juros,
+        base: form.base,
+        beneficiario: form.beneficiario,
+        observacoes: '',
+        valor_fixo: null,
+        // Sprint 2: campos novos persistidos via dados extras (service deve aceitar)
+        incidencia_sobre_fgts: form.incidencia_sobre_fgts,
+        incidencia_sobre_multa_fgts: form.incidencia_sobre_multa_fgts,
+        descontar_antes_ir: form.descontar_antes_ir,
+      } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_pensao_config", caseId] });
       toast.success("Pensão Alimentícia salva!");
     } catch (e) { toast.error((e as Error).message); }
@@ -74,6 +96,30 @@ export function ModuloPensaoAlimenticia({ caseId }: Props) {
                     <SelectItem value="principal">Somente Principal (sem multas)</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div title="Nome do beneficiário (filho/cônjuge) que recebe a pensão.">
+                <Label className="text-xs font-semibold">Beneficiário</Label>
+                <Input value={form.beneficiario} onChange={e => setForm(p => ({ ...p, beneficiario: e.target.value }))} className="mt-1 h-8 text-xs w-72" placeholder="Nome do beneficiário" />
+              </div>
+
+              <div className="border-t pt-3 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">Incidências adicionais</p>
+
+                <div className="flex items-center gap-2" title="Quando marcado, pensão também incide sobre o FGTS pago ao reclamante. Lei 5.478/68 art. 4º. Java: <incidenciaPensaoAlimenticia> em Fgts.">
+                  <Checkbox checked={form.incidencia_sobre_fgts} onCheckedChange={v => setForm(p => ({ ...p, incidencia_sobre_fgts: !!v }))} />
+                  <Label className="text-xs">Incidir sobre FGTS</Label>
+                </div>
+
+                <div className="flex items-center gap-2" title="Pensão incide também sobre a multa 40% do FGTS quando há rescisão sem justa causa.">
+                  <Checkbox checked={form.incidencia_sobre_multa_fgts} onCheckedChange={v => setForm(p => ({ ...p, incidencia_sobre_multa_fgts: !!v }))} />
+                  <Label className="text-xs">Incidir sobre Multa 40% FGTS</Label>
+                </div>
+
+                <div className="flex items-center gap-2" title="Lei 9.250/95 art. 4º II: pensão alimentícia é dedução da base de cálculo do IR. Default ativado.">
+                  <Checkbox checked={form.descontar_antes_ir} onCheckedChange={v => setForm(p => ({ ...p, descontar_antes_ir: !!v }))} />
+                  <Label className="text-xs">Deduzir da base de IR (Lei 9.250/95)</Label>
+                </div>
               </div>
             </div>
           )}

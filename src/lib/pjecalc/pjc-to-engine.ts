@@ -808,18 +808,26 @@ function buildDefaultIRConfig(a: PJCAnalysis): PjeIRConfig {
   // Prefer PJC's explicit flags when present. Caveat: apurar=true in PJC XML does
   // not necessarily mean the result is > 0 — zero income after deductions is valid.
   if (ic) {
+    const icExt = ic as Record<string, unknown>;
     return {
       apurar: ic.apurar_imposto_renda,
       incidir_sobre_juros: ic.incidir_sobre_juros_de_mora,
       cobrar_reclamado: ic.cobrar_do_reclamado,
       tributacao_exclusiva_13: ic.considerar_tributacao_exclusiva,
       tributacao_separada_ferias: ic.considerar_tributacao_em_separado,
+      regime_caixa: (icExt.regime_de_caixa as boolean) ?? false,
       deduzir_cs: ic.deduzir_cs_reclamante,
       deduzir_prev_privada: ic.deduzir_previdencia_privada,
       deduzir_pensao: ic.deduzir_pensao_alimenticia,
       deduzir_honorarios: ic.deduzir_honorarios_reclamante,
       aposentado_65: ic.aposentado_maior_que_65,
       dependentes: ic.possui_dependentes ? ic.quantidade_dependentes : 0,
+      // Sprint 3: RRA art. 12-A
+      apurar_rra: (icExt.rra_meses as number ?? 0) > 0,
+      rra_meses: (icExt.rra_meses as number) || undefined,
+      rra_numero_parcelas: (icExt.rra_numero_parcelas as number) || undefined,
+      incidir_sobre_principal_tributavel: (icExt.incidir_sobre_principal_tributavel as boolean) ?? true,
+      incidir_sobre_principal_nao_tributavel: (icExt.incidir_sobre_principal_nao_tributavel as boolean) ?? false,
       apuracao_juros_gt: gt,
     };
   }
@@ -1001,6 +1009,23 @@ function buildHonorariosConfig(a: PJCAnalysis): PjeHonorariosConfig {
     'BRUTO_MENOS_CONTRIBUICAO_SOCIAL_MENOS_PREVIDENCIA_PRIVADA': 'bruto_menos_cs_menos_pp',
     'VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL': 'verbas_nao_principal',
   };
+  // Sprint 2: mapeamentos enum Java → TS para os 9 campos novos
+  const tipoHonMap: Record<string, 'sucumbenciais' | 'contratuais' | 'periciais_contador' | 'periciais_tecnico' | 'outros'> = {
+    'SUCUMBENCIAIS': 'sucumbenciais',
+    'CONTRATUAIS': 'contratuais',
+    'PERICIAIS_CONTADOR': 'periciais_contador',
+    'PERICIAIS_TECNICO': 'periciais_tecnico',
+    'OUT': 'outros',
+  };
+  const tipoIRMap: Record<string, 'pessoa_fisica' | 'pessoa_juridica'> = {
+    'PESSOA_FISICA': 'pessoa_fisica', 'PESSOA_JURIDICA': 'pessoa_juridica',
+  };
+  const tipoCobMap: Record<string, 'descontar_credito' | 'cobrar'> = {
+    'DESCONTAR_CREDITO': 'descontar_credito', 'COBRAR': 'cobrar',
+  };
+  const tipoIdxMap: Record<string, 'trabalhista' | 'outro'> = {
+    'UTILIZAR_INDICE_TRABALHISTA': 'trabalhista',
+  };
   const items = honorariosPjc
     .filter(h => h.valor > 0 || (h.aliquota && h.aliquota > 0))
     .map(h => {
@@ -1009,13 +1034,26 @@ function buildHonorariosConfig(a: PJCAnalysis): PjeHonorariosConfig {
       const devedor = h.tipo_devedor === 'RECLAMANTE' ? 'reclamante' : 'reclamado';
       return {
         descricao: h.nome ? `Honorários para ${h.nome}` : 'Honorários',
+        // Novo: tipo_honorario
+        tipo_honorario: h.tipo_honorario ? tipoHonMap[h.tipo_honorario] ?? 'sucumbenciais' : 'sucumbenciais',
         devedor,
         credor: h.nome || '',
+        doc_fiscal_credor: h.cpf || undefined,
         tipo: tipoEng,
         percentual: h.aliquota ?? 15,
         valor_fixo: h.valor,
         base: baseMap[h.base_para_apuracao || 'BRUTO'] || 'condenacao',
-        apurar_ir: false,
+        apurar_ir: h.apurar_irrf ?? false,
+        // Novos campos Sprint 2:
+        tipo_imposto_renda: h.tipo_imposto_renda ? tipoIRMap[h.tipo_imposto_renda] : undefined,
+        apurar_irpf_sobre_juros: h.apurar_irpf_sobre_juros ?? false,
+        tipo_cobranca_reclamante: h.tipo_cobranca_reclamante
+          ? tipoCobMap[h.tipo_cobranca_reclamante] ?? 'descontar_credito'
+          : 'descontar_credito',
+        aplicar_juros: h.aplicar_juros ?? false,
+        data_apartir_de_aplicar_juros: h.data_apartir_de_aplicar_juros,
+        data_vencimento: h.data_vencimento,
+        tipo_indice_correcao: h.tipo_indice_correcao ? tipoIdxMap[h.tipo_indice_correcao] ?? 'trabalhista' : 'trabalhista',
       };
     });
   return {
@@ -1162,11 +1200,16 @@ function convertExcecoesSabado(analysis: PJCAnalysis): PjeExcecaoSabado[] {
 
 function buildPrevPrivadaConfig(a: PJCAnalysis): PjePrevidenciaPrivadaConfig {
   if (a.previdencia_privada?.apurar) {
+    const pp = a.previdencia_privada as Record<string, unknown>;
     return {
       apurar: true,
       percentual: a.previdencia_privada.percentual || 0,
-      base_calculo: 'diferenca',
-      deduzir_ir: true,
+      // Sprint 2: lê campos antes hardcoded
+      base_calculo: (pp.base_calculo as 'diferenca' | 'devido' | 'corrigido') ?? 'diferenca',
+      deduzir_ir: (pp.deduzir_ir as boolean) ?? true,
+      periodos: pp.periodos as PjePrevidenciaPrivadaConfig['periodos'] ?? undefined,
+      teto_mensal: pp.teto_mensal as number ?? undefined,
+      juros: (pp.juros as PjePrevidenciaPrivadaConfig['juros']) ?? 'trabalhista',
     };
   }
   return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false };
@@ -1178,13 +1221,23 @@ function buildPrevPrivadaConfig(a: PJCAnalysis): PjePrevidenciaPrivadaConfig {
 
 function buildPensaoConfig(a: PJCAnalysis): PjePensaoConfig {
   if (a.pensao_alimenticia?.apurar) {
-    const baseMap: Record<string, 'liquido' | 'bruto' | 'bruto_menos_inss'> = {
+    const baseMap: Record<string, 'liquido' | 'bruto' | 'bruto_menos_inss' | 'principal'> = {
       'LIQUIDO': 'liquido', 'BRUTO': 'bruto', 'BRUTO_MENOS_INSS': 'bruto_menos_inss',
+      'PRINCIPAL': 'principal',
     };
+    const pa = a.pensao_alimenticia as Record<string, unknown>;
     return {
       apurar: true,
       percentual: a.pensao_alimenticia.percentual || 0,
       base: baseMap[(a.pensao_alimenticia.base || '').toUpperCase()] || 'liquido',
+      // Sprint 2: campos novos da Pensão Alimentícia
+      incidencia_sobre_fgts: (pa.incidencia_sobre_fgts as boolean) ?? false,
+      incidencia_sobre_multa_fgts: (pa.incidencia_sobre_multa_fgts as boolean) ?? false,
+      descontar_antes_ir: (pa.descontar_antes_ir as boolean) ?? true,
+      incidir_sobre_juros: (pa.incidir_sobre_juros as boolean) ?? false,
+      dependentes: (pa.dependentes as PjePensaoConfig['dependentes']) ?? [],
+      beneficiario: pa.beneficiario as string ?? undefined,
+      observacoes: pa.observacoes as string ?? undefined,
     };
   }
   return { apurar: false, percentual: 0, base: 'liquido' };
@@ -1196,9 +1249,19 @@ function buildPensaoConfig(a: PJCAnalysis): PjePensaoConfig {
 
 function buildSalarioFamiliaConfig(a: PJCAnalysis): PjeSalarioFamiliaConfig {
   if (a.salario_familia?.apurar) {
+    const sf = a.salario_familia as Record<string, unknown>;
     return {
       apurar: true,
       numero_filhos: a.salario_familia.numero_filhos || 0,
+      filhos_detalhes: sf.filhos_detalhes as PjeSalarioFamiliaConfig['filhos_detalhes'],
+      compor_principal: (sf.compor_principal as boolean) ?? true,
+      competencia_inicial: sf.competencia_inicial as string,
+      competencia_final: sf.competencia_final as string,
+      variacoes_qtd: sf.variacoes_qtd as PjeSalarioFamiliaConfig['variacoes_qtd'],
+      valor_cota: sf.valor_cota as number ?? undefined,
+      teto_salarial: sf.teto_salarial as number ?? undefined,
+      // Sprint 2: tabela anual de cotas (override completo retroativo)
+      cotas_anuais: sf.cotas_anuais as PjeSalarioFamiliaConfig['cotas_anuais'],
     };
   }
   return { apurar: false, numero_filhos: 0 };

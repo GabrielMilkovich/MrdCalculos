@@ -75,18 +75,21 @@ export interface PJCAnalysis {
       nome: string;
       cpf: string;
       valor: number;
-      /** D2 fix: percentual aplicado pelo Java (do XML <Honorario><aliquota>) */
       aliquota?: number;
-      /** D2 fix: base usada (BRUTO / BRUTO_MENOS_CONTRIBUICAO_SOCIAL / BRUTO_MENOS_CS_MENOS_PREVIDENCIA_PRIVADA) */
       base_para_apuracao?: 'BRUTO' | 'BRUTO_MENOS_CONTRIBUICAO_SOCIAL' | 'BRUTO_MENOS_CONTRIBUICAO_SOCIAL_MENOS_PREVIDENCIA_PRIVADA' | 'VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL' | string;
-      /** D2 fix: base monetária persistida pelo Java (= valor sobre o qual aplicou o percentual) */
       base_honorario?: number;
-      /** D2 fix: tipo do valor — CALCULADO (engine recalcula) ou INFORMADO (valor fixo) */
       tipo_valor?: 'CALCULADO' | 'INFORMADO' | string;
-      /** D2 fix: SUCUMBENCIAIS / CONTRATUAIS / OUT */
-      tipo_honorario?: 'SUCUMBENCIAIS' | 'CONTRATUAIS' | 'OUT' | string;
-      /** D2 fix: RECLAMADO ou RECLAMANTE */
+      tipo_honorario?: 'SUCUMBENCIAIS' | 'CONTRATUAIS' | 'OUT' | 'PERICIAIS_CONTADOR' | 'PERICIAIS_TECNICO' | string;
       tipo_devedor?: 'RECLAMADO' | 'RECLAMANTE' | string;
+      // Sprint 2 — 9 campos novos
+      tipo_imposto_renda?: 'PESSOA_FISICA' | 'PESSOA_JURIDICA' | string;
+      apurar_irrf?: boolean;
+      apurar_irpf_sobre_juros?: boolean;
+      tipo_cobranca_reclamante?: 'DESCONTAR_CREDITO' | 'COBRAR' | string;
+      aplicar_juros?: boolean;
+      data_apartir_de_aplicar_juros?: string;
+      data_vencimento?: string;
+      tipo_indice_correcao?: 'UTILIZAR_INDICE_TRABALHISTA' | 'OUTRO_INDICE' | string;
     }[];
     custas: number;
   };
@@ -496,6 +499,15 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     seen.add(key);
     const aliqRaw = getTextContent(h, 'aliquota');
     const baseRaw = getTextContent(h, 'baseHonorario');
+    // Sprint 2.x: campos extras do <Honorario> Java (auditoria revelou 9 campos faltando)
+    const dataVencRaw = getTextContent(h, 'dataVencimento');
+    const dataJurosRaw = getTextContent(h, 'dataApartirDeAplicarJuros');
+    const tsToIso = (raw: string | undefined): string | undefined => {
+      if (!raw || raw === 'null') return undefined;
+      const ms = parseInt(raw, 10);
+      if (!isFinite(ms)) return undefined;
+      return new Date(ms).toISOString().slice(0, 10);
+    };
     honorarios.push({
       nome,
       cpf,
@@ -506,6 +518,15 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       tipo_valor: getTextContent(h, 'tipoValor') || undefined,
       tipo_honorario: getTextContent(h, 'tipoHonorario') || undefined,
       tipo_devedor: getTextContent(h, 'tipoDeDevedor') || undefined,
+      // Novos campos (Sprint 2):
+      tipo_imposto_renda: getTextContent(h, 'tipoImpostoRenda') || undefined,
+      apurar_irrf: getTextContent(h, 'apurarIRRF') === 'true' || undefined,
+      apurar_irpf_sobre_juros: getTextContent(h, 'apurarIRPFSobreJuros') === 'true' || undefined,
+      tipo_cobranca_reclamante: getTextContent(h, 'tipoCobrancaReclamante') || undefined,
+      aplicar_juros: getTextContent(h, 'aplicarJuros') === 'true' || undefined,
+      data_apartir_de_aplicar_juros: tsToIso(dataJurosRaw),
+      data_vencimento: tsToIso(dataVencRaw),
+      tipo_indice_correcao: getTextContent(h, 'tipoDeIndiceDeCorrecao') || undefined,
     });
   }
   // Fallback: ler também <honorario> aninhados em <honorariosReclamado>/<honorariosReclamante>

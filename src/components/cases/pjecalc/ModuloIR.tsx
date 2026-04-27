@@ -25,6 +25,12 @@ export function ModuloIR({ caseId }: Props) {
     tributacao_exclusiva_13: false, tributacao_separada_ferias: false,
     aplicar_regime_caixa: false, deduzir_cs: true, deduzir_prev_privada: true,
     deduzir_pensao: true, deduzir_honorarios: true, aposentado_65: false, dependentes: 0,
+    // Sprint 3: RRA art. 12-A Lei 7.713/88
+    apurar_rra: false,
+    rra_meses: 0,
+    rra_numero_parcelas: 0,
+    incidir_sobre_principal_tributavel: true,
+    incidir_sobre_principal_nao_tributavel: false,
   });
 
   useEffect(() => {
@@ -43,6 +49,11 @@ export function ModuloIR({ caseId }: Props) {
         deduzir_honorarios: (d.deduzir_honorarios as boolean) ?? true,
         aposentado_65: (d.aposentado_65 as boolean) ?? false,
         dependentes: (d.dependentes as number) ?? 0,
+        apurar_rra: (d.apurar_rra as boolean) ?? false,
+        rra_meses: (d.rra_meses as number) ?? 0,
+        rra_numero_parcelas: (d.rra_numero_parcelas as number) ?? 0,
+        incidir_sobre_principal_tributavel: (d.incidir_sobre_principal_tributavel as boolean) ?? true,
+        incidir_sobre_principal_nao_tributavel: (d.incidir_sobre_principal_nao_tributavel as boolean) ?? false,
       });
     }
   }, [data]);
@@ -76,11 +87,58 @@ export function ModuloIR({ caseId }: Props) {
           {form.apurar && (
             <div className="flex gap-8">
               <div className="space-y-3 flex-1">
-                <div className="flex items-center gap-2"><Checkbox checked={form.incidir_sobre_juros} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_juros: !!v }))} /><Label className="text-xs">Incidir sobre Juros de Mora</Label></div>
-                <div className="flex items-center gap-2"><Checkbox checked={form.cobrar_reclamado} onCheckedChange={v => setForm(p => ({ ...p, cobrar_reclamado: !!v }))} /><Label className="text-xs">Cobrar do Reclamado</Label></div>
-                <div className="flex items-center gap-2"><Checkbox checked={form.tributacao_exclusiva_13} onCheckedChange={v => setForm(p => ({ ...p, tributacao_exclusiva_13: !!v }))} /><Label className="text-xs">Tributação Exclusiva</Label></div>
-                <div className="flex items-center gap-2"><Checkbox checked={form.tributacao_separada_ferias} onCheckedChange={v => setForm(p => ({ ...p, tributacao_separada_ferias: !!v }))} /><Label className="text-xs">Tributação em Separado</Label></div>
-                <div className="flex items-center gap-2"><Checkbox checked={form.aplicar_regime_caixa} onCheckedChange={v => setForm(p => ({ ...p, aplicar_regime_caixa: !!v }))} /><Label className="text-xs">Aplicar Regime de Caixa</Label></div>
+                <div className="flex items-center gap-2" title="Quando marcado, IR incide também sobre os juros mora (Lei 8.541/92 art. 46). Súmula 463 STJ: IRRF sobre juros mora é discutível.">
+                  <Checkbox checked={form.incidir_sobre_juros} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_juros: !!v }))} />
+                  <Label className="text-xs">Incidir sobre Juros de Mora</Label>
+                </div>
+                <div className="flex items-center gap-2" title="Quando marcado, IR é cobrado do reclamado em vez do reclamante (raro, depende de sentença).">
+                  <Checkbox checked={form.cobrar_reclamado} onCheckedChange={v => setForm(p => ({ ...p, cobrar_reclamado: !!v }))} />
+                  <Label className="text-xs">Cobrar do Reclamado</Label>
+                </div>
+                <div className="flex items-center gap-2" title="13º salário tributado de forma exclusiva na fonte (separado dos demais rendimentos). Lei 7.713/88 art. 26.">
+                  <Checkbox checked={form.tributacao_exclusiva_13} onCheckedChange={v => setForm(p => ({ ...p, tributacao_exclusiva_13: !!v }))} />
+                  <Label className="text-xs">Tributação Exclusiva (13º)</Label>
+                </div>
+                <div className="flex items-center gap-2" title="Férias tributadas em separado. Pode reduzir alíquota efetiva.">
+                  <Checkbox checked={form.tributacao_separada_ferias} onCheckedChange={v => setForm(p => ({ ...p, tributacao_separada_ferias: !!v }))} />
+                  <Label className="text-xs">Tributação em Separado (Férias)</Label>
+                </div>
+                <div className="flex items-center gap-2" title="Regime de caixa: IR no momento do pagamento (default). Regime de competência: IR no momento em que devido.">
+                  <Checkbox checked={form.aplicar_regime_caixa} onCheckedChange={v => setForm(p => ({ ...p, aplicar_regime_caixa: !!v }))} />
+                  <Label className="text-xs">Regime de Caixa</Label>
+                </div>
+
+                <div className="border-t pt-3 mt-3">
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">RRA — Rendimentos Recebidos Acumuladamente (Art. 12-A Lei 7.713/88)</p>
+                  <div className="flex items-center gap-2" title="Quando processo abrange período > 12 meses, IR é calculado sobre média mensal (base / RRA_meses). Reduz alíquota efetiva. Aplicável em ações trabalhistas longas.">
+                    <Checkbox checked={form.apurar_rra} onCheckedChange={v => setForm(p => ({ ...p, apurar_rra: !!v }))} />
+                    <Label className="text-xs">Apurar RRA</Label>
+                  </div>
+                  {form.apurar_rra && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <div title="Número de meses-calendário a que se referem os rendimentos.">
+                        <Label className="text-xs">Meses-calendário</Label>
+                        <Input type="number" min={1} value={form.rra_meses} onChange={e => setForm(p => ({ ...p, rra_meses: parseInt(e.target.value) || 0 }))} className="h-7 text-xs mt-1" />
+                      </div>
+                      <div title="Número de parcelas mensais (default = meses).">
+                        <Label className="text-xs">Número de Parcelas</Label>
+                        <Input type="number" min={1} value={form.rra_numero_parcelas} onChange={e => setForm(p => ({ ...p, rra_numero_parcelas: parseInt(e.target.value) || 0 }))} className="h-7 text-xs mt-1" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t pt-3 mt-3 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">Bases tributáveis</p>
+                  <div className="flex items-center gap-2" title="Verba tributável (salário, hora extra, 13º, férias gozadas). Default: incide IR.">
+                    <Checkbox checked={form.incidir_sobre_principal_tributavel} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_principal_tributavel: !!v }))} />
+                    <Label className="text-xs">Verba principal TRIBUTÁVEL (default)</Label>
+                  </div>
+                  <div className="flex items-center gap-2" title="Verba indenizatória normalmente não-tributável (FGTS, multa, férias indenizadas). Marcar apenas em casos específicos como danos morais reconhecidos como tributáveis.">
+                    <Checkbox checked={form.incidir_sobre_principal_nao_tributavel} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_principal_nao_tributavel: !!v }))} />
+                    <Label className="text-xs">Verba principal NÃO-tributável</Label>
+                  </div>
+                </div>
               </div>
               <div className="flex-1">
                 <Card className="bg-muted/30">

@@ -733,9 +733,29 @@ export class PjeCalcEngineV3 {
         // Cada item pode ter sua própria base (ex: alguns advogados têm BRUTO,
         // outros BC). Default herda do config global.
         const baseItem = resolverBaseHonorario((it as { base?: string }).base ?? this.honorariosConfig.base_sucumbenciais);
-        const valor = it.tipo === 'valor_fixo'
+        let valor = it.tipo === 'valor_fixo'
           ? (it.valor_fixo ?? 0)
           : baseItem * (it.percentual ?? 0) / 100;
+        // Sprint 2: aplicar correção monetária quando data_vencimento < data_liquidacao.
+        // Java: MaquinaDeCalculoDeHonorarios.java:34-50 — aplica TabelaDeCorrecaoMonetaria
+        // quando o honorário foi vencido em data anterior à liquidação (caso izabela 430d).
+        const ext = it as { data_vencimento?: string; aplicar_juros?: boolean };
+        if (ext.data_vencimento) {
+          const dv = new Date(ext.data_vencimento);
+          const dl = new Date(this.correcaoConfig.data_liquidacao);
+          if (dv.getTime() < dl.getTime()) {
+            // Calcula fator IPCA-E acumulado de dataVencimento até dataLiquidacao
+            const indices = this.indicesDB.filter(i => i.indice === 'IPCA-E' || i.indice === 'IPCAE');
+            const ymVenc = `${dv.getFullYear()}-${String(dv.getMonth()+1).padStart(2,'0')}`;
+            const ymLiq = `${dl.getFullYear()}-${String(dl.getMonth()+1).padStart(2,'0')}`;
+            const idxVenc = indices.find(i => i.competencia.startsWith(ymVenc))?.acumulado;
+            const idxLiq = indices.find(i => i.competencia.startsWith(ymLiq))?.acumulado;
+            if (idxVenc && idxLiq && idxVenc > 0) {
+              const fator = idxLiq / idxVenc;
+              valor = valor * fator;
+            }
+          }
+        }
         // Devedor=reclamante → deduz do líquido (honorários contratuais)
         // Devedor=reclamado → soma à condenação (sucumbenciais pagos pela parte vencida)
         if (it.devedor === 'reclamante') honorariosContratuais += valor;

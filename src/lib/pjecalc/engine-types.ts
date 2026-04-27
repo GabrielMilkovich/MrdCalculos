@@ -311,11 +311,36 @@ export interface PjeFeriadoDB {
   municipio?: string;
 }
 
+/** Período com alíquota de previdência privada vigente. */
+export interface PjePrevPrivadaPeriodo {
+  competencia_inicial: string; // MM/AAAA
+  competencia_final?: string;
+  aliquota: number; // %
+}
+
 export interface PjePrevidenciaPrivadaConfig {
   apurar: boolean;
+  /** Alíquota global (legacy). Quando há `periodos`, esses prevalecem. */
   percentual: number;
   base_calculo: 'diferenca' | 'devido' | 'corrigido';
+  /** Se true, prev. privada é deduzida da base do IR (Lei 9.250/95 art. 4º V). */
   deduzir_ir: boolean;
+  /** Períodos com alíquotas distintas (ex: mudança de plano em data específica). */
+  periodos?: PjePrevPrivadaPeriodo[];
+  /** Teto mensal — alíquota não incide acima desse valor. */
+  teto_mensal?: number;
+  /** Como aplicar juros sobre prev. privada atrasada:
+   *  trabalhista (mesmo do principal) / pago_atraso (juros após data efetiva) / nenhum. */
+  juros?: 'trabalhista' | 'pago_atraso' | 'nenhum';
+}
+
+/** Cota e teto de salário-família por ano vigente.
+ *  Lei 8.213/91 art. 67 + Portarias INSS anuais.
+ *  Quando ausente, engine usa default 2025. */
+export interface PjeSalarioFamiliaCotaAnual {
+  ano: number;
+  valor_cota: number;     // valor por filho elegível (≤14)
+  teto_salarial: number;  // remuneração máxima para elegibilidade
 }
 
 export interface PjeSalarioFamiliaConfig {
@@ -329,10 +354,14 @@ export interface PjeSalarioFamiliaConfig {
   competencia_final?: string;
   /** Variação de qtd de filhos ≤14 ao longo do período (novas competências que mudam a quantidade). */
   variacoes_qtd?: { competencia: string; quantidade: number }[];
-  /** Valor da cota legal (override). Default usa cota vigente 2025 (R$ 62,04). */
+  /** Valor da cota legal (override pontual). Default usa cota vigente 2025 (R$ 62,04). */
   valor_cota?: number;
   /** Teto salarial — elegível se remuneração ≤ teto. Default 2025 (R$ 1.819,26). */
   teto_salarial?: number;
+  /** Tabela anual de cotas/tetos (override completo por ano). Quando presente,
+   *  engine usa o valor do ano correspondente à competência em vez do default.
+   *  Permite calcular salário-família retroativo (ex: 2020 com R$ 51,27). */
+  cotas_anuais?: PjeSalarioFamiliaCotaAnual[];
 }
 
 export interface PjeSalarioFamiliaResult {
@@ -469,12 +498,26 @@ export interface PjeIRConfig {
   cobrar_reclamado: boolean;
   tributacao_exclusiva_13: boolean;
   tributacao_separada_ferias: boolean;
+  /** Regime de competência (default) ou caixa.
+   *  Java: <regimeDeCaixa> em ImpostoRendaCalculo. */
+  regime_caixa?: boolean;
   deduzir_cs: boolean;
   deduzir_prev_privada: boolean;
   deduzir_pensao: boolean;
   deduzir_honorarios: boolean;
   aposentado_65: boolean;
   dependentes: number;
+  /** RRA Art. 12-A Lei 7.713/88: cálculo IR sobre rendimentos recebidos
+   *  acumuladamente. Aplicável quando processo abrange período > 12 meses.
+   *  Java: <rraMeses> e <rraNumeroParcelas>. */
+  apurar_rra?: boolean;
+  rra_meses?: number;
+  rra_numero_parcelas?: number;
+  /** Incidir IR sobre verba principal tributável (default true). */
+  incidir_sobre_principal_tributavel?: boolean;
+  /** Incidir IR sobre verba principal NÃO tributável (default false — só para
+   *  casos específicos como danos morais que viram tributáveis). */
+  incidir_sobre_principal_nao_tributavel?: boolean;
   /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, use these exact IR bases */
   apuracao_juros_gt?: PjeApuracaoJurosGT[];
 }
@@ -624,6 +667,10 @@ export interface PjeMultaItem {
   indice_outro?: string;
   aplicar_juros: boolean;
   apurar_ir: boolean;
+  /** Tipo de cobrança quando devedor=reclamante. */
+  tipo_cobranca_reclamante?: 'descontar_credito' | 'cobrar';
+  /** Data a partir da qual juros mora começam (ISO). */
+  data_apartir_de_aplicar_juros?: string;
 }
 
 export interface PjeMultasConfig {
@@ -631,6 +678,10 @@ export interface PjeMultasConfig {
   apurar_477: boolean;
   valor_477_tipo?: 'salario' | 'informado';
   valor_477_informado?: number;
+  /** Multa CPC art. 523 (10% por descumprimento de sentença líquida no prazo).
+   *  Aplicada sobre o líquido após sentença + 15 dias úteis. */
+  apurar_523_cpc?: boolean;
+  percentual_523?: number; // default 10%
   /** Multas/indenizações individuais cadastradas na tela do PJe-Calc. */
   multas_indenizacoes?: PjeMultaItem[];
 }
@@ -645,13 +696,38 @@ export type PjeHonorarioBase = 'condenacao' | 'causa' | 'proveito' | 'bruto_meno
 
 export interface PjeHonorarioItem {
   descricao: string;
+  /** Tipo do honorário (paridade Java TipoHonorarioEnum):
+   *  SUCUMBENCIAIS / CONTRATUAIS / PERICIAIS_CONTADOR / PERICIAIS_TECNICO / OUT */
+  tipo_honorario?: 'sucumbenciais' | 'contratuais' | 'periciais_contador' | 'periciais_tecnico' | 'outros';
   devedor: 'reclamante' | 'reclamado';
   credor: string;
+  /** Documento fiscal do credor (CPF/CNPJ). */
+  doc_fiscal_credor?: string;
   tipo: 'percentual' | 'valor_fixo';
   percentual: number;
   valor_fixo?: number;
   base: PjeHonorarioBase;
   apurar_ir: boolean;
+  /** Tipo IRPF (PESSOA_FISICA = tabela progressiva, PESSOA_JURIDICA = 1,5%).
+   *  Java: TipoDeImpostoDeRendaEnum. */
+  tipo_imposto_renda?: 'pessoa_fisica' | 'pessoa_juridica';
+  /** Aplicar IRPF sobre os JUROS do honorário (true) ou só sobre valor corrigido (false).
+   *  Java: <apurarIRPFSobreJuros>. */
+  apurar_irpf_sobre_juros?: boolean;
+  /** Tipo de cobrança quando devedor=reclamante:
+   *  DESCONTAR_CREDITO (default — deduz do líquido) / COBRAR (cobra à parte).
+   *  Java: TipoCobrancaReclamanteEnum. */
+  tipo_cobranca_reclamante?: 'descontar_credito' | 'cobrar';
+  /** Aplicar juros mora sobre o honorário (quando dataVencimento < dataLiquidacao). */
+  aplicar_juros?: boolean;
+  /** Data a partir da qual juros mora começam a contar (ISO YYYY-MM-DD). */
+  data_apartir_de_aplicar_juros?: string;
+  /** Data de vencimento do honorário — base para correção monetária se < dataLiquidacao.
+   *  Java: <dataVencimento> em ms desde epoch. */
+  data_vencimento?: string;
+  /** Tipo de índice de correção: TRABALHISTA (default) ou OUTRO.
+   *  Java: TipoDeIndiceDeCorrecaoEnum. */
+  tipo_indice_correcao?: 'trabalhista' | 'outro';
 }
 
 export interface PjeHonorariosConfig {
@@ -844,11 +920,33 @@ export interface PjeCustaResult {
   valor: number;
 }
 
+export interface PjePensaoDependente {
+  nome: string;
+  cpf?: string;
+  data_nascimento?: string;
+  percentual?: number; // % individual (quando há rateio entre dependentes)
+}
+
 export interface PjePensaoConfig {
   apurar: boolean;
   percentual: number;
   valor_fixo?: number;
-  base: 'liquido' | 'bruto' | 'bruto_menos_inss';
+  base: 'liquido' | 'bruto' | 'bruto_menos_inss' | 'principal';
+  /** Pensão incide sobre verba FGTS pago ao reclamante. Java:
+   *  <incidenciaPensaoAlimenticia> em <Fgts>. */
+  incidencia_sobre_fgts?: boolean;
+  /** Pensão incide sobre multa 40% FGTS. Java:
+   *  <incidenciaPensaoAlimenticiaSobreMulta>. */
+  incidencia_sobre_multa_fgts?: boolean;
+  /** Pensão deve ser deduzida da base de cálculo do IR (default true).
+   *  Lei 9.250/95 art. 4º II — pensão alimentícia é dedução da base IR. */
+  descontar_antes_ir?: boolean;
+  /** Lista de dependentes que recebem pensão. */
+  dependentes?: PjePensaoDependente[];
+  /** Incidência sobre juros mora (default false). */
+  incidir_sobre_juros?: boolean;
+  beneficiario?: string;
+  observacoes?: string;
 }
 
 export interface PjeResumo {

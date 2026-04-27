@@ -34,6 +34,9 @@ export function ModuloMultasCLT({ caseId }: Props) {
   const [editForm, setEditForm] = useState<MultaIndenizacao>(EMPTY_MULTA);
   const [apurar467, setApurar467] = useState(false);
   const [apurar477, setApurar477] = useState(false);
+  // Sprint 2: Multa 523 CPC (10% por descumprimento de sentença)
+  const [apurar523Cpc, setApurar523Cpc] = useState(false);
+  const [percentual523, setPercentual523] = useState('10');
 
   const { data } = useQuery({
     queryKey: ["pjecalc_multas_config", caseId],
@@ -46,6 +49,8 @@ export function ModuloMultasCLT({ caseId }: Props) {
       if (d.multas_indenizacoes && Array.isArray(d.multas_indenizacoes)) setMultas(d.multas_indenizacoes as MultaIndenizacao[]);
       setApurar467((d.apurar_467 as boolean) ?? false);
       setApurar477((d.apurar_477 as boolean) ?? false);
+      setApurar523Cpc((d.apurar_523_cpc as boolean) ?? false);
+      setPercentual523(((d.percentual_523 as number) ?? 10).toString());
     }
   }, [data]);
 
@@ -66,7 +71,10 @@ export function ModuloMultasCLT({ caseId }: Props) {
         apurar_477: apurar477, valor_477_tipo: (d.valor_477_tipo as string) || 'salario',
         valor_477_informado: d.valor_477_informado ?? null, observacoes: (d.observacoes as string) || '',
         multas_indenizacoes: multas,
-      });
+        // Sprint 2: Multa 523 CPC
+        apurar_523_cpc: apurar523Cpc,
+        percentual_523: percentual523 ? parseFloat(percentual523) : 10,
+      } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_multas_config", caseId] });
       toast.success("Multas e Indenizações salvas!");
     } catch (e) { toast.error((e as Error).message); }
@@ -88,9 +96,21 @@ export function ModuloMultasCLT({ caseId }: Props) {
             <Checkbox checked={apurar467} onCheckedChange={v => setApurar467(!!v)} />
             <Label className="text-xs">Apurar Multa Art. 467 CLT (valores incontroversos não pagos na rescisão — 50%)</Label>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" title="CLT art. 477 §8º — quando o empregador atrasa o pagamento das verbas rescisórias (>10 dias).">
             <Checkbox checked={apurar477} onCheckedChange={v => setApurar477(!!v)} />
-            <Label className="text-xs">Apurar Multa Art. 477 CLT (atraso no pagamento das verbas rescisórias — 1 mês de salário)</Label>
+            <Label className="text-xs">Apurar Multa Art. 477 CLT (atraso nas verbas rescisórias — 1 salário)</Label>
+          </div>
+          <div className="border-t pt-3 mt-3">
+            <div className="flex items-center gap-2" title="CPC art. 523 §1º: quando o devedor não paga voluntariamente em 15 dias após sentença líquida, multa de 10%. Aplicável em execução trabalhista.">
+              <Checkbox checked={apurar523Cpc} onCheckedChange={v => setApurar523Cpc(!!v)} />
+              <Label className="text-xs">Apurar Multa Art. 523 CPC (descumprimento de sentença líquida — 10%)</Label>
+            </div>
+            {apurar523Cpc && (
+              <div className="ml-6 mt-2" title="Percentual da multa CPC art. 523. Default: 10%.">
+                <Label className="text-xs">Percentual (%)</Label>
+                <Input type="number" step="0.1" value={percentual523} onChange={e => setPercentual523(e.target.value)} className="h-7 text-xs w-24 mt-1" />
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
