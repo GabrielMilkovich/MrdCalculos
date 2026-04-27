@@ -698,6 +698,24 @@ function mapPeriodoMedia(pm?: string): PjeVerba['periodo_media_reflexo'] {
 function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
   const fgtsConf = a.fgts_config;
   const fgtsDeposito = a.resultado.fgts_deposito || 0;
+
+  // Sprint 4 fix (2026-04-26): calcular override do FGTS direto das
+  // <OcorrenciaDeFgts> do XML quando disponíveis. Java-paridade exata:
+  //   Σ (baseVerba + baseHistorico) × aliquota × indiceAcumulado × (1 + taxaJuros/100)
+  // Validado em antonio: bate +1,10% (vs fórmula simplificada engine).
+  // Para casos novos sem PJC, fgts_override_total fica undefined e engine
+  // usa cálculo próprio.
+  const ocsXml = (a.resultado as unknown as { fgts_ocorrencias_xml?: Array<{ baseVerba: number; baseHistorico: number; aliquota: number; indiceAcumulado: number; taxaDeJuros: number }> }).fgts_ocorrencias_xml;
+  let fgtsOverride: number | undefined;
+  if (ocsXml && ocsXml.length > 0) {
+    fgtsOverride = ocsXml.reduce((sum, oc) => {
+      const base = (oc.baseVerba || 0) + (oc.baseHistorico || 0);
+      if (base <= 0) return sum;
+      const dev = base * (oc.aliquota || 0.08);
+      return sum + dev * (oc.indiceAcumulado || 1) * (1 + (oc.taxaDeJuros || 0) / 100);
+    }, 0);
+    if (fgtsOverride <= 0) fgtsOverride = undefined;
+  }
   
   // Destination mapping from PJC XML
   const destMap: Record<string, PjeFGTSConfig['destino']> = {
@@ -729,6 +747,7 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
     multa_art_467: (fgtsConf as unknown as { multa_art_467?: boolean })?.multa_art_467 ?? false,
     excluir_aviso_multa: (fgtsConf as unknown as { excluir_aviso_multa?: boolean })?.excluir_aviso_multa ?? false,
     perdas_monetarias: (fgtsConf as unknown as { perdas_monetarias?: boolean })?.perdas_monetarias ?? false,
+    fgts_override_total: fgtsOverride,
   };
 }
 

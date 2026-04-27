@@ -178,17 +178,17 @@ async function main() {
       const r = result.resumo;
       const pjc_inss = analysis.resultado.inss_reclamante;
       const pjc_ir = analysis.resultado.imposto_renda;
-      // Comparação BRUTO vs BRUTO (pós-D5 fix de juros, 2026-04-26):
-      // Java: liquidoExequente = bruto - INSS_seg_nominal - IR (D2 confirmação)
-      //       Logo: bruto Java = LE + INSS_seg_nominal + IR
-      // Engine: total_reclamada = principalCorrigido + jurosMora + fgtsNoLiquido
-      //       = bruto Java (após D5 fix juros — sem deduzir nada).
-      // ANTES (acidente): juros sub-estimado em -17% mascarava como total_reclamada ≈ LE PJC.
-      // AGORA (correto): comparamos bruto eng vs bruto Java diretamente.
-      // Nota: `inss_reclamante` no PJC é INSS CORRIGIDO (não nominal). Para o nominal
-      // usaríamos a soma de `apuracao_juros[].cs_normal+cs_13`. Para simplicidade,
-      // usamos o INSS corrigido — diferença ~0.5% absorvida pela tolerância.
-      const pjc_bruto = pjc_liq + pjc_inss + pjc_ir;
+      // Comparação BRUTO vs BRUTO (Sprint 4 fix, 2026-04-27):
+      // Java BRUTO = LE + INSS_seg_NOMINAL + IR
+      //   onde INSS_seg_NOMINAL = Σ cs_normal+cs_13 das apuracao_juros (não corrigido)
+      // Engine: total_reclamada = principalCorrigido + jurosMora + fgts (= bruto Java)
+      // Nota: usar INSS NOMINAL (não corrigido) é importante porque o BRUTO Java
+      // antes da dedução do INSS é nominal — quando subtrai inss CORRIGIDO sobra LE PJC.
+      let inssNominal = 0;
+      for (const it of (analysis.apuracao_juros || [])) {
+        inssNominal += (it.cs_normal || 0) + (it.cs_13 || 0);
+      }
+      const pjc_bruto = pjc_liq + (inssNominal > 0 ? inssNominal : pjc_inss) + pjc_ir;
       const eng_bruto = r.total_reclamada;
 
       // Comparação BRUTO vs BRUTO (semanticamente correta após D5 fix):

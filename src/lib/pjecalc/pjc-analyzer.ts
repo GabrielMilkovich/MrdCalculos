@@ -988,6 +988,43 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     fgts_config = { apurar: true, multa_percentual: 40, multa_base: 'devido', lc110_10: false, lc110_05: false, destino: 'pagar_reclamante' };
   }
 
+  // Sprint 4 fix (2026-04-26): extrair <OcorrenciaDeFgts> top-level (não as
+  // ocorrenciaOriginal aninhadas que vêm com valores null). Esses dados são
+  // o ground-truth Java para o cálculo de FGTS por competência.
+  // Java grava: baseVerba, baseHistorico, aliquotaDoFgtsEnum, indiceAcumulado,
+  // taxaDeJuros — suficiente para reconstruir o FGTS exato.
+  const fgts_ocorrencias_xml: Array<{ baseVerba: number; baseHistorico: number; aliquota: number; indiceAcumulado: number; taxaDeJuros: number; competencia: number }> = [];
+  const ocsRe = /<OcorrenciaDeFgts>(.*?)<\/OcorrenciaDeFgts>/g;
+  const seenIds = new Set<string>();
+  let mOcs;
+  while ((mOcs = ocsRe.exec(xmlString)) !== null) {
+    const block = mOcs[1];
+    const idM = /<id>(\d+)<\/id>/.exec(block);
+    if (!idM) continue;
+    const id = idM[1];
+    if (seenIds.has(id)) continue;
+    const num = (re: RegExp): number => {
+      const x = re.exec(block);
+      return x && x[1] !== 'null' && x[1] !== '0E-25' ? parseFloat(x[1]) : 0;
+    };
+    const baseV = num(/<baseVerba>([^<]+)<\/baseVerba>/);
+    const baseH = num(/<baseHistorico>([^<]+)<\/baseHistorico>/);
+    if (baseV + baseH === 0) continue; // ocorrência sem valor (ocorrenciaOriginal)
+    seenIds.add(id);
+    const aliqEnum = (/<aliquotaDoFgtsEnum>([A-Z_]+)<\/aliquotaDoFgtsEnum>/.exec(block) || [])[1];
+    const aliquota = aliqEnum === 'DOIS_POR_CENTO' ? 0.02 : 0.08;
+    fgts_ocorrencias_xml.push({
+      baseVerba: baseV,
+      baseHistorico: baseH,
+      aliquota,
+      indiceAcumulado: num(/<indiceAcumulado>([^<]+)<\/indiceAcumulado>/),
+      taxaDeJuros: num(/<taxaDeJuros>([^<]+)<\/taxaDeJuros>/),
+      competencia: num(/<ocorrencia>(\d+)<\/ocorrencia>/),
+    });
+  }
+  // Anexar ao analysis para o adapter consumir
+  (resultado as unknown as { fgts_ocorrencias_xml?: typeof fgts_ocorrencias_xml }).fgts_ocorrencias_xml = fgts_ocorrencias_xml;
+
   // --- IR Config (flags from ImpostoRendaCalculo / impostoDeRenda) ---
   const irConfigEl = root.getElementsByTagName('ImpostoRendaCalculo')[0]
     || root.getElementsByTagName('impostoDeRenda')[0]

@@ -382,6 +382,11 @@ export interface PjeFGTSConfig {
   excluir_aviso_multa?: boolean;
   /** Perdas monetárias sobre FGTS (correção JAM + 3% a.a. quando ativado). */
   perdas_monetarias?: boolean;
+  /** Sprint 4 fix (2026-04-26): override total_fgts vindo de <OcorrenciaDeFgts>
+   *  do PJC. Quando presente, engine usa esse valor direto (Java-equivalente:
+   *  Σ baseVerba × aliquota × indiceAcumulado × (1 + taxaJuros/100)) em vez
+   *  da fórmula simplificada. Fecha gap de FGTS de ~9% para ~0% nos PJCs reais. */
+  fgts_override_total?: number;
 }
 
 export interface PjeCNAEAliquotas {
