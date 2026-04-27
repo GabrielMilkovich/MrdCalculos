@@ -1046,11 +1046,13 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   // Anexar ao analysis para o adapter consumir
   (resultado as unknown as { fgts_ocorrencias_xml?: typeof fgts_ocorrencias_xml }).fgts_ocorrencias_xml = fgts_ocorrencias_xml;
 
-  // --- IR Config (flags from ImpostoRendaCalculo / impostoDeRenda) ---
+  // --- IR Config (flags from ImpostoRendaCalculo / impostoDeRenda / Irpf) ---
   const irConfigEl = root.getElementsByTagName('ImpostoRendaCalculo')[0]
     || root.getElementsByTagName('impostoDeRenda')[0]
     || root.getElementsByTagName('ImpostoRenda')[0]
-    || root.getElementsByTagName('impostoRendaCalculo')[0];
+    || root.getElementsByTagName('impostoRendaCalculo')[0]
+    || root.getElementsByTagName('Irpf')[0]
+    || root.getElementsByTagName('irpf')[0];
   let ir_config: PJCAnalysis['ir_config'] = undefined;
   if (irConfigEl) {
     const getBoolTag = (tag: string, fallback: boolean): boolean => {
