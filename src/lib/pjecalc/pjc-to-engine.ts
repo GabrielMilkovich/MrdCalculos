@@ -1059,7 +1059,6 @@ function buildHonorariosConfig(a: PJCAnalysis): PjeHonorariosConfig {
         apurar_ir: h.apurar_irrf ?? false,
         // Novos campos Sprint 2:
         tipo_imposto_renda: h.tipo_imposto_renda ? tipoIRMap[h.tipo_imposto_renda] : undefined,
-        apurar_irpf_sobre_juros: h.apurar_irpf_sobre_juros ?? false,
         tipo_cobranca_reclamante: h.tipo_cobranca_reclamante
           ? tipoCobMap[h.tipo_cobranca_reclamante] ?? 'descontar_credito'
           : 'descontar_credito',
@@ -1219,13 +1218,12 @@ function buildPrevPrivadaConfig(a: PJCAnalysis): PjePrevidenciaPrivadaConfig {
       percentual: a.previdencia_privada.percentual || 0,
       // Sprint 2: lê campos antes hardcoded
       base_calculo: (pp.base_calculo as 'diferenca' | 'devido' | 'corrigido') ?? 'diferenca',
-      deduzir_ir: (pp.deduzir_ir as boolean) ?? true,
       periodos: pp.periodos as PjePrevidenciaPrivadaConfig['periodos'] ?? undefined,
       teto_mensal: pp.teto_mensal as number ?? undefined,
       juros: (pp.juros as PjePrevidenciaPrivadaConfig['juros']) ?? 'trabalhista',
     };
   }
-  return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false };
+  return { apurar: false, percentual: 0, base_calculo: 'diferenca' };
 }
 
 // =====================================================

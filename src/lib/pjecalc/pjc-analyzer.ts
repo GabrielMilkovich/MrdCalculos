@@ -84,7 +84,6 @@ export interface PJCAnalysis {
       // Sprint 2 — 9 campos novos
       tipo_imposto_renda?: 'PESSOA_FISICA' | 'PESSOA_JURIDICA' | string;
       apurar_irrf?: boolean;
-      apurar_irpf_sobre_juros?: boolean;
       tipo_cobranca_reclamante?: 'DESCONTAR_CREDITO' | 'COBRAR' | string;
       aplicar_juros?: boolean;
       data_apartir_de_aplicar_juros?: string;
@@ -521,7 +520,6 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       // Novos campos (Sprint 2):
       tipo_imposto_renda: getTextContent(h, 'tipoImpostoRenda') || undefined,
       apurar_irrf: getTextContent(h, 'apurarIRRF') === 'true' || undefined,
-      apurar_irpf_sobre_juros: getTextContent(h, 'apurarIRPFSobreJuros') === 'true' || undefined,
       tipo_cobranca_reclamante: getTextContent(h, 'tipoCobrancaReclamante') || undefined,
       aplicar_juros: getTextContent(h, 'aplicarJuros') === 'true' || undefined,
       data_apartir_de_aplicar_juros: tsToIso(dataJurosRaw),

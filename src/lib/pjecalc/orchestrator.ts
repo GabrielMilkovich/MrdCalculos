@@ -587,16 +587,15 @@ async function loadPensaoConfig(caseId: string): Promise<PjePensaoConfig> {
 async function loadPrevPrivadaConfig(caseId: string): Promise<PjePrevidenciaPrivadaConfig> {
   try {
     const cfg = await svc.getPrevPrivConfig(caseId);
-    if (!cfg) return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false };
+    if (!cfg) return { apurar: false, percentual: 0, base_calculo: 'diferenca' };
     return {
       apurar: !!cfg.apurar,
       percentual: Number(cfg.percentual_empregado || 0),
       base_calculo: (cfg.base_calculo as 'diferenca' | 'devido' | 'corrigido') || 'diferenca',
-      deduzir_ir: !!cfg.deduzir_ir,
     };
   } catch (err: any) {
     if (err?.code === 'PGRST116' || err?.message?.includes('not found')) {
-      return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false };
+      return { apurar: false, percentual: 0, base_calculo: 'diferenca' };
     }
     logger.error('[ORCHESTRATOR] Erro inesperado em loadPrevPrivadaConfig', err);
     throw err;

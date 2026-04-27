@@ -26,7 +26,6 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
   const [periodos, setPeriodos] = useState<AliquotaPeriodo[]>([{ competencia_inicial: '', competencia_final: '', aliquota: '' }]);
   // Sprint 2: campos antes hardcoded
   const [baseCalculo, setBaseCalculo] = useState<'diferenca' | 'devido' | 'corrigido'>('diferenca');
-  const [deduzirIR, setDeduzirIR] = useState(true);
   const [tetoMensal, setTetoMensal] = useState('');
   const [juros, setJuros] = useState<'trabalhista' | 'pago_atraso' | 'nenhum'>('trabalhista');
 
@@ -40,7 +39,6 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
         setPeriodos([{ competencia_inicial: '', competencia_final: '', aliquota: d.percentual?.toString() || '' }]);
       }
       setBaseCalculo(((d.base_calculo as string) || 'diferenca') as 'diferenca' | 'devido' | 'corrigido');
-      setDeduzirIR((d.deduzir_ir as boolean) ?? true);
       setTetoMensal(d.teto_mensal?.toString() || '');
       setJuros(((d.juros as string) || 'trabalhista') as 'trabalhista' | 'pago_atraso' | 'nenhum');
     }
@@ -53,7 +51,6 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
         apurar,
         percentual: periodos[0]?.aliquota ? parseFloat(periodos[0].aliquota) : 0,
         base_calculo: baseCalculo,
-        deduzir_ir: deduzirIR,
         periodos,
         observacao: null,
         // Sprint 2: novos campos
@@ -132,12 +129,6 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
                         <SelectItem value="nenhum">Sem juros</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="flex items-end" title="Lei 9.250/95 art. 4º V: prev. privada deduzida da base IR. Default ativado.">
-                    <div className="flex items-center gap-2 pb-1">
-                      <Checkbox checked={deduzirIR} onCheckedChange={v => setDeduzirIR(!!v)} />
-                      <Label className="text-xs">Deduzir da base IR (Lei 9.250/95)</Label>
-                    </div>
                   </div>
                 </div>
               </div>

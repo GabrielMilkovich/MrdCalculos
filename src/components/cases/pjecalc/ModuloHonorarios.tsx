@@ -21,7 +21,6 @@ interface HonorarioItem {
   tipo_honorario?: string;
   doc_fiscal_credor?: string;
   tipo_imposto_renda?: string;
-  apurar_irpf_sobre_juros?: boolean;
   tipo_cobranca_reclamante?: string;
   aplicar_juros?: boolean;
   data_apartir_de_aplicar_juros?: string;
@@ -34,7 +33,6 @@ const EMPTY: HonorarioItem = {
   tipo: 'percentual', percentual: '15', valor_fixo: '', base: 'condenacao', apurar_ir: false,
   tipo_honorario: 'sucumbenciais',
   tipo_imposto_renda: 'pessoa_fisica',
-  apurar_irpf_sobre_juros: false,
   tipo_cobranca_reclamante: 'descontar_credito',
   aplicar_juros: false,
   tipo_indice_correcao: 'trabalhista',
@@ -205,10 +203,6 @@ export function ModuloHonorarios({ caseId }: Props) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex items-center gap-2" title="Quando marcado, IR incide também sobre os juros mora do honorário. Java <apurarIRPFSobreJuros>.">
-                      <Checkbox checked={editForm.apurar_irpf_sobre_juros || false} onCheckedChange={v => setEditForm(p => ({ ...p, apurar_irpf_sobre_juros: !!v }))} />
-                      <Label className="text-xs">IR sobre juros mora também</Label>
-                    </div>
                   </>
                 )}
               </div>
@@ -230,7 +224,7 @@ export function ModuloHonorarios({ caseId }: Props) {
 
             <div className="border-t pt-2 mt-2">
               <p className="text-xs font-semibold text-muted-foreground mb-1">Correção monetária e juros</p>
-              <p className="text-[10px] text-emerald-700 mb-2 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ <strong>Data Vencimento</strong> + Índice Trabalhista funcionam (engine aplica IPCA-E acumulado). 🔬 Aplicar Juros e outros índices ainda em estudo.</p>
+              <p className="text-[10px] text-emerald-700 mb-2 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ <strong>Data Vencimento</strong> + Índice Trabalhista funcionam (engine aplica IPCA-E acumulado). ✓ Aplicar Juros (Sprint 4.2-C1, OJ-348 SDI-1): juros simples mensais a partir da data informada.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div title="Data em que o honorário foi fixado. Se anterior à liquidação, engine aplica IPCA-E acumulado.">
                   <Label className="text-xs">Data de Vencimento</Label>

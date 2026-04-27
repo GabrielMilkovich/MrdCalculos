@@ -976,10 +976,31 @@ export interface PjePensaoConfig {
   descontar_antes_ir?: boolean;
   /** Lista de dependentes que recebem pensão. */
   dependentes?: PjePensaoDependente[];
-  /** Incidência sobre juros mora (default false). */
+  /** Incidência sobre juros mora (default false). Quando true, soma a fração
+   *  proporcional dos juros à base efetiva de cálculo da pensão (independe
+   *  da `base` configurada — efeito incremental). */
   incidir_sobre_juros?: boolean;
   beneficiario?: string;
   observacoes?: string;
+}
+
+/**
+ * Sprint 4.2-C1 — Configuração da aba Atualização (pós-pagamento).
+ * Decide quais buckets do resumo são incluídos no `total_atualizado`
+ * que será usado pela rotina de atualização para confronto com o `valor_pago`.
+ *
+ * Defaults TODOS false: preserva o comportamento atual em que `total_atualizado`
+ * é igual a `total_reclamada` (sem soma de pensão/multas/honorários/custas).
+ */
+export interface PjeAtualizacaoConfig {
+  /** Soma `pensao_total` ao total atualizado. */
+  aplicar_pensao?: boolean;
+  /** Soma o saldo líquido das multas/indenizações individuais ao total atualizado. */
+  aplicar_multas_indenizacoes?: boolean;
+  /** Soma `honorarios_sucumbenciais + honorarios_contratuais` ao total atualizado. */
+  aplicar_honorarios?: boolean;
+  /** Soma `custas` ao total atualizado. */
+  aplicar_custas?: boolean;
 }
 
 export interface PjeResumo {
@@ -1003,6 +1024,9 @@ export interface PjeResumo {
   custas_detalhadas: PjeCustaResult[];
   pensao_sobre_fgts: number;
   pensao_total: number;
+  /** Sprint 4.2-C1: total_reclamada + buckets habilitados pela config Atualização.
+   *  Default = total_reclamada (todos `aplicar_*` false). */
+  total_atualizado?: number;
   contribuicao_sindical: number;
   /** Abono pecuniário férias (Art. 143 CLT) — sujeito a IR, não ao INSS */
   abono_pecuniario: number;

@@ -110,7 +110,7 @@ export class PjeCalcEngine {
     faixasIRDB: PjeIRFaixaRow[] = [],
     excecoesCargas: PjeExcecaoCargaHoraria[] = [],
     feriadosDB: PjeFeriadoDB[] = [],
-    prevPrivadaConfig: PjePrevidenciaPrivadaConfig = { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false },
+    prevPrivadaConfig: PjePrevidenciaPrivadaConfig = { apurar: false, percentual: 0, base_calculo: 'diferenca' },
     pensaoConfig: PjePensaoConfig = { apurar: false, percentual: 0, base: 'liquido' },
     salarioFamiliaConfig: PjeSalarioFamiliaConfig = { apurar: false, numero_filhos: 0 },
     seguroDesempregoDB: PjeSeguroDesempregoDB[] = [],
