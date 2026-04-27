@@ -30,7 +30,7 @@ dist-ssr
 .env
 .env.local
 .env.*.local
-.env.test
+.env.e2e
 
 # Bun lockfiles (project standardized on npm)
 bun.lock

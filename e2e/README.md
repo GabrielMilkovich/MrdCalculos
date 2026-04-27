@@ -22,15 +22,19 @@ pipeline de CI/local antes de merge.
 
 Os specs precisam que o app monte sem erros fatais de Supabase. Para isso:
 
-1. Crie `.env.test` na raiz (ja gitignored) — use `.env.example` como base.
+1. Crie `.env.e2e` na raiz (ja gitignored) — use `.env.example` como base.
    Os valores podem ser stubs (URL local + anon key publica do supabase-cli).
    Exemplo minimo:
    ```
    VITE_SUPABASE_URL=http://localhost:54321
    VITE_SUPABASE_PUBLISHABLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
    ```
-2. O `playwright.config.ts` ja sobe o dev server com `--mode test`, o que
-   faz o Vite carregar `.env.test` automaticamente.
+2. O `playwright.config.ts` ja sobe o dev server com `--mode e2e`, o que
+   faz o Vite carregar `.env.e2e` automaticamente.
+
+   Por que `.env.e2e` e nao `.env.test`? O Vitest carrega `.env.test`
+   por padrao em `mode=test` e o arquivo conflita com testes de
+   feature-flags que esperam env vazio. `.env.e2e` isola o ambiente E2E.
 
 ## Como rodar
 

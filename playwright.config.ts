@@ -50,7 +50,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --mode test',
+    command: 'npm run dev -- --mode e2e',
     url: BASE_URL,
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,
