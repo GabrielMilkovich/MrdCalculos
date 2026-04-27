@@ -145,11 +145,16 @@ export class InssModuloAdapter implements IModuloLiquidavel {
       for (const [comp, base] of Object.entries(basesEmp)) {
         if (base <= 0) continue;
         const compDate = new Date(comp + '-01');
-        const isSimples = this.csConfig.periodos_simples?.some(p => {
+        // Sprint 4.2-B2 (TIER 2 P1): SIMPLES NACIONAL global (LC 123/2006 art.13 §3º).
+        // Quando `simples_nacional=true`, força isenção patronal em TODAS as
+        // competências (recolhimento unificado via DAS). Mais amplo que
+        // `periodos_simples` (intervalo) — qualquer competência fica zerada.
+        const isSimplesGlobal = this.csConfig.simples_nacional === true;
+        const isSimples = isSimplesGlobal || (this.csConfig.periodos_simples?.some(p => {
           const pI = new Date(p.inicio);
           const pF = new Date(p.fim);
           return compDate >= pI && compDate <= pF;
-        }) ?? false;
+        }) ?? false);
 
         if (isSimples) {
           this.empregadorPorCompetencia.push({ competencia: comp, empresa: 0, sat: 0, terceiros: 0 });

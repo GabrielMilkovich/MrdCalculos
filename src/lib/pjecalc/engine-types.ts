@@ -490,6 +490,15 @@ export interface PjeCSConfig {
    * Default false (compatibilidade) — quando true, totais de INSS retornam atualizados.
    */
   atualizar_inss_selic?: boolean;
+  /**
+   * Sprint 4.2-B2 (TIER 2 P1): empresa optante do SIMPLES NACIONAL.
+   * LC 123/2006 art. 13 §3º — empresa do SIMPLES é ISENTA das contribuições
+   * patronais (CS empresa 20%, SAT, terceiros). O recolhimento é unificado
+   * via DAS. Quando true, força empresa+SAT+terceiros = 0 em TODAS as
+   * competências (independente de `periodos_simples`, que é por intervalo).
+   * Default false (preservar comportamento atual).
+   */
+  simples_nacional?: boolean;
 }
 
 export interface PjeIRConfig {
@@ -986,6 +995,8 @@ export interface PjeResumo {
   salario_familia: number;
   multa_523: number;
   multa_467: number;
+  /** Sprint 4.2-B2: Multa 477 §8 CLT — 1 salário se rescisão atrasou. */
+  multa_477?: number;
   honorarios_sucumbenciais: number;
   honorarios_contratuais: number;
   custas: number;

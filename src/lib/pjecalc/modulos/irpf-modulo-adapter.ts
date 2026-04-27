@@ -17,7 +17,7 @@ import Decimal from 'decimal.js';
 import type { IModuloLiquidavel } from '../core/dominio/calculo/calculo';
 import type { VerbaDeCalculo } from '../core/dominio/verbacalculo/verba-de-calculo';
 import type {
-  PjeIRConfig, PjeIRFaixaRow, PjeHonorariosConfig,
+  PjeIRConfig, PjeIRFaixaRow, PjeHonorariosConfig, PjePensaoConfig,
 } from '../engine-types';
 import {
   DEFAULT_FAIXAS_IR, DEFAULT_DEDUCAO_DEPENDENTE,
@@ -35,6 +35,7 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
   private honorariosConfig: PjeHonorariosConfig;
   private inssAdapter: InssModuloAdapter;
   private dataLiquidacao: string; // YYYY-MM-DD
+  private pensaoConfig?: PjePensaoConfig;
 
   // Resultados (populados após liquidar())
   baseCalculo = 0;
@@ -54,6 +55,7 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     honorariosConfig: PjeHonorariosConfig,
     inssAdapter: InssModuloAdapter,
     dataLiquidacao: string,
+    pensaoConfig?: PjePensaoConfig,
   ) {
     this.verbas = verbas;
     this.irConfig = irConfig;
@@ -61,6 +63,7 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     this.honorariosConfig = honorariosConfig;
     this.inssAdapter = inssAdapter;
     this.dataLiquidacao = dataLiquidacao;
+    this.pensaoConfig = pensaoConfig;
   }
 
   liquidar(_dataLiquidacao?: Date): void {
@@ -168,6 +171,25 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     }
     if (this.irConfig.deduzir_honorarios && this.honorariosConfig.apurar_contratuais) {
       deducoes += this.calcularHonorariosContratuais();
+    }
+    // Sprint 4.2-B2 (TIER 2 P1): Pensão alimentícia — Lei 9.250/95 art. 4º II.
+    // Quando apurar=true E (deduzir_pensao=true OU descontar_antes_ir=true),
+    // a pensão é dedução da base de cálculo do IR. Implementação simplificada:
+    // % do percentual configurado sobre a base bruta IR (proxy seguro evita
+    // circularidade base='liquido'). Desliga se pensão estiver OFF.
+    const pensaoApurada = this.pensaoConfig?.apurar === true;
+    const deduzirPensao = this.irConfig.deduzir_pensao === true
+      || this.pensaoConfig?.descontar_antes_ir === true;
+    if (pensaoApurada && deduzirPensao) {
+      const pct = this.pensaoConfig?.percentual ?? 0;
+      const valorFixo = this.pensaoConfig?.valor_fixo ?? 0;
+      // Quando há valor fixo, deduz integralmente (paridade com PJC: pensão
+      // mensal acumulada × meses fica externa). Caso contrário, % × baseBruta
+      // (não-13 normal — IR ano liquidação é o componente principal).
+      const dedPensao = valorFixo > 0
+        ? new Decimal(valorFixo).toDP(2, ROUND_CS_IR).toNumber()
+        : new Decimal(baseBruta).times(pct).div(100).toDP(2, ROUND_CS_IR).toNumber();
+      deducoes += dedPensao;
     }
 
     // ─── 4. Tabela IR da competência de liquidação ───

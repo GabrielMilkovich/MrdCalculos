@@ -470,6 +470,7 @@ export class PjeCalcEngineV3 {
       verbasCore, this.irConfig, this.faixasIRDB,
       this.honorariosConfig, inssAdapter,
       this.correcaoConfig.data_liquidacao,
+      this.pensaoConfig,
     );
     calculo.setInss(inssAdapter);
     calculo.setIrpf(irpfAdapter);
@@ -574,6 +575,8 @@ export class PjeCalcEngineV3 {
 
     // Multa 467 CLT: 50% sobre verbas RESCISORIAS (aviso, saldo salario, 13, ferias) nao pagas
     const multa467 = this.calcularMulta467(verbaResults);
+    // Multa 477 §8 CLT: 1 salário-base se rescisão atrasou (Sprint 4.2-B2 TIER 2 P1)
+    const multa477 = this.calcularMulta477();
     // Multa 523 CPC: 10% sobre total devido nao pago em 15 dias apos intimacao
     // Multa 523 CPC: aceita flag tanto em correcaoConfig (legacy) quanto em
     // multasConfig (Phase 2). Unificação 2026-04-27.
@@ -625,61 +628,111 @@ export class PjeCalcEngineV3 {
     // 2. `inssTaxaJurosPorCompetencia` (taxa do PJC, multiplica nosso INSS nominal).
     // 3. `tabelaSelicInss` (porte autônomo Java — Etapa 1 D2).
     // 4. `pctJurosCombinado` (cálculo legado via correcaoConfig).
+    //
+    // Sprint 4.2-B1: gates `cs_dev_*` modulam o multiplicador final.
+    // Defaults preservam o comportamento atual (96% calibrate):
+    //   cs_dev_correcao_prev=true   ← SELIC INSS (Lei 11.941/09 + RFB 1.117/10)
+    //   cs_dev_juros_prev=true      ← SELIC já é juros+correção combinados
+    //   cs_dev_correcao_trab=false  ← engine não aplica IPCA-E sobre INSS hoje
+    //   cs_dev_juros_trab=false     ← engine não aplica 1% trab sobre INSS hoje
+    //   cs_dev_multa_prev_aplicar=false ← Lei 8.212/91 art.35 não aplicada hoje
+    const csDevFlagsAtivas = this.csDevFlagsAlteramFator();
     let csSeguradoCorrigido: number;
-    if (overrideCorrigidoFromPJC) {
+    if (overrideCorrigidoFromPJC && !csDevFlagsAtivas) {
       csSeguradoCorrigido = Object.values(overrideCorrigidoFromPJC).reduce((s, v) => s + v, 0);
     } else {
       csSeguradoCorrigido = inssAdapter.seguradoDevidos.reduce((sum, item) => {
-        let pctJuros: number;
+        let pctSelic: number;
         if (taxasJurosFromPJC && taxasJurosFromPJC[item.competencia] !== undefined) {
-          pctJuros = taxasJurosFromPJC[item.competencia];
+          pctSelic = taxasJurosFromPJC[item.competencia];
         } else if (tabelaSelicInss.has(item.competencia)) {
-          // Porte autônomo: SELIC INSS via TabelaDeJurosDeInss (Java).
-          pctJuros = tabelaSelicInss.get(item.competencia) as number;
+          pctSelic = tabelaSelicInss.get(item.competencia) as number;
         } else {
           const dataComp = new Date(item.competencia + '-01');
           const inicioJuros = new Date(dataComp.getFullYear(), dataComp.getMonth() + 1, 1);
-          if (inicioJuros.getTime() >= dataLiqInss.getTime()) return sum + item.valor;
-          pctJuros = combsInss.length > 0
-            ? this.pctJurosCombinado(inicioJuros, dataLiqInss, tipoJurosInss, combsInss).toNumber()
-            : this.pctJurosSegmento(inicioJuros, dataLiqInss, tipoJurosInss).toNumber();
+          if (inicioJuros.getTime() >= dataLiqInss.getTime()) {
+            pctSelic = 0;
+          } else {
+            pctSelic = combsInss.length > 0
+              ? this.pctJurosCombinado(inicioJuros, dataLiqInss, tipoJurosInss, combsInss).toNumber()
+              : this.pctJurosSegmento(inicioJuros, dataLiqInss, tipoJurosInss).toNumber();
+          }
         }
-        return sum + item.valor * (1 + pctJuros / 100);
+        const factor = this.csCorrecaoFator(item.competencia, pctSelic, dataLiqInss, false);
+        return sum + item.valor * factor;
       }, 0);
     }
     const csSegurado = Number(new Decimal(csSeguradoCorrigido).toDP(2, Decimal.ROUND_HALF_EVEN));
 
-    // D1 fix Bug 2 (2026-04-26): aplicar correção+juros sobre o EMPREGADOR
-    // Java aplica `(indiceCorrecao + taxaJuros/100 + taxaMulta/100)` em CADA
-    // ocorrência, sobre `valorDevidoEmpresaFinal + valorDevidoSAT + valorDevidoTerceiros`.
-    // Empiricamente verificado em antonio-harley: somando ocorrência-a-ocorrência
-    // com esse fator chega-se a 6 336,27 ≈ PJC 6 336,11 (R$ 0,16 diff).
-    // Antes: `csEmpregador = inssAdapter.totalEmpregador` (NOMINAL puro), gerando
-    // -38% de gap. A taxa de juros usada é a MESMA do segurado (mesma competência,
-    // mesma data de liquidação) — `pctJuros` derivado de SELIC INSS / TabelaDeJurosDeInss.
+    // Sprint 4.2-B1: aplica os mesmos gates `cs_dev_*` ao empregador (mesma
+    // base legal — Lei 8.212/91 + Lei 11.941/09 RFB 1.117/10).
     let csEmpregadorCorrigido = 0;
     for (const item of inssAdapter.empregadorPorCompetencia) {
       const totalNominal = (item.empresa || 0) + (item.sat || 0) + (item.terceiros || 0);
       if (totalNominal <= 0) continue;
-      let pctJuros: number;
+      let pctSelic: number;
       if (taxasJurosFromPJC && taxasJurosFromPJC[item.competencia] !== undefined) {
-        pctJuros = taxasJurosFromPJC[item.competencia];
+        pctSelic = taxasJurosFromPJC[item.competencia];
       } else if (tabelaSelicInss.has(item.competencia)) {
-        pctJuros = tabelaSelicInss.get(item.competencia) as number;
+        pctSelic = tabelaSelicInss.get(item.competencia) as number;
       } else {
         const dataComp = new Date(item.competencia + '-01');
         const inicioJuros = new Date(dataComp.getFullYear(), dataComp.getMonth() + 1, 1);
         if (inicioJuros.getTime() >= dataLiqInss.getTime()) {
-          csEmpregadorCorrigido += totalNominal;
-          continue;
+          pctSelic = 0;
+        } else {
+          pctSelic = combsInss.length > 0
+            ? this.pctJurosCombinado(inicioJuros, dataLiqInss, tipoJurosInss, combsInss).toNumber()
+            : this.pctJurosSegmento(inicioJuros, dataLiqInss, tipoJurosInss).toNumber();
         }
-        pctJuros = combsInss.length > 0
-          ? this.pctJurosCombinado(inicioJuros, dataLiqInss, tipoJurosInss, combsInss).toNumber()
-          : this.pctJurosSegmento(inicioJuros, dataLiqInss, tipoJurosInss).toNumber();
       }
-      csEmpregadorCorrigido += totalNominal * (1 + pctJuros / 100);
+      const factor = this.csCorrecaoFator(item.competencia, pctSelic, dataLiqInss, false);
+      csEmpregadorCorrigido += totalNominal * factor;
     }
     const csEmpregador = Number(new Decimal(csEmpregadorCorrigido).toDP(2, Decimal.ROUND_HALF_EVEN));
+
+    // ── Sprint 4.2-B1: CS sobre SALÁRIOS PAGOS ──
+    // Aplica os 5 gates `cs_pagos_*` quando `cs_pagos_aplicar=true` AND alguma
+    // flag de pagos ativada. Base = soma de `oc.pago` em verbas com incidência
+    // CS (similar a `cs_sobre_salarios_pagos` do PJe-Calc Avançado).
+    // Defaults preservam o comportamento atual: sem qualquer flag pagos, o
+    // engine retorna `total_segurado_pagos = 0` (idêntico ao baseline).
+    let csSeguradoPagos = 0;
+    let csEmpregadorPagos = 0;
+    if (this.correcaoConfig.cs_pagos_aplicar && this.csPagosFlagsAlteramFator()) {
+      const pagosPorComp: Record<string, number> = {};
+      for (let vi = 0; vi < this.verbas.length; vi++) {
+        const vUI = this.verbas[vi];
+        if (vUI.incidencias?.contribuicao_social === false) continue;
+        const vc = verbasCore[vi];
+        if (!vc) continue;
+        for (const oc of vc.getOcorrenciasAtivas()) {
+          const dataIni = oc.getDataInicial();
+          const pago = oc.getPago()?.toNumber() ?? 0;
+          if (!dataIni || pago <= 0) continue;
+          const comp = `${dataIni.getFullYear()}-${String(dataIni.getMonth() + 1).padStart(2, '0')}`;
+          pagosPorComp[comp] = (pagosPorComp[comp] ?? 0) + pago;
+        }
+      }
+      const aliqSeg = this.csConfig.aliquota_segurado_fixa
+        ? (this.csConfig.aliquota_segurado_fixa as number) / 100
+        : 0.11;
+      const aliqEmp = this.csConfig.aliquota_empresa_fixa
+        ? (this.csConfig.aliquota_empresa_fixa as number) / 100
+        : 0.20;
+      for (const [comp, basePago] of Object.entries(pagosPorComp)) {
+        let pctSelic = tabelaSelicInss.get(comp) ?? 0;
+        if (taxasJurosFromPJC && taxasJurosFromPJC[comp] !== undefined) {
+          pctSelic = taxasJurosFromPJC[comp];
+        }
+        const factor = this.csCorrecaoFator(comp, pctSelic, dataLiqInss, true);
+        if (this.csConfig.apurar_segurado) csSeguradoPagos += basePago * aliqSeg * factor;
+        if (this.csConfig.apurar_empresa) csEmpregadorPagos += basePago * aliqEmp * factor;
+      }
+      csSeguradoPagos = Number(new Decimal(csSeguradoPagos).toDP(2, Decimal.ROUND_HALF_EVEN));
+      csEmpregadorPagos = Number(new Decimal(csEmpregadorPagos).toDP(2, Decimal.ROUND_HALF_EVEN));
+    }
+
     const csReclamante = this.csConfig.cobrar_reclamante ? csSegurado : 0;
     // D2 fix: prefere IR exato do PJC quando disponível.
     const irRetido = this.irTotalPjcOverride !== null
@@ -855,9 +908,49 @@ export class PjeCalcEngineV3 {
       // credor=terceiro não afeta líquido do reclamante
     }
 
-    const liquidoReclamante = +(principalCorrigido + jurosMora + fgtsNoLiquido + multa467 + multa523
+    // Sprint 4.2-B2: Pensão alimentícia — quando `apurar=true`, deduz do
+    // líquido do reclamante. Lei 5.478/68 + CC art.1.694. A base depende de
+    // `pensaoConfig.base`:
+    //   - 'liquido' (default): % sobre líquido pré-pensão (após CS+IR)
+    //   - 'bruto'  : % sobre principal corrigido + juros (antes de CS/IR)
+    //   - 'principal' : % somente sobre principal corrigido
+    //   - 'bruto_menos_inss' : % sobre bruto - CS reclamante
+    let pensaoTotal = 0;
+    if (this.pensaoConfig.apurar) {
+      const pct = new Decimal(this.pensaoConfig.percentual ?? 0);
+      // Base PRELIMINAR (sem pensão) — usada em todas as opções
+      const liqPrePensao = principalCorrigido + jurosMora + fgtsNoLiquido + multa467 + multa477
+        + multa523 + seguroNoLiquido + salFamNoLiquido + multasIndenizacoesNoLiquido
+        - csReclamante - irRetido - honorariosContratuais;
+      let basePensao = 0;
+      switch (this.pensaoConfig.base) {
+        case 'bruto':
+          basePensao = principalCorrigido + jurosMora;
+          break;
+        case 'principal':
+          basePensao = principalCorrigido;
+          break;
+        case 'bruto_menos_inss':
+          basePensao = principalCorrigido + jurosMora - csReclamante;
+          break;
+        case 'liquido':
+        default:
+          basePensao = liqPrePensao;
+          break;
+      }
+      if (this.pensaoConfig.valor_fixo && this.pensaoConfig.valor_fixo > 0) {
+        pensaoTotal = +new Decimal(this.pensaoConfig.valor_fixo)
+          .toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
+      } else {
+        pensaoTotal = +new Decimal(basePensao).times(pct).div(100)
+          .toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
+      }
+      if (pensaoTotal < 0) pensaoTotal = 0;
+    }
+
+    const liquidoReclamante = +(principalCorrigido + jurosMora + fgtsNoLiquido + multa467 + multa477 + multa523
       + seguroNoLiquido + salFamNoLiquido + multasIndenizacoesNoLiquido
-      - csReclamante - irRetido - honorariosContratuais).toFixed(2);
+      - csReclamante - irRetido - honorariosContratuais - pensaoTotal).toFixed(2);
 
     const resumo: PjeResumo = {
       principal_bruto: +principalBruto.toFixed(2),
@@ -872,6 +965,7 @@ export class PjeCalcEngineV3 {
       salario_familia: +valorSalarioFamilia.toFixed(2),
       multa_523: +multa523.toFixed(2),
       multa_467: +multa467.toFixed(2),
+      multa_477: +multa477.toFixed(2),
       honorarios_sucumbenciais: +(itens.length > 0
         ? honorariosSucumbenciaisList
         : (this.honorariosConfig.apurar_sucumbenciais
@@ -888,7 +982,7 @@ export class PjeCalcEngineV3 {
       custas: 0,
       custas_detalhadas: [],
       pensao_sobre_fgts: 0,
-      pensao_total: 0,
+      pensao_total: +pensaoTotal.toFixed(2),
       contribuicao_sindical: 0,
       abono_pecuniario: 0,
       liquido_reclamante: liquidoReclamante,
@@ -906,9 +1000,11 @@ export class PjeCalcEngineV3 {
         segurado_pagos: [],
         empregador: inssAdapter.empregadorPorCompetencia,
         total_segurado_devidos: +csSegurado.toFixed(2),
-        total_segurado_pagos: 0,
+        // Sprint 4.2-B1: total_segurado_pagos populado quando flags cs_pagos_*
+        // ativas. Default 0 preserva o baseline (cs_pagos_aplicar=false).
+        total_segurado_pagos: +csSeguradoPagos.toFixed(2),
         total_segurado: +csSegurado.toFixed(2),
-        total_empregador: +csEmpregador.toFixed(2),
+        total_empregador: +(csEmpregador + csEmpregadorPagos).toFixed(2),
       },
       imposto_renda: {
         base_calculo: irpfAdapter.baseCalculo,
@@ -960,21 +1056,77 @@ export class PjeCalcEngineV3 {
   // ── Cálculo de Multa 467 CLT (50% sobre verbas rescisórias não pagas) ──
 
   /**
-   * Art. 467 CLT: 50% sobre verbas rescisórias (aviso prévio, saldo de salário,
-   * 13° proporcional, férias) quando o empregador não paga no 1° audiência.
-   * Base = verbas rescisórias CORRIGIDAS.
+   * Art. 467 CLT: 50% sobre verbas rescisórias INCONTROVERSAS quando o
+   * empregador não paga na 1ª audiência. Base = verbas rescisórias
+   * CORRIGIDAS (aviso prévio, 13° proporcional, férias) e — Sprint 4.2-B2 —
+   * também verbas COMUM marcadas como `compor_principal=true` com diferença
+   * positiva e nenhuma quitação (proxy de "incontroverso", ex: saldo salário
+   * modelado como verba comum no último mês).
+   *
+   * Gates:
+   *   - `correcaoConfig.multa_467` (legacy, controle por correção)
+   *   - `multasConfig.apurar_467` (UI Multas; default=true, preserva 96%
+   *     calibrate). Quando explicitamente false, força retorno 0.
    */
   private calcularMulta467(verbaResults: PjeVerbaResult[]): number {
+    // Sprint 4.2-B2: gate UI prevalece quando explicitamente desligado.
+    if (this.multasConfig.apurar_467 === false) return 0;
     if (!this.correcaoConfig.multa_467) return 0;
     const pct = this.correcaoConfig.multa_467_percentual ?? 50;
     let baseRescisoria = 0;
-    for (const vr of verbaResults) {
+    for (let i = 0; i < verbaResults.length; i++) {
+      const vr = verbaResults[i];
+      const vUI = this.verbas[i];
       const carac = vr.caracteristica;
       if (carac === 'aviso_previo' || carac === '13_salario' || carac === 'ferias') {
+        baseRescisoria += vr.total_corrigido;
+        continue;
+      }
+      // Sprint 4.2-B2: estende para verbas COMUM rescisórias incontroversas
+      // (compor_principal=true + diferença positiva). Modela saldo salário /
+      // verbas devidas-mas-não-pagas no mês da rescisão. Mantém retrocompat:
+      // só ativo quando flag explícita `apurar_467=true` for marcada na UI.
+      if (this.multasConfig.apurar_467 === true
+        && carac === 'comum'
+        && vUI?.compor_principal !== false
+        && vr.total_diferenca > 0) {
         baseRescisoria += vr.total_corrigido;
       }
     }
     return +(baseRescisoria * pct / 100).toFixed(2);
+  }
+
+  // ── Cálculo de Multa 477 §8º CLT (1 salário se atraso > 10 dias) ──
+
+  /**
+   * Art. 477 §8º CLT: quando o empregador não paga as verbas rescisórias no
+   * prazo legal (10 dias corridos contados a partir da rescisão — Lei 13.467/2017),
+   * é devida multa de 1 salário-base ao empregado.
+   *
+   * Implementação Sprint 4.2-B2 (TIER 2 P1):
+   *   - Gate: somente quando `multasConfig.apurar_477=true`.
+   *   - Valor:
+   *     * `valor_477_tipo='informado'` → usa `valor_477_informado`.
+   *     * default ('salario'): usa `params.ultima_remuneracao`
+   *       (fallback `params.maior_remuneracao` ou `0`).
+   *   - Atraso: heurística — engine não modela `data_pagamento_rescisao`,
+   *     então quando flag está ON assumimos atraso (juiz julgou procedente).
+   *     Esse comportamento é consistente com o PJe-Calc, que aplica a multa
+   *     quando o operador marca o flag (decisão judicial).
+   *
+   * Default=false (novo comportamento — não estava implementado antes).
+   */
+  private calcularMulta477(): number {
+    if (!this.multasConfig.apurar_477) return 0;
+    const tipo = this.multasConfig.valor_477_tipo ?? 'salario';
+    if (tipo === 'informado') {
+      const v = this.multasConfig.valor_477_informado ?? 0;
+      return +new Decimal(v).toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
+    }
+    const sal = this.params.ultima_remuneracao
+      ?? this.params.maior_remuneracao
+      ?? 0;
+    return +new Decimal(sal).toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
   }
 
   // ── Cálculo de FGTS (depósitos + multa 40%) ──
@@ -1335,6 +1487,113 @@ export class PjeCalcEngineV3 {
   private mesesEntre(inicio: Date, fim: Date): number {
     const ms = fim.getTime() - inicio.getTime();
     return new Decimal(ms).div(1000 * 3600 * 24 * 30.4375).toDP(6).toNumber();
+  }
+
+  // ───────────────────────────────────────────────────────────────────
+  // Sprint 4.2-B1: gates CS devida/paga (correção/juros + multa Lei 8.212)
+  // ───────────────────────────────────────────────────────────────────
+  /**
+   * Indica se alguma das 5 flags CS-devida customizou o fator vs default
+   * (correcao_prev=true, juros_prev=true, demais=false). Quando false,
+   * mantemos o atalho de override do PJC para preservar paridade Java.
+   * Refs: Súm.TST 200, Lei 11.941/09 art.43 + Res.RFB 1.117/10, Lei 8.212/91 art.35.
+   */
+  private csDevFlagsAlteramFator(): boolean {
+    const c = this.correcaoConfig;
+    return (
+      (c.cs_dev_correcao_trab === true) ||
+      (c.cs_dev_juros_trab === true) ||
+      (c.cs_dev_correcao_prev === false) ||
+      (c.cs_dev_juros_prev === false) ||
+      (c.cs_dev_multa_prev_aplicar === true)
+    );
+  }
+
+  /**
+   * Indica se alguma das 5 flags CS-paga customizou o fator vs default
+   * (todas false). Quando false, o engine NÃO computa CS sobre pagos
+   * (comportamento atual: contribuição zero).
+   */
+  private csPagosFlagsAlteramFator(): boolean {
+    const c = this.correcaoConfig;
+    return (
+      (c.cs_pagos_correcao_trab === true) ||
+      (c.cs_pagos_juros_trab === true) ||
+      (c.cs_pagos_correcao_prev === true) ||
+      (c.cs_pagos_juros_prev === true) ||
+      (c.cs_pagos_multa_prev_aplicar === true)
+    );
+  }
+
+  /**
+   * Calcula o fator multiplicador da CS por competência conforme as 5 flags
+   * (devida ou paga). Aditivo a partir do nominal (1.0):
+   *   + correcao_prev=true: SELIC INSS já é correção+juros combinada (Lei 11.941/09).
+   *   + juros_prev=true:   adiciona o componente excedente de juros (mesma SELIC).
+   *   + correcao_trab=true: adiciona IPCA-E acumulado entre competência e liquidação.
+   *   + juros_trab=true:   adiciona 1%/m simples (Súm.TST 200).
+   *   + multa_prev_aplicar=true: adiciona 20% (Lei 8.212/91 art.35 caput, II).
+   *
+   * Defaults preservam o comportamento atual (calibrate 96%):
+   *   devida → correcao_prev=true, juros_prev=true (resultado: 1 + pctSelic/100)
+   *   paga   → todas false (resultado: 1.0 → contribuição zero)
+   *
+   * IMPORTANTE: SELIC inclui correção e juros simultaneamente. Para fidelidade
+   * à mecânica do PJe-Calc, tratamos cs_correcao_prev como "ativa o regime SELIC"
+   * (factor base = 1) e cs_juros_prev como "soma o pctSelic" (incremento). Ambos
+   * ON ≡ comportamento Java: 1 + pctSelic/100. Desligar correcao_prev sozinho
+   * remove TODO o efeito SELIC; desligar juros_prev sozinho mantém apenas o
+   * "1.0" do regime ativo (sem crescimento).
+   */
+  private csCorrecaoFator(
+    competencia: string, pctSelic: number, dataLiq: Date, pagos: boolean,
+  ): number {
+    const c = this.correcaoConfig;
+    const correcaoPrev = pagos
+      ? (c.cs_pagos_correcao_prev === true)
+      : (c.cs_dev_correcao_prev !== false);
+    const jurosPrev = pagos
+      ? (c.cs_pagos_juros_prev === true)
+      : (c.cs_dev_juros_prev !== false);
+    const correcaoTrab = pagos
+      ? (c.cs_pagos_correcao_trab === true)
+      : (c.cs_dev_correcao_trab === true);
+    const jurosTrab = pagos
+      ? (c.cs_pagos_juros_trab === true)
+      : (c.cs_dev_juros_trab === true);
+    const multaPrev = pagos
+      ? (c.cs_pagos_multa_prev_aplicar === true)
+      : (c.cs_dev_multa_prev_aplicar === true);
+
+    // Componente previdenciária (SELIC INSS combinada).
+    let factor = 0;
+    if (correcaoPrev) factor += 1; // ativa o regime → captura o nominal
+    if (jurosPrev) factor += pctSelic / 100; // SELIC excedente
+    // Quando ambos prev OFF mas alguma trab/multa ON, o nominal precisa ainda
+    // entrar — caso contrário multiplicaríamos por algo < 1, distorcendo.
+    if (!correcaoPrev && (correcaoTrab || jurosTrab || multaPrev)) factor += 1;
+
+    // Componente trabalhista (Súm.TST 200): IPCA-E acumulado + 1%/m simples.
+    if (correcaoTrab || jurosTrab) {
+      const dataComp = new Date(competencia + '-01');
+      const inicio = new Date(dataComp.getFullYear(), dataComp.getMonth() + 1, 1);
+      if (inicio.getTime() < dataLiq.getTime()) {
+        if (correcaoTrab) {
+          // IPCA-E pro-rata mensal (somarIpcaSimples retorna pontos percentuais
+          // somados — alinhado à mesma convenção de pctSelic).
+          factor += this.somarIpcaSimples(inicio, dataLiq) / 100;
+        }
+        if (jurosTrab) {
+          // 1%/m simples sobre o período (Súm.TST 200 + CLT art. 883).
+          factor += this.mesesEntre(inicio, dataLiq) * 0.01;
+        }
+      }
+    }
+
+    // Multa Lei 8.212/91 art.35 caput, II: 20% sobre a contribuição em mora.
+    if (multaPrev) factor += 0.20;
+
+    return factor;
   }
 
   /**
