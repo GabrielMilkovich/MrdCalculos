@@ -109,7 +109,8 @@ export function ModuloIR({ caseId }: Props) {
                 </div>
 
                 <div className="border-t pt-3 mt-3">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">RRA — Rendimentos Recebidos Acumuladamente (Art. 12-A Lei 7.713/88)</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">RRA — Rendimentos Recebidos Acumuladamente (Art. 12-A Lei 7.713/88)</p>
+                  <p className="text-[10px] text-amber-700 mb-2 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — UI persiste mas engine ainda calcula IR via tabela progressiva tradicional. Aguarda PJC com <code>rraMeses &gt; 0</code> como ground-truth (0/47 no corpus).</p>
                   <div className="flex items-center gap-2" title="Quando processo abrange período > 12 meses, IR é calculado sobre média mensal (base / RRA_meses). Reduz alíquota efetiva. Aplicável em ações trabalhistas longas.">
                     <Checkbox checked={form.apurar_rra} onCheckedChange={v => setForm(p => ({ ...p, apurar_rra: !!v }))} />
                     <Label className="text-xs">Apurar RRA</Label>
@@ -130,6 +131,7 @@ export function ModuloIR({ caseId }: Props) {
 
                 <div className="border-t pt-3 mt-3 space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground">Bases tributáveis</p>
+                  <p className="text-[10px] text-amber-700 mb-1 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — engine aplica IR sobre verba principal sem distinção tributável/não-tributável. Casos especiais (danos morais tributáveis) aguardam PJC ground-truth.</p>
                   <div className="flex items-center gap-2" title="Verba tributável (salário, hora extra, 13º, férias gozadas). Default: incide IR.">
                     <Checkbox checked={form.incidir_sobre_principal_tributavel} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_principal_tributavel: !!v }))} />
                     <Label className="text-xs">Verba principal TRIBUTÁVEL (default)</Label>

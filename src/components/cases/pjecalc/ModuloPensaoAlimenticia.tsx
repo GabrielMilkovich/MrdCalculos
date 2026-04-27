@@ -105,6 +105,7 @@ export function ModuloPensaoAlimenticia({ caseId }: Props) {
 
               <div className="border-t pt-3 space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground">Incidências adicionais</p>
+                <p className="text-[10px] text-amber-700 mb-1 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — campos persistidos mas engine ainda não aplica pensão sobre FGTS/multa FGTS, nem deduz da base IR. Aguarda PJC com pensão alimentícia ativa (0/47 no corpus).</p>
 
                 <div className="flex items-center gap-2" title="Quando marcado, pensão também incide sobre o FGTS pago ao reclamante. Lei 5.478/68 art. 4º. Java: <incidenciaPensaoAlimenticia> em Fgts.">
                   <Checkbox checked={form.incidencia_sobre_fgts} onCheckedChange={v => setForm(p => ({ ...p, incidencia_sobre_fgts: !!v }))} />

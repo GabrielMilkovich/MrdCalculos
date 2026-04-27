@@ -186,7 +186,8 @@ export function ModuloHonorarios({ caseId }: Props) {
             </div>
 
             <div className="border-t pt-2 mt-2">
-              <p className="text-xs font-semibold text-muted-foreground mb-2">Imposto de Renda</p>
+              <p className="text-xs font-semibold text-muted-foreground mb-1">Imposto de Renda</p>
+              <p className="text-[10px] text-amber-700 mb-2 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — campos persistidos mas engine ainda não calcula IRPF sobre honorário (PF/PJ). Validação aguarda PJC com <code>apurarIRRF=true</code> (0/47 no corpus).</p>
               <div className="space-y-2">
                 <div className="flex items-center gap-2" title="Quando marcado, retém IRPF do honorário. PF=tabela progressiva (Lei 7.713/88). PJ=1,5% fixo (IN RFB).">
                   <Checkbox checked={editForm.apurar_ir} onCheckedChange={v => setEditForm(p => ({ ...p, apurar_ir: !!v }))} />
@@ -215,6 +216,7 @@ export function ModuloHonorarios({ caseId }: Props) {
 
             {editForm.devedor === 'reclamante' && (
               <div className="border-t pt-2 mt-2" title="Java TipoCobrancaReclamanteEnum: DESCONTAR_CREDITO (deduz do líquido) ou COBRAR (cobra à parte do reclamante). Default: descontar.">
+                <p className="text-[10px] text-emerald-700 mb-1 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ Engine implementado — COBRAR não deduz do líquido, vai para totalizador separado.</p>
                 <Label className="text-xs">Forma de Cobrança</Label>
                 <Select value={editForm.tipo_cobranca_reclamante || 'descontar_credito'} onValueChange={v => setEditForm(p => ({ ...p, tipo_cobranca_reclamante: v }))}>
                   <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
@@ -227,7 +229,8 @@ export function ModuloHonorarios({ caseId }: Props) {
             )}
 
             <div className="border-t pt-2 mt-2">
-              <p className="text-xs font-semibold text-muted-foreground mb-2">Correção monetária e juros</p>
+              <p className="text-xs font-semibold text-muted-foreground mb-1">Correção monetária e juros</p>
+              <p className="text-[10px] text-emerald-700 mb-2 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ <strong>Data Vencimento</strong> + Índice Trabalhista funcionam (engine aplica IPCA-E acumulado). 🔬 Aplicar Juros e outros índices ainda em estudo.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div title="Data em que o honorário foi fixado. Se anterior à liquidação, engine aplica IPCA-E acumulado.">
                   <Label className="text-xs">Data de Vencimento</Label>

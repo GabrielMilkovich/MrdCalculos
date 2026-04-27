@@ -565,8 +565,13 @@ export class PjeCalcEngineV3 {
     // Multa 467 CLT: 50% sobre verbas RESCISORIAS (aviso, saldo salario, 13, ferias) nao pagas
     const multa467 = this.calcularMulta467(verbaResults);
     // Multa 523 CPC: 10% sobre total devido nao pago em 15 dias apos intimacao
-    const multa523 = this.correcaoConfig.multa_523
-      ? (principalCorrigido + jurosMora) * (this.correcaoConfig.multa_523_percentual ?? 10) / 100
+    // Multa 523 CPC: aceita flag tanto em correcaoConfig (legacy) quanto em
+    // multasConfig (Phase 2). Unificação 2026-04-27.
+    const apurar523 = this.correcaoConfig.multa_523 || (this.multasConfig as { apurar_523_cpc?: boolean }).apurar_523_cpc;
+    const pct523 = (this.multasConfig as { percentual_523?: number }).percentual_523
+      ?? this.correcaoConfig.multa_523_percentual ?? 10;
+    const multa523 = apurar523
+      ? (principalCorrigido + jurosMora) * pct523 / 100
       : 0;
 
     // FGTS rescisório + multa 40% (BUG FIX: era hardcoded em zero)
@@ -758,8 +763,16 @@ export class PjeCalcEngineV3 {
         }
         // Devedor=reclamante → deduz do líquido (honorários contratuais)
         // Devedor=reclamado → soma à condenação (sucumbenciais pagos pela parte vencida)
-        if (it.devedor === 'reclamante') honorariosContratuais += valor;
-        else honorariosSucumbenciaisList += valor;
+        // Sprint Phase 2 (2026-04-27): tipoCobrancaReclamante:
+        //   DESCONTAR_CREDITO (default Java) → deduz do líquido (honorariosContratuais)
+        //   COBRAR → não deduz, vai para totalizador "à parte" (honorariosSucumbenciaisList)
+        // Java: TotalizadorDeHonorario.java:39-40 acumula 0 quando COBRAR.
+        const tipoCobranca = (it as { tipo_cobranca_reclamante?: string }).tipo_cobranca_reclamante;
+        if (it.devedor === 'reclamante' && tipoCobranca !== 'cobrar') {
+          honorariosContratuais += valor;
+        } else {
+          honorariosSucumbenciaisList += valor;
+        }
       }
     } else {
       // Fallback: usa os percentuais globais

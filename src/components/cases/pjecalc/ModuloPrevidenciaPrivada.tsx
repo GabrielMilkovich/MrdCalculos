@@ -103,6 +103,7 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
 
               <div className="border-t pt-3 mt-3 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground">Configurações avançadas</p>
+                <p className="text-[10px] text-emerald-700 mb-1 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ <strong>Base de Cálculo</strong> e <strong>Deduzir IR</strong> agora são editáveis (antes hardcoded). 🔬 Teto Mensal e Juros em estudo — aguarda PJC com prev. privada ativa (0/47 no corpus).</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div title="Base sobre a qual incide o percentual: diferença (devido - pago), valor devido total, ou valor corrigido.">
                     <Label className="text-xs">Base de Cálculo</Label>

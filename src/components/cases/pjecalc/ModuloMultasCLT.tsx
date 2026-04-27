@@ -101,6 +101,7 @@ export function ModuloMultasCLT({ caseId }: Props) {
             <Label className="text-xs">Apurar Multa Art. 477 CLT (atraso nas verbas rescisórias — 1 salário)</Label>
           </div>
           <div className="border-t pt-3 mt-3">
+            <p className="text-[10px] text-emerald-700 mb-2 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ Engine implementado — multa 523 unificada (aceita flag de Multas ou Atualização).</p>
             <div className="flex items-center gap-2" title="CPC art. 523 §1º: quando o devedor não paga voluntariamente em 15 dias após sentença líquida, multa de 10%. Aplicável em execução trabalhista.">
               <Checkbox checked={apurar523Cpc} onCheckedChange={v => setApurar523Cpc(!!v)} />
               <Label className="text-xs">Apurar Multa Art. 523 CPC (descumprimento de sentença líquida — 10%)</Label>
