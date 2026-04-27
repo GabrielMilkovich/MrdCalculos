@@ -20,6 +20,7 @@ import type {
   PjeLiquidacaoResult, PjeVerbaResult, PjeOcorrenciaResult, PjeResumo,
   PjeFGTSResult, PjeCSResult, PjeIRResult, PjeSeguroResult,
   PjePrevidenciaPrivadaConfig, PjePensaoConfig, PjeSalarioFamiliaConfig,
+  PjeAtualizacaoConfig,
   PjePrevidenciaPrivadaResult, PjeSalarioFamiliaResult,
   PjeExcecaoCargaHoraria, PjeExcecaoSabado, PjeFeriadoDB,
   PjeSeguroDesempregoDB, PjeSalarioFamiliaDB, PjeSalarioMinimoRow,
@@ -100,6 +101,8 @@ export class PjeCalcEngineV3 {
   private excecoesSabado: PjeExcecaoSabado[];
   private salarioMinimoDB: PjeSalarioMinimoRow[];
   private multasConfig: PjeMultasConfig;
+  /** Sprint 4.2-C1: configuração da aba Atualização (pós-pagamento). */
+  private atualizacaoConfig: PjeAtualizacaoConfig;
   /**
    * D2 fix (2026-04-26): taxa de juros INSS por competência, opcionalmente
    * pré-calculada pelo Java (lida do PJC quando disponível). Quando setada,
@@ -143,7 +146,7 @@ export class PjeCalcEngineV3 {
     faixasIRDB: PjeIRFaixaRow[] = [],
     excecoesCargas: PjeExcecaoCargaHoraria[] = [],
     feriadosDB: PjeFeriadoDB[] = [],
-    prevPrivadaConfig: PjePrevidenciaPrivadaConfig = { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false },
+    prevPrivadaConfig: PjePrevidenciaPrivadaConfig = { apurar: false, percentual: 0, base_calculo: 'diferenca' },
     pensaoConfig: PjePensaoConfig = { apurar: false, percentual: 0, base: 'liquido' },
     salarioFamiliaConfig: PjeSalarioFamiliaConfig = { apurar: false, numero_filhos: 0 },
     seguroDesempregoDB: PjeSeguroDesempregoDB[] = [],
@@ -153,6 +156,9 @@ export class PjeCalcEngineV3 {
     /** Multas CLT (467/477) + multas/indenizações individuais. Opcional para
      *  retrocompatibilidade: chamadas antigas não quebram. */
     multasConfig: PjeMultasConfig = { apurar_467: false, apurar_477: false },
+    /** Sprint 4.2-C1: aba Atualização. Defaults TODOS false preservam o
+     *  comportamento atual (`total_atualizado` = `total_reclamada`). */
+    atualizacaoConfig: PjeAtualizacaoConfig = {},
   ) {
     this.params = params;
     this.historicos = historicos;
@@ -184,6 +190,7 @@ export class PjeCalcEngineV3 {
     this.excecoesSabado = excecoesSabado;
     this.salarioMinimoDB = salarioMinimoDB;
     this.multasConfig = multasConfig;
+    this.atualizacaoConfig = atualizacaoConfig;
   }
 
   /**
@@ -807,10 +814,10 @@ export class PjeCalcEngineV3 {
         // Sprint 2: aplicar correção monetária quando data_vencimento < data_liquidacao.
         // Java: MaquinaDeCalculoDeHonorarios.java:34-50 — aplica TabelaDeCorrecaoMonetaria
         // quando o honorário foi vencido em data anterior à liquidação (caso izabela 430d).
-        const ext = it as { data_vencimento?: string; aplicar_juros?: boolean };
+        const ext = it as { data_vencimento?: string; aplicar_juros?: boolean; data_apartir_de_aplicar_juros?: string };
+        const dl = new Date(this.correcaoConfig.data_liquidacao);
         if (ext.data_vencimento) {
           const dv = new Date(ext.data_vencimento);
-          const dl = new Date(this.correcaoConfig.data_liquidacao);
           if (dv.getTime() < dl.getTime()) {
             // Calcula fator IPCA-E acumulado de dataVencimento até dataLiquidacao
             const indices = this.indicesDB.filter(i => i.indice === 'IPCA-E' || i.indice === 'IPCAE');
@@ -821,6 +828,28 @@ export class PjeCalcEngineV3 {
             if (idxVenc && idxLiq && idxVenc > 0) {
               const fator = idxLiq / idxVenc;
               valor = valor * fator;
+            }
+          }
+        }
+        // Sprint 4.2-C1 (TIER 3 P2 — OJ-348 SDI-1): juros mora sobre honorário
+        // sucumbencial. Quando `aplicar_juros=true`, aplica juros simples
+        // mensais (taxa do correcaoConfig.juros_percentual, default 1% a.m.)
+        // de `data_apartir_de_aplicar_juros` (ou `data_vencimento`) até
+        // `data_liquidacao`. SELIC e regimes complexos não são tratados aqui
+        // (escopo: trazer ON/OFF observável; refinos em sprint posterior).
+        if (ext.aplicar_juros === true) {
+          const dInicioRaw = ext.data_apartir_de_aplicar_juros || ext.data_vencimento;
+          if (dInicioRaw) {
+            const dIni = new Date(dInicioRaw);
+            if (dIni.getTime() < dl.getTime()) {
+              const meses = Math.max(0,
+                (dl.getFullYear() - dIni.getFullYear()) * 12 + (dl.getMonth() - dIni.getMonth())
+              );
+              const pctMensal = (this.correcaoConfig.juros_tipo === 'selic'
+                ? 1 // SELIC mensal aproximada — refino posterior
+                : (this.correcaoConfig.juros_percentual ?? 1));
+              const fatorJuros = 1 + (pctMensal / 100) * meses;
+              valor = valor * fatorJuros;
             }
           }
         }
@@ -915,9 +944,27 @@ export class PjeCalcEngineV3 {
     //   - 'bruto'  : % sobre principal corrigido + juros (antes de CS/IR)
     //   - 'principal' : % somente sobre principal corrigido
     //   - 'bruto_menos_inss' : % sobre bruto - CS reclamante
+    //
+    // Sprint 4.2-C1 (TIER 3 P2):
+    //   - `incidir_sobre_juros`: quando true e a base NÃO inclui juros
+    //     (apenas `principal` está nessa categoria), inclui `jurosMora` na
+    //     base. Para bases que já agregam juros (bruto/bruto_menos_inss/
+    //     liquido) é no-op — evita dupla contagem.
+    //   - `incidencia_sobre_fgts`: pensão sobre depósitos FGTS pagos ao
+    //     reclamante. Lei 5.478/68 art.4º + Java <incidenciaPensaoAlimenticia>
+    //     em <Fgts>. Usa `fgtsResult.total_depositos` (base nominal antes da
+    //     multa).
+    //   - `incidencia_sobre_multa_fgts`: pensão sobre multa 40% FGTS. Java
+    //     <incidenciaPensaoAlimenticiaSobreMulta>.
+    //   Ambas as incidências FGTS são SOMADAS a `pensao_total` e expostas em
+    //   `pensao_sobre_fgts`. A pensão sobre FGTS NÃO deduz do líquido
+    //   reclamante quando o FGTS não compõe o principal — segue o mesmo
+    //   tratamento do bucket FGTS de origem.
     let pensaoTotal = 0;
+    let pensaoSobreFgts = 0;
     if (this.pensaoConfig.apurar) {
       const pct = new Decimal(this.pensaoConfig.percentual ?? 0);
+      const incidirJuros = this.pensaoConfig.incidir_sobre_juros === true;
       // Base PRELIMINAR (sem pensão) — usada em todas as opções
       const liqPrePensao = principalCorrigido + jurosMora + fgtsNoLiquido + multa467 + multa477
         + multa523 + seguroNoLiquido + salFamNoLiquido + multasIndenizacoesNoLiquido
@@ -928,7 +975,8 @@ export class PjeCalcEngineV3 {
           basePensao = principalCorrigido + jurosMora;
           break;
         case 'principal':
-          basePensao = principalCorrigido;
+          // Default principal exclui juros; opt-in via incidir_sobre_juros.
+          basePensao = principalCorrigido + (incidirJuros ? jurosMora : 0);
           break;
         case 'bruto_menos_inss':
           basePensao = principalCorrigido + jurosMora - csReclamante;
@@ -946,11 +994,29 @@ export class PjeCalcEngineV3 {
           .toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
       }
       if (pensaoTotal < 0) pensaoTotal = 0;
+
+      // Pensão sobre FGTS / Multa FGTS (TIER 3 P2 flags)
+      if (this.pensaoConfig.incidencia_sobre_fgts === true) {
+        pensaoSobreFgts += +new Decimal(fgtsResult.total_depositos)
+          .times(pct).div(100).toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
+      }
+      if (this.pensaoConfig.incidencia_sobre_multa_fgts === true) {
+        pensaoSobreFgts += +new Decimal(fgtsResult.multa_valor)
+          .times(pct).div(100).toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
+      }
+      pensaoSobreFgts = +new Decimal(pensaoSobreFgts).toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
+      pensaoTotal = +new Decimal(pensaoTotal).plus(pensaoSobreFgts)
+        .toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
     }
 
+    // Pensão sobre FGTS só deduz do líquido se o FGTS está entrando no
+    // líquido (compor_principal=true). Caso contrário, é destino à parte e
+    // segue tratamento do bucket FGTS.
+    const pensaoFgtsDeduzLiquido = this.fgtsConfig.compor_principal ? pensaoSobreFgts : 0;
     const liquidoReclamante = +(principalCorrigido + jurosMora + fgtsNoLiquido + multa467 + multa477 + multa523
       + seguroNoLiquido + salFamNoLiquido + multasIndenizacoesNoLiquido
-      - csReclamante - irRetido - honorariosContratuais - pensaoTotal).toFixed(2);
+      - csReclamante - irRetido - honorariosContratuais
+      - (pensaoTotal - pensaoSobreFgts) - pensaoFgtsDeduzLiquido).toFixed(2);
 
     const resumo: PjeResumo = {
       principal_bruto: +principalBruto.toFixed(2),
@@ -981,13 +1047,27 @@ export class PjeCalcEngineV3 {
       honorarios_contratuais: +honorariosContratuais.toFixed(2),
       custas: 0,
       custas_detalhadas: [],
-      pensao_sobre_fgts: 0,
+      pensao_sobre_fgts: +pensaoSobreFgts.toFixed(2),
       pensao_total: +pensaoTotal.toFixed(2),
       contribuicao_sindical: 0,
       abono_pecuniario: 0,
       liquido_reclamante: liquidoReclamante,
       total_reclamada: +(principalCorrigido + jurosMora + fgtsResult.total_fgts).toFixed(2),
     };
+
+    // Sprint 4.2-C1 (TIER 3 P2): aba Atualização — total_atualizado é o
+    // total_reclamada acrescido dos buckets habilitados pelos flags
+    // `aplicar_*` da config. Defaults TODOS false → total_atualizado =
+    // total_reclamada (preserva comportamento anterior).
+    const at = this.atualizacaoConfig;
+    const honorariosTotal = resumo.honorarios_sucumbenciais + resumo.honorarios_contratuais;
+    const totalAtualizado = +(resumo.total_reclamada
+      + (at.aplicar_pensao ? resumo.pensao_total : 0)
+      + (at.aplicar_multas_indenizacoes ? multasIndenizacoesNoLiquido : 0)
+      + (at.aplicar_honorarios ? honorariosTotal : 0)
+      + (at.aplicar_custas ? resumo.custas : 0)
+    ).toFixed(2);
+    resumo.total_atualizado = totalAtualizado;
 
     return {
       data_liquidacao: this.correcaoConfig.data_liquidacao,

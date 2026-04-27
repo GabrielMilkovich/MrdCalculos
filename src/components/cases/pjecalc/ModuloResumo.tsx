@@ -323,9 +323,14 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         base_calculo: d(prevPrivadaData, 'base_calculo', 'diferenca'), deduzir_ir: d(prevPrivadaData, 'deduzir_ir', false),
       } as PjePrevidenciaPrivadaConfig;
 
+      // Sprint 4.2-C1 (TIER 3 P2): incluir flags Pensao agora consumidas pelo engine.
       const pensaoConfig = {
         apurar: d(pensaoData, 'apurar', false), percentual: d(pensaoData, 'percentual', 0),
         valor_fixo: d(pensaoData, 'valor_fixo'), base: d(pensaoData, 'base', 'liquido'),
+        incidir_sobre_juros: d(pensaoData, 'incidir_sobre_juros', false),
+        incidencia_sobre_fgts: d(pensaoData, 'incidencia_sobre_fgts', false),
+        incidencia_sobre_multa_fgts: d(pensaoData, 'incidencia_sobre_multa_fgts', false),
+        descontar_antes_ir: d(pensaoData, 'descontar_antes_ir', true),
       } as PjePensaoConfig;
 
       const salarioFamiliaConfig = {
@@ -356,6 +361,15 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
 
       // Execute engine com TODOS os dados
       const verbasCast = verbas.map(v => ({ ...v, valor: v.valor as "calculado" | "informado" }));
+      // Sprint 4.2-C1 (TIER 3 P2): config Atualização persistida em
+      // pjecalc_correcao_config.atualizacao (JSONB).
+      const atualizacaoRaw = (correcaoDataLocal as Record<string, unknown>).atualizacao as Record<string, unknown> | undefined;
+      const atualizacaoConfig = atualizacaoRaw ? {
+        aplicar_pensao: atualizacaoRaw.aplicar_pensao as boolean ?? false,
+        aplicar_multas_indenizacoes: atualizacaoRaw.aplicar_multas_indenizacoes as boolean ?? false,
+        aplicar_honorarios: atualizacaoRaw.aplicar_honorarios as boolean ?? false,
+        aplicar_custas: atualizacaoRaw.aplicar_custas as boolean ?? false,
+      } : {};
       const engine = new PjeCalcEngineV3(
         params, historicos, faltas, ferias, verbasCast, cartaoPonto,
         fgtsConfig, csConfig, irConfig, correcaoConfigLocal,
@@ -366,6 +380,12 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         prevPrivadaConfig,
         pensaoConfig,
         salarioFamiliaConfig,
+        [], // seguroDesempregoDB
+        [], // salarioFamiliaDB
+        [], // excecoesSabado
+        [], // salarioMinimoDB
+        { apurar_467: false, apurar_477: false }, // multasConfig (defaults)
+        atualizacaoConfig,
       );
 
       // ── Validação pré-liquidação ──
