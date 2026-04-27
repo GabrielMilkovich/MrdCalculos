@@ -105,23 +105,12 @@ test.describe('fluxo 6: flags RRA no modulo IR', () => {
     const mesesLabel = page.getByText(/Meses-calend(a|á)rio/i).first();
     await expect(mesesLabel).not.toBeVisible();
 
-    // Clica no checkbox "Apurar RRA" para ligar
-    const apurarRraCheckbox = page.locator('[role="checkbox"]').filter({ hasText: '' })
-      .nth(0); // fallback se nao achar por label
-    // Melhor: encontrar pelo texto proximo ao checkbox via label
-    const apurarRraContainer = page.locator('label').filter({ hasText: /Apurar RRA/i }).first();
-    if (await apurarRraContainer.isVisible()) {
-      const checkbox = apurarRraContainer.locator('[role="checkbox"]').first();
-      if (await checkbox.isVisible()) {
-        await checkbox.click();
-      } else {
-        // Tenta clicar na label diretamente (shadcn Checkbox)
-        await apurarRraContainer.click();
-      }
-    } else {
-      // Fallback: procura o checkbox adjacente ao texto
-      await page.locator('button[role="checkbox"]').nth(0).click();
-    }
+    // Clica no checkbox "Apurar RRA" para ligar.
+    // Checkbox e Label sao IRMAOS no <div className="flex items-center gap-2">.
+    // Localiza o div pai pelo texto do Label e pega o checkbox irmao.
+    const apurarRraDiv = page.locator('div.flex.items-center.gap-2', { hasText: 'Apurar RRA' }).first();
+    await expect(apurarRraDiv).toBeVisible({ timeout: 5_000 });
+    await apurarRraDiv.locator('button[role="checkbox"]').click();
 
     // Apos ligar, campos NM devem aparecer
     await expect(page.getByText(/Meses-calend(a|á)rio/i).first()).toBeVisible({ timeout: 3_000 });
