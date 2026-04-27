@@ -1,4 +1,9 @@
 /**
+ * EXPERIMENTAL — INSS proporcionalizado.
+ * NÃO em produção (apenas teste parity-v4-vs-pjc.test.ts).
+ * Promoção condicionada a validação completa em Sprint 7+.
+ */
+/**
  * PJe-Calc Engine v4 — Pipeline Refinado
  *
  * Extends engine-v3 com INSS proporcionalizado:

@@ -41,6 +41,11 @@ import {
 // MOTOR DE CÁLCULO
 // =====================================================
 
+/**
+ * @deprecated Use PjeCalcEngineV3 (src/lib/pjecalc/engine-v3.ts).
+ * Legacy V1. Mantido apenas para retro-compatibilidade de testes antigos.
+ * Slated for removal — Sprint 6 (2026-Q3).
+ */
 export class PjeCalcEngine {
   private params: PjeParametros;
   private historicos: PjeHistoricoSalarial[];
@@ -4529,95 +4534,4 @@ export class PjeCalcEngine {
       total_final: totalDiferenca.toDP(2).toNumber(),
     };
   }
-}
-
-// =====================================================
-// MULTI-VÍNCULO: Execute engine per contract and merge
-// =====================================================
-
-import type { PjeMultiVinculo } from './engine-types';
-
-export interface MultiVinculoResult {
-  vinculos: { vinculo_id: string; label: string; resultado: PjeLiquidacaoResult }[];
-  consolidado: PjeLiquidacaoResult;
-}
-
-/**
- * Runs independent liquidation per employment link and merges results.
- */
-export function liquidarMultiVinculo(
-  multi: PjeMultiVinculo,
-  fgtsConfig: PjeFGTSConfig,
-  csConfig: PjeCSConfig,
-  irConfig: PjeIRConfig,
-  correcaoConfig: PjeCorrecaoConfig,
-  honorariosConfig: PjeHonorariosConfig,
-  custasConfig: PjeCustasConfig,
-  seguroConfig: PjeSeguroConfig,
-  indicesDB: PjeIndiceRow[] = [],
-  faixasINSSDB: PjeINSSFaixaRow[] = [],
-  faixasIRDB: PjeIRFaixaRow[] = [],
-): MultiVinculoResult {
-  const resultados: MultiVinculoResult['vinculos'] = [];
-
-  for (const v of multi.vinculos) {
-    const engine = new PjeCalcEngine(
-      { ...v.params, vinculo_id: v.vinculo_id, vinculo_label: v.label },
-      v.historicos, v.faltas, v.ferias, v.verbas, v.cartaoPonto,
-      fgtsConfig, csConfig, irConfig, correcaoConfig, honorariosConfig, custasConfig, seguroConfig,
-      indicesDB, faixasINSSDB, faixasIRDB,
-    );
-    const resultado = engine.liquidar();
-    resultados.push({ vinculo_id: v.vinculo_id, label: v.label, resultado });
-  }
-
-  // Consolidate: merge all verba results and recalculate totals
-  if (resultados.length === 0) {
-    throw new Error('liquidarMultiVinculo: nenhum vínculo fornecido');
-  }
-  const consolidado = { ...resultados[0].resultado };
-  if (resultados.length > 1) {
-    // Merge verbas from all vinculos
-    const allVerbas = resultados.flatMap(r => r.resultado.verbas);
-    consolidado.verbas = allVerbas;
-    
-    // Sum resumo values
-    consolidado.resumo = {
-      ...consolidado.resumo,
-      principal_bruto: resultados.reduce((s, r) => s + r.resultado.resumo.principal_bruto, 0),
-      principal_corrigido: resultados.reduce((s, r) => s + r.resultado.resumo.principal_corrigido, 0),
-      juros_mora: resultados.reduce((s, r) => s + r.resultado.resumo.juros_mora, 0),
-      fgts_total: resultados.reduce((s, r) => s + r.resultado.resumo.fgts_total, 0),
-      cs_segurado: resultados.reduce((s, r) => s + r.resultado.resumo.cs_segurado, 0),
-      cs_empregador: resultados.reduce((s, r) => s + r.resultado.resumo.cs_empregador, 0),
-      ir_retido: resultados.reduce((s, r) => s + r.resultado.resumo.ir_retido, 0),
-      abono_pecuniario: resultados.reduce((s, r) => s + (r.resultado.resumo.abono_pecuniario ?? 0), 0),
-      liquido_reclamante: resultados.reduce((s, r) => s + r.resultado.resumo.liquido_reclamante, 0),
-      total_reclamada: resultados.reduce((s, r) => s + r.resultado.resumo.total_reclamada, 0),
-    };
-
-    // Merge validações from all vinculos
-    const allItens = resultados.flatMap(r =>
-      (r.resultado.validacao?.itens || []).map(it => ({ ...it, mensagem: `[${r.label}] ${it.mensagem}` }))
-    );
-    if (allItens.length > 0) {
-      consolidado.validacao = {
-        valido: allItens.every(i => i.tipo !== 'erro'),
-        itens: allItens,
-        erros: allItens.filter(i => i.tipo === 'erro').length,
-        alertas: allItens.filter(i => i.tipo === 'alerta').length,
-        observacoes: allItens.filter(i => i.tipo === 'observacao').length,
-      };
-    }
-
-    // Merge calculation_warnings from all vinculos
-    const allWarnings = resultados.flatMap(r =>
-      (r.resultado.calculation_warnings || []).map(w => ({ ...w, module: `[${r.label}] ${w.module}` }))
-    );
-    if (allWarnings.length > 0) {
-      consolidado.calculation_warnings = allWarnings;
-    }
-  }
-
-  return { vinculos: resultados, consolidado };
 }
