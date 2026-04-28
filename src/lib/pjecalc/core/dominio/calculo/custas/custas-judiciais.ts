@@ -313,11 +313,33 @@ export class CustasJudiciais implements IModuloLiquidavel {
   getPrioridade(): number { return CustasJudiciais.PRIORIDADE_ATUALIZACAO; }
 
   /**
-   * calcularValorTetoCustasConhecimento (Java linha 262) — teto previdenciário × 4.
-   * Stub: depende de TabelaPrevidenciariaSeguradoEmpregado (Fase 6/infra).
+   * `calcularValorTetoCustasConhecimento` — porte 1-a-1 de
+   * CustasJudiciais.java:262-272.
+   *
+   * Devolve o teto de custas de conhecimento, que é o **teto do benefício
+   * previdenciário (INSS) vigente em `dataLiquidacao` × 4** (CLT art. 789 §1º
+   * e Resolução CSJT 219/2018).
+   *
+   * Java consulta `TabelaPrevidenciariaSeguradoEmpregado.obter(dataDia1)` ou,
+   * se ausente, `obterAtual()`. Em TS, expomos como port com **estratégia
+   * injetável** (`tetoBeneficioFinder`) para evitar acoplar a classe ao
+   * loader de tabelas previdenciárias antes da Fase 6/infra. O caller
+   * (orquestrador) injeta a função real ou um mock.
+   *
+   * Se nenhum loader for fornecido OU se ele retornar null, devolve `null`
+   * (idêntico ao Java quando ambas chamadas falham).
    */
-  static calcularValorTetoCustasConhecimento(_dataLiquidacao: Date): Decimal | null {
-    return null;
+  static calcularValorTetoCustasConhecimento(
+    dataLiquidacao: Date,
+    tetoBeneficioFinder?: (competencia: Date) => Decimal | null,
+  ): Decimal | null {
+    if (!tetoBeneficioFinder) return null;
+    // Java seta day=1 antes de obter
+    const competencia = new Date(dataLiquidacao);
+    competencia.setDate(1);
+    const teto = tetoBeneficioFinder(competencia);
+    if (teto == null) return null;
+    return teto.times(4);
   }
 
   liquidar(): void {

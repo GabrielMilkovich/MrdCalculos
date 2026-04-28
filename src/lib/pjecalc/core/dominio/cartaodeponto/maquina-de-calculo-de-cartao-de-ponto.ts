@@ -72,6 +72,58 @@ export class MaquinaDeCalculoDeCartaoDePonto {
     for (const _ocorr of ocorrencias) {
       // TODO(fase-14): criar ApuracaoDiariaCartao e processar
     }
-    // TODO(fase-14): somar totais
+    this.somarTotais();
+  }
+
+  /**
+   * somarTotais — agrega os totais do período somando os valores acumulados
+   * em cada `ApuracaoDiariaCartao`.
+   *
+   * Espelha o padrão Java `MaquinaDeCalculoDeCartaoDePonto` que mantém
+   * acumuladores por período (`qtHorasNoturnasTrabalhadas`, etc., linhas
+   * 287-393) e os atualiza via `Utils.somar(acumulado, parcelaDoDia)`.
+   *
+   * Aqui acumulamos por categoria a partir de cada `ApuracaoDiariaCartao`:
+   *   - totalHorasTrabalhadas         ← Σ getHorasTrabalhadas()
+   *   - totalHorasExtras              ← Σ (primeiroBloco + demais + descanso +
+   *                                        feriado + sábado-domingo)
+   *   - totalHorasNoturnas            ← Σ getHorasNoturnas()
+   *   - totalSupressaoIntrajornada    ← Σ (intraIntegral + intraReforma + excessoIntra)
+   *   - totalSupressaoArt253          ← Σ getSupressaoArt253()
+   *   - totalSupressaoInterjornada    ← 0 (não modelado em ApuracaoDiariaCartao
+   *                                       no port atual; Java mantém em campo
+   *                                       distinto que será portado em fase-14).
+   */
+  somarTotais(): void {
+    let trabalhadas = new Decimal(0);
+    let extras = new Decimal(0);
+    let noturnas = new Decimal(0);
+    let supIntra = new Decimal(0);
+    let supArt253 = new Decimal(0);
+
+    for (const adc of this.apuracoesDiarias) {
+      trabalhadas = trabalhadas.plus(adc.getHorasTrabalhadas());
+      extras = extras
+        .plus(adc.getHorasExtrasPrimeiroBloco())
+        .plus(adc.getHorasExtrasDemais())
+        .plus(adc.getHorasExtrasDescanso())
+        .plus(adc.getHorasExtrasFeriado())
+        .plus(adc.getHorasExtrasSabadoDomingo());
+      noturnas = noturnas.plus(adc.getHorasNoturnas());
+      supIntra = supIntra
+        .plus(adc.getSupressaoIntraIntegral())
+        .plus(adc.getSupressaoIntraReforma())
+        .plus(adc.getExcessoIntervaloIntra());
+      supArt253 = supArt253.plus(adc.getSupressaoArt253());
+    }
+
+    this.totalHorasTrabalhadas = trabalhadas;
+    this.totalHorasExtras = extras;
+    this.totalHorasNoturnas = noturnas;
+    this.totalSupressaoIntrajornada = supIntra;
+    this.totalSupressaoArt253 = supArt253;
+    // totalSupressaoInterjornada permanece zero — fonte ainda não modelada
+    // em ApuracaoDiariaCartao (será preenchida quando fase-14 portar a parte
+    // de descanso interjornada do Java).
   }
 }

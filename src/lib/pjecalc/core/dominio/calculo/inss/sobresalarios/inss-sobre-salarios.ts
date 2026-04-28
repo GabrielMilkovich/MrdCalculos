@@ -22,6 +22,8 @@
  *   - getDataLimiteCorrecaoTrabalhista / getDataLimiteCorrecao11941
  */
 import type Decimal from 'decimal.js';
+import { Periodo } from '../../../../base/comum/periodo';
+import { HelperDate } from '../../../../base/comum/helper-date';
 import type { Inss } from '../inss';
 import type { OcorrenciaDeInss } from './ocorrencia-de-inss';
 import { TotalizadorInssSobreSalarios } from './totalizador-inss-sobre-salarios';
@@ -85,4 +87,104 @@ export abstract class InssSobreSalarios {
   getJurosTotalInssTerceiros(): Decimal { return this.getTotalizador().getJurosTerceirosCorrigido(); }
   getMultaTotalInssTerceiros(): Decimal { return this.getTotalizador().getMultaTerceirosCorrigido(); }
   getTotalGeralInssTerceiros(): Decimal { return this.getTotalizador().getTotalTerceirosCorrigido(); }
+
+  /**
+   * `getDataParaRestricaoSalarioDevido` — porte 1-a-1 de
+   * InssSobreSalarios.java:166-200.
+   *
+   * Devolve um `Periodo` com a maior data inicial entre:
+   *   1. `dataAdmissao`
+   *   2. `dataInicioCalculo`
+   *   3. `dataDePrescricao` (se `prescricaoQuinquenal == true`)
+   *
+   * E a data final entre:
+   *   - `dataTerminoCalculo` (se posterior a `dataDemissao`)
+   *   - ou `dataDemissao` (caso contrário)
+   *
+   * Cada etapa também seta os rótulos Java (`setLabelDataIncial` /
+   * `setLabelDataFinal`) para uso posterior em mensagens de erro.
+   */
+  getDataParaRestricaoSalarioDevido(): Periodo {
+    const periodo = new Periodo();
+    const calculo = this.getInss()?.getCalculo();
+    if (calculo == null) return periodo;
+
+    const dataAdmissao = calculo.getDataAdmissao();
+    const dataInicioCalculo = calculo.getDataInicioCalculo();
+    const prescricaoQuinquenal = calculo.getPrescricaoQuinquenal();
+    const dataPrescricaoQuinquenal = prescricaoQuinquenal
+      ? calculo.getDataDePrescricao()
+      : null;
+
+    let maiorData: Date | null = dataAdmissao;
+    if (maiorData != null) {
+      periodo.setInicial(maiorData);
+      periodo.setLabelDataIncial('Data de Admissão');
+    }
+
+    if (
+      dataInicioCalculo != null &&
+      (maiorData == null || HelperDate.getInstance(dataInicioCalculo).greaterThen(maiorData))
+    ) {
+      maiorData = dataInicioCalculo;
+      periodo.setInicial(maiorData);
+      periodo.setLabelDataIncial('Data Início do Cálculo');
+    }
+
+    if (
+      dataPrescricaoQuinquenal != null &&
+      (maiorData == null || HelperDate.getInstance(dataPrescricaoQuinquenal).greaterThen(maiorData))
+    ) {
+      maiorData = dataPrescricaoQuinquenal;
+      periodo.setInicial(maiorData);
+      periodo.setLabelDataIncial('Data Prescrição Quinquenal');
+    }
+
+    const dataDemissao = calculo.getDataDemissao();
+    const dataFimDoCalculo = calculo.getDataTerminoCalculo();
+
+    if (
+      dataFimDoCalculo != null &&
+      (dataDemissao == null ||
+        HelperDate.getInstance(dataFimDoCalculo).greaterThen(dataDemissao))
+    ) {
+      periodo.setFinal(dataFimDoCalculo);
+      periodo.setLabelDataFinal('Data Fim do Cálculo');
+    } else if (dataDemissao != null) {
+      periodo.setFinal(dataDemissao);
+      periodo.setLabelDataFinal('Data de Demissão');
+    }
+
+    return periodo;
+  }
+
+  /**
+   * `getDataParaRestricaoSalarioPago` — porte 1-a-1 de
+   * InssSobreSalarios.java:202-216.
+   *
+   * Sempre Admissão → (Demissão ?? DataTérminoCalculo).
+   */
+  getDataParaRestricaoSalarioPago(): Periodo {
+    const periodo = new Periodo();
+    const calculo = this.getInss()?.getCalculo();
+    if (calculo != null) {
+      const admissao = calculo.getDataAdmissao();
+      if (admissao != null) {
+        periodo.setInicial(admissao);
+        periodo.setLabelDataIncial('Data de Admissão');
+      }
+      const demissao = calculo.getDataDemissao();
+      if (demissao != null) {
+        periodo.setFinal(demissao);
+        periodo.setLabelDataFinal('Data de Demissão');
+      } else {
+        const fim = calculo.getDataTerminoCalculo();
+        if (fim != null) {
+          periodo.setFinal(fim);
+          periodo.setLabelDataFinal('Data Fim do Cálculo');
+        }
+      }
+    }
+    return periodo;
+  }
 }

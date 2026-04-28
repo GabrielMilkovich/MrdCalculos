@@ -17,11 +17,25 @@ interface HonorarioItem {
   descricao: string; devedor: string; credor: string;
   tipo: 'percentual' | 'valor_fixo'; percentual: string; valor_fixo: string;
   base: string; apurar_ir: boolean;
+  // Sprint 2: 9 campos novos
+  tipo_honorario?: string;
+  doc_fiscal_credor?: string;
+  tipo_imposto_renda?: string;
+  tipo_cobranca_reclamante?: string;
+  aplicar_juros?: boolean;
+  data_apartir_de_aplicar_juros?: string;
+  data_vencimento?: string;
+  tipo_indice_correcao?: string;
 }
 
 const EMPTY: HonorarioItem = {
   descricao: 'HONORÁRIOS DE SUCUMBÊNCIA', devedor: 'reclamado', credor: '',
   tipo: 'percentual', percentual: '15', valor_fixo: '', base: 'condenacao', apurar_ir: false,
+  tipo_honorario: 'sucumbenciais',
+  tipo_imposto_renda: 'pessoa_fisica',
+  tipo_cobranca_reclamante: 'descontar_credito',
+  aplicar_juros: false,
+  tipo_indice_correcao: 'trabalhista',
 };
 
 export function ModuloHonorarios({ caseId }: Props) {
@@ -118,23 +132,128 @@ export function ModuloHonorarios({ caseId }: Props) {
         </CardContent>
       </Card>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="text-sm">{editIdx !== null ? 'Editar' : 'Novo'} Honorário</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label className="text-xs">Descrição</Label><Input value={editForm.descricao} onChange={e => setEditForm(p => ({ ...p, descricao: e.target.value }))} className="h-8 text-xs mt-1" /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Devedor</Label><Select value={editForm.devedor} onValueChange={v => setEditForm(p => ({ ...p, devedor: v }))}><SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reclamante">Reclamante</SelectItem><SelectItem value="reclamado">Reclamado</SelectItem></SelectContent></Select></div>
-              <div><Label className="text-xs">Credor (nome)</Label><Input value={editForm.credor} onChange={e => setEditForm(p => ({ ...p, credor: e.target.value }))} className="h-8 text-xs mt-1" placeholder="Ex: MARCOS ROBERTO DIAS" /></div>
+              <div title="Devedor: quem paga o honorário. Reclamado=somado à condenação. Reclamante=deduzido do líquido.">
+                <Label className="text-xs">Devedor</Label>
+                <Select value={editForm.devedor} onValueChange={v => setEditForm(p => ({ ...p, devedor: v }))}><SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="reclamante">Reclamante</SelectItem><SelectItem value="reclamado">Reclamado</SelectItem></SelectContent></Select>
+              </div>
+              <div title="Java TipoHonorarioEnum: Sucumbenciais (CLT art. 791-A), Contratuais (advogado/cliente), Periciais (perito), Outros.">
+                <Label className="text-xs">Tipo Honorário</Label>
+                <Select value={editForm.tipo_honorario || 'sucumbenciais'} onValueChange={v => setEditForm(p => ({ ...p, tipo_honorario: v }))}>
+                  <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sucumbenciais">Sucumbenciais</SelectItem>
+                    <SelectItem value="contratuais">Contratuais</SelectItem>
+                    <SelectItem value="periciais_contador">Periciais (Contador)</SelectItem>
+                    <SelectItem value="periciais_tecnico">Periciais (Técnico)</SelectItem>
+                    <SelectItem value="outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Tipo</Label><Select value={editForm.tipo} onValueChange={v => setEditForm(p => ({ ...p, tipo: v as 'percentual' | 'valor_fixo' }))}><SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percentual">Percentual</SelectItem><SelectItem value="valor_fixo">Valor Fixo</SelectItem></SelectContent></Select></div>
+              <div><Label className="text-xs">Credor (nome)</Label><Input value={editForm.credor} onChange={e => setEditForm(p => ({ ...p, credor: e.target.value }))} className="h-8 text-xs mt-1" placeholder="Ex: MARCOS ROBERTO DIAS" /></div>
+              <div title="CPF (PF) ou CNPJ (PJ) do credor."><Label className="text-xs">Doc. Fiscal Credor</Label><Input value={editForm.doc_fiscal_credor || ''} onChange={e => setEditForm(p => ({ ...p, doc_fiscal_credor: e.target.value }))} className="h-8 text-xs mt-1" placeholder="000.000.000-00" /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div title="Calculado: engine recalcula via percentual × base. Informado: valor fixo direto.">
+                <Label className="text-xs">Tipo</Label>
+                <Select value={editForm.tipo} onValueChange={v => setEditForm(p => ({ ...p, tipo: v as 'percentual' | 'valor_fixo' }))}><SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percentual">Percentual</SelectItem><SelectItem value="valor_fixo">Valor Fixo</SelectItem></SelectContent></Select>
+              </div>
               {editForm.tipo === 'percentual' ? (
-                <div><Label className="text-xs">Percentual (%)</Label><Input type="number" step="0.1" value={editForm.percentual} onChange={e => setEditForm(p => ({ ...p, percentual: e.target.value }))} className="h-8 text-xs mt-1" /></div>
+                <div title="Percentual aplicado sobre a base. Sucumbenciais comumente 10-15%, contratuais até 30%."><Label className="text-xs">Percentual (%)</Label><Input type="number" step="0.1" value={editForm.percentual} onChange={e => setEditForm(p => ({ ...p, percentual: e.target.value }))} className="h-8 text-xs mt-1" /></div>
               ) : (
-                <div><Label className="text-xs">Valor (R$)</Label><Input type="number" step="0.01" value={editForm.valor_fixo} onChange={e => setEditForm(p => ({ ...p, valor_fixo: e.target.value }))} className="h-8 text-xs mt-1" /></div>
+                <div title="Valor fixo em reais."><Label className="text-xs">Valor (R$)</Label><Input type="number" step="0.01" value={editForm.valor_fixo} onChange={e => setEditForm(p => ({ ...p, valor_fixo: e.target.value }))} className="h-8 text-xs mt-1" /></div>
               )}
             </div>
-            <div className="flex items-center gap-2"><Checkbox checked={editForm.apurar_ir} onCheckedChange={v => setEditForm(p => ({ ...p, apurar_ir: !!v }))} /><Label className="text-xs">Apurar Imposto de Renda</Label></div>
+            <div title="Base de cálculo: BRUTO=PC+juros+FGTS pré-deduções; BC=BRUTO-INSS_segurado; BCP=BC-PrevPrivada; VNP=verbas que não compõem o principal (Java BaseParaApuracaoDeHonorarioEnum).">
+              <Label className="text-xs">Base de Apuração</Label>
+              <Select value={editForm.base} onValueChange={v => setEditForm(p => ({ ...p, base: v }))}>
+                <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="condenacao">BRUTO (Condenação)</SelectItem>
+                  <SelectItem value="bruto_menos_cs">BRUTO − Contribuição Social</SelectItem>
+                  <SelectItem value="bruto_menos_cs_menos_pp">BRUTO − CS − Prev. Privada</SelectItem>
+                  <SelectItem value="verbas_nao_principal">Verbas que não compõem o principal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="border-t pt-2 mt-2">
+              <p className="text-xs font-semibold text-muted-foreground mb-1">Imposto de Renda</p>
+              <p className="text-[10px] text-amber-700 mb-2 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — campos persistidos mas engine ainda não calcula IRPF sobre honorário (PF/PJ). Validação aguarda PJC com <code>apurarIRRF=true</code> (0/47 no corpus).</p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2" title="Quando marcado, retém IRPF do honorário. PF=tabela progressiva (Lei 7.713/88). PJ=1,5% fixo (IN RFB).">
+                  <Checkbox checked={editForm.apurar_ir} onCheckedChange={v => setEditForm(p => ({ ...p, apurar_ir: !!v }))} />
+                  <Label className="text-xs">Apurar Imposto de Renda na Fonte</Label>
+                </div>
+                {editForm.apurar_ir && (
+                  <>
+                    <div title="Pessoa Física: tabela progressiva IRPF. Pessoa Jurídica: alíquota fixa 1,5% (serviços profissionais).">
+                      <Label className="text-xs">Tipo IR</Label>
+                      <Select value={editForm.tipo_imposto_renda || 'pessoa_fisica'} onValueChange={v => setEditForm(p => ({ ...p, tipo_imposto_renda: v }))}>
+                        <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pessoa_fisica">Pessoa Física (tabela progressiva)</SelectItem>
+                          <SelectItem value="pessoa_juridica">Pessoa Jurídica (1,5% fixo)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {editForm.devedor === 'reclamante' && (
+              <div className="border-t pt-2 mt-2" title="Java TipoCobrancaReclamanteEnum: DESCONTAR_CREDITO (deduz do líquido) ou COBRAR (cobra à parte do reclamante). Default: descontar.">
+                <p className="text-[10px] text-emerald-700 mb-1 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ Engine implementado — COBRAR não deduz do líquido, vai para totalizador separado.</p>
+                <Label className="text-xs">Forma de Cobrança</Label>
+                <Select value={editForm.tipo_cobranca_reclamante || 'descontar_credito'} onValueChange={v => setEditForm(p => ({ ...p, tipo_cobranca_reclamante: v }))}>
+                  <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="descontar_credito">Descontar do Crédito (deduz do líquido)</SelectItem>
+                    <SelectItem value="cobrar">Cobrar à Parte (não deduz)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="border-t pt-2 mt-2">
+              <p className="text-xs font-semibold text-muted-foreground mb-1">Correção monetária e juros</p>
+              <p className="text-[10px] text-emerald-700 mb-2 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ <strong>Data Vencimento</strong> + Índice Trabalhista funcionam (engine aplica IPCA-E acumulado). ✓ Aplicar Juros (Sprint 4.2-C1, OJ-348 SDI-1): juros simples mensais a partir da data informada.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div title="Data em que o honorário foi fixado. Se anterior à liquidação, engine aplica IPCA-E acumulado.">
+                  <Label className="text-xs">Data de Vencimento</Label>
+                  <Input type="date" value={editForm.data_vencimento || ''} onChange={e => setEditForm(p => ({ ...p, data_vencimento: e.target.value }))} className="h-8 text-xs mt-1" />
+                </div>
+                <div title="Índice de correção monetária. Trabalhista (default) usa o mesmo índice do principal (IPCA-E em geral).">
+                  <Label className="text-xs">Índice de Correção</Label>
+                  <Select value={editForm.tipo_indice_correcao || 'trabalhista'} onValueChange={v => setEditForm(p => ({ ...p, tipo_indice_correcao: v }))}>
+                    <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="trabalhista">Trabalhista (mesmo do principal)</SelectItem>
+                      <SelectItem value="outro">Outro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center gap-2" title="Aplica juros mora sobre o honorário a partir da data informada. Útil quando o honorário foi devido em data anterior e não foi pago.">
+                  <Checkbox checked={editForm.aplicar_juros || false} onCheckedChange={v => setEditForm(p => ({ ...p, aplicar_juros: !!v }))} />
+                  <Label className="text-xs">Aplicar Juros Mora</Label>
+                </div>
+                {editForm.aplicar_juros && (
+                  <div title="Data inicial dos juros mora.">
+                    <Label className="text-xs">Juros a partir de</Label>
+                    <Input type="date" value={editForm.data_apartir_de_aplicar_juros || ''} onChange={e => setEditForm(p => ({ ...p, data_apartir_de_aplicar_juros: e.target.value }))} className="h-8 text-xs mt-1" />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter><Button size="sm" onClick={saveItem}>Confirmar</Button></DialogFooter>
         </DialogContent>

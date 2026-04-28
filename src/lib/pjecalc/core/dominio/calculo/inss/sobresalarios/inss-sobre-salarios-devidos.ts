@@ -124,6 +124,34 @@ export class InssSobreSalariosDevidos extends InssSobreSalarios {
     if (dataFinal) this.setDataTerminoPeriodo(dataFinal);
   }
 
+  /**
+   * `sugerirDataTerminoCalculo` — porte 1-a-1 de
+   * InssSobreSalariosDevidos.java:240-250.
+   *
+   * Atualiza apenas `dataTerminoPeriodo` com a maior entre
+   * `dataTerminoCalculo` (se ≥ `dataDemissao`) e `dataDemissao`.
+   * Preserva `dataInicioPeriodo` intacto (diferença com `sugerirDatas`).
+   *
+   * Observação: o Java usa `greaterThenOrEquals` para o fim do cálculo, o que
+   * significa que empates de data preferem `dataTerminoCalculo`. Replicado.
+   */
+  sugerirDataTerminoCalculo(): void {
+    const calc = this.getInss()?.getCalculo();
+    if (!calc) return;
+    const dataDemissao = calc.getDataDemissao?.() ?? null;
+    const dataFimDoCalculo = calc.getDataTerminoCalculo?.() ?? null;
+    let dataFinal = dataDemissao;
+    if (dataFimDoCalculo != null) {
+      if (
+        dataDemissao == null ||
+        HelperDate.getInstance(dataFimDoCalculo).greaterThenOrEquals(dataDemissao)
+      ) {
+        dataFinal = dataFimDoCalculo;
+      }
+    }
+    if (dataFinal != null) this.setDataTerminoPeriodo(dataFinal);
+  }
+
   existemOcorrencias(): boolean { return this.ocorrencias.size > 0; }
 
   // ── flags de correção via ParametrosDeAtualizacao (ducktype) ──

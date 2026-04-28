@@ -10,6 +10,9 @@
  */
 import type Decimal from 'decimal.js';
 import { Periodo } from '../../../base/comum/periodo';
+import { MensagemDeRecurso } from '../../../comum/mensagem-de-recurso';
+import { Mensagens } from '../../../comum/mensagens';
+import { NegocioException } from '../../../comum/exceptions/negocio-exception';
 import type { Inss } from './inss';
 
 export class AliquotasDoEmpregadorPorPeriodo {
@@ -59,5 +62,52 @@ export class AliquotasDoEmpregadorPorPeriodo {
     const b = outra.getPeriodo();
     if (!a || !b) return false;
     return a.isDatasCoincidentesCom(b);
+  }
+
+  /**
+   * `validar` — porte 1-a-1 de AliquotasDoEmpregadorPorPeriodo.java:170-184.
+   *
+   * Regras:
+   *   1. Pelo menos uma das 3 alíquotas (empresa, RAT, terceiros) deve ser
+   *      informada — caso contrário lança NegocioException com 3 MensagemDeRecurso
+   *      MSG0045 (empresaPorPeriodo, ratPorPeriodo, terceirosPorPeriodo).
+   *   2. Não pode haver coincidência com outro período já cadastrado no mesmo
+   *      Inss (erro MSG0024 em "dataTerminoPeriodo").
+   *
+   * Nota: a validação declarativa (@Required, @GreaterOrEqualThan) de Java via
+   * GerenciadorDeValidadores foi portada separadamente — aqui porta-se apenas
+   * a parte de negócio.
+   */
+  validar(): AliquotasDoEmpregadorPorPeriodo {
+    if (
+      this.aliquotaEmpresa == null &&
+      this.aliquotaRAT == null &&
+      this.aliquotaTerceiros == null
+    ) {
+      const excecao = new NegocioException();
+      excecao.adicionarMensagemDeRecurso(
+        new MensagemDeRecurso('aliquotaEmpresaPorPeriodo', Mensagens.MSG0045),
+      );
+      excecao.adicionarMensagemDeRecurso(
+        new MensagemDeRecurso('aliquotaRatPorPeriodo', Mensagens.MSG0045),
+      );
+      excecao.adicionarMensagemDeRecurso(
+        new MensagemDeRecurso('aliquotaTerceirosPorPeriodo', Mensagens.MSG0045),
+      );
+      throw excecao;
+    }
+
+    if (this.inss != null) {
+      for (const outra of this.inss.getAliquotasPorPeriodos()) {
+        if (outra === this) continue;
+        if (this.isPeriodoCoincidenteCom(outra)) {
+          throw new NegocioException(
+            new MensagemDeRecurso('dataTerminoPeriodo', Mensagens.MSG0024),
+          );
+        }
+      }
+    }
+
+    return this;
   }
 }

@@ -268,3 +268,73 @@ export function obterPercentualPara(valor: Decimal | null | undefined): Decimal 
   if (nulo(valor)) return null;
   return (valor as Decimal).div(CEM);
 }
+
+// =====================================================
+// String helpers (linhas 243-258, 722-727)
+// =====================================================
+
+/** Utils.isVazio (linha 251). TRUE se null/undefined ou string vazia. */
+export function isVazio(arg: string | null | undefined): boolean {
+  return nulo(arg) || arg === '';
+}
+
+/** Utils.isNaoVazios (linha 243). TRUE se TODOS os args forem não-null e não-vazios. */
+export function isNaoVazios(...args: Array<string | null | undefined>): boolean {
+  for (const s of args) {
+    if (nulo(s) || s === '') return false;
+  }
+  return true;
+}
+
+/**
+ * Utils.substituirPontoPorVirgula (linha 255).
+ * Substitui apenas o ÚLTIMO ponto por vírgula — útil para exibição de
+ * números com separador decimal BR quando a representação original usa
+ * ponto (ex: "1.234.56" → "1.234,56").
+ */
+export function substituirPontoPorVirgula(valor: string): string {
+  const reversed = valor.split('').reverse().join('');
+  const substituido = reversed.replace(/\./, ',');
+  return substituido.split('').reverse().join('');
+}
+
+/**
+ * Utils.filtrarSomenteNumeros (linha 722).
+ * Remove qualquer caractere não-dígito. Ex: "123.456.789-00" → "12345678900".
+ * Preserva null/undefined sem lançar.
+ */
+export function filtrarSomenteNumeros(texto: string | null | undefined): string | null | undefined {
+  if (nulo(texto)) return texto;
+  return (texto as string).replace(/\D+/g, '');
+}
+
+/**
+ * Utils.objetoParaString (linha 77).
+ * Formata objeto como "ClasseSimples [attr1:valor1, attr2:valor2, ...]"
+ * chamando getters via reflexão. Em TS usamos acesso direto a propriedades.
+ * Se um atributo não tem getter camel-case, tenta a propriedade literal.
+ * Erros por atributo são silenciados (espelha o comportamento Java de logar
+ * e continuar).
+ */
+export function objetoParaString(objeto: unknown, ...atributos: string[]): string {
+  if (nulo(objeto) || typeof objeto !== 'object') return String(objeto);
+  const className = (objeto as { constructor?: { name?: string } }).constructor?.name ?? 'Object';
+  const parts: string[] = [];
+  for (const atributo of atributos) {
+    let valor: unknown;
+    try {
+      const getterName =
+        'get' + atributo.charAt(0).toUpperCase() + atributo.slice(1);
+      const obj = objeto as Record<string, unknown>;
+      if (typeof obj[getterName] === 'function') {
+        valor = (obj[getterName] as () => unknown)();
+      } else {
+        valor = obj[atributo];
+      }
+    } catch {
+      valor = undefined;
+    }
+    parts.push(`${atributo}:${valor}`);
+  }
+  return `${className} [${parts.join(', ')}]`;
+}

@@ -17,7 +17,7 @@ import Decimal from 'decimal.js';
 import type { IModuloLiquidavel } from '../core/dominio/calculo/calculo';
 import type { VerbaDeCalculo } from '../core/dominio/verbacalculo/verba-de-calculo';
 import type {
-  PjeIRConfig, PjeIRFaixaRow, PjeHonorariosConfig,
+  PjeIRConfig, PjeIRFaixaRow, PjeHonorariosConfig, PjePensaoConfig,
 } from '../engine-types';
 import {
   DEFAULT_FAIXAS_IR, DEFAULT_DEDUCAO_DEPENDENTE,
@@ -35,6 +35,7 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
   private honorariosConfig: PjeHonorariosConfig;
   private inssAdapter: InssModuloAdapter;
   private dataLiquidacao: string; // YYYY-MM-DD
+  private pensaoConfig?: PjePensaoConfig;
 
   // Resultados (populados após liquidar())
   baseCalculo = 0;
@@ -54,6 +55,7 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     honorariosConfig: PjeHonorariosConfig,
     inssAdapter: InssModuloAdapter,
     dataLiquidacao: string,
+    pensaoConfig?: PjePensaoConfig,
   ) {
     this.verbas = verbas;
     this.irConfig = irConfig;
@@ -61,10 +63,21 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     this.honorariosConfig = honorariosConfig;
     this.inssAdapter = inssAdapter;
     this.dataLiquidacao = dataLiquidacao;
+    this.pensaoConfig = pensaoConfig;
   }
 
   liquidar(_dataLiquidacao?: Date): void {
     if (!this.irConfig.apurar) return;
+
+    // ─── Flags de controle (Sprint 4.2-A1) ───
+    // apurar_rra: undefined → auto (mesesTotal > 1); true → forçar RRA; false → forçar tabela
+    const apurarRraFlag = this.irConfig.apurar_rra;
+    // aplicar_regime_caixa: true → tributar tudo no ano da liquidação (mesesTotal=1, tabela mensal)
+    const regimeCaixa = this.irConfig.regime_caixa ?? false;
+    // incidir_sobre_principal_tributavel: default true; false → excluir verbas COMUM/normais
+    const incidirTributavel = this.irConfig.incidir_sobre_principal_tributavel ?? true;
+    // incidir_sobre_principal_nao_tributavel: default false; true → incluir verbas irpf=false
+    const incidirNaoTributavel = this.irConfig.incidir_sobre_principal_nao_tributavel ?? false;
 
     // ─── 1. Coletar bases por característica ───
     let baseBruta = 0;    // normal + demais
@@ -73,10 +86,25 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     const base13PorAno: Record<number, number> = {};
     const compsNormal = new Set<string>();
     const compsFerias = new Set<string>();
+    // FIX 4 (IR-FIXER 2026-04-26): NM do RRA (Art. 12-A) =
+    //   |competências de não-13 (com base IR > 0)| + |competências de 13 (idem)|
+    // Sets SEPARADOS, somados por cardinalidade (sobreposições contam 2×).
+    // Ref Java: pjecalc-fonte/.../MaquinaDeCalculoDeIrpf.java:266-282 e :414.
+    // Bate com francisco-pablo: 28 (não-13) + 3 (13) = 31 ✓.
+    const compsNaoTreze = new Set<string>();
+    const compsTreze = new Set<string>();
     const anoLiq = parseInt(this.dataLiquidacao.slice(0, 4));
+    void anoLiq; // reservado para futura segregação ano-liquidação
 
     for (const vc of this.verbas) {
-      if (!vc.getIncidenciaIRPF()) continue;
+      const temIncidenciaIR = vc.getIncidenciaIRPF();
+      // Flag incidir_sobre_principal_nao_tributavel=true: incluir verbas sem incidência IR
+      // Flag incidir_sobre_principal_tributavel=false: excluir verbas com incidência IR (COMUM)
+      if (temIncidenciaIR) {
+        if (!incidirTributavel) continue; // flag explícita: excluir tributáveis
+      } else {
+        if (!incidirNaoTributavel) continue; // default: não incluir não-tributáveis
+      }
       const car = vc.getCaracteristica();
       const ehFerias = car === CaracteristicaDaVerbaEnum.FERIAS;
       const eh13 = car === CaracteristicaDaVerbaEnum.DECIMO_TERCEIRO_SALARIO;
@@ -86,10 +114,27 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
         if (!dataIni) continue;
         const dif = oc.getDiferenca().toNumber();
         if (dif <= 0) continue;
-        // Base = diferença corrigida (se incidir_sobre_juros=true, soma juros)
-        const corrigida = oc.getDiferencaCorrigida();
-        const valorBase = corrigida ? corrigida.toNumber() : dif;
+        // Etapa 2 D2 (2026-04-26): Java aplica regras especiais para FERIAS
+        // (Ref: ProporcoesIrpf.java:64-69 do PJe-Calc):
+        //   - case FERIAS: usa `getDiferencaCorrigidaParaCalculoDasIncidencias`
+        //     (que aplica dobra ×0.5 e retira abono pecuniário, conforme
+        //     CLT art. 137/143 — partes indenizatórias isentas IR)
+        //   - case 13o e COMUM: usa `getDiferencaCorrigida` puro
+        // Para férias indenizadas, o método retorna null e Java skip.
+        // Para férias com dobra/abono, retorna porção tributável.
+        let valorBase: number;
+        if (ehFerias) {
+          const baseIncid = oc.getDiferencaCorrigidaParaCalculoDasIncidencias();
+          if (baseIncid === null) continue;  // férias indenizadas (sem dobra/abono): skip
+          valorBase = baseIncid.toNumber();
+        } else {
+          const corrigida = oc.getDiferencaCorrigida();
+          valorBase = corrigida ? corrigida.toNumber() : dif;
+        }
         const comp = this.formatCompetencia(dataIni);
+        // Particionar competência em bucket-13 ou bucket-não-13 (PJC).
+        if (eh13) compsTreze.add(comp);
+        else compsNaoTreze.add(comp);
 
         if (ehFerias && this.irConfig.tributacao_separada_ferias) {
           baseFerias += valorBase;
@@ -105,16 +150,25 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
       }
     }
 
-    // ─── 2. Art. 12-A: NM = span de meses do período + stretch capado até dataLiq ───
-    // PARITY ALVO 2: PJC v2.15.1 considera o NM como o período de "recebimento
-    // acumulado" até a data de liquidação (Lei 7.713/88 art. 12-A). Para casos
-    // onde o gap entre última competência e dataLiquidacao é grande (ex:
-    // rosicleia 13 meses), estender o NM aproxima nosso IR ao PJC.
+    // ─── 2. Art. 12-A — NM com hierarquia de flags ───
     //
-    // Cap conservador (12 meses além da última competência) evita overshoot
-    // em casos com gap muito grande entre última verba e dataLiq (ex: leandro
-    // 47 meses, tiago 34 meses) onde o stretch full subestima IR drasticamente.
-    const mesesTotal = this.computeSpanMesesAteLiquidacao(compsNormal, 12);
+    //   regime_caixa=true .... NM=1 (IN RFB 1.500/2014 art.36)
+    //   apurar_rra=false ..... NM=1 (UI força tabela mensal, sem RRA)
+    //   apurar_rra=true ...... NM = sets separados (cardinalidade não-13 + 13)
+    //                          UI explicita override — preserva semântica
+    //                          original da Lei 7.713/88 art.12-A
+    //   apurar_rra=undefined . NM = computeSpanMesesAteLiquidacao (PARITY
+    //                          ALVO 2, main #22 — span+stretch capado 12m)
+    //                          é o método CANÔNICO para auto-detecção,
+    //                          mais próximo do PJC v2.15.1 real
+    let mesesTotal: number;
+    if (regimeCaixa || apurarRraFlag === false) {
+      mesesTotal = 1;
+    } else if (apurarRraFlag === true) {
+      mesesTotal = this.computeNMRra(compsNaoTreze, compsTreze);
+    } else {
+      mesesTotal = this.computeSpanMesesAteLiquidacao(compsNormal, 12);
+    }
 
     // ─── 3. Deduções ───
     let deducoes = 0;
@@ -123,6 +177,25 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     }
     if (this.irConfig.deduzir_honorarios && this.honorariosConfig.apurar_contratuais) {
       deducoes += this.calcularHonorariosContratuais();
+    }
+    // Sprint 4.2-B2 (TIER 2 P1): Pensão alimentícia — Lei 9.250/95 art. 4º II.
+    // Quando apurar=true E (deduzir_pensao=true OU descontar_antes_ir=true),
+    // a pensão é dedução da base de cálculo do IR. Implementação simplificada:
+    // % do percentual configurado sobre a base bruta IR (proxy seguro evita
+    // circularidade base='liquido'). Desliga se pensão estiver OFF.
+    const pensaoApurada = this.pensaoConfig?.apurar === true;
+    const deduzirPensao = this.irConfig.deduzir_pensao === true
+      || this.pensaoConfig?.descontar_antes_ir === true;
+    if (pensaoApurada && deduzirPensao) {
+      const pct = this.pensaoConfig?.percentual ?? 0;
+      const valorFixo = this.pensaoConfig?.valor_fixo ?? 0;
+      // Quando há valor fixo, deduz integralmente (paridade com PJC: pensão
+      // mensal acumulada × meses fica externa). Caso contrário, % × baseBruta
+      // (não-13 normal — IR ano liquidação é o componente principal).
+      const dedPensao = valorFixo > 0
+        ? new Decimal(valorFixo).toDP(2, ROUND_CS_IR).toNumber()
+        : new Decimal(baseBruta).times(pct).div(100).toDP(2, ROUND_CS_IR).toNumber();
+      deducoes += dedPensao;
     }
 
     // ─── 4. Tabela IR da competência de liquidação ───
@@ -201,7 +274,20 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     );
     this.impostoDevido = imposto.toDP(2, ROUND_CS_IR).toNumber();
     this.mesesRRA = mesesTotal;
-    this.metodo = mesesTotal > 1 ? 'art_12a_rra' : 'tabela_mensal';
+    // Determinar método reportado:
+    // - apurar_rra=true  → forçar art_12a_rra (mesmo NM=1)
+    // - apurar_rra=false → forçar tabela_mensal (mesmo NM>1)
+    // - apurar_rra=undefined (auto) → RRA se NM>1, tabela caso contrário
+    // - regime_caixa=true → sempre tabela_mensal (NM já foi forçado a 1)
+    if (regimeCaixa) {
+      this.metodo = 'tabela_mensal';
+    } else if (apurarRraFlag === true) {
+      this.metodo = 'art_12a_rra';
+    } else if (apurarRraFlag === false) {
+      this.metodo = 'tabela_mensal';
+    } else {
+      this.metodo = mesesTotal > 1 ? 'art_12a_rra' : 'tabela_mensal';
+    }
     this.ir13Exclusivo = ir13.toDP(2, ROUND_CS_IR).toNumber();
     this.irFeriasSeparado = irFerias.toDP(2, ROUND_CS_IR).toNumber();
     this.irAnoLiquidacao = irTotal.toDP(2, ROUND_CS_IR).toNumber();
@@ -213,13 +299,21 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
 
-  /** Nº meses do span [primeira competência, última competência] inclusive. */
-  private computeSpanMeses(comps: Set<string>): number {
-    if (comps.size === 0) return 1;
-    const arr = [...comps].sort();
-    const [y1, m1] = arr[0].split('-').map(Number);
-    const [y2, m2] = arr[arr.length - 1].split('-').map(Number);
-    return Math.max(1, (y2 - y1) * 12 + (m2 - m1) + 1);
+  /**
+   * NM do RRA (Art. 12-A) = SOMA das cardinalidades de DOIS sets separados:
+   *   1) competências de verbas NÃO-13º (Demais, Aviso, Férias) com base IR > 0
+   *   2) competências de verbas 13º com diferença IR > 0
+   *
+   * Sobreposições entre os dois sets são CONTADAS DUAS VEZES (uma em cada).
+   * Confirmado pelo PJC em `MaquinaDeCalculoDeIrpf.java:266-282` (separa em
+   * dois HashSet<Date>) e `:414`:
+   *   somatorioMesesAnteriores = mesesAnosAnteriores.size + mesesAnosAnterioresDecimoTerceiro.size
+   *
+   * Para francisco-pablo: 28 (não-13) + 3 (13) = 31 ✓ (vs span 28 do código antigo).
+   */
+  private computeNMRra(compsNaoTreze: Set<string>, compsTreze: Set<string>): number {
+    const total = compsNaoTreze.size + compsTreze.size;
+    return Math.max(1, total);
   }
 
   /**

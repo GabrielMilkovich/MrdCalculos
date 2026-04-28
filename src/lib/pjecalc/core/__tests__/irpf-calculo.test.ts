@@ -216,8 +216,9 @@ describe('IrpfModuloAdapter — integração com engine V3', () => {
     });
     expect(adapter.ir13Exclusivo).toBeGreaterThanOrEqual(0);
     // IR 13° por ano: 4000 cada — cai na 4ª faixa (2826.65 < 4000 <= 4664.68)
-    // 4000 × 0.225 − 662.77 = 900 − 662.77 = 237.23 por ano × 2 anos = 474.46
-    expect(adapter.ir13Exclusivo).toBeCloseTo(474.46, 1);
+    // Tabela 2025-mai+ (Lei 14.973/2024 + MP 1.294/2025): aliq 22,5%, ded 675,49.
+    // 4000 × 0.225 − 675.49 = 900 − 675.49 = 224.51 por ano × 2 anos = 449.02
+    expect(adapter.ir13Exclusivo).toBeCloseTo(449.02, 1);
   });
 
   it('10. Férias em tributação separada — NM = nº competências de férias', () => {
@@ -235,8 +236,9 @@ describe('IrpfModuloAdapter — integração com engine V3', () => {
       deduzir_cs: false,
     });
     // 2 comps férias, base=7000, NM=2. mensal=3500 → faixa 3
-    // IR = 7000 × 0.15 − 381.44 × 2 = 1050 − 762.88 = 287.12
-    expect(adapter.irFeriasSeparado).toBeCloseTo(287.12, 1);
+    // Tabela 2025-mai+ (Lei 14.973/2024 + MP 1.294/2025): aliq 15%, ded 394,16.
+    // IR = 7000 × 0.15 − 394.16 × 2 = 1050 − 788.32 = 261.68
+    expect(adapter.irFeriasSeparado).toBeCloseTo(261.68, 1);
   });
 
   it('11. Aposentado 65+ — dedução adicional = 1ª faixa × NM', () => {
@@ -263,10 +265,12 @@ describe('IrpfModuloAdapter — integração com engine V3', () => {
       return { comp: `${y}-${String(m).padStart(2, '0')}`, valor: 3500 };
     });
     const vc = makeVerba(CaracteristicaDaVerbaEnum.COMUM, comps);
-    const adapterSemDep = setup([vc], { ...IR_CONFIG_BASE, deduzir_cs: false });
+    // apurar_rra=true: força NM=cardinalidade dos sets (não span+stretch),
+    // garantindo NM=24 e IR > 0 em sem-deps (fixture original).
+    const adapterSemDep = setup([vc], { ...IR_CONFIG_BASE, deduzir_cs: false, apurar_rra: true });
     const adapterComDep = setup(
       [makeVerba(CaracteristicaDaVerbaEnum.COMUM, comps)],
-      { ...IR_CONFIG_BASE, deduzir_cs: false, dependentes: 2 },
+      { ...IR_CONFIG_BASE, deduzir_cs: false, dependentes: 2, apurar_rra: true },
     );
     expect(adapterComDep.impostoDevido).toBeLessThan(adapterSemDep.impostoDevido);
   });

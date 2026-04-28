@@ -25,6 +25,9 @@
  */
 import Decimal from 'decimal.js';
 import { arredondarValorMonetario } from '../../../base/comum/utils';
+import { MensagemDeRecurso } from '../../../comum/mensagem-de-recurso';
+import { Mensagens } from '../../../comum/mensagens';
+import { NegocioException } from '../../../comum/exceptions/negocio-exception';
 import type { IModuloLiquidavel } from '../calculo';
 import type { Calculo } from '../calculo';
 import {
@@ -290,5 +293,87 @@ export class Honorario implements IModuloLiquidavel {
   calcular(base: Decimal): void {
     const aliq = this.aliquota ?? new Decimal(15);
     this.valorCalculadoLegacy = arredondarValorMonetario(base.times(aliq).div(100));
+  }
+
+  /**
+   * `validar` — porte 1-a-1 de Honorario.java:524-549.
+   *
+   * Regras (acumulam em NegocioException, lançada se houver mensagens):
+   *   1. ATUALIZACAO sem `dataEvento` → MSG0003.
+   *   2. `dataEvento` anterior à `dataDeLiquidacao` do cálculo → MSG0127.
+   *   3. `dataEvento` no futuro → MSG0128.
+   *   4. `apurarIRRF=true` mas sem `tipoImpostoRenda` → MSG0003.
+   *   5. `baseParaApuracao=VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL` mas sem
+   *      verbas selecionadas → MSG0167.
+   *
+   * O Java também chama `GerenciadorDeValidadores.getInstance().validar(...)`
+   * para validações declarativas (@Required, etc.). Em TS isso fica
+   * responsabilidade do adapter.
+   */
+  validar(): Honorario {
+    const excecao = new NegocioException();
+
+    if (this.origemRegistro === TipoOrigemRegistroEnum.ATUALIZACAO) {
+      if (this.dataEvento == null) {
+        excecao.adicionarMensagemDeRecurso(
+          new MensagemDeRecurso('dataEvento', Mensagens.MSG0003, 'Data do Evento'),
+        );
+      }
+      const dataLiquidacao = this.calculo?.getDataDeLiquidacao?.() ?? null;
+      if (this.dataEvento != null && dataLiquidacao != null && this.dataEvento.getTime() < dataLiquidacao.getTime()) {
+        // 4-arg form (entidade=null, atributo=null, chave, ...params) — evita
+        // ambiguidade do construtor entre (atributo, chave) e (chave, param).
+        excecao.adicionarMensagemDeRecurso(
+          new MensagemDeRecurso(null, null, Mensagens.MSG0127, this.formatarData(dataLiquidacao)),
+        );
+      }
+      if (this.dataEvento != null && this.dataEvento.getTime() > Date.now()) {
+        excecao.adicionarMensagemDeRecurso(
+          new MensagemDeRecurso(Mensagens.MSG0128),
+        );
+      }
+    }
+
+    if (this.apurarIRRF && this.tipoImpostoRenda == null) {
+      excecao.adicionarMensagemDeRecurso(
+        new MensagemDeRecurso('tipoDeImpostoDeRenda', Mensagens.MSG0003, 'Tipo de Imposto de Renda'),
+      );
+    }
+
+    if (
+      this.baseParaApuracao === BaseParaApuracaoDeHonorarioEnum.VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL &&
+      this.verbasSelecionadas.length === 0
+    ) {
+      excecao.adicionarMensagemDeRecurso(new MensagemDeRecurso(Mensagens.MSG0167));
+    }
+
+    if (excecao.existeMensagensDeRecurso()) {
+      throw excecao;
+    }
+    return this;
+  }
+
+  /**
+   * `validarDocumentoFiscal` — porte 1-a-1 de Honorario.java:551-560.
+   * Se `apurarIRRF=true`, `numeroDocumentoFiscalCredor` precisa ser
+   * preenchido (não-nulo / não-branco).
+   */
+  validarDocumentoFiscal(): void {
+    if (this.apurarIRRF) {
+      const docTrim = this.numeroDocumentoFiscalCredor?.trim() ?? '';
+      if (docTrim.length === 0) {
+        throw new NegocioException(
+          new MensagemDeRecurso('numeroDocumentoFiscalCredor', Mensagens.MSG0003, 'Número'),
+        );
+      }
+    }
+  }
+
+  /** Formato dd/MM/yyyy — paridade Utils.formatarData do Java. */
+  private formatarData(d: Date): string {
+    const dia = String(d.getUTCDate()).padStart(2, '0');
+    const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const ano = d.getUTCFullYear();
+    return `${dia}/${mes}/${ano}`;
   }
 }

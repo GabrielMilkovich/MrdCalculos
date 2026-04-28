@@ -20,6 +20,7 @@ import {
 } from '../../constantes/enums';
 import { Periodo } from '../../base/comum/periodo';
 import { HelperDate } from '../../base/comum/helper-date';
+import { salarioMinimoNaCompetencia } from '../../../tabelas-historicas';
 import type { Calculo } from '../calculo/calculo';
 
 export class HistoricoSalarial {
@@ -155,11 +156,11 @@ export class HistoricoSalarial {
     for (const competencia of competencias) {
       let valor: Decimal | null;
       if (this.isTipoValorCalculado()) {
-        // TODO: obter valor da base (SalarioMinimoNacional ou SalarioCategoria) × quantidade.
-        // Stub: devolve valor informado × quantidade se disponível.
-        valor = this.valorParaBaseDeCalculo
-          ? this.valorParaBaseDeCalculo.times(this.quantidade)
-          : null;
+        // Java: HistoricoSalarial.java:343-349 — quando tipoValor=CALCULADO, busca o valor
+        // base (SalarioMinimoNacional ou SalarioCategoria) na competência e multiplica
+        // pela quantidade. Aqui replicamos `Utils.multiplicar(base, quantidade)`.
+        const valorBase = this.obterValorDaBaseDeReferencia(competencia.getDate());
+        valor = valorBase !== null ? valorBase.times(this.quantidade) : null;
       } else {
         valor = this.valorParaBaseDeCalculo;
       }
@@ -202,6 +203,45 @@ export class HistoricoSalarial {
 
   isTipoValorCalculado(): boolean {
     return this.tipoValor === TipoValorEnum.CALCULADO;
+  }
+
+  /**
+   * obterValorDaBaseDeReferencia — port de
+   * `getOcorrenciasOptimizerListDaBaseCadastradaNoPeriodo` + lookup
+   * (Java HistoricoSalarial.java:378-386 + linha 349 `baseReferenciaOptimizerList.valueOf`).
+   *
+   * - SALARIO_MINIMO → busca em `SALARIO_MINIMO_HISTORICO` (TBSALARIOMINIMONACIONAL).
+   * - SALARIO_CATEGORIA → consulta `categoria.getListaDeOcorrenciasOtimizada(...)`,
+   *   se a categoria implementar tal contrato. Caso contrário, retorna null.
+   * - default (sem base) → null.
+   *
+   * Retorna null quando a base não cobre a competência (compatível com
+   * OptimizerListSearch.valueOf que retorna null/zero quando vazio — a aritmética
+   * do Java em `Utils.multiplicar(null, quantidade)` resulta em null/zero).
+   */
+  private obterValorDaBaseDeReferencia(competencia: Date): Decimal | null {
+    if (this.baseDeReferencia === BaseDeCalculoDoPrincipalEnum.SALARIO_MINIMO) {
+      const ano = competencia.getFullYear();
+      const mes = String(competencia.getMonth() + 1).padStart(2, '0');
+      const dia = String(competencia.getDate()).padStart(2, '0');
+      const chave = `${ano}-${mes}-${dia}`;
+      const valor = salarioMinimoNaCompetencia(chave);
+      if (valor === 0) return null;
+      return new Decimal(valor);
+    }
+    if (this.baseDeReferencia === BaseDeCalculoDoPrincipalEnum.SALARIO_CATEGORIA) {
+      // Java: this.categoria.getListaDeOcorrenciasOtimizada(...).valueOf(competencia).
+      // SalarioCategoria não foi portada — se a referência opcional implementar o contrato,
+      // delegamos; senão, retornamos null (compatível com lista vazia no Java).
+      const cat = this.categoria as
+        | { getValorParaCompetencia?: (c: Date) => Decimal | null }
+        | null;
+      if (cat && typeof cat.getValorParaCompetencia === 'function') {
+        return cat.getValorParaCompetencia(competencia);
+      }
+      return null;
+    }
+    return null;
   }
 
   /**

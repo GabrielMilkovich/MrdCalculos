@@ -9,9 +9,47 @@ export * from './base/comum/utils';
 export { HelperDate, JANUARY, FEBRUARY, MARCH, APRIL, MAY, JUNE, JULY, AUGUST,
          SEPTEMBER, OCTOBER, NOVEMBER, DECEMBER } from './base/comum/helper-date';
 export { Periodo } from './base/comum/periodo';
+export {
+  STR_ESPACO,
+  STR_E,
+  STR_SOBRE,
+  STR_VIRGULA,
+  STR_TRACO,
+  QUANTIDADE_PADRAO_AVISO_PREVIO,
+  QUANTIDADE_MAXIMA_DE_HISTORICOS,
+  DATA_LIMITE_COM_DEMISSAO_PARA_AVISO_PREVIO_CALCULADO,
+  DATA_REFORMA_TRABALHISTA,
+  DATA_REFORMA_PREVIDENCIA,
+} from './base/comum/constantes';
+export { HelperIterate } from './base/comum/helper-iterate';
+export type { Where } from './base/comum/helper-iterate';
+export {
+  PORTED_MODULES,
+  envVarForModule,
+  isPortedEnabled,
+  isAnyPortedEnabled,
+  snapshotPortedFlags,
+} from './base/comum/feature-flags';
+export type { PortedModule } from './base/comum/feature-flags';
 
 // ────────────── constantes ──────────────
 export * from './constantes/enums';
+export { TipoDeVerbaEnum, TipoDeVerbaEnumNomes } from './constantes/tipo-de-verba-enum';
+export { TipoFeriadoEnum, TipoFeriadoEnumNomes } from './constantes/tipo-feriado-enum';
+export {
+  AbrangenciaDoFeriadoEnum,
+  AbrangenciaDoFeriadoEnumNomes,
+} from './constantes/abrangencia-do-feriado-enum';
+export {
+  TipoSalarioPagoEnum,
+  TipoSalarioPagoEnumNomes,
+} from './constantes/tipo-salario-pago-enum';
+export { TipoValorCalculadoEnum } from './constantes/tipo-valor-calculado-enum';
+export {
+  DestinoDoFgtsEnum,
+  DestinoDoFgtsEnumNomes,
+  DestinoDoFgtsEnumMensagens,
+} from './constantes/destino-do-fgts-enum';
 
 // ────────────── comum ──────────────
 export * from './comum/rotinasdecalculo/calculador-de-indices';

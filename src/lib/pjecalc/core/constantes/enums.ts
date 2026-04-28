@@ -179,11 +179,22 @@ export enum AliquotaDoFgtsEnum {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Base do FGTS — TipoDeBaseDoFgtsEnum
+// Base do FGTS — TipoDeBaseDoFgtsEnum (CALCULADA/INFORMADA — Java)
+// Ref Java: negocio/constantes/TipoDeBaseDoFgtsEnum.java
+// Substitui versão antiga (DEVIDO/CORRIGIDO) que não tinha uso real e
+// não correspondia ao enum Java.
 // ─────────────────────────────────────────────────────────────────────────────
 export enum TipoDeBaseDoFgtsEnum {
-  DEVIDO = 'D',
-  CORRIGIDO = 'C',
+  CALCULADA = 'C',
+  INFORMADA = 'I',
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Depositado do FGTS — TipoDeDepositadoDoFgtsEnum
+// ─────────────────────────────────────────────────────────────────────────────
+export enum TipoDeDepositadoDoFgtsEnum {
+  CALCULADA = 'C',
+  INFORMADA = 'I',
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -312,12 +323,17 @@ export enum TipoValorEnum {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Base de cálculo do principal — BaseDeCalculoDoPrincipalEnum.java
+// Valores string espelham exatamente os do Java. Os 6 casos do enum original:
+// ULTIMA_REMUNERACAO(UR), MAIOR_REMUNERACAO(MR), HISTORICO_SALARIAL(HS),
+// SALARIO_DA_CATEGORIA(SC), SALARIO_MINIMO(SM), VALE_TRANSPORTE(VT).
 // ─────────────────────────────────────────────────────────────────────────────
 export enum BaseDeCalculoDoPrincipalEnum {
   SALARIO_MINIMO = 'SM',
   SALARIO_CATEGORIA = 'SC',
   MAIOR_REMUNERACAO = 'MR',
   ULTIMA_REMUNERACAO = 'UR',
+  HISTORICO_SALARIAL = 'HS',
+  VALE_TRANSPORTE = 'VT',
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -332,9 +348,20 @@ export enum RegimeDoContratoEnum {
 // ─────────────────────────────────────────────────────────────────────────────
 // Enums adicionais de Atualização (Fase 3) — ParametrosDeAtualizacao.java
 // ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Ref Java: negocio/constantes/IndiceDeCorrecaoDoFGTSEnum.java
+ * Valores Java reais: TRABALHISTA(UIT), JAM(UIJ), JAM_E_TRABALHISTA(UJT).
+ * Aliases (UTILIZAR_INDICE_FGTS, UTILIZAR_OUTRO_INDICE) preservados temporariamente
+ * para compatibilidade com `parametros-de-atualizacao.ts` — remover quando aquele
+ * arquivo for re-portado contra o Java.
+ */
 export enum IndiceDeCorrecaoDoFGTSEnum {
-  UTILIZAR_INDICE_TRABALHISTA = 'IT',
+  UTILIZAR_INDICE_TRABALHISTA = 'UIT',
+  UTILIZAR_INDICE_JAM = 'UIJ',
+  UTILIZAR_INDICE_JAM_E_TRABALHISTA = 'UJT',
+  /** @deprecated Não existe no Java. Manter até parametros-de-atualizacao migrar. */
   UTILIZAR_INDICE_FGTS = 'IF',
+  /** @deprecated Não existe no Java. */
   UTILIZAR_OUTRO_INDICE = 'OI',
 }
 

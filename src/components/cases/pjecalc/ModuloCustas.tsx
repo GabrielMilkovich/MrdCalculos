@@ -72,11 +72,6 @@ export function ModuloCustas({ caseId }: Props) {
     rdo_conhecimento: 'nao_aplica', rdo_conhecimento_valor: '',
     rdo_liquidacao: 'nao_aplica', rdo_liquidacao_valor: '',
     custas_fixas_vencimento: '',
-    custas_fixas: {
-      oficiais_urbana: false, oficiais_rural: false, agravo_instrumento: false,
-      agravo_peticao: false, impugnacao_sentenca: false, embargos_arrematacao: false,
-      embargos_execucao: false, embargos_terceiros: false, recurso_revista: false,
-    },
     autos: [] as AutoItem[], armazenamento: [] as ArmazenamentoItem[],
   });
   const [recolhidas, setRecolhidas] = useState<{ descricao: string; valor: string; data: string }[]>([]);
@@ -106,7 +101,6 @@ export function ModuloCustas({ caseId }: Props) {
         rdo_liquidacao: (d.rdo_liquidacao as string) || 'nao_aplica',
         rdo_liquidacao_valor: d.rdo_liquidacao_valor?.toString() || '',
         custas_fixas_vencimento: (d.custas_fixas_vencimento as string) || '',
-        custas_fixas: (d.custas_fixas as typeof prev.custas_fixas) || prev.custas_fixas,
         autos: (d.autos as AutoItem[]) || [],
         armazenamento: (d.armazenamento as ArmazenamentoItem[]) || [],
       }));
@@ -234,7 +228,7 @@ export function ModuloCustas({ caseId }: Props) {
         rdo_liquidacao: form.rdo_liquidacao,
         rdo_liquidacao_valor: form.rdo_liquidacao_valor ? parseFloat(form.rdo_liquidacao_valor) : null,
         custas_fixas_vencimento: form.custas_fixas_vencimento || null,
-        custas_fixas: form.custas_fixas, autos: form.autos, armazenamento: form.armazenamento,
+        autos: form.autos, armazenamento: form.armazenamento,
         recolhidas, itens: itensCustas,
       } as any);
       qc.invalidateQueries({ queryKey: ["pjecalc_custas_config", caseId] });
@@ -461,17 +455,6 @@ export function ModuloCustas({ caseId }: Props) {
                 <div className="flex-1 space-y-2">
                   <Label className="text-xs font-semibold">Custas Fixas</Label>
                   <div><Label className="text-[10px]">Vencimento</Label><Input type="date" value={form.custas_fixas_vencimento} onChange={e => setForm(p => ({ ...p, custas_fixas_vencimento: e.target.value }))} className="h-7 text-xs mt-0.5 w-36" /></div>
-                  {Object.entries({
-                    oficiais_urbana: 'Atos dos Oficiais de Justiça - Zona Urbana', oficiais_rural: 'Atos dos Oficiais de Justiça - Zona Rural',
-                    agravo_instrumento: 'Agravo de Instrumento', agravo_peticao: 'Agravo de Petição',
-                    impugnacao_sentenca: 'Impugnação à Sentença de Liquidação', embargos_arrematacao: 'Embargos à Arrematação',
-                    embargos_execucao: 'Embargos à Execução', embargos_terceiros: 'Embargos de Terceiros', recurso_revista: 'Recurso de Revista',
-                  }).map(([key, label]) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <Label className="text-[10px] flex-1">{label}</Label>
-                      <Checkbox checked={(form.custas_fixas as Record<string, boolean>)[key] ?? false} onCheckedChange={v => setForm(p => ({ ...p, custas_fixas: { ...p.custas_fixas, [key]: !!v } }))} />
-                    </div>
-                  ))}
                 </div>
                 <div className="flex-1 space-y-3">
                   <div className="space-y-2">

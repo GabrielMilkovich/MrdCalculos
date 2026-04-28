@@ -14,7 +14,16 @@
  */
 import Decimal from 'decimal.js';
 import { Periodo } from '../../base/comum/periodo';
-import { nulo, naoNulo, naoNulos, subtrair, dividir } from '../../base/comum/utils';
+import {
+  nulo,
+  naoNulo,
+  naoNulos,
+  subtrair,
+  dividir,
+  arredondarValorMonetario,
+  retirarAbono,
+  CINQUENTA_POR_CENTO,
+} from '../../base/comum/utils';
 import { CaracteristicaDaVerbaEnum, LogicoEnum, OcorrenciaDePagamentoEnum, ValorDaVerbaEnum } from '../../constantes/enums';
 import { CalculoDoIntegralizar } from '../../comum/rotinasdecalculo/calculo-do-integralizar';
 
@@ -31,6 +40,10 @@ const FATOR_ABONO_PADRAO = new Decimal('1.5');
 export interface IVerbaDeCalculoRef {
   getTipoValor(): ValorDaVerbaEnum;
   getZeraValorNegativo(): boolean;
+  // Característica da verba (FERIAS, DT, AP, COMUM) — usado por
+  // isCaracteristicaFeriasComDobra (Java OcorrenciaDeVerba linha 638).
+  // Opcional p/ não quebrar mocks legados; quando ausente, considera-se COMUM.
+  getCaracteristica?(): CaracteristicaDaVerbaEnum;
   // getCalculo().getListaDeFerias() usado em calcularFatorAbono; simplificado
   getListaDeFerias?(): IFeriasRef[];
 }
@@ -255,6 +268,94 @@ export class OcorrenciaDeVerba {
     const diferenca = this.getDiferencaIntegral();
     if (!naoNulos(diferenca, this.indiceAcumulado)) return null;
     return this.indiceAcumulado!.times(diferenca);
+  }
+
+  /**
+   * isCaracteristicaFeriasComDobra (Java OcorrenciaDeVerba linha 638-640).
+   *
+   * Java:
+   *   return CaracteristicaDaVerbaEnum.FERIAS == this.getVerbaDeCalculo().getCaracteristica()
+   *       && this.getDobra() != false;
+   *
+   * Se a `VerbaDeCalculo` referenciada não expuser `getCaracteristica()` (mocks
+   * antigos via interface mínima), considera-se COMUM — comportamento conservador
+   * que retorna false (não havia FERIAS ali, então não há "férias com dobra").
+   */
+  isCaracteristicaFeriasComDobra(): boolean {
+    const car = this.verbaDeCalculo?.getCaracteristica?.() ?? CaracteristicaDaVerbaEnum.COMUM;
+    return car === CaracteristicaDaVerbaEnum.FERIAS && this.dobra === true;
+  }
+
+  /**
+   * getDiferencaParaCalculoDasIncidencias — base ajustada para INSS/IRPF/FGTS.
+   *
+   * Porte 1:1 de OcorrenciaDeVerba.java linhas 663-684.
+   *
+   * Regras (replicação literal do Java):
+   *   1. Se `isFeriasIndenizadas()` → retorna `null`. (Java linha 683.)
+   *      O 1/3 constitucional indenizado é isento de INSS por força de
+   *      Lei 8.212/91 art. 28 §9 "d" + Súmula 171 TST; o restante das
+   *      férias indenizadas também não compõe a base de incidências
+   *      conforme regra do PJe-Calc original.
+   *   2. Caso contrário, base = corrigido ? getDiferencaCorrigida() : getDiferenca().
+   *      Java atribui `BigDecimal.ZERO` antes — preservamos o fallback para
+   *      zero quando `getDiferencaCorrigida()` retornar null (em vez de
+   *      propagar null para fora).
+   *   3. Se `isCaracteristicaFeriasComDobra()` → multiplica por 0.5
+   *      (linha 676): `base = base.multiply(Utils.CINQUENTA_POR_CENTO,
+   *      Utils.CONTEXTO_MATEMATICO)`. Apenas a parcela "simples" entra
+   *      na base de incidências; a dobra (CLT art. 137) é indenizatória.
+   *   4. Se `isFeriasComAbono() && verba.tipoValor == CALCULADO` →
+   *      `base = Utils.retirarAbono(calcularFatorAbono(), base)` (linha 679).
+   *      O abono pecuniário (CLT art. 143) também é isento.
+   *   5. Retorna `Utils.arredondarValorMonetario(base)` (HALF_EVEN, 2 casas).
+   *
+   * Overloads (Java linhas 663-671):
+   *   - sem argumento  → corrigido = false
+   *   - corrigido bool → usa getDiferencaCorrigida()
+   *
+   * Em TS compactamos em UM método com argumento opcional default false.
+   */
+  getDiferencaParaCalculoDasIncidencias(corrigido: boolean = false): Decimal | null {
+    if (this.feriasIndenizadas) {
+      return null;
+    }
+    let base: Decimal = new Decimal(0);
+    if (corrigido) {
+      const corr = this.getDiferencaCorrigida();
+      // Java (OcorrenciaDeVerba.java:673-674) usa `getDiferencaCorrigida()` direto.
+      // Em Java, quando o `indiceAcumulado` não foi setado, `getDiferencaCorrigida()`
+      // retorna null e o método continua propagando null pelas operações
+      // subsequentes (`null.multiply(...)` lança NPE em alguns paths Java, mas a
+      // semântica esperada do PJe-Calc é "ocorrência sem índice → cai no
+      // comportamento legado nominal" — ver `MaquinaDeCalculo.liquidarVerba` que
+      // garante a setagem na maioria dos fluxos. Em TS optamos pelo fallback
+      // não-destrutivo: nominal (`getDiferenca()`), preservando o comportamento
+      // anterior ao port D1 e evitando zerar a base por falta de índice.
+      // (Antes: `?? new Decimal(0)` zerava a base e regredia o INSS quando
+      // alguma ocorrência ficava sem indiceAcumulado.)
+      base = naoNulo(corr) ? corr : this.getDiferenca();
+    } else {
+      base = this.getDiferenca();
+    }
+    if (this.isCaracteristicaFeriasComDobra()) {
+      base = base.times(CINQUENTA_POR_CENTO);
+    }
+    if (
+      this.feriasComAbono &&
+      this.verbaDeCalculo?.getTipoValor() === ValorDaVerbaEnum.CALCULADO
+    ) {
+      base = retirarAbono(this.calcularFatorAbono(), base);
+    }
+    return arredondarValorMonetario(base);
+  }
+
+  /**
+   * getDiferencaCorrigidaParaCalculoDasIncidencias — atalho corrigido = true.
+   * Java OcorrenciaDeVerba linha 667-669.
+   */
+  getDiferencaCorrigidaParaCalculoDasIncidencias(): Decimal | null {
+    return this.getDiferencaParaCalculoDasIncidencias(true);
   }
 
   // ────────────── Helpers ──────────────

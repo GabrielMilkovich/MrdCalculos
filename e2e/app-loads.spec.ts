@@ -8,7 +8,10 @@ test.describe('smoke: app-loads', () => {
       if (msg.type() === 'error') {
         const text = msg.text();
         // Ignora erros esperados de rede/Supabase em ambiente E2E.
-        if (/VITE_SUPABASE|Failed to fetch|NetworkError/i.test(text)) return;
+        // - VITE_SUPABASE / fetch / NetworkError: mock pode nao cobrir todos os endpoints.
+        // - ERR_CERT_AUTHORITY_INVALID: pode vir de telemetria/3rd-party em sandbox.
+        // - Failed to load resource: tipico de assets remotos (fonts, analytics).
+        if (/VITE_SUPABASE|Failed to fetch|NetworkError|ERR_CERT_AUTHORITY_INVALID|Failed to load resource/i.test(text)) return;
         consoleErrors.push(text);
       }
     });
@@ -19,18 +22,9 @@ test.describe('smoke: app-loads', () => {
     // Deve renderizar algum chrome de app (body presente + root React montado).
     await expect(page.locator('#root')).toBeVisible();
 
-    // Checa se existe alguma navegação/header comum ao app autenticado.
-    // Aceita qualquer header, nav ou link para rotas internas conhecidas.
-    const hasChrome = await page
-      .locator('header, nav, [role="navigation"], a[href="/casos"], a[href="/novo-calculo"]')
-      .first()
-      .isVisible()
-      .catch(() => false);
-
-    // Se o ProtectedRoute redirecionou para /auth, ainda consideramos OK desde
-    // que a página tenha carregado (smoke apenas).
-    const onAuth = page.url().includes('/auth');
-    expect(hasChrome || onAuth).toBeTruthy();
+    // Com mock de sessao ativo, ProtectedRoute NAO deve redirecionar para /auth.
+    // (Se cair em /auth, ha bug no mock — ver e2e/helpers.ts.)
+    expect(page.url(), 'mock de sessao deveria liberar ProtectedRoute').not.toContain('/auth');
 
     expect(consoleErrors, `console errors: ${consoleErrors.join(' | ')}`).toEqual([]);
   });

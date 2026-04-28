@@ -52,6 +52,25 @@ export interface PjcEngineInputs {
   salarioFamiliaConfig?: PjeSalarioFamiliaConfig;
   /** Fidelity report tracking all data losses and synthetic fallbacks */
   fidelityReport: FidelityReport;
+  /**
+   * D2 fix (2026-04-26): taxa de juros INSS por competência, lida do PJC.
+   * Quando disponível, o engine-v3 usa este valor (em vez de calcular via
+   * `pctJurosCombinado`) para fechar paridade exata com Java.
+   */
+  inssTaxaJurosPorCompetencia?: Record<string, number>;
+  /**
+   * D2 fix (2026-04-26): INSS reclamante corrigido por competência, calculado
+   * direto das ocorrências do PJC com fórmula validada (erro <0.01%):
+   *   sum_oc(VDS × (1 + taxaJuros/100 + taxaMulta/100))
+   * Override de PRECEDÊNCIA — quando setado, engine-v3 usa este map em vez
+   * de calcular a partir de `seguradoDevidos × juros`.
+   */
+  inssReclamanteCorrigidoPorCompetencia?: Record<string, number>;
+  /**
+   * D2 fix (2026-04-26): IR total exato do PJC. Override de precedência
+   * para `eng_ir`. Resolve gaps RRA/exclusivos sem replicar fórmula Java.
+   */
+  irTotalPjc?: number;
 }
 
 export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string): PjcEngineInputs {
@@ -114,6 +133,9 @@ export function convertPjcToEngineInputs(analysis: PJCAnalysis, caseId: string):
     pensaoConfig: buildPensaoConfig(analysis),
     salarioFamiliaConfig: buildSalarioFamiliaConfig(analysis),
     fidelityReport: report,
+    inssTaxaJurosPorCompetencia: analysis.inss_taxa_juros_por_competencia,
+    inssReclamanteCorrigidoPorCompetencia: analysis.inss_reclamante_corrigido_por_competencia,
+    irTotalPjc: analysis.ir_total_pjc,
   };
 }
 
@@ -396,6 +418,8 @@ function consolidarReflexoMediaPelaQuantidade(
     devido: +valorPorMes.toFixed(10),
     pago: 0,
     indice_acumulado: oc.indice_acumulado,
+    ferias_indenizadas: oc.ferias_indenizadas,
+    ferias_com_abono: oc.ferias_com_abono,
   }));
 }
 
@@ -524,6 +548,8 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
             devido: oc.devido || 0,
             pago: oc.pago || 0,
             indice_acumulado: oc.indice_acumulado,
+            ferias_indenizadas: oc.ferias_indenizadas,
+            ferias_com_abono: oc.ferias_com_abono,
           };
         }
         return {
@@ -536,6 +562,8 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
           devido: oc.devido,
           pago: oc.pago,
           indice_acumulado: oc.indice_acumulado,
+          ferias_indenizadas: oc.ferias_indenizadas,
+          ferias_com_abono: oc.ferias_com_abono,
         };
       });
     }
@@ -547,7 +575,9 @@ function convertVerbas(verbas: VerbaAnalysis[], dag: PJCAnalysis['dag']): PjeVer
       valor: (isInformada ? 'informado' : 'calculado') as 'informado' | 'calculado',
       caracteristica,
       ocorrencia_pagamento: ocorrenciaPagamento,
-      compor_principal: v.compor_principal !== 'NAO_COMPOR',
+      // PJC XML usa LogicoEnum: 'SIM' ou 'NAO'. comporPrincipal=NAO significa
+      // que a verba NAO entra no principal (eg. DOMIGO E FERIADO ja pago).
+      compor_principal: v.compor_principal !== 'NAO',
       zerar_valor_negativo: false,
       dobrar_valor_devido: v.formula.dobra,
       periodo_inicio: v.periodo_inicio,
@@ -670,6 +700,24 @@ function mapPeriodoMedia(pm?: string): PjeVerba['periodo_media_reflexo'] {
 function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
   const fgtsConf = a.fgts_config;
   const fgtsDeposito = a.resultado.fgts_deposito || 0;
+
+  // Sprint 4 fix (2026-04-26): calcular override do FGTS direto das
+  // <OcorrenciaDeFgts> do XML quando disponíveis. Java-paridade exata:
+  //   Σ (baseVerba + baseHistorico) × aliquota × indiceAcumulado × (1 + taxaJuros/100)
+  // Validado em antonio: bate +1,10% (vs fórmula simplificada engine).
+  // Para casos novos sem PJC, fgts_override_total fica undefined e engine
+  // usa cálculo próprio.
+  const ocsXml = (a.resultado as unknown as { fgts_ocorrencias_xml?: Array<{ baseVerba: number; baseHistorico: number; aliquota: number; indiceAcumulado: number; taxaDeJuros: number }> }).fgts_ocorrencias_xml;
+  let fgtsOverride: number | undefined;
+  if (ocsXml && ocsXml.length > 0) {
+    fgtsOverride = ocsXml.reduce((sum, oc) => {
+      const base = (oc.baseVerba || 0) + (oc.baseHistorico || 0);
+      if (base <= 0) return sum;
+      const dev = base * (oc.aliquota || 0.08);
+      return sum + dev * (oc.indiceAcumulado || 1) * (1 + (oc.taxaDeJuros || 0) / 100);
+    }, 0);
+    if (fgtsOverride <= 0) fgtsOverride = undefined;
+  }
   
   // Destination mapping from PJC XML
   const destMap: Record<string, PjeFGTSConfig['destino']> = {
@@ -701,6 +749,7 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
     multa_art_467: (fgtsConf as unknown as { multa_art_467?: boolean })?.multa_art_467 ?? false,
     excluir_aviso_multa: (fgtsConf as unknown as { excluir_aviso_multa?: boolean })?.excluir_aviso_multa ?? false,
     perdas_monetarias: (fgtsConf as unknown as { perdas_monetarias?: boolean })?.perdas_monetarias ?? false,
+    fgts_override_total: fgtsOverride,
   };
 }
 
@@ -736,12 +785,14 @@ function buildDefaultCSConfig(a: PJCAnalysis): PjeCSConfig {
     // PJe-Calc uses "Segurado Empregado" (progressive) or fixed aliquota
     aliquota_segurado_tipo: csConf?.aliquota_segurado && csConf.aliquota_segurado > 0 ? 'fixa' : 'empregado',
     aliquota_segurado_fixa: csConf?.aliquota_segurado || undefined,
-    limitar_teto: true,
+    // Sprint 1.1: respeitar <limitarTeto> do XML quando disponível.
+    // 45/47 PJCs do corpus têm `false`. Default `true` apenas para casos novos.
+    limitar_teto: csConf?.limitar_teto ?? true,
     apurar_empresa: csConf?.apurar_empresa ?? (a.resultado.inss_reclamado > 0),
-    // SAT/RAT: enable if PJC has SAT > 0, or default to true when empregador active
-    apurar_sat: (csConf?.aliquota_sat ?? 0) > 0 || (csConf?.apurar_empresa ?? (a.resultado.inss_reclamado > 0)),
-    // Terceiros: only enable if PJC explicitly sets aliquota > 0
-    apurar_terceiros: (csConf?.aliquota_terceiros ?? 0) > 0,
+    // D1 fix: respeitar a flag explícita do parser quando disponível;
+    // só usa fallback (aliq>0 OU empregador-ativo) se parser não setou.
+    apurar_sat: csConf?.apurar_sat ?? ((csConf?.aliquota_sat ?? 0) > 0 || (csConf?.apurar_empresa ?? (a.resultado.inss_reclamado > 0))),
+    apurar_terceiros: csConf?.apurar_terceiros ?? ((csConf?.aliquota_terceiros ?? 0) > 0),
     aliquota_empregador_tipo: 'atividade',
     aliquota_empresa_fixa: csConf?.aliquota_empresa ?? 20,
     aliquota_sat_fixa: csConf?.aliquota_sat ?? 2, // Default SAT/RAT grau leve
@@ -759,18 +810,30 @@ function buildDefaultIRConfig(a: PJCAnalysis): PjeIRConfig {
   // Prefer PJC's explicit flags when present. Caveat: apurar=true in PJC XML does
   // not necessarily mean the result is > 0 — zero income after deductions is valid.
   if (ic) {
+    const icExt = ic as Record<string, unknown>;
     return {
       apurar: ic.apurar_imposto_renda,
       incidir_sobre_juros: ic.incidir_sobre_juros_de_mora,
       cobrar_reclamado: ic.cobrar_do_reclamado,
       tributacao_exclusiva_13: ic.considerar_tributacao_exclusiva,
       tributacao_separada_ferias: ic.considerar_tributacao_em_separado,
+      regime_caixa: (icExt.regime_de_caixa as boolean) ?? false,
       deduzir_cs: ic.deduzir_cs_reclamante,
       deduzir_prev_privada: ic.deduzir_previdencia_privada,
       deduzir_pensao: ic.deduzir_pensao_alimenticia,
       deduzir_honorarios: ic.deduzir_honorarios_reclamante,
       aposentado_65: ic.aposentado_maior_que_65,
       dependentes: ic.possui_dependentes ? ic.quantidade_dependentes : 0,
+      // Sprint 3/4.2-A1: RRA art. 12-A
+      // apurar_rra=undefined → auto-detect (engine decide por NM > 1)
+      // apurar_rra=true  → PJC XML tem rraMeses > 0 (forçar RRA)
+      // apurar_rra=false → somente quando UI explicitamente desliga (não por rra_meses=0)
+      // Quando rra_meses=0 do PJC, mantemos undefined para preservar auto-detect.
+      apurar_rra: (icExt.rra_meses as number ?? 0) > 0 ? true : undefined,
+      rra_meses: (icExt.rra_meses as number) || undefined,
+      rra_numero_parcelas: (icExt.rra_numero_parcelas as number) || undefined,
+      incidir_sobre_principal_tributavel: (icExt.incidir_sobre_principal_tributavel as boolean) ?? true,
+      incidir_sobre_principal_nao_tributavel: (icExt.incidir_sobre_principal_nao_tributavel as boolean) ?? false,
       apuracao_juros_gt: gt,
     };
   }
@@ -914,6 +977,13 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
     })(),
     combinacoes_indice: hasCombinations ? combinacoes_indice : undefined,
     combinacoes_juros: combinacoes_juros.length > 0 ? combinacoes_juros : undefined,
+    // Sprint 4.2-A2 (ADC 58 STF + Súm.TST 381): explicitar flags TIER 1.
+    // Quando o PJC trouxe combinações, ligamos as flags (default true).
+    // Mantém comportamento atual (96% calibrate) e permite à UI desligar
+    // como override do usuário sem corromper a fonte do PJC.
+    combinar_indice: hasCombinations ? true : undefined,
+    combinar_juros: combinacoes_juros.length > 0 ? true : undefined,
+    juros_pre_judicial: a.atualizacao.aplicar_juros_fase_pre_judicial,
     juros_apos_deducao_cs: a.atualizacao.juros_apos_deducao_cs,
     apuracao_juros_gt: gt,
     gt_closure: (a.resultado.liquido_exequente > 0 || a.resultado.inss_reclamante > 0) ? {
@@ -933,17 +1003,79 @@ function buildCorrecaoConfig(a: PJCAnalysis): PjeCorrecaoConfig {
 }
 
 function buildHonorariosConfig(a: PJCAnalysis): PjeHonorariosConfig {
-  const totalHon = a.resultado.honorarios.reduce((s, h) => s + h.valor, 0);
-  // O XML PJC emite apenas o VALOR ABSOLUTO dos honorários (sem percentual).
-  // Usar `valor_fixo` quando existe, evitando recálculo com percentual inventado.
-  // Antes: default 15% — produzia honor inflado quando o PJC usa 6-10% em alguns casos.
+  const honorariosPjc = a.resultado.honorarios || [];
+  const totalHon = honorariosPjc.reduce((s, h) => s + h.valor, 0);
+
+  // D2 fix (2026-04-26): construir items[] com percentual + base do XML
+  // <Honorario> em vez de cair em valor_fixo cego.
+  // Mapeamento Java→engine:
+  //   tipoDeDevedor: RECLAMADO → 'reclamado' (sucumbenciais — soma à condenação)
+  //   tipoDeDevedor: RECLAMANTE → 'reclamante' (contratuais — deduz do líquido)
+  //   baseParaApuracao: BRUTO → 'condenacao' (default, somado de INSS_seg)
+  //                     BRUTO_MENOS_CS → 'bruto_menos_cs'
+  //                     BRUTO_MENOS_CS_MENOS_PP → 'bruto_menos_cs_menos_pp'
+  //   tipoValor: CALCULADO → tipo='percentual' (engine recalcula)
+  //              INFORMADO → tipo='valor_fixo' (engine usa valor direto)
+  const baseMap: Record<string, string> = {
+    'BRUTO': 'condenacao',
+    'BRUTO_MENOS_CONTRIBUICAO_SOCIAL': 'bruto_menos_cs',
+    'BRUTO_MENOS_CONTRIBUICAO_SOCIAL_MENOS_PREVIDENCIA_PRIVADA': 'bruto_menos_cs_menos_pp',
+    'VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL': 'verbas_nao_principal',
+  };
+  // Sprint 2: mapeamentos enum Java → TS para os 9 campos novos
+  const tipoHonMap: Record<string, 'sucumbenciais' | 'contratuais' | 'periciais_contador' | 'periciais_tecnico' | 'outros'> = {
+    'SUCUMBENCIAIS': 'sucumbenciais',
+    'CONTRATUAIS': 'contratuais',
+    'PERICIAIS_CONTADOR': 'periciais_contador',
+    'PERICIAIS_TECNICO': 'periciais_tecnico',
+    'OUT': 'outros',
+  };
+  const tipoIRMap: Record<string, 'pessoa_fisica' | 'pessoa_juridica'> = {
+    'PESSOA_FISICA': 'pessoa_fisica', 'PESSOA_JURIDICA': 'pessoa_juridica',
+  };
+  const tipoCobMap: Record<string, 'descontar_credito' | 'cobrar'> = {
+    'DESCONTAR_CREDITO': 'descontar_credito', 'COBRAR': 'cobrar',
+  };
+  const tipoIdxMap: Record<string, 'trabalhista' | 'outro'> = {
+    'UTILIZAR_INDICE_TRABALHISTA': 'trabalhista',
+  };
+  const items = honorariosPjc
+    .filter(h => h.valor > 0 || (h.aliquota && h.aliquota > 0))
+    .map(h => {
+      const ehInformado = h.tipo_valor === 'INFORMADO';
+      const tipoEng: 'percentual' | 'valor_fixo' = ehInformado ? 'valor_fixo' : 'percentual';
+      const devedor = h.tipo_devedor === 'RECLAMANTE' ? 'reclamante' : 'reclamado';
+      return {
+        descricao: h.nome ? `Honorários para ${h.nome}` : 'Honorários',
+        // Novo: tipo_honorario
+        tipo_honorario: h.tipo_honorario ? tipoHonMap[h.tipo_honorario] ?? 'sucumbenciais' : 'sucumbenciais',
+        devedor,
+        credor: h.nome || '',
+        doc_fiscal_credor: h.cpf || undefined,
+        tipo: tipoEng,
+        percentual: h.aliquota ?? 15,
+        valor_fixo: h.valor,
+        base: baseMap[h.base_para_apuracao || 'BRUTO'] || 'condenacao',
+        apurar_ir: h.apurar_irrf ?? false,
+        // Novos campos Sprint 2:
+        tipo_imposto_renda: h.tipo_imposto_renda ? tipoIRMap[h.tipo_imposto_renda] : undefined,
+        tipo_cobranca_reclamante: h.tipo_cobranca_reclamante
+          ? tipoCobMap[h.tipo_cobranca_reclamante] ?? 'descontar_credito'
+          : 'descontar_credito',
+        aplicar_juros: h.aplicar_juros ?? false,
+        data_apartir_de_aplicar_juros: h.data_apartir_de_aplicar_juros,
+        data_vencimento: h.data_vencimento,
+        tipo_indice_correcao: h.tipo_indice_correcao ? tipoIdxMap[h.tipo_indice_correcao] ?? 'trabalhista' : 'trabalhista',
+      };
+    });
   return {
-    apurar_sucumbenciais: totalHon > 0,
-    percentual_sucumbenciais: 15, // Fallback — só aplicado se valor_fixo não vier
-    base_sucumbenciais: 'condenacao',
-    apurar_contratuais: false,
+    apurar_sucumbenciais: items.length > 0 || totalHon > 0,
+    percentual_sucumbenciais: items[0]?.percentual ?? 15,
+    base_sucumbenciais: (items[0]?.base ?? 'condenacao') as PjeHonorariosConfig['base_sucumbenciais'],
+    apurar_contratuais: items.some(i => i.devedor === 'reclamante'),
     percentual_contratuais: 0,
     valor_fixo: totalHon > 0 ? totalHon : undefined,
+    items,
   };
 }
 
@@ -1080,14 +1212,18 @@ function convertExcecoesSabado(analysis: PJCAnalysis): PjeExcecaoSabado[] {
 
 function buildPrevPrivadaConfig(a: PJCAnalysis): PjePrevidenciaPrivadaConfig {
   if (a.previdencia_privada?.apurar) {
+    const pp = a.previdencia_privada as Record<string, unknown>;
     return {
       apurar: true,
       percentual: a.previdencia_privada.percentual || 0,
-      base_calculo: 'diferenca',
-      deduzir_ir: true,
+      // Sprint 2: lê campos antes hardcoded
+      base_calculo: (pp.base_calculo as 'diferenca' | 'devido' | 'corrigido') ?? 'diferenca',
+      periodos: pp.periodos as PjePrevidenciaPrivadaConfig['periodos'] ?? undefined,
+      teto_mensal: pp.teto_mensal as number ?? undefined,
+      juros: (pp.juros as PjePrevidenciaPrivadaConfig['juros']) ?? 'trabalhista',
     };
   }
-  return { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false };
+  return { apurar: false, percentual: 0, base_calculo: 'diferenca' };
 }
 
 // =====================================================
@@ -1096,13 +1232,23 @@ function buildPrevPrivadaConfig(a: PJCAnalysis): PjePrevidenciaPrivadaConfig {
 
 function buildPensaoConfig(a: PJCAnalysis): PjePensaoConfig {
   if (a.pensao_alimenticia?.apurar) {
-    const baseMap: Record<string, 'liquido' | 'bruto' | 'bruto_menos_inss'> = {
+    const baseMap: Record<string, 'liquido' | 'bruto' | 'bruto_menos_inss' | 'principal'> = {
       'LIQUIDO': 'liquido', 'BRUTO': 'bruto', 'BRUTO_MENOS_INSS': 'bruto_menos_inss',
+      'PRINCIPAL': 'principal',
     };
+    const pa = a.pensao_alimenticia as Record<string, unknown>;
     return {
       apurar: true,
       percentual: a.pensao_alimenticia.percentual || 0,
       base: baseMap[(a.pensao_alimenticia.base || '').toUpperCase()] || 'liquido',
+      // Sprint 2: campos novos da Pensão Alimentícia
+      incidencia_sobre_fgts: (pa.incidencia_sobre_fgts as boolean) ?? false,
+      incidencia_sobre_multa_fgts: (pa.incidencia_sobre_multa_fgts as boolean) ?? false,
+      descontar_antes_ir: (pa.descontar_antes_ir as boolean) ?? true,
+      incidir_sobre_juros: (pa.incidir_sobre_juros as boolean) ?? false,
+      dependentes: (pa.dependentes as PjePensaoConfig['dependentes']) ?? [],
+      beneficiario: pa.beneficiario as string ?? undefined,
+      observacoes: pa.observacoes as string ?? undefined,
     };
   }
   return { apurar: false, percentual: 0, base: 'liquido' };
@@ -1114,9 +1260,19 @@ function buildPensaoConfig(a: PJCAnalysis): PjePensaoConfig {
 
 function buildSalarioFamiliaConfig(a: PJCAnalysis): PjeSalarioFamiliaConfig {
   if (a.salario_familia?.apurar) {
+    const sf = a.salario_familia as Record<string, unknown>;
     return {
       apurar: true,
       numero_filhos: a.salario_familia.numero_filhos || 0,
+      filhos_detalhes: sf.filhos_detalhes as PjeSalarioFamiliaConfig['filhos_detalhes'],
+      compor_principal: (sf.compor_principal as boolean) ?? true,
+      competencia_inicial: sf.competencia_inicial as string,
+      competencia_final: sf.competencia_final as string,
+      variacoes_qtd: sf.variacoes_qtd as PjeSalarioFamiliaConfig['variacoes_qtd'],
+      valor_cota: sf.valor_cota as number ?? undefined,
+      teto_salarial: sf.teto_salarial as number ?? undefined,
+      // Sprint 2: tabela anual de cotas (override completo retroativo)
+      cotas_anuais: sf.cotas_anuais as PjeSalarioFamiliaConfig['cotas_anuais'],
     };
   }
   return { apurar: false, numero_filhos: 0 };

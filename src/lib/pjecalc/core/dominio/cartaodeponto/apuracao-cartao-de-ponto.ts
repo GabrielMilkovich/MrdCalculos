@@ -247,4 +247,39 @@ export class ApuracaoCartaoDePonto {
 
   getPreenchimentos(): PreenchimentoJornadaApuracaoCartao[] { return this.preenchimentos; }
   setPreenchimentos(v: PreenchimentoJornadaApuracaoCartao[]): void { this.preenchimentos = v; }
+
+  /**
+   * Início do horário noturno conforme atividade econômica.
+   * Porte 1-a-1 de ApuracaoCartaoDePonto.java:809-817.
+   *
+   * - ATIVIDADE_AGRICOLA → 21:00 (CLT art. 7º Lei 5.889/73)
+   * - ATIVIDADE_PECUARIA → 20:00
+   * - ATIVIDADE_URBANA → 22:00 (CLT art. 73 §2º, padrão)
+   */
+  obterInicioAtividadeHorarioNoturno(): string {
+    switch (this.horarioNoturnoApuracaroCartao) {
+      case HorarioNoturnoApuracaroCartaoEnum.ATIVIDADE_AGRICOLA: return '21:00';
+      case HorarioNoturnoApuracaroCartaoEnum.ATIVIDADE_PECUARIA: return '20:00';
+      default: return '22:00';
+    }
+  }
+
+  /**
+   * Fim do horário noturno conforme atividade econômica.
+   * Porte 1-a-1 de ApuracaoCartaoDePonto.java:819-827.
+   *
+   * - ATIVIDADE_AGRICOLA → 05:00 (Lei 5.889/73)
+   * - ATIVIDADE_PECUARIA → 04:00
+   * - ATIVIDADE_URBANA → 05:00 (CLT art. 73 §2º)
+   *
+   * Nota: agrícola e urbana têm mesmo fim (05:00), apesar de ramos diferentes
+   * no switch Java. Preservado 1-a-1.
+   */
+  obterFimAtividadeHorarioNoturno(): string {
+    switch (this.horarioNoturnoApuracaroCartao) {
+      case HorarioNoturnoApuracaroCartaoEnum.ATIVIDADE_AGRICOLA: return '05:00';
+      case HorarioNoturnoApuracaroCartaoEnum.ATIVIDADE_PECUARIA: return '04:00';
+      default: return '05:00';
+    }
+  }
 }

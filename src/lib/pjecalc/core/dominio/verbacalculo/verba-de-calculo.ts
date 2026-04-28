@@ -26,6 +26,9 @@ import {
   JurosDoAjuizamentoEnum,
   ValorDaVerbaEnum,
 } from '../../constantes/enums';
+import type { CartaoDePontoDaVerba } from './cartao-de-ponto-da-verba';
+import type { HistoricoSalarialDaVerba } from './historico-salarial-da-verba';
+import type { ValeTransporteDaVerba } from './vale-transporte-da-verba';
 
 export class VerbaDeCalculo implements IVerbaDeCalculoRef {
   // ── Metadados ──
@@ -60,6 +63,19 @@ export class VerbaDeCalculo implements IVerbaDeCalculoRef {
   private ocorrencias: OcorrenciaDeVerba[] = [];
   private tabelaDeCorrecaoMonetariaTrabalhista: TabelaDeCorrecaoMonetaria | null = null;
   private tipoValor: ValorDaVerbaEnum = ValorDaVerbaEnum.CALCULADO;
+
+  // ── Coleções de vinculação (Java: 6 coleções separadas por aspecto) ──
+  // Essas 6 coleções resolvem o bug do conversor pjc-to-engine que descartava
+  // verbas ao tentar casar por nome em vez de por ID — a vinculação explícita
+  // `.setVerbaDeCalculo(this)` garante que cada cartão/histórico/vale saiba
+  // em qual verba está ancorado, independente de busca por nome.
+  // Ver docs/PORT-PJECALC-CHANGELOG.md (Fase 3) para referência cruzada.
+  private cartoesDePontoDaVerbaQuantidade: CartaoDePontoDaVerba[] = [];
+  private cartoesDePontoDaVerbaDivisor: CartaoDePontoDaVerba[] = [];
+  private historicosDaVerbaDoValorDevido: HistoricoSalarialDaVerba[] = [];
+  private historicosDaVerbaDoValorPago: HistoricoSalarialDaVerba[] = [];
+  private valesTransportesDoValorDevido: ValeTransporteDaVerba[] = [];
+  private valesTransportesDoValorPago: ValeTransporteDaVerba[] = [];
 
   // ────────────── Getters/Setters ──────────────
 
@@ -144,5 +160,172 @@ export class VerbaDeCalculo implements IVerbaDeCalculoRef {
   }
   setTabelaDeCorrecaoMonetariaTrabalhista(v: TabelaDeCorrecaoMonetaria): void {
     this.tabelaDeCorrecaoMonetariaTrabalhista = v;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  //  Vinculação dados ↔ verba (Fase 3 — port 1-a-1 Java)
+  //
+  //  Porte direto dos 10 métodos de vinculação de VerbaDeCalculo.java:
+  //  linhas 847, 854, 870, 878, 901, 909, 916, 923, 947, 955, 962, 969.
+  //
+  //  Contrato (idêntico Java):
+  //   - `adicionar*`: LIMPA a coleção destino, então adiciona cada item
+  //     com `setVerbaDeCalculo(this)` — garante o vínculo bidirecional
+  //     mesmo quando o item já existia em outra verba.
+  //   - `removerDos*`: remove apenas itens com `id != null` (itens persistidos
+  //     — transientes são mantidos; esta regra é do Java, preservada para
+  //     paridade).
+  // ──────────────────────────────────────────────────────────────────────────
+
+  getCartoesDePontoDaVerbaQuantidade(): CartaoDePontoDaVerba[] {
+    return this.cartoesDePontoDaVerbaQuantidade;
+  }
+  setCartoesDePontoDaVerbaQuantidade(v: CartaoDePontoDaVerba[]): void {
+    this.cartoesDePontoDaVerbaQuantidade = v;
+  }
+
+  getCartoesDePontoDaVerbaDivisor(): CartaoDePontoDaVerba[] {
+    return this.cartoesDePontoDaVerbaDivisor;
+  }
+  setCartoesDePontoDaVerbaDivisor(v: CartaoDePontoDaVerba[]): void {
+    this.cartoesDePontoDaVerbaDivisor = v;
+  }
+
+  getHistoricosDaVerbaDoValorDevido(): HistoricoSalarialDaVerba[] {
+    return this.historicosDaVerbaDoValorDevido;
+  }
+  setHistoricosDaVerbaDoValorDevido(v: HistoricoSalarialDaVerba[]): void {
+    this.historicosDaVerbaDoValorDevido = v;
+  }
+
+  getHistoricosDaVerbaDoValorPago(): HistoricoSalarialDaVerba[] {
+    return this.historicosDaVerbaDoValorPago;
+  }
+  setHistoricosDaVerbaDoValorPago(v: HistoricoSalarialDaVerba[]): void {
+    this.historicosDaVerbaDoValorPago = v;
+  }
+
+  getValesTransportesDoValorDevido(): ValeTransporteDaVerba[] {
+    return this.valesTransportesDoValorDevido;
+  }
+  setValesTransportesDoValorDevido(v: ValeTransporteDaVerba[]): void {
+    this.valesTransportesDoValorDevido = v;
+  }
+
+  getValesTransportesDoValorPago(): ValeTransporteDaVerba[] {
+    return this.valesTransportesDoValorPago;
+  }
+  setValesTransportesDoValorPago(v: ValeTransporteDaVerba[]): void {
+    this.valesTransportesDoValorPago = v;
+  }
+
+  // ── Cartão de ponto ──
+
+  adicionarCartoesVinculadosAtravesDaQuantidade(cartoes: Iterable<CartaoDePontoDaVerba>): void {
+    this.cartoesDePontoDaVerbaQuantidade = [];
+    for (const c of cartoes) {
+      c.setVerbaDeCalculo(this);
+      this.cartoesDePontoDaVerbaQuantidade.push(c);
+    }
+  }
+
+  removerDosCartoesDaVerbaDaQuantidade(cartoes: Iterable<CartaoDePontoDaVerba>): void {
+    for (const c of cartoes) {
+      if (c.getId() == null) continue;
+      const idx = this.cartoesDePontoDaVerbaQuantidade.indexOf(c);
+      if (idx >= 0) this.cartoesDePontoDaVerbaQuantidade.splice(idx, 1);
+    }
+  }
+
+  adicionarCartoesVinculadosAtravesDoDivisor(cartoes: Iterable<CartaoDePontoDaVerba>): void {
+    this.cartoesDePontoDaVerbaDivisor = [];
+    for (const c of cartoes) {
+      c.setVerbaDeCalculo(this);
+      this.cartoesDePontoDaVerbaDivisor.push(c);
+    }
+  }
+
+  removerDosCartoesDaVerbaDoDivisor(cartoes: Iterable<CartaoDePontoDaVerba>): void {
+    for (const c of cartoes) {
+      if (c.getId() == null) continue;
+      const idx = this.cartoesDePontoDaVerbaDivisor.indexOf(c);
+      if (idx >= 0) this.cartoesDePontoDaVerbaDivisor.splice(idx, 1);
+    }
+  }
+
+  // ── Histórico salarial ──
+
+  adicionarHistoricosVinculadosAtravesDoValorDevido(
+    historicos: Iterable<HistoricoSalarialDaVerba>,
+  ): void {
+    this.historicosDaVerbaDoValorDevido = [];
+    for (const h of historicos) {
+      h.setVerbaDeCalculo(this);
+      this.historicosDaVerbaDoValorDevido.push(h);
+    }
+  }
+
+  removerDosHistoricosDaVerbaDoValorDevido(
+    historicos: Iterable<HistoricoSalarialDaVerba>,
+  ): void {
+    for (const h of historicos) {
+      if (h.getId() == null) continue;
+      const idx = this.historicosDaVerbaDoValorDevido.indexOf(h);
+      if (idx >= 0) this.historicosDaVerbaDoValorDevido.splice(idx, 1);
+    }
+  }
+
+  adicionarHistoricosVinculadosAtravesDoValorPago(
+    historicos: Iterable<HistoricoSalarialDaVerba>,
+  ): void {
+    this.historicosDaVerbaDoValorPago = [];
+    for (const h of historicos) {
+      h.setVerbaDeCalculo(this);
+      this.historicosDaVerbaDoValorPago.push(h);
+    }
+  }
+
+  removerDosHistoricosDaVerbaDoValorPago(
+    historicos: Iterable<HistoricoSalarialDaVerba>,
+  ): void {
+    for (const h of historicos) {
+      if (h.getId() == null) continue;
+      const idx = this.historicosDaVerbaDoValorPago.indexOf(h);
+      if (idx >= 0) this.historicosDaVerbaDoValorPago.splice(idx, 1);
+    }
+  }
+
+  // ── Vale-transporte ──
+
+  adicionarValesVinculadosAtravesDoValorDevido(vales: Iterable<ValeTransporteDaVerba>): void {
+    this.valesTransportesDoValorDevido = [];
+    for (const v of vales) {
+      v.setVerbaDeCalculo(this);
+      this.valesTransportesDoValorDevido.push(v);
+    }
+  }
+
+  removerDosValesDaVerbaDoValorDevido(vales: Iterable<ValeTransporteDaVerba>): void {
+    for (const v of vales) {
+      if (v.getId() == null) continue;
+      const idx = this.valesTransportesDoValorDevido.indexOf(v);
+      if (idx >= 0) this.valesTransportesDoValorDevido.splice(idx, 1);
+    }
+  }
+
+  adicionarValesVinculadosAtravesDoValorPago(vales: Iterable<ValeTransporteDaVerba>): void {
+    this.valesTransportesDoValorPago = [];
+    for (const v of vales) {
+      v.setVerbaDeCalculo(this);
+      this.valesTransportesDoValorPago.push(v);
+    }
+  }
+
+  removerDosValesDaVerbaDoValorPago(vales: Iterable<ValeTransporteDaVerba>): void {
+    for (const v of vales) {
+      if (v.getId() == null) continue;
+      const idx = this.valesTransportesDoValorPago.indexOf(v);
+      if (idx >= 0) this.valesTransportesDoValorPago.splice(idx, 1);
+    }
   }
 }

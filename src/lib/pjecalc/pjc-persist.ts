@@ -475,7 +475,6 @@ export async function persistirPJCAnalysis(
         apurar: inputs.prevPrivadaConfig.apurar,
         percentual: inputs.prevPrivadaConfig.percentual,
         base_calculo: inputs.prevPrivadaConfig.base_calculo ?? 'diferenca',
-        deduzir_ir: inputs.prevPrivadaConfig.deduzir_ir ?? true,
         periodos: (inputs.prevPrivadaConfig as Record<string, unknown>).periodos ?? [],
         observacao: null,
       });

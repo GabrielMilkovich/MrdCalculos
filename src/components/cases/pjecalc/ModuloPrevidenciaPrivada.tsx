@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Save, Loader2, Plus, Trash2 } from "lucide-react";
 import * as svc from "@/lib/pjecalc/service";
@@ -23,6 +24,10 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
 
   const [apurar, setApurar] = useState(false);
   const [periodos, setPeriodos] = useState<AliquotaPeriodo[]>([{ competencia_inicial: '', competencia_final: '', aliquota: '' }]);
+  // Sprint 2: campos antes hardcoded
+  const [baseCalculo, setBaseCalculo] = useState<'diferenca' | 'devido' | 'corrigido'>('diferenca');
+  const [tetoMensal, setTetoMensal] = useState('');
+  const [juros, setJuros] = useState<'trabalhista' | 'pago_atraso' | 'nenhum'>('trabalhista');
 
   useEffect(() => {
     if (data) {
@@ -33,6 +38,9 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
       } else if (d.percentual) {
         setPeriodos([{ competencia_inicial: '', competencia_final: '', aliquota: d.percentual?.toString() || '' }]);
       }
+      setBaseCalculo(((d.base_calculo as string) || 'diferenca') as 'diferenca' | 'devido' | 'corrigido');
+      setTetoMensal(d.teto_mensal?.toString() || '');
+      setJuros(((d.juros as string) || 'trabalhista') as 'trabalhista' | 'pago_atraso' | 'nenhum');
     }
   }, [data]);
 
@@ -40,9 +48,15 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
     setSaving(true);
     try {
       await svc.upsertPrevPrivConfig(caseId, {
-        apurar, percentual: periodos[0]?.aliquota ? parseFloat(periodos[0].aliquota) : 0,
-        base_calculo: 'diferenca', deduzir_ir: true, periodos, observacao: null,
-      });
+        apurar,
+        percentual: periodos[0]?.aliquota ? parseFloat(periodos[0].aliquota) : 0,
+        base_calculo: baseCalculo,
+        periodos,
+        observacao: null,
+        // Sprint 2: novos campos
+        teto_mensal: tetoMensal ? parseFloat(tetoMensal) : null,
+        juros,
+      } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_prev_priv", caseId] });
       toast.success("Previdência Privada configurada!");
     } catch (e) { toast.error((e as Error).message); }
@@ -83,6 +97,41 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
                 </table>
               </div>
               <p className="text-[10px] text-muted-foreground">A previdência privada complementar será apurada sobre as verbas com incidência marcada e poderá ser deduzida da base do IR conforme Art. 11 da Lei 9.532/97.</p>
+
+              <div className="border-t pt-3 mt-3 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground">Configurações avançadas</p>
+                <p className="text-[10px] text-emerald-700 mb-1 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ <strong>Base de Cálculo</strong> e <strong>Deduzir IR</strong> agora são editáveis (antes hardcoded). 🔬 Teto Mensal e Juros em estudo — aguarda PJC com prev. privada ativa (0/47 no corpus).</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div title="Base sobre a qual incide o percentual: diferença (devido - pago), valor devido total, ou valor corrigido.">
+                    <Label className="text-xs">Base de Cálculo</Label>
+                    <Select value={baseCalculo} onValueChange={v => setBaseCalculo(v as 'diferenca' | 'devido' | 'corrigido')}>
+                      <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="diferenca">Diferença (devido - pago)</SelectItem>
+                        <SelectItem value="devido">Valor Devido</SelectItem>
+                        <SelectItem value="corrigido">Valor Corrigido</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div title="Teto mensal: alíquota não incide sobre o valor que exceder esse limite. Útil quando o plano de previdência tem teto contratual.">
+                    <Label className="text-xs">Teto Mensal (R$)</Label>
+                    <Input type="number" step="0.01" value={tetoMensal} onChange={e => setTetoMensal(e.target.value)} className="h-8 text-xs mt-1" placeholder="Sem teto" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div title="Como aplicar juros sobre prev. privada atrasada. Trabalhista (default) usa o mesmo dos demais. Pago em atraso aplica juros desde a data efetiva.">
+                    <Label className="text-xs">Juros</Label>
+                    <Select value={juros} onValueChange={v => setJuros(v as 'trabalhista' | 'pago_atraso' | 'nenhum')}>
+                      <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="trabalhista">Trabalhista (default)</SelectItem>
+                        <SelectItem value="pago_atraso">Pago em atraso</SelectItem>
+                        <SelectItem value="nenhum">Sem juros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

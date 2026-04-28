@@ -46,11 +46,8 @@ type FormState = {
   prescricao_fgts: boolean;
   prescricao_quinquenal: boolean;
   data_prescricao_quinquenal: string;
-  considera_feriado_nacional: boolean;
   considera_feriado_estadual: boolean;
   considera_feriado_municipal: boolean;
-  zera_valor_negativo: boolean;
-  limitar_avos_periodo_calculo: boolean;
   dia_fechamento_mes: string;
   percentual_he_50: string;
   percentual_he_100: string;
@@ -84,11 +81,8 @@ const defaults: FormState = {
   prescricao_fgts: false,
   prescricao_quinquenal: true,
   data_prescricao_quinquenal: "",
-  considera_feriado_nacional: true,
   considera_feriado_estadual: true,
   considera_feriado_municipal: false,
-  zera_valor_negativo: true,
-  limitar_avos_periodo_calculo: false,
   dia_fechamento_mes: "31",
   percentual_he_50: "50",
   percentual_he_100: "100",
@@ -148,11 +142,8 @@ export function ModuloParametrosGerais({ caseId }: Props) {
       prescricao_fgts: (d.prescricao_fgts as boolean) ?? defaults.prescricao_fgts,
       prescricao_quinquenal: (d.prescricao_quinquenal as boolean) ?? defaults.prescricao_quinquenal,
       data_prescricao_quinquenal: (d.data_prescricao_quinquenal as string) ?? "",
-      considera_feriado_nacional: (d.considera_feriado_nacional as boolean) ?? defaults.considera_feriado_nacional,
       considera_feriado_estadual: (d.considera_feriado_estadual as boolean) ?? defaults.considera_feriado_estadual,
       considera_feriado_municipal: (d.considera_feriado_municipal as boolean) ?? defaults.considera_feriado_municipal,
-      zera_valor_negativo: (d.zera_valor_negativo as boolean) ?? defaults.zera_valor_negativo,
-      limitar_avos_periodo_calculo: (d.limitar_avos_periodo_calculo as boolean) ?? defaults.limitar_avos_periodo_calculo,
       dia_fechamento_mes: d.dia_fechamento_mes?.toString() ?? defaults.dia_fechamento_mes,
       percentual_he_50: d.percentual_he_50?.toString() ?? defaults.percentual_he_50,
       percentual_he_100: d.percentual_he_100?.toString() ?? defaults.percentual_he_100,
@@ -206,11 +197,8 @@ export function ModuloParametrosGerais({ caseId }: Props) {
         prescricao_fgts: form.prescricao_fgts,
         prescricao_quinquenal: form.prescricao_quinquenal,
         data_prescricao_quinquenal: toDateOrNull(form.data_prescricao_quinquenal),
-        considera_feriado_nacional: form.considera_feriado_nacional,
         considera_feriado_estadual: form.considera_feriado_estadual,
         considera_feriado_municipal: form.considera_feriado_municipal,
-        zera_valor_negativo: form.zera_valor_negativo,
-        limitar_avos_periodo_calculo: form.limitar_avos_periodo_calculo,
         dia_fechamento_mes: toIntOrNull(form.dia_fechamento_mes),
         percentual_he_50: toNumOrNull(form.percentual_he_50),
         percentual_he_100: toNumOrNull(form.percentual_he_100),
@@ -381,11 +369,8 @@ export function ModuloParametrosGerais({ caseId }: Props) {
             <Label className="text-xs">Data prescrição quinquenal</Label>
             <Input type="date" value={form.data_prescricao_quinquenal} onChange={(e) => setForm((p) => ({ ...p, data_prescricao_quinquenal: e.target.value }))} className="h-7 text-xs w-40" disabled={!form.prescricao_quinquenal} />
           </div>
-          <label className="flex items-center gap-2 text-xs"><Checkbox checked={form.considera_feriado_nacional} onCheckedChange={(v) => setForm((p) => ({ ...p, considera_feriado_nacional: !!v }))} /> Considera feriado nacional</label>
           <label className="flex items-center gap-2 text-xs"><Checkbox checked={form.considera_feriado_estadual} onCheckedChange={(v) => setForm((p) => ({ ...p, considera_feriado_estadual: !!v }))} /> Considera feriado estadual</label>
           <label className="flex items-center gap-2 text-xs"><Checkbox checked={form.considera_feriado_municipal} onCheckedChange={(v) => setForm((p) => ({ ...p, considera_feriado_municipal: !!v }))} /> Considera feriado municipal</label>
-          <label className="flex items-center gap-2 text-xs"><Checkbox checked={form.zera_valor_negativo} onCheckedChange={(v) => setForm((p) => ({ ...p, zera_valor_negativo: !!v }))} /> Zerar valor negativo</label>
-          <label className="flex items-center gap-2 text-xs"><Checkbox checked={form.limitar_avos_periodo_calculo} onCheckedChange={(v) => setForm((p) => ({ ...p, limitar_avos_periodo_calculo: !!v }))} /> Limitar avos ao período de cálculo</label>
         </CardContent>
       </Card>
     </div>

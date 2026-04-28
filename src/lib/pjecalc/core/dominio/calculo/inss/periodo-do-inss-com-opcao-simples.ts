@@ -9,6 +9,10 @@
  * no Simples). Configurado por Inss.adicionar(PeriodoDoINSSComOpcaoSimples).
  */
 import { Periodo } from '../../../base/comum/periodo';
+import { Competencia } from '../../../base/comum/competencia';
+import { MensagemDeRecurso } from '../../../comum/mensagem-de-recurso';
+import { Mensagens } from '../../../comum/mensagens';
+import { NegocioException } from '../../../comum/exceptions/negocio-exception';
 import type { Inss } from './inss';
 
 export class PeriodoDoINSSComOpcaoSimples {
@@ -46,5 +50,62 @@ export class PeriodoDoINSSComOpcaoSimples {
     const b = outro.getPeriodo();
     if (!a || !b) return false;
     return a.isDatasCoincidentesCom(b);
+  }
+
+  /**
+   * `validar` — porte 1-a-1 de PeriodoDoINSSComOpcaoSimples.java:140-163.
+   *
+   * Regras:
+   *   1. Datas inicial e final devem estar entre Admissão e
+   *      (Demissão ?? DataTérminoCalculo) — senão: MSG0004 em
+   *      "dataInicioSimples" e/ou "dataTerminoSimples".
+   *   2. Não pode coincidir com outro período Simples do mesmo Inss
+   *      (MSG0024 em "dataTerminoSimples") — lança direto, sem acumular.
+   *
+   * Depende de `Calculo` já ter `dataAdmissao`, `dataDemissao` e
+   * `dataTerminoCalculo` populados.
+   */
+  validar(): PeriodoDoINSSComOpcaoSimples {
+    const excecao = new NegocioException();
+
+    if (this.inss == null) return this; // sem INSS linkado, ignora
+    const calculo = this.inss.getCalculo();
+    if (calculo == null) return this;
+
+    if (this.dataInicioSimples != null && this.dataTerminoSimples != null) {
+      const inicial = Competencia.getInstance(this.dataInicioSimples);
+      const termino = Competencia.getInstance(this.dataTerminoSimples);
+      const limite =
+        calculo.getDataDemissao() ?? calculo.getDataTerminoCalculo();
+      const admissao = calculo.getDataAdmissao();
+
+      if (admissao != null) {
+        if (inicial.isAnteriorA(admissao) || (limite != null && inicial.isApos(limite))) {
+          excecao.adicionarMensagemDeRecurso(
+            new MensagemDeRecurso('dataInicioSimples', Mensagens.MSG0004, 'Início'),
+          );
+        }
+        if (termino.isAnteriorA(admissao) || (limite != null && termino.isApos(limite))) {
+          excecao.adicionarMensagemDeRecurso(
+            new MensagemDeRecurso('dataTerminoSimples', Mensagens.MSG0004, 'Fim'),
+          );
+        }
+      }
+    }
+
+    if (excecao.existeMensagensDeRecurso()) {
+      throw excecao;
+    }
+
+    for (const outro of this.inss.getPeriodosComOpcaoSimples()) {
+      if (outro === this) continue;
+      if (this.isPeriodoCoincidenteCom(outro)) {
+        throw new NegocioException(
+          new MensagemDeRecurso('dataTerminoSimples', Mensagens.MSG0024),
+        );
+      }
+    }
+
+    return this;
   }
 }

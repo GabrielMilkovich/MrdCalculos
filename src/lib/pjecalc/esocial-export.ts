@@ -45,8 +45,6 @@ export interface ESocialDadosProcesso {
 
 export interface ESocialConfig {
   dados: ESocialDadosProcesso;
-  incluirS2500: boolean;
-  incluirS2501: boolean;
   ambiente: '1' | '2';      // 1=Produção, 2=Produção restrita
   /** Processo executivo / fase */
   tpProcesso: '1' | '2';    // 1=Administrativo, 2=Judicial
@@ -396,12 +394,8 @@ export async function exportarESocialZip(
   const JSZip = (await import('jszip')).default;
   const zip = new JSZip();
 
-  if (config.incluirS2500) {
-    zip.file('S-2500.xml', gerarS2500(config, result));
-  }
-  if (config.incluirS2501) {
-    zip.file('S-2501.xml', gerarS2501(config, result));
-  }
+  zip.file('S-2500.xml', gerarS2500(config, result));
+  zip.file('S-2501.xml', gerarS2501(config, result));
 
   const blob = await zip.generateAsync({ type: 'blob' });
   const url = URL.createObjectURL(blob);

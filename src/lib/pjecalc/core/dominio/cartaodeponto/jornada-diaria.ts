@@ -36,6 +36,23 @@ export class Turno {
   getDuracaoMillis(): Decimal {
     return this.saida.minus(this.entrada);
   }
+
+  /**
+   * `getQuantidadeHorasTrabalhadas` — alias de `getDuracaoMillis()`.
+   * Porte 1-a-1 de JornadaDiaria.Turno.java:211-213 (que é simplesmente
+   * `somar(diurnas, noturnas)`, cuja soma equivale à duração total do
+   * turno quando diurnas e noturnas foram apurados sem overlap).
+   *
+   * Nota Fase 4: A decomposição em diurnas/noturnas exige porta do
+   * `calcularQuantidadeHorasDiurnas` e do predicado `prorrogarHorarioNoturno`,
+   * que dependem de reestruturar `Turno` para usar `Date` (como Java) em
+   * vez de `Decimal` de millis. Decisão operacional: postergar para uma
+   * sessão futura. A versão atual devolve duração total do turno — correto
+   * para `getQuantidadeHorasTrabalhadas` por identidade algébrica.
+   */
+  getQuantidadeHorasTrabalhadas(): Decimal {
+    return this.getDuracaoMillis();
+  }
 }
 
 export class JornadaDiaria {

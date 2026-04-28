@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
@@ -56,9 +55,6 @@ export function ModuloESocial({ caseId, resultado, dadosProcesso, params }: Prop
   const [indContr, setIndContr] = useState<'1' | '2'>('1');
   const [tpTrib, setTpTrib] = useState<'1' | '2'>('2');
   const [ambiente, setAmbiente] = useState<'1' | '2'>('2');
-  const [incluirS2500, setIncluirS2500] = useState(true);
-  const [incluirS2501, setIncluirS2501] = useState(true);
-
   const buildConfig = (): ESocialConfig => ({
     dados: {
       cnpjEmpregador,
@@ -73,8 +69,6 @@ export function ModuloESocial({ caseId, resultado, dadosProcesso, params }: Prop
       indContr,
       tpTrib,
     },
-    incluirS2500,
-    incluirS2501,
     ambiente,
     tpProcesso: '2',
   });
@@ -282,17 +276,7 @@ export function ModuloESocial({ caseId, resultado, dadosProcesso, params }: Prop
       {/* Export Options */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-xs">
-                <Checkbox checked={incluirS2500} onCheckedChange={v => setIncluirS2500(!!v)} />
-                S-2500 (Processo)
-              </label>
-              <label className="flex items-center gap-2 text-xs">
-                <Checkbox checked={incluirS2501} onCheckedChange={v => setIncluirS2501(!!v)} />
-                S-2501 (Contribuições)
-              </label>
-            </div>
+          <div className="flex items-center justify-end flex-wrap gap-3">
             <div className="flex gap-2 flex-wrap">
               <Button size="sm" variant="outline" onClick={() => handlePreview('S2500')} disabled={!resultado}>
                 <FileText className="h-4 w-4 mr-1" /> Visualizar S-2500

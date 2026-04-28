@@ -8,6 +8,7 @@ import Decimal from 'decimal.js';
 import { getReformaRules, REFORMA_DATE } from '../reforma-trabalhista';
 import { getFPASByCodigo } from '../terceiros-contributions';
 import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO } from '../indices-fallback';
+import { calcularDataPrescricaoFgts } from '../core-adapters';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
 
@@ -40,6 +41,11 @@ import {
 // MOTOR DE CÁLCULO
 // =====================================================
 
+/**
+ * @deprecated Use PjeCalcEngineV3 (src/lib/pjecalc/engine-v3.ts).
+ * Legacy V1. Mantido apenas para retro-compatibilidade de testes antigos.
+ * Slated for removal — Sprint 6 (2026-Q3).
+ */
 export class PjeCalcEngine {
   private params: PjeParametros;
   private historicos: PjeHistoricoSalarial[];
@@ -104,7 +110,7 @@ export class PjeCalcEngine {
     faixasIRDB: PjeIRFaixaRow[] = [],
     excecoesCargas: PjeExcecaoCargaHoraria[] = [],
     feriadosDB: PjeFeriadoDB[] = [],
-    prevPrivadaConfig: PjePrevidenciaPrivadaConfig = { apurar: false, percentual: 0, base_calculo: 'diferenca', deduzir_ir: false },
+    prevPrivadaConfig: PjePrevidenciaPrivadaConfig = { apurar: false, percentual: 0, base_calculo: 'diferenca' },
     pensaoConfig: PjePensaoConfig = { apurar: false, percentual: 0, base: 'liquido' },
     salarioFamiliaConfig: PjeSalarioFamiliaConfig = { apurar: false, numero_filhos: 0 },
     seguroDesempregoDB: PjeSeguroDesempregoDB[] = [],
@@ -1833,11 +1839,16 @@ export class PjeCalcEngine {
 
     const depositos: PjeFGTSResult['depositos'] = [];
     
-    // Prescrição FGTS diferenciada
+    // Prescrição FGTS diferenciada — delega a `core-adapters` quando a flag
+    // `VITE_USE_PORTED_CALCULO=true` está ativa, trazendo as 3 regras do STF
+    // ARE 709.212 (Fase 9 port). Quando off, mantém quinquenal universal
+    // (comportamento legado, zero regressão por default).
     let dataPrescricaoFGTS: Date | null = null;
     if (this.params.prescricao_fgts && this.params.data_ajuizamento) {
-      const ajuiz = new Date(this.params.data_ajuizamento);
-      dataPrescricaoFGTS = new Date(ajuiz.getFullYear() - 5, ajuiz.getMonth(), ajuiz.getDate());
+      dataPrescricaoFGTS = calcularDataPrescricaoFgts(
+        this.params.data_ajuizamento,
+        this.params.data_admissao,
+      );
     }
     
     const basesPorComp: Record<string, number> = {};
@@ -2401,15 +2412,33 @@ export class PjeCalcEngine {
     // Use strict === true so undefined/null defaults to excluding juros from IR base
     const irUsarValorFinal = this.irConfig.incidir_sobre_juros === true;
 
+    // RRA Art. 12-A — NM (nº meses) é a SOMA das CARDINALIDADES de dois sets
+    // separados: (1) competências de não-13º com base IR > 0, (2) competências
+    // de 13º com base IR > 0. Sobreposições são CONTADAS DUAS VEZES (uma vez
+    // em cada set). Confirmado em PJC `MaquinaDeCalculoDeIrpf.java:414`:
+    //   somatorioMesesAnteriores = mesesAnosAnteriores.size + mesesAnosAnterioresDecimoTerceiro.size
+    // Para francisco-pablo: 28 (Demais+Férias+Aviso) + 3 (13º) = 31 ✓.
+    const competenciasRRA_NaoTreze_Anos = new Set<string>();
+    const competenciasRRA_NaoTreze_Liq = new Set<string>();
+    const competenciasRRA_Treze_Anos = new Set<string>();
+    const competenciasRRA_Treze_Liq = new Set<string>();
+
     for (const vr of verbaResults) {
       const verba = this.verbas.find(v => v.id === vr.verba_id);
       if (!verba?.incidencias.irpf) continue;
       const vrBaseIR = irUsarValorFinal ? vr.total_final : vr.total_corrigido;
+      const eh13 = verba.caracteristica === '13_salario';
+
       if (verba.caracteristica === 'ferias') {
         if (this.irConfig.tributacao_separada_ferias) {
           baseFerias += vrBaseIR;
           for (const oc of vr.ocorrencias) {
-            if (oc.diferenca > 0) competenciasFerias.add(oc.competencia);
+            if (oc.diferenca <= 0) continue;
+            competenciasFerias.add(oc.competencia);
+            // Férias entra no set de não-13º para NM do RRA (igual PJC).
+            const anoComp = parseInt(oc.competencia.slice(0, 4));
+            if (anoComp < anoLiq) competenciasRRA_NaoTreze_Anos.add(oc.competencia);
+            else competenciasRRA_NaoTreze_Liq.add(oc.competencia);
           }
         } else {
           baseBruta += vrBaseIR;
@@ -2417,49 +2446,57 @@ export class PjeCalcEngine {
             if (oc.diferenca <= 0) continue;
             const anoComp = parseInt(oc.competencia.slice(0, 4));
             const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : (oc.valor_corrigido || oc.diferenca);
-            if (anoComp < anoLiq) { baseAnosAnteriores += valorIR; competenciasAnosAnteriores.add(oc.competencia); }
-            else { baseAnoLiquidacao += valorIR; competenciasAnoLiquidacao.add(oc.competencia); }
+            if (anoComp < anoLiq) {
+              baseAnosAnteriores += valorIR;
+              competenciasAnosAnteriores.add(oc.competencia);
+              competenciasRRA_NaoTreze_Anos.add(oc.competencia);
+            } else {
+              baseAnoLiquidacao += valorIR;
+              competenciasAnoLiquidacao.add(oc.competencia);
+              competenciasRRA_NaoTreze_Liq.add(oc.competencia);
+            }
           }
         }
         continue;
       }
-      if (verba.caracteristica === '13_salario' && this.irConfig.tributacao_exclusiva_13) {
+      if (eh13 && this.irConfig.tributacao_exclusiva_13) {
         base13 += vrBaseIR;
+        // 13º exclusivo entra no set SEPARADO para NM (igual PJC).
+        for (const oc of vr.ocorrencias) {
+          if (oc.diferenca <= 0) continue;
+          const anoComp = parseInt(oc.competencia.slice(0, 4));
+          if (anoComp < anoLiq) competenciasRRA_Treze_Anos.add(oc.competencia);
+          else competenciasRRA_Treze_Liq.add(oc.competencia);
+        }
       } else {
         baseBruta += vrBaseIR;
         for (const oc of vr.ocorrencias) {
           if (oc.diferenca <= 0) continue;
           const anoComp = parseInt(oc.competencia.slice(0, 4));
           const valorIR = irUsarValorFinal ? (oc.valor_final || oc.diferenca) : (oc.valor_corrigido || oc.diferenca);
+          // Se 13 vier como verba normal (sem trib exclusiva), classifica em "13" para NM.
+          const setAnos = eh13 ? competenciasRRA_Treze_Anos : competenciasRRA_NaoTreze_Anos;
+          const setLiq = eh13 ? competenciasRRA_Treze_Liq : competenciasRRA_NaoTreze_Liq;
           if (anoComp < anoLiq) {
             baseAnosAnteriores += valorIR;
             competenciasAnosAnteriores.add(oc.competencia);
+            setAnos.add(oc.competencia);
           } else {
             baseAnoLiquidacao += valorIR;
             competenciasAnoLiquidacao.add(oc.competencia);
+            setLiq.add(oc.competencia);
           }
         }
       }
     }
 
-    // FIX 3: RRA Art. 12-A — PJe-Calc counts TOTAL months in the period,
-    // not just months with positive income. Count from first to last competencia.
-    if (competenciasAnosAnteriores.size > 0) {
-      const sortedComps = [...competenciasAnosAnteriores].sort();
-      const firstComp = sortedComps[0];
-      const lastComp = sortedComps[sortedComps.length - 1];
-      mesesAnosAnteriores = this.getCompetencias(firstComp, lastComp).length;
-    } else {
-      mesesAnosAnteriores = 0;
-    }
-    if (competenciasAnoLiquidacao.size > 0) {
-      const sortedComps = [...competenciasAnoLiquidacao].sort();
-      const firstComp = sortedComps[0];
-      const lastComp = sortedComps[sortedComps.length - 1];
-      mesesAnoLiquidacao = this.getCompetencias(firstComp, lastComp).length;
-    } else {
-      mesesAnoLiquidacao = 0;
-    }
+    // FIX 4 (IR-FIXER 2026-04-26): NM no RRA = |não-13| + |13|, sets separados.
+    // PJe-Calc soma cardinalidades; mesma competência em demais e 13º conta 2×.
+    // Antes: getCompetencias(min, max).length (span contínuo). Era subestimativa
+    // quando havia 13º com competência sobreposta às demais.
+    // Ref: pjecalc-fonte/.../MaquinaDeCalculoDeIrpf.java:414.
+    mesesAnosAnteriores = competenciasRRA_NaoTreze_Anos.size + competenciasRRA_Treze_Anos.size;
+    mesesAnoLiquidacao = competenciasRRA_NaoTreze_Liq.size + competenciasRRA_Treze_Liq.size;
 
     let deducoes = 0;
     if (this.irConfig.deduzir_cs && this.csConfig.cobrar_reclamante) {
@@ -4510,7 +4547,6 @@ export class PjeCalcEngine {
     };
   }
 }
-
 // =====================================================
 // MULTI-VÍNCULO: Execute engine per contract and merge
 // =====================================================
@@ -4523,7 +4559,8 @@ export interface MultiVinculoResult {
 }
 
 /**
- * Runs independent liquidation per employment link and merges results.
+ * @deprecated Em quarentena junto com PjeCalcEngine V1. Sem call sites em produção.
+ * Mantido apenas para histórico de referência.
  */
 export function liquidarMultiVinculo(
   multi: PjeMultiVinculo,
@@ -4551,17 +4588,14 @@ export function liquidarMultiVinculo(
     resultados.push({ vinculo_id: v.vinculo_id, label: v.label, resultado });
   }
 
-  // Consolidate: merge all verba results and recalculate totals
   if (resultados.length === 0) {
     throw new Error('liquidarMultiVinculo: nenhum vínculo fornecido');
   }
   const consolidado = { ...resultados[0].resultado };
   if (resultados.length > 1) {
-    // Merge verbas from all vinculos
     const allVerbas = resultados.flatMap(r => r.resultado.verbas);
     consolidado.verbas = allVerbas;
-    
-    // Sum resumo values
+
     consolidado.resumo = {
       ...consolidado.resumo,
       principal_bruto: resultados.reduce((s, r) => s + r.resultado.resumo.principal_bruto, 0),
@@ -4576,7 +4610,6 @@ export function liquidarMultiVinculo(
       total_reclamada: resultados.reduce((s, r) => s + r.resultado.resumo.total_reclamada, 0),
     };
 
-    // Merge validações from all vinculos
     const allItens = resultados.flatMap(r =>
       (r.resultado.validacao?.itens || []).map(it => ({ ...it, mensagem: `[${r.label}] ${it.mensagem}` }))
     );
@@ -4590,7 +4623,6 @@ export function liquidarMultiVinculo(
       };
     }
 
-    // Merge calculation_warnings from all vinculos
     const allWarnings = resultados.flatMap(r =>
       (r.resultado.calculation_warnings || []).map(w => ({ ...w, module: `[${r.label}] ${w.module}` }))
     );

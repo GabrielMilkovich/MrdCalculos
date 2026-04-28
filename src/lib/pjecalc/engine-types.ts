@@ -263,6 +263,12 @@ export interface PjeVerba {
     pago: number;
     /** PJC ground truth correction factor (indiceAcumulado from XML) */
     indice_acumulado?: number;
+    /** Etapa 1.bis D2 (2026-04-26): férias indenizadas — Java exclui da base
+     *  INSS (Lei 8.212/91 art. 28 §9 "d" + Súmula 171 TST). Quando true,
+     *  D1 (`getDiferencaParaCalculoDasIncidencias`) retorna null e adapter pula. */
+    ferias_indenizadas?: boolean;
+    /** Para D1: férias com abono pecuniário (CLT art. 143). */
+    ferias_com_abono?: boolean;
   }[];
 }
 
@@ -305,11 +311,36 @@ export interface PjeFeriadoDB {
   municipio?: string;
 }
 
+/** Período com alíquota de previdência privada vigente. */
+export interface PjePrevPrivadaPeriodo {
+  competencia_inicial: string; // MM/AAAA
+  competencia_final?: string;
+  aliquota: number; // %
+}
+
 export interface PjePrevidenciaPrivadaConfig {
   apurar: boolean;
+  /** Alíquota global (legacy). Quando há `periodos`, esses prevalecem. */
   percentual: number;
   base_calculo: 'diferenca' | 'devido' | 'corrigido';
+  /** Se true, prev. privada é deduzida da base do IR (Lei 9.250/95 art. 4º V). */
   deduzir_ir: boolean;
+  /** Períodos com alíquotas distintas (ex: mudança de plano em data específica). */
+  periodos?: PjePrevPrivadaPeriodo[];
+  /** Teto mensal — alíquota não incide acima desse valor. */
+  teto_mensal?: number;
+  /** Como aplicar juros sobre prev. privada atrasada:
+   *  trabalhista (mesmo do principal) / pago_atraso (juros após data efetiva) / nenhum. */
+  juros?: 'trabalhista' | 'pago_atraso' | 'nenhum';
+}
+
+/** Cota e teto de salário-família por ano vigente.
+ *  Lei 8.213/91 art. 67 + Portarias INSS anuais.
+ *  Quando ausente, engine usa default 2025. */
+export interface PjeSalarioFamiliaCotaAnual {
+  ano: number;
+  valor_cota: number;     // valor por filho elegível (≤14)
+  teto_salarial: number;  // remuneração máxima para elegibilidade
 }
 
 export interface PjeSalarioFamiliaConfig {
@@ -323,10 +354,14 @@ export interface PjeSalarioFamiliaConfig {
   competencia_final?: string;
   /** Variação de qtd de filhos ≤14 ao longo do período (novas competências que mudam a quantidade). */
   variacoes_qtd?: { competencia: string; quantidade: number }[];
-  /** Valor da cota legal (override). Default usa cota vigente 2025 (R$ 62,04). */
+  /** Valor da cota legal (override pontual). Default usa cota vigente 2025 (R$ 62,04). */
   valor_cota?: number;
   /** Teto salarial — elegível se remuneração ≤ teto. Default 2025 (R$ 1.819,26). */
   teto_salarial?: number;
+  /** Tabela anual de cotas/tetos (override completo por ano). Quando presente,
+   *  engine usa o valor do ano correspondente à competência em vez do default.
+   *  Permite calcular salário-família retroativo (ex: 2020 com R$ 51,27). */
+  cotas_anuais?: PjeSalarioFamiliaCotaAnual[];
 }
 
 export interface PjeSalarioFamiliaResult {
@@ -376,6 +411,11 @@ export interface PjeFGTSConfig {
   excluir_aviso_multa?: boolean;
   /** Perdas monetárias sobre FGTS (correção JAM + 3% a.a. quando ativado). */
   perdas_monetarias?: boolean;
+  /** Sprint 4 fix (2026-04-26): override total_fgts vindo de <OcorrenciaDeFgts>
+   *  do PJC. Quando presente, engine usa esse valor direto (Java-equivalente:
+   *  Σ baseVerba × aliquota × indiceAcumulado × (1 + taxaJuros/100)) em vez
+   *  da fórmula simplificada. Fecha gap de FGTS de ~9% para ~0% nos PJCs reais. */
+  fgts_override_total?: number;
 }
 
 export interface PjeCNAEAliquotas {
@@ -450,6 +490,15 @@ export interface PjeCSConfig {
    * Default false (compatibilidade) — quando true, totais de INSS retornam atualizados.
    */
   atualizar_inss_selic?: boolean;
+  /**
+   * Sprint 4.2-B2 (TIER 2 P1): empresa optante do SIMPLES NACIONAL.
+   * LC 123/2006 art. 13 §3º — empresa do SIMPLES é ISENTA das contribuições
+   * patronais (CS empresa 20%, SAT, terceiros). O recolhimento é unificado
+   * via DAS. Quando true, força empresa+SAT+terceiros = 0 em TODAS as
+   * competências (independente de `periodos_simples`, que é por intervalo).
+   * Default false (preservar comportamento atual).
+   */
+  simples_nacional?: boolean;
 }
 
 export interface PjeIRConfig {
@@ -458,12 +507,26 @@ export interface PjeIRConfig {
   cobrar_reclamado: boolean;
   tributacao_exclusiva_13: boolean;
   tributacao_separada_ferias: boolean;
+  /** Regime de competência (default) ou caixa.
+   *  Java: <regimeDeCaixa> em ImpostoRendaCalculo. */
+  regime_caixa?: boolean;
   deduzir_cs: boolean;
   deduzir_prev_privada: boolean;
   deduzir_pensao: boolean;
   deduzir_honorarios: boolean;
   aposentado_65: boolean;
   dependentes: number;
+  /** RRA Art. 12-A Lei 7.713/88: cálculo IR sobre rendimentos recebidos
+   *  acumuladamente. Aplicável quando processo abrange período > 12 meses.
+   *  Java: <rraMeses> e <rraNumeroParcelas>. */
+  apurar_rra?: boolean;
+  rra_meses?: number;
+  rra_numero_parcelas?: number;
+  /** Incidir IR sobre verba principal tributável (default true). */
+  incidir_sobre_principal_tributavel?: boolean;
+  /** Incidir IR sobre verba principal NÃO tributável (default false — só para
+   *  casos específicos como danos morais que viram tributáveis). */
+  incidir_sobre_principal_nao_tributavel?: boolean;
   /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, use these exact IR bases */
   apuracao_juros_gt?: PjeApuracaoJurosGT[];
 }
@@ -497,6 +560,30 @@ export interface PjeCorrecaoConfig {
   combinacoes_indice?: PjeCombinacaoIndice[];
   /** Combination-by-date interest regime */
   combinacoes_juros?: PjeCombinacaoJuros[];
+  /**
+   * Sprint 4.2-A2 (ADC 58 STF + Súm.TST 381): gate UI para o regime de
+   * combinação de índice. Quando explicitamente `false`, engine ignora
+   * `combinacoes_indice` e usa SOMENTE `indice` em todo o período.
+   * Default `undefined` ≈ `true` (backward-compatible com 96% calibrate).
+   * Desligar permite ao usuário rodar com regime único mesmo se PJC trouxe
+   * combinações.
+   */
+  combinar_indice?: boolean;
+  /**
+   * Sprint 4.2-A2 (ADC 58 — SELIC engloba juros+correção pós-citação): gate
+   * UI para combinação de juros. Quando `false`, engine ignora
+   * `combinacoes_juros` e usa SOMENTE `juros_tipo` em todo o período.
+   * Default `undefined` ≈ `true` (preserva comportamento atual).
+   */
+  combinar_juros?: boolean;
+  /**
+   * Sprint 4.2-A2 (CC art.406 + ADC 58 — juros pré-judiciais): quando `false`,
+   * juros começam a contar APENAS pós-citação (`data_citacao` ou
+   * `juros_inicio` configurado). Quando `true`/`undefined`, segue regra
+   * atual (juros desde a data inicial da ocorrência se houver combinação
+   * com regime explícito).
+   */
+  juros_pre_judicial?: boolean;
   /** Apply interest after deducting CS from reclamante */
   juros_apos_deducao_cs?: boolean;
   /** Ground truth from PJe-Calc's ApuracaoDeJuros — when present, calibrate corrected values */
@@ -613,6 +700,10 @@ export interface PjeMultaItem {
   indice_outro?: string;
   aplicar_juros: boolean;
   apurar_ir: boolean;
+  /** Tipo de cobrança quando devedor=reclamante. */
+  tipo_cobranca_reclamante?: 'descontar_credito' | 'cobrar';
+  /** Data a partir da qual juros mora começam (ISO). */
+  data_apartir_de_aplicar_juros?: string;
 }
 
 export interface PjeMultasConfig {
@@ -620,25 +711,62 @@ export interface PjeMultasConfig {
   apurar_477: boolean;
   valor_477_tipo?: 'salario' | 'informado';
   valor_477_informado?: number;
+  /** Multa CPC art. 523 (10% por descumprimento de sentença líquida no prazo).
+   *  Aplicada sobre o líquido após sentença + 15 dias úteis. */
+  apurar_523_cpc?: boolean;
+  percentual_523?: number; // default 10%
   /** Multas/indenizações individuais cadastradas na tela do PJe-Calc. */
   multas_indenizacoes?: PjeMultaItem[];
 }
 
+/** Bases de honorários — paridade com Java BaseParaApuracaoDeHonorarioEnum:
+ *  - 'condenacao' / 'bruto'         → BRUTO (default)
+ *  - 'bruto_menos_cs'                → BRUTO_MENOS_CONTRIBUICAO_SOCIAL
+ *  - 'bruto_menos_cs_menos_pp'       → BRUTO_MENOS_CS_MENOS_PREVIDENCIA_PRIVADA
+ *  - 'verbas_nao_principal'          → VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL
+ *  Mantemos 'causa' / 'proveito' para compatibilidade com casos novos no front. */
+export type PjeHonorarioBase = 'condenacao' | 'causa' | 'proveito' | 'bruto_menos_cs' | 'bruto_menos_cs_menos_pp' | 'verbas_nao_principal';
+
 export interface PjeHonorarioItem {
   descricao: string;
+  /** Tipo do honorário (paridade Java TipoHonorarioEnum):
+   *  SUCUMBENCIAIS / CONTRATUAIS / PERICIAIS_CONTADOR / PERICIAIS_TECNICO / OUT */
+  tipo_honorario?: 'sucumbenciais' | 'contratuais' | 'periciais_contador' | 'periciais_tecnico' | 'outros';
   devedor: 'reclamante' | 'reclamado';
   credor: string;
+  /** Documento fiscal do credor (CPF/CNPJ). */
+  doc_fiscal_credor?: string;
   tipo: 'percentual' | 'valor_fixo';
   percentual: number;
   valor_fixo?: number;
-  base: 'condenacao' | 'causa' | 'proveito';
+  base: PjeHonorarioBase;
   apurar_ir: boolean;
+  /** Tipo IRPF (PESSOA_FISICA = tabela progressiva, PESSOA_JURIDICA = 1,5%).
+   *  Java: TipoDeImpostoDeRendaEnum. */
+  tipo_imposto_renda?: 'pessoa_fisica' | 'pessoa_juridica';
+  /** Aplicar IRPF sobre os JUROS do honorário (true) ou só sobre valor corrigido (false).
+   *  Java: <apurarIRPFSobreJuros>. */
+  apurar_irpf_sobre_juros?: boolean;
+  /** Tipo de cobrança quando devedor=reclamante:
+   *  DESCONTAR_CREDITO (default — deduz do líquido) / COBRAR (cobra à parte).
+   *  Java: TipoCobrancaReclamanteEnum. */
+  tipo_cobranca_reclamante?: 'descontar_credito' | 'cobrar';
+  /** Aplicar juros mora sobre o honorário (quando dataVencimento < dataLiquidacao). */
+  aplicar_juros?: boolean;
+  /** Data a partir da qual juros mora começam a contar (ISO YYYY-MM-DD). */
+  data_apartir_de_aplicar_juros?: string;
+  /** Data de vencimento do honorário — base para correção monetária se < dataLiquidacao.
+   *  Java: <dataVencimento> em ms desde epoch. */
+  data_vencimento?: string;
+  /** Tipo de índice de correção: TRABALHISTA (default) ou OUTRO.
+   *  Java: TipoDeIndiceDeCorrecaoEnum. */
+  tipo_indice_correcao?: 'trabalhista' | 'outro';
 }
 
 export interface PjeHonorariosConfig {
   apurar_sucumbenciais: boolean;
   percentual_sucumbenciais: number;
-  base_sucumbenciais: 'condenacao' | 'causa' | 'proveito';
+  base_sucumbenciais: PjeHonorarioBase;
   apurar_contratuais: boolean;
   percentual_contratuais: number;
   valor_fixo?: number;
@@ -825,11 +953,54 @@ export interface PjeCustaResult {
   valor: number;
 }
 
+export interface PjePensaoDependente {
+  nome: string;
+  cpf?: string;
+  data_nascimento?: string;
+  percentual?: number; // % individual (quando há rateio entre dependentes)
+}
+
 export interface PjePensaoConfig {
   apurar: boolean;
   percentual: number;
   valor_fixo?: number;
-  base: 'liquido' | 'bruto' | 'bruto_menos_inss';
+  base: 'liquido' | 'bruto' | 'bruto_menos_inss' | 'principal';
+  /** Pensão incide sobre verba FGTS pago ao reclamante. Java:
+   *  <incidenciaPensaoAlimenticia> em <Fgts>. */
+  incidencia_sobre_fgts?: boolean;
+  /** Pensão incide sobre multa 40% FGTS. Java:
+   *  <incidenciaPensaoAlimenticiaSobreMulta>. */
+  incidencia_sobre_multa_fgts?: boolean;
+  /** Pensão deve ser deduzida da base de cálculo do IR (default true).
+   *  Lei 9.250/95 art. 4º II — pensão alimentícia é dedução da base IR. */
+  descontar_antes_ir?: boolean;
+  /** Lista de dependentes que recebem pensão. */
+  dependentes?: PjePensaoDependente[];
+  /** Incidência sobre juros mora (default false). Quando true, soma a fração
+   *  proporcional dos juros à base efetiva de cálculo da pensão (independe
+   *  da `base` configurada — efeito incremental). */
+  incidir_sobre_juros?: boolean;
+  beneficiario?: string;
+  observacoes?: string;
+}
+
+/**
+ * Sprint 4.2-C1 — Configuração da aba Atualização (pós-pagamento).
+ * Decide quais buckets do resumo são incluídos no `total_atualizado`
+ * que será usado pela rotina de atualização para confronto com o `valor_pago`.
+ *
+ * Defaults TODOS false: preserva o comportamento atual em que `total_atualizado`
+ * é igual a `total_reclamada` (sem soma de pensão/multas/honorários/custas).
+ */
+export interface PjeAtualizacaoConfig {
+  /** Soma `pensao_total` ao total atualizado. */
+  aplicar_pensao?: boolean;
+  /** Soma o saldo líquido das multas/indenizações individuais ao total atualizado. */
+  aplicar_multas_indenizacoes?: boolean;
+  /** Soma `honorarios_sucumbenciais + honorarios_contratuais` ao total atualizado. */
+  aplicar_honorarios?: boolean;
+  /** Soma `custas` ao total atualizado. */
+  aplicar_custas?: boolean;
 }
 
 export interface PjeResumo {
@@ -845,12 +1016,17 @@ export interface PjeResumo {
   salario_familia: number;
   multa_523: number;
   multa_467: number;
+  /** Sprint 4.2-B2: Multa 477 §8 CLT — 1 salário se rescisão atrasou. */
+  multa_477?: number;
   honorarios_sucumbenciais: number;
   honorarios_contratuais: number;
   custas: number;
   custas_detalhadas: PjeCustaResult[];
   pensao_sobre_fgts: number;
   pensao_total: number;
+  /** Sprint 4.2-C1: total_reclamada + buckets habilitados pela config Atualização.
+   *  Default = total_reclamada (todos `aplicar_*` false). */
+  total_atualizado?: number;
   contribuicao_sindical: number;
   /** Abono pecuniário férias (Art. 143 CLT) — sujeito a IR, não ao INSS */
   abono_pecuniario: number;

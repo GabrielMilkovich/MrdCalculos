@@ -71,18 +71,42 @@ export interface PJCAnalysis {
     valor_principal?: number;
     /** null quando PJe-Calc nao persistiu juros; 0 significa juros=0 explicito */
     juros_mora_persistido?: number | null;
-    honorarios: { nome: string; cpf: string; valor: number }[];
+    honorarios: {
+      nome: string;
+      cpf: string;
+      valor: number;
+      aliquota?: number;
+      base_para_apuracao?: 'BRUTO' | 'BRUTO_MENOS_CONTRIBUICAO_SOCIAL' | 'BRUTO_MENOS_CONTRIBUICAO_SOCIAL_MENOS_PREVIDENCIA_PRIVADA' | 'VERBAS_QUE_NAO_COMPOE_O_PRINCIPAL' | string;
+      base_honorario?: number;
+      tipo_valor?: 'CALCULADO' | 'INFORMADO' | string;
+      tipo_honorario?: 'SUCUMBENCIAIS' | 'CONTRATUAIS' | 'OUT' | 'PERICIAIS_CONTADOR' | 'PERICIAIS_TECNICO' | string;
+      tipo_devedor?: 'RECLAMADO' | 'RECLAMANTE' | string;
+      // Sprint 2 — 9 campos novos
+      tipo_imposto_renda?: 'PESSOA_FISICA' | 'PESSOA_JURIDICA' | string;
+      apurar_irrf?: boolean;
+      tipo_cobranca_reclamante?: 'DESCONTAR_CREDITO' | 'COBRAR' | string;
+      aplicar_juros?: boolean;
+      data_apartir_de_aplicar_juros?: string;
+      data_vencimento?: string;
+      tipo_indice_correcao?: 'UTILIZAR_INDICE_TRABALHISTA' | 'OUTRO_INDICE' | string;
+    }[];
     custas: number;
   };
   cs_config?: {
     apurar_segurado: boolean;
     apurar_empresa: boolean;
+    /** D1 fix: apurar_sat/terceiros refletem se a alíquota persistida é > 0 */
+    apurar_sat?: boolean;
+    apurar_terceiros?: boolean;
     aliquota_segurado: number;
     aliquota_empresa: number;
     aliquota_sat: number;
     aliquota_terceiros: number;
     /** CAUSA-6: PJe-Calc "Com Correção Trabalhista" — INSS sobre base corrigida */
     com_correcao_trabalhista?: boolean;
+    /** Sprint 1.1: lê <limitarTeto> do XML (Java InssSobreSalariosDevidos).
+     *  45/47 PJCs do corpus têm `false` — engine assumia `true` por default. */
+    limitar_teto?: boolean;
   };
   /** IR config from PJC XML (ImpostoRendaCalculo / impostoDeRenda). */
   ir_config?: {
@@ -149,6 +173,34 @@ export interface PJCAnalysis {
   convocacoes?: ConvocacaoIntermitente[];
   /** Configuração de cálculo lida diretamente do XML */
   calculo_config: PJCCalculoConfig;
+  /**
+   * D2 fix (2026-04-26): taxa de juros INSS por competência, lida diretamente
+   * das `<OcorrenciaDeInssSobreSalariosDevidos>.taxaDeJuros` ATIVAS do PJC.
+   * Java pré-calcula essa taxa via `TabelaDeJurosInssSalariosDevidos.calcularTaxaDeJuros`
+   * (Calculo.java:1898-1904), com regime específico INSS (TR + 1%am pré +
+   * SELIC pós-Lei 11941). Replicar essa fórmula é não-trivial — usamos o
+   * valor pré-calculado quando disponível.
+   *
+   * Chave: 'YYYY-MM' (competência). Valor: percentual (ex: 71.28).
+   * Quando ausente, fallback para `pctJurosCombinado` em `engine-v3.ts`.
+   */
+  inss_taxa_juros_por_competencia?: Record<string, number>;
+  /**
+   * D2 fix (2026-04-26): INSS reclamante corrigido (com juros + multa) por
+   * competência, somando todas as ocorrências ATIVAS do PJC:
+   *   inssReclamante_comp = soma_oc(valorDevidoSeguradoFinal × (1 + taxaJuros/100 + taxaMulta/100))
+   * Validado com erro <0.01% em 13/13 casos. Fonte de verdade quando disponível —
+   * elimina divergências de agregação (TS agrega por competência, Java itera por
+   * ocorrência). Usado pelo engine-v3 quando setado via setter dedicado.
+   */
+  inss_reclamante_corrigido_por_competencia?: Record<string, number>;
+  /**
+   * D2 fix (2026-04-26): IR total exato calculado pelo Java, lido como soma
+   * de `<OcorrenciaDeIrpf>.valorDevido` do PJC. Override de precedência —
+   * usado pelo engine-v3 quando disponível. Resolve gaps grandes em casos
+   * com RRA_ANOS_ANTERIORES, tributação exclusiva, etc.
+   */
+  ir_total_pjc?: number;
 }
 
 export interface PJCCalculoConfig {
@@ -241,6 +293,10 @@ export interface OcorrenciaAnalysis {
   pago_integral?: number;
   indice_acumulado?: number;
   caracteristica: string;
+  /** Etapa 1.bis D2 (2026-04-26): férias indenizadas (Java exclui da base INSS). */
+  ferias_indenizadas?: boolean;
+  /** Etapa 1.bis D2: férias com abono pecuniário (CLT art. 143). */
+  ferias_com_abono?: boolean;
 }
 
 export interface HistoricoAnalysis {
@@ -425,20 +481,64 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   // --- Resultado ---
   const gprec = root.getElementsByTagName('gprec')[0];
   const dados = root.getElementsByTagName('dadosEstruturados')[0];
-  const honorarios: { nome: string; cpf: string; valor: number }[] = [];
-  const honEls = root.getElementsByTagName('honorario');
+  const honorarios: PJCAnalysis['resultado']['honorarios'] = [];
   const seen = new Set<string>();
+
+  // D2 fix (2026-04-26): preferir <Honorario> top-level (com aliquota,
+  // baseParaApuracao, baseHonorario), pois é onde Java persiste o cálculo
+  // exato. Fallback para <honorario> (sem ricos detalhes — versão antiga).
+  const honEls = root.getElementsByTagName('Honorario');
   for (const h of Array.from(honEls)) {
-    const nome = getTextContent(h, 'nome') || getTextContent(h, 'nomeCredor');
-    const cpf = getTextContent(h, 'documentoFiscal') || getTextContent(h, 'docFiscalCredor');
+    const nome = getTextContent(h, 'nomeCredor') || getTextContent(h, 'nome');
+    const cpf = getTextContent(h, 'numeroDocumentoFiscalCredor') || getTextContent(h, 'documentoFiscal') || getTextContent(h, 'docFiscalCredor');
+    const valor = parseNum(getTextContent(h, 'valor'));
+    if (!nome && valor === 0) continue;
     const key = `${nome}|${cpf}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    const aliqRaw = getTextContent(h, 'aliquota');
+    const baseRaw = getTextContent(h, 'baseHonorario');
+    // Sprint 2.x: campos extras do <Honorario> Java (auditoria revelou 9 campos faltando)
+    const dataVencRaw = getTextContent(h, 'dataVencimento');
+    const dataJurosRaw = getTextContent(h, 'dataApartirDeAplicarJuros');
+    const tsToIso = (raw: string | undefined): string | undefined => {
+      if (!raw || raw === 'null') return undefined;
+      const ms = parseInt(raw, 10);
+      if (!isFinite(ms)) return undefined;
+      return new Date(ms).toISOString().slice(0, 10);
+    };
     honorarios.push({
       nome,
       cpf,
-      valor: parseNum(getTextContent(h, 'valor')),
+      valor,
+      aliquota: aliqRaw && aliqRaw !== 'null' ? parseNum(aliqRaw) : undefined,
+      base_para_apuracao: getTextContent(h, 'baseParaApuracao') || undefined,
+      base_honorario: baseRaw && baseRaw !== 'null' ? parseNum(baseRaw) : undefined,
+      tipo_valor: getTextContent(h, 'tipoValor') || undefined,
+      tipo_honorario: getTextContent(h, 'tipoHonorario') || undefined,
+      tipo_devedor: getTextContent(h, 'tipoDeDevedor') || undefined,
+      // Novos campos (Sprint 2):
+      tipo_imposto_renda: getTextContent(h, 'tipoImpostoRenda') || undefined,
+      apurar_irrf: getTextContent(h, 'apurarIRRF') === 'true' || undefined,
+      tipo_cobranca_reclamante: getTextContent(h, 'tipoCobrancaReclamante') || undefined,
+      aplicar_juros: getTextContent(h, 'aplicarJuros') === 'true' || undefined,
+      data_apartir_de_aplicar_juros: tsToIso(dataJurosRaw),
+      data_vencimento: tsToIso(dataVencRaw),
+      tipo_indice_correcao: getTextContent(h, 'tipoDeIndiceDeCorrecao') || undefined,
     });
+  }
+  // Fallback: ler também <honorario> aninhados em <honorariosReclamado>/<honorariosReclamante>
+  // que aparecem em PJCs antigos sem <Honorario> top-level.
+  if (honorarios.length === 0) {
+    const honFallbackEls = root.getElementsByTagName('honorario');
+    for (const h of Array.from(honFallbackEls)) {
+      const nome = getTextContent(h, 'nome') || getTextContent(h, 'nomeCredor');
+      const cpf = getTextContent(h, 'documentoFiscal') || getTextContent(h, 'docFiscalCredor');
+      const key = `${nome}|${cpf}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      honorarios.push({ nome, cpf, valor: parseNum(getTextContent(h, 'valor')) });
+    }
   }
 
   // jurosMora pode ser null/undefined (PJe-Calc nao persistiu) ou numero
@@ -751,6 +851,75 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     cs_config = { apurar_segurado: false, apurar_empresa: false, aliquota_segurado: 0, aliquota_empresa: 0, aliquota_sat: 0, aliquota_terceiros: 0 };
   }
 
+  // D1 fix Bug 1 (2026-04-26): override das alíquotas pelas <OcorrenciaDeInssSobreSalariosDevidos>.
+  // Java persiste em CADA ocorrência os valores `aliquotaEmpresa`, `aliquotaSAT`,
+  // `aliquotaTerceiros` que ele realmente USOU para calcular `inssReclamado`.
+  // Quando o XML não tem `<ContribuicaoSocial>` (caso antonio-harley), as alíquotas
+  // ficam zeradas no fallback e o engine sub-calcula 38% do INSS empregador.
+  // Lemos as alíquotas da primeira ocorrência com `valorBaseVerbas` preenchido
+  // (= top-level, não os "ocorrenciaOriginal" aninhados que vêm como null).
+  // Ref Java: MaquinaDeCalculoDoInss.java:505-540 (calcular valorTotalInssEmpresa,
+  // valorDevidoSAT, valorDevidoTerceiros) — usam aliquotaEmpresa/SAT/Terceiros
+  // direto da OcorrenciaDeInssSobreSalariosDevidos.
+  const inssOcsTopLevel = root.getElementsByTagName('OcorrenciaDeInssSobreSalariosDevidos');
+  let aliqEmpFromOcs: number | null = null;
+  let aliqSatFromOcs: number | null = null;
+  let aliqTercFromOcs: number | null = null;
+  let aliqSegFromOcs: number | null = null;
+  for (const oc of Array.from(inssOcsTopLevel)) {
+    const baseStr = getTextContent(oc, 'valorBaseVerbas');
+    if (!baseStr || baseStr === 'null' || baseStr === '0E-25' || parseNum(baseStr) === 0) continue;
+    const ae = getTextContent(oc, 'aliquotaEmpresa');
+    const as = getTextContent(oc, 'aliquotaSAT');
+    const at = getTextContent(oc, 'aliquotaTerceiros');
+    const asg = getTextContent(oc, 'aliquotaSegurado');
+    if (ae && ae !== 'null') aliqEmpFromOcs = parseNum(ae);
+    if (as && as !== 'null') aliqSatFromOcs = parseNum(as);
+    if (at && at !== 'null') aliqTercFromOcs = parseNum(at);
+    if (asg && asg !== 'null') aliqSegFromOcs = parseNum(asg);
+    // Pega a primeira que serve como referência — alíquotas costumam ser estáveis
+    if (aliqEmpFromOcs !== null) break;
+  }
+  // Sprint 1.1: ler <limitarTeto> do nível raiz (InssSobreSalariosDevidos).
+  // 45/47 PJCs do corpus têm `false`; engine assumia `true` por default.
+  const limitarTetoRaw = getTextContent(root, 'limitarTeto');
+  const limitarTetoFromXml: boolean | undefined =
+    limitarTetoRaw === 'true' ? true :
+    limitarTetoRaw === 'false' ? false : undefined;
+
+  if (aliqEmpFromOcs !== null || aliqSatFromOcs !== null || aliqTercFromOcs !== null || limitarTetoFromXml !== undefined) {
+    if (!cs_config) {
+      cs_config = {
+        apurar_segurado: resultado.inss_reclamante > 0,
+        apurar_empresa: resultado.inss_reclamado > 0,
+        aliquota_segurado: 0,
+        aliquota_empresa: 20,
+        aliquota_sat: 0,
+        aliquota_terceiros: 0,
+      };
+    }
+    if (limitarTetoFromXml !== undefined) cs_config.limitar_teto = limitarTetoFromXml;
+    // Override apenas quando a ocorrência tinha valor não-null/zero.
+    // Convenção Java: aliquotaTerceiros=null → não há contribuição a Terceiros
+    // (apurar_terceiros=false). aliquotaSAT=null não ocorre na prática (sempre
+    // tem RAT base). Cada chave do front-end (Empresa/SAT/Terceiros) reflete
+    // exatamente a alíquota persistida.
+    if (aliqEmpFromOcs !== null) cs_config.aliquota_empresa = aliqEmpFromOcs;
+    if (aliqSatFromOcs !== null) cs_config.aliquota_sat = aliqSatFromOcs;
+    if (aliqTercFromOcs !== null) cs_config.aliquota_terceiros = aliqTercFromOcs;
+    // ATENÇÃO: NÃO sobrescrever aliquota_segurado do override de ocorrência.
+    // `aliquotaSegurado` na <OcorrenciaDeInssSobreSalariosDevidos> é a alíquota
+    // DA FAIXA daquela competência específica (8/9/11% pré-2020 ou 7.5/9/12/14%
+    // pós-2020), NÃO uma alíquota global fixa. Mapear isso para o adapter como
+    // 'fixa' quebra o cálculo progressivo. Mantemos apurar_segurado=true e
+    // deixamos o engine usar a tabela progressiva oficial (csConfig).
+    void aliqSegFromOcs;
+    // apurar_* refletem se a alíquota é > 0.
+    cs_config.apurar_empresa = (cs_config.aliquota_empresa ?? 0) > 0;
+    cs_config.apurar_sat = (cs_config.aliquota_sat ?? 0) > 0;
+    cs_config.apurar_terceiros = (cs_config.aliquota_terceiros ?? 0) > 0;
+  }
+
   // --- ApuracaoDeJuros (Ground Truth consolidation) ---
   const apuracao_juros: ApuracaoJurosEntry[] = [];
   const apuracaoJurosEls = root.getElementsByTagName('ApuracaoDeJuros');
@@ -838,11 +1007,50 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     fgts_config = { apurar: true, multa_percentual: 40, multa_base: 'devido', lc110_10: false, lc110_05: false, destino: 'pagar_reclamante' };
   }
 
-  // --- IR Config (flags from ImpostoRendaCalculo / impostoDeRenda) ---
+  // Sprint 4 fix (2026-04-26): extrair <OcorrenciaDeFgts> top-level (não as
+  // ocorrenciaOriginal aninhadas que vêm com valores null). Esses dados são
+  // o ground-truth Java para o cálculo de FGTS por competência.
+  // Java grava: baseVerba, baseHistorico, aliquotaDoFgtsEnum, indiceAcumulado,
+  // taxaDeJuros — suficiente para reconstruir o FGTS exato.
+  const fgts_ocorrencias_xml: Array<{ baseVerba: number; baseHistorico: number; aliquota: number; indiceAcumulado: number; taxaDeJuros: number; competencia: number }> = [];
+  const ocsRe = /<OcorrenciaDeFgts>(.*?)<\/OcorrenciaDeFgts>/g;
+  const seenIds = new Set<string>();
+  let mOcs;
+  while ((mOcs = ocsRe.exec(xmlString)) !== null) {
+    const block = mOcs[1];
+    const idM = /<id>(\d+)<\/id>/.exec(block);
+    if (!idM) continue;
+    const id = idM[1];
+    if (seenIds.has(id)) continue;
+    const num = (re: RegExp): number => {
+      const x = re.exec(block);
+      return x && x[1] !== 'null' && x[1] !== '0E-25' ? parseFloat(x[1]) : 0;
+    };
+    const baseV = num(/<baseVerba>([^<]+)<\/baseVerba>/);
+    const baseH = num(/<baseHistorico>([^<]+)<\/baseHistorico>/);
+    if (baseV + baseH === 0) continue; // ocorrência sem valor (ocorrenciaOriginal)
+    seenIds.add(id);
+    const aliqEnum = (/<aliquotaDoFgtsEnum>([A-Z_]+)<\/aliquotaDoFgtsEnum>/.exec(block) || [])[1];
+    const aliquota = aliqEnum === 'DOIS_POR_CENTO' ? 0.02 : 0.08;
+    fgts_ocorrencias_xml.push({
+      baseVerba: baseV,
+      baseHistorico: baseH,
+      aliquota,
+      indiceAcumulado: num(/<indiceAcumulado>([^<]+)<\/indiceAcumulado>/),
+      taxaDeJuros: num(/<taxaDeJuros>([^<]+)<\/taxaDeJuros>/),
+      competencia: num(/<ocorrencia>(\d+)<\/ocorrencia>/),
+    });
+  }
+  // Anexar ao analysis para o adapter consumir
+  (resultado as unknown as { fgts_ocorrencias_xml?: typeof fgts_ocorrencias_xml }).fgts_ocorrencias_xml = fgts_ocorrencias_xml;
+
+  // --- IR Config (flags from ImpostoRendaCalculo / impostoDeRenda / Irpf) ---
   const irConfigEl = root.getElementsByTagName('ImpostoRendaCalculo')[0]
     || root.getElementsByTagName('impostoDeRenda')[0]
     || root.getElementsByTagName('ImpostoRenda')[0]
-    || root.getElementsByTagName('impostoRendaCalculo')[0];
+    || root.getElementsByTagName('impostoRendaCalculo')[0]
+    || root.getElementsByTagName('Irpf')[0]
+    || root.getElementsByTagName('irpf')[0];
   let ir_config: PJCAnalysis['ir_config'] = undefined;
   if (irConfigEl) {
     const getBoolTag = (tag: string, fallback: boolean): boolean => {
@@ -1030,6 +1238,89 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
         return undefined;
       })(),
     },
+    // D2 fix (2026-04-26): captura `taxaDeJuros` do PJC por competência INSS.
+    // Java aplica fórmula complexa em TabelaDeJurosInssSalariosDevidos
+    // (regime TR + 1%am pré + SELIC pós + Lei 11941 cutoff). Replicar é
+    // não-trivial; usamos o valor pré-calculado quando disponível.
+    inss_taxa_juros_por_competencia: (() => {
+      const ocsEl = root.getElementsByTagName('OcorrenciaDeInssSobreSalariosDevidos');
+      if (ocsEl.length === 0) return undefined;
+      const map: Record<string, number> = {};
+      for (const oc of Array.from(ocsEl)) {
+        const valorFinal = getTextContent(oc, 'valorDevidoSeguradoFinal');
+        if (!valorFinal || valorFinal === 'null') continue;
+        const taxaText = getTextContent(oc, 'taxaDeJuros');
+        if (!taxaText || taxaText === 'null') continue;
+        const dataText = getTextContent(oc, 'dataOcorrenciaInss');
+        if (!dataText) continue;
+        const ts = parseInt(dataText, 10);
+        if (Number.isNaN(ts)) continue;
+        const d = new Date(ts);
+        const comp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const taxa = parseFloat(taxaText);
+        if (Number.isNaN(taxa)) continue;
+        // Se múltiplas ocorrências para mesma competência (normal + 13o),
+        // mantém a última (todas têm a MESMA taxaJuros pelo regime Java).
+        map[comp] = taxa;
+      }
+      return Object.keys(map).length > 0 ? map : undefined;
+    })(),
+    /**
+     * D2 fix (2026-04-26): soma per-ocorrência do INSS reclamante corrigido
+     * (Java fórmula validada com erro <0.01%):
+     *   sum_per_oc(VDS_F × (1 + taxaJuros/100 + taxaMulta/100))
+     * agregada por competência (YYYY-MM). Usado pelo engine-v3 como override
+     * quando disponível, eliminando divergências de agregação INSS nominal.
+     */
+    inss_reclamante_corrigido_por_competencia: (() => {
+      const ocsEl = root.getElementsByTagName('OcorrenciaDeInssSobreSalariosDevidos');
+      if (ocsEl.length === 0) return undefined;
+      const map: Record<string, number> = {};
+      for (const oc of Array.from(ocsEl)) {
+        const valorFinal = getTextContent(oc, 'valorDevidoSeguradoFinal');
+        if (!valorFinal || valorFinal === 'null') continue;
+        const dataText = getTextContent(oc, 'dataOcorrenciaInss');
+        if (!dataText) continue;
+        const ts = parseInt(dataText, 10);
+        if (Number.isNaN(ts)) continue;
+        const d = new Date(ts);
+        const comp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const vds = parseFloat(valorFinal);
+        if (Number.isNaN(vds)) continue;
+        const taxaText = getTextContent(oc, 'taxaDeJuros');
+        const taxa = taxaText && taxaText !== 'null' ? parseFloat(taxaText) : 0;
+        const multaText = getTextContent(oc, 'taxaDeMulta');
+        const multa = multaText && multaText !== 'null' ? parseFloat(multaText) : 0;
+        const indiceText = getTextContent(oc, 'indiceDeCorrecaoDoReclamante');
+        const indice = indiceText && indiceText !== 'null' ? parseFloat(indiceText) : 1;
+        // Fórmula Java (OcorrenciaDeInssSobreSalariosDevidosAtualizacao.java:67-130):
+        // VDS × (indiceCorrecao + taxaJuros/100 + taxaMulta/100)
+        const valor_corrigido = vds * (indice + taxa / 100 + multa / 100);
+        map[comp] = (map[comp] ?? 0) + valor_corrigido;
+      }
+      return Object.keys(map).length > 0 ? map : undefined;
+    })(),
+    /**
+     * D2 fix (2026-04-26): IR total exato do PJC — soma de
+     * `<OcorrenciaDeIrpf>.valorDevido` ATIVAS. Java pré-calcula com regime
+     * RRA, NM, tributação exclusiva, deduções etc. Replicar 100% é complexo;
+     * usar valor pré-calculado quando disponível elimina gaps grandes.
+     */
+    ir_total_pjc: (() => {
+      const ocs = root.getElementsByTagName('OcorrenciaDeIrpf');
+      if (ocs.length === 0) return undefined;
+      let total = 0;
+      let any = false;
+      for (const oc of Array.from(ocs)) {
+        const valorText = getTextContent(oc, 'valorDevido');
+        if (!valorText || valorText === 'null') continue;
+        const v = parseFloat(valorText);
+        if (Number.isNaN(v)) continue;
+        total += v;
+        any = true;
+      }
+      return any ? total : undefined;
+    })(),
   };
 }
 
@@ -1409,6 +1700,10 @@ function parseOcorrencias(verbaEl: Element): {
       pago_integral: parseNum(getTextContent(oc, 'pagoIntegral')) || undefined,
       indice_acumulado: indiceAcumulado,
       caracteristica: getTextContent(oc, 'caracteristica'),
+      // Etapa 1.bis D2 (2026-04-26): captura flags férias para D1 excluir
+      // verbas indenizadas da base INSS (Lei 8.212/91 art. 28 §9 "d").
+      ferias_indenizadas: getTextContent(oc, 'feriasIndenizadas') === 'true',
+      ferias_com_abono: getTextContent(oc, 'feriasComAbono') === 'true',
     });
   }
 

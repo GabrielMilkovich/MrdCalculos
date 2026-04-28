@@ -306,6 +306,14 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         data_liquidacao: correcaoDataLocal.data_liquidacao || new Date().toISOString().slice(0, 10),
         combinacoes_indice: combinacoesIndice,
         combinacoes_juros: combinacoesJuros,
+        // Sprint 4.2-A2 (ADC 58): gates UI explícitos. Default `undefined` ≈ true
+        // — preserva 96% calibrate. Quando user marca "Combinar com Outro Índice"
+        // OFF na UI, ModuloCorrecao salva combinacoes_indice=undefined no DB +
+        // transicao_adc58=false; aqui também repassamos a flag para sobrepor o
+        // engine caso futuras rotas reintroduzam combinações sem revogar a flag.
+        combinar_indice: combinacoesIndice && combinacoesIndice.length > 0 ? true : undefined,
+        combinar_juros: combinacoesJuros && combinacoesJuros.length > 0 ? true : undefined,
+        juros_pre_judicial: (correcaoDataLocal as Record<string, unknown>).aplicar_juros_fase_pre_judicial as boolean ?? true,
         juros_apos_deducao_cs: true, // PJe-Calc Criterion 8: juros após dedução CS
       } as PjeCorrecaoConfig;
 
@@ -335,9 +343,14 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         base_calculo: d(prevPrivadaData, 'base_calculo', 'diferenca'), deduzir_ir: d(prevPrivadaData, 'deduzir_ir', false),
       } as PjePrevidenciaPrivadaConfig;
 
+      // Sprint 4.2-C1 (TIER 3 P2): incluir flags Pensao agora consumidas pelo engine.
       const pensaoConfig = {
         apurar: d(pensaoData, 'apurar', false), percentual: d(pensaoData, 'percentual', 0),
         valor_fixo: d(pensaoData, 'valor_fixo'), base: d(pensaoData, 'base', 'liquido'),
+        incidir_sobre_juros: d(pensaoData, 'incidir_sobre_juros', false),
+        incidencia_sobre_fgts: d(pensaoData, 'incidencia_sobre_fgts', false),
+        incidencia_sobre_multa_fgts: d(pensaoData, 'incidencia_sobre_multa_fgts', false),
+        descontar_antes_ir: d(pensaoData, 'descontar_antes_ir', true),
       } as PjePensaoConfig;
 
       const salarioFamiliaConfig = {
@@ -368,6 +381,15 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
 
       // Execute engine com TODOS os dados (26 args — alinhado com orchestrator)
       const verbasCast = verbas.map(v => ({ ...v, valor: v.valor as "calculado" | "informado" }));
+      // Sprint 4.2-C1 (TIER 3 P2): config Atualização persistida em
+      // pjecalc_correcao_config.atualizacao (JSONB).
+      const atualizacaoRaw = (correcaoDataLocal as Record<string, unknown>).atualizacao as Record<string, unknown> | undefined;
+      const atualizacaoConfig = atualizacaoRaw ? {
+        aplicar_pensao: atualizacaoRaw.aplicar_pensao as boolean ?? false,
+        aplicar_multas_indenizacoes: atualizacaoRaw.aplicar_multas_indenizacoes as boolean ?? false,
+        aplicar_honorarios: atualizacaoRaw.aplicar_honorarios as boolean ?? false,
+        aplicar_custas: atualizacaoRaw.aplicar_custas as boolean ?? false,
+      } : {};
       const engine = new PjeCalcEngineV3(
         params, historicos, faltas, ferias, verbasCast, cartaoPonto,
         fgtsConfig, csConfig, irConfig, correcaoConfigLocal,
@@ -378,15 +400,15 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         prevPrivadaConfig,
         pensaoConfig,
         salarioFamiliaConfig,
-        // Engine unification: 4 DBs históricos antes ausentes na UI manual
+        // Engine unification (#26): 4 DBs históricos reais
         seguroDesempregoDBRows,
         salarioFamiliaDBRows,
         excecoesSabadoRows,
         salarioMinimoDBRows,
-        // multasConfig: as multas 467/477 já são propagadas via correcaoConfigLocal
-        // (linhas multa_467/multa_477 acima). Aqui passa multas_indenizacoes
-        // individuais quando disponíveis (não há UI hoje — array vazio é OK).
+        // multasConfig: 467/477 propagadas via correcaoConfigLocal; indenizações vazias por default
         { apurar_467: false, apurar_477: false, multas_indenizacoes: [] },
+        // Sprint 4.2-C1: aba Atualização (defaults preservam comportamento)
+        atualizacaoConfig,
       );
 
       // ── Validação pré-liquidação ──

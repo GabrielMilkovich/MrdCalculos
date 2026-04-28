@@ -1,7 +1,10 @@
 # MRD Calc — Liquidação Trabalhista
 
-[![Testes](https://img.shields.io/badge/vitest-600%2B%20passando-brightgreen)]()
-[![PJC parity](https://img.shields.io/badge/PJC%20parity-measurement%20in%20progress-yellow)]()
+**Versão atual:** v3.2.0 (Sprint 6 — auditoria + handoff completos · 2026-04-27)
+
+[![Testes](https://img.shields.io/badge/vitest-1215%20passando-brightgreen)]()
+[![Paridade](https://img.shields.io/badge/PJC%20parity-96%25%20%C2%B15%25%20(47%20PJCs)-success)]()
+[![E2E](https://img.shields.io/badge/playwright-9%20fluxos-success)]()
 [![LOC](https://img.shields.io/badge/TypeScript-%7E146k%20LOC-blue)]()
 [![Stack](https://img.shields.io/badge/stack-React%20%2B%20Supabase-informational)]()
 
@@ -23,7 +26,7 @@ Sistema de **cálculos trabalhistas com paridade ao PJe-Calc v2.15.1** do CNJ. M
 - 🧭 **Integração PJe Judicial** — gera pacote ZIP+Base64 pronto para petição
 - 🕑 **Versionamento** — histórico completo com diff entre versões
 - 📊 **Observability** — logging estruturado, audit log, painel de produtividade
-- ✅ **600+ testes Vitest + Playwright E2E** — paridade com 17 casos PJC reais
+- ✅ **1.215 testes Vitest + 9 fluxos Playwright E2E** — paridade com 47 casos PJC reais (96% ±5%)
 
 ---
 
@@ -91,7 +94,7 @@ npm run calibrate:dir          # calibra diretório inteiro de .PJC
 
 - ❌ **Nunca** usar `number` para valores monetários — sempre `Decimal`
 - ❌ **Nunca** usar `as any` sem comentário justificando
-- ❌ **Nunca** quebrar os 600+ testes existentes (rode `npm run test` antes de abrir PR)
+- ❌ **Nunca** quebrar os 1.215 testes existentes (rode `npm run test` antes de abrir PR)
 - ❌ **Nunca** editar migrations já aplicadas — crie uma nova
 - ✅ **Sempre** tratar `error` de queries Supabase
 - ✅ **Sempre** respeitar Row Level Security (RLS)
@@ -139,9 +142,25 @@ MrdCalculos/
 
 ## 📚 Documentação
 
-- 📖 [Manual do Usuário](./docs/MANUAL-USUARIO.md) — como usar os módulos, importar PJC, gerar relatórios
-- 🧑‍💻 [Manual do Desenvolvedor](./docs/DESENVOLVEDOR.md) — arquitetura, fluxo de cálculo, como estender
-- 📜 [Changelog](./docs/CHANGELOG.md) — histórico de releases e fases
+### Documentos principais (v3.2.0)
+- 🎯 [HANDOFF EXECUTIVO (CEO)](./docs/HANDOFF-CEO.md) — relatório de 1 página com estado atual, riscos e próximos passos
+- 🏗️ [SISTEMA OVERVIEW](./docs/SISTEMA-OVERVIEW.md) — guia técnico (arquitetura, pipeline, como adicionar flag/PJC)
+- 🛠️ [RUNBOOK DE PRODUÇÃO](./docs/RUNBOOK-PRODUCAO.md) — env vars, edge functions, monitoring, rollback
+- 📜 [Changelog](./CHANGELOG.md) — histórico organizado por release
+
+### Documentos por módulo de cálculo (jurídico + técnico)
+- 🧾 [01 — INSS Segurado e Empregador](./docs/calculos/01-INSS-segurado-empregador.md) (Lei 8.212/91 + EC 103/2019 + Lei 11.941/09)
+- 💰 [02 — IRPF Tabela e RRA](./docs/calculos/02-IRPF-tabela-RRA.md) (Lei 7.713/88 + Art. 12-A)
+- 🏦 [03 — FGTS Depósito e Multa](./docs/calculos/03-FGTS-deposito-multa.md) (Lei 8.036/90 + LC 110/2001)
+- 📈 [04 — Correção Monetária IPCA/SELIC](./docs/calculos/04-Correcao-Monetaria-IPCA-SELIC.md) (ADC 58 + EC 113 + Lei 14.905/2024)
+- ⏱️ [05 — Juros de Mora Trabalhista](./docs/calculos/05-Juros-Mora-Trabalhista.md) (TRD + SELIC + TAXA_LEGAL)
+- ⚖️ [06 — Multas CLT e CPC](./docs/calculos/06-Multas-CLT-CPC.md) (Arts. 467, 477 CLT + 523 CPC)
+- 👨‍⚖️ [07 — Honorários Advocatícios](./docs/calculos/07-Honorarios-Advocaticios.md) (CLT 791-A + Lei 9.250/95)
+- 👨‍👩‍👧 [08 — Pensão Alimentícia](./docs/calculos/08-Pensao-Alimenticia.md) (CC art. 1.694)
+
+### Documentos legados
+- 📖 [Manual do Usuário](./docs/MANUAL-USUARIO.md) — como usar os módulos
+- 🧑‍💻 [Manual do Desenvolvedor](./docs/DESENVOLVEDOR.md) — arquitetura detalhada
 
 ---
 

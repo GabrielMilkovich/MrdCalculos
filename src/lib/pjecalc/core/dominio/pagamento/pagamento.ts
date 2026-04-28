@@ -24,10 +24,16 @@
  * em MaquinaDeRateioDoPagamento (também stub).
  */
 import type Decimal from 'decimal.js';
+import DecimalClass from 'decimal.js';
 import type { Calculo } from '../calculo/calculo';
 import type { EventoAtualizacao } from './evento-atualizacao';
 import type { HonorarioDoPagamento } from './honorario-do-pagamento';
 import type { MultaDoPagamento } from './multa-do-pagamento';
+import { MensagemDeRecurso } from '../../comum/mensagem-de-recurso';
+import { Mensagens } from '../../comum/mensagens';
+import { NegocioException } from '../../comum/exceptions/negocio-exception';
+
+const ZERO = new DecimalClass(0);
 
 export class Pagamento implements EventoAtualizacao {
   static readonly PRIORIDADE_ATUALIZACAO = 5;
@@ -43,6 +49,8 @@ export class Pagamento implements EventoAtualizacao {
   private pagarPrecatorio: boolean = false;
   private valorPagamento: Decimal | null = null;
   private valorParcelaCreditoReclamante: Decimal | null = null;
+  private valorParcelaOutrosDebitos: Decimal | null = null;
+  private valorParcelaDebitosCobrarDoReclamante: Decimal | null = null;
 
   private apurarValorPrincipal: boolean = false;
   private valorParcelaPrincipal: Decimal | null = null;
@@ -96,6 +104,16 @@ export class Pagamento implements EventoAtualizacao {
 
   getValorParcelaCreditoReclamante(): Decimal | null { return this.valorParcelaCreditoReclamante; }
   setValorParcelaCreditoReclamante(v: Decimal | null): void { this.valorParcelaCreditoReclamante = v; }
+
+  getValorParcelaOutrosDebitos(): Decimal | null { return this.valorParcelaOutrosDebitos; }
+  setValorParcelaOutrosDebitos(v: Decimal | null): void { this.valorParcelaOutrosDebitos = v; }
+
+  getValorParcelaDebitosCobrarDoReclamante(): Decimal | null {
+    return this.valorParcelaDebitosCobrarDoReclamante;
+  }
+  setValorParcelaDebitosCobrarDoReclamante(v: Decimal | null): void {
+    this.valorParcelaDebitosCobrarDoReclamante = v;
+  }
 
   getApurarValorPrincipal(): boolean { return this.apurarValorPrincipal; }
   setApurarValorPrincipal(v: boolean): void { this.apurarValorPrincipal = v; }
@@ -193,4 +211,29 @@ export class Pagamento implements EventoAtualizacao {
 
   /** getPrioridade (EventoAtualizacao) — 5. */
   getPrioridade(): number { return Pagamento.PRIORIDADE_ATUALIZACAO; }
+
+  /**
+   * `verificarRateioInicial` — porte 1-a-1 de Pagamento.java:425-432.
+   *
+   * Valida consistência: soma das 3 parcelas (crédito reclamante +
+   * outros débitos + débitos cobrar do reclamante) deve bater com
+   * `valorPagamento`. Se divergir, anexa MSG0125 ao NegocioException
+   * retornado.
+   *
+   * Importante: NÃO lança — retorna o NegocioException acumulador,
+   * seguindo contrato Java (caller decide se levanta via `throw`).
+   * Parcelas/valorPagamento nulos são tratados como zero.
+   */
+  verificarRateioInicial(): NegocioException {
+    const excecao = new NegocioException();
+    const pagtoCredito = this.valorParcelaCreditoReclamante ?? ZERO;
+    const pagtoOutros = this.valorParcelaOutrosDebitos ?? ZERO;
+    const pagtoDebitos = this.valorParcelaDebitosCobrarDoReclamante ?? ZERO;
+    const somaPagamentos = pagtoCredito.plus(pagtoOutros).plus(pagtoDebitos);
+    const valor = this.valorPagamento ?? ZERO;
+    if (!somaPagamentos.equals(valor)) {
+      excecao.adicionarMensagemDeRecurso(new MensagemDeRecurso(Mensagens.MSG0125));
+    }
+    return excecao;
+  }
 }
