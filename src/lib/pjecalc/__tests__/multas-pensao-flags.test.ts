@@ -247,12 +247,14 @@ describe('Sprint 4.2-B2 — TIER 2 P1 multas/pensao flags', () => {
     });
 
     it('pensao apurar=true + descontar_antes_ir=true → IR menor que sem dedução', () => {
+      // apurar_rra=true: força NM=cardinalidade dos sets (não span+stretch),
+      // garantindo IR > 0 em fixtures de período curto.
       const semDeducao = runEngine({
-        ir: { apurar: true, deduzir_pensao: false },
+        ir: { apurar: true, apurar_rra: true, deduzir_pensao: false },
         pensao: { apurar: true, percentual: 30, descontar_antes_ir: false },
       });
       const comDeducao = runEngine({
-        ir: { apurar: true, deduzir_pensao: true },
+        ir: { apurar: true, apurar_rra: true, deduzir_pensao: true },
         pensao: { apurar: true, percentual: 30, descontar_antes_ir: true },
       });
       expect(comDeducao.resumo.ir_retido).toBeLessThan(semDeducao.resumo.ir_retido);

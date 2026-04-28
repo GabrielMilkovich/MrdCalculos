@@ -150,18 +150,24 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
       }
     }
 
-    // ─── 2. Art. 12-A: NM = |não-13| + |13| (sets separados) ───
-    // Regime de caixa (IN RFB 1.500/2014 art. 36): tributar todo o valor no momento
-    // do pagamento, sem divisão por meses. NM=1 → tabela mensal simples.
-    // apurar_rra=false: forçar tabela mensal (sem RRA), NM=1.
-    // apurar_rra=true:  forçar RRA mesmo se NM=1 (raro, mas respeitamos UI).
-    // apurar_rra=undefined: auto — RRA se NM>1.
+    // ─── 2. Art. 12-A — NM com hierarquia de flags ───
+    //
+    //   regime_caixa=true .... NM=1 (IN RFB 1.500/2014 art.36)
+    //   apurar_rra=false ..... NM=1 (UI força tabela mensal, sem RRA)
+    //   apurar_rra=true ...... NM = sets separados (cardinalidade não-13 + 13)
+    //                          UI explicita override — preserva semântica
+    //                          original da Lei 7.713/88 art.12-A
+    //   apurar_rra=undefined . NM = computeSpanMesesAteLiquidacao (PARITY
+    //                          ALVO 2, main #22 — span+stretch capado 12m)
+    //                          é o método CANÔNICO para auto-detecção,
+    //                          mais próximo do PJC v2.15.1 real
     let mesesTotal: number;
     if (regimeCaixa || apurarRraFlag === false) {
-      // Regime de caixa ou RRA explicitamente desligado: tabela mensal (NM=1)
       mesesTotal = 1;
-    } else {
+    } else if (apurarRraFlag === true) {
       mesesTotal = this.computeNMRra(compsNaoTreze, compsTreze);
+    } else {
+      mesesTotal = this.computeSpanMesesAteLiquidacao(compsNormal, 12);
     }
 
     // ─── 3. Deduções ───
@@ -310,6 +316,29 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     return Math.max(1, total);
   }
 
+  /**
+   * computeSpanMesesAteLiquidacao — span da primeira competência até
+   * `dataLiquidacao`, capado em `maxStretch` meses além da última competência.
+   *
+   * PJe-Calc v2.15.1: o NM em RRA reflete o período de acumulação até a
+   * quitação. O cap evita overshoot quando o gap entre última competência
+   * e dataLiquidacao é muito grande (caso de contratos antigos em demanda
+   * judicial demorada).
+   */
+  private computeSpanMesesAteLiquidacao(comps: Set<string>, maxStretch: number): number {
+    if (comps.size === 0) return 1;
+    const arr = [...comps].sort();
+    const [y1, m1] = arr[0].split('-').map(Number);
+    const [y2, m2] = arr[arr.length - 1].split('-').map(Number);
+    const spanCompetencias = (y2 - y1) * 12 + (m2 - m1) + 1;
+
+    const [yL, mL] = this.dataLiquidacao.slice(0, 7).split('-').map(Number);
+    const monthsBetweenLastCompAndLiq = (yL - y2) * 12 + (mL - m2);
+    const stretchPermitido = Math.max(0, Math.min(monthsBetweenLastCompAndLiq, maxStretch));
+
+    return Math.max(1, spanCompetencias + stretchPermitido);
+  }
+
   private getTabelaParaCompetencia(comp: string): {
     faixas: { ate: number; aliquota: number; deducao: number }[];
     deducaoDependente: number;
@@ -369,7 +398,7 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
       return this.honorariosConfig.valor_fixo;
     }
     let principalCorrigido = new Decimal(0);
-    let jurosMora = new Decimal(0);
+    const jurosMora = new Decimal(0);
     for (const vc of this.verbas) {
       for (const oc of vc.getOcorrenciasAtivas()) {
         const corrigida = oc.getDiferencaCorrigida();

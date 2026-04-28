@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { AdminRoute } from "./components/AdminRoute";
 import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import Casos from "./pages/Casos";
@@ -41,7 +42,7 @@ const App = () => (
             <Route path="/busca" element={<ProtectedRoute><Busca /></ProtectedRoute>} />
             <Route path="/documentos" element={<ProtectedRoute><Documentos /></ProtectedRoute>} />
             <Route path="/regras" element={<ProtectedRoute><RegrasTabelas /></ProtectedRoute>} />
-            <Route path="/admin/pjc-analyzer" element={<ProtectedRoute><PJCAnalyzer /></ProtectedRoute>} />
+            <Route path="/admin/pjc-analyzer" element={<AdminRoute><PJCAnalyzer /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -17,6 +17,7 @@ import {
   SELIC_ACUMULADO,
   TR_ACUMULADO,
 } from './indices-fallback';
+import { logger } from '@/lib/logger';
 
 export type IndiceNome =
   | 'IPCA-E'
@@ -99,8 +100,8 @@ function sliceFallback(
 
 function logWarn(silent: boolean | undefined, msg: string): void {
   if (silent) return;
-  // eslint-disable-next-line no-console
-  console.warn(`[indices-loader] ${msg}`);
+   
+  logger.warn(`[indices-loader] ${msg}`);
 }
 
 /**

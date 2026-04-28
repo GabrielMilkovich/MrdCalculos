@@ -36,6 +36,7 @@ Sistema de **cálculos trabalhistas com paridade ao PJe-Calc v2.15.1** do CNJ. M
 - **UI** — shadcn/ui (Radix) + Tailwind CSS + Lucide icons
 - **Estado / Dados** — TanStack Query + React Hook Form + Zod
 - **Backend** — Supabase (PostgreSQL + Edge Functions em Deno/TypeScript)
+- **Motor de cálculo canônico** — `PjeCalcEngineV3` em `src/lib/pjecalc/engine-v3.ts`, sobre o core portado 1:1 do PJe-Calc v2.15.1 em `src/lib/pjecalc/core/`. Motores legados V1/V2/V4 estão em quarentena em `_legacy/` — ver [`docs/MOTOR-UNICO-V3.md`](docs/MOTOR-UNICO-V3.md).
 - **Cálculo** — `decimal.js` com 20 dígitos — **nunca `number` nativo para valores monetários**
 - **Testes** — Vitest (unit + integration) + Playwright (E2E)
 - **Build** — Vite + SWC

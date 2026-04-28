@@ -152,7 +152,7 @@ export class Logger {
     const payload: unknown[] = [entry.message];
     if (entry.context) payload.push(entry.context);
     if (entry.error) payload.push(entry.error);
-    // eslint-disable-next-line no-console
+     
     const sink = entry.level === 'error' || entry.level === 'fatal' ? console.error : entry.level === 'warn' ? console.warn : console.log;
     sink(`%c${prefix}`, `color:${color};font-weight:bold`, ...payload);
   }

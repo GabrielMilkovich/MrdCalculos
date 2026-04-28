@@ -83,8 +83,13 @@ jobs:
           echo "═══════════════════════════════════════════════"
           echo " Deploy concluído: $((total - failures))/$total ok, $failures falhas"
           echo "═══════════════════════════════════════════════"
-          # Não falha o job se algumas falharem (reportado acima).
-          exit 0
+          # P0.6: falha o job se houve falhas no deploy de functions.
+          # Antes engolíamos com `exit 0` — agora falha alto e claro para
+          # evitar "deploys silenciosamente quebrados".
+          if [ $failures -gt 0 ]; then
+            echo "❌ $failures function(s) falharam — falhando job para visibilidade"
+            exit 1
+          fi
 
       - name: Apply database migrations
         if: ${{ github.event.inputs.target != 'somente-functions' }}
@@ -101,16 +106,23 @@ jobs:
           # A parte crítica (Edge Functions) já rodou acima. Aqui apenas
           # tentamos aplicar migrations pendentes e reportamos o status,
           # sem falhar o job em caso de mismatch de histórico.
-          if supabase db push --password "$SUPABASE_DB_PASSWORD"; then
+          # P0.6: separa "mismatch de histórico" (warning) de "falha real" (erro).
+          # Mismatch é recuperável (migration aplicada via dashboard) — não bloqueia.
+          # Outros erros (sintaxe SQL, perda de conexão, RLS quebrada) DEVEM falhar.
+          set +e
+          output=$(supabase db push --password "$SUPABASE_DB_PASSWORD" 2>&1)
+          status=$?
+          echo "$output"
+          set -e
+          if [ $status -eq 0 ]; then
             echo "✓ Migrations aplicadas (ou nenhuma pendente)."
+          elif echo "$output" | grep -qE "Remote migration versions not found|migration history does not match"; then
+            echo "⚠ Histórico local/remoto divergente — não bloqueia, mas requer atenção."
+            echo "   Para sincronizar rode localmente: supabase db pull --schema public"
           else
-            echo "⚠ db push falhou — provavelmente histórico local/remoto divergente."
-            echo "   O DB continua funcional; para sincronizar rode localmente:"
-            echo "     supabase db pull --schema public"
-            echo "   Edge Functions já foram deployadas acima."
+            echo "❌ db push falhou por motivo não esperado — falhando job."
+            exit 1
           fi
-          # Não falha o job: mismatch de histórico é recuperável.
-          exit 0
 
       - name: Post-deploy — list functions
         env:

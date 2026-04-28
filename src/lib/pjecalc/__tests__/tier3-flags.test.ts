@@ -252,12 +252,13 @@ describe('Sprint 4.2-C1 — TIER 3 P2 (9 flags)', () => {
 
   describe('Pensao.descontar_antes_ir (Lei 9.250/95 art.4º II)', () => {
     it('apurar=true + descontar_antes_ir=true → IR menor que sem dedução', () => {
+      // apurar_rra=true: força NM=sets (não span+stretch), garante IR > 0
       const semDeducao = runEngine({
-        ir: { apurar: true, deduzir_pensao: false },
+        ir: { apurar: true, apurar_rra: true, deduzir_pensao: false },
         pensao: { apurar: true, percentual: 30, descontar_antes_ir: false },
       });
       const comDeducao = runEngine({
-        ir: { apurar: true, deduzir_pensao: false },
+        ir: { apurar: true, apurar_rra: true, deduzir_pensao: false },
         pensao: { apurar: true, percentual: 30, descontar_antes_ir: true },
       });
       expect(comDeducao.resumo.ir_retido).toBeLessThan(semDeducao.resumo.ir_retido);

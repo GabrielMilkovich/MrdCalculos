@@ -182,8 +182,6 @@ async function main() {
       // Java BRUTO = LE + INSS_seg_NOMINAL + IR
       //   onde INSS_seg_NOMINAL = Σ cs_normal+cs_13 das apuracao_juros (não corrigido)
       // Engine: total_reclamada = principalCorrigido + jurosMora + fgts (= bruto Java)
-      // Nota: usar INSS NOMINAL (não corrigido) é importante porque o BRUTO Java
-      // antes da dedução do INSS é nominal — quando subtrai inss CORRIGIDO sobra LE PJC.
       let inssNominal = 0;
       for (const it of (analysis.apuracao_juros || [])) {
         inssNominal += (it.cs_normal || 0) + (it.cs_13 || 0);
@@ -191,13 +189,8 @@ async function main() {
       const pjc_bruto = pjc_liq + (inssNominal > 0 ? inssNominal : pjc_inss) + pjc_ir;
       const eng_bruto = r.total_reclamada;
 
-      // Comparação BRUTO vs BRUTO (semanticamente correta após D5 fix):
-      // - eng_bruto = r.total_reclamada = principalCorrigido + jurosMora + fgts
-      // - pjc_bruto = liquidoExequente + INSS_recl_corrigido + IR (= bruto Java)
-      // ANTES (jurosMora sub-estimado): r.total_reclamada acidentalmente ≈ LE PJC.
-      // AGORA: r.total_reclamada = bruto Java exato (validado em antonio +0,28%).
       const dl_bruto = calcDelta(eng_bruto, pjc_bruto);
-      const dl_le = calcDelta(r.total_reclamada, pjc_liq); // legado — diff puramente artefato
+      const dl_le = calcDelta(r.total_reclamada, pjc_liq); // legado
       const dl = dl_bruto; // métrica primária = bruto vs bruto
       const badge = Math.abs(dl) <= 1 ? '✅' : Math.abs(dl) <= 5 ? '⚠️' : '❌';
 

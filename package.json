@@ -20,7 +20,10 @@
     "calibrate:dir": "npx tsx scripts/calibration-pipeline.ts --dir",
     "audit:port": "npx tsx scripts/audit-java-vs-ts.ts",
     "audit:port:check": "npx tsx scripts/audit-java-vs-ts.ts --check",
-    "audit:port:baseline": "npx tsx scripts/audit-java-vs-ts.ts --out docs/baselines/audit-port-baseline.json"
+    "audit:port:baseline": "npx tsx scripts/audit-java-vs-ts.ts --out docs/baselines/audit-port-baseline.json",
+    "calibrate:v3": "npx tsx scripts/calibration-pipeline-v3.ts",
+    "calibrate:v3:dir": "npx tsx scripts/calibration-pipeline-v3.ts --dir",
+    "calibrate:compare": "npx tsx scripts/calibrate-compare-v1-v3.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

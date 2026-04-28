@@ -8,8 +8,10 @@
 
 const LEGACY_ENGINE_DEPRECATION_WARNING = '[DEPRECATED] Motor V1 (src/lib/calculation/engine.ts) foi acionado. Use PjeCalcEngine em src/lib/pjecalc/engine.ts. Este motor será removido em breve.';
 
-// Runtime guard: warn loudly when this module is used
-if (typeof console !== 'undefined') {
+// Runtime guard: warn loudly when this module is used.
+// Silenciado em NODE_ENV=test para não poluir output dos parity tests
+// legados (consolidação V3, 2026-04-22).
+if (typeof console !== 'undefined' && (typeof process === 'undefined' || process.env.NODE_ENV !== 'test')) {
   console.warn(LEGACY_ENGINE_DEPRECATION_WARNING);
 }
 
@@ -29,7 +31,7 @@ import {
   Warning,
   AuditLine,
   arredondarMoeda,
-} from './types';
+} from '../types';
 import { createHorasExtrasCalculator } from './calculators/horas-extras';
 import { createReflexos13Calculator } from './calculators/reflexos-13';
 import { createReflexosFeriasCalculator } from './calculators/reflexos-ferias';
@@ -113,6 +115,18 @@ export class CalculationEngine {
     facts: FactMap,
     dataReferencia?: Date
   ) {
+    // [DEPRECATION WARNING — adicionado em consolidação V3 (2026-04-22)]
+    // Warning de instanciação (complementa o warning de module-load acima).
+    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+      const stack = new Error().stack?.split('\n').slice(2, 5).join('\n') ?? '';
+      console.warn(
+        '[DEPRECATED] CalculationEngine (motor legado V1, src/lib/calculation/_legacy/engine.ts) foi instanciado. ' +
+        'Use PjeCalcEngineV3 em @/lib/pjecalc/engine-v3. ' +
+        'Este motor será removido após 2026-05-20.\n' +
+        'Stack:\n' + stack,
+      );
+    }
+
     this.profile = profile;
     this.indices = indices;
     this.taxTables = taxTables;
@@ -241,7 +255,7 @@ export class CalculationEngine {
 
     // Acumuladores para passar entre calculadoras
     const verbasPorCompetencia: Record<string, number> = {};
-    let accumulatedInputs: CalculatorInputs = {};
+    const accumulatedInputs: CalculatorInputs = {};
 
     // Executar na ordem
     for (const nome of executionOrder) {

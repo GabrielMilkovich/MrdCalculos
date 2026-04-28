@@ -19,7 +19,7 @@ import {
   RubricaRisco,
   toDecimal,
   hashObject,
-} from '../types/index';
+} from '../../types/index';
 
 // =====================================================
 // MAPA DE FUNDAMENTOS LEGAIS POR RUBRICA (V3: URLs oficiais obrigatórias)

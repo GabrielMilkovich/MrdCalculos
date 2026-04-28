@@ -16,8 +16,8 @@ import {
   Warning,
   arredondarMoeda,
   parseFactAsNumber,
-} from '../types';
-import { FGTS_MOVEMENT_CODES } from '../cross-validation';
+} from '../../types';
+import { FGTS_MOVEMENT_CODES } from '../../cross-validation';
 
 interface RescisaoParams {
   tipo_demissao: 'sem_justa_causa' | 'justa_causa' | 'pedido_demissao' | 'rescisao_indireta' | 'acordo';

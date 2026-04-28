@@ -6,7 +6,7 @@ import Decimal from 'decimal.js';
 import {
   CalcResultItem,
   toDecimal,
-} from '../types/index';
+} from '../../types/index';
 import { Rubrica } from './RubricaEngine';
 
 // Configuração de precisão

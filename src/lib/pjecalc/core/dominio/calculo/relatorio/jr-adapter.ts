@@ -78,5 +78,5 @@ export class JRAdapterDataSource<T extends JRAdapter> {
  * JREmptyDS — bean marker "sem dados" para relatórios que só têm cabeçalho.
  * Java: `net.sf.jasperreports.engine.data.JREmptyDataSource`.
  */
-// eslint-disable-next-line @typescript-eslint/no-extraneous-class
+ 
 export class JREmptyDS {}

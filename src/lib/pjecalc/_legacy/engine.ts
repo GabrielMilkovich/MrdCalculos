@@ -5,16 +5,16 @@
 // =====================================================
 
 import Decimal from 'decimal.js';
-import { getReformaRules, REFORMA_DATE } from './reforma-trabalhista';
-import { getFPASByCodigo } from './terceiros-contributions';
-import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO } from './indices-fallback';
-import { calcularDataPrescricaoFgts } from './core-adapters';
+import { getReformaRules, REFORMA_DATE } from '../reforma-trabalhista';
+import { getFPASByCodigo } from '../terceiros-contributions';
+import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, TR_ACUMULADO } from '../indices-fallback';
+import { calcularDataPrescricaoFgts } from '../core-adapters';
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_DOWN });
 
 // Re-export all types and constants for backward compatibility
-export * from './engine-types';
-export { CNAE_ALIQUOTAS_COMUNS } from './engine-constants';
+export * from '../engine-types';
+export { CNAE_ALIQUOTAS_COMUNS } from '../engine-constants';
 
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias,
@@ -30,12 +30,12 @@ import type {
   PjePrevidenciaPrivadaResult, PjeSalarioFamiliaResult,
   PjeCombinacaoIndice, PjeCombinacaoJuros,
   PjeSeguroDesempregoDB, PjeSalarioFamiliaDB, PjeSalarioMinimoRow,
-} from './engine-types';
+} from '../engine-types';
 
 import {
   DEFAULT_FAIXAS_INSS, DEFAULT_FAIXAS_IR, DEFAULT_DEDUCAO_DEPENDENTE,
   SEGURO_DESEMP_2025, SALARIO_FAMILIA_2025,
-} from './engine-constants';
+} from '../engine-constants';
 
 // =====================================================
 // MOTOR DE CÁLCULO
@@ -118,6 +118,18 @@ export class PjeCalcEngine {
     excecoesSabado: PjeExcecaoSabado[] = [],
     salarioMinimoDB: PjeSalarioMinimoRow[] = [],
   ) {
+    // [DEPRECATION WARNING — adicionado em consolidação V3 (2026-04-22)]
+    // Silenciado em testes para não poluir output dos parity tests legados.
+    if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'test') {
+      const stack = new Error().stack?.split('\n').slice(2, 5).join('\n') ?? '';
+      console.warn(
+        '[DEPRECATED] PjeCalcEngine (motor legado V1, src/lib/pjecalc/_legacy/engine.ts) foi instanciado. ' +
+        'Use PjeCalcEngineV3 em @/lib/pjecalc/engine-v3. ' +
+        'Este motor será removido após 2026-05-20.\n' +
+        'Stack:\n' + stack,
+      );
+    }
+
     this.params = params;
     this.historicos = historicos;
     this.faltas = faltas;
@@ -269,8 +281,8 @@ export class PjeCalcEngine {
         const periodo = this.getPeriodoCalculo();
         const periodoInicio = new Date(periodo.inicio);
         const periodoFim = new Date(periodo.fim);
-        let efetInicio = admDate > periodoInicio ? admDate : periodoInicio;
-        let efetFim = demDate < periodoFim ? demDate : periodoFim;
+        const efetInicio = admDate > periodoInicio ? admDate : periodoInicio;
+        const efetFim = demDate < periodoFim ? demDate : periodoFim;
         if (efetInicio > efetFim) return 0;
         let avos = 0;
         for (let m = efetInicio.getMonth(); m <= efetFim.getMonth(); m++) {
@@ -4534,4 +4546,90 @@ export class PjeCalcEngine {
       total_final: totalDiferenca.toDP(2).toNumber(),
     };
   }
+}
+// =====================================================
+// MULTI-VÍNCULO: Execute engine per contract and merge
+// =====================================================
+
+import type { PjeMultiVinculo } from '../engine-types';
+
+export interface MultiVinculoResult {
+  vinculos: { vinculo_id: string; label: string; resultado: PjeLiquidacaoResult }[];
+  consolidado: PjeLiquidacaoResult;
+}
+
+/**
+ * @deprecated Em quarentena junto com PjeCalcEngine V1. Sem call sites em produção.
+ * Mantido apenas para histórico de referência.
+ */
+export function liquidarMultiVinculo(
+  multi: PjeMultiVinculo,
+  fgtsConfig: PjeFGTSConfig,
+  csConfig: PjeCSConfig,
+  irConfig: PjeIRConfig,
+  correcaoConfig: PjeCorrecaoConfig,
+  honorariosConfig: PjeHonorariosConfig,
+  custasConfig: PjeCustasConfig,
+  seguroConfig: PjeSeguroConfig,
+  indicesDB: PjeIndiceRow[] = [],
+  faixasINSSDB: PjeINSSFaixaRow[] = [],
+  faixasIRDB: PjeIRFaixaRow[] = [],
+): MultiVinculoResult {
+  const resultados: MultiVinculoResult['vinculos'] = [];
+
+  for (const v of multi.vinculos) {
+    const engine = new PjeCalcEngine(
+      { ...v.params, vinculo_id: v.vinculo_id, vinculo_label: v.label },
+      v.historicos, v.faltas, v.ferias, v.verbas, v.cartaoPonto,
+      fgtsConfig, csConfig, irConfig, correcaoConfig, honorariosConfig, custasConfig, seguroConfig,
+      indicesDB, faixasINSSDB, faixasIRDB,
+    );
+    const resultado = engine.liquidar();
+    resultados.push({ vinculo_id: v.vinculo_id, label: v.label, resultado });
+  }
+
+  if (resultados.length === 0) {
+    throw new Error('liquidarMultiVinculo: nenhum vínculo fornecido');
+  }
+  const consolidado = { ...resultados[0].resultado };
+  if (resultados.length > 1) {
+    const allVerbas = resultados.flatMap(r => r.resultado.verbas);
+    consolidado.verbas = allVerbas;
+
+    consolidado.resumo = {
+      ...consolidado.resumo,
+      principal_bruto: resultados.reduce((s, r) => s + r.resultado.resumo.principal_bruto, 0),
+      principal_corrigido: resultados.reduce((s, r) => s + r.resultado.resumo.principal_corrigido, 0),
+      juros_mora: resultados.reduce((s, r) => s + r.resultado.resumo.juros_mora, 0),
+      fgts_total: resultados.reduce((s, r) => s + r.resultado.resumo.fgts_total, 0),
+      cs_segurado: resultados.reduce((s, r) => s + r.resultado.resumo.cs_segurado, 0),
+      cs_empregador: resultados.reduce((s, r) => s + r.resultado.resumo.cs_empregador, 0),
+      ir_retido: resultados.reduce((s, r) => s + r.resultado.resumo.ir_retido, 0),
+      abono_pecuniario: resultados.reduce((s, r) => s + (r.resultado.resumo.abono_pecuniario ?? 0), 0),
+      liquido_reclamante: resultados.reduce((s, r) => s + r.resultado.resumo.liquido_reclamante, 0),
+      total_reclamada: resultados.reduce((s, r) => s + r.resultado.resumo.total_reclamada, 0),
+    };
+
+    const allItens = resultados.flatMap(r =>
+      (r.resultado.validacao?.itens || []).map(it => ({ ...it, mensagem: `[${r.label}] ${it.mensagem}` }))
+    );
+    if (allItens.length > 0) {
+      consolidado.validacao = {
+        valido: allItens.every(i => i.tipo !== 'erro'),
+        itens: allItens,
+        erros: allItens.filter(i => i.tipo === 'erro').length,
+        alertas: allItens.filter(i => i.tipo === 'alerta').length,
+        observacoes: allItens.filter(i => i.tipo === 'observacao').length,
+      };
+    }
+
+    const allWarnings = resultados.flatMap(r =>
+      (r.resultado.calculation_warnings || []).map(w => ({ ...w, module: `[${r.label}] ${w.module}` }))
+    );
+    if (allWarnings.length > 0) {
+      consolidado.calculation_warnings = allWarnings;
+    }
+  }
+
+  return { vinculos: resultados, consolidado };
 }

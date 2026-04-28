@@ -47,7 +47,7 @@ interface LiquidacaoRow {
   created_at: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const sb = (table: string): any => supabase.from(table as any);
 
 /**

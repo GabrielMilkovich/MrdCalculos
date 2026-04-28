@@ -17,7 +17,7 @@ import {
   getMonthsBetween,
   formatCompetencia,
   arredondarMoeda,
-} from '../types';
+} from '../../types';
 
 interface HorasExtrasRules {
   divisor: number;
@@ -65,7 +65,7 @@ export function createHorasExtrasCalculator(rulesData: CalculatorRules): Calcula
       const dataDemissao = parseFactAsDate(ctx.facts['data_demissao']) || ctx.dataReferencia;
       
       // Média de horas extras mensais - aceita chaves legadas e atuais
-      let horasMensais = parseFactAsNumber(ctx.facts['horas_extras_mensais']) || 
+      const horasMensais = parseFactAsNumber(ctx.facts['horas_extras_mensais']) || 
                           parseFactAsNumber(ctx.facts['media_horas_extras']) ||
                           parseFactAsNumber(ctx.facts['horas_extras']) ||
                           (inputs.horas_extras_mensais as number) || 0;

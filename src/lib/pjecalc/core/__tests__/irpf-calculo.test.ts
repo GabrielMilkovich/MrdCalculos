@@ -181,14 +181,18 @@ describe('IrpfModuloAdapter — integração com engine V3', () => {
   }
 
   it('8. Base coletada de verbas COMUM → IR > 0', () => {
-    // 24 meses × R$ 3000 = R$ 72000; sem 13/férias/deduções
+    // 24 meses × R$ 3000 = R$ 72000; sem 13/férias/deduções.
+    // PARITY ALVO 2: dataLiq agora é considerado para NM (Lei 7.713/88 art 12-A).
+    // Para evitar dependência da data fixture (que estende NM além do span de
+    // verbas e empurra a base para faixa isenta), uso dataLiq na própria
+    // última competência → mesesRRA = 24 (span puro, comportamento original).
     const comps = Array.from({ length: 24 }, (_, i) => {
       const y = 2023 + Math.floor(i / 12);
       const m = (i % 12) + 1;
       return { comp: `${y}-${String(m).padStart(2, '0')}`, valor: 3000 };
     });
     const vc = makeVerba(CaracteristicaDaVerbaEnum.COMUM, comps);
-    const adapter = setup([vc], { ...IR_CONFIG_BASE, deduzir_cs: false });
+    const adapter = setup([vc], { ...IR_CONFIG_BASE, deduzir_cs: false }, '2024-12-01');
     expect(adapter.impostoDevido).toBeGreaterThan(0);
     expect(adapter.mesesRRA).toBe(24);
     expect(adapter.metodo).toBe('art_12a_rra');
@@ -261,10 +265,12 @@ describe('IrpfModuloAdapter — integração com engine V3', () => {
       return { comp: `${y}-${String(m).padStart(2, '0')}`, valor: 3500 };
     });
     const vc = makeVerba(CaracteristicaDaVerbaEnum.COMUM, comps);
-    const adapterSemDep = setup([vc], { ...IR_CONFIG_BASE, deduzir_cs: false });
+    // apurar_rra=true: força NM=cardinalidade dos sets (não span+stretch),
+    // garantindo NM=24 e IR > 0 em sem-deps (fixture original).
+    const adapterSemDep = setup([vc], { ...IR_CONFIG_BASE, deduzir_cs: false, apurar_rra: true });
     const adapterComDep = setup(
       [makeVerba(CaracteristicaDaVerbaEnum.COMUM, comps)],
-      { ...IR_CONFIG_BASE, deduzir_cs: false, dependentes: 2 },
+      { ...IR_CONFIG_BASE, deduzir_cs: false, dependentes: 2, apurar_rra: true },
     );
     expect(adapterComDep.impostoDevido).toBeLessThan(adapterSemDep.impostoDevido);
   });

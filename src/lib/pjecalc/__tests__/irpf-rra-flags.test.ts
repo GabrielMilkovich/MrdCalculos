@@ -174,11 +174,14 @@ describe('IrpfModuloAdapter — flags RRA (Sprint 4.2-A1)', () => {
    */
   it('incidir_sobre_principal_tributavel=false → base IR = 0 (verbas irpf=true excluídas)', () => {
     // Normal: verbas com irpf=true incluídas na base → IR > 0
+    // apurar_rra=true força NM=cardinalidade dos sets (não span+stretch),
+    // garantindo que NM=1 com 1 mês de verba e IR > 0.
     const engineOn = createEngine({
       params: params1(),
       verbas: verbas1Mes(), // irpf=true
       irConfig: makeIrConfig({
         apurar: true,
+        apurar_rra: true,
         deduzir_cs: false,
         dependentes: 0,
         incidir_sobre_principal_tributavel: true, // default
@@ -193,6 +196,7 @@ describe('IrpfModuloAdapter — flags RRA (Sprint 4.2-A1)', () => {
       verbas: verbas1Mes(), // irpf=true, mas será excluída
       irConfig: makeIrConfig({
         apurar: true,
+        apurar_rra: true,
         deduzir_cs: false,
         dependentes: 0,
         incidir_sobre_principal_tributavel: false, // excluir tributáveis

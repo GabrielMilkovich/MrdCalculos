@@ -20,6 +20,30 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/lib/**/*.ts'],
+      // Thresholds INFORMACIONAIS — não falham CI hoje. Servem como meta
+      // visível ao rodar `npm run test:coverage`. Subir esses pisos
+      // gradualmente conforme a paridade golden cresce (ver
+      // docs/KNOWN-LIMITATIONS.md).
+      thresholds: {
+        // Core portado 1:1 do Java — alvo alto
+        'src/lib/pjecalc/core/**': {
+          lines: 60,
+          branches: 50,
+          functions: 60,
+          statements: 60,
+        },
+        // Engine V3 + módulos — alvo médio (fluxos de UI dependem disso)
+        'src/lib/pjecalc/engine-v3.ts': {
+          lines: 50,
+          branches: 40,
+          functions: 50,
+        },
+        'src/lib/pjecalc/modulos/**': {
+          lines: 60,
+          branches: 50,
+          functions: 60,
+        },
+      },
     },
   },
   resolve: {

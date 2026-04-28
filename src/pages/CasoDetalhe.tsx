@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { logger } from "@/lib/logger";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
@@ -527,7 +528,7 @@ export default function CasoDetalhe() {
       setReviewResult(buildReviewFromDomain(domainResult));
       setShowReviewDialog(true);
     } catch (e) {
-      console.error("Domain pre-calc review error:", e);
+      logger.error("Domain pre-calc review error", { error: String(e) });
       toast.error("Erro na revisão: " + (e as Error).message);
     } finally {
       setIsReviewing(false);
@@ -671,7 +672,7 @@ export default function CasoDetalhe() {
       updateStatusMutation.mutate("calculado");
       setActiveTab("calculo");
     } catch (e) {
-      console.error(e);
+      logger.error("CasoDetalhe handler error", { error: String(e) });
       toast.error("Falha: " + (e as Error).message);
     } finally {
       setIsCalculating(false);

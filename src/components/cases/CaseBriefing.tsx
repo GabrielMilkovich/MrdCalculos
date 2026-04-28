@@ -21,6 +21,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 interface CaseBriefingProps {
   caseId: string;
@@ -163,7 +164,7 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
       }
       queryClient.invalidateQueries({ queryKey: ["case_briefing", caseId] });
     } catch (e) {
-      console.error("Failed to save briefing:", e);
+      logger.error("Failed to save briefing", { error: String(e) });
     }
   };
 
@@ -293,7 +294,7 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
       setGeneratedAt(new Date());
       toast.success("Diagnóstico gerado e salvo com sucesso!");
     } catch (e) {
-      console.error(e);
+      logger.error("CaseBriefing handler error", { error: String(e) });
       toast.error("Falha ao gerar diagnóstico: " + (e as Error).message);
     } finally {
       setIsGenerating(false);

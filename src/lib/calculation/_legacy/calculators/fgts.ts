@@ -12,7 +12,7 @@ import {
   Warning,
   VerbaOutput,
   arredondarMoeda,
-} from '../types';
+} from '../../types';
 
 interface FGTSRules {
   aliquota: number; // 8% padrão

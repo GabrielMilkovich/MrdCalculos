@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { logger } from "@/lib/logger";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
@@ -246,7 +247,7 @@ export default function NovoCalculo() {
       toast.success('Caso criado com sucesso! Redirecionando...');
       navigate(`/casos/${caso.id}`);
     } catch (err) {
-      console.error(err);
+      logger.error("NovoCalculo handler error", { error: String(err) });
       toast.error('Erro ao criar caso: ' + (err as Error).message);
     } finally {
       setIsSubmitting(false);

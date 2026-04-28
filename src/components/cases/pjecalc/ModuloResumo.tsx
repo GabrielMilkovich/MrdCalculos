@@ -15,6 +15,16 @@ import { ComparacaoCenarios } from "./ComparacaoCenarios";
 import { calcularCompletude } from "@/lib/pjecalc/completude";
 import * as svc from "@/lib/pjecalc/service";
 import { PjeCalcEngineV3 } from "@/lib/pjecalc/engine-v3";
+// Engine unification (P-prod): UI manual deve carregar os mesmos 4 DBs
+// históricos que o orchestrator usa, para evitar fallbacks hardcoded em
+// casos PRE_ADC58 longos. Ver docs sobre divergência de inputs UI vs
+// orchestrator vs calibrate.
+import {
+  loadSeguroDesempregoDB,
+  loadSalarioFamiliaDBRows,
+  loadExcecoesSabado,
+  loadSalarioMinimoDB,
+} from "@/lib/pjecalc/orchestrator";
 import type {
   PjeParametros, PjeHistoricoSalarial, PjeFalta, PjeFerias,
   PjeVerba, PjeCartaoPonto, PjeFGTSConfig, PjeCSConfig,
@@ -36,6 +46,7 @@ import { fecharCalculo, reabrirCalculo, duplicarCalculo } from "@/lib/pjecalc/ca
 import { RelatorioConsolidado } from "./RelatorioConsolidado";
 import { RelatorioPDFDownload } from "./RelatorioPDFDownload";
 import type { DadosProcesso } from "@/lib/pjecalc/pdf/types";
+import { logger } from "@/lib/logger";
 
 interface Props { caseId: string; onBeforeLiquidar?: () => Promise<void>; }
 
@@ -132,8 +143,13 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       ]);
 
       // ── Fase 1: Carregar dados do banco (séries históricas e tabelas versionadas) ──
+      // Inclui 4 DBs históricos (seguroDesemprego, salarioFamilia, excecoesSabado,
+      // salarioMinimo) para alinhar inputs UI ↔ orchestrator. Sem isso, motor
+      // caía em fallbacks hardcoded de 2025 para casos PRE_ADC58 longos.
       const [indicesData, inssFaixasData, irFaixasData, dadosProcessoLocal,
-             prevPrivadaData, pensaoData, sfData, feriadosData, multasData] = await Promise.all([
+             prevPrivadaData, pensaoData, sfData, feriadosData, multasData,
+             seguroDesempregoDBRows, salarioFamiliaDBRows, excecoesSabadoRows,
+             salarioMinimoDBRows] = await Promise.all([
         svc.getIndicesCorrecao(),
         svc.getInssFaixas(),
         svc.getIrFaixas(),
@@ -143,6 +159,10 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         svc.getSalarioFamiliaConfig(caseId).then(r => (r || {}) as Record<string, unknown>),
         svc.getFeriados(),
         svc.getMultasConfig(caseId).then(r => (r || {}) as Record<string, unknown>),
+        loadSeguroDesempregoDB(),
+        loadSalarioFamiliaDBRows(),
+        loadExcecoesSabado(caseId),
+        loadSalarioMinimoDB(),
       ]);
 
       if (!paramsRes) throw new Error("Configure os Parâmetros primeiro.");
@@ -359,7 +379,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         deducao: Number(f.deducao), deducao_dependente: Number(f.deducao_dependente),
       }));
 
-      // Execute engine com TODOS os dados
+      // Execute engine com TODOS os dados (26 args — alinhado com orchestrator)
       const verbasCast = verbas.map(v => ({ ...v, valor: v.valor as "calculado" | "informado" }));
       // Sprint 4.2-C1 (TIER 3 P2): config Atualização persistida em
       // pjecalc_correcao_config.atualizacao (JSONB).
@@ -375,16 +395,19 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         fgtsConfig, csConfig, irConfig, correcaoConfigLocal,
         honorariosConfig, custasConfigLocal, seguroConfig,
         indicesDB, faixasINSSDB, faixasIRDB,
-        [], // excecoesCargas
+        [], // excecoesCargas (TODO: carregar via loadExcecoesCarga quando disponível)
         feriadosDB.map(f => ({ ...f, tipo: f.tipo as "estadual" | "facultativo" | "municipal" | "nacional" })),
         prevPrivadaConfig,
         pensaoConfig,
         salarioFamiliaConfig,
-        [], // seguroDesempregoDB
-        [], // salarioFamiliaDB
-        [], // excecoesSabado
-        [], // salarioMinimoDB
-        { apurar_467: false, apurar_477: false }, // multasConfig (defaults)
+        // Engine unification (#26): 4 DBs históricos reais
+        seguroDesempregoDBRows,
+        salarioFamiliaDBRows,
+        excecoesSabadoRows,
+        salarioMinimoDBRows,
+        // multasConfig: 467/477 propagadas via correcaoConfigLocal; indenizações vazias por default
+        { apurar_467: false, apurar_477: false, multas_indenizacoes: [] },
+        // Sprint 4.2-C1: aba Atualização (defaults preservam comportamento)
         atualizacaoConfig,
       );
 
@@ -437,7 +460,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         resumo_verbas: result as any,
       });
       if (resError) {
-        console.error("Erro ao persistir resultado:", resError);
+        logger.error("ModuloResumo persistir resultado falhou", { error: String(resError) });
         toast.error("Erro ao salvar resultado no banco de dados. O cálculo foi executado mas pode não ter sido salvo.");
       }
 
@@ -477,7 +500,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         for (let i = 0; i < ocRows.length; i += 500) {
           const { error: ocErr } = await supabase.from("pjecalc_ocorrencia_calculo" as any).insert(ocRows.slice(i, i + 500));
           if (ocErr) {
-            console.error("Erro ao persistir ocorrências:", ocErr);
+            logger.error("ModuloResumo persistir ocorrencias falhou", { error: String(ocErr) });
             toast.warning("Algumas ocorrências podem não ter sido salvas. Tente recalcular.");
           }
         }
