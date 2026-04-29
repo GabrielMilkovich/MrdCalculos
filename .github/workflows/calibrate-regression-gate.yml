@@ -1,0 +1,95 @@
+name: Calibrate Regression Gate
+
+# Bloqueia merge se calibrate cair de 94% media OU se properties falharem.
+# Sprint 4 — validacao continua sem JAR Java.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  property-tests:
+    runs-on: ubuntu-latest
+    name: Property-based testing (fast-check)
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Rodar property tests (17 invariantes financeiras)
+        run: npx vitest run src/lib/pjecalc/__tests__/property-invariantes.test.ts --reporter=default
+
+  calibrate-no-regression:
+    runs-on: ubuntu-latest
+    name: Calibrate >= 94% (sem regressao)
+    timeout-minutes: 10
+    # Apenas em PRs (em push para main eh registro, nao gate)
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Rodar calibrate-pipeline-v3
+        id: calibrate
+        run: |
+          npx tsx scripts/calibration-pipeline-v3.ts | tee calibrate.log
+          # Extrai porcentagem da linha "MEDIA: X%" (formato esperado do script)
+          MEDIA=$(grep -oE 'media[: ]+([0-9]+\.?[0-9]*)' calibrate.log | head -1 | grep -oE '[0-9]+\.?[0-9]*' || echo "0")
+          echo "media=$MEDIA" >> $GITHUB_OUTPUT
+          echo "Calibrate media: $MEDIA%"
+
+      - name: Falhar se media < 94%
+        run: |
+          MEDIA="${{ steps.calibrate.outputs.media }}"
+          # Bash float compare via awk
+          BELOW=$(awk -v m="$MEDIA" 'BEGIN { print (m < 94) ? 1 : 0 }')
+          if [ "$BELOW" = "1" ]; then
+            echo "::error::Calibrate REGREDIU: $MEDIA% < 94% baseline"
+            exit 1
+          fi
+          echo "::notice::Calibrate OK: $MEDIA%"
+
+  vitest-suite:
+    runs-on: ubuntu-latest
+    name: Vitest suite completa (sem regressao)
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Rodar suite completa
+        run: |
+          npx vitest run --reporter=default 2>&1 | tee test.log
+          # Conta passed
+          PASSED=$(grep -oE 'Tests +([0-9]+) passed' test.log | grep -oE '[0-9]+' | head -1 || echo "0")
+          echo "Vitest passed: $PASSED"
+          if [ "$PASSED" -lt "1388" ]; then
+            echo "::error::Suite regrediu: $PASSED < 1388 baseline"
+            exit 1
+          fi
+
+      - name: TypeScript strict check
+        run: npx tsc --noEmit
