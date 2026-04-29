@@ -100,9 +100,11 @@ async function main() {
   }
 
   // Oracle: <ApuracaoDeJuros> consolida POR COMPETÊNCIA
-  // valor_corrigido = principal corrigido na liquidação
-  // taxa_juros = % juros acumulado a partir de dataInicial
-  // juros_oracle = valor_corrigido × (taxa_juros / 100)  ← conforme Java ApuracaoDeJuros.getJuros
+  // BUG FIX (Sprint 2B): Java oracle pode emitir MULTIPLAS ApuracaoDeJuros
+  // para a MESMA competencia (uma para verba "normal" e outra para verba "13",
+  // outra para verba_pre_acordo, etc). O Map.set() anterior SOBRESCREVIA a
+  // primeira entrada, gerando gap fictício de R$ 6.443 (refutado em Sprint 2B).
+  // Corrigido: AGREGAR (somar) por competência, manter taxa primeira como referência.
   const oraclePorComp = new Map<string, { valor_corrigido: number; taxa_juros: number; juros: number; cs_normal: number; cs_13: number }>();
   for (const ap of (a.apuracao_juros || [])) {
     const d = new Date(ap.competencia);
@@ -111,13 +113,22 @@ async function main() {
     // (base de juros é DIFERENÇA-INSS, conforme base_de_juros_das_verbas=VERBA_INSS)
     const jurosBase = ap.valor_corrigido - (ap.cs_normal || 0) - (ap.cs_13 || 0);
     const juros = jurosBase * (ap.taxa_juros || 0) / 100;
-    oraclePorComp.set(k, {
-      valor_corrigido: ap.valor_corrigido,
-      taxa_juros: ap.taxa_juros || 0,
-      juros: juros,
-      cs_normal: ap.cs_normal || 0,
-      cs_13: ap.cs_13 || 0,
-    });
+    const cur = oraclePorComp.get(k);
+    if (cur) {
+      cur.valor_corrigido += ap.valor_corrigido;
+      cur.juros += juros;
+      cur.cs_normal += ap.cs_normal || 0;
+      cur.cs_13 += ap.cs_13 || 0;
+      // taxa_juros: keep first (geralmente igual entre entries da mesma competencia)
+    } else {
+      oraclePorComp.set(k, {
+        valor_corrigido: ap.valor_corrigido,
+        taxa_juros: ap.taxa_juros || 0,
+        juros: juros,
+        cs_normal: ap.cs_normal || 0,
+        cs_13: ap.cs_13 || 0,
+      });
+    }
   }
 
   // Tabela
