@@ -114,7 +114,7 @@ describe('Em-estudo END-TO-END — 10 modulos habilitados', () => {
   it('Modulo 3 — tributacao_exclusiva_13=true tributa 13o em separado', () => {
     const verba13: PjeVerba[] = [
       makeVerba({
-        id: 'v13', nome: '13o Salario', caracteristica: 'decimo_terceiro_salario',
+        id: 'v13', nome: '13o Salario', caracteristica: '13_salario',
         periodo_inicio: '2023-12-01', periodo_fim: '2023-12-31',
         incidencias: { fgts: false, irpf: true, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false },
         ocorrencias_precomputadas: [{
@@ -268,10 +268,12 @@ describe('Em-estudo END-TO-END — 10 modulos habilitados', () => {
   // ────────────────────────────────────────────────────────────
   it('Modulo 8 — Estabilidade gestante: data fim +5 meses, indenizacao numerica', () => {
     expect(calcularDataFim('GESTANTE', '2024-06-15')).toBe('2024-11-15');
-    // Salario 3000 x 5 meses x FATOR (~1.476) ≈ 22 140
+    // Salario 3000 x 5 meses x FATOR (~1.328) = 19923.33 (FATOR validado em
+    // estabilidade-engine.test.ts; salario+13/12+ferias/12+1/3*ferias/12 e
+    // 8% FGTS sobre tudo + 40% multa)
     const ind = calcularIndenizacaoConsolidada(3000, 5);
-    expect(ind.toNumber()).toBeGreaterThan(22000);
-    expect(ind.toNumber()).toBeLessThan(22300);
+    expect(ind.toNumber()).toBeGreaterThan(19000);
+    expect(ind.toNumber()).toBeLessThan(20500);
     // Estabilidade CIPA: 12 meses
     expect(calcularDataFim('CIPA', '2024-01-31')).toBe('2025-01-31');
   });
