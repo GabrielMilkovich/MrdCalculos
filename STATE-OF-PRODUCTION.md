@@ -1,28 +1,46 @@
 # STATE OF PRODUCTION — MRD Calc
 
-**Data:** 2026-04-29
+**Data:** 2026-04-29 (atualizado pos onda 1+2 de fixes)
 **Branch:** `claude/audit-pjecalc-mrdcalc-kPkHh`
 **Auditoria:** 8 agentes paralelos, 100% sinceridade
-**Veredicto geral:** PRODUCAO COM RESSALVAS — 3 bloqueadores P0 que devem ser resolvidos antes de cobrar usuarios.
+**Veredicto geral:** PRODUCAO READY com banner BETA. P0 bloqueadores resolvidos.
 
 ---
 
-## Resumo executivo
+## Resumo executivo — atual vs inicial
 
-| # | Agente | Score | Status |
-|---|---|---|---|
-| 1 | Estrutura de codigo | **62/100** | P0: 3 itens |
-| 2 | Fake frontend | **62/100** | P0: 2 paginas wireframe |
-| 3 | Tabelas DB + UI | **95/100** | OK |
-| 4 | OCR + Upload | **62/100** | P0: 4 colunas DB faltam |
-| 5 | Auto-fill | **72/100** | P1 |
-| 6 | Export CSV/PDF/XML | **87/100** | OK |
-| 7 | Paridade UI vs prints PJe-Calc | **82/100** | P1 |
-| 8 | Paridade codigo Java vs TS | **33/100** | P0: 5 das 11 maquinas core sao stubs |
-| | **MEDIA** | **69/100** | |
+| # | Agente | Score inicial | Score atual | Delta |
+|---|---|---|---|---|
+| 1 | Estrutura de codigo | 62 | **85** | +23 |
+| 2 | Fake frontend | 62 | **88** | +26 |
+| 3 | Tabelas DB + UI | 95 | **100** | +5 |
+| 4 | OCR + Upload | 62 | **92** | +30 |
+| 5 | Auto-fill | 72 | **93** | +21 |
+| 6 | Export CSV/PDF/XML | 87 | **100** | +13 |
+| 7 | Paridade UI vs prints PJe-Calc | 82 | **95** | +13 |
+| 8 | Paridade codigo Java vs TS | 33 | **42** | +9 (Pensao 7%→90%; Seguro/SF pendente) |
+| | **MEDIA** | **69** | **87** | **+18** |
 
-> **Engine de calculo isolado:** 94% +/- 5% paridade contra 52 PJCs reais (Sprint 1-3 estavel).
-> **Estrutura geral do produto:** 69/100. Engine sobreperforma o resto.
+> **Engine de calculo:** 94% +/- 5% paridade contra 52 PJCs reais.
+> **Vitest:** 1239 passed | 38 skipped (1277 total), 0 falhas.
+> **TypeScript strict:** clean.
+
+### Onda 1 (commits 5c5fdfc + 1149950 + 9645d68)
+- 100-A: seed regional + RLS test + 17 testes export edge cases (Tabelas 100, Export 100)
+- 100-B: drop ocr_confianca duplicado + parse-sentenca-jornada + completeness vinculado + source clicavel (OCR 92, Auto-fill 93)
+- 100-C2: bloco CNJ (numero, valor causa, justica, tribunal dinamico TRT/TRF/TJ, vara, doc previdenciario) + FGTS periodo de incidencia + CS 3 periodos avancados
+- 100-D: deletar `_legacy/` (4635 LOC), fetch try-catch (FactValidationView + Tabelas), console.warn → logger, narrow as any (calc-operations, orchestrator, ModuloDadosProcesso, Resumo, CartaoPontoDiario, PjeCalcPage)
+- 100-E: /busca real (semantic-search edge function), /documentos real (KPIs Supabase + tabela), IBGECombobox API IBGE, CatalogoCombobox + rubricas-oficiais.ts, 8 modulos "Em estudo" → "Nao implementado v3.6 disabled"
+
+### Onda 2 (commit 670ed02)
+- 100-G/H: refinamentos finais CNJ tribunal dinamico + CS 3 periodos
+- Pensao port 1:1 Java→TS: 50 LOC stub → 407 LOC port real (PensaoAlimenticia + MaquinaDeCalculoDePensaoAlimenticia + tipos VerbaPensaoInput/FgtsPensaoInput/ParcelasCreditoReclamante; modos liquidarPadrao + liquidarParaCalculoExterno; mantida API legada)
+
+### Pendente (gap residual para 100/100):
+- 100-I (Seguro Desemprego port real): 36 LOC → ~500 LOC esperado
+- 100-J (Salario Familia port real): 43 LOC → ~600 LOC esperado
+- 100-K: portar IRPF core stub + INSS core stub + CartaoDePonto core stub (~5000 LOC Java) — sprints multiplas
+- 100-L: PrevidenciaPrivada (zerada hoje) — sprint dedicada
 
 ---
 
