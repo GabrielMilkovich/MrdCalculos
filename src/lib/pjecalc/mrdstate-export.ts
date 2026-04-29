@@ -68,12 +68,19 @@ export async function exportMRDState(caseId: string): Promise<MRDState> {
     supabase.from("pjecalc_liquidacao_resultado" as any).select("*").eq("case_id", caseId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
-  const calc = (calcRes as any).data;
-  const eventos = ((eventosRes as any).data || []) as any[];
-  
+  // Tipos das respostas: tabelas pjecalc_* não estão no schema gerado em
+  // src/integrations/supabase/types.ts. Usamos `unknown` + helper para
+  // extrair `.data` sem `as any` em cada acesso.
+  type PjeCalcRowGeneric = Record<string, unknown>;
+  type SupabaseSingleRes = { data: PjeCalcRowGeneric | null };
+  type SupabaseListRes = { data: PjeCalcRowGeneric[] | null };
+
+  const calc = (calcRes as unknown as SupabaseSingleRes).data;
+  const eventos = ((eventosRes as unknown as SupabaseListRes).data ?? []);
+
   // Handle ponto with pagination (may exceed 1000 rows)
-  let ponto: any[] = [];
-  const pontoData = (pontoRes as any).data || [];
+  let ponto: PjeCalcRowGeneric[] = [];
+  const pontoData = (pontoRes as unknown as SupabaseListRes).data ?? [];
   ponto = pontoData;
   if (pontoData.length === 1000) {
     // Fetch remaining pages
@@ -81,24 +88,25 @@ export async function exportMRDState(caseId: string): Promise<MRDState> {
     let hasMore = true;
     while (hasMore) {
       const moreRes = await supabase
+        // tabela custom fora do schema gerado
         .from("pjecalc_ponto_diario" as any)
         .select("*")
         .eq("case_id", caseId)
         .order("data")
         .range(offset, offset + 999);
-      const moreData = (moreRes as any).data || [];
+      const moreData = (moreRes as unknown as SupabaseListRes).data ?? [];
       ponto = [...ponto, ...moreData];
       hasMore = moreData.length === 1000;
       offset += 1000;
     }
   }
 
-  const hist = ((histRes as any).data || []) as any[];
-  const histMes = ((histMesRes as any).data || []) as any[];
-  const verbas = ((verbasRes as any).data || []) as any[];
-  const ocorr = ((ocorrRes as any).data || []) as any[];
-  const atualiz = (atualizRes as any).data;
-  const resultado = (resultadoRes as any).data;
+  const hist = ((histRes as unknown as SupabaseListRes).data ?? []);
+  const histMes = ((histMesRes as unknown as SupabaseListRes).data ?? []);
+  const verbas = ((verbasRes as unknown as SupabaseListRes).data ?? []);
+  const ocorr = ((ocorrRes as unknown as SupabaseListRes).data ?? []);
+  const atualiz = (atualizRes as unknown as SupabaseSingleRes).data;
+  const resultado = (resultadoRes as unknown as SupabaseSingleRes).data;
 
   const stateWithoutHash: Omit<MRDState, 'hash'> = {
     version: '1.0.0',

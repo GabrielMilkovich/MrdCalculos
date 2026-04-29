@@ -137,7 +137,7 @@ export async function importarXMLParaCalculo(caseId: string, xmlString: string):
         await supabase.from("pjecalc_verbas" as any).insert({
           case_id: caseId,
           nome: v.nome,
-          tipo: v.tipo as any,
+          tipo: v.tipo,
           caracteristica: 'comum',
           ocorrencia_pagamento: 'mensal',
           multiplicador: 1,
@@ -157,7 +157,9 @@ export async function importarXMLParaCalculo(caseId: string, xmlString: string):
 
       const existing = await supabase.from("pjecalc_dados_processo" as any).select("id").eq("case_id", caseId).maybeSingle();
       if (existing.data) {
-        await supabase.from("pjecalc_dados_processo" as any).update(payload).eq("id", (existing.data as any).id);
+        // tabela custom fora do schema gerado
+        const existingId = (existing.data as { id: string }).id;
+        await supabase.from("pjecalc_dados_processo" as any).update(payload).eq("id", existingId);
       } else {
         await supabase.from("pjecalc_dados_processo" as any).insert(payload);
       }
@@ -301,7 +303,7 @@ export async function importarXMLParaCalculo(caseId: string, xmlString: string):
         await supabase.from("pjecalc_verbas" as any).insert({
           case_id: caseId,
           nome: v.nome,
-          tipo: v.tipo as any,
+          tipo: v.tipo,
           caracteristica: 'comum',
           ocorrencia_pagamento: 'mensal',
           multiplicador: 1,
@@ -321,7 +323,9 @@ export async function importarXMLParaCalculo(caseId: string, xmlString: string):
 
       const existing = await supabase.from("pjecalc_dados_processo" as any).select("id").eq("case_id", caseId).maybeSingle();
       if (existing.data) {
-        await supabase.from("pjecalc_dados_processo" as any).update(payload).eq("id", (existing.data as any).id);
+        // tabela custom fora do schema gerado
+        const existingId = (existing.data as { id: string }).id;
+        await supabase.from("pjecalc_dados_processo" as any).update(payload).eq("id", existingId);
       } else {
         await supabase.from("pjecalc_dados_processo" as any).insert(payload);
       }

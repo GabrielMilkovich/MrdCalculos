@@ -599,7 +599,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           valor: parseNumBR(r["valor do salário"] || r["valor"] || r["valor_salario"]),
         })).filter(r => r.competencia && r.valor != null);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_salario_minimo" as any).upsert(rec as any, { onConflict: "competencia" });
+          const { error } = await supabase.from("pjecalc_salario_minimo" as any).upsert(rec, { onConflict: "competencia" });
           if (!error) inserted++;
         }
       } else if (tipo === "salario-familia") {
@@ -611,7 +611,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           valor_cota: parseNumBR(r["vl. do salário"] || r["valor_cota"] || r["valor"]),
         })).filter(r => r.competencia && r.valor_cota != null);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_salario_familia" as any).upsert(rec as any, { onConflict: "competencia,faixa" });
+          const { error } = await supabase.from("pjecalc_salario_familia" as any).upsert(rec, { onConflict: "competencia,faixa" });
           if (!error) inserted++;
         }
       } else if (tipo === "contribuicao-social") {
@@ -626,7 +626,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           teto_beneficio: parseNumBR(r["teto ben."] || r["teto_beneficio"]),
         })).filter(r => r.competencia);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_contribuicao_social" as any).upsert(rec as any, { onConflict: "competencia,tipo,faixa" });
+          const { error } = await supabase.from("pjecalc_contribuicao_social" as any).upsert(rec, { onConflict: "competencia,tipo,faixa" });
           if (!error) inserted++;
         }
       } else if (tipo === "imposto-renda") {
@@ -662,7 +662,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           teto_custas_autos: parseNumBR(r["teto - custas de autos"] || r["teto_custas_autos"]),
         })).filter(r => r.vigencia_inicio);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_custas_judiciais" as any).upsert(rec as any, { onConflict: "vigencia_inicio" });
+          const { error } = await supabase.from("pjecalc_custas_judiciais" as any).upsert(rec, { onConflict: "vigencia_inicio" });
           if (!error) inserted++;
         }
       } else if (tipo === "correcao-monetaria") {
@@ -674,7 +674,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           fonte: r["fonte"] || null,
         })).filter(r => r.competencia && r.valor != null);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_correcao_monetaria" as any).upsert(rec as any, { onConflict: "competencia,indice" });
+          const { error } = await supabase.from("pjecalc_correcao_monetaria" as any).upsert(rec, { onConflict: "competencia,indice" });
           if (!error) inserted++;
         }
       } else if (tipo === "juros-mora") {
@@ -685,7 +685,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           acumulado: parseNumBR(r["acumulado"]),
         })).filter(r => r.competencia && r.taxa_mensal != null);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_juros_mora" as any).upsert(rec as any, { onConflict: "competencia,tipo" });
+          const { error } = await supabase.from("pjecalc_juros_mora" as any).upsert(rec, { onConflict: "competencia,tipo" });
           if (!error) inserted++;
         }
       } else if (tipo === "seguro-desemprego") {
@@ -700,7 +700,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           valor_teto: parseNumBR(r["vl. teto"] || r["valor_teto"]),
         })).filter(r => r.competencia);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_seguro_desemprego" as any).upsert(rec as any, { onConflict: "competencia,faixa" });
+          const { error } = await supabase.from("pjecalc_seguro_desemprego" as any).upsert(rec, { onConflict: "competencia,faixa" });
           if (!error) inserted++;
         }
       } else if (tipo === "pisos-salariais") {
@@ -713,7 +713,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           sindicato: r["sindicato"] || null,
         })).filter(r => r.competencia && r.nome && r.uf);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_pisos_salariais" as any).insert(rec as any);
+          const { error } = await supabase.from("pjecalc_pisos_salariais" as any).insert(rec);
           if (!error) inserted++;
         }
       } else if (tipo === "vale-transporte") {
@@ -726,7 +726,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           vigencia_fim: parseDate(r["fim"] || r["vigencia_fim"]) || null,
         })).filter(r => r.linha && r.uf && r.vigencia_inicio);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_vale_transporte" as any).insert(rec as any);
+          const { error } = await supabase.from("pjecalc_vale_transporte" as any).insert(rec);
           if (!error) inserted++;
         }
       } else if (tipo === "verbas") {
@@ -741,7 +741,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           incidencia_irpf: r["irpf"]?.toLowerCase() === "sim",
         })).filter(r => r.nome);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_verbas_padrao" as any).insert(rec as any);
+          const { error } = await supabase.from("pjecalc_verbas_padrao" as any).insert(rec);
           if (!error) inserted++;
         }
       } else if (tipo === "feriados") {
@@ -754,7 +754,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           fonte: r["fonte"] || null,
         })).filter(r => r.data && r.nome);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_feriados" as any).insert(rec as any);
+          const { error } = await supabase.from("pjecalc_feriados" as any).insert(rec);
           if (!error) inserted++;
         }
       }
@@ -847,7 +847,7 @@ function SalarioMinimoView() {
     queryFn: async () => {
       const { data, error } = await supabase.from("pjecalc_salario_minimo" as any).select("*").order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
   const rows = data || [];
@@ -881,7 +881,7 @@ function SalarioFamiliaView() {
     queryFn: async () => {
       const { data, error } = await supabase.from("pjecalc_salario_familia" as any).select("*").order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
@@ -926,7 +926,7 @@ function SeguroDesempregoView() {
     queryFn: async () => {
       const { data, error } = await supabase.from("pjecalc_seguro_desemprego" as any).select("*").order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
@@ -973,7 +973,7 @@ function ContribuicaoSocialView() {
       const { data, error } = await supabase.from("pjecalc_contribuicao_social" as any)
         .select("*").eq("tipo", tab).order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
@@ -1025,7 +1025,7 @@ function ImpostoRendaView() {
     queryFn: async () => {
       const { data, error } = await supabase.from("pjecalc_imposto_renda" as any).select("*").order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
   const rows = data || [];
@@ -1080,7 +1080,7 @@ function CustasJudiciaisView() {
     queryFn: async () => {
       const { data, error } = await supabase.from("pjecalc_custas_judiciais" as any).select("*").order("vigencia_inicio", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
@@ -1119,7 +1119,7 @@ function CorrecaoMonetariaView() {
       const { data, error } = await supabase.from("pjecalc_correcao_monetaria" as any)
         .select("*").eq("indice", indice).order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
   const rows = data || [];
@@ -1164,7 +1164,7 @@ function JurosMoraView() {
       const { data, error } = await supabase.from("pjecalc_juros_mora" as any)
         .select("*").eq("tipo", tipoJuros).order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
   const rows = data || [];
@@ -1212,7 +1212,7 @@ function PisosSalariaisView() {
       if (filterNome) q = q.ilike("nome", `%${filterNome}%`);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
     enabled: searched,
   });
@@ -1278,7 +1278,7 @@ function ValeTransporteView() {
       if (filterLinha) q = q.ilike("linha", `%${filterLinha}%`);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
     enabled: searched,
   });
@@ -1346,7 +1346,7 @@ function FeriadosView() {
       if (filterUf !== "all") q = q.or(`scope.eq.national,uf.eq.${filterUf}`);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
   const rows = data || [];
@@ -1403,7 +1403,7 @@ function VerbasView() {
       if (filterValor !== "all") q = q.eq("valor_tipo", filterValor);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
     enabled: searched,
   });
