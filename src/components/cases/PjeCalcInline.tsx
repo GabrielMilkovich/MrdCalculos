@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -214,7 +215,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const { data: params } = useQuery({
     queryKey: ["pjecalc_parametros", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pjecalc_parametros" as any).select("*").eq("case_id", caseId).maybeSingle();
+      const { data, error } = await fromUntyped("pjecalc_parametros").select("*").eq("case_id", caseId).maybeSingle();
       if (error) throw error;
       return data as unknown as Record<string, unknown> | null;
     },
@@ -223,7 +224,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const { data: contract } = useQuery({
     queryKey: ["employment_contract", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("employment_contracts" as any).select("*").eq("case_id", caseId).maybeSingle();
+      const { data } = await fromUntyped("employment_contracts").select("*").eq("case_id", caseId).maybeSingle();
       return data as unknown as Record<string, unknown> | null;
     },
   });
@@ -231,7 +232,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const { data: faltas = [] } = useQuery({
     queryKey: ["pjecalc_faltas", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_faltas" as any).select("*").eq("case_id", caseId).order("data_inicial");
+      const { data } = await fromUntyped("pjecalc_faltas").select("*").eq("case_id", caseId).order("data_inicial");
       return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
@@ -239,7 +240,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const { data: ferias = [] } = useQuery({
     queryKey: ["pjecalc_ferias", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_ferias" as any).select("*").eq("case_id", caseId).order("periodo_aquisitivo_inicio");
+      const { data } = await fromUntyped("pjecalc_ferias").select("*").eq("case_id", caseId).order("periodo_aquisitivo_inicio");
       return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
@@ -247,7 +248,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const { data: historicos = [] } = useQuery({
     queryKey: ["pjecalc_historico", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_historico_salarial" as any).select("*").eq("case_id", caseId).order("periodo_inicio");
+      const { data } = await fromUntyped("pjecalc_historico_salarial").select("*").eq("case_id", caseId).order("periodo_inicio");
       return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
@@ -255,7 +256,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const { data: verbas = [] } = useQuery({
     queryKey: ["pjecalc_verbas", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_verbas" as any).select("*").eq("case_id", caseId).order("ordem");
+      const { data } = await fromUntyped("pjecalc_verbas").select("*").eq("case_id", caseId).order("ordem");
       return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
@@ -263,7 +264,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const { data: dadosProcesso } = useQuery({
     queryKey: ["pjecalc_dados_processo", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_dados_processo" as any).select("*").eq("case_id", caseId).maybeSingle();
+      const { data } = await fromUntyped("pjecalc_dados_processo").select("*").eq("case_id", caseId).maybeSingle();
       return data as unknown as Record<string, unknown> | null;
     },
   });
@@ -271,7 +272,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const { data: resultado } = useQuery({
     queryKey: ["pjecalc_liquidacao", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_liquidacao_resultado" as any).select("*").eq("case_id", caseId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const { data } = await fromUntyped("pjecalc_liquidacao_resultado").select("*").eq("case_id", caseId).order("created_at", { ascending: false }).limit(1).maybeSingle();
       return data as unknown as Record<string, unknown> | null;
     },
   });
@@ -376,9 +377,9 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         comentarios: formParams.comentarios,
       };
       if (params?.id) {
-        await supabase.from("pjecalc_parametros" as any).update(payload).eq("id", params.id);
+        await fromUntyped("pjecalc_parametros").update(payload).eq("id", params.id);
       } else {
-        await supabase.from("pjecalc_parametros" as any).insert(payload);
+        await fromUntyped("pjecalc_parametros").insert(payload);
       }
       queryClient.invalidateQueries({ queryKey: ["pjecalc_parametros", caseId] });
       toast.success("Parâmetros salvos!");
@@ -661,7 +662,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
     if (!editingVerba) return;
     setSavingVerba(true);
     try {
-      await supabase.from("pjecalc_verbas" as any).update({
+      await fromUntyped("pjecalc_verbas").update({
         nome: editForm.nome,
         multiplicador: Number(editForm.multiplicador),
         divisor_informado: Number(editForm.divisor_informado),
@@ -692,7 +693,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   }, []);
 
   const toggleReflexaAtiva = useCallback(async (reflexaId: string, currentAtiva: boolean) => {
-    await supabase.from("pjecalc_verbas" as any).update({ ativa: !currentAtiva }).eq("id", reflexaId);
+    await fromUntyped("pjecalc_verbas").update({ ativa: !currentAtiva }).eq("id", reflexaId);
     queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
   }, [caseId, queryClient]);
 
@@ -720,7 +721,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                 const periodo = formParams.data_admissao && formParams.data_demissao
                   ? { inicio: formParams.data_admissao, fim: formParams.data_demissao }
                   : { inicio: new Date().toISOString().slice(0, 10), fim: new Date().toISOString().slice(0, 10) };
-                await supabase.from("pjecalc_verbas" as any).insert({
+                await fromUntyped("pjecalc_verbas").insert({
                   case_id: caseId, nome: `Verba ${verbas.length + 1}`, tipo: 'principal',
                   periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: verbas.length,
                 });
@@ -730,7 +731,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                 const periodo = formParams.data_admissao && formParams.data_demissao
                   ? { inicio: formParams.data_admissao, fim: formParams.data_demissao }
                   : { inicio: new Date().toISOString().slice(0, 10), fim: new Date().toISOString().slice(0, 10) };
-                const { data: principalData } = await supabase.from("pjecalc_verbas" as any).insert({
+                const { data: principalData } = await fromUntyped("pjecalc_verbas").insert({
                   case_id: caseId, nome: 'Horas Extras 50%', caracteristica: 'comum', ocorrencia_pagamento: 'mensal',
                   tipo: 'principal', multiplicador: 1.5, divisor_informado: formParams.carga_horaria_padrao || 220,
                   periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: verbas.length,
@@ -746,7 +747,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                   ];
                   for (let i = 0; i < reflexas.length; i++) {
                     const { ativa, ...rest } = reflexas[i] as any;
-                    await supabase.from("pjecalc_verbas" as any).insert({
+                    await fromUntyped("pjecalc_verbas").insert({
                       case_id: caseId, ...rest, tipo: 'reflexa',
                       periodo_inicio: periodo.inicio, periodo_fim: periodo.fim,
                       ordem: verbas.length + 1 + i,
@@ -798,7 +799,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                     <Button variant="ghost" size="icon" className="h-6 w-6" title="Duplicar"
                       onClick={async () => {
                         const periodo = { inicio: principal.periodo_inicio, fim: principal.periodo_fim };
-                        const { data: newP } = await supabase.from("pjecalc_verbas" as any).insert({
+                        const { data: newP } = await fromUntyped("pjecalc_verbas").insert({
                           case_id: caseId, nome: principal.nome + ' (cópia)', tipo: 'principal',
                           caracteristica: principal.caracteristica, ocorrencia_pagamento: principal.ocorrencia_pagamento,
                           multiplicador: principal.multiplicador, divisor_informado: principal.divisor_informado,
@@ -816,8 +817,8 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" title="Excluir"
                       onClick={async () => {
                         // Delete reflexas first, then principal
-                        for (const r of reflexas) await supabase.from("pjecalc_verbas" as any).delete().eq("id", r.id);
-                        await supabase.from("pjecalc_verbas" as any).delete().eq("id", principal.id);
+                        for (const r of reflexas) await fromUntyped("pjecalc_verbas").delete().eq("id", r.id);
+                        await fromUntyped("pjecalc_verbas").delete().eq("id", principal.id);
                         queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
                       }}>
                       <Trash2 className="h-3 w-3" />
@@ -869,7 +870,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                           <div className="text-right">
                             <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive hover:text-destructive"
                               onClick={async () => {
-                                await supabase.from("pjecalc_verbas" as any).delete().eq("id", ref.id);
+                                await fromUntyped("pjecalc_verbas").delete().eq("id", ref.id);
                                 queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
                               }}>
                               <Trash2 className="h-3 w-3" />
@@ -895,7 +896,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                   <div className="text-right">
                     <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive"
                       onClick={async () => {
-                        await supabase.from("pjecalc_verbas" as any).delete().eq("id", v.id);
+                        await fromUntyped("pjecalc_verbas").delete().eq("id", v.id);
                         queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
                       }}>
                       <Trash2 className="h-3 w-3" />

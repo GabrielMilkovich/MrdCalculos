@@ -5,6 +5,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 
 export interface MRDState {
   version: string;
@@ -57,15 +58,15 @@ export async function exportMRDState(caseId: string): Promise<MRDState> {
     atualizRes,
     resultadoRes,
   ] = await Promise.all([
-    supabase.from("pjecalc_calculos" as any).select("*").eq("case_id", caseId).maybeSingle(),
-    supabase.from("pjecalc_evento_intervalo" as any).select("*").eq("calculo_id", caseId).order("data_inicio"),
-    supabase.from("pjecalc_ponto_diario" as any).select("*").eq("case_id", caseId).order("data"),
-    supabase.from("pjecalc_hist_salarial" as any).select("*").eq("calculo_id", caseId),
-    supabase.from("pjecalc_hist_salarial_mes" as any).select("*").eq("calculo_id", caseId).order("competencia"),
-    supabase.from("pjecalc_verbas" as any).select("*").eq("case_id", caseId).order("ordem"),
-    supabase.from("pjecalc_ocorrencias" as any).select("*").eq("case_id", caseId).order("competencia"),
-    supabase.from("pjecalc_atualizacao_config" as any).select("*").eq("case_id", caseId).maybeSingle(),
-    supabase.from("pjecalc_liquidacao_resultado" as any).select("*").eq("case_id", caseId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    fromUntyped("pjecalc_calculos").select("*").eq("case_id", caseId).maybeSingle(),
+    fromUntyped("pjecalc_evento_intervalo").select("*").eq("calculo_id", caseId).order("data_inicio"),
+    fromUntyped("pjecalc_ponto_diario").select("*").eq("case_id", caseId).order("data"),
+    fromUntyped("pjecalc_hist_salarial").select("*").eq("calculo_id", caseId),
+    fromUntyped("pjecalc_hist_salarial_mes").select("*").eq("calculo_id", caseId).order("competencia"),
+    fromUntyped("pjecalc_verbas").select("*").eq("case_id", caseId).order("ordem"),
+    fromUntyped("pjecalc_ocorrencias").select("*").eq("case_id", caseId).order("competencia"),
+    fromUntyped("pjecalc_atualizacao_config").select("*").eq("case_id", caseId).maybeSingle(),
+    fromUntyped("pjecalc_liquidacao_resultado").select("*").eq("case_id", caseId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   // Tipos das respostas: tabelas pjecalc_* não estão no schema gerado em

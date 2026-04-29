@@ -48,6 +48,20 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
   irFeriasSeparado = 0;
   irAnoLiquidacao = 0;
 
+  // Estado interno para reaplicação com juros (Sprint 4.2-C2)
+  // Armazenado em liquidar() para permitir aplicarIncidenciaJuros() pós-juros.
+  private _baseBruta = 0;
+  private _base13 = 0;
+  private _baseFerias = 0;
+  private _base13PorAno: Record<number, number> = {};
+  private _compsFerias = new Set<string>();
+  private _deducoesNominais = 0;
+  private _mesesTotal = 1;
+  private _tabelaCache: {
+    faixas: { ate: number; aliquota: number; deducao: number }[];
+    deducaoDependente: number;
+  } | null = null;
+
   constructor(
     verbas: VerbaDeCalculo[],
     irConfig: PjeIRConfig,
@@ -291,6 +305,80 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     }
     this.ir13Exclusivo = ir13.toDP(2, ROUND_CS_IR).toNumber();
     this.irFeriasSeparado = irFerias.toDP(2, ROUND_CS_IR).toNumber();
+    this.irAnoLiquidacao = irTotal.toDP(2, ROUND_CS_IR).toNumber();
+
+    // Persistir estado para eventual reaplicação de incidência sobre juros.
+    this._baseBruta = baseBruta;
+    this._base13 = base13;
+    this._baseFerias = baseFerias;
+    this._base13PorAno = { ...base13PorAno };
+    this._compsFerias = new Set(compsFerias);
+    this._deducoesNominais = deducoes;
+    this._mesesTotal = mesesTotal;
+    this._tabelaCache = tabela;
+  }
+
+  /**
+   * Sprint 4.2-C2 — incidir_sobre_juros (Lei 8.541/92 art. 46).
+   *
+   * Aplicada APÓS o cálculo de juros mora pelo engine. Quando
+   * `irConfig.incidir_sobre_juros=true`, soma os juros à base bruta IR e
+   * recalcula `irAnoLiquidacao`/`impostoDevido` (paridade com Java
+   * MaquinaDeCalculoDeIrpf.java:982 — juros entram somente na base "normal",
+   * não em 13º exclusivo nem em férias separado).
+   *
+   * Súmula 368 IV TST defende isenção dos juros mora trabalhistas; engine
+   * deixa a decisão para o usuário via flag (default OFF preserva regressão).
+   *
+   * @param jurosTotal Total de juros mora (já calculado pelo engine sobre
+   *   ocorrências com `compor_principal !== false`).
+   */
+  aplicarIncidenciaJuros(jurosTotal: number): void {
+    if (!this.irConfig.apurar) return;
+    if (this.irConfig.incidir_sobre_juros !== true) return;
+    if (!this._tabelaCache) return;
+    if (jurosTotal <= 0) return;
+
+    const tabela = this._tabelaCache;
+    const baseBrutaComJuros = new Decimal(this._baseBruta).plus(jurosTotal).toNumber();
+    const mesesTotal = this._mesesTotal;
+    const deducoes = this._deducoesNominais;
+
+    // Recalcular IR sobre a base normal (Art. 12-A RRA preserva NM original).
+    let irTotal = new Decimal(0);
+    if (baseBrutaComJuros > 0) {
+      const deducaoDepBruto = new Decimal(this.irConfig.dependentes)
+        .times(tabela.deducaoDependente).times(mesesTotal).toDP(2, ROUND_CS_IR).toNumber();
+      const baseTrib = Math.max(0, baseBrutaComJuros - deducoes - deducaoDepBruto);
+      for (const f of tabela.faixas) {
+        if (baseTrib <= f.ate * mesesTotal) {
+          irTotal = new Decimal(baseTrib).times(f.aliquota)
+            .minus(new Decimal(f.deducao).times(mesesTotal))
+            .toDP(2, ROUND_CS_IR);
+          break;
+        }
+      }
+      if (irTotal.lt(0)) irTotal = new Decimal(0);
+    }
+
+    // 13º e férias separadas NÃO recebem juros (Java: juros vão só ao bucket normal).
+    const ir13 = new Decimal(this.ir13Exclusivo);
+    const irFerias = new Decimal(this.irFeriasSeparado);
+    const imposto = irTotal.plus(ir13).plus(irFerias);
+
+    const deducaoDep = new Decimal(this.irConfig.dependentes)
+      .times(tabela.deducaoDependente).times(mesesTotal).toDP(2, ROUND_CS_IR).toNumber();
+
+    this.baseCalculo = Number(
+      new Decimal(baseBrutaComJuros + this._base13 + this._baseFerias).toDP(2, ROUND_CS_IR),
+    );
+    this.baseTributavel = Number(
+      new Decimal(
+        Math.max(0, baseBrutaComJuros - deducoes - deducaoDep)
+          + this._base13 + this._baseFerias,
+      ).toDP(2, ROUND_CS_IR),
+    );
+    this.impostoDevido = imposto.toDP(2, ROUND_CS_IR).toNumber();
     this.irAnoLiquidacao = irTotal.toDP(2, ROUND_CS_IR).toNumber();
   }
 

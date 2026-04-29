@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Calculator, Loader2, Trash2 } from "lucide-react";
 
@@ -26,7 +27,7 @@ export function ModuloOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, p
   const { data: ocorrencias = [] } = useQuery({
     queryKey: ["pjecalc_verba_ocorrencias", verbaId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_verba_ocorrencias" as any)
+      const { data } = await fromUntyped("pjecalc_verba_ocorrencias")
         .select("*").eq("verba_id", verbaId).order("competencia");
       return (data || []) as any[];
     },
@@ -36,7 +37,7 @@ export function ModuloOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, p
     if (!periodoInicio || !periodoFim) { toast.error("Verba sem período definido."); return; }
     setGenerating(true);
     try {
-      await supabase.from("pjecalc_verba_ocorrencias" as any).delete().eq("verba_id", verbaId);
+      await fromUntyped("pjecalc_verba_ocorrencias").delete().eq("verba_id", verbaId);
       const start = new Date(periodoInicio + "T00:00:00");
       const end = new Date(periodoFim + "T00:00:00");
       const rows: any[] = [];
@@ -56,7 +57,7 @@ export function ModuloOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, p
         });
         cur.setMonth(cur.getMonth() + 1);
       }
-      if (rows.length > 0) await supabase.from("pjecalc_verba_ocorrencias" as any).insert(rows);
+      if (rows.length > 0) await fromUntyped("pjecalc_verba_ocorrencias").insert(rows);
       qc.invalidateQueries({ queryKey: ["pjecalc_verba_ocorrencias", verbaId] });
       toast.success(`${rows.length} ocorrências geradas`);
     } catch (e) { toast.error((e as Error).message); }
@@ -64,7 +65,7 @@ export function ModuloOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, p
   };
 
   const updateField = async (id: string, field: string, value: any) => {
-    await supabase.from("pjecalc_verba_ocorrencias" as any).update({ [field]: value }).eq("id", id);
+    await fromUntyped("pjecalc_verba_ocorrencias").update({ [field]: value }).eq("id", id);
   };
 
   const recalcRow = async (row: any) => {
@@ -76,7 +77,7 @@ export function ModuloOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, p
     const devido = (base * mult / div) * qtd * dobra;
     const pago = parseFloat(row.pago) || 0;
     const diferenca = devido - pago;
-    await supabase.from("pjecalc_verba_ocorrencias" as any).update({
+    await fromUntyped("pjecalc_verba_ocorrencias").update({
       devido: Math.round(devido * 100) / 100,
       diferenca: Math.round(diferenca * 100) / 100,
     }).eq("id", row.id);
@@ -156,7 +157,7 @@ export function ModuloOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, p
                     <td className="p-2 text-right font-mono font-medium">{(o.diferenca || 0).toFixed(2)}</td>
                     <td className="p-1">
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async () => {
-                        await supabase.from("pjecalc_verba_ocorrencias" as any).delete().eq("id", o.id);
+                        await fromUntyped("pjecalc_verba_ocorrencias").delete().eq("id", o.id);
                         qc.invalidateQueries({ queryKey: ["pjecalc_verba_ocorrencias", verbaId] });
                       }}><Trash2 className="h-3 w-3" /></Button>
                     </td>

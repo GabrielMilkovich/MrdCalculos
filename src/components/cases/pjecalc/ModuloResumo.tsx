@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Play, Loader2, FileBarChart, Printer, FileCode, AlertTriangle, CheckCircle2, Info, XCircle, Lock, Unlock, Copy, MoreVertical, FileText, FileSpreadsheet, ClipboardCheck, GitCompareArrows, Download, Gavel } from "lucide-react";
 import { PainelRevisao } from "./PainelRevisao";
@@ -441,10 +442,10 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       const calculoId = (calculoRow as { id: string }).id;
 
       // Delete previous resultado if exists
-      await supabase.from("pjecalc_resultado" as any).delete().eq("calculo_id", calculoId);
+      await fromUntyped("pjecalc_resultado").delete().eq("calculo_id", calculoId);
 
       // Persist resultado to REAL table (pjecalc_resultado)
-      const { error: resError } = await supabase.from("pjecalc_resultado" as any).insert({
+      const { error: resError } = await fromUntyped("pjecalc_resultado").insert({
         calculo_id: calculoId,
         total_bruto: result.resumo.principal_bruto,
         total_diferenca: result.resumo.principal_bruto,
@@ -519,13 +520,13 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       }
       if (ocRows.length > 0) {
         // Delete existing CALCULADA rows
-        await supabase.from("pjecalc_ocorrencia_calculo" as any)
+        await fromUntyped("pjecalc_ocorrencia_calculo")
           .delete()
           .eq("calculo_id", calculoId)
           .eq("origem", "CALCULADA");
         // Insert in batches of 500
         for (let i = 0; i < ocRows.length; i += 500) {
-          const { error: ocErr } = await supabase.from("pjecalc_ocorrencia_calculo" as any).insert(ocRows.slice(i, i + 500));
+          const { error: ocErr } = await fromUntyped("pjecalc_ocorrencia_calculo").insert(ocRows.slice(i, i + 500));
           if (ocErr) {
             logger.error("ModuloResumo persistir ocorrencias falhou", { error: String(ocErr) });
             toast.warning("Algumas ocorrências podem não ter sido salvas. Tente recalcular.");

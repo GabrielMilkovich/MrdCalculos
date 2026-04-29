@@ -3,6 +3,7 @@
  * Implements calculation locking, unlocking and duplication.
  */
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 
 export interface CalcStatus {
   id: string;
@@ -130,7 +131,7 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
 
   if (params) {
     const paramsCopy = rebindToCase(params as unknown as PjeCalcRowGen, newCaseId);
-    await supabase.from("pjecalc_parametros" as any).insert(paramsCopy as never);
+    await fromUntyped("pjecalc_parametros").insert(paramsCopy as never);
   }
 
   // 3. Copy faltas
@@ -144,7 +145,7 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
     const faltasCopy = (faltas as unknown as PjeCalcFaltaRow[]).map(
       (f) => rebindToCase(f, newCaseId),
     );
-    await supabase.from("pjecalc_faltas" as any).insert(faltasCopy as never);
+    await fromUntyped("pjecalc_faltas").insert(faltasCopy as never);
   }
 
   // 4. Copy ferias
@@ -158,7 +159,7 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
     const feriasCopy = (ferias as unknown as PjeCalcFeriasRow[]).map(
       (f) => rebindToCase(f, newCaseId),
     );
-    await supabase.from("pjecalc_ferias" as any).insert(feriasCopy as never);
+    await fromUntyped("pjecalc_ferias").insert(feriasCopy as never);
   }
 
   // 5. Copy historico salarial
@@ -172,7 +173,7 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
     const histCopy = (historicos as unknown as PjeCalcRowGen[]).map(
       (h) => rebindToCase(h, newCaseId),
     );
-    await supabase.from("pjecalc_historico_salarial" as any).insert(histCopy as never);
+    await fromUntyped("pjecalc_historico_salarial").insert(histCopy as never);
   }
 
   // 6. Copy verbas
@@ -186,7 +187,7 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
     const verbasCopy = (verbas as unknown as PjeCalcRowGen[]).map(
       (v) => rebindToCase(v, newCaseId),
     );
-    await supabase.from("pjecalc_verbas" as any).insert(verbasCopy as never);
+    await fromUntyped("pjecalc_verbas").insert(verbasCopy as never);
   }
 
   // 7. Copy configs (FGTS, CS, IR, Correção, Honorários, Custas, Seguro)

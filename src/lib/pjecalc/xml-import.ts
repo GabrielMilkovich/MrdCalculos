@@ -7,6 +7,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { DOMParser as NodeDOMParser } from '@xmldom/xmldom';
 import { logger } from "@/lib/logger";
 
@@ -130,11 +131,11 @@ export async function importarXMLParaCalculo(caseId: string, xmlString: string):
 
   try {
     if (parsed.verbas && parsed.verbas.length > 0) {
-      await supabase.from("pjecalc_verbas" as any).delete().eq("case_id", caseId);
+      await fromUntyped("pjecalc_verbas").delete().eq("case_id", caseId);
 
       for (let i = 0; i < parsed.verbas.length; i++) {
         const v = parsed.verbas[i];
-        await supabase.from("pjecalc_verbas" as any).insert({
+        await fromUntyped("pjecalc_verbas").insert({
           case_id: caseId,
           nome: v.nome,
           tipo: v.tipo,
@@ -155,13 +156,13 @@ export async function importarXMLParaCalculo(caseId: string, xmlString: string):
       const payload: any = { case_id: caseId };
       if (parsed.dados_processo.numero) payload.numero_processo = parsed.dados_processo.numero;
 
-      const existing = await supabase.from("pjecalc_dados_processo" as any).select("id").eq("case_id", caseId).maybeSingle();
+      const existing = await fromUntyped("pjecalc_dados_processo").select("id").eq("case_id", caseId).maybeSingle();
       if (existing.data) {
         // tabela custom fora do schema gerado
         const existingId = (existing.data as { id: string }).id;
-        await supabase.from("pjecalc_dados_processo" as any).update(payload).eq("id", existingId);
+        await fromUntyped("pjecalc_dados_processo").update(payload).eq("id", existingId);
       } else {
-        await supabase.from("pjecalc_dados_processo" as any).insert(payload);
+        await fromUntyped("pjecalc_dados_processo").insert(payload);
       }
     }
 
@@ -183,6 +184,7 @@ export async function importarXMLParaCalculo(caseId: string, xmlString: string):
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 
 /** @deprecated Use analyzePJC from pjc-analyzer.ts */
 interface XmlParseResult {
@@ -296,11 +298,11 @@ export async function importarXMLParaCalculo(caseId: string, xmlString: string):
 
   try {
     if (parsed.verbas && parsed.verbas.length > 0) {
-      await supabase.from("pjecalc_verbas" as any).delete().eq("case_id", caseId);
+      await fromUntyped("pjecalc_verbas").delete().eq("case_id", caseId);
 
       for (let i = 0; i < parsed.verbas.length; i++) {
         const v = parsed.verbas[i];
-        await supabase.from("pjecalc_verbas" as any).insert({
+        await fromUntyped("pjecalc_verbas").insert({
           case_id: caseId,
           nome: v.nome,
           tipo: v.tipo,
@@ -321,13 +323,13 @@ export async function importarXMLParaCalculo(caseId: string, xmlString: string):
       const payload: any = { case_id: caseId };
       if (parsed.dados_processo.numero) payload.numero_processo = parsed.dados_processo.numero;
 
-      const existing = await supabase.from("pjecalc_dados_processo" as any).select("id").eq("case_id", caseId).maybeSingle();
+      const existing = await fromUntyped("pjecalc_dados_processo").select("id").eq("case_id", caseId).maybeSingle();
       if (existing.data) {
         // tabela custom fora do schema gerado
         const existingId = (existing.data as { id: string }).id;
-        await supabase.from("pjecalc_dados_processo" as any).update(payload).eq("id", existingId);
+        await fromUntyped("pjecalc_dados_processo").update(payload).eq("id", existingId);
       } else {
-        await supabase.from("pjecalc_dados_processo" as any).insert(payload);
+        await fromUntyped("pjecalc_dados_processo").insert(payload);
       }
     }
 

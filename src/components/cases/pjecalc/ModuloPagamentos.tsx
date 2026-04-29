@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import Decimal from "decimal.js";
@@ -165,7 +166,7 @@ export function ModuloPagamentos({ caseId }: Props) {
   const deletePag = async (id: string) => {
     if (!confirm("Excluir este pagamento?")) return;
     try {
-      const { error } = await supabase.from("pjecalc_pagamentos" as any).delete().eq("id", id);
+      const { error } = await fromUntyped("pjecalc_pagamentos").delete().eq("id", id);
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["pjecalc_pagamentos", caseId] });
       toast.success("Pagamento excluído!");

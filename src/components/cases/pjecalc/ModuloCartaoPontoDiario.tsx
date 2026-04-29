@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Trash2, Loader2, Calculator, Calendar, ChevronLeft, ChevronRight, Copy, Clock, AlertTriangle } from "lucide-react";
 
@@ -127,7 +128,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       // Deletar dias existentes do mês
       const inicioMes = `${mesAtual}-01`;
       const fimMes = `${mesAtual}-${String(diasNoMes).padStart(2, '0')}`;
-      await supabase.from("pjecalc_ponto_diario" as any).delete()
+      await fromUntyped("pjecalc_ponto_diario").delete()
         .eq("case_id", caseId).gte("data", inicioMes).lte("data", fimMes);
 
       const rows: Record<string, unknown>[] = [];
@@ -146,7 +147,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
           horas_trabalhadas: 0,
         });
       }
-      if (rows.length > 0) await supabase.from("pjecalc_ponto_diario" as any).insert(rows);
+      if (rows.length > 0) await fromUntyped("pjecalc_ponto_diario").insert(rows);
       qc.invalidateQueries({ queryKey: ["pjecalc_ponto_diario", caseId, mesAtual] });
       toast.success(`${rows.length} dias gerados para ${mesAtual}`);
     } catch (e) { toast.error((e as Error).message); }
@@ -157,7 +158,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
     if (!dataAdmissao || !dataDemissao) { toast.error("Preencha admissão e demissão."); return; }
     setGenerating(true);
     try {
-      await supabase.from("pjecalc_ponto_diario" as any).delete().eq("case_id", caseId);
+      await fromUntyped("pjecalc_ponto_diario").delete().eq("case_id", caseId);
       const admDate = new Date(dataAdmissao);
       const demDate = new Date(dataDemissao);
       const rows: Record<string, unknown>[] = [];
@@ -177,7 +178,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       }
       // Insert em lotes de 500
       for (let i = 0; i < rows.length; i += 500) {
-        await supabase.from("pjecalc_ponto_diario" as any).insert(rows.slice(i, i + 500));
+        await fromUntyped("pjecalc_ponto_diario").insert(rows.slice(i, i + 500));
       }
       qc.invalidateQueries({ queryKey: ["pjecalc_ponto_diario", caseId, mesAtual] });
       toast.success(`${rows.length} dias gerados para todo o período`);
@@ -200,7 +201,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
         const jornadadiaria = cargaHoraria / (jornadaFixa.sabado ? 26 : 22);
         const he = Math.max(0, ht - jornadadiaria);
         
-        await supabase.from("pjecalc_ponto_diario" as any).update({
+        await fromUntyped("pjecalc_ponto_diario").update({
           entrada_1: jornadaFixa.entrada_1,
           saida_1: jornadaFixa.saida_1,
           entrada_2: jornadaFixa.entrada_2,
@@ -234,14 +235,14 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
         updated.entrada_3 && updated.saida_3 ? `${updated.entrada_3}-${updated.saida_3}` : '',
       ].filter(Boolean).join(' / ');
       
-      await supabase.from("pjecalc_ponto_diario" as any).update({
+      await fromUntyped("pjecalc_ponto_diario").update({
         [field]: value,
         horas_trabalhadas: ht,
         frequencia: freq,
         origem: 'INFORMADA',
       }).eq("id", id);
     } else {
-      await supabase.from("pjecalc_ponto_diario" as any).update({
+      await fromUntyped("pjecalc_ponto_diario").update({
         [field]: value,
         origem: 'INFORMADA',
       }).eq("id", id);
@@ -260,7 +261,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
   const sincronizarTotais = async () => {
     try {
       // Buscar todos os meses com dados
-      const res = await supabase.from("pjecalc_ponto_diario" as any)
+      const res = await fromUntyped("pjecalc_ponto_diario")
         .select("*").eq("case_id", caseId).order("data");
       type PontoRow = Record<string, unknown> & { data: string; tipo?: string; horas_trabalhadas?: number };
       const todos = ((res as unknown as { data: PontoRow[] | null }).data ?? []);
@@ -275,7 +276,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       }
 
       // Deletar totais existentes e inserir novos
-      await supabase.from("pjecalc_cartao_ponto" as any).delete().eq("case_id", caseId);
+      await fromUntyped("pjecalc_cartao_ponto").delete().eq("case_id", caseId);
       type CartaoPontoRow = Record<string, unknown>;
       const rows: CartaoPontoRow[] = [];
       for (const [comp, dias] of Object.entries(porComp)) {
@@ -295,7 +296,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       }
       if (rows.length > 0) {
         for (let i = 0; i < rows.length; i += 500) {
-          await supabase.from("pjecalc_cartao_ponto" as any).insert(rows.slice(i, i + 500));
+          await fromUntyped("pjecalc_cartao_ponto").insert(rows.slice(i, i + 500));
         }
       }
       toast.success(`${rows.length} competências sincronizadas com o motor de cálculo`);
