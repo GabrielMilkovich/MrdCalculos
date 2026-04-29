@@ -48,6 +48,7 @@ import { ServicoDeCalculo } from './core/servicos/servico-de-calculo';
 import { InssModuloAdapter } from './modulos/inss-modulo-adapter';
 import { IrpfModuloAdapter } from './modulos/irpf-modulo-adapter';
 import { SELIC_MENSAL, TR_MENSAL, IPCA_E_ACUMULADO } from './indices-fallback';
+import { TABELA_UNICA_JT_DEVEDOR } from './tabela-unica-jt-oficial';
 import { TABELA_SELIC_MENSAL } from './core/dominio/indices/selic/tabela-selic-mensal';
 import {
   IndiceMonetarioEnum,
@@ -1468,7 +1469,9 @@ export class PjeCalcEngineV3 {
       // TR pos-Lei 12.703/2012 ~0%. O componente fixo da Tabela JT empiricamente
       // calibrado em 0.15%/m via 47 PJCs (regressao por minimos quadrados sobre
       // taxas <taxaDeJuros> isolando SELIC pos-transicao).
-      // Resultado: media gap 0.08%, 96% +/-5%, 100% +/-10% (vs 89% e 96% antes).
+      // NOTA 2026-04-29: tentativa de usar TABELA_UNICA_JT_DEVEDOR oficial
+      // (de PJe-Calc-Cidadao TRT8) gerou overshoot (96% -> 35%). Provavel
+      // que tabela tenha formato diferente (acumulada? diaria?). Investigar.
       const meses = this.mesesEntre(inicio, fim);
       const trComp = new Decimal(this.somarTRSimples(inicio, fim));
       return trComp.plus(new Decimal(0.15).times(meses));
@@ -1515,6 +1518,47 @@ export class PjeCalcEngineV3 {
       const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
       const taxa = TR_MENSAL[key];
       if (taxa !== undefined) total = total.plus(taxa);
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return total.toNumber();
+  }
+
+  /**
+   * Soma Tabela Unica JT TST oficial mensal pro-rata em [inicio, fim], em pp.
+   * Para meses fora do range tabelado (>2024-10): fallback TR + 0.15%/m.
+   * Fonte: TABELA_UNICA_JT_DEVEDOR (PJe-Calc-Cidadao TRT8 v2.13.2 H2 db).
+   */
+  private somarTabelaJtDevedor(inicio: Date, fim: Date): number {
+    let total = new Decimal(0);
+    const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+    const fimMes = new Date(fim.getFullYear(), fim.getMonth(), 1);
+    while (cursor.getTime() <= fimMes.getTime()) {
+      const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      const taxaOficial = TABELA_UNICA_JT_DEVEDOR[key];
+      let taxaMes: number;
+      if (taxaOficial !== undefined) {
+        taxaMes = taxaOficial;
+      } else {
+        // Fallback pos-2024-10 (lacuna): TR + 0.15%/m empirico
+        const tr = TR_MENSAL[key] ?? 0;
+        taxaMes = tr + 0.15;
+      }
+      // Pro-rata mes inicial/final
+      const ehInicio = cursor.getFullYear() === inicio.getFullYear() && cursor.getMonth() === inicio.getMonth();
+      const ehFim = cursor.getFullYear() === fim.getFullYear() && cursor.getMonth() === fim.getMonth();
+      let fator = 1;
+      if (ehInicio && ehFim) {
+        const dias = fim.getDate() - inicio.getDate();
+        const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+        fator = Math.max(0, dias) / diasMes;
+      } else if (ehInicio) {
+        const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+        fator = (diasMes - inicio.getDate() + 1) / diasMes;
+      } else if (ehFim) {
+        const diasMes = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+        fator = fim.getDate() / diasMes;
+      }
+      total = total.plus(new Decimal(taxaMes).times(fator));
       cursor.setMonth(cursor.getMonth() + 1);
     }
     return total.toNumber();

@@ -1,0 +1,1206 @@
+[
+  {
+    "competencia": "1991-08-01",
+    "indice": "11.950000000"
+  },
+  {
+    "competencia": "1991-09-01",
+    "indice": "16.780000000"
+  },
+  {
+    "competencia": "1991-10-01",
+    "indice": "19.770000000"
+  },
+  {
+    "competencia": "1991-11-01",
+    "indice": "30.520000000"
+  },
+  {
+    "competencia": "1991-12-01",
+    "indice": "28.420000000"
+  },
+  {
+    "competencia": "1992-01-01",
+    "indice": "25.480000000"
+  },
+  {
+    "competencia": "1992-02-01",
+    "indice": "25.610000000"
+  },
+  {
+    "competencia": "1992-03-01",
+    "indice": "24.270000000"
+  },
+  {
+    "competencia": "1992-04-01",
+    "indice": "21.080000000"
+  },
+  {
+    "competencia": "1992-05-01",
+    "indice": "19.810000000"
+  },
+  {
+    "competencia": "1992-06-01",
+    "indice": "21.050000000"
+  },
+  {
+    "competencia": "1992-07-01",
+    "indice": "23.690000000"
+  },
+  {
+    "competencia": "1992-08-01",
+    "indice": "23.220000000"
+  },
+  {
+    "competencia": "1992-09-01",
+    "indice": "25.380000000"
+  },
+  {
+    "competencia": "1992-10-01",
+    "indice": "25.070000000"
+  },
+  {
+    "competencia": "1992-11-01",
+    "indice": "23.290000000"
+  },
+  {
+    "competencia": "1992-12-01",
+    "indice": "23.950000000"
+  },
+  {
+    "competencia": "1993-01-01",
+    "indice": "26.760000000"
+  },
+  {
+    "competencia": "1993-02-01",
+    "indice": "26.400000000"
+  },
+  {
+    "competencia": "1993-03-01",
+    "indice": "25.810000000"
+  },
+  {
+    "competencia": "1993-04-01",
+    "indice": "28.220000000"
+  },
+  {
+    "competencia": "1993-05-01",
+    "indice": "28.680000000"
+  },
+  {
+    "competencia": "1993-06-01",
+    "indice": "30.080000000"
+  },
+  {
+    "competencia": "1993-07-01",
+    "indice": "30.370000000"
+  },
+  {
+    "competencia": "1993-08-01",
+    "indice": "33.340000000"
+  },
+  {
+    "competencia": "1993-09-01",
+    "indice": "34.620000000"
+  },
+  {
+    "competencia": "1993-10-01",
+    "indice": "36.530000000"
+  },
+  {
+    "competencia": "1993-11-01",
+    "indice": "36.160000000"
+  },
+  {
+    "competencia": "1993-12-01",
+    "indice": "36.800000000"
+  },
+  {
+    "competencia": "1994-01-01",
+    "indice": "41.440000000"
+  },
+  {
+    "competencia": "1994-02-01",
+    "indice": "39.860000000"
+  },
+  {
+    "competencia": "1994-03-01",
+    "indice": "41.850000000"
+  },
+  {
+    "competencia": "1994-04-01",
+    "indice": "45.970000000"
+  },
+  {
+    "competencia": "1994-05-01",
+    "indice": "46.440000000"
+  },
+  {
+    "competencia": "1994-06-01",
+    "indice": "46.880000000"
+  },
+  {
+    "competencia": "1994-07-01",
+    "indice": "5.026152000"
+  },
+  {
+    "competencia": "1994-08-01",
+    "indice": "2.131200000"
+  },
+  {
+    "competencia": "1994-09-01",
+    "indice": "2.439100000"
+  },
+  {
+    "competencia": "1994-10-01",
+    "indice": "2.555100000"
+  },
+  {
+    "competencia": "1994-11-01",
+    "indice": "2.921000000"
+  },
+  {
+    "competencia": "1994-12-01",
+    "indice": "2.873100000"
+  },
+  {
+    "competencia": "1995-01-01",
+    "indice": "2.101300000"
+  },
+  {
+    "competencia": "1995-02-01",
+    "indice": "1.853100000"
+  },
+  {
+    "competencia": "1995-03-01",
+    "indice": "2.299800000"
+  },
+  {
+    "competencia": "1995-04-01",
+    "indice": "3.466700000"
+  },
+  {
+    "competencia": "1995-05-01",
+    "indice": "3.247100000"
+  },
+  {
+    "competencia": "1995-06-01",
+    "indice": "2.886300000"
+  },
+  {
+    "competencia": "1995-07-01",
+    "indice": "2.990500000"
+  },
+  {
+    "competencia": "1995-08-01",
+    "indice": "2.604500000"
+  },
+  {
+    "competencia": "1995-09-01",
+    "indice": "1.939300000"
+  },
+  {
+    "competencia": "1995-10-01",
+    "indice": "1.654000000"
+  },
+  {
+    "competencia": "1995-11-01",
+    "indice": "1.438700000"
+  },
+  {
+    "competencia": "1995-12-01",
+    "indice": "1.340000000"
+  },
+  {
+    "competencia": "1996-01-01",
+    "indice": "1.252600000"
+  },
+  {
+    "competencia": "1996-02-01",
+    "indice": "0.962500000"
+  },
+  {
+    "competencia": "1996-03-01",
+    "indice": "0.813900000"
+  },
+  {
+    "competencia": "1996-04-01",
+    "indice": "0.659700000"
+  },
+  {
+    "competencia": "1996-05-01",
+    "indice": "0.588800000"
+  },
+  {
+    "competencia": "1996-06-01",
+    "indice": "0.609900000"
+  },
+  {
+    "competencia": "1996-07-01",
+    "indice": "0.585100000"
+  },
+  {
+    "competencia": "1996-08-01",
+    "indice": "0.627500000"
+  },
+  {
+    "competencia": "1996-09-01",
+    "indice": "0.662000000"
+  },
+  {
+    "competencia": "1996-10-01",
+    "indice": "0.741900000"
+  },
+  {
+    "competencia": "1996-11-01",
+    "indice": "0.814600000"
+  },
+  {
+    "competencia": "1996-12-01",
+    "indice": "0.871700000"
+  },
+  {
+    "competencia": "1997-01-01",
+    "indice": "0.744000000"
+  },
+  {
+    "competencia": "1997-02-01",
+    "indice": "0.661600000"
+  },
+  {
+    "competencia": "1997-03-01",
+    "indice": "0.631600000"
+  },
+  {
+    "competencia": "1997-04-01",
+    "indice": "0.621100000"
+  },
+  {
+    "competencia": "1997-05-01",
+    "indice": "0.635400000"
+  },
+  {
+    "competencia": "1997-06-01",
+    "indice": "0.653500000"
+  },
+  {
+    "competencia": "1997-07-01",
+    "indice": "0.658000000"
+  },
+  {
+    "competencia": "1997-08-01",
+    "indice": "0.627000000"
+  },
+  {
+    "competencia": "1997-09-01",
+    "indice": "0.647400000"
+  },
+  {
+    "competencia": "1997-10-01",
+    "indice": "0.655300000"
+  },
+  {
+    "competencia": "1997-11-01",
+    "indice": "1.533400000"
+  },
+  {
+    "competencia": "1997-12-01",
+    "indice": "1.308500000"
+  },
+  {
+    "competencia": "1998-01-01",
+    "indice": "1.145900000"
+  },
+  {
+    "competencia": "1998-02-01",
+    "indice": "0.446100000"
+  },
+  {
+    "competencia": "1998-03-01",
+    "indice": "0.899500000"
+  },
+  {
+    "competencia": "1998-04-01",
+    "indice": "0.472000000"
+  },
+  {
+    "competencia": "1998-05-01",
+    "indice": "0.454300000"
+  },
+  {
+    "competencia": "1998-06-01",
+    "indice": "0.491300000"
+  },
+  {
+    "competencia": "1998-07-01",
+    "indice": "0.550300000"
+  },
+  {
+    "competencia": "1998-08-01",
+    "indice": "0.374900000"
+  },
+  {
+    "competencia": "1998-09-01",
+    "indice": "0.451200000"
+  },
+  {
+    "competencia": "1998-10-01",
+    "indice": "0.889200000"
+  },
+  {
+    "competencia": "1998-11-01",
+    "indice": "0.613600000"
+  },
+  {
+    "competencia": "1998-12-01",
+    "indice": "0.743400000"
+  },
+  {
+    "competencia": "1999-01-01",
+    "indice": "0.516300000"
+  },
+  {
+    "competencia": "1999-02-01",
+    "indice": "0.829800000"
+  },
+  {
+    "competencia": "1999-03-01",
+    "indice": "1.161400000"
+  },
+  {
+    "competencia": "1999-04-01",
+    "indice": "0.609200000"
+  },
+  {
+    "competencia": "1999-05-01",
+    "indice": "0.576100000"
+  },
+  {
+    "competencia": "1999-06-01",
+    "indice": "0.310800000"
+  },
+  {
+    "competencia": "1999-07-01",
+    "indice": "0.293300000"
+  },
+  {
+    "competencia": "1999-08-01",
+    "indice": "0.294500000"
+  },
+  {
+    "competencia": "1999-09-01",
+    "indice": "0.271500000"
+  },
+  {
+    "competencia": "1999-10-01",
+    "indice": "0.226500000"
+  },
+  {
+    "competencia": "1999-11-01",
+    "indice": "0.199800000"
+  },
+  {
+    "competencia": "1999-12-01",
+    "indice": "0.299800000"
+  },
+  {
+    "competencia": "2000-01-01",
+    "indice": "0.214900000"
+  },
+  {
+    "competencia": "2000-02-01",
+    "indice": "0.232800000"
+  },
+  {
+    "competencia": "2000-03-01",
+    "indice": "0.224200000"
+  },
+  {
+    "competencia": "2000-04-01",
+    "indice": "0.130100000"
+  },
+  {
+    "competencia": "2000-05-01",
+    "indice": "0.249200000"
+  },
+  {
+    "competencia": "2000-06-01",
+    "indice": "0.214000000"
+  },
+  {
+    "competencia": "2000-07-01",
+    "indice": "0.154700000"
+  },
+  {
+    "competencia": "2000-08-01",
+    "indice": "0.202500000"
+  },
+  {
+    "competencia": "2000-09-01",
+    "indice": "0.103800000"
+  },
+  {
+    "competencia": "2000-10-01",
+    "indice": "0.131600000"
+  },
+  {
+    "competencia": "2000-11-01",
+    "indice": "0.119700000"
+  },
+  {
+    "competencia": "2000-12-01",
+    "indice": "0.099100000"
+  },
+  {
+    "competencia": "2001-01-01",
+    "indice": "0.136900000"
+  },
+  {
+    "competencia": "2001-02-01",
+    "indice": "0.036800000"
+  },
+  {
+    "competencia": "2001-03-01",
+    "indice": "0.172400000"
+  },
+  {
+    "competencia": "2001-04-01",
+    "indice": "0.154600000"
+  },
+  {
+    "competencia": "2001-05-01",
+    "indice": "0.182700000"
+  },
+  {
+    "competencia": "2001-06-01",
+    "indice": "0.145800000"
+  },
+  {
+    "competencia": "2001-07-01",
+    "indice": "0.244100000"
+  },
+  {
+    "competencia": "2001-08-01",
+    "indice": "0.343600000"
+  },
+  {
+    "competencia": "2001-09-01",
+    "indice": "0.162700000"
+  },
+  {
+    "competencia": "2001-10-01",
+    "indice": "0.291300000"
+  },
+  {
+    "competencia": "2001-11-01",
+    "indice": "0.192800000"
+  },
+  {
+    "competencia": "2001-12-01",
+    "indice": "0.198300000"
+  },
+  {
+    "competencia": "2002-01-01",
+    "indice": "0.259100000"
+  },
+  {
+    "competencia": "2002-02-01",
+    "indice": "0.117100000"
+  },
+  {
+    "competencia": "2002-03-01",
+    "indice": "0.175800000"
+  },
+  {
+    "competencia": "2002-04-01",
+    "indice": "0.235700000"
+  },
+  {
+    "competencia": "2002-05-01",
+    "indice": "0.210200000"
+  },
+  {
+    "competencia": "2002-06-01",
+    "indice": "0.158200000"
+  },
+  {
+    "competencia": "2002-07-01",
+    "indice": "0.265600000"
+  },
+  {
+    "competencia": "2002-08-01",
+    "indice": "0.248100000"
+  },
+  {
+    "competencia": "2002-09-01",
+    "indice": "0.195500000"
+  },
+  {
+    "competencia": "2002-10-01",
+    "indice": "0.276800000"
+  },
+  {
+    "competencia": "2002-11-01",
+    "indice": "0.264400000"
+  },
+  {
+    "competencia": "2002-12-01",
+    "indice": "0.360900000"
+  },
+  {
+    "competencia": "2003-01-01",
+    "indice": "0.487800000"
+  },
+  {
+    "competencia": "2003-02-01",
+    "indice": "0.411600000"
+  },
+  {
+    "competencia": "2003-03-01",
+    "indice": "0.378200000"
+  },
+  {
+    "competencia": "2003-04-01",
+    "indice": "0.418400000"
+  },
+  {
+    "competencia": "2003-05-01",
+    "indice": "0.465000000"
+  },
+  {
+    "competencia": "2003-06-01",
+    "indice": "0.416600000"
+  },
+  {
+    "competencia": "2003-07-01",
+    "indice": "0.546500000"
+  },
+  {
+    "competencia": "2003-08-01",
+    "indice": "0.403800000"
+  },
+  {
+    "competencia": "2003-09-01",
+    "indice": "0.336400000"
+  },
+  {
+    "competencia": "2003-10-01",
+    "indice": "0.321300000"
+  },
+  {
+    "competencia": "2003-11-01",
+    "indice": "0.177600000"
+  },
+  {
+    "competencia": "2003-12-01",
+    "indice": "0.189900000"
+  },
+  {
+    "competencia": "2004-01-01",
+    "indice": "0.128000000"
+  },
+  {
+    "competencia": "2004-02-01",
+    "indice": "0.045800000"
+  },
+  {
+    "competencia": "2004-03-01",
+    "indice": "0.177800000"
+  },
+  {
+    "competencia": "2004-04-01",
+    "indice": "0.087400000"
+  },
+  {
+    "competencia": "2004-05-01",
+    "indice": "0.154600000"
+  },
+  {
+    "competencia": "2004-06-01",
+    "indice": "0.176100000"
+  },
+  {
+    "competencia": "2004-07-01",
+    "indice": "0.195200000"
+  },
+  {
+    "competencia": "2004-08-01",
+    "indice": "0.200500000"
+  },
+  {
+    "competencia": "2004-09-01",
+    "indice": "0.172800000"
+  },
+  {
+    "competencia": "2004-10-01",
+    "indice": "0.110800000"
+  },
+  {
+    "competencia": "2004-11-01",
+    "indice": "0.114600000"
+  },
+  {
+    "competencia": "2004-12-01",
+    "indice": "0.240000000"
+  },
+  {
+    "competencia": "2005-01-01",
+    "indice": "0.188000000"
+  },
+  {
+    "competencia": "2005-02-01",
+    "indice": "0.096200000"
+  },
+  {
+    "competencia": "2005-03-01",
+    "indice": "0.263500000"
+  },
+  {
+    "competencia": "2005-04-01",
+    "indice": "0.200300000"
+  },
+  {
+    "competencia": "2005-05-01",
+    "indice": "0.252700000"
+  },
+  {
+    "competencia": "2005-06-01",
+    "indice": "0.299300000"
+  },
+  {
+    "competencia": "2005-07-01",
+    "indice": "0.257500000"
+  },
+  {
+    "competencia": "2005-08-01",
+    "indice": "0.346600000"
+  },
+  {
+    "competencia": "2005-09-01",
+    "indice": "0.263700000"
+  },
+  {
+    "competencia": "2005-10-01",
+    "indice": "0.210000000"
+  },
+  {
+    "competencia": "2005-11-01",
+    "indice": "0.192900000"
+  },
+  {
+    "competencia": "2005-12-01",
+    "indice": "0.226900000"
+  },
+  {
+    "competencia": "2006-01-01",
+    "indice": "0.232600000"
+  },
+  {
+    "competencia": "2006-02-01",
+    "indice": "0.072500000"
+  },
+  {
+    "competencia": "2006-03-01",
+    "indice": "0.207300000"
+  },
+  {
+    "competencia": "2006-04-01",
+    "indice": "0.085500000"
+  },
+  {
+    "competencia": "2006-05-01",
+    "indice": "0.188800000"
+  },
+  {
+    "competencia": "2006-06-01",
+    "indice": "0.193700000"
+  },
+  {
+    "competencia": "2006-07-01",
+    "indice": "0.175100000"
+  },
+  {
+    "competencia": "2006-08-01",
+    "indice": "0.243600000"
+  },
+  {
+    "competencia": "2006-09-01",
+    "indice": "0.152100000"
+  },
+  {
+    "competencia": "2006-10-01",
+    "indice": "0.187500000"
+  },
+  {
+    "competencia": "2006-11-01",
+    "indice": "0.128200000"
+  },
+  {
+    "competencia": "2006-12-01",
+    "indice": "0.152200000"
+  },
+  {
+    "competencia": "2007-01-01",
+    "indice": "0.218900000"
+  },
+  {
+    "competencia": "2007-02-01",
+    "indice": "0.072100000"
+  },
+  {
+    "competencia": "2007-03-01",
+    "indice": "0.187600000"
+  },
+  {
+    "competencia": "2007-04-01",
+    "indice": "0.127200000"
+  },
+  {
+    "competencia": "2007-05-01",
+    "indice": "0.168900000"
+  },
+  {
+    "competencia": "2007-06-01",
+    "indice": "0.095400000"
+  },
+  {
+    "competencia": "2007-07-01",
+    "indice": "0.146900000"
+  },
+  {
+    "competencia": "2007-08-01",
+    "indice": "0.146600000"
+  },
+  {
+    "competencia": "2007-09-01",
+    "indice": "0.035200000"
+  },
+  {
+    "competencia": "2007-10-01",
+    "indice": "0.114200000"
+  },
+  {
+    "competencia": "2007-11-01",
+    "indice": "0.059000000"
+  },
+  {
+    "competencia": "2007-12-01",
+    "indice": "0.064000000"
+  },
+  {
+    "competencia": "2008-01-01",
+    "indice": "0.101000000"
+  },
+  {
+    "competencia": "2008-02-01",
+    "indice": "0.024300000"
+  },
+  {
+    "competencia": "2008-03-01",
+    "indice": "0.040900000"
+  },
+  {
+    "competencia": "2008-04-01",
+    "indice": "0.095500000"
+  },
+  {
+    "competencia": "2008-05-01",
+    "indice": "0.073600000"
+  },
+  {
+    "competencia": "2008-06-01",
+    "indice": "0.114600000"
+  },
+  {
+    "competencia": "2008-07-01",
+    "indice": "0.191400000"
+  },
+  {
+    "competencia": "2008-08-01",
+    "indice": "0.157400000"
+  },
+  {
+    "competencia": "2008-09-01",
+    "indice": "0.197000000"
+  },
+  {
+    "competencia": "2008-10-01",
+    "indice": "0.250600000"
+  },
+  {
+    "competencia": "2008-11-01",
+    "indice": "0.161800000"
+  },
+  {
+    "competencia": "2008-12-01",
+    "indice": "0.214900000"
+  },
+  {
+    "competencia": "2009-01-01",
+    "indice": "0.184000000"
+  },
+  {
+    "competencia": "2009-02-01",
+    "indice": "0.045100000"
+  },
+  {
+    "competencia": "2009-03-01",
+    "indice": "0.143800000"
+  },
+  {
+    "competencia": "2009-04-01",
+    "indice": "0.045400000"
+  },
+  {
+    "competencia": "2009-05-01",
+    "indice": "0.044900000"
+  },
+  {
+    "competencia": "2009-06-01",
+    "indice": "0.065600000"
+  },
+  {
+    "competencia": "2009-07-01",
+    "indice": "0.105100000"
+  },
+  {
+    "competencia": "2009-08-01",
+    "indice": "0.019700000"
+  },
+  {
+    "competencia": "2009-09-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2009-10-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2009-11-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2009-12-01",
+    "indice": "0.053300000"
+  },
+  {
+    "competencia": "2010-01-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2010-02-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2010-03-01",
+    "indice": "0.079200000"
+  },
+  {
+    "competencia": "2010-04-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2010-05-01",
+    "indice": "0.051000000"
+  },
+  {
+    "competencia": "2010-06-01",
+    "indice": "0.058900000"
+  },
+  {
+    "competencia": "2010-07-01",
+    "indice": "0.115100000"
+  },
+  {
+    "competencia": "2010-08-01",
+    "indice": "0.090900000"
+  },
+  {
+    "competencia": "2010-09-01",
+    "indice": "0.070200000"
+  },
+  {
+    "competencia": "2010-10-01",
+    "indice": "0.047200000"
+  },
+  {
+    "competencia": "2010-11-01",
+    "indice": "0.033600000"
+  },
+  {
+    "competencia": "2010-12-01",
+    "indice": "0.140600000"
+  },
+  {
+    "competencia": "2011-01-01",
+    "indice": "0.071500000"
+  },
+  {
+    "competencia": "2011-02-01",
+    "indice": "0.052400000"
+  },
+  {
+    "competencia": "2011-03-01",
+    "indice": "0.121200000"
+  },
+  {
+    "competencia": "2011-04-01",
+    "indice": "0.036900000"
+  },
+  {
+    "competencia": "2011-05-01",
+    "indice": "0.157000000"
+  },
+  {
+    "competencia": "2011-06-01",
+    "indice": "0.111400000"
+  },
+  {
+    "competencia": "2011-07-01",
+    "indice": "0.122900000"
+  },
+  {
+    "competencia": "2011-08-01",
+    "indice": "0.207600000"
+  },
+  {
+    "competencia": "2011-09-01",
+    "indice": "0.100300000"
+  },
+  {
+    "competencia": "2011-10-01",
+    "indice": "0.062000000"
+  },
+  {
+    "competencia": "2011-11-01",
+    "indice": "0.064500000"
+  },
+  {
+    "competencia": "2011-12-01",
+    "indice": "0.093700000"
+  },
+  {
+    "competencia": "2012-01-01",
+    "indice": "0.086400000"
+  },
+  {
+    "competencia": "2012-02-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2012-03-01",
+    "indice": "0.106800000"
+  },
+  {
+    "competencia": "2012-04-01",
+    "indice": "0.022700000"
+  },
+  {
+    "competencia": "2012-05-01",
+    "indice": "0.046800000"
+  },
+  {
+    "competencia": "2012-06-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2012-07-01",
+    "indice": "0.014400000"
+  },
+  {
+    "competencia": "2012-08-01",
+    "indice": "0.012300000"
+  },
+  {
+    "competencia": "2012-09-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2012-10-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2012-11-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2012-12-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2013-01-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2013-02-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2013-03-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2013-04-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2013-05-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2013-06-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2013-07-01",
+    "indice": "0.020900000"
+  },
+  {
+    "competencia": "2013-08-01",
+    "indice": "0E-9"
+  },
+  {
+    "competencia": "2013-09-01",
+    "indice": "0.007900000"
+  },
+  {
+    "competencia": "2013-10-01",
+    "indice": "0.092000000"
+  },
+  {
+    "competencia": "2013-11-01",
+    "indice": "0.020700000"
+  },
+  {
+    "competencia": "2013-12-01",
+    "indice": "0.049400000"
+  },
+  {
+    "competencia": "2014-01-01",
+    "indice": "0.112600000"
+  },
+  {
+    "competencia": "2014-02-01",
+    "indice": "0.053700000"
+  },
+  {
+    "competencia": "2014-03-01",
+    "indice": "0.026600000"
+  },
+  {
+    "competencia": "2014-04-01",
+    "indice": "0.045900000"
+  },
+  {
+    "competencia": "2014-05-01",
+    "indice": "0.060400000"
+  },
+  {
+    "competencia": "2014-06-01",
+    "indice": "0.046500000"
+  },
+  {
+    "competencia": "2014-07-01",
+    "indice": "0.105400000"
+  },
+  {
+    "competencia": "2014-08-01",
+    "indice": "0.060200000"
+  },
+  {
+    "competencia": "2014-09-01",
+    "indice": "0.087300000"
+  },
+  {
+    "competencia": "2014-10-01",
+    "indice": "0.103800000"
+  },
+  {
+    "competencia": "2014-11-01",
+    "indice": "0.048300000"
+  },
+  {
+    "competencia": "2014-12-01",
+    "indice": "0.105300000"
+  },
+  {
+    "competencia": "2015-01-01",
+    "indice": "0.087800000"
+  },
+  {
+    "competencia": "2015-02-01",
+    "indice": "0.016800000"
+  },
+  {
+    "competencia": "2015-03-01",
+    "indice": "0.129600000"
+  },
+  {
+    "competencia": "2015-04-01",
+    "indice": "0.107400000"
+  },
+  {
+    "competencia": "2015-05-01",
+    "indice": "0.115300000"
+  },
+  {
+    "competencia": "2015-06-01",
+    "indice": "0.181300000"
+  },
+  {
+    "competencia": "2015-07-01",
+    "indice": "0.230500000"
+  },
+  {
+    "competencia": "2015-08-01",
+    "indice": "0.186700000"
+  },
+  {
+    "competencia": "2015-09-01",
+    "indice": "0.192000000"
+  },
+  {
+    "competencia": "2015-10-01",
+    "indice": "0.179000000"
+  },
+  {
+    "competencia": "2015-11-01",
+    "indice": "0.129700000"
+  },
+  {
+    "competencia": "2015-12-01",
+    "indice": "0.225000000"
+  },
+  {
+    "competencia": "2016-01-01",
+    "indice": "0.132000000"
+  },
+  {
+    "competencia": "2016-02-01",
+    "indice": "0.095700000"
+  },
+  {
+    "competencia": "2016-03-01",
+    "indice": "0.216800000"
+  },
+  {
+    "competencia": "2016-04-01",
+    "indice": "0.130400000"
+  },
+  {
+    "competencia": "2016-05-01",
+    "indice": "0.153300000"
+  },
+  {
+    "competencia": "2016-06-01",
+    "indice": "0.204300000"
+  },
+  {
+    "competencia": "2016-07-01",
+    "indice": "0.162100000"
+  },
+  {
+    "competencia": "2016-08-01",
+    "indice": "0.254500000"
+  }
+]
