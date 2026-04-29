@@ -126,16 +126,39 @@ export async function exportMRDState(caseId: string): Promise<MRDState> {
 }
 
 export function downloadMRDState(state: MRDState, filename?: string) {
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    throw new Error('downloadMRDState: ambiente sem suporte a File API.');
+  }
+
   const json = JSON.stringify(state, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename || `mrdstate_${state.meta.processo_cnj || 'calculo'}_${new Date().toISOString().slice(0, 10)}.mrdstate.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const fallback = `mrdstate_${state.meta?.processo_cnj || 'calculo'}_${new Date().toISOString().slice(0, 10)}.mrdstate.json`;
+  const safeName = (filename || fallback)
+    .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
+    .trim()
+    .slice(0, 200) || fallback;
+
+  let a: HTMLAnchorElement | null = null;
+  try {
+    a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+  } finally {
+    try {
+      if (a && a.parentNode) a.parentNode.removeChild(a);
+    } catch {
+      /* ignore */
+    }
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export function validateMRDStateIntegrity(state: MRDState): boolean {

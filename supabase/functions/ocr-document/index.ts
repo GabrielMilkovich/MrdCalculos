@@ -803,7 +803,6 @@ serve(async (req) => {
           ...(shouldAutoSetTipo ? { tipo: newTipo } : {}),
           page_count: result.pageCount,
           ocr_confidence: result.confidence,
-          ocr_confianca: result.confidence,
           ocr_chunks_total: result.chunksTotal,
           ocr_chunks_done: result.chunksDone,
           ocr_chunks_failed: result.chunksFailed,

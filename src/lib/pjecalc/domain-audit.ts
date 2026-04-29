@@ -73,7 +73,7 @@ function toEvidenceSources(caseId: string, documents: DocumentRow[]): EvidenceSo
     periodo_referencia_inicio: doc.periodo_referencia_inicio ?? doc.periodo_inicio ?? undefined,
     periodo_referencia_fim: doc.periodo_referencia_fim ?? doc.periodo_fim ?? undefined,
     status: mapDocumentStatus(doc.status),
-    confidence: Math.max(0, Math.min(1, doc.ocr_confidence ?? doc.ocr_confianca ?? 0.75)),
+    confidence: Math.max(0, Math.min(1, doc.ocr_confidence ?? 0.75)),
     metadata: typeof doc.metadata === "object" && doc.metadata ? (doc.metadata as Record<string, unknown>) : undefined,
   }));
 }

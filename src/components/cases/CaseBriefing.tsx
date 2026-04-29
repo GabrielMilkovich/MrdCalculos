@@ -187,7 +187,7 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
             file_name: d.file_name,
             tipo: d.tipo,
             status: d.status,
-            ocr_confidence: d.ocr_confidence || d.ocr_confianca,
+            ocr_confidence: d.ocr_confidence,
           })),
           calculation_result: latestRun ? {
             resultado_bruto: latestRun.resultado_bruto,

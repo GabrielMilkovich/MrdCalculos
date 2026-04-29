@@ -6,17 +6,42 @@
 
 /**
  * Download HTML as a file (for offline printing or archival).
+ *
+ * Hardened: throws clear errors if File API is unavailable, sanitizes
+ * filename against path-separator injection, and revokes Object URL even
+ * when click fails.
  */
 export function downloadHTML(html: string, filename: string): void {
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    throw new Error('downloadHTML: ambiente sem suporte a File API (SSR/Node).');
+  }
+  const safeName = (filename || 'mrd_calc_report.html')
+    .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
+    .trim()
+    .slice(0, 200) || 'mrd_calc_report.html';
+
+  const blob = new Blob([html ?? ''], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  let a: HTMLAnchorElement | null = null;
+  try {
+    a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+  } finally {
+    try {
+      if (a && a.parentNode) a.parentNode.removeChild(a);
+    } catch {
+      /* ignore */
+    }
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /**

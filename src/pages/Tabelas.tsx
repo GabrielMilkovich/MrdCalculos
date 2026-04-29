@@ -14,6 +14,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 const UFS = [
   "AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
@@ -129,22 +130,29 @@ function HealthDashboard() {
   const checkSourceUrls = async () => {
     setCheckingUrls(true);
     const results: typeof urlResults = {};
-    for (const src of (sources || [])) {
-      if (!src.url) continue;
-      try {
-        await fetch(src.url, { method: 'HEAD', mode: 'no-cors' });
-        results[src.id] = { ok: true };
-      } catch {
-        results[src.id] = { ok: false, error: 'URL inacessível' };
+    try {
+      for (const src of (sources || [])) {
+        if (!src.url) continue;
+        try {
+          await fetch(src.url, { method: 'HEAD', mode: 'no-cors' });
+          results[src.id] = { ok: true };
+        } catch (fetchErr) {
+          logger.warn('checkSourceUrls: fetch falhou', { sourceId: src.id, url: src.url, err: String(fetchErr) });
+          results[src.id] = { ok: false, error: 'URL inacessível' };
+        }
       }
-    }
-    setUrlResults(results);
-    setCheckingUrls(false);
-    const failures = Object.values(results).filter(r => !r.ok).length;
-    if (failures > 0) {
-      toast.error(`${failures} fonte(s) com URL inacessível!`);
-    } else {
-      toast.success('Todas as fontes estão acessíveis.');
+      setUrlResults(results);
+      const failures = Object.values(results).filter(r => !r.ok).length;
+      if (failures > 0) {
+        toast.error(`${failures} fonte(s) com URL inacessível!`);
+      } else {
+        toast.success('Todas as fontes estão acessíveis.');
+      }
+    } catch (err) {
+      logger.error('checkSourceUrls: erro inesperado', err);
+      toast.error('Erro inesperado ao verificar fontes. Tente novamente.');
+    } finally {
+      setCheckingUrls(false);
     }
   };
 

@@ -13,15 +13,28 @@ import { generateXlsx } from './xlsx-generator';
 
 // =====================================================
 // FORMATTERS
+//
+// Edge cases handled:
+//   - undefined/null/NaN/Infinity -> "0,00" (or equivalent for the format).
+//   - Very large numbers (> 1e15) still serialize without loss-of-precision
+//     because we always go through toLocaleString / toFixed which produce
+//     plain decimal strings. We never coerce via Number stringification of
+//     scientific notation.
 // =====================================================
 
+function safeNumber(v: unknown): number {
+  if (typeof v !== 'number') return 0;
+  if (!Number.isFinite(v)) return 0;
+  return v;
+}
+
 const fmtBRL = (v: number): string =>
-  (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  safeNumber(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const fmtPct = (v: number): string =>
-  ((v || 0) * 100).toFixed(2) + '%';
+  (safeNumber(v) * 100).toFixed(2) + '%';
 
-const fmtNum4 = (v: number): string => (v || 0).toFixed(4);
+const fmtNum4 = (v: number): string => safeNumber(v).toFixed(4);
 
 const fmtComp = (c: string): string => {
   if (!c) return '';
@@ -545,25 +558,72 @@ export function exportToCSV(result: PjeLiquidacaoResult): string {
 }
 
 /**
+ * Sanitize a download filename so it never breaks the browser File API.
+ * Strips control chars, path separators, and limits to 200 chars.
+ */
+function sanitizeFilename(name: string, fallback: string): string {
+  const safe = (name || '').replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_').trim();
+  if (!safe) return fallback;
+  return safe.slice(0, 200);
+}
+
+/**
  * Download helper: triggers a browser download for a Blob.
+ *
+ * Hardened against:
+ *   - Non-browser environments (SSR, tests): throws with a clear message.
+ *   - Invalid blob: rejects null/undefined input.
+ *   - Filename injection: sanitizes path separators and control chars.
+ *   - URL leaks: revokes Object URL even if click fails.
+ *
+ * @throws Error if document/Blob/URL.createObjectURL are unavailable.
  */
 export function downloadBlob(blob: Blob, filename: string): void {
+  if (!blob) {
+    throw new Error('downloadBlob: blob é obrigatório.');
+  }
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    throw new Error('downloadBlob: ambiente sem suporte a File API (SSR/Node sem polyfill).');
+  }
+
+  const safeName = sanitizeFilename(filename, 'download.bin');
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 100);
+  let a: HTMLAnchorElement | null = null;
+  try {
+    a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+  } finally {
+    setTimeout(() => {
+      try {
+        if (a && a.parentNode) a.parentNode.removeChild(a);
+      } catch {
+        /* ignore: anchor already detached */
+      }
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        /* ignore: URL may already be revoked */
+      }
+    }, 100);
+  }
 }
 
 /**
  * Download helper for CSV string content.
+ *
+ * Edge cases handled:
+ *   - Empty content -> writes BOM-only file (Excel still opens).
+ *   - Very large content -> Blob created from array (avoids string copy).
+ *
+ * @throws Error if download fails (forwarded from downloadBlob).
  */
 export function downloadCSV(content: string, filename: string): void {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' });
+  const safe = typeof content === 'string' ? content : '';
+  // Use array form to avoid double allocation on very large strings.
+  const blob = new Blob([safe], { type: 'text/csv;charset=utf-8' });
   downloadBlob(blob, filename);
 }

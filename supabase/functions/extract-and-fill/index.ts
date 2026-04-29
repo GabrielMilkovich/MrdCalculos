@@ -1848,7 +1848,6 @@ async function processDocumentInBackground(
       tipo: extracted.tipo_documento || doc.tipo,
       page_count: extracted.paginas_detectadas || 1,
       ocr_confidence: extracted.confianca_geral || 0.9,
-      ocr_confianca: extracted.confianca_geral || 0.9,
       processing_completed_at: new Date().toISOString(),
       error_message: null,
     };

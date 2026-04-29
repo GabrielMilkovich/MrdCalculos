@@ -742,24 +742,35 @@ export function FactValidationView({
     const token = sessionData?.session?.access_token;
     if (!token) throw new Error("Sessão inválida para preview");
 
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-signed-document-url`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ document_id: documentId, mode: "blob" }),
-      cache: "no-store",
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-signed-document-url`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ document_id: documentId, mode: "blob" }),
+        cache: "no-store",
+      });
+    } catch (networkErr) {
+      logger.error("Network error fetching preview blob", networkErr, { documentId });
+      throw new Error("Falha de rede ao buscar pré-visualização do documento");
+    }
 
     if (!response.ok) {
       throw new Error(`Backend preview failed (${response.status})`);
     }
 
-    const blob = await response.blob();
-    const type = mimeType || blob.type || "application/pdf";
-    return new Blob([blob], { type });
+    try {
+      const blob = await response.blob();
+      const type = mimeType || blob.type || "application/pdf";
+      return new Blob([blob], { type });
+    } catch (parseErr) {
+      logger.error("Failed to read preview blob body", parseErr, { documentId });
+      throw new Error("Erro ao ler corpo do documento");
+    }
   };
 
   const fetchAndCreateBlobUrl = async (documentId: string, signedUrl: string, mimeType?: string | null) => {
