@@ -187,16 +187,23 @@ export class MaquinaDeCalculoDePrevidenciaPrivada {
     this.prev.removerDeOcorrencias();
     if (!this.prev.getApurarPrevidenciaPrivada()) return;
 
+    // Teto mensal — clampa base se definido e > 0 (Art. 6 LC 109/2001).
+    const tetoAtivo = input.tetoMensal !== null && input.tetoMensal !== undefined && input.tetoMensal.gt(ZERO);
+    const teto = tetoAtivo ? (input.tetoMensal as Decimal) : null;
+
     // 2. Iterar aliquotas, e por aliquota iterar meses do periodo.
     for (const aliq of this.prev.getAliquotas()) {
       const periodos = eachMonth(aliq.dataInicioPeriodo, aliq.dataTerminoPeriodo);
       for (const p of periodos) {
         const somaDasDiferencas = this.somarDiferencasNaCompetencia(p.competencia, input.verbasIncidentes);
         if (somaDasDiferencas === null) continue; // Java: if (!existeOcorrencia) continue;
+        const valorBase = teto !== null && somaDasDiferencas.gt(teto)
+          ? teto
+          : somaDasDiferencas;
         this.prev.getOcorrencias().push({
           competencia: p.inicio,
           aliquota: aliq.aliquota,
-          valorBase: somaDasDiferencas,
+          valorBase,
           indiceAcumulado: new Decimal(1),
           taxaDeJuros: ZERO,
         });
@@ -205,14 +212,17 @@ export class MaquinaDeCalculoDePrevidenciaPrivada {
 
     if (this.prev.getOcorrencias().length === 0) return;
 
-    // 3. Aplicar indice de correcao (Java: TabelaDeCorrecaoMonetaria com flag
-    //    UTILIZAR_INDICE_TRABALHISTA OU outroIndiceDeCorrecao).
-    //    Em ambos os casos, o input.indicesAcumulados ja foi pre-carregado
-    //    pelo orchestrator com o indice correto — basta ler por competencia.
+    // 3. Aplicar indice de correcao + juros conforme modoJuros.
+    //    'nenhum' zera juros; demais modos leem taxaJurosPorCompetencia.
+    const modoJuros = input.modoJuros ?? 'trabalhista';
     for (const o of this.prev.getOcorrencias()) {
       const ym = fmtComp(o.competencia);
       o.indiceAcumulado = input.indicesAcumulados[ym] ?? new Decimal(1);
-      o.taxaDeJuros = input.taxaJurosPorCompetencia?.[ym] ?? ZERO;
+      if (modoJuros === 'nenhum') {
+        o.taxaDeJuros = ZERO;
+      } else {
+        o.taxaDeJuros = input.taxaJurosPorCompetencia?.[ym] ?? ZERO;
+      }
     }
   }
 
