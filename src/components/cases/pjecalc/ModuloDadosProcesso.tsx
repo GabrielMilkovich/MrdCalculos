@@ -23,7 +23,7 @@ export function ModuloDadosProcesso({ caseId }: Props) {
     queryKey: ["pjecalc_dados_processo", caseId],
     queryFn: async () => {
       const { data } = await supabase.from("pjecalc_dados_processo" as any).select("*").eq("case_id", caseId).maybeSingle();
-      return data as any;
+      return data as unknown as Record<string, unknown> | null;
     },
   });
 
@@ -32,7 +32,7 @@ export function ModuloDadosProcesso({ caseId }: Props) {
     queryKey: ["pjecalc_parametros_conflict", caseId],
     queryFn: async () => {
       const { data } = await supabase.from("pjecalc_parametros" as any).select("*").eq("case_id", caseId).maybeSingle();
-      return data as any;
+      return data as unknown as Record<string, unknown> | null;
     },
   });
 
@@ -151,11 +151,11 @@ export function ModuloDadosProcesso({ caseId }: Props) {
       </Label>
       <Input
         type={type}
-        value={(form as any)[key] || ''}
+        value={(form as Record<string, string>)[key] || ''}
         onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
-        className={cn("mt-1 h-8 text-xs", required && !(form as any)[key] && "border-destructive/50")}
+        className={cn("mt-1 h-8 text-xs", required && !(form as Record<string, string>)[key] && "border-destructive/50")}
       />
-      {required && !(form as any)[key] && (
+      {required && !(form as Record<string, string>)[key] && (
         <p className="text-[10px] text-destructive mt-0.5">Obrigatório para liquidação</p>
       )}
     </div>

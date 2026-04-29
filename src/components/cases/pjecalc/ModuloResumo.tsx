@@ -275,19 +275,23 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       } as PjeIRConfig;
 
       // Load combination-by-date data from pjecalc_atualizacao_config
-      let combinacoesIndice: any[] | undefined;
-      let combinacoesJuros: any[] | undefined;
+      let combinacoesIndice: unknown[] | undefined;
+      let combinacoesJuros: unknown[] | undefined;
       {
         const { data: calculoRow2 } = await supabase.from("pjecalc_calculos").select("id").eq("case_id", caseId).maybeSingle();
         if (calculoRow2) {
-          const { data: atConfigs } = await supabase.from("pjecalc_atualizacao_config" as any)
-            .select("*").eq("calculo_id", (calculoRow2 as any).id);
+          const calculoIdLocal = (calculoRow2 as { id: string }).id;
+          const { data: atConfigs } = await supabase
+            // tabela custom fora do schema gerado
+            .from("pjecalc_atualizacao_config" as any)
+            .select("*").eq("calculo_id", calculoIdLocal);
           if (atConfigs) {
-            for (const ac of atConfigs as any[]) {
+            type AtConfig = { tipo: string; combinacoes_indice?: string; combinacoes_juros?: string };
+            for (const ac of atConfigs as unknown as AtConfig[]) {
               if (ac.tipo === 'correcao' && ac.combinacoes_indice) {
-                try { combinacoesIndice = JSON.parse(ac.combinacoes_indice); } catch {}
+                try { combinacoesIndice = JSON.parse(ac.combinacoes_indice); } catch { /* ignore */ }
                 if (!combinacoesJuros && ac.combinacoes_juros) {
-                  try { combinacoesJuros = JSON.parse(ac.combinacoes_juros); } catch {}
+                  try { combinacoesJuros = JSON.parse(ac.combinacoes_juros); } catch { /* ignore */ }
                 }
               }
             }
@@ -434,7 +438,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         .maybeSingle();
       
       if (!calculoRow) throw new Error("Cálculo não encontrado. Execute 'Sincronizar Dados' primeiro.");
-      const calculoId = (calculoRow as any).id;
+      const calculoId = (calculoRow as { id: string }).id;
 
       // Delete previous resultado if exists
       await supabase.from("pjecalc_resultado" as any).delete().eq("calculo_id", calculoId);
@@ -457,7 +461,10 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         total_reclamante: result.resumo.liquido_reclamante,
         total_reclamado: result.resumo.total_reclamada,
         engine_version: '2.1.0',
-        resumo_verbas: result as any,
+        // pjecalc_resultado.resumo_verbas é JSONB; o engine retorna estrutura
+        // tipada via PjeCalcEngineV3.liquidar(). Usamos `unknown` para passar
+        // ao banco sem perder a tipagem do `result` em uso local acima.
+        resumo_verbas: result as unknown,
       });
       if (resError) {
         logger.error("ModuloResumo persistir resultado falhou", { error: String(resError) });
@@ -465,7 +472,27 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       }
 
       // ── Persistir ocorrências calculadas na tabela REAL (pjecalc_ocorrencia_calculo) ──
-      const ocRows: any[] = [];
+      type OcRow = {
+        calculo_id: string;
+        verba_base_id: string;
+        tipo: string;
+        nome: string;
+        competencia: string;
+        base_valor: number;
+        divisor: number;
+        multiplicador: number;
+        quantidade: number;
+        dobra: number;
+        devido: number;
+        pago: number;
+        diferenca: number;
+        correcao: number;
+        juros: number;
+        total: number;
+        origem: string;
+        ativa: boolean;
+      };
+      const ocRows: OcRow[] = [];
       for (const vr of result.verbas) {
         for (const oc of vr.ocorrencias) {
           ocRows.push({
