@@ -1,5 +1,24 @@
 # 3 Outliers Persistentes — Diagnóstico
 
+> **CORREÇÃO 2026-04-29 (Sprint 4):** A hipótese inicial sobre regime FGTS
+> foi **REFUTADA empiricamente** pelo CEREBRO. Aplicar o fix proposto (zerar
+> FGTS quando oracle tem `<depositoFgts>0`) PIORA os outliers em vez de melhorar:
+>   - PROCESSO_00008567: -11.24% → -16.25% (FGTS=4430 sai indevidamente do líquido)
+>   - PROCESSO_10004617: -15.83% → -22.05% (FGTS=16284 sai indevidamente do líquido)
+>
+> **Causa real:** ambos PJCs têm `<comporPrincipal>SIM</comporPrincipal>` em
+> todas as verbas FGTS. O FGTS COMPÕE o líquido conforme
+> `Calculo.java:3010-3024`. O `<depositoFgts>0` no `<gprec>` é apenas EFEITO
+> de `destinoDoFgts=PAGAR`: `ResumoPrecatorioJrAdapterPadrao.java:255-258`
+> só popula o item "Depósito FGTS" quando destino=DEPOSITAR. Engine v3 já
+> calcula FGTS via `fgts_override_total` corretamente.
+>
+> **Gap real está em** `principal_corrigido + juros_mora`, NÃO em FGTS.
+> Gap absoluto: ~R$ 10k em 00008567, ~R$ 41k em 10004617.
+>
+> **Sprint 4 redirecionado para:** investigar correção monetária pré-ADC58
+> (long-tail) + composição de juros de mora. Estimativa: 5-7 dias humanos.
+
 Engine v3 atinge ~94% de PJCs reais dentro de ±5% no `liquido_reclamante`.
 Os 3 casos abaixo persistem com delta acima do limite. Diagnóstico baseado em
 `scripts/pjc-oracle-compare.ts` rodado em 2026-04-29 contra os arquivos
