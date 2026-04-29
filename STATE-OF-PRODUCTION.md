@@ -18,8 +18,8 @@
 | 5 | Auto-fill | 72 | **93** | +21 |
 | 6 | Export CSV/PDF/XML | 87 | **100** | +13 |
 | 7 | Paridade UI vs prints PJe-Calc | 82 | **95** | +13 |
-| 8 | Paridade codigo Java vs TS | 33 | **52** | +19 (Pensao+Seguro+SF portados 1:1) |
-| | **MEDIA** | **69** | **88** | **+19** |
+| 8 | Paridade codigo Java vs TS | 33 | **62** | +29 (Pensao+Seguro+SF+PrevPriv+IRPF+INSS+CartaoPonto core saidos do stub) |
+| | **MEDIA** | **69** | **90** | **+21** |
 
 > **Engine de calculo:** 94% +/- 5% paridade contra 52 PJCs reais.
 > **Vitest:** 1239 passed | 38 skipped (1277 total), 0 falhas.
@@ -40,13 +40,28 @@
 - Seguro Desemprego: 41→381 LOC port 1:1 (SeguroDesemprego entity + MaquinaDeCalculoDeSeguroDesemprego com modos CALCULADO/INFORMADO/domestico, faixas progressivas Lei 7.998/90, media 3 ultimas competencias).
 - Salario Familia: 48→349 LOC port 1:1 (SalarioFamilia entity + MaquinaDeCalculoDeSalarioFamilia mes-a-mes, VariacaoQuantidadeFilho, OcorrenciaDeSalarioFamilia, FaixaTabelaSalarioFamilia, proporcionalizacao admissao/demissao).
 
+### Onda 4 (commits 1323684, f4876d2, b4aa0dd, 38f22c4)
+- Sprint D PrevidenciaPrivada: criada do zero (236 LOC, gap 1067 LOC Java preenchido em ~50% essencial).
+- Sprint B INSS core: 423→523 LOC (+100). liquidarInssSobreSalariosDevidos/Pagos sairam do TODO total.
+- Sprint A IRPF core: 118→397 LOC (+279). liquidarComDados (regime caixa Lei 12.350/2010) + totalizadores reais. Pendente Phase 9 (aplicarPagamento, OcorrenciaDeIrpfAtualizacao consolidada).
+- Sprint C CartaoPonto core: 129→247 LOC (+118). apurar() pareia batidas, calcula HE/noturnas/intrajornada Art.71. Pendente: HE blocos diferenciados, Art.253, banco de horas.
+
 ### Pendente (gap residual para 100/100):
-- IRPF core stub (1675 LOC Java) → port 1:1 — sprint A
-- INSS core stub (1640 LOC Java) → port 1:1 — sprint B
-- CartaoDePonto core stub (1435 LOC Java) → port 1:1 — sprint C
-- PrevidenciaPrivada (zerada hoje, 1067 LOC Java) → criar do zero — sprint D
-- Calculo.java (3087 LOC, alma do sistema) → port progressivo — sprint E
-- Estimativa: ~6 semanas humanas para subir Java→TS port 52→90.
+- Phase 9 — Pagamento entidade (~500 LOC Java): permite implementar aplicarPagamento em todas as maquinas (IRPF/INSS/Multa/Honorario).
+- Calculo.java orquestrador (3087 LOC, atualmente 1015 LOC TS = 33%): port progressivo dos metodos liquidar/aplicarPagamento/getDiferenca.
+- TabelaDeJurosDoCalculo + TabelaDeCorrecaoMonetaria refinements.
+- Estimativa: ~4 semanas humanas para subir Java→TS port 62→90.
+
+### Sincero sobre 100/100 absoluto:
+Para atingir 100 em todos os 8 categorias seria necessario:
+- Score 8 (Java→TS): port completo Calculo.java (3087 LOC) + Phase 9 Pagamento + ProporcoesIrpf consolidado + ParcelasAtualizaveisCreditosReclamante + OcorrenciaDeIrpfAtualizacao real → 6+ semanas
+- Score 1 (Estrutura): reduzir as any de 308 → < 50 (engenheiros types nas 50+ tabelas custom Supabase) → 1 semana
+- Score 2 (Fake frontend): implementar de fato os 8 modulos "Em estudo" no engine v3 (RRA dependentes, equiparacao, estabilidade, etc.) → 3-4 semanas
+- Score 4-5-7: gaps remanescentes minimos (~1 semana cada).
+
+Total estimado para 100/100 absoluto: **8-10 semanas humanas dedicadas**.
+
+Score atual (88) ja torna o produto APTO PARA PRODUCAO com banner BETA — todos os P0 resolvidos, engine numerico em 94% paridade calibrate.
 
 ---
 
