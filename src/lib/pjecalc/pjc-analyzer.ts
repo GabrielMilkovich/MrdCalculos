@@ -553,20 +553,12 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   const jurosRaw = getTextContent(dados, 'jurosMora');
   const jurosPersistido = jurosRaw === 'null' || jurosRaw === '' ? null : parseNum(jurosRaw);
 
-  // Sprint 1 — Bug 4: capturar `<gprec><depositoFgts>` (Java pré-computou
-  // o FGTS devido). Quando = 0 explícito, significa "FGTS já satisfeito".
-  // Engine respeita zerando o cálculo (ver buildFGTSConfigFromPJC).
-  const gprecFgtsRaw = gprec ? getTextContent(gprec, 'depositoFgts') : '';
-  const gprecFgtsPresent = !!gprec && gprecFgtsRaw !== '' && gprecFgtsRaw !== 'null';
-
-  const resultado: PJCAnalysis['resultado'] = {
+  const resultado = {
     liquido_exequente: parseNum(getTextContent(gprec, 'liquidoExequente')),
     inss_reclamante: parseNum(getTextContent(dados, 'inssReclamante')),
     inss_reclamado: parseNum(getTextContent(dados, 'inssReclamado')),
     imposto_renda: parseNum(getTextContent(dados, 'impostoRenda')),
     fgts_deposito: parseNum(getTextContent(dados, 'fgtsDepositoContaVinculada')),
-    gprec_deposito_fgts: gprecFgtsPresent ? parseNum(gprecFgtsRaw) : undefined,
-    gprec_deposito_fgts_present: gprecFgtsPresent,
     valor_principal: parseNum(getTextContent(dados, 'valorPrincipal')),
     juros_mora_persistido: jurosPersistido,
     honorarios,
