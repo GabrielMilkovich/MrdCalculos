@@ -91,11 +91,10 @@ export function ModuloIR({ caseId }: Props) {
                   <Checkbox checked={form.incidir_sobre_juros} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_juros: !!v }))} />
                   <Label className="text-xs">Incidir sobre Juros de Mora</Label>
                 </div>
-                <div className="flex items-center gap-2" title="Quando marcado, IR é cobrado do reclamado em vez do reclamante (raro, depende de sentença).">
-                  <Checkbox checked={form.cobrar_reclamado} onCheckedChange={v => setForm(p => ({ ...p, cobrar_reclamado: !!v }))} disabled />
-                  <Label className="text-xs text-muted-foreground">Cobrar do Reclamado</Label>
+                <div className="flex items-center gap-2" title="Quando marcado, IR é cobrado do reclamado em vez do reclamante (raro, depende de sentença). Engine apura IR mas não desconta do líquido do reclamante.">
+                  <Checkbox checked={form.cobrar_reclamado} onCheckedChange={v => setForm(p => ({ ...p, cobrar_reclamado: !!v }))} />
+                  <Label className="text-xs">Cobrar do Reclamado</Label>
                 </div>
-                <p className="text-[10px] text-orange-800 -mt-1 bg-orange-50 dark:bg-orange-950/20 p-1.5 rounded border border-orange-200 dark:border-orange-900"><strong>🚧 Não implementado — release v3.6.</strong> Lei 8.541/92 art. 46 vs Súmula 368 STJ. Engine ainda calcula IR descontando do reclamante.</p>
                 <div className="flex items-center gap-2" title="13º salário tributado de forma exclusiva na fonte (separado dos demais rendimentos). Lei 7.713/88 art. 26.">
                   <Checkbox checked={form.tributacao_exclusiva_13} onCheckedChange={v => setForm(p => ({ ...p, tributacao_exclusiva_13: !!v }))} />
                   <Label className="text-xs">Tributação Exclusiva (13º)</Label>
