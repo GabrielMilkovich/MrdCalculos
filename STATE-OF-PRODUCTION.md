@@ -18,8 +18,8 @@
 | 5 | Auto-fill | 72 | **93** | +21 |
 | 6 | Export CSV/PDF/XML | 87 | **100** | +13 |
 | 7 | Paridade UI vs prints PJe-Calc | 82 | **95** | +13 |
-| 8 | Paridade codigo Java vs TS | 33 | **42** | +9 (Pensao 7%→90%; Seguro/SF pendente) |
-| | **MEDIA** | **69** | **87** | **+18** |
+| 8 | Paridade codigo Java vs TS | 33 | **52** | +19 (Pensao+Seguro+SF portados 1:1) |
+| | **MEDIA** | **69** | **88** | **+19** |
 
 > **Engine de calculo:** 94% +/- 5% paridade contra 52 PJCs reais.
 > **Vitest:** 1239 passed | 38 skipped (1277 total), 0 falhas.
@@ -36,11 +36,17 @@
 - 100-G/H: refinamentos finais CNJ tribunal dinamico + CS 3 periodos
 - Pensao port 1:1 Java→TS: 50 LOC stub → 407 LOC port real (PensaoAlimenticia + MaquinaDeCalculoDePensaoAlimenticia + tipos VerbaPensaoInput/FgtsPensaoInput/ParcelasCreditoReclamante; modos liquidarPadrao + liquidarParaCalculoExterno; mantida API legada)
 
+### Onda 3 (commit pendente)
+- Seguro Desemprego: 41→381 LOC port 1:1 (SeguroDesemprego entity + MaquinaDeCalculoDeSeguroDesemprego com modos CALCULADO/INFORMADO/domestico, faixas progressivas Lei 7.998/90, media 3 ultimas competencias).
+- Salario Familia: 48→349 LOC port 1:1 (SalarioFamilia entity + MaquinaDeCalculoDeSalarioFamilia mes-a-mes, VariacaoQuantidadeFilho, OcorrenciaDeSalarioFamilia, FaixaTabelaSalarioFamilia, proporcionalizacao admissao/demissao).
+
 ### Pendente (gap residual para 100/100):
-- 100-I (Seguro Desemprego port real): 36 LOC → ~500 LOC esperado
-- 100-J (Salario Familia port real): 43 LOC → ~600 LOC esperado
-- 100-K: portar IRPF core stub + INSS core stub + CartaoDePonto core stub (~5000 LOC Java) — sprints multiplas
-- 100-L: PrevidenciaPrivada (zerada hoje) — sprint dedicada
+- IRPF core stub (1675 LOC Java) → port 1:1 — sprint A
+- INSS core stub (1640 LOC Java) → port 1:1 — sprint B
+- CartaoDePonto core stub (1435 LOC Java) → port 1:1 — sprint C
+- PrevidenciaPrivada (zerada hoje, 1067 LOC Java) → criar do zero — sprint D
+- Calculo.java (3087 LOC, alma do sistema) → port progressivo — sprint E
+- Estimativa: ~6 semanas humanas para subir Java→TS port 52→90.
 
 ---
 
