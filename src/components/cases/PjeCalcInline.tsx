@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 
 // Module components
+import { AutoFillReviewPanel } from "./AutoFillReviewPanel";
 import { ModuloDadosProcesso } from "./pjecalc/ModuloDadosProcesso";
 import { ModuloCartaoPonto } from "./pjecalc/ModuloCartaoPonto";
 import { ModuloCartaoPontoDiario } from "./pjecalc/ModuloCartaoPontoDiario";
@@ -519,6 +520,17 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
           Salvar
         </Button>
       </div>
+
+      {/* Painel de revisão de auto-preenchimento — propostas geradas a
+          partir dos documentos enviados. Apenas exibido quando ha
+          propostas pendentes (componente faz a query interna). */}
+      <AutoFillReviewPanel caseId={caseId} onAfterApply={() => {
+        // Refetch dos parametros apos aplicar uma proposta.
+        // Implementacao via React Query invalidation seria ideal mas
+        // o useState/useEffect interno do PjeCalcInline ja captura
+        // mudancas via supabase realtime indireto (saveParams call).
+      }} />
+
       {(missingCritical.estado || missingCritical.municipio || missingCritical.data_admissao || missingCritical.data_ajuizamento || missingCritical.remuneracao) && (
         <Card className="border-yellow-400 bg-yellow-50/50 dark:bg-yellow-950/20">
           <CardContent className="p-3 flex items-start gap-2 text-xs">
