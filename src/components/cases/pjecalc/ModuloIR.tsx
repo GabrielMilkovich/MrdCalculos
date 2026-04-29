@@ -87,11 +87,10 @@ export function ModuloIR({ caseId }: Props) {
           {form.apurar && (
             <div className="flex gap-8">
               <div className="space-y-3 flex-1">
-                <div className="flex items-center gap-2" title="Quando marcado, IR incide também sobre os juros mora (Lei 8.541/92 art. 46). Súmula 463 STJ: IRRF sobre juros mora é discutível.">
-                  <Checkbox checked={form.incidir_sobre_juros} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_juros: !!v }))} disabled />
-                  <Label className="text-xs text-muted-foreground">Incidir sobre Juros de Mora</Label>
+                <div className="flex items-center gap-2" title="Quando marcado, IR incide também sobre os juros mora (Lei 8.541/92 art. 46). Súmula 368 IV TST recomenda isenção em causas trabalhistas — default OFF.">
+                  <Checkbox checked={form.incidir_sobre_juros} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_juros: !!v }))} />
+                  <Label className="text-xs">Incidir sobre Juros de Mora</Label>
                 </div>
-                <p className="text-[10px] text-orange-800 -mt-1 bg-orange-50 dark:bg-orange-950/20 p-1.5 rounded border border-orange-200 dark:border-orange-900"><strong>🚧 Não implementado — release v3.6.</strong> Súmula 368 IV TST: IR não incide sobre juros mora trabalhistas. Flag desabilitada até engine distinguir.</p>
                 <div className="flex items-center gap-2" title="Quando marcado, IR é cobrado do reclamado em vez do reclamante (raro, depende de sentença).">
                   <Checkbox checked={form.cobrar_reclamado} onCheckedChange={v => setForm(p => ({ ...p, cobrar_reclamado: !!v }))} disabled />
                   <Label className="text-xs text-muted-foreground">Cobrar do Reclamado</Label>

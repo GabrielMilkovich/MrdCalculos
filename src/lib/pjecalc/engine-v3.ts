@@ -581,6 +581,12 @@ export class PjeCalcEngineV3 {
     const jurosMora = verbaResults.reduce((s, v, i) =>
       this.verbas[i].compor_principal !== false ? s + v.total_juros : s, 0);
 
+    // Sprint 4.2-C2: incidir_sobre_juros (Lei 8.541/92 art. 46) — após
+    // jurosMora computado, repassa ao IR adapter para recalcular base + IR
+    // se a flag estiver ativa. No-op quando flag=false (default — Súmula 368
+    // IV TST recomenda isenção dos juros mora trabalhistas).
+    irpfAdapter.aplicarIncidenciaJuros(jurosMora);
+
     // Multa 467 CLT: 50% sobre verbas RESCISORIAS (aviso, saldo salario, 13, ferias) nao pagas
     const multa467 = this.calcularMulta467(verbaResults);
     // Multa 477 §8 CLT: 1 salário-base se rescisão atrasou (Sprint 4.2-B2 TIER 2 P1)

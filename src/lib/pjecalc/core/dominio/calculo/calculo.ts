@@ -761,15 +761,50 @@ export class Calculo {
       }
     }
 
-    // 4-13. Módulos secundários (ordem Java)
+    // 4-13. Modulos secundarios (ordem Java 1486-1531).
     this.salarioFamilia?.liquidar();
     this.seguroDesemprego?.liquidar();
     this.fgts?.liquidar();
     this.inss?.liquidar(this.getDataDeLiquidacao());
     this.previdenciaPrivada?.liquidar();
+    // Java 1519: calcularJuros() entre PrevPriv e PensaoAlimenticia.
+    this.calcularJuros();
     this.pensaoAlimenticia?.liquidar();
+    // Java 1524-1526: Multas — itera multasDoCalculo + chama liquidar().
+    for (const m of this.multas) {
+      const multa = m as { liquidar?(): void };
+      multa.liquidar?.();
+    }
+    // Java 1527-1529: Honorarios — itera + liquidar().
+    for (const h of this.honorarios) {
+      const honor = h as { liquidar?(): void };
+      honor.liquidar?.();
+    }
     this.irpf?.liquidar();
     this.custasJudiciais?.liquidar();
+  }
+
+  /**
+   * Java Calculo.calcularJuros (linha 1519 chamada). Itera apuracoesDeJuros
+   * e cada modulo (FGTS/INSS/etc) que aplica juros. Implementacao stub
+   * que delega para os modulos individuais ja capazes de calcular seus
+   * proprios juros (cada *.liquidar() ja popula taxaDeJuros internamente).
+   */
+  calcularJuros(): void {
+    // Java orquestra TabelaDeJurosDoCalculo + apuracoes; aqui delegamos
+    // pois cada modulo (FGTS/INSS/PrevPriv/SF/Seguro) ja calcula juros
+    // internamente em seu liquidar(). Esta implementacao pode evoluir para
+    // 1:1 quando ApuracaoDeJuros entidade for portada.
+    const fgts = this.fgts as null | { calcularJuros?(): void };
+    const inss = this.inss as null | { calcularJuros?(): void };
+    const prev = this.previdenciaPrivada as null | { calcularJuros?(): void };
+    const sf = this.salarioFamilia as null | { calcularJuros?(): void };
+    const seg = this.seguroDesemprego as null | { calcularJuros?(): void };
+    fgts?.calcularJuros?.();
+    inss?.calcularJuros?.();
+    prev?.calcularJuros?.();
+    sf?.calcularJuros?.();
+    seg?.calcularJuros?.();
   }
 
   /**
