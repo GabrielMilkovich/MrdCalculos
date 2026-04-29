@@ -31,6 +31,7 @@ import { HelperDate } from '../../base/comum/helper-date';
 import { Periodo } from '../../base/comum/periodo';
 import { arredondarValorMonetario } from '../../base/comum/utils';
 import {
+  BaseDeCalculoDoPrincipalEnum,
   IndiceMonetarioEnum,
   IndicesAcumuladosEnum,
   InstanciaSetorEnum,
@@ -38,8 +39,12 @@ import {
   RegimeDoContratoEnum,
   TipoCalculoEnum,
   TipoDeApuracaoPrazoDoAvisoPrevioEnum,
+  TipoDeBaseDoFgtsEnum,
+  TipoValorEnum,
 } from '../../constantes/enums';
+import { FormulaCalculada, FormulaInformada, FormulaReflexo } from '../formula/formula';
 import { VerbaDeCalculo } from '../verbacalculo/verba-de-calculo';
+import type { OcorrenciaDeVerba } from '../ocorrenciaverba/ocorrencia-de-verba';
 import {
   TabelaDeCorrecaoMonetaria,
   type ITabelaCorrecaoContext,
@@ -1300,5 +1305,248 @@ export class Calculo {
     total = total.minus(this.getValorTotalMultasDoTipoReclamadoReclamante());
 
     return total;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //                     VALIDACOES (Java 2012-2060)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * `validarVerbaPossuiQuantidade` — porte 1-a-1 de Calculo.java:2012-2017.
+   *
+   * Para cada verba: se NAO e informada e a Formula(Reflexo) nao tem
+   * quantidade, lanca NegocioException (MSG0019). No port: lanca Error
+   * com a mesma mensagem-chave para preservar contrato a montante.
+   *
+   * Considera somente FormulaReflexo (Java usa `getFormula(FormulaReflexo.class)`,
+   * que retorna null para outras subclasses → o predicado dispara).
+   */
+  validarVerbaPossuiQuantidade(): void {
+    for (const verba of this.verbas) {
+      const formula = verba.getFormula();
+      // Java: !verba.isInformada() && (FormulaReflexo)verba.getFormula().getQuantidade() != null
+      // Na ausencia de isInformada() em VerbaDeCalculo, usamos o equivalente:
+      // formula instanceof FormulaInformada → considera "informada".
+      if (formula instanceof FormulaInformada) continue;
+      if (formula instanceof FormulaReflexo && formula.quantidade?.valorInformado != null) continue;
+      throw new Error(`MSG0019: ${verba.getNome()}`);
+    }
+  }
+
+  /**
+   * `validarDisponibilidadeDaMaiorRemuneracaoNaLiquidacao` — porte 1-a-1
+   * de Calculo.java:2019-2029.
+   *
+   * Se `valorMaiorRemuneracao` esta nulo e existe verba referenciando
+   * `MAIOR_REMUNERACAO` (em ValorPago.baseTabelada de FormulaInformada,
+   * ou em FormulaCalculada.baseTabelada.tipo) → lanca NegocioException
+   * (MSG0030).
+   */
+  validarDisponibilidadeDaMaiorRemuneracaoNaLiquidacao(): void {
+    if (this.valorMaiorRemuneracao != null) return;
+    for (const verba of this.verbas) {
+      const formula = verba.getFormula();
+      if (formula == null) continue;
+      // ValorPago.baseTabelada — Java usa `verba.getFormula().getValorPago().getBaseTabelada()`.
+      // No port atual ValorPago nao expoe baseTabelada — checamos somente o
+      // ramo FormulaCalculada (que e o caminho real para MAIOR_REMUNERACAO).
+      if (formula instanceof FormulaCalculada) {
+        const tipo = formula.baseTabelada?.tipo;
+        if (tipo === BaseDeCalculoDoPrincipalEnum.MAIOR_REMUNERACAO) {
+          throw new Error('MSG0030: maior remuneracao nao informada');
+        }
+      }
+    }
+  }
+
+  /**
+   * `validarDisponibilidadeDaUltimaRemuneracaoNaLiquidacao` — porte 1-a-1
+   * de Calculo.java:2031-2041 (analogo ao da maior remuneracao, MSG0043).
+   */
+  validarDisponibilidadeDaUltimaRemuneracaoNaLiquidacao(): void {
+    if (this.valorUltimaRemuneracao != null) return;
+    for (const verba of this.verbas) {
+      const formula = verba.getFormula();
+      if (formula == null) continue;
+      if (formula instanceof FormulaCalculada) {
+        const tipo = formula.baseTabelada?.tipo;
+        if (tipo === BaseDeCalculoDoPrincipalEnum.ULTIMA_REMUNERACAO) {
+          throw new Error('MSG0043: ultima remuneracao nao informada');
+        }
+      }
+    }
+  }
+
+  /**
+   * `validarUsoCorretoDoHistoricoSalarial` — porte 1-a-1 de
+   * Calculo.java:2043-2059.
+   *
+   * Acumula nomes de verbas que usam `HISTORICO_SALARIAL` como base
+   * (FormulaCalculada) mas nao tem nenhum historico selecionado em
+   * `historicosDaVerbaDoValorDevido`. Se houver, lanca NegocioException
+   * (MSG0032) com a lista entre colchetes.
+   */
+  validarUsoCorretoDoHistoricoSalarial(): void {
+    const verbasComErro: string[] = [];
+    for (const verba of this.verbas) {
+      const formula = verba.getFormula();
+      if (!(formula instanceof FormulaCalculada)) continue;
+      const baseTabelada = formula.baseTabelada;
+      if (baseTabelada == null) continue;
+      if (baseTabelada.tipo !== BaseDeCalculoDoPrincipalEnum.HISTORICO_SALARIAL) continue;
+      if (verba.getHistoricosDaVerbaDoValorDevido().length > 0) continue;
+      verbasComErro.push(verba.getNome());
+    }
+    if (verbasComErro.length > 0) {
+      throw new Error(`MSG0032: [${verbasComErro.join(', ')}]`);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //                     PREDICADOS (Java 2565-2593)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * `isTemFGTSApurado` — porte 1-a-1 de Calculo.java:2565-2579.
+   *
+   * Retorna true se QUALQUER uma das condicoes abaixo for verdadeira:
+   *   1. fgts.getMulta() == true E fgts.getTipoDoValorDaMulta() == INFORMADA
+   *   2. Algum HistoricoSalarial com `aplicarProporcionalidadeFGTS = true`
+   *   3. Alguma VerbaAtiva com `incidenciaFGTS = true`
+   *
+   * O modulo FGTS ainda esta atras de IModuloLiquidavel — narrow defensivo.
+   */
+  isTemFGTSApurado(): boolean {
+    const fgts = this.fgts as null | {
+      getMulta?(): boolean;
+      getTipoDoValorDaMulta?(): TipoDeBaseDoFgtsEnum | null;
+    };
+    if (
+      fgts?.getMulta?.() === true &&
+      fgts?.getTipoDoValorDaMulta?.() === TipoDeBaseDoFgtsEnum.INFORMADA
+    ) {
+      return true;
+    }
+    for (const h of this.historicosSalariais) {
+      const hist = h as { getAplicarProporcionalidadeFGTS?(): boolean };
+      if (hist.getAplicarProporcionalidadeFGTS?.() === true) return true;
+    }
+    for (const verba of this.getVerbasAtivas()) {
+      if (verba.getIncidenciaFGTS()) return true;
+    }
+    return false;
+  }
+
+  /**
+   * `isTemMultaInformada` — porte 1-a-1 de Calculo.java:2581-2589.
+   *
+   * Retorna true se houver alguma multa com `tipoValorDaMulta = INFORMADO`.
+   * Multa ainda e Set<unknown> — usa narrow defensivo.
+   */
+  isTemMultaInformada(): boolean {
+    for (const m of this.multas) {
+      const multa = m as { getTipoValorDaMulta?(): TipoValorEnum | string | null };
+      if (multa.getTipoValorDaMulta?.() === TipoValorEnum.INFORMADO) return true;
+    }
+    return false;
+  }
+
+  /**
+   * `isApurarPrevidenciaPrivada` — porte 1-a-1 de Calculo.java:2591-2593.
+   *
+   * Retorna true se previdenciaPrivada existe (id != null) E
+   * `getApurarPrevidenciaPrivada() == true`.
+   */
+  isApurarPrevidenciaPrivada(): boolean {
+    const prev = this.previdenciaPrivada as null | {
+      getId?(): number | null;
+      getApurarPrevidenciaPrivada?(): boolean;
+    };
+    if (prev == null) return false;
+    if (prev.getId?.() == null) return false;
+    return prev.getApurarPrevidenciaPrivada?.() === true;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //                  APURACAO INSS POR COMPETENCIA (Java 1977-2010)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * `apurarVerbaIncideInssAvisoOuComum` — porte 1-a-1 de Calculo.java:1977-1986.
+   *
+   * Acumula a `diferenca` (arredondada) de uma ocorrencia comum/aviso:
+   *   1. Soma na ApuracaoDeJuros corrente (`valorVerbaParaContribuicaoSocial`)
+   *   2. Acumula no map `competencia → totalParaContribuicaoSocial`
+   *
+   * O contrato `ApuracaoDeJuros` ainda nao foi portado — usa narrow defensivo
+   * via duck-typing nos getters/setters numericos esperados.
+   */
+  apurarVerbaIncideInssAvisoOuComum(
+    mapValorTotalPorCompetenciaParaContribuicaoSocial: Map<unknown, Decimal>,
+    ocorrencia: OcorrenciaDeVerba,
+    competencia: unknown,
+    ocorrenciaDeJuros: unknown,
+  ): void {
+    const diferenca = arredondarValorMonetario(ocorrencia.getDiferenca());
+    const oj = ocorrenciaDeJuros as {
+      getValorVerbaParaContribuicaoSocial?(): Decimal | null;
+      setValorVerbaParaContribuicaoSocial?(v: Decimal): void;
+    };
+    const atual = oj.getValorVerbaParaContribuicaoSocial?.() ?? ZERO;
+    oj.setValorVerbaParaContribuicaoSocial?.(atual.plus(diferenca));
+    const valorCompetencia = mapValorTotalPorCompetenciaParaContribuicaoSocial.get(competencia) ?? ZERO;
+    mapValorTotalPorCompetenciaParaContribuicaoSocial.set(competencia, valorCompetencia.plus(diferenca));
+  }
+
+  /**
+   * `apurarVerbaIncideInssFerias` — porte 1-a-1 de Calculo.java:1988-1999.
+   *
+   * Para verbas com caracteristica FERIAS, usa `getDiferencaParaCalculoDasIncidencias()`
+   * como base (preserva regras de proporcionalidade ferias).
+   * Se a base e null, NAO acumula (Java skip).
+   */
+  apurarVerbaIncideInssFerias(
+    mapValorTotalPorCompetenciaParaContribuicaoSocial: Map<unknown, Decimal>,
+    ocorrencia: OcorrenciaDeVerba,
+    competencia: unknown,
+    ocorrenciaDeJuros: unknown,
+  ): void {
+    const base = ocorrencia.getDiferencaParaCalculoDasIncidencias();
+    if (base == null) return;
+    const oj = ocorrenciaDeJuros as {
+      getValorVerbaParaContribuicaoSocial?(): Decimal | null;
+      setValorVerbaParaContribuicaoSocial?(v: Decimal): void;
+    };
+    const atual = oj.getValorVerbaParaContribuicaoSocial?.() ?? ZERO;
+    oj.setValorVerbaParaContribuicaoSocial?.(atual.plus(base));
+    const valorCompetencia = mapValorTotalPorCompetenciaParaContribuicaoSocial.get(competencia) ?? ZERO;
+    mapValorTotalPorCompetenciaParaContribuicaoSocial.set(competencia, valorCompetencia.plus(base));
+  }
+
+  /**
+   * `apurarVerbaIncideInssDecimoTerceiro` — porte 1-a-1 de Calculo.java:2001-2010.
+   *
+   * Acumula `diferenca` (arredondada) de uma ocorrencia de 13o, em map
+   * separado (`...DecimoTerceiro`) e em
+   * `valorVerbaParaContribuicaoSocialDecimoTerceiro`.
+   */
+  apurarVerbaIncideInssDecimoTerceiro(
+    mapValorTotalPorCompetenciaParaContribuicaoSocialDecimoTerceiro: Map<unknown, Decimal>,
+    ocorrencia: OcorrenciaDeVerba,
+    competencia: unknown,
+    ocorrenciaDeJuros: unknown,
+  ): void {
+    const diferenca = arredondarValorMonetario(ocorrencia.getDiferenca());
+    const oj = ocorrenciaDeJuros as {
+      getValorVerbaParaContribuicaoSocialDecimoTerceiro?(): Decimal | null;
+      setValorVerbaParaContribuicaoSocialDecimoTerceiro?(v: Decimal): void;
+    };
+    const atual = oj.getValorVerbaParaContribuicaoSocialDecimoTerceiro?.() ?? ZERO;
+    oj.setValorVerbaParaContribuicaoSocialDecimoTerceiro?.(atual.plus(diferenca));
+    const valorCompetencia = mapValorTotalPorCompetenciaParaContribuicaoSocialDecimoTerceiro.get(competencia) ?? ZERO;
+    mapValorTotalPorCompetenciaParaContribuicaoSocialDecimoTerceiro.set(
+      competencia,
+      valorCompetencia.plus(diferenca),
+    );
   }
 }
