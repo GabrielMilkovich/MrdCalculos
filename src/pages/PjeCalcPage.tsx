@@ -181,16 +181,21 @@ export default function PjeCalcPage() {
 
   useEffect(() => {
     if (calc.params) {
+      // calc.params tem tipo gerado, mas alguns campos extras (data_citacao,
+      // data_liquidacao, pontos_facultativos, tipo_mes) ainda não foram
+      // regenerados em src/integrations/supabase/types.ts. Acessamos via
+      // narrow Record<string, unknown> em vez de `as any`.
+      const extra = calc.params as unknown as Record<string, unknown>;
       setFormParams({
         estado: calc.params.estado || 'SP',
         municipio: calc.params.municipio || '',
         data_admissao: calc.params.data_admissao || '',
         data_demissao: calc.params.data_demissao || '',
         data_ajuizamento: calc.params.data_ajuizamento || '',
-        data_citacao: (calc.params as any).data_citacao || '',
+        data_citacao: (typeof extra.data_citacao === 'string' ? extra.data_citacao : '') || '',
         data_inicial: calc.params.data_inicial || '',
         data_final: calc.params.data_final || '',
-        data_liquidacao: (calc.params as any).data_liquidacao || '',
+        data_liquidacao: (typeof extra.data_liquidacao === 'string' ? extra.data_liquidacao : '') || '',
         prescricao_quinquenal: calc.params.prescricao_quinquenal || false,
         prescricao_fgts: calc.params.prescricao_fgts || false,
         regime_trabalho: calc.params.regime_trabalho || 'tempo_integral',
@@ -205,8 +210,8 @@ export default function PjeCalcPage() {
         sabado_dia_util: calc.params.sabado_dia_util ?? true,
         considerar_feriado_estadual: calc.params.considerar_feriado_estadual || false,
         considerar_feriado_municipal: calc.params.considerar_feriado_municipal || false,
-        pontos_facultativos: (calc.params as any).pontos_facultativos || [],
-        tipo_mes: (calc.params as any).tipo_mes || 'civil',
+        pontos_facultativos: (Array.isArray(extra.pontos_facultativos) ? extra.pontos_facultativos : []) as string[],
+        tipo_mes: ((typeof extra.tipo_mes === 'string' ? extra.tipo_mes : 'civil')) as 'civil' | 'comercial',
         comentarios: calc.params.comentarios || '',
       });
     }
