@@ -15,6 +15,7 @@
  * 6. Retornar resultado tipado
  */
 
+import Decimal from 'decimal.js';
 import { supabase } from "@/integrations/supabase/client";
 import {
   resolveCanonicalInput,
@@ -948,29 +949,81 @@ function multasConfigToVerbas(
     }
   }
 
-  // ── Equiparação Salarial (Art. 461 CLT) ──
+  // ── Equiparação Salarial (Art. 461 CLT + Súmula 6 TST) ──
+  // Diferença = paradigma_salario - empregado_salario (por competência).
+  // Reflexos: 13º (pro-rata 1/12), férias + 1/3 (1.3333/12), FGTS (8%).
   if (cfg.equiparacao_config) {
     const eq = cfg.equiparacao_config as {
       ativo: boolean;
       paradigma_nome: string;
+      paradigma_funcao?: string;
       periodo_inicio: string;
       periodo_fim: string;
       salarios: Array<{ competencia: string; salario_paradigma: string; salario_empregado: string }>;
     };
     if (eq.ativo && Array.isArray(eq.salarios) && eq.salarios.length > 0) {
+      const totalDiferenca = eq.salarios.reduce((acc, s) => {
+        const par = new Decimal(s.salario_paradigma || 0);
+        const emp = new Decimal(s.salario_empregado || 0);
+        const dif = Decimal.max(0, par.minus(emp));
+        return acc.plus(dif);
+      }, new Decimal(0));
+
       eq.salarios.forEach((s, idx) => {
-        const diferenca = Number(s.salario_paradigma || 0) - Number(s.salario_empregado || 0);
-        if (diferenca > 0) {
-          const v = defaultVerba(`equiparacao_auto_${idx}`, `Diferença Salarial - Equiparação ${eq.paradigma_nome || ''} (${s.competencia})`);
-          v.valor_informado_devido = diferenca;
-          v.periodo_inicio = s.competencia || eq.periodo_inicio || periodoInicio;
-          v.periodo_fim = s.competencia || eq.periodo_fim || periodoFim;
+        const par = new Decimal(s.salario_paradigma || 0);
+        const emp = new Decimal(s.salario_empregado || 0);
+        const diferenca = Decimal.max(0, par.minus(emp));
+        if (diferenca.gt(0)) {
+          const v = defaultVerba(`equiparacao_auto_${idx}`, `DIFERENCA EQUIPARACAO SALARIAL ${eq.paradigma_nome || ''} (${s.competencia})`.trim());
+          v.valor_informado_devido = diferenca.toDP(2).toNumber();
+          v.periodo_inicio = s.competencia ? `${s.competencia}-01` : (eq.periodo_inicio || periodoInicio);
+          v.periodo_fim = s.competencia ? `${s.competencia}-28` : (eq.periodo_fim || periodoFim);
           v.ocorrencia_pagamento = 'mensal';
           v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+          v.gerar_verba_reflexa = 'diferenca';
           v.ordem = 9040 + idx;
           result.push(v);
         }
       });
+
+      // Reflexos automáticos consolidados ao fim do período (Súmula 6 TST item VI).
+      if (totalDiferenca.gt(0)) {
+        const baseRef = totalDiferenca;
+        const dataReflexo = eq.periodo_fim || periodoFim || '';
+
+        // 13º Salário: 1/12 da diferença anual
+        const v13 = defaultVerba('equiparacao_reflexo_13', `REFLEXO EQUIPARACAO EM 13o SALARIO ${eq.paradigma_nome || ''}`.trim());
+        v13.valor_informado_devido = baseRef.times(new Decimal(1).div(12)).toDP(2).toNumber();
+        v13.periodo_inicio = eq.periodo_inicio || periodoInicio;
+        v13.periodo_fim = dataReflexo;
+        v13.ocorrencia_pagamento = 'desligamento';
+        v13.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+        v13.ordem = 9060;
+        result.push(v13);
+
+        // Férias + 1/3: 1.3333/12 da diferença
+        const vFerias = defaultVerba('equiparacao_reflexo_ferias', `REFLEXO EQUIPARACAO EM FERIAS + 1/3 ${eq.paradigma_nome || ''}`.trim());
+        vFerias.valor_informado_devido = baseRef.times(new Decimal('1.3333')).div(12).toDP(2).toNumber();
+        vFerias.periodo_inicio = eq.periodo_inicio || periodoInicio;
+        vFerias.periodo_fim = dataReflexo;
+        vFerias.ocorrencia_pagamento = 'desligamento';
+        vFerias.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+        vFerias.ordem = 9061;
+        result.push(vFerias);
+
+        // FGTS reflexo (8% da diferença total + reflexos).
+        const baseFgts = baseRef
+          .plus(baseRef.times(new Decimal(1).div(12)))
+          .plus(baseRef.times(new Decimal('1.3333')).div(12));
+        const vFgts = defaultVerba('equiparacao_reflexo_fgts', `REFLEXO EQUIPARACAO EM FGTS ${eq.paradigma_nome || ''}`.trim());
+        vFgts.valor_informado_devido = baseFgts.times(new Decimal('0.08')).toDP(2).toNumber();
+        vFgts.periodo_inicio = eq.periodo_inicio || periodoInicio;
+        vFgts.periodo_fim = dataReflexo;
+        vFgts.ocorrencia_pagamento = 'desligamento';
+        vFgts.incidencias = { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false };
+        vFgts.ordem = 9062;
+        result.push(vFgts);
+      }
     }
   }
 
