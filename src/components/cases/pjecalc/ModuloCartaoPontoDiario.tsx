@@ -72,7 +72,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
         .gte("data", inicioMes)
         .lte("data", fimMes)
         .order("data");
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
@@ -92,7 +92,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
         // Como aproximacao usamos calculo_id via subquery por case.
         .in(
           "calculo_id",
-          (await supabase.from("pjecalc_calculos").select("id").eq("case_id", caseId)).data?.map((r: any) => r.id) || ["__none__"],
+          (await supabase.from("pjecalc_calculos").select("id").eq("case_id", caseId)).data?.map((r: { id: string }) => r.id) || ["__none__"],
         );
       if (error) return { ocrCount: 0, truncated: false };
       const ocrCount = count || 0;
@@ -105,12 +105,13 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
   const resumoMes = useMemo(() => {
     let ht = 0, hed = 0, hes = 0, hedsr = 0, hn = 0, is = 0;
     for (const r of registros) {
-      ht += r.horas_trabalhadas || 0;
-      hed += r.horas_extras_diarias || 0;
-      hes += r.horas_extras_semanais || 0;
-      hedsr += r.horas_extras_dsr || 0;
-      hn += r.horas_noturnas || 0;
-      is += r.intervalo_suprimido || 0;
+      const row = r as Record<string, number | undefined>;
+      ht += row.horas_trabalhadas || 0;
+      hed += row.horas_extras_diarias || 0;
+      hes += row.horas_extras_semanais || 0;
+      hedsr += row.horas_extras_dsr || 0;
+      hn += row.horas_noturnas || 0;
+      is += row.intervalo_suprimido || 0;
     }
     return { ht: ht.toFixed(2), hed: hed.toFixed(2), hes: hes.toFixed(2), hedsr: hedsr.toFixed(2), hn: hn.toFixed(2), is: is.toFixed(2) };
   }, [registros]);
@@ -129,7 +130,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       await supabase.from("pjecalc_ponto_diario" as any).delete()
         .eq("case_id", caseId).gte("data", inicioMes).lte("data", fimMes);
 
-      const rows: any[] = [];
+      const rows: Record<string, unknown>[] = [];
       for (let d = 1; d <= diasNoMes; d++) {
         const date = new Date(ano, mes - 1, d);
         if (date < admDate) continue;
@@ -159,7 +160,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       await supabase.from("pjecalc_ponto_diario" as any).delete().eq("case_id", caseId);
       const admDate = new Date(dataAdmissao);
       const demDate = new Date(dataDemissao);
-      const rows: any[] = [];
+      const rows: Record<string, unknown>[] = [];
       const cur = new Date(admDate);
       while (cur <= demDate) {
         const dow = cur.getDay();
@@ -261,20 +262,22 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       // Buscar todos os meses com dados
       const res = await supabase.from("pjecalc_ponto_diario" as any)
         .select("*").eq("case_id", caseId).order("data");
-      const todos = (res as any).data;
-      if (!todos || todos.length === 0) return;
+      type PontoRow = Record<string, unknown> & { data: string; tipo?: string; horas_trabalhadas?: number };
+      const todos = ((res as unknown as { data: PontoRow[] | null }).data ?? []);
+      if (todos.length === 0) return;
 
       // Agrupar por competência
-      const porComp: Record<string, any[]> = {};
+      const porComp: Record<string, PontoRow[]> = {};
       for (const r of todos) {
-        const comp = (r.data as string).slice(0, 7);
+        const comp = r.data.slice(0, 7);
         if (!porComp[comp]) porComp[comp] = [];
         porComp[comp].push(r);
       }
 
       // Deletar totais existentes e inserir novos
       await supabase.from("pjecalc_cartao_ponto" as any).delete().eq("case_id", caseId);
-      const rows: any[] = [];
+      type CartaoPontoRow = Record<string, unknown>;
+      const rows: CartaoPontoRow[] = [];
       for (const [comp, dias] of Object.entries(porComp)) {
         const diasUteis = dias.filter(d => d.tipo === 'normal' && new Date(d.data).getDay() !== 0).length;
         const diasTrabalhados = dias.filter(d => (d.horas_trabalhadas || 0) > 0).length;
