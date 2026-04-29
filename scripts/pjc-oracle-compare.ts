@@ -113,7 +113,7 @@ async function compareSinglePJC(pjcPath: string) {
     inputs.params, inputs.historicos, inputs.faltas, inputs.ferias,
     inputs.verbas, inputs.cartaoPonto, inputs.fgtsConfig, inputs.csConfig,
     inputs.irConfig, inputs.correcaoConfig, inputs.honorariosConfig,
-    inputs.custasConfig, inputs.seguroConfig, {} as any, buildINSSFaixas() as any,
+    inputs.custasConfig, inputs.seguroConfig, [], buildINSSFaixas() as any,
     [], inputs.excecoesCargas || [], [], inputs.prevPrivadaConfig,
     inputs.pensaoConfig, inputs.salarioFamiliaConfig,
   );
