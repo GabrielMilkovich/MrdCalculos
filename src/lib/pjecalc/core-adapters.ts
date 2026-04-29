@@ -23,7 +23,7 @@
  * 1. **Nunca quebrar o engine legado**: quando a flag está off (default),
  *    retorno bate 100% com a implementação anterior.
  * 2. **Fail-safe**: se o core lançar exception, o adapter faz fallback
- *    para o legado + log em `console.warn` (visível em dev).
+ *    para o legado + log estruturado via `logger.warn` (visível em dev).
  * 3. **Isolamento**: este arquivo não vaza tipos do core (`Calculo`, etc.)
  *    para o engine legado. Cada adapter trafega dados simples.
  *
@@ -34,6 +34,9 @@
  */
 import { Calculo } from './core/dominio/calculo/calculo';
 import { isPortedEnabled } from './core/base/comum/feature-flags';
+import { logger } from '@/lib/logger';
+
+const adapterLog = logger.child('pjecalc:adapter');
 
 // ═════════════════════════════════════════════════════════════════════
 //  CALCULO — prescrição FGTS (STF ARE 709.212)
@@ -74,7 +77,7 @@ export function calcularDataPrescricaoFgts(
       return c.getDataPrescricaoFgts();
     } catch (e) {
       // fail-safe: não quebrar o engine se o core falhar
-      console.warn('[pjecalc-adapter] getDataPrescricaoFgts portado falhou, usando legado:', e);
+      adapterLog.warn('getDataPrescricaoFgts portado falhou, usando legado', { err: String(e) });
     }
   }
 

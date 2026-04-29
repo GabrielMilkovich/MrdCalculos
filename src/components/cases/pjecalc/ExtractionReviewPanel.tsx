@@ -12,6 +12,9 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -44,6 +47,7 @@ interface ExtractionItem {
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
+  source_doc_id: string | null;
 }
 
 interface PipelineRow {
@@ -75,6 +79,9 @@ export function ExtractionReviewPanel({ caseId, pipelineId, onConfirmAll }: Prop
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [sourceModalItem, setSourceModalItem] = useState<ExtractionItem | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [sourceLoading, setSourceLoading] = useState(false);
 
   // Load extractions
   const { data: items = [], isLoading } = useQuery({
@@ -178,14 +185,54 @@ export function ExtractionReviewPanel({ caseId, pipelineId, onConfirmAll }: Prop
     return { icon: X, color: 'text-destructive', label: 'Requer Revisão' };
   };
 
-  const handleGoToSource = (item: ExtractionItem) => {
-    if (!item.page) {
-      toast.info("Página de origem não disponível para este item.");
+  const handleGoToSource = async (item: ExtractionItem) => {
+    setSourceModalItem(item);
+    setSourceUrl(null);
+
+    if (!item.source_doc_id) {
+      // Sem documento de origem registrado — abrimos o modal mostrando apenas o trecho.
       return;
     }
-    // Open the source document with page reference
-    const docWindow = window.open(`#extraction-source-page=${item.page}&field=${item.field_key}`, '_blank');
-    toast.success(`Navegando para página ${item.page} — campo "${item.field_key}"`);
+
+    setSourceLoading(true);
+    try {
+      // Busca o storage_path do documento e gera signed URL.
+      const { data: doc, error } = await supabase
+        .from("documents")
+        .select("storage_path, file_name")
+        .eq("id", item.source_doc_id)
+        .maybeSingle();
+      if (error) throw error;
+      if (!doc?.storage_path) {
+        toast.info("Documento de origem sem caminho de armazenamento.");
+        return;
+      }
+
+      const { data: signed, error: signErr } = await supabase.functions.invoke(
+        "get-signed-document-url",
+        { body: { storage_path: doc.storage_path } },
+      );
+      if (signErr) throw signErr;
+
+      const url = signed?.signedUrl || signed?.signed_url;
+      if (!url) {
+        toast.error("Não foi possível obter URL do documento.");
+        return;
+      }
+
+      // Anexa #page=N para PDF viewer pular direto à página da evidência.
+      const withPage = item.page ? `${url}#page=${item.page}` : url;
+      setSourceUrl(withPage);
+    } catch (err) {
+      toast.error(`Falha ao abrir documento: ${(err as Error).message}`);
+    } finally {
+      setSourceLoading(false);
+    }
+  };
+
+  const closeSourceModal = () => {
+    setSourceModalItem(null);
+    setSourceUrl(null);
   };
 
   if (isLoading) {
@@ -258,6 +305,70 @@ export function ExtractionReviewPanel({ caseId, pipelineId, onConfirmAll }: Prop
           </Button>
         )}
       </div>
+
+      {/* Modal de fonte (PDF + trecho destacado) */}
+      <Dialog open={!!sourceModalItem} onOpenChange={(open) => !open && closeSourceModal()}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              Origem da extração — {sourceModalItem?.field_key}
+            </DialogTitle>
+            <DialogDescription>
+              {sourceModalItem?.page
+                ? `Página ${sourceModalItem.page} do documento de origem`
+                : "Trecho extraído do documento de origem"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-3 flex-1 overflow-hidden min-h-[400px]">
+            {/* Esquerda: trecho destacado */}
+            <div className="space-y-2 overflow-y-auto">
+              <div className="text-xs font-semibold text-muted-foreground uppercase">Trecho extraído</div>
+              {sourceModalItem?.evidence_text ? (
+                <div className="p-3 rounded bg-yellow-50 dark:bg-yellow-950/20 border-l-4 border-yellow-400 font-mono text-xs whitespace-pre-wrap">
+                  {sourceModalItem.evidence_text}
+                </div>
+              ) : (
+                <div className="p-3 rounded bg-muted/40 text-xs text-muted-foreground italic">
+                  Sem trecho de evidência registrado para este item.
+                </div>
+              )}
+              <div className="text-xs">
+                <div><span className="text-muted-foreground">Valor:</span> <span className="font-mono font-medium">{sourceModalItem?.valor || "—"}</span></div>
+                {sourceModalItem?.competencia && (
+                  <div><span className="text-muted-foreground">Competência:</span> <span className="font-mono">{sourceModalItem.competencia}</span></div>
+                )}
+                {sourceModalItem?.confidence != null && (
+                  <div><span className="text-muted-foreground">Confiança:</span> <span className="font-mono">{fmtConf(sourceModalItem.confidence)}</span></div>
+                )}
+              </div>
+            </div>
+
+            {/* Direita: preview do PDF */}
+            <div className="border rounded overflow-hidden bg-muted/30">
+              {sourceLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : sourceUrl ? (
+                <iframe
+                  src={sourceUrl}
+                  className="w-full h-full min-h-[400px]"
+                  title="Documento de origem"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4 text-center text-xs">
+                  <FileText className="h-8 w-8 mb-2" />
+                  {sourceModalItem?.source_doc_id
+                    ? "Pré-visualização indisponível."
+                    : "Item sem documento de origem vinculado. Apenas o trecho extraído está disponível."}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Items list */}
       <ScrollArea className="max-h-[500px]">
@@ -372,14 +483,14 @@ export function ExtractionReviewPanel({ caseId, pipelineId, onConfirmAll }: Prop
                           {item.evidence_text}
                         </div>
                       )}
-                       {item.page && (
+                      {(item.page || item.source_doc_id || item.evidence_text) && (
                         <div className="flex items-center gap-2">
-                          <p className="text-[10px] text-muted-foreground">Página: {item.page}</p>
+                          {item.page && <p className="text-[10px] text-muted-foreground">Página: {item.page}</p>}
                           <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5" onClick={() => handleGoToSource(item)}>
-                            <Eye className="h-2.5 w-2.5 mr-0.5" /> Ir para Fonte
+                            <Eye className="h-2.5 w-2.5 mr-0.5" /> Ver Fonte
                           </Button>
                         </div>
-                       )}
+                      )}
                       {item.review_note && (
                         <p className="text-[10px] text-muted-foreground italic">Nota: {item.review_note}</p>
                       )}
