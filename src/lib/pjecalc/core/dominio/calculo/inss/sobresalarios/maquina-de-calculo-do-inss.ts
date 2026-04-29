@@ -17,19 +17,84 @@
  *     getOcorrenciaDecimoTerceiro, isJurosEMultaPrevidenciario, setTaxaDeJuros)
  *   - Inss / Calculo / ParametrosDeAtualizacao (flags Lei 11941)
  */
-import type Decimal from 'decimal.js';
+import Decimal from 'decimal.js';
 import { HelperDate } from '../../../../base/comum/helper-date';
-import { naoNulo, nulo } from '../../../../base/comum/utils';
+import { naoNulo, nulo, obterPercentualPara } from '../../../../base/comum/utils';
+import { TipoValorEnum } from '../../../constantes/enums';
 import type { Inss } from '../inss';
 import type { OcorrenciaDeInssSobreSalariosDevidos } from './ocorrencia-de-inss-sobre-salarios-devidos';
 import type { OcorrenciaDeInssSobreSalariosPagos } from './ocorrencia-de-inss-sobre-salarios-pagos';
 import { TabelaDeJurosInssSalariosDevidos } from './tabela-de-juros-inss-salarios-devidos';
 import { TabelaDeJurosInssSalariosPagos } from './tabela-de-juros-inss-salarios-pagos';
 
-// Placeholders para entidades ainda nao portadas (Fase 9 futura).
-export interface Pagamento { /* stub */ }
-export interface DebitosDoReclamante { /* stub */ }
-export interface OutrosDebitosReclamado { /* stub */ }
+const ZERO = new Decimal(0);
+const UM = new Decimal(1);
+
+// ─────────────────────────────────────────────────────────────────────
+// Inputs simplificados — Fase 9 (espelha pattern usado em pensao-alimenticia)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * BaseVerbaInput — mapeamento para `verba.getOcorrenciasOptimizerListSearch().search(competencia)`.
+ *
+ * O Java consulta as ocorrências de cada VerbaDeCalculo ativa com IncidenciaINSS,
+ * agrupa por competência (ano-mês) e separa entre 13o/normal. Para liquidar
+ * `valorBaseVerbas`, basta termos pré-agrupado os totais por (competencia, is13o).
+ */
+export interface BaseVerbaInput {
+  /** YYYY-MM da ocorrência. */
+  competencia: string;
+  /** True se a verba é caracteristica DECIMO_TERCEIRO_SALARIO. */
+  is13o: boolean;
+  /** Soma de `getDiferencaParaCalculoDasIncidencias()` no mês — base nominal. */
+  baseNominal: Decimal;
+}
+
+/** Aliquota progressiva (faixa) para calcular `aliquotaDoTotalSegurado`. */
+export interface FaixaInssInput {
+  ate: Decimal;
+  aliquota: Decimal; // 0-100
+}
+
+/**
+ * TabelaAliquotasInssInput — equivale ao
+ * TabelaPrevidenciariaSeguradoEmpregadoOptimizerListSearch.
+ * Cada linha tem competencia inicial/final (string YYYY-MM) e faixas.
+ * Quando `tipo='fixa'`, retorna sempre `aliquotaFixa`.
+ */
+export interface TabelaAliquotasInssInput {
+  tipo: 'fixa' | 'progressiva';
+  aliquotaFixa?: Decimal;
+  faixas?: { competenciaInicio: string; competenciaFim: string | null; faixas: FaixaInssInput[] }[];
+}
+
+/** Multa previdenciária por competência (TaxaMultaPrevidenciaria.obterListaOtimizada). */
+export interface TaxaMultaInput {
+  competenciaInicio: string;
+  competenciaFim: string | null;
+  taxa: Decimal; // 0-100
+  tipoMulta: string | null;
+}
+
+/** Pagamento simplificado (Pagamento.java reduzido ao mínimo). */
+export interface Pagamento {
+  data: Date;
+  valor: Decimal;
+  /** Indica se o valor amortiza segurado, empresa, SAT ou terceiros. */
+  destino: 'segurado' | 'empresa' | 'sat' | 'terceiros';
+}
+
+/** Débitos do reclamante (saldo amortizável). */
+export interface DebitosDoReclamante {
+  saldoSegurado: Decimal;
+}
+
+/** Outros débitos do reclamado (empresa/SAT/terceiros). */
+export interface OutrosDebitosReclamado {
+  saldoEmpresa: Decimal;
+  saldoSAT: Decimal;
+  saldoTerceiros: Decimal;
+}
 
 /**
  * MESES_NAO_CONSIDERADOS_PARA_JUROS — Java linha 68.
@@ -56,16 +121,51 @@ export class MaquinaDeCalculoDoInss {
 
   getInss(): Inss { return this.inss; }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Inputs auxiliares (settados antes de liquidar() para evitar dependencias
+  // pesadas — VerbaDeCalculo, HistoricoSalarial, TaxaMultaPrevidenciaria).
+  // ─────────────────────────────────────────────────────────────────────
+  private basesPorCompetencia: BaseVerbaInput[] = [];
+  private tabelaAliquotas: TabelaAliquotasInssInput | null = null;
+  private taxasDeMulta: TaxaMultaInput[] = [];
+
+  /** Permite ao adapter injetar bases pré-agregadas (Java itera VerbaDeCalculo). */
+  setBasesPorCompetencia(bases: BaseVerbaInput[]): void { this.basesPorCompetencia = bases; }
+  setTabelaAliquotas(tabela: TabelaAliquotasInssInput | null): void { this.tabelaAliquotas = tabela; }
+  setTaxasDeMulta(taxas: TaxaMultaInput[]): void { this.taxasDeMulta = taxas; }
+
   /** liquidar (Java linha 146) — entry point do calculo de INSS.
-   *  TODO(integracao-futura): implementar fluxo completo com liquidarInssSobre*. */
+   *  Pipeline (espelho do Java):
+   *    1. dataLiquidacao = parametro
+   *    2. se nao ha ocorrencias, gera (skipped — caller responsabilizado)
+   *    3. determina apuracaoMulta range (skipped — uso simplificado)
+   *    4. liquidarInssSobreSalariosDevidos / Pagos
+   */
   liquidar(dataLiquidacao: Date): void {
     this.dataLiquidacao = dataLiquidacao;
-    // Restante do fluxo (liquidarInssSobreSalariosDevidos/Pagos) vem em sessao futura.
+    const devidos = this.inss.getInssSobreSalariosDevidos();
+    if (devidos && devidos.existemOcorrencias()) {
+      this.liquidarInssSobreSalariosDevidos();
+    }
+    const apurarPagos = this.inss.getApurarInssSobreSalariosPagos();
+    const pagos = this.inss.getInssSobreSalariosPagos();
+    if (apurarPagos && pagos && pagos.existemOcorrencias()) {
+      this.liquidarInssSobreSalariosPagos();
+    }
   }
 
-  /** liquidarAtualizacao (Java linha 92). TODO(integracao-futura). */
+  /** liquidarAtualizacao (Java linha 92). Re-aplica fluxo de liquidacao na atualizacao. */
   liquidarAtualizacao(dataEvento: Date): void {
     this.dataLiquidacao = dataEvento;
+    const devidos = this.inss.getInssSobreSalariosDevidos();
+    if (devidos && devidos.existemOcorrencias()) {
+      this.liquidarInssSobreSalariosDevidos();
+    }
+    const apurarPagos = this.inss.getApurarInssSobreSalariosPagos();
+    const pagos = this.inss.getInssSobreSalariosPagos();
+    if (apurarPagos && pagos && pagos.existemOcorrencias()) {
+      this.liquidarInssSobreSalariosPagos();
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────
