@@ -191,6 +191,8 @@ export { OcorrenciaDoHistoricoSalarialOptimizerListSearch } from './dominio/hist
 // ────────────── dominio/pagamento ──────────────
 export { totalizar } from './dominio/pagamento/pagamento-totalizador';
 export type { ResultadoPagamento } from './dominio/pagamento/pagamento-totalizador';
+// Phase 9: Pagamento entidade (parcial 22% Java, ~370 LOC TS)
+export { Pagamento } from './dominio/pagamento/pagamento';
 
 // ────────────── comum/rotinasdecalculo (Integralizar/Proporcionalizar) ──────────────
 export { CalculoDoIntegralizar } from './comum/rotinasdecalculo/calculo-do-integralizar';
@@ -214,6 +216,9 @@ export { SalarioFamilia } from './dominio/calculo/salariofamilia/salario-familia
 
 // ────────────── dominio/calculo/segurodesemprego ──────────────
 export { SeguroDesemprego } from './dominio/calculo/segurodesemprego/seguro-desemprego';
+
+// ────────────── dominio/calculo/previdenciaprivada ──────────────
+export { PrevidenciaPrivada } from './dominio/calculo/previdenciaprivada/previdencia-privada';
 
 // ────────────── dominio/juros (JurosSelicParaCorrecao) ──────────────
 export { obterTabelaSelicParaCorrecao } from './dominio/juros/juros-selic-para-correcao';

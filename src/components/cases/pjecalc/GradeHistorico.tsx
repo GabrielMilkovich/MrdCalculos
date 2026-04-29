@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Calculator, Loader2, ArrowLeft, Trash2 } from "lucide-react";
 
@@ -24,9 +25,9 @@ export function GradeHistorico({ caseId, historicoId, historicoNome, periodoInic
   const { data: ocorrencias = [] } = useQuery({
     queryKey: ["pjecalc_historico_ocorrencias", historicoId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_historico_ocorrencias" as any)
+      const { data } = await fromUntyped("pjecalc_historico_ocorrencias")
         .select("*").eq("historico_id", historicoId).order("competencia");
-      return (data || []) as any[];
+      return (data || []) as unknown[];
     },
   });
 
@@ -34,7 +35,7 @@ export function GradeHistorico({ caseId, historicoId, historicoNome, periodoInic
     if (!periodoInicio || !periodoFim) { toast.error("Histórico sem período definido."); return; }
     setGenerating(true);
     try {
-      await supabase.from("pjecalc_historico_ocorrencias" as any).delete().eq("historico_id", historicoId);
+      await fromUntyped("pjecalc_historico_ocorrencias").delete().eq("historico_id", historicoId);
       const start = new Date(periodoInicio + "T00:00:00");
       const end = new Date(periodoFim + "T00:00:00");
       const rows: any[] = [];
@@ -50,7 +51,7 @@ export function GradeHistorico({ caseId, historicoId, historicoNome, periodoInic
         });
         cur.setMonth(cur.getMonth() + 1);
       }
-      if (rows.length > 0) await supabase.from("pjecalc_historico_ocorrencias" as any).insert(rows);
+      if (rows.length > 0) await fromUntyped("pjecalc_historico_ocorrencias").insert(rows);
       qc.invalidateQueries({ queryKey: ["pjecalc_historico_ocorrencias", historicoId] });
       toast.success(`${rows.length} ocorrências geradas`);
     } catch (e) { toast.error((e as Error).message); }
@@ -58,7 +59,7 @@ export function GradeHistorico({ caseId, historicoId, historicoNome, periodoInic
   };
 
   const updateVal = async (id: string, valor: number) => {
-    await supabase.from("pjecalc_historico_ocorrencias" as any).update({ valor }).eq("id", id);
+    await fromUntyped("pjecalc_historico_ocorrencias").update({ valor }).eq("id", id);
   };
 
   const total = ocorrencias.reduce((s: number, o: any) => s + (o.valor || 0), 0);
@@ -114,7 +115,7 @@ export function GradeHistorico({ caseId, historicoId, historicoNome, periodoInic
                     <td className="p-2 text-center text-muted-foreground">{o.tipo}</td>
                     <td className="p-1">
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={async () => {
-                        await supabase.from("pjecalc_historico_ocorrencias" as any).delete().eq("id", o.id);
+                        await fromUntyped("pjecalc_historico_ocorrencias").delete().eq("id", o.id);
                         qc.invalidateQueries({ queryKey: ["pjecalc_historico_ocorrencias", historicoId] });
                       }}><Trash2 className="h-3 w-3" /></Button>
                     </td>

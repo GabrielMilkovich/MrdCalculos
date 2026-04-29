@@ -9,8 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Calculator, Calendar, ChevronLeft, ChevronRight, Copy, Clock } from "lucide-react";
+import { Plus, Trash2, Loader2, Calculator, Calendar, ChevronLeft, ChevronRight, Copy, Clock, AlertTriangle } from "lucide-react";
+
+// Limite de amostragem aplicado pelo extract-and-fill (cartao de ponto).
+// Refs: supabase/functions/extract-and-fill/index.ts:1058 (prompt) e :1393 (loop).
+const OCR_CARTAO_PONTO_SAMPLE_LIMIT = 60;
 
 interface Props {
   caseId: string;
@@ -61,27 +66,51 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       const inicioMes = `${mesAtual}-01`;
       const diasNoMes = new Date(ano, mes, 0).getDate();
       const fimMes = `${mesAtual}-${String(diasNoMes).padStart(2, '0')}`;
-      const { data } = await supabase
-        .from("pjecalc_ponto_diario" as any)
+      const { data } = await fromUntyped("pjecalc_ponto_diario")
         .select("*")
         .eq("case_id", caseId)
         .gte("data", inicioMes)
         .lte("data", fimMes)
         .order("data");
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
+  });
+
+  // Detecta truncamento OCR: extract-and-fill capa o cartao de ponto em 60 dias
+  // como amostra (vide prompt em extract-and-fill/index.ts:1058). Se a apuracao
+  // diaria do caso tem >= 60 registros com origem='OCR', alertamos que HE
+  // pode estar subestimada por falta de amostra completa.
+  const { data: ocrSampleInfo } = useQuery({
+    queryKey: ["cartao_ponto_ocr_sample", caseId],
+    queryFn: async () => {
+      const { count, error } = await fromUntyped("pjecalc_apuracao_diaria")
+        .select("*", { count: "exact", head: true })
+        .eq("origem", "OCR")
+        // calculo_id e o link real, mas nao temos aqui — filtra por presenca
+        // de qualquer linha OCR (pjecalc_apuracao_diaria nao tem case_id direto).
+        // Como aproximacao usamos calculo_id via subquery por case.
+        .in(
+          "calculo_id",
+          (await supabase.from("pjecalc_calculos").select("id").eq("case_id", caseId)).data?.map((r: { id: string }) => r.id) || ["__none__"],
+        );
+      if (error) return { ocrCount: 0, truncated: false };
+      const ocrCount = count || 0;
+      return { ocrCount, truncated: ocrCount >= OCR_CARTAO_PONTO_SAMPLE_LIMIT };
+    },
+    staleTime: 60_000,
   });
 
   // Resumo do mês
   const resumoMes = useMemo(() => {
     let ht = 0, hed = 0, hes = 0, hedsr = 0, hn = 0, is = 0;
     for (const r of registros) {
-      ht += r.horas_trabalhadas || 0;
-      hed += r.horas_extras_diarias || 0;
-      hes += r.horas_extras_semanais || 0;
-      hedsr += r.horas_extras_dsr || 0;
-      hn += r.horas_noturnas || 0;
-      is += r.intervalo_suprimido || 0;
+      const row = r as Record<string, number | undefined>;
+      ht += row.horas_trabalhadas || 0;
+      hed += row.horas_extras_diarias || 0;
+      hes += row.horas_extras_semanais || 0;
+      hedsr += row.horas_extras_dsr || 0;
+      hn += row.horas_noturnas || 0;
+      is += row.intervalo_suprimido || 0;
     }
     return { ht: ht.toFixed(2), hed: hed.toFixed(2), hes: hes.toFixed(2), hedsr: hedsr.toFixed(2), hn: hn.toFixed(2), is: is.toFixed(2) };
   }, [registros]);
@@ -97,10 +126,10 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       // Deletar dias existentes do mês
       const inicioMes = `${mesAtual}-01`;
       const fimMes = `${mesAtual}-${String(diasNoMes).padStart(2, '0')}`;
-      await supabase.from("pjecalc_ponto_diario" as any).delete()
+      await fromUntyped("pjecalc_ponto_diario").delete()
         .eq("case_id", caseId).gte("data", inicioMes).lte("data", fimMes);
 
-      const rows: any[] = [];
+      const rows: Record<string, unknown>[] = [];
       for (let d = 1; d <= diasNoMes; d++) {
         const date = new Date(ano, mes - 1, d);
         if (date < admDate) continue;
@@ -116,7 +145,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
           horas_trabalhadas: 0,
         });
       }
-      if (rows.length > 0) await supabase.from("pjecalc_ponto_diario" as any).insert(rows);
+      if (rows.length > 0) await fromUntyped("pjecalc_ponto_diario").insert(rows);
       qc.invalidateQueries({ queryKey: ["pjecalc_ponto_diario", caseId, mesAtual] });
       toast.success(`${rows.length} dias gerados para ${mesAtual}`);
     } catch (e) { toast.error((e as Error).message); }
@@ -127,10 +156,10 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
     if (!dataAdmissao || !dataDemissao) { toast.error("Preencha admissão e demissão."); return; }
     setGenerating(true);
     try {
-      await supabase.from("pjecalc_ponto_diario" as any).delete().eq("case_id", caseId);
+      await fromUntyped("pjecalc_ponto_diario").delete().eq("case_id", caseId);
       const admDate = new Date(dataAdmissao);
       const demDate = new Date(dataDemissao);
-      const rows: any[] = [];
+      const rows: Record<string, unknown>[] = [];
       const cur = new Date(admDate);
       while (cur <= demDate) {
         const dow = cur.getDay();
@@ -147,7 +176,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       }
       // Insert em lotes de 500
       for (let i = 0; i < rows.length; i += 500) {
-        await supabase.from("pjecalc_ponto_diario" as any).insert(rows.slice(i, i + 500));
+        await fromUntyped("pjecalc_ponto_diario").insert(rows.slice(i, i + 500));
       }
       qc.invalidateQueries({ queryKey: ["pjecalc_ponto_diario", caseId, mesAtual] });
       toast.success(`${rows.length} dias gerados para todo o período`);
@@ -170,7 +199,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
         const jornadadiaria = cargaHoraria / (jornadaFixa.sabado ? 26 : 22);
         const he = Math.max(0, ht - jornadadiaria);
         
-        await supabase.from("pjecalc_ponto_diario" as any).update({
+        await fromUntyped("pjecalc_ponto_diario").update({
           entrada_1: jornadaFixa.entrada_1,
           saida_1: jornadaFixa.saida_1,
           entrada_2: jornadaFixa.entrada_2,
@@ -204,14 +233,14 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
         updated.entrada_3 && updated.saida_3 ? `${updated.entrada_3}-${updated.saida_3}` : '',
       ].filter(Boolean).join(' / ');
       
-      await supabase.from("pjecalc_ponto_diario" as any).update({
+      await fromUntyped("pjecalc_ponto_diario").update({
         [field]: value,
         horas_trabalhadas: ht,
         frequencia: freq,
         origem: 'INFORMADA',
       }).eq("id", id);
     } else {
-      await supabase.from("pjecalc_ponto_diario" as any).update({
+      await fromUntyped("pjecalc_ponto_diario").update({
         [field]: value,
         origem: 'INFORMADA',
       }).eq("id", id);
@@ -230,22 +259,24 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
   const sincronizarTotais = async () => {
     try {
       // Buscar todos os meses com dados
-      const res = await supabase.from("pjecalc_ponto_diario" as any)
+      const res = await fromUntyped("pjecalc_ponto_diario")
         .select("*").eq("case_id", caseId).order("data");
-      const todos = (res as any).data;
-      if (!todos || todos.length === 0) return;
+      type PontoRow = Record<string, unknown> & { data: string; tipo?: string; horas_trabalhadas?: number };
+      const todos = ((res as unknown as { data: PontoRow[] | null }).data ?? []);
+      if (todos.length === 0) return;
 
       // Agrupar por competência
-      const porComp: Record<string, any[]> = {};
+      const porComp: Record<string, PontoRow[]> = {};
       for (const r of todos) {
-        const comp = (r.data as string).slice(0, 7);
+        const comp = r.data.slice(0, 7);
         if (!porComp[comp]) porComp[comp] = [];
         porComp[comp].push(r);
       }
 
       // Deletar totais existentes e inserir novos
-      await supabase.from("pjecalc_cartao_ponto" as any).delete().eq("case_id", caseId);
-      const rows: any[] = [];
+      await fromUntyped("pjecalc_cartao_ponto").delete().eq("case_id", caseId);
+      type CartaoPontoRow = Record<string, unknown>;
+      const rows: CartaoPontoRow[] = [];
       for (const [comp, dias] of Object.entries(porComp)) {
         const diasUteis = dias.filter(d => d.tipo === 'normal' && new Date(d.data).getDay() !== 0).length;
         const diasTrabalhados = dias.filter(d => (d.horas_trabalhadas || 0) > 0).length;
@@ -263,7 +294,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       }
       if (rows.length > 0) {
         for (let i = 0; i < rows.length; i += 500) {
-          await supabase.from("pjecalc_cartao_ponto" as any).insert(rows.slice(i, i + 500));
+          await fromUntyped("pjecalc_cartao_ponto").insert(rows.slice(i, i + 500));
         }
       }
       toast.success(`${rows.length} competências sincronizadas com o motor de cálculo`);
@@ -305,6 +336,25 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Warning de amostra OCR truncada */}
+      {ocrSampleInfo?.truncated && (
+        <Card className="border-amber-400 bg-amber-50/60 dark:bg-amber-950/20">
+          <CardContent className="p-3 flex items-start gap-2 text-xs">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-amber-800 dark:text-amber-200">
+                Amostra de {OCR_CARTAO_PONTO_SAMPLE_LIMIT} dias detectada
+              </div>
+              <div className="text-amber-700 dark:text-amber-300/80">
+                A extração via OCR limitou-se aos primeiros {OCR_CARTAO_PONTO_SAMPLE_LIMIT} registros diários. Horas Extras
+                podem estar subestimadas. Verifique e complete os meses faltantes manualmente
+                ou via importação de CSV antes da liquidação.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resumo do mês */}
       <div className="grid grid-cols-6 gap-2">

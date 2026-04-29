@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Upload, FileText, Loader2, Check, AlertTriangle, Download, Eye } from "lucide-react";
 import { logger } from "@/lib/logger";
@@ -134,7 +135,7 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
           template_detectado: tipoDoc,
           empresa_detectada: parsed.empresa || null,
           status: "extraido",
-        } as any).select("id").single();
+        } as Record<string, unknown>).select("id").single();
 
         // Create extracao_items for each rubrica
         if (pipeline?.id && parsed.rubricas) {
@@ -198,8 +199,7 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
           const avg = sorted.reduce((s, v) => s + v.valor, 0) / sorted.length;
 
           // Insert into the view (triggers pjecalc_hist_ioi → pjecalc_hist_salarial)
-          const { data: inserted, error } = await supabase
-            .from("pjecalc_historico_salarial" as any)
+          const { data: inserted, error } = await fromUntyped("pjecalc_historico_salarial")
             .insert({
               case_id: caseId,
               nome: `${rub.denominacao} (${CATEGORIA_LABELS[rub.categoria] || rub.categoria})`,
@@ -220,17 +220,16 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
           }
 
           // Insert monthly occurrences via view (triggers → pjecalc_hist_salarial_mes)
-          if ((inserted as any)?.id) {
+          if ((inserted as Record<string, unknown>)?.id) {
             const ocorrencias = sorted.map((v) => ({
-              historico_id: (inserted as any).id,
+              historico_id: (inserted as Record<string, unknown>).id,
               case_id: caseId,
               competencia: v.competencia,
               valor: v.valor,
               tipo: "informado",
             }));
 
-            const { error: ocorrErr } = await supabase
-              .from("pjecalc_historico_ocorrencias" as any)
+            const { error: ocorrErr } = await fromUntyped("pjecalc_historico_ocorrencias")
               .insert(ocorrencias);
             
             if (ocorrErr) {

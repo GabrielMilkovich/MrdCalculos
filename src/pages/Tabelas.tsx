@@ -12,8 +12,10 @@ import {
   Download, RefreshCw, CheckCircle, AlertTriangle, XCircle, Clock, FileText, History
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 const UFS = [
   "AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
@@ -70,81 +72,121 @@ function HealthDashboard() {
   const [checkingUrls, setCheckingUrls] = useState(false);
   const [urlResults, setUrlResults] = useState<Record<string, { ok: boolean; error?: string }>>({});
 
-  const { data: registry, isLoading } = useQuery({
+  // Tipos das tabelas custom do módulo reference_*. Não estão no schema
+  // gerado em src/integrations/supabase/types.ts — declaramos os subsets
+  // efetivamente lidos pelo UI para evitar `as any`.
+  interface RegistryRow {
+    id: string;
+    name: string;
+    status: 'ok' | 'warning' | 'broken' | string;
+    last_import_at: string | null;
+    [k: string]: unknown;
+  }
+  interface ImportRunRow {
+    id: string;
+    table_name?: string;
+    started_at: string | null;
+    result: 'success' | 'error' | 'failed' | 'pending' | string;
+    [k: string]: unknown;
+  }
+  interface SyncStatusRow {
+    id: string;
+    status: 'ok' | 'error' | string;
+    [k: string]: unknown;
+  }
+  interface SourceRow {
+    id: string;
+    name: string;
+    url: string | null;
+    [k: string]: unknown;
+  }
+
+  const { data: registry, isLoading } = useQuery<RegistryRow[]>({
     queryKey: ["reference_table_registry"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("reference_table_registry" as any).select("*").order("name");
+      // tabela custom fora do schema gerado
+      const { data, error } = await fromUntyped("reference_table_registry").select("*").order("name");
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as RegistryRow[];
     },
     refetchInterval: 60_000,
   });
 
-  const { data: importRuns } = useQuery({
+  const { data: importRuns } = useQuery<ImportRunRow[]>({
     queryKey: ["reference_import_runs_recent"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("reference_import_runs" as any)
+      // tabela custom fora do schema gerado
+      const { data, error } = await fromUntyped("reference_import_runs")
         .select("*").order("started_at", { ascending: false }).limit(30);
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as ImportRunRow[];
     },
     refetchInterval: 60_000,
   });
 
-  const { data: syncStatuses } = useQuery({
+  const { data: syncStatuses } = useQuery<SyncStatusRow[]>({
     queryKey: ["sync_status_all"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sync_status" as any).select("*");
+      // tabela custom fora do schema gerado
+      const { data, error } = await fromUntyped("sync_status").select("*");
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as SyncStatusRow[];
     },
     refetchInterval: 30_000,
   });
 
-  const { data: sources } = useQuery({
+  const { data: sources } = useQuery<SourceRow[]>({
     queryKey: ["reference_sources_all"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("reference_sources" as any).select("*").order("name");
+      // tabela custom fora do schema gerado
+      const { data, error } = await fromUntyped("reference_sources").select("*").order("name");
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as SourceRow[];
     },
   });
 
   // Derived metrics
   const totalTables = registry?.length || 0;
-  const okTables = registry?.filter((r: any) => r.status === 'ok').length || 0;
-  const warningTables = registry?.filter((r: any) => r.status === 'warning').length || 0;
-  const brokenTables = registry?.filter((r: any) => r.status === 'broken').length || 0;
-  const neverImported = registry?.filter((r: any) => !r.last_import_at).length || 0;
+  const okTables = registry?.filter((r) => r.status === 'ok').length || 0;
+  const warningTables = registry?.filter((r) => r.status === 'warning').length || 0;
+  const brokenTables = registry?.filter((r) => r.status === 'broken').length || 0;
+  const neverImported = registry?.filter((r) => !r.last_import_at).length || 0;
 
-  const recentErrors = (importRuns || []).filter((r: any) => r.result === 'error' || r.result === 'failed');
-  const last24hRuns = (importRuns || []).filter((r: any) => {
+  const recentErrors = (importRuns || []).filter((r) => r.result === 'error' || r.result === 'failed');
+  const last24hRuns = (importRuns || []).filter((r) => {
     if (!r.started_at) return false;
     return (Date.now() - new Date(r.started_at).getTime()) < 86_400_000;
   });
 
-  const syncErrors = (syncStatuses || []).filter((s: any) => s.status === 'error');
+  const syncErrors = (syncStatuses || []).filter((s) => s.status === 'error');
 
   // Source URL health check
   const checkSourceUrls = async () => {
     setCheckingUrls(true);
     const results: typeof urlResults = {};
-    for (const src of (sources || [])) {
-      if (!src.url) continue;
-      try {
-        await fetch(src.url, { method: 'HEAD', mode: 'no-cors' });
-        results[src.id] = { ok: true };
-      } catch {
-        results[src.id] = { ok: false, error: 'URL inacessível' };
+    try {
+      for (const src of (sources || [])) {
+        if (!src.url) continue;
+        try {
+          await fetch(src.url, { method: 'HEAD', mode: 'no-cors' });
+          results[src.id] = { ok: true };
+        } catch (fetchErr) {
+          logger.warn('checkSourceUrls: fetch falhou', { sourceId: src.id, url: src.url, err: String(fetchErr) });
+          results[src.id] = { ok: false, error: 'URL inacessível' };
+        }
       }
-    }
-    setUrlResults(results);
-    setCheckingUrls(false);
-    const failures = Object.values(results).filter(r => !r.ok).length;
-    if (failures > 0) {
-      toast.error(`${failures} fonte(s) com URL inacessível!`);
-    } else {
-      toast.success('Todas as fontes estão acessíveis.');
+      setUrlResults(results);
+      const failures = Object.values(results).filter(r => !r.ok).length;
+      if (failures > 0) {
+        toast.error(`${failures} fonte(s) com URL inacessível!`);
+      } else {
+        toast.success('Todas as fontes estão acessíveis.');
+      }
+    } catch (err) {
+      logger.error('checkSourceUrls: erro inesperado', err);
+      toast.error('Erro inesperado ao verificar fontes. Tente novamente.');
+    } finally {
+      setCheckingUrls(false);
     }
   };
 
@@ -558,7 +600,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           valor: parseNumBR(r["valor do salário"] || r["valor"] || r["valor_salario"]),
         })).filter(r => r.competencia && r.valor != null);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_salario_minimo" as any).upsert(rec as any, { onConflict: "competencia" });
+          const { error } = await fromUntyped("pjecalc_salario_minimo").upsert(rec, { onConflict: "competencia" });
           if (!error) inserted++;
         }
       } else if (tipo === "salario-familia") {
@@ -570,7 +612,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           valor_cota: parseNumBR(r["vl. do salário"] || r["valor_cota"] || r["valor"]),
         })).filter(r => r.competencia && r.valor_cota != null);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_salario_familia" as any).upsert(rec as any, { onConflict: "competencia,faixa" });
+          const { error } = await fromUntyped("pjecalc_salario_familia").upsert(rec, { onConflict: "competencia,faixa" });
           if (!error) inserted++;
         }
       } else if (tipo === "contribuicao-social") {
@@ -585,7 +627,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           teto_beneficio: parseNumBR(r["teto ben."] || r["teto_beneficio"]),
         })).filter(r => r.competencia);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_contribuicao_social" as any).upsert(rec as any, { onConflict: "competencia,tipo,faixa" });
+          const { error } = await fromUntyped("pjecalc_contribuicao_social").upsert(rec, { onConflict: "competencia,tipo,faixa" });
           if (!error) inserted++;
         }
       } else if (tipo === "imposto-renda") {
@@ -598,9 +640,9 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           });
         });
         for (const [comp, vals] of compMap) {
-          const { error } = await supabase.from("pjecalc_imposto_renda" as any).upsert({
+          const { error } = await fromUntyped("pjecalc_imposto_renda").upsert({
             competencia: comp, deducao_dependente: vals.dep, deducao_aposentado_65: vals.apos,
-          } as any, { onConflict: "competencia" });
+          } as Record<string, unknown>, { onConflict: "competencia" });
           if (!error) inserted++;
         }
       } else if (tipo === "custas-judiciais") {
@@ -621,7 +663,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           teto_custas_autos: parseNumBR(r["teto - custas de autos"] || r["teto_custas_autos"]),
         })).filter(r => r.vigencia_inicio);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_custas_judiciais" as any).upsert(rec as any, { onConflict: "vigencia_inicio" });
+          const { error } = await fromUntyped("pjecalc_custas_judiciais").upsert(rec, { onConflict: "vigencia_inicio" });
           if (!error) inserted++;
         }
       } else if (tipo === "correcao-monetaria") {
@@ -633,7 +675,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           fonte: r["fonte"] || null,
         })).filter(r => r.competencia && r.valor != null);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_correcao_monetaria" as any).upsert(rec as any, { onConflict: "competencia,indice" });
+          const { error } = await fromUntyped("pjecalc_correcao_monetaria").upsert(rec, { onConflict: "competencia,indice" });
           if (!error) inserted++;
         }
       } else if (tipo === "juros-mora") {
@@ -644,7 +686,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           acumulado: parseNumBR(r["acumulado"]),
         })).filter(r => r.competencia && r.taxa_mensal != null);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_juros_mora" as any).upsert(rec as any, { onConflict: "competencia,tipo" });
+          const { error } = await fromUntyped("pjecalc_juros_mora").upsert(rec, { onConflict: "competencia,tipo" });
           if (!error) inserted++;
         }
       } else if (tipo === "seguro-desemprego") {
@@ -659,7 +701,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           valor_teto: parseNumBR(r["vl. teto"] || r["valor_teto"]),
         })).filter(r => r.competencia);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_seguro_desemprego" as any).upsert(rec as any, { onConflict: "competencia,faixa" });
+          const { error } = await fromUntyped("pjecalc_seguro_desemprego").upsert(rec, { onConflict: "competencia,faixa" });
           if (!error) inserted++;
         }
       } else if (tipo === "pisos-salariais") {
@@ -672,7 +714,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           sindicato: r["sindicato"] || null,
         })).filter(r => r.competencia && r.nome && r.uf);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_pisos_salariais" as any).insert(rec as any);
+          const { error } = await fromUntyped("pjecalc_pisos_salariais").insert(rec);
           if (!error) inserted++;
         }
       } else if (tipo === "vale-transporte") {
@@ -685,7 +727,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           vigencia_fim: parseDate(r["fim"] || r["vigencia_fim"]) || null,
         })).filter(r => r.linha && r.uf && r.vigencia_inicio);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_vale_transporte" as any).insert(rec as any);
+          const { error } = await fromUntyped("pjecalc_vale_transporte").insert(rec);
           if (!error) inserted++;
         }
       } else if (tipo === "verbas") {
@@ -700,7 +742,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           incidencia_irpf: r["irpf"]?.toLowerCase() === "sim",
         })).filter(r => r.nome);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_verbas_padrao" as any).insert(rec as any);
+          const { error } = await fromUntyped("pjecalc_verbas_padrao").insert(rec);
           if (!error) inserted++;
         }
       } else if (tipo === "feriados") {
@@ -713,13 +755,13 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
           fonte: r["fonte"] || null,
         })).filter(r => r.data && r.nome);
         for (const rec of records) {
-          const { error } = await supabase.from("pjecalc_feriados" as any).insert(rec as any);
+          const { error } = await fromUntyped("pjecalc_feriados").insert(rec);
           if (!error) inserted++;
         }
       }
 
       // Log import run
-      await supabase.from("reference_import_runs" as any).insert({
+      await fromUntyped("reference_import_runs").insert({
         table_slug: tipo.replace(/-/g, "_"),
         trigger: "manual",
         result: inserted > 0 ? "success" : "failed",
@@ -804,9 +846,9 @@ function SalarioMinimoView() {
   const { data, isLoading } = useQuery({
     queryKey: ["pjecalc_salario_minimo"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pjecalc_salario_minimo" as any).select("*").order("competencia", { ascending: false });
+      const { data, error } = await fromUntyped("pjecalc_salario_minimo").select("*").order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
   const rows = data || [];
@@ -838,9 +880,9 @@ function SalarioFamiliaView() {
   const { data, isLoading } = useQuery({
     queryKey: ["pjecalc_salario_familia"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pjecalc_salario_familia" as any).select("*").order("competencia", { ascending: false });
+      const { data, error } = await fromUntyped("pjecalc_salario_familia").select("*").order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
@@ -883,9 +925,9 @@ function SeguroDesempregoView() {
   const { data, isLoading } = useQuery({
     queryKey: ["pjecalc_seguro_desemprego"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pjecalc_seguro_desemprego" as any).select("*").order("competencia", { ascending: false });
+      const { data, error } = await fromUntyped("pjecalc_seguro_desemprego").select("*").order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
@@ -929,10 +971,10 @@ function ContribuicaoSocialView() {
   const { data, isLoading } = useQuery({
     queryKey: ["pjecalc_contribuicao_social", tab],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pjecalc_contribuicao_social" as any)
+      const { data, error } = await fromUntyped("pjecalc_contribuicao_social")
         .select("*").eq("tipo", tab).order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
@@ -982,9 +1024,9 @@ function ImpostoRendaView() {
   const { data, isLoading } = useQuery({
     queryKey: ["pjecalc_imposto_renda"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pjecalc_imposto_renda" as any).select("*").order("competencia", { ascending: false });
+      const { data, error } = await fromUntyped("pjecalc_imposto_renda").select("*").order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
   const rows = data || [];
@@ -1037,9 +1079,9 @@ function CustasJudiciaisView() {
   const { data, isLoading } = useQuery({
     queryKey: ["pjecalc_custas_judiciais"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pjecalc_custas_judiciais" as any).select("*").order("vigencia_inicio", { ascending: false });
+      const { data, error } = await fromUntyped("pjecalc_custas_judiciais").select("*").order("vigencia_inicio", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
@@ -1075,10 +1117,10 @@ function CorrecaoMonetariaView() {
   const { data, isLoading } = useQuery({
     queryKey: ["pjecalc_correcao_monetaria", indice],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pjecalc_correcao_monetaria" as any)
+      const { data, error } = await fromUntyped("pjecalc_correcao_monetaria")
         .select("*").eq("indice", indice).order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
   const rows = data || [];
@@ -1120,10 +1162,10 @@ function JurosMoraView() {
   const { data, isLoading } = useQuery({
     queryKey: ["pjecalc_juros_mora", tipoJuros],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pjecalc_juros_mora" as any)
+      const { data, error } = await fromUntyped("pjecalc_juros_mora")
         .select("*").eq("tipo", tipoJuros).order("competencia", { ascending: false });
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
   const rows = data || [];
@@ -1166,12 +1208,12 @@ function PisosSalariaisView() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["pjecalc_pisos_salariais", filterNome, filterUf],
     queryFn: async () => {
-      let q = supabase.from("pjecalc_pisos_salariais" as any).select("*").order("competencia", { ascending: false }).limit(500);
+      let q = fromUntyped("pjecalc_pisos_salariais").select("*").order("competencia", { ascending: false }).limit(500);
       if (filterUf !== "all") q = q.eq("uf", filterUf);
       if (filterNome) q = q.ilike("nome", `%${filterNome}%`);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
     enabled: searched,
   });
@@ -1231,13 +1273,13 @@ function ValeTransporteView() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["pjecalc_vale_transporte", filterLinha, filterUf, filterMun],
     queryFn: async () => {
-      let q = supabase.from("pjecalc_vale_transporte" as any).select("*").order("vigencia_inicio", { ascending: false }).limit(500);
+      let q = fromUntyped("pjecalc_vale_transporte").select("*").order("vigencia_inicio", { ascending: false }).limit(500);
       if (filterUf !== "all") q = q.eq("uf", filterUf);
       if (filterMun) q = q.ilike("municipio", `%${filterMun}%`);
       if (filterLinha) q = q.ilike("linha", `%${filterLinha}%`);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
     enabled: searched,
   });
@@ -1299,13 +1341,13 @@ function FeriadosView() {
   const { data, isLoading } = useQuery({
     queryKey: ["pjecalc_feriados", filterUf, filterAno],
     queryFn: async () => {
-      let q = supabase.from("pjecalc_feriados" as any).select("*")
+      let q = fromUntyped("pjecalc_feriados").select("*")
         .gte("data", `${filterAno}-01-01`).lte("data", `${filterAno}-12-31`)
         .order("data");
       if (filterUf !== "all") q = q.or(`scope.eq.national,uf.eq.${filterUf}`);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
   const rows = data || [];
@@ -1356,13 +1398,13 @@ function VerbasView() {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["pjecalc_verbas_padrao", filterNome, filterTipo, filterValor],
     queryFn: async () => {
-      let q = supabase.from("pjecalc_verbas_padrao" as any).select("*").eq("ativo", true).order("nome");
+      let q = fromUntyped("pjecalc_verbas_padrao").select("*").eq("ativo", true).order("nome");
       if (filterNome) q = q.ilike("nome", `%${filterNome}%`);
       if (filterTipo !== "all") q = q.eq("tipo", filterTipo);
       if (filterValor !== "all") q = q.eq("valor_tipo", filterValor);
       const { data, error } = await q;
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
     enabled: searched,
   });

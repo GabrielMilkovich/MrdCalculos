@@ -48,7 +48,7 @@ interface LiquidacaoRow {
 }
 
  
-const sb = (table: string): any => supabase.from(table as any);
+const sb = (table: string): any => supabase.from(table as Record<string, unknown>);
 
 /**
  * Normaliza o JSON para hash estável (chaves ordenadas).

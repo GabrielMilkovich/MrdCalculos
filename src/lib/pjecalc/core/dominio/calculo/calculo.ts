@@ -761,15 +761,50 @@ export class Calculo {
       }
     }
 
-    // 4-13. Módulos secundários (ordem Java)
+    // 4-13. Modulos secundarios (ordem Java 1486-1531).
     this.salarioFamilia?.liquidar();
     this.seguroDesemprego?.liquidar();
     this.fgts?.liquidar();
     this.inss?.liquidar(this.getDataDeLiquidacao());
     this.previdenciaPrivada?.liquidar();
+    // Java 1519: calcularJuros() entre PrevPriv e PensaoAlimenticia.
+    this.calcularJuros();
     this.pensaoAlimenticia?.liquidar();
+    // Java 1524-1526: Multas — itera multasDoCalculo + chama liquidar().
+    for (const m of this.multas) {
+      const multa = m as { liquidar?(): void };
+      multa.liquidar?.();
+    }
+    // Java 1527-1529: Honorarios — itera + liquidar().
+    for (const h of this.honorarios) {
+      const honor = h as { liquidar?(): void };
+      honor.liquidar?.();
+    }
     this.irpf?.liquidar();
     this.custasJudiciais?.liquidar();
+  }
+
+  /**
+   * Java Calculo.calcularJuros (linha 1519 chamada). Itera apuracoesDeJuros
+   * e cada modulo (FGTS/INSS/etc) que aplica juros. Implementacao stub
+   * que delega para os modulos individuais ja capazes de calcular seus
+   * proprios juros (cada *.liquidar() ja popula taxaDeJuros internamente).
+   */
+  calcularJuros(): void {
+    // Java orquestra TabelaDeJurosDoCalculo + apuracoes; aqui delegamos
+    // pois cada modulo (FGTS/INSS/PrevPriv/SF/Seguro) ja calcula juros
+    // internamente em seu liquidar(). Esta implementacao pode evoluir para
+    // 1:1 quando ApuracaoDeJuros entidade for portada.
+    const fgts = this.fgts as null | { calcularJuros?(): void };
+    const inss = this.inss as null | { calcularJuros?(): void };
+    const prev = this.previdenciaPrivada as null | { calcularJuros?(): void };
+    const sf = this.salarioFamilia as null | { calcularJuros?(): void };
+    const seg = this.seguroDesemprego as null | { calcularJuros?(): void };
+    fgts?.calcularJuros?.();
+    inss?.calcularJuros?.();
+    prev?.calcularJuros?.();
+    sf?.calcularJuros?.();
+    seg?.calcularJuros?.();
   }
 
   /**
@@ -985,6 +1020,64 @@ export class Calculo {
   }
 
   /**
+   * Java Calculo.obterFaltasNaoJustificadas (linha 1096) — soma dias de
+   * faltas nao justificadas que coincidem com o periodo informado.
+   */
+  obterFaltasNaoJustificadas(periodo: { inicial: Date; final: Date } | { inicial: Date | null; final: Date | null }): number {
+    if (!periodo.inicial || !periodo.final) return 0;
+    let total = 0;
+    for (const f of this.faltas) {
+      const falta = f as {
+        getFaltaJustificada?(): boolean;
+        getPeriodoDaExcecao?(): { totalDeDiasCoincidentesComEste?(p: unknown): number };
+      };
+      if (falta.getFaltaJustificada?.()) continue;
+      const dias = falta.getPeriodoDaExcecao?.().totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+      total += dias;
+    }
+    return total;
+  }
+
+  /** Java Calculo.obterFaltasJustificadas (linha 1121). */
+  obterFaltasJustificadas(periodo: { inicial: Date | null; final: Date | null }): number {
+    if (!periodo.inicial || !periodo.final) return 0;
+    let total = 0;
+    for (const f of this.faltas) {
+      const falta = f as {
+        getFaltaJustificada?(): boolean;
+        getPeriodoDaExcecao?(): { totalDeDiasCoincidentesComEste?(p: unknown): number };
+      };
+      if (!falta.getFaltaJustificada?.()) continue;
+      const dias = falta.getPeriodoDaExcecao?.().totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+      total += dias;
+    }
+    return total;
+  }
+
+  /**
+   * Java Calculo.obterDiasFerias (linha 1146) — soma dias de ferias gozadas
+   * (3 periodos possiveis: gozo1, gozo2, gozo3) coincidentes com o periodo.
+   */
+  obterDiasFerias(periodo: { inicial: Date | null; final: Date | null }): number {
+    if (!periodo.inicial || !periodo.final) return 0;
+    let total = 0;
+    for (const f of this.listaDeFerias) {
+      const ferias = f as {
+        getPeriodoDeGozo1?(): { totalDeDiasCoincidentesComEste?(p: unknown): number; isValido?(): boolean } | null;
+        getPeriodoDeGozo2?(): { totalDeDiasCoincidentesComEste?(p: unknown): number; isValido?(): boolean } | null;
+        getPeriodoDeGozo3?(): { totalDeDiasCoincidentesComEste?(p: unknown): number; isValido?(): boolean } | null;
+      };
+      const g1 = ferias.getPeriodoDeGozo1?.();
+      const g2 = ferias.getPeriodoDeGozo2?.();
+      const g3 = ferias.getPeriodoDeGozo3?.();
+      if (g1) total += g1.totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+      if (g2) total += g2.totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+      if (g3) total += g3.totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+    }
+    return total;
+  }
+
+  /**
    * calcularTotalCorrigido — soma o total corrigido das verbas que compõem
    * o principal. Usado para totalização final do cálculo.
    */
@@ -1003,13 +1096,209 @@ export class Calculo {
   }
 
   /**
-   * calcularBrutoDevidoAoReclamante (stub).
-   * No Java, esse método soma verbas com comporPrincipal=SIM,
-   * devidas ao reclamante, já corrigidas. Consumido por
-   * MaquinaDeCalculoDeHonorarios (BRUTO / BC / BCP).
-   * TODO(fase-10): port fiel ao Java (considera FGTS, INSS, descontos).
+   * Java Calculo.getTotalDeValorCorrigidoDaApuracaoDeJuros (linha 2405).
+   * Soma diferencaCorrigidaParaCalculoDasIncidencias de cada ocorrencia ativa
+   * que tem juros aplicaveis (Java itera apuracoesDeJuros). Aproximacao TS:
+   * itera verbas ativas com comporPrincipal=SIM/N null e suas ocorrencias.
+   */
+  getTotalDeValorCorrigidoDaApuracaoDeJuros(): Decimal {
+    let total: Decimal = ZERO;
+    for (const verba of this.getVerbasAtivas()) {
+      if (verba.getComporPrincipal() === LogicoEnum.NAO) continue;
+      for (const oc of verba.getOcorrenciasAtivas()) {
+        const base = oc.getDiferencaCorrigidaParaCalculoDasIncidencias?.()
+          ?? oc.getDiferencaCorrigida();
+        if (base) total = total.plus(arredondarValorMonetario(base));
+      }
+    }
+    return total;
+  }
+
+  /**
+   * Java Calculo.getTotalDeJurosDaApuracaoDeJuros (linha 2425).
+   * Soma juros consolidados de todas as ocorrencias.
+   */
+  getTotalDeJurosDaApuracaoDeJuros(): Decimal {
+    let total: Decimal = ZERO;
+    for (const verba of this.getVerbasAtivas()) {
+      for (const oc of verba.getOcorrenciasAtivas()) {
+        const juros = oc.getValorDeJuros?.();
+        if (juros) total = total.plus(juros);
+      }
+    }
+    return total;
+  }
+
+  /** Java Calculo.getTotalDeJurosDaApuracaoDeJurosParaIrpfDecimoTerceiro (linha 2436). */
+  getTotalDeJurosDaApuracaoDeJurosParaIrpfDecimoTerceiro(): Decimal {
+    let total: Decimal = ZERO;
+    for (const verba of this.getVerbasAtivas()) {
+      if (!verba.isCaracteristicaDecimoTerceiro?.()) continue;
+      for (const oc of verba.getOcorrenciasAtivas()) {
+        const juros = oc.getValorDeJuros?.();
+        if (juros) total = total.plus(juros);
+      }
+    }
+    return total;
+  }
+
+  /** Java Calculo.getTotalDeJurosDaApuracaoDeJurosParaIrpfFerias (linha 2447). */
+  getTotalDeJurosDaApuracaoDeJurosParaIrpfFerias(): Decimal {
+    let total: Decimal = ZERO;
+    for (const verba of this.getVerbasAtivas()) {
+      if (!verba.isCaracteristicaFerias?.()) continue;
+      for (const oc of verba.getOcorrenciasAtivas()) {
+        const juros = oc.getValorDeJuros?.();
+        if (juros) total = total.plus(juros);
+      }
+    }
+    return total;
+  }
+
+  /** Java Calculo.getTotalDeJurosDaApuracaoDeJurosParaIrpfDemaisVerbas (linha 2458). */
+  getTotalDeJurosDaApuracaoDeJurosParaIrpfDemaisVerbas(): Decimal {
+    let total: Decimal = ZERO;
+    for (const verba of this.getVerbasAtivas()) {
+      if (verba.isCaracteristicaDecimoTerceiro?.() || verba.isCaracteristicaFerias?.()) continue;
+      for (const oc of verba.getOcorrenciasAtivas()) {
+        const juros = oc.getValorDeJuros?.();
+        if (juros) total = total.plus(juros);
+      }
+    }
+    return total;
+  }
+
+  /** Java Calculo.getTotalGeralDaApuracaoDeJuros (linha 2469). */
+  getTotalGeralDaApuracaoDeJuros(): Decimal {
+    return this.getTotalDeValorCorrigidoDaApuracaoDeJuros().plus(this.getTotalDeJurosDaApuracaoDeJuros());
+  }
+
+  /**
+   * Java Calculo.getValorTotalMultasDoTipoReclamanteReclamado (linha 2305).
+   * Soma valor das multas com Devedor=RECLAMANTE, Credor=RECLAMADO.
+   * Implementacao defensiva — `multas` eh Set<unknown> ate a entidade Multa
+   * ser totalmente portada. Usa narrow via duck-typing.
+   */
+  getValorTotalMultasDoTipoReclamanteReclamado(): Decimal {
+    return this.somarMultasFiltrando(m => {
+      const dev = (m as { getTipoDevedor?(): string }).getTipoDevedor?.();
+      const cred = (m as { getTipoCredor?(): string }).getTipoCredor?.();
+      return dev === 'RECLAMANTE' && cred === 'RECLAMADO';
+    });
+  }
+
+  /** Java Calculo.getValorTotalMultasDoTipoReclamadoReclamante (linha 2309). */
+  getValorTotalMultasDoTipoReclamadoReclamante(): Decimal {
+    return this.somarMultasFiltrando(m => {
+      const dev = (m as { getTipoDevedor?(): string }).getTipoDevedor?.();
+      const cred = (m as { getTipoCredor?(): string }).getTipoCredor?.();
+      return dev === 'RECLAMADO' && cred === 'RECLAMANTE';
+    });
+  }
+
+  /** Java Calculo.getValorTotalMultasDoTipoTerceiroReclamado (linha 2313). */
+  getValorTotalMultasDoTipoTerceiroReclamado(): Decimal {
+    return this.somarMultasFiltrando(m => {
+      const dev = (m as { getTipoDevedor?(): string }).getTipoDevedor?.();
+      const cred = (m as { getTipoCredor?(): string }).getTipoCredor?.();
+      return dev === 'TERCEIRO' && cred === 'RECLAMADO';
+    });
+  }
+
+  /** Java Calculo.getValorTotalHonorariosDevidosPeloReclamante (linha 2317). */
+  getValorTotalHonorariosDevidosPeloReclamante(): Decimal {
+    return this.somarHonorariosFiltrando(h => {
+      const dev = (h as { getDevedor?(): string }).getDevedor?.();
+      return dev === 'RECLAMANTE';
+    });
+  }
+
+  /** Java Calculo.getValorTotalHonorariosDevidosPeloReclamado (linha 2321). */
+  getValorTotalHonorariosDevidosPeloReclamado(): Decimal {
+    return this.somarHonorariosFiltrando(h => {
+      const dev = (h as { getDevedor?(): string }).getDevedor?.();
+      return dev === 'RECLAMADO';
+    });
+  }
+
+  /** Helper interno para iterar multas com narrow defensivo. */
+  private somarMultasFiltrando(predicado: (m: unknown) => boolean): Decimal {
+    let total: Decimal = ZERO;
+    for (const m of this.multas) {
+      if (!predicado(m)) continue;
+      const v = (m as { getValor?(): Decimal }).getValor?.();
+      if (v) total = total.plus(v);
+    }
+    return total;
+  }
+
+  /** Helper interno para iterar honorarios com narrow defensivo. */
+  private somarHonorariosFiltrando(predicado: (h: unknown) => boolean): Decimal {
+    let total: Decimal = ZERO;
+    for (const h of this.honorarios) {
+      if (!predicado(h)) continue;
+      const v = (h as { getValor?(): Decimal }).getValor?.();
+      if (v) total = total.plus(v);
+    }
+    return total;
+  }
+
+  /**
+   * Java Calculo.calcularBrutoDevidoAoReclamante (linha 2511) — port 1:1.
+   * Bruto devido = correcao de juros + juros + FGTS (se compor) + multa FGTS
+   * + multa Art.467 - depositos (se deduzir) + SF (se compor) + Seguro
+   * (se compor) + multas Reclamante→Reclamado - multas Reclamado→Reclamante.
+   *
+   * Anterior: stub = calcularTotalCorrigido(). Sai do TODO(fase-10).
    */
   calcularBrutoDevidoAoReclamante(): Decimal {
-    return this.calcularTotalCorrigido();
+    let total: Decimal = this.getTotalDeValorCorrigidoDaApuracaoDeJuros()
+      .plus(this.getTotalDeJurosDaApuracaoDeJuros());
+
+    // FGTS — se comporOPrincipal
+    const fgts = this.fgts as null | {
+      isComporOPrincipal?(): boolean;
+      getTotalDoFgts?(modo?: unknown): Decimal;
+      getTotalDaMultaDoFgts?(): Decimal;
+      getTotalDaMultaDoArtigo467?(): Decimal;
+      getDeduzirDoFGTS?(): boolean;
+      getTotalGeralDoDepositadoOuSacado?(modo?: unknown): Decimal;
+    };
+    if (fgts?.isComporOPrincipal?.()) {
+      total = total.plus(fgts.getTotalDoFgts?.() ?? ZERO);
+      total = total.plus(fgts.getTotalDaMultaDoFgts?.() ?? ZERO);
+      total = total.plus(fgts.getTotalDaMultaDoArtigo467?.() ?? ZERO);
+      if (fgts.getDeduzirDoFGTS?.()) {
+        total = total.minus(fgts.getTotalGeralDoDepositadoOuSacado?.() ?? ZERO);
+      }
+    }
+
+    // Salario Familia — se apurar + comporOPrincipal
+    const sf = this.salarioFamilia as null | {
+      getApurarSalarioFamilia?(): boolean;
+      isComporOPrincipal?(): boolean;
+      getTotalGeral?(): Decimal;
+      getValorTotalDoSalarioFamilia?(): Decimal;
+    };
+    if (sf?.getApurarSalarioFamilia?.() && sf?.isComporOPrincipal?.()) {
+      total = total.plus(sf.getTotalGeral?.() ?? sf.getValorTotalDoSalarioFamilia?.() ?? ZERO);
+    }
+
+    // Seguro Desemprego — se apurar + comporOPrincipal
+    const seg = this.seguroDesemprego as null | {
+      getApurarSeguroDesemprego?(): boolean;
+      isComporOPrincipal?(): boolean;
+      getTotal?(): Decimal;
+      getValorSeguroDesemprego?(): Decimal;
+    };
+    if (seg?.getApurarSeguroDesemprego?.() && seg?.isComporOPrincipal?.()) {
+      total = total.plus(seg.getTotal?.() ?? seg.getValorSeguroDesemprego?.() ?? ZERO);
+    }
+
+    // Multas
+    total = total.plus(this.getValorTotalMultasDoTipoReclamanteReclamado());
+    total = total.minus(this.getValorTotalMultasDoTipoReclamadoReclamante());
+
+    return total;
   }
 }

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { FileBarChart, Loader2, Layers, FileDown } from "lucide-react";
 import {
@@ -69,15 +70,14 @@ export function RelatorioConsolidado({ processoNumero, clienteNome }: Props) {
       const caseIds = cases.map(c => c.id);
 
       // Get all liquidation results for those cases
-      const { data: resultados } = await supabase
-        .from("pjecalc_liquidacao_resultado" as any)
+      const { data: resultados } = await fromUntyped("pjecalc_liquidacao_resultado")
         .select("*")
         .in("case_id", caseIds)
         .order("created_at", { ascending: false });
 
       if (!resultados) return [];
 
-      return (resultados as any[]).map((r: any) => ({
+      return (resultados as unknown[]).map((r: any) => ({
         id: r.id,
         case_id: r.case_id,
         resultado_json: r.resultado_json,

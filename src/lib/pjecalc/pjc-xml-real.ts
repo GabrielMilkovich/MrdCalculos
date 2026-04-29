@@ -855,16 +855,41 @@ export function exportPJCXml(data: PJCReal): string {
 // =====================================================
 
 export function downloadPJCXml(data: PJCReal, nomeArquivo?: string) {
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    throw new Error('downloadPJCXml: ambiente sem suporte a File API.');
+  }
+
   const xml = exportPJCXml(data);
   const blob = new Blob([xml], { type: 'application/xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nomeArquivo || `${data.processo.numero_cnj?.replace(/\D/g, '') || 'CALCULO'}_${data.processo.reclamante_nome?.replace(/\s+/g, '_') || 'RECLAMANTE'}.PJC`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const proc = data.processo?.numero_cnj?.replace(/\D/g, '') || 'CALCULO';
+  const recl = data.processo?.reclamante_nome?.replace(/\s+/g, '_') || 'RECLAMANTE';
+  const fallback = `${proc}_${recl}.PJC`;
+  const safeName = (nomeArquivo || fallback)
+    .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
+    .trim()
+    .slice(0, 200) || fallback;
+
+  let a: HTMLAnchorElement | null = null;
+  try {
+    a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+  } finally {
+    try {
+      if (a && a.parentNode) a.parentNode.removeChild(a);
+    } catch {
+      /* ignore */
+    }
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 // =====================================================

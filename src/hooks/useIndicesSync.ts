@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 
 export interface SyncState {
@@ -18,14 +19,13 @@ export function useIndicesSync() {
 
   const checkStatus = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("sync_status" as any)
+      const { data, error } = await fromUntyped("sync_status")
         .select("*")
         .in("serie_id", [10764, 4390]);
 
       if (error) throw error;
 
-      const rows = data as any[];
+      const rows = data as unknown[];
       if (!rows || rows.length === 0) {
         setState({ status: "stale", lastSync: null, error: null });
         return;

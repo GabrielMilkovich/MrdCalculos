@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import {
   Upload, Loader2, CheckCircle2, AlertTriangle,
@@ -117,10 +118,10 @@ export function CTPSUploader({ caseId, onExtracted }: Props) {
           });
         } else if (item.field_key === "admissao" || item.field_key === "demissao") {
           // Update dados do processo
-          await supabase.from("pjecalc_parametros" as any).upsert({
+          await fromUntyped("pjecalc_parametros").upsert({
             case_id: caseId,
             [item.field_key === "admissao" ? "data_admissao" : "data_demissao"]: item.valor,
-          }, { onConflict: "case_id" } as any);
+          }, { onConflict: "case_id" } as Record<string, unknown>);
         }
       }
 
@@ -151,7 +152,7 @@ export function CTPSUploader({ caseId, onExtracted }: Props) {
       
       for (const ev of confirmed) {
         if (ev.tipo === "FERIAS") {
-          await supabase.from("pjecalc_ferias" as any).insert({
+          await fromUntyped("pjecalc_ferias").insert({
             case_id: caseId,
             periodo_aquisitivo_inicio: ev.aquisitivo_inicio || ev.data_inicio,
             periodo_aquisitivo_fim: ev.aquisitivo_fim || ev.data_fim,
@@ -161,7 +162,7 @@ export function CTPSUploader({ caseId, onExtracted }: Props) {
             situacao: ev.situacao || "GOZADAS",
           });
         } else {
-          await supabase.from("pjecalc_faltas" as any).insert({
+          await fromUntyped("pjecalc_faltas").insert({
             case_id: caseId,
             data_inicial: ev.data_inicio,
             data_final: ev.data_fim,

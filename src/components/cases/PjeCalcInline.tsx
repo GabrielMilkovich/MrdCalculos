@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 
 // Module components
+import { AutoFillReviewPanel } from "./AutoFillReviewPanel";
 import { ModuloDadosProcesso } from "./pjecalc/ModuloDadosProcesso";
 import { ModuloCartaoPonto } from "./pjecalc/ModuloCartaoPonto";
 import { ModuloCartaoPontoDiario } from "./pjecalc/ModuloCartaoPontoDiario";
@@ -214,65 +216,65 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const { data: params } = useQuery({
     queryKey: ["pjecalc_parametros", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("pjecalc_parametros" as any).select("*").eq("case_id", caseId).maybeSingle();
+      const { data, error } = await fromUntyped("pjecalc_parametros").select("*").eq("case_id", caseId).maybeSingle();
       if (error) throw error;
-      return data as any;
+      return data as unknown as Record<string, unknown> | null;
     },
   });
 
   const { data: contract } = useQuery({
     queryKey: ["employment_contract", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("employment_contracts" as any).select("*").eq("case_id", caseId).maybeSingle();
-      return data as any;
+      const { data } = await fromUntyped("employment_contracts").select("*").eq("case_id", caseId).maybeSingle();
+      return data as unknown as Record<string, unknown> | null;
     },
   });
 
   const { data: faltas = [] } = useQuery({
     queryKey: ["pjecalc_faltas", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_faltas" as any).select("*").eq("case_id", caseId).order("data_inicial");
-      return (data || []) as any[];
+      const { data } = await fromUntyped("pjecalc_faltas").select("*").eq("case_id", caseId).order("data_inicial");
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
   const { data: ferias = [] } = useQuery({
     queryKey: ["pjecalc_ferias", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_ferias" as any).select("*").eq("case_id", caseId).order("periodo_aquisitivo_inicio");
-      return (data || []) as any[];
+      const { data } = await fromUntyped("pjecalc_ferias").select("*").eq("case_id", caseId).order("periodo_aquisitivo_inicio");
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
   const { data: historicos = [] } = useQuery({
     queryKey: ["pjecalc_historico", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_historico_salarial" as any).select("*").eq("case_id", caseId).order("periodo_inicio");
-      return (data || []) as any[];
+      const { data } = await fromUntyped("pjecalc_historico_salarial").select("*").eq("case_id", caseId).order("periodo_inicio");
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
   const { data: verbas = [] } = useQuery({
     queryKey: ["pjecalc_verbas", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_verbas" as any).select("*").eq("case_id", caseId).order("ordem");
-      return (data || []) as any[];
+      const { data } = await fromUntyped("pjecalc_verbas").select("*").eq("case_id", caseId).order("ordem");
+      return (data ?? []) as unknown as Record<string, unknown>[];
     },
   });
 
   const { data: dadosProcesso } = useQuery({
     queryKey: ["pjecalc_dados_processo", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_dados_processo" as any).select("*").eq("case_id", caseId).maybeSingle();
-      return data as any;
+      const { data } = await fromUntyped("pjecalc_dados_processo").select("*").eq("case_id", caseId).maybeSingle();
+      return data as unknown as Record<string, unknown> | null;
     },
   });
 
   const { data: resultado } = useQuery({
     queryKey: ["pjecalc_liquidacao", caseId],
     queryFn: async () => {
-      const { data } = await supabase.from("pjecalc_liquidacao_resultado" as any).select("*").eq("case_id", caseId).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      return data as any;
+      const { data } = await fromUntyped("pjecalc_liquidacao_resultado").select("*").eq("case_id", caseId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      return data as unknown as Record<string, unknown> | null;
     },
   });
 
@@ -312,7 +314,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         sabado_dia_util: params.sabado_dia_util ?? true,
         considerar_feriado_estadual: params.considerar_feriado_estadual || false,
         considerar_feriado_municipal: params.considerar_feriado_municipal || false,
-        tipo_mes: ((params as any).tipo_mes as 'comercial' | 'civil') || 'comercial',
+        tipo_mes: ((params as Record<string, unknown>).tipo_mes as 'comercial' | 'civil') || 'comercial',
         comentarios: params.comentarios || '',
       });
     } else if (contract) {
@@ -320,7 +322,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         ...prev,
         data_admissao: contract.data_admissao || '',
         data_demissao: contract.data_demissao || '',
-        carga_horaria_padrao: (contract.jornada_contratual as any)?.divisor || 220,
+        carga_horaria_padrao: (contract.jornada_contratual as Record<string, unknown>)?.divisor || 220,
       }));
     }
   }, [params, contract]);
@@ -376,9 +378,9 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         comentarios: formParams.comentarios,
       };
       if (params?.id) {
-        await supabase.from("pjecalc_parametros" as any).update(payload).eq("id", params.id);
+        await fromUntyped("pjecalc_parametros").update(payload).eq("id", params.id);
       } else {
-        await supabase.from("pjecalc_parametros" as any).insert(payload);
+        await fromUntyped("pjecalc_parametros").insert(payload);
       }
       queryClient.invalidateQueries({ queryKey: ["pjecalc_parametros", caseId] });
       toast.success("Parâmetros salvos!");
@@ -482,7 +484,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
       case 'esocial': return (
         <ModuloESocial
           caseId={caseId}
-          resultado={(resultado as any) ?? null}
+          resultado={(resultado as Record<string, unknown>) ?? null}
           dadosProcesso={dadosProcesso as any}
           params={{ data_admissao: formParams.data_admissao, data_demissao: formParams.data_demissao }}
         />
@@ -498,6 +500,17 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   };
 
   // ── PARÂMETROS ──
+  // Highlight de campos criticos ausentes (vinculado ao completeness score)
+  // — campos marcados com "*" pintam a borda em amarelo quando vazios.
+  const missingCritical = {
+    estado: !formParams.estado,
+    municipio: !formParams.municipio?.trim(),
+    data_admissao: !formParams.data_admissao,
+    data_ajuizamento: !formParams.data_ajuizamento,
+    remuneracao: !formParams.maior_remuneracao && !formParams.ultima_remuneracao && historicos.length === 0,
+  };
+  const criticalCls = "border-yellow-400 ring-1 ring-yellow-400/40 bg-yellow-50/40 dark:bg-yellow-950/20";
+
   const renderParametros = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -507,28 +520,52 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
           Salvar
         </Button>
       </div>
+
+      {/* Painel de revisão de auto-preenchimento — propostas geradas a
+          partir dos documentos enviados. Apenas exibido quando ha
+          propostas pendentes (componente faz a query interna). */}
+      <AutoFillReviewPanel caseId={caseId} onAfterApply={() => {
+        // Refetch dos parametros apos aplicar uma proposta.
+        // Implementacao via React Query invalidation seria ideal mas
+        // o useState/useEffect interno do PjeCalcInline ja captura
+        // mudancas via supabase realtime indireto (saveParams call).
+      }} />
+
+      {(missingCritical.estado || missingCritical.municipio || missingCritical.data_admissao || missingCritical.data_ajuizamento || missingCritical.remuneracao) && (
+        <Card className="border-yellow-400 bg-yellow-50/50 dark:bg-yellow-950/20">
+          <CardContent className="p-3 flex items-start gap-2 text-xs">
+            <AlertCircle className="h-4 w-4 text-yellow-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-yellow-800 dark:text-yellow-200">Campos críticos pendentes</div>
+              <div className="text-yellow-700 dark:text-yellow-300/80">
+                Preencha os campos destacados em amarelo para liberar a liquidação.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Localização</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4">
           <div>
             <Label className="text-xs">Estado *</Label>
             <Select value={formParams.estado} onValueChange={v => setFormParams(p => ({ ...p, estado: v }))}>
-              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className={cn("mt-1 h-8 text-xs", missingCritical.estado && criticalCls)}><SelectValue /></SelectTrigger>
               <SelectContent>{UFS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>
             <Label className="text-xs">Município *</Label>
-            <Input value={formParams.municipio} onChange={e => setFormParams(p => ({ ...p, municipio: e.target.value }))} className="mt-1 h-8 text-xs" />
+            <Input value={formParams.municipio} onChange={e => setFormParams(p => ({ ...p, municipio: e.target.value }))} className={cn("mt-1 h-8 text-xs", missingCritical.municipio && criticalCls)} />
           </div>
         </CardContent>
       </Card>
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Datas do Contrato</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div><Label className="text-xs">Admissão *</Label><Input type="date" value={formParams.data_admissao} onChange={e => setFormParams(p => ({ ...p, data_admissao: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+          <div><Label className="text-xs">Admissão *</Label><Input type="date" value={formParams.data_admissao} onChange={e => setFormParams(p => ({ ...p, data_admissao: e.target.value }))} className={cn("mt-1 h-8 text-xs", missingCritical.data_admissao && criticalCls)} /></div>
           <div><Label className="text-xs">Demissão</Label><Input type="date" value={formParams.data_demissao} onChange={e => setFormParams(p => ({ ...p, data_demissao: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
-          <div><Label className="text-xs">Ajuizamento *</Label><Input type="date" value={formParams.data_ajuizamento} onChange={e => setFormParams(p => ({ ...p, data_ajuizamento: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+          <div><Label className="text-xs">Ajuizamento *</Label><Input type="date" value={formParams.data_ajuizamento} onChange={e => setFormParams(p => ({ ...p, data_ajuizamento: e.target.value }))} className={cn("mt-1 h-8 text-xs", missingCritical.data_ajuizamento && criticalCls)} /></div>
           <div><Label className="text-xs">Data Inicial</Label><Input type="date" value={formParams.data_inicial} onChange={e => setFormParams(p => ({ ...p, data_inicial: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
         </CardContent>
       </Card>
@@ -558,8 +595,8 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Remunerações</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4">
-          <div><Label className="text-xs">Maior Remuneração (R$)</Label><Input type="number" step="0.01" value={formParams.maior_remuneracao} onChange={e => setFormParams(p => ({ ...p, maior_remuneracao: e.target.value }))} className="mt-1 h-8 text-xs" placeholder="0,00" /></div>
-          <div><Label className="text-xs">Última Remuneração (R$)</Label><Input type="number" step="0.01" value={formParams.ultima_remuneracao} onChange={e => setFormParams(p => ({ ...p, ultima_remuneracao: e.target.value }))} className="mt-1 h-8 text-xs" placeholder="0,00" /></div>
+          <div><Label className="text-xs">Maior Remuneração (R$)</Label><Input type="number" step="0.01" value={formParams.maior_remuneracao} onChange={e => setFormParams(p => ({ ...p, maior_remuneracao: e.target.value }))} className={cn("mt-1 h-8 text-xs", missingCritical.remuneracao && criticalCls)} placeholder="0,00" /></div>
+          <div><Label className="text-xs">Última Remuneração (R$)</Label><Input type="number" step="0.01" value={formParams.ultima_remuneracao} onChange={e => setFormParams(p => ({ ...p, ultima_remuneracao: e.target.value }))} className={cn("mt-1 h-8 text-xs", missingCritical.remuneracao && criticalCls)} placeholder="0,00" /></div>
         </CardContent>
       </Card>
       <Card>
@@ -637,7 +674,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
     if (!editingVerba) return;
     setSavingVerba(true);
     try {
-      await supabase.from("pjecalc_verbas" as any).update({
+      await fromUntyped("pjecalc_verbas").update({
         nome: editForm.nome,
         multiplicador: Number(editForm.multiplicador),
         divisor_informado: Number(editForm.divisor_informado),
@@ -668,7 +705,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   }, []);
 
   const toggleReflexaAtiva = useCallback(async (reflexaId: string, currentAtiva: boolean) => {
-    await supabase.from("pjecalc_verbas" as any).update({ ativa: !currentAtiva }).eq("id", reflexaId);
+    await fromUntyped("pjecalc_verbas").update({ ativa: !currentAtiva }).eq("id", reflexaId);
     queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
   }, [caseId, queryClient]);
 
@@ -696,7 +733,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                 const periodo = formParams.data_admissao && formParams.data_demissao
                   ? { inicio: formParams.data_admissao, fim: formParams.data_demissao }
                   : { inicio: new Date().toISOString().slice(0, 10), fim: new Date().toISOString().slice(0, 10) };
-                await supabase.from("pjecalc_verbas" as any).insert({
+                await fromUntyped("pjecalc_verbas").insert({
                   case_id: caseId, nome: `Verba ${verbas.length + 1}`, tipo: 'principal',
                   periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: verbas.length,
                 });
@@ -706,12 +743,12 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                 const periodo = formParams.data_admissao && formParams.data_demissao
                   ? { inicio: formParams.data_admissao, fim: formParams.data_demissao }
                   : { inicio: new Date().toISOString().slice(0, 10), fim: new Date().toISOString().slice(0, 10) };
-                const { data: principalData } = await supabase.from("pjecalc_verbas" as any).insert({
+                const { data: principalData } = await fromUntyped("pjecalc_verbas").insert({
                   case_id: caseId, nome: 'Horas Extras 50%', caracteristica: 'comum', ocorrencia_pagamento: 'mensal',
                   tipo: 'principal', multiplicador: 1.5, divisor_informado: formParams.carga_horaria_padrao || 220,
                   periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: verbas.length,
                 }).select("id").single();
-                const principalId = (principalData as any)?.id;
+                const principalId = (principalData as Record<string, unknown>)?.id;
                 if (principalId) {
                   const reflexas = [
                     { nome: '13º SALÁRIO SOBRE HORAS EXTRAS', caracteristica: '13_salario', ocorrencia_pagamento: 'dezembro', multiplicador: 1, divisor_informado: 12 },
@@ -722,7 +759,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                   ];
                   for (let i = 0; i < reflexas.length; i++) {
                     const { ativa, ...rest } = reflexas[i] as any;
-                    await supabase.from("pjecalc_verbas" as any).insert({
+                    await fromUntyped("pjecalc_verbas").insert({
                       case_id: caseId, ...rest, tipo: 'reflexa',
                       periodo_inicio: periodo.inicio, periodo_fim: periodo.fim,
                       ordem: verbas.length + 1 + i,
@@ -774,7 +811,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                     <Button variant="ghost" size="icon" className="h-6 w-6" title="Duplicar"
                       onClick={async () => {
                         const periodo = { inicio: principal.periodo_inicio, fim: principal.periodo_fim };
-                        const { data: newP } = await supabase.from("pjecalc_verbas" as any).insert({
+                        const { data: newP } = await fromUntyped("pjecalc_verbas").insert({
                           case_id: caseId, nome: principal.nome + ' (cópia)', tipo: 'principal',
                           caracteristica: principal.caracteristica, ocorrencia_pagamento: principal.ocorrencia_pagamento,
                           multiplicador: principal.multiplicador, divisor_informado: principal.divisor_informado,
@@ -792,8 +829,8 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" title="Excluir"
                       onClick={async () => {
                         // Delete reflexas first, then principal
-                        for (const r of reflexas) await supabase.from("pjecalc_verbas" as any).delete().eq("id", r.id);
-                        await supabase.from("pjecalc_verbas" as any).delete().eq("id", principal.id);
+                        for (const r of reflexas) await fromUntyped("pjecalc_verbas").delete().eq("id", r.id);
+                        await fromUntyped("pjecalc_verbas").delete().eq("id", principal.id);
                         queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
                       }}>
                       <Trash2 className="h-3 w-3" />
@@ -845,7 +882,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                           <div className="text-right">
                             <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive hover:text-destructive"
                               onClick={async () => {
-                                await supabase.from("pjecalc_verbas" as any).delete().eq("id", ref.id);
+                                await fromUntyped("pjecalc_verbas").delete().eq("id", ref.id);
                                 queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
                               }}>
                               <Trash2 className="h-3 w-3" />
@@ -871,7 +908,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                   <div className="text-right">
                     <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive"
                       onClick={async () => {
-                        await supabase.from("pjecalc_verbas" as any).delete().eq("id", v.id);
+                        await fromUntyped("pjecalc_verbas").delete().eq("id", v.id);
                         queryClient.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });
                       }}>
                       <Trash2 className="h-3 w-3" />

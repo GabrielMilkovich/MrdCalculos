@@ -5,6 +5,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 
 export interface MRDState {
   version: string;
@@ -57,23 +58,30 @@ export async function exportMRDState(caseId: string): Promise<MRDState> {
     atualizRes,
     resultadoRes,
   ] = await Promise.all([
-    supabase.from("pjecalc_calculos" as any).select("*").eq("case_id", caseId).maybeSingle(),
-    supabase.from("pjecalc_evento_intervalo" as any).select("*").eq("calculo_id", caseId).order("data_inicio"),
-    supabase.from("pjecalc_ponto_diario" as any).select("*").eq("case_id", caseId).order("data"),
-    supabase.from("pjecalc_hist_salarial" as any).select("*").eq("calculo_id", caseId),
-    supabase.from("pjecalc_hist_salarial_mes" as any).select("*").eq("calculo_id", caseId).order("competencia"),
-    supabase.from("pjecalc_verbas" as any).select("*").eq("case_id", caseId).order("ordem"),
-    supabase.from("pjecalc_ocorrencias" as any).select("*").eq("case_id", caseId).order("competencia"),
-    supabase.from("pjecalc_atualizacao_config" as any).select("*").eq("case_id", caseId).maybeSingle(),
-    supabase.from("pjecalc_liquidacao_resultado" as any).select("*").eq("case_id", caseId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    fromUntyped("pjecalc_calculos").select("*").eq("case_id", caseId).maybeSingle(),
+    fromUntyped("pjecalc_evento_intervalo").select("*").eq("calculo_id", caseId).order("data_inicio"),
+    fromUntyped("pjecalc_ponto_diario").select("*").eq("case_id", caseId).order("data"),
+    fromUntyped("pjecalc_hist_salarial").select("*").eq("calculo_id", caseId),
+    fromUntyped("pjecalc_hist_salarial_mes").select("*").eq("calculo_id", caseId).order("competencia"),
+    fromUntyped("pjecalc_verbas").select("*").eq("case_id", caseId).order("ordem"),
+    fromUntyped("pjecalc_ocorrencias").select("*").eq("case_id", caseId).order("competencia"),
+    fromUntyped("pjecalc_atualizacao_config").select("*").eq("case_id", caseId).maybeSingle(),
+    fromUntyped("pjecalc_liquidacao_resultado").select("*").eq("case_id", caseId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
-  const calc = (calcRes as any).data;
-  const eventos = ((eventosRes as any).data || []) as any[];
-  
+  // Tipos das respostas: tabelas pjecalc_* não estão no schema gerado em
+  // src/integrations/supabase/types.ts. Usamos `unknown` + helper para
+  // extrair `.data` sem `as any` em cada acesso.
+  type PjeCalcRowGeneric = Record<string, unknown>;
+  type SupabaseSingleRes = { data: PjeCalcRowGeneric | null };
+  type SupabaseListRes = { data: PjeCalcRowGeneric[] | null };
+
+  const calc = (calcRes as unknown as SupabaseSingleRes).data;
+  const eventos = ((eventosRes as unknown as SupabaseListRes).data ?? []);
+
   // Handle ponto with pagination (may exceed 1000 rows)
-  let ponto: any[] = [];
-  const pontoData = (pontoRes as any).data || [];
+  let ponto: PjeCalcRowGeneric[] = [];
+  const pontoData = (pontoRes as unknown as SupabaseListRes).data ?? [];
   ponto = pontoData;
   if (pontoData.length === 1000) {
     // Fetch remaining pages
@@ -81,24 +89,25 @@ export async function exportMRDState(caseId: string): Promise<MRDState> {
     let hasMore = true;
     while (hasMore) {
       const moreRes = await supabase
-        .from("pjecalc_ponto_diario" as any)
+        // tabela custom fora do schema gerado
+        .from("pjecalc_ponto_diario" as never)
         .select("*")
         .eq("case_id", caseId)
         .order("data")
         .range(offset, offset + 999);
-      const moreData = (moreRes as any).data || [];
+      const moreData = (moreRes as unknown as SupabaseListRes).data ?? [];
       ponto = [...ponto, ...moreData];
       hasMore = moreData.length === 1000;
       offset += 1000;
     }
   }
 
-  const hist = ((histRes as any).data || []) as any[];
-  const histMes = ((histMesRes as any).data || []) as any[];
-  const verbas = ((verbasRes as any).data || []) as any[];
-  const ocorr = ((ocorrRes as any).data || []) as any[];
-  const atualiz = (atualizRes as any).data;
-  const resultado = (resultadoRes as any).data;
+  const hist = ((histRes as unknown as SupabaseListRes).data ?? []);
+  const histMes = ((histMesRes as unknown as SupabaseListRes).data ?? []);
+  const verbas = ((verbasRes as unknown as SupabaseListRes).data ?? []);
+  const ocorr = ((ocorrRes as unknown as SupabaseListRes).data ?? []);
+  const atualiz = (atualizRes as unknown as SupabaseSingleRes).data;
+  const resultado = (resultadoRes as unknown as SupabaseSingleRes).data;
 
   const stateWithoutHash: Omit<MRDState, 'hash'> = {
     version: '1.0.0',
@@ -126,16 +135,39 @@ export async function exportMRDState(caseId: string): Promise<MRDState> {
 }
 
 export function downloadMRDState(state: MRDState, filename?: string) {
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    throw new Error('downloadMRDState: ambiente sem suporte a File API.');
+  }
+
   const json = JSON.stringify(state, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename || `mrdstate_${state.meta.processo_cnj || 'calculo'}_${new Date().toISOString().slice(0, 10)}.mrdstate.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const fallback = `mrdstate_${state.meta?.processo_cnj || 'calculo'}_${new Date().toISOString().slice(0, 10)}.mrdstate.json`;
+  const safeName = (filename || fallback)
+    .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
+    .trim()
+    .slice(0, 200) || fallback;
+
+  let a: HTMLAnchorElement | null = null;
+  try {
+    a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+  } finally {
+    try {
+      if (a && a.parentNode) a.parentNode.removeChild(a);
+    } catch {
+      /* ignore */
+    }
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export function validateMRDStateIntegrity(state: MRDState): boolean {

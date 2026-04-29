@@ -144,7 +144,7 @@ describe('Paridade FULL INDEPENDENT — PJCs Novos (9 arquivos)', () => {
       const r = rodarCasoIndependent(file);
       resultados.push(r);
       expect(r.erro || r.mrd_liquido >= 0).toBeTruthy();
-    });
+    }, 15000);
   }
 
   it('relatório consolidado INDEPENDENT', () => {

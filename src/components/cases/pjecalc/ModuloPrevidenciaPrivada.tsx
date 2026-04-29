@@ -100,7 +100,8 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
 
               <div className="border-t pt-3 mt-3 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground">Configurações avançadas</p>
-                <p className="text-[10px] text-emerald-700 mb-1 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ <strong>Base de Cálculo</strong> e <strong>Deduzir IR</strong> agora são editáveis (antes hardcoded). 🔬 Teto Mensal e Juros em estudo — aguarda PJC com prev. privada ativa (0/47 no corpus).</p>
+                <p className="text-[10px] text-emerald-700 mb-1 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded">✓ <strong>Base de Cálculo</strong> e <strong>Deduzir IR</strong> agora são editáveis (antes hardcoded).</p>
+                <p className="text-[10px] text-emerald-800 mb-1 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded border border-emerald-200 dark:border-emerald-900"><strong>✓ Teto Mensal e Juros habilitados (v3.6).</strong> Teto clampa a base mensal (Art. 6º LC 109/2001). Juros: "trabalhista" usa tabela do principal; "pago_atraso" aplica desde data efetiva; "nenhum" desativa juros.</p>
                 <div className="grid grid-cols-2 gap-3">
                   <div title="Base sobre a qual incide o percentual: diferença (devido - pago), valor devido total, ou valor corrigido.">
                     <Label className="text-xs">Base de Cálculo</Label>
@@ -113,13 +114,13 @@ export function ModuloPrevidenciaPrivada({ caseId }: Props) {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div title="Teto mensal: alíquota não incide sobre o valor que exceder esse limite. Útil quando o plano de previdência tem teto contratual.">
+                  <div title="Teto mensal: alíquota não incide sobre o valor que exceder esse limite. Útil quando o plano de previdência tem teto contratual (Art. 6º LC 109/2001).">
                     <Label className="text-xs">Teto Mensal (R$)</Label>
                     <Input type="number" step="0.01" value={tetoMensal} onChange={e => setTetoMensal(e.target.value)} className="h-8 text-xs mt-1" placeholder="Sem teto" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div title="Como aplicar juros sobre prev. privada atrasada. Trabalhista (default) usa o mesmo dos demais. Pago em atraso aplica juros desde a data efetiva.">
+                  <div title="Como aplicar juros sobre prev. privada atrasada. Trabalhista (default) usa a tabela do principal. Pago em atraso aplica juros desde a data efetiva. Sem juros desativa o componente.">
                     <Label className="text-xs">Juros</Label>
                     <Select value={juros} onValueChange={v => setJuros(v as 'trabalhista' | 'pago_atraso' | 'nenhum')}>
                       <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>

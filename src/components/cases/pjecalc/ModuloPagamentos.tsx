@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import Decimal from "decimal.js";
@@ -17,8 +18,8 @@ Decimal.set({ precision: 20 });
 // =====================================================
 // MÓDULO PAGAMENTOS — baseado em Pagamento.java (PJe-Calc v2.15.1)
 // Persiste em pjecalc_pagamentos.
-// TODO: dropdown de verba_base_id usa texto livre por ora; plugar em pjecalc_verba_base quando integrado.
-// TODO: dropdown de documento_id idem.
+// verba_base_id: select carregado de pjecalc_verba_base para o caso.
+// documento_id: select carregado de documents para o caso.
 // =====================================================
 
 interface Props { caseId: string; }
@@ -58,13 +59,40 @@ export function ModuloPagamentos({ caseId }: Props) {
   const { data: pagamentos = [], isLoading } = useQuery({
     queryKey: ["pjecalc_pagamentos", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_pagamentos" as any)
+      const { data, error } = await fromUntyped("pjecalc_pagamentos")
         .select("*")
         .eq("case_id", caseId)
         .order("competencia", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as any[];
+      return (data ?? []) as unknown[];
+    },
+  });
+
+  // Opções para selects: verbas-base do caso e documentos do caso.
+  const { data: verbasBase = [] } = useQuery({
+    queryKey: ["pjecalc_verba_base_options", caseId],
+    queryFn: async () => {
+      const { data, error } = await fromUntyped("pjecalc_verba_base")
+        .select("id, nome, codigo")
+        .eq("case_id", caseId)
+        .order("ordem", { ascending: true })
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []) as { id: string; nome: string | null; codigo: string | null }[];
+    },
+  });
+
+  const { data: docOptions = [] } = useQuery({
+    queryKey: ["case_documents_options", caseId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, file_name, tipo")
+        .eq("case_id", caseId)
+        .order("uploaded_em", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as { id: string; file_name: string | null; tipo: string | null }[];
     },
   });
 
@@ -112,14 +140,12 @@ export function ModuloPagamentos({ caseId }: Props) {
         verba_base_id: editing.verba_base_id || null,
       };
       if (editing.id) {
-        const { error } = await supabase
-          .from("pjecalc_pagamentos" as any)
+        const { error } = await fromUntyped("pjecalc_pagamentos")
           .update(payload)
           .eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("pjecalc_pagamentos" as any)
+        const { error } = await fromUntyped("pjecalc_pagamentos")
           .insert(payload);
         if (error) throw error;
       }
@@ -136,7 +162,7 @@ export function ModuloPagamentos({ caseId }: Props) {
   const deletePag = async (id: string) => {
     if (!confirm("Excluir este pagamento?")) return;
     try {
-      const { error } = await supabase.from("pjecalc_pagamentos" as any).delete().eq("id", id);
+      const { error } = await fromUntyped("pjecalc_pagamentos").delete().eq("id", id);
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["pjecalc_pagamentos", caseId] });
       toast.success("Pagamento excluído!");
@@ -242,15 +268,44 @@ export function ModuloPagamentos({ caseId }: Props) {
               <Label className="text-xs">Descrição</Label>
               <Input value={editing.descricao} onChange={(e) => setEditing((p) => ({ ...p, descricao: e.target.value }))} className="h-8 text-xs" />
             </div>
-            {/* TODO: trocar por select de documentos quando disponível */}
             <div>
-              <Label className="text-xs">Documento (ID)</Label>
-              <Input value={editing.documento_id} onChange={(e) => setEditing((p) => ({ ...p, documento_id: e.target.value }))} className="h-8 text-xs" placeholder="uuid opcional" />
+              <Label className="text-xs">Documento</Label>
+              <Select
+                value={editing.documento_id || "__none__"}
+                onValueChange={(v) =>
+                  setEditing((p) => ({ ...p, documento_id: v === "__none__" ? "" : v }))
+                }
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="(opcional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— sem documento —</SelectItem>
+                  {docOptions.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.file_name ?? d.id.slice(0, 8)}
+                      {d.tipo ? ` (${d.tipo})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            {/* TODO: trocar por select de verba_base quando disponível */}
             <div>
-              <Label className="text-xs">Verba Base (ID)</Label>
-              <Input value={editing.verba_base_id} onChange={(e) => setEditing((p) => ({ ...p, verba_base_id: e.target.value }))} className="h-8 text-xs" placeholder="uuid opcional" />
+              <Label className="text-xs">Verba Base</Label>
+              <Select
+                value={editing.verba_base_id || "__none__"}
+                onValueChange={(v) =>
+                  setEditing((p) => ({ ...p, verba_base_id: v === "__none__" ? "" : v }))
+                }
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="(opcional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— sem verba —</SelectItem>
+                  {verbasBase.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.codigo ? `[${v.codigo}] ` : ""}{v.nome ?? v.id.slice(0, 8)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="col-span-2 flex items-center gap-2">
               <Checkbox checked={editing.abatimento_global} onCheckedChange={(v) => setEditing((p) => ({ ...p, abatimento_global: !!v }))} />

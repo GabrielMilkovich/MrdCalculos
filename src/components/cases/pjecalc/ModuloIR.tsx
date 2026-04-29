@@ -61,7 +61,7 @@ export function ModuloIR({ caseId }: Props) {
   const save = async () => {
     setSaving(true);
     try {
-      await svc.upsertIrConfig({ case_id: caseId, ...form } as any);
+      await svc.upsertIrConfig({ case_id: caseId, ...form } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_ir_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
       toast.success("IR configurado!");
@@ -87,16 +87,14 @@ export function ModuloIR({ caseId }: Props) {
           {form.apurar && (
             <div className="flex gap-8">
               <div className="space-y-3 flex-1">
-                <div className="flex items-center gap-2" title="Quando marcado, IR incide também sobre os juros mora (Lei 8.541/92 art. 46). Súmula 463 STJ: IRRF sobre juros mora é discutível.">
+                <div className="flex items-center gap-2" title="Quando marcado, IR incide também sobre os juros mora (Lei 8.541/92 art. 46). Súmula 368 IV TST recomenda isenção em causas trabalhistas — default OFF.">
                   <Checkbox checked={form.incidir_sobre_juros} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_juros: !!v }))} />
                   <Label className="text-xs">Incidir sobre Juros de Mora</Label>
                 </div>
-                <p className="text-[10px] text-amber-700 -mt-1 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — Súmula 368 IV TST: IR não incide sobre juros mora trabalhistas. Flag persiste mas engine ainda não distingue. Aguarda PJC com <code>incidirSobreJuros=true</code> + sentença explícita (0/47 no corpus).</p>
-                <div className="flex items-center gap-2" title="Quando marcado, IR é cobrado do reclamado em vez do reclamante (raro, depende de sentença).">
+                <div className="flex items-center gap-2" title="Quando marcado, IR é cobrado do reclamado em vez do reclamante (raro, depende de sentença). Engine apura IR mas não desconta do líquido do reclamante.">
                   <Checkbox checked={form.cobrar_reclamado} onCheckedChange={v => setForm(p => ({ ...p, cobrar_reclamado: !!v }))} />
                   <Label className="text-xs">Cobrar do Reclamado</Label>
                 </div>
-                <p className="text-[10px] text-amber-700 -mt-1 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — Lei 8.541/92 art. 46 vs Súmula 368 STJ. Flag persiste mas engine ainda calcula IR descontando do reclamante. Aguarda PJC com cobrança ao reclamado como ground-truth (0/47 no corpus).</p>
                 <div className="flex items-center gap-2" title="13º salário tributado de forma exclusiva na fonte (separado dos demais rendimentos). Lei 7.713/88 art. 26.">
                   <Checkbox checked={form.tributacao_exclusiva_13} onCheckedChange={v => setForm(p => ({ ...p, tributacao_exclusiva_13: !!v }))} />
                   <Label className="text-xs">Tributação Exclusiva (13º)</Label>
@@ -111,8 +109,7 @@ export function ModuloIR({ caseId }: Props) {
                 </div>
 
                 <div className="border-t pt-3 mt-3">
-                  <p className="text-xs font-semibold text-muted-foreground mb-1">RRA — Rendimentos Recebidos Acumuladamente (Art. 12-A Lei 7.713/88)</p>
-                  <p className="text-[10px] text-amber-700 mb-2 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — UI persiste mas engine ainda calcula IR via tabela progressiva tradicional. Aguarda PJC com <code>rraMeses &gt; 0</code> como ground-truth (0/47 no corpus).</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">RRA — Rendimentos Recebidos Acumuladamente (Art. 12-A Lei 7.713/88)</p>
                   <div className="flex items-center gap-2" title="Quando processo abrange período > 12 meses, IR é calculado sobre média mensal (base / RRA_meses). Reduz alíquota efetiva. Aplicável em ações trabalhistas longas.">
                     <Checkbox checked={form.apurar_rra} onCheckedChange={v => setForm(p => ({ ...p, apurar_rra: !!v }))} />
                     <Label className="text-xs">Apurar RRA</Label>
@@ -133,14 +130,14 @@ export function ModuloIR({ caseId }: Props) {
 
                 <div className="border-t pt-3 mt-3 space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground">Bases tributáveis</p>
-                  <p className="text-[10px] text-amber-700 mb-1 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — engine aplica IR sobre verba principal sem distinção tributável/não-tributável. Casos especiais (danos morais tributáveis) aguardam PJC ground-truth.</p>
+                  <p className="text-[10px] text-orange-800 mb-1 bg-orange-50 dark:bg-orange-950/20 p-1.5 rounded border border-orange-200 dark:border-orange-900"><strong>🚧 Não implementado — release v3.6.</strong> Engine aplica IR sobre verba principal sem distinção tributável/não-tributável.</p>
                   <div className="flex items-center gap-2" title="Verba tributável (salário, hora extra, 13º, férias gozadas). Default: incide IR.">
-                    <Checkbox checked={form.incidir_sobre_principal_tributavel} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_principal_tributavel: !!v }))} />
-                    <Label className="text-xs">Verba principal TRIBUTÁVEL (default)</Label>
+                    <Checkbox checked={form.incidir_sobre_principal_tributavel} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_principal_tributavel: !!v }))} disabled />
+                    <Label className="text-xs text-muted-foreground">Verba principal TRIBUTÁVEL (default)</Label>
                   </div>
                   <div className="flex items-center gap-2" title="Verba indenizatória normalmente não-tributável (FGTS, multa, férias indenizadas). Marcar apenas em casos específicos como danos morais reconhecidos como tributáveis.">
-                    <Checkbox checked={form.incidir_sobre_principal_nao_tributavel} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_principal_nao_tributavel: !!v }))} />
-                    <Label className="text-xs">Verba principal NÃO-tributável</Label>
+                    <Checkbox checked={form.incidir_sobre_principal_nao_tributavel} onCheckedChange={v => setForm(p => ({ ...p, incidir_sobre_principal_nao_tributavel: !!v }))} disabled />
+                    <Label className="text-xs text-muted-foreground">Verba principal NÃO-tributável</Label>
                   </div>
                 </div>
               </div>

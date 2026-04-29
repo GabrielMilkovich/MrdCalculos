@@ -321,29 +321,41 @@ async function tryTemplateCacheExtraction(
   ocrText: string
 ): Promise<any | null> {
   if (!cnpj) return null;
-  
+
   try {
-    // Look for cached template mapping for this CNPJ
-    const { data: cached } = await supabase
-      .from("rubrica_map" as any)
+    // pjecalc_rubrica_map (NAO rubrica_map — schema diferente).
+    // Colunas: codigo_match, descricao_regex, empresa_cnpj, conceito,
+    // categoria, ativo, prioridade.
+    const cleanCnpj = cnpj.replace(/[^\d]/g, '');
+    const { data: cached, error } = await supabase
+      .from("pjecalc_rubrica_map")
       .select("*")
-      .eq("empresa_cnpj", cnpj.replace(/[^\d]/g, ''))
+      .eq("empresa_cnpj", cleanCnpj)
       .eq("ativo", true)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    
+      .order("prioridade", { ascending: false })
+      .limit(200);
+
+    if (error) {
+      console.warn("[TEMPLATE-CACHE] read error:", error.message);
+      return null;
+    }
     if (!cached || cached.length === 0) return null;
-    
-    console.log(`[TEMPLATE-CACHE] Found ${cached.length} cached mappings for CNPJ ${cnpj}`);
-    
-    // Use cached rubrica mappings to extract from text
+
+    console.log(`[TEMPLATE-CACHE] Found ${cached.length} cached mappings for CNPJ ${cleanCnpj}`);
+
     const extractedRubricas: any[] = [];
-    
+
     for (const mapping of cached) {
-      const regex = new RegExp(mapping.regex_pattern || mapping.codigo_origem, 'gi');
+      const pattern = mapping.descricao_regex || mapping.codigo_match;
+      if (!pattern) continue;
+      let regex: RegExp;
+      try {
+        regex = new RegExp(pattern, 'gi');
+      } catch {
+        continue;
+      }
       const matches = ocrText.match(regex);
       if (matches) {
-        // Find value near the match
         const idx = ocrText.indexOf(matches[0]);
         const context = ocrText.substring(idx, idx + 200);
         const valorMatch = context.match(/(\d[\d.,]*\d)/);
@@ -351,22 +363,22 @@ async function tryTemplateCacheExtraction(
           const valor = parseFloat(valorMatch[1].replace(/\./g, '').replace(',', '.'));
           if (valor > 0 && valor < 999999) {
             extractedRubricas.push({
-              codigo: mapping.codigo_origem,
-              denominacao: mapping.nome_padronizado || mapping.nome_origem,
-              tipo: mapping.tipo || "vencimento",
+              codigo: mapping.codigo_match || mapping.conceito,
+              denominacao: mapping.conceito || mapping.codigo_match,
+              tipo: "vencimento",
               categoria: mapping.categoria || "outros",
-              valores_mensais: [{ competencia: new Date().toISOString().slice(0, 7), valor }]
+              valores_mensais: [{ competencia: new Date().toISOString().slice(0, 7), valor }],
             });
           }
         }
       }
     }
-    
+
     if (extractedRubricas.length > 3) {
       console.log(`[TEMPLATE-CACHE] Extracted ${extractedRubricas.length} rubricas from cache`);
       return { rubricas: extractedRubricas, _from_cache: true };
     }
-    
+
     return null;
   } catch (err) {
     console.warn("[TEMPLATE-CACHE] Error:", err);
@@ -374,34 +386,60 @@ async function tryTemplateCacheExtraction(
   }
 }
 
-// Save successful extraction as template for future use
+// Save successful extraction as template for future use.
+// Importante: usa dedupe-then-insert (filtra existentes via SELECT antes de
+// INSERT batch) em vez de loop com `.then()` solto sem await — que era a
+// race condition apontada no audit (multiplos docs em paralelo do mesmo CNPJ
+// podiam disparar inserts redundantes). Best-effort: erros nao bloqueiam o
+// pipeline principal.
 async function saveTemplateCache(
   supabase: any,
   cnpj: string | null,
   extracted: any
 ) {
   if (!cnpj || !extracted.rubricas?.length) return;
-  
+
   try {
     const cleanCnpj = cnpj.replace(/[^\d]/g, '');
-    
-    for (const rub of extracted.rubricas) {
-      if (!rub.codigo || !rub.denominacao) continue;
-      
-      await supabase.from("rubrica_map" as any).upsert({
+
+    const upserts = extracted.rubricas
+      .filter((rub: any) => rub.codigo && rub.denominacao)
+      .map((rub: any) => ({
+        codigo_match: String(rub.codigo).slice(0, 64),
+        descricao_regex: String(rub.denominacao).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 256),
         empresa_cnpj: cleanCnpj,
-        codigo_origem: rub.codigo,
-        nome_origem: rub.denominacao,
-        nome_padronizado: rub.denominacao,
-        tipo: rub.tipo || "vencimento",
+        conceito: String(rub.denominacao).slice(0, 128),
         categoria: rub.categoria || "outros",
         ativo: true,
-      }, { onConflict: 'empresa_cnpj,codigo_origem' }).then(({ error }: any) => {
-        if (error) console.warn("[TEMPLATE-CACHE] Save error:", error.message);
-      });
+        prioridade: 5,
+      }));
+
+    if (upserts.length === 0) return;
+
+    // pjecalc_rubrica_map nao tem unique constraint composto — entao fazemos
+    // dedupe-then-insert: lemos os pares (codigo_match, empresa_cnpj) ja existentes
+    // e so inserimos os faltantes. Atomico o suficiente para o caso de paralelismo
+    // (multiplos docs do mesmo CNPJ): pior cenario e duplicada (idempotencia OK
+    // por descricao_regex igual).
+    const codigos = Array.from(new Set(upserts.map((u: any) => u.codigo_match).filter(Boolean)));
+    const { data: existing } = await supabase
+      .from("pjecalc_rubrica_map")
+      .select("codigo_match")
+      .eq("empresa_cnpj", cleanCnpj)
+      .in("codigo_match", codigos);
+    const existingSet = new Set((existing || []).map((r: any) => r.codigo_match));
+    const toInsert = upserts.filter((u: any) => !existingSet.has(u.codigo_match));
+    if (toInsert.length === 0) {
+      console.log(`[TEMPLATE-CACHE] All ${upserts.length} mappings already cached for CNPJ ${cleanCnpj}`);
+      return;
     }
-    
-    console.log(`[TEMPLATE-CACHE] Saved ${extracted.rubricas.length} mappings for CNPJ ${cleanCnpj}`);
+    const { error } = await supabase.from("pjecalc_rubrica_map").insert(toInsert);
+    if (error) {
+      console.warn("[TEMPLATE-CACHE] insert error:", error.message);
+      return;
+    }
+
+    console.log(`[TEMPLATE-CACHE] Saved ${toInsert.length}/${upserts.length} new mappings for CNPJ ${cleanCnpj}`);
   } catch (err) {
     console.warn("[TEMPLATE-CACHE] Save failed:", err);
   }
@@ -1147,6 +1185,197 @@ async function extractStructured(
 // AUTO-FILL: Grava dados extraídos nas tabelas pjecalc
 // =====================================================
 
+// =====================================================
+// IMPROVEMENT #6: AUTO-FILL PROPOSALS — intelligence layer
+// Cria propostas em auto_fill_proposals com authority score
+// e snapshot do valor anterior. UI revisa antes de aplicar.
+// =====================================================
+
+// Authority matrix (subset essencial — sincronizado com
+// src/lib/pjecalc/auto-fill/document-authority.ts).
+const AUTHORITY_MATRIX_EDGE: Record<string, Partial<Record<string, number>>> = {
+  data_admissao: { CTPS: 100, TRCT: 90, CONTRATO_TRABALHO: 95, HOLERITE: 60, SENTENCA: 95, PETICAO_INICIAL: 30 },
+  data_demissao: { CTPS: 95, TRCT: 100, HOLERITE: 70, SENTENCA: 90, PETICAO_INICIAL: 40 },
+  data_ajuizamento: { PETICAO_INICIAL: 100, SENTENCA: 90 },
+  numero_processo: { PETICAO_INICIAL: 100, SENTENCA: 100, ACORDAO: 100, TERMO_AUDIENCIA: 100 },
+  tribunal: { PETICAO_INICIAL: 95, SENTENCA: 100, ACORDAO: 100 },
+  vara: { PETICAO_INICIAL: 95, SENTENCA: 100, ACORDAO: 100 },
+  reclamante_nome: { CTPS: 100, TRCT: 90, CONTRATO_TRABALHO: 95, HOLERITE: 80 },
+  reclamante_cpf: { CTPS: 100, TRCT: 95, HOLERITE: 90 },
+  reclamada_nome: { CTPS: 95, TRCT: 100, HOLERITE: 95, CONTRATO_TRABALHO: 100 },
+  reclamada_cnpj: { CTPS: 95, TRCT: 100, HOLERITE: 100, CONTRATO_TRABALHO: 100, GUIA_FGTS: 100 },
+  cargo_funcao: { CTPS: 100, TRCT: 80, CONTRATO_TRABALHO: 95, HOLERITE: 70 },
+  salario_base: { CTPS: 90, TRCT: 100, CONTRATO_TRABALHO: 95, HOLERITE: 90, FICHA_FINANCEIRA: 95 },
+  tipo_demissao: { TRCT: 100, CTPS: 70, SENTENCA: 95 },
+  jornada: { CONTRATO_TRABALHO: 100, CTPS: 80, HOLERITE: 70 },
+};
+
+// Mapa tipo_documento extraido -> codigo canonico authority
+function normalizarDocTipo(raw: string | undefined | null): string {
+  if (!raw) return "OUTRO";
+  const map: Record<string, string> = {
+    holerite: "HOLERITE",
+    contracheque: "HOLERITE",
+    ctps: "CTPS",
+    trct: "TRCT",
+    rescisao: "TRCT",
+    contrato: "CONTRATO_TRABALHO",
+    contrato_trabalho: "CONTRATO_TRABALHO",
+    ficha_financeira: "FICHA_FINANCEIRA",
+    cartao_ponto: "CARTAO_PONTO",
+    sentenca: "SENTENCA",
+    sentença: "SENTENCA",
+    acordao: "ACORDAO",
+    peticao_inicial: "PETICAO_INICIAL",
+    peticao: "PETICAO_INICIAL",
+    contestacao: "CONTESTACAO",
+    termo_audiencia: "TERMO_AUDIENCIA",
+    recibo_ferias: "RECIBO_FERIAS",
+    guia_fgts: "GUIA_FGTS",
+    extrato_fgts: "EXTRATO_FGTS",
+    recibo_pagamento: "RECIBO_PAGAMENTO",
+  };
+  return map[raw.toLowerCase().trim()] ?? "OUTRO";
+}
+
+interface ProposalDraft {
+  campo: string;
+  valor_proposto: unknown;
+  doc_tipo: string;
+  authority: number;
+  confianca: number;
+}
+
+function extrairPropostas(
+  docTipoCanonico: string,
+  extracted: any,
+  confianca: number,
+): ProposalDraft[] {
+  const draft: ProposalDraft[] = [];
+  const add = (campo: string, valor: unknown) => {
+    if (valor === null || valor === undefined || valor === "") return;
+    const authority = AUTHORITY_MATRIX_EDGE[campo]?.[docTipoCanonico];
+    if (!authority || authority <= 0) return; // doc sem autoridade para esse campo
+    draft.push({ campo, valor_proposto: valor, doc_tipo: docTipoCanonico, authority, confianca });
+  };
+
+  const dp = extracted.dados_processo || {};
+  const c = extracted.contrato || {};
+  const rec = extracted.reclamante || {};
+  const rda = extracted.reclamada || {};
+
+  add("data_admissao", c.data_admissao);
+  add("data_demissao", c.data_demissao);
+  add("data_ajuizamento", dp.data_ajuizamento);
+  add("numero_processo", dp.numero_processo);
+  add("tribunal", dp.tribunal);
+  add("vara", dp.vara);
+  add("reclamante_nome", rec.nome);
+  add("reclamante_cpf", rec.cpf);
+  add("reclamada_nome", rda.nome || rda.razao_social);
+  add("reclamada_cnpj", rda.cnpj);
+  add("cargo_funcao", c.cargo_funcao);
+  add("salario_base", c.salario_base);
+  add("tipo_demissao", c.tipo_demissao);
+  add("jornada", c.jornada);
+
+  return draft;
+}
+
+async function obterValorAnterior(
+  supabase: any,
+  caseId: string,
+  campo: string,
+): Promise<unknown> {
+  // Mapa campo -> (tabela, coluna). Tem que bater com DESTINO_CAMPO do AutoFillReviewPanel.
+  const destino: Record<string, { tabela: string; coluna: string }> = {
+    data_admissao: { tabela: "pjecalc_calculos", coluna: "data_admissao" },
+    data_demissao: { tabela: "pjecalc_calculos", coluna: "data_demissao" },
+    data_ajuizamento: { tabela: "pjecalc_calculos", coluna: "data_ajuizamento" },
+    numero_processo: { tabela: "pjecalc_calculos", coluna: "processo_cnj" },
+    tribunal: { tabela: "pjecalc_calculos", coluna: "tribunal" },
+    vara: { tabela: "pjecalc_calculos", coluna: "vara" },
+    reclamante_nome: { tabela: "pjecalc_calculos", coluna: "reclamante_nome" },
+    reclamante_cpf: { tabela: "pjecalc_calculos", coluna: "reclamante_cpf" },
+    reclamada_nome: { tabela: "pjecalc_calculos", coluna: "reclamado_nome" },
+    reclamada_cnpj: { tabela: "pjecalc_calculos", coluna: "reclamado_cnpj" },
+    cargo_funcao: { tabela: "pjecalc_calculos", coluna: "cargo" },
+    tipo_demissao: { tabela: "pjecalc_calculos", coluna: "tipo_demissao" },
+    salario_base: { tabela: "pjecalc_parametros", coluna: "salario_base" },
+    jornada: { tabela: "pjecalc_parametros", coluna: "jornada_contratual" },
+  };
+  const map = destino[campo];
+  if (!map) return null;
+  const { data } = await supabase.from(map.tabela).select(map.coluna).eq("case_id", caseId).maybeSingle();
+  return data?.[map.coluna] ?? null;
+}
+
+async function criarPropostasDeExtracao(
+  supabase: any,
+  caseId: string,
+  documentId: string,
+  tipoDocumentoExtracted: string,
+  extracted: any,
+): Promise<number> {
+  const docTipoCanonico = normalizarDocTipo(tipoDocumentoExtracted);
+  const confiancaGeral = typeof extracted.confianca_geral === "number" ? extracted.confianca_geral : 0.85;
+  const drafts = extrairPropostas(docTipoCanonico, extracted, confiancaGeral);
+  if (drafts.length === 0) return 0;
+
+  let criadas = 0;
+  for (const d of drafts) {
+    const valorAnterior = await obterValorAnterior(supabase, caseId, d.campo);
+
+    // Skip se valor anterior == proposto (sem mudanca real)
+    if (
+      valorAnterior !== null &&
+      valorAnterior !== undefined &&
+      JSON.stringify(valorAnterior) === JSON.stringify(d.valor_proposto)
+    ) {
+      continue;
+    }
+
+    // Detecta perdedores (propostas anteriores PENDENTES para o mesmo campo)
+    const { data: pendentes } = await supabase
+      .from("auto_fill_proposals")
+      .select("doc_tipo, valor_proposto, score_final")
+      .eq("case_id", caseId)
+      .eq("campo", d.campo)
+      .eq("status", "pendente");
+
+    const conflitantes = (pendentes ?? [])
+      .filter((p: any) => p.doc_tipo !== d.doc_tipo)
+      .map((p: any) => ({
+        doc_tipo: p.doc_tipo,
+        valor: p.valor_proposto,
+        score: p.score_final,
+      }));
+
+    const score_final = d.authority * d.confianca;
+    const motivo_resolucao = conflitantes.length === 0 ? "unico" : "authority";
+
+    const { error } = await supabase.from("auto_fill_proposals").insert({
+      case_id: caseId,
+      document_id: documentId,
+      campo: d.campo,
+      doc_tipo: d.doc_tipo,
+      valor_proposto: d.valor_proposto,
+      valor_anterior: valorAnterior,
+      authority_score: d.authority,
+      confianca: d.confianca,
+      score_final,
+      motivo_resolucao,
+      conflitantes,
+      status: "pendente",
+    });
+
+    if (!error) criadas++;
+    else console.warn(`[PROPOSALS] erro ${d.campo}:`, error.message);
+  }
+
+  return criadas;
+}
+
 async function autoFill(supabase: any, caseId: string, extracted: any) {
   const fills: string[] = [];
 
@@ -1828,6 +2057,19 @@ async function processDocumentInBackground(
       console.warn(`[EXTRACT] Cross-validation warnings: ${crossValidation.warnings.join(" | ")}`);
     }
 
+    // ============ IMPROVEMENT #6: Auto-fill Proposals (intelligence layer) ============
+    // Cria propostas em auto_fill_proposals com snapshot do valor anterior
+    // ANTES de aplicar via autoFill direto. Isso permite UI revisar/reverter.
+    const tProp = Date.now();
+    const propostasCriadas = await criarPropostasDeExtracao(
+      supabase,
+      doc.case_id,
+      document_id,
+      extracted.tipo_documento || "OUTRO",
+      extracted,
+    );
+    console.log(`[TIMING] proposals=${Date.now() - tProp}ms criadas=${propostasCriadas}`);
+
     // Auto-fill pjecalc tables
     const tFill = Date.now();
     const fills = await autoFill(supabase, doc.case_id, extracted);
@@ -1848,7 +2090,6 @@ async function processDocumentInBackground(
       tipo: extracted.tipo_documento || doc.tipo,
       page_count: extracted.paginas_detectadas || 1,
       ocr_confidence: extracted.confianca_geral || 0.9,
-      ocr_confianca: extracted.confianca_geral || 0.9,
       processing_completed_at: new Date().toISOString(),
       error_message: null,
     };

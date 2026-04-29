@@ -122,6 +122,8 @@ export interface PjecalcFaltaRow {
   motivo: string | null;
   observacoes: string | null;
   created_at: string;
+  /** Art. 130-A CLT: falta que reinicia o periodo aquisitivo de ferias. */
+  reiniciar_ferias?: boolean | null;
 }
 
 export interface PjecalcFaltaInsert {
@@ -479,6 +481,17 @@ export interface PjecalcCsConfigRow {
   periodos_simples?: unknown[];
   contribuicao_sindical?: boolean;
   contribuicao_sindical_pos2017?: boolean;
+  cnae?: string | null;
+  /** PJe-Calc oficial: período "Sobre Salários Devidos" (data inicial) */
+  cs_devidos_data_inicial?: string | null;
+  /** PJe-Calc oficial: período "Sobre Salários Devidos" (data final) */
+  cs_devidos_data_final?: string | null;
+  /** PJe-Calc oficial: período "Sobre Salários Pagos" (data inicial) */
+  cs_pagos_data_inicial?: string | null;
+  /** PJe-Calc oficial: período "Sobre Salários Pagos" (data final) */
+  cs_pagos_data_final?: string | null;
+  /** PJe-Calc oficial: "Mês da Reclamação" (data única) */
+  cs_mes_reclamacao?: string | null;
   created_at: string;
 }
 
@@ -497,6 +510,20 @@ export interface PjecalcCsConfigInsert {
   aliquota_sat_fixa?: number;
   aliquota_terceiros_fixa?: number;
   fpas_code?: string;
+  periodos_simples?: { inicio: string; fim: string }[];
+  cnae?: string | null;
+  contribuicao_sindical?: boolean;
+  contribuicao_sindical_pos2017?: boolean;
+  /** PJe-Calc oficial: período "Sobre Salários Devidos" (data inicial) */
+  cs_devidos_data_inicial?: string | null;
+  /** PJe-Calc oficial: período "Sobre Salários Devidos" (data final) */
+  cs_devidos_data_final?: string | null;
+  /** PJe-Calc oficial: período "Sobre Salários Pagos" (data inicial) */
+  cs_pagos_data_inicial?: string | null;
+  /** PJe-Calc oficial: período "Sobre Salários Pagos" (data final) */
+  cs_pagos_data_final?: string | null;
+  /** PJe-Calc oficial: "Mês da Reclamação" (data única, formato YYYY-MM-DD ou YYYY-MM-01) */
+  cs_mes_reclamacao?: string | null;
 }
 
 export interface PjecalcIrConfigRow {

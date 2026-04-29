@@ -3,6 +3,7 @@
  * Implements calculation locking, unlocking and duplication.
  */
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 
 export interface CalcStatus {
   id: string;
@@ -12,16 +13,63 @@ export interface CalcStatus {
 }
 
 /**
+ * Linha genérica de tabela "pjecalc_*". Todas estas tabelas seguem o
+ * mesmo padrão (id PK, case_id FK, timestamps). Usar `unknown` para o
+ * payload custom evita `any` ao fazer destructuring controlado.
+ *
+ * Justificativa para o `as any` nos calls do supabase: estas tabelas
+ * são custom (`pjecalc_*`) e não fazem parte do schema gerado em
+ * `src/types/supabase.ts`. Substituir por tipo explícito exigiria
+ * declará-las manualmente — preferível centralizar a "fronteira de
+ * tipo desconhecido" aqui via `RowGen`.
+ */
+type PjeCalcRowGen = {
+  id: string;
+  case_id: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+};
+
+/** Faltas têm shape específico (date, justificada, motivo). */
+interface PjeCalcFaltaRow extends PjeCalcRowGen {
+  data?: string;
+  justificada?: boolean;
+  motivo?: string | null;
+}
+
+/** Férias têm shape específico (data_inicio, data_fim, abono_pecuniario). */
+interface PjeCalcFeriasRow extends PjeCalcRowGen {
+  data_inicio?: string;
+  data_fim?: string;
+  abono_pecuniario?: boolean;
+}
+
+/**
+ * Remove campos auto-gerados pelo banco e injeta novo `case_id`. Tipa
+ * o retorno como `Omit<...>` para deixar claro que `id`/timestamps
+ * desaparecem do payload de inserção.
+ */
+function rebindToCase<T extends PjeCalcRowGen>(
+  row: T,
+  newCaseId: string,
+): Omit<T, 'id' | 'case_id' | 'created_at' | 'updated_at'> & { case_id: string } {
+  const { id: _id, case_id: _case, created_at: _ca, updated_at: _ua, ...rest } = row;
+  return { ...rest, case_id: newCaseId };
+}
+
+/**
  * Fechar (lock) a calculation - prevents further edits
  */
 export async function fecharCalculo(calculoId: string): Promise<void> {
   const { error } = await supabase
-    .from("pjecalc_liquidacao_resultado" as any)
+    // tabela custom fora do schema gerado
+    .from("pjecalc_liquidacao_resultado" as never)
     .update({
       status: 'fechado',
       fechado_em: new Date().toISOString(),
       fechado_por: 'usuario',
-    } as any)
+    } as never)
     .eq("id", calculoId);
 
   if (error) throw new Error(`Erro ao fechar cálculo: ${error.message}`);
@@ -32,12 +80,13 @@ export async function fecharCalculo(calculoId: string): Promise<void> {
  */
 export async function reabrirCalculo(calculoId: string): Promise<void> {
   const { error } = await supabase
-    .from("pjecalc_liquidacao_resultado" as any)
+    // tabela custom fora do schema gerado
+    .from("pjecalc_liquidacao_resultado" as never)
     .update({
       status: 'aberto',
       fechado_em: null,
       fechado_por: null,
-    } as any)
+    } as never)
     .eq("id", calculoId);
 
   if (error) throw new Error(`Erro ao reabrir cálculo: ${error.message}`);
@@ -74,70 +123,71 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
 
   // 2. Copy parametros
   const { data: params } = await supabase
-    .from("pjecalc_parametros" as any)
+    // tabela custom fora do schema gerado
+    .from("pjecalc_parametros" as never)
     .select("*")
     .eq("case_id", caseId)
     .maybeSingle();
 
   if (params) {
-    const { id, case_id, created_at, updated_at, ...paramsCopy } = params as any;
-    await supabase.from("pjecalc_parametros" as any).insert({ ...paramsCopy, case_id: newCaseId });
+    const paramsCopy = rebindToCase(params as unknown as PjeCalcRowGen, newCaseId);
+    await fromUntyped("pjecalc_parametros").insert(paramsCopy as never);
   }
 
   // 3. Copy faltas
   const { data: faltas } = await supabase
-    .from("pjecalc_faltas" as any)
+    // tabela custom fora do schema gerado
+    .from("pjecalc_faltas" as never)
     .select("*")
     .eq("case_id", caseId);
 
-  if (faltas?.length) {
-    const faltasCopy = (faltas as any[]).map((f: any) => {
-      const { id, case_id, created_at, ...rest } = f;
-      return { ...rest, case_id: newCaseId };
-    });
-    await supabase.from("pjecalc_faltas" as any).insert(faltasCopy);
+  if (faltas && Array.isArray(faltas) && faltas.length > 0) {
+    const faltasCopy = (faltas as unknown as PjeCalcFaltaRow[]).map(
+      (f) => rebindToCase(f, newCaseId),
+    );
+    await fromUntyped("pjecalc_faltas").insert(faltasCopy as never);
   }
 
   // 4. Copy ferias
   const { data: ferias } = await supabase
-    .from("pjecalc_ferias" as any)
+    // tabela custom fora do schema gerado
+    .from("pjecalc_ferias" as never)
     .select("*")
     .eq("case_id", caseId);
 
-  if (ferias?.length) {
-    const feriasCopy = (ferias as any[]).map((f: any) => {
-      const { id, case_id, created_at, ...rest } = f;
-      return { ...rest, case_id: newCaseId };
-    });
-    await supabase.from("pjecalc_ferias" as any).insert(feriasCopy);
+  if (ferias && Array.isArray(ferias) && ferias.length > 0) {
+    const feriasCopy = (ferias as unknown as PjeCalcFeriasRow[]).map(
+      (f) => rebindToCase(f, newCaseId),
+    );
+    await fromUntyped("pjecalc_ferias").insert(feriasCopy as never);
   }
 
   // 5. Copy historico salarial
   const { data: historicos } = await supabase
-    .from("pjecalc_historico_salarial" as any)
+    // tabela custom fora do schema gerado
+    .from("pjecalc_historico_salarial" as never)
     .select("*")
     .eq("case_id", caseId);
 
-  if (historicos?.length) {
-    const histCopy = (historicos as any[]).map((h: any) => {
-      const { id, case_id, created_at, ...rest } = h;
-      return { ...rest, case_id: newCaseId };
-    });
-    await supabase.from("pjecalc_historico_salarial" as any).insert(histCopy);
+  if (historicos && Array.isArray(historicos) && historicos.length > 0) {
+    const histCopy = (historicos as unknown as PjeCalcRowGen[]).map(
+      (h) => rebindToCase(h, newCaseId),
+    );
+    await fromUntyped("pjecalc_historico_salarial").insert(histCopy as never);
   }
 
   // 6. Copy verbas
   const { data: verbas } = await supabase
-    .from("pjecalc_verbas" as any)
+    // tabela custom fora do schema gerado
+    .from("pjecalc_verbas" as never)
     .select("*")
     .eq("case_id", caseId);
 
-  if (verbas?.length) {
-    const verbasCopy = (verbas as any[]).map((v: any) => {
-      const { id, case_id, created_at, ...rest } = v;
-      return { ...rest, case_id: newCaseId };
-    });
-    await supabase.from("pjecalc_verbas" as any).insert(verbasCopy);
+  if (verbas && Array.isArray(verbas) && verbas.length > 0) {
+    const verbasCopy = (verbas as unknown as PjeCalcRowGen[]).map(
+      (v) => rebindToCase(v, newCaseId),
+    );
+    await fromUntyped("pjecalc_verbas").insert(verbasCopy as never);
   }
 
   // 7. Copy configs (FGTS, CS, IR, Correção, Honorários, Custas, Seguro)
@@ -153,18 +203,19 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
     'pjecalc_pensao_config',
     'pjecalc_previdencia_privada_config',
     'pjecalc_salario_familia_config',
-  ];
+  ] as const;
 
   for (const table of configTables) {
     const { data: config } = await supabase
-      .from(table as any)
+      // tabela custom fora do schema gerado
+      .from(table as unknown as never)
       .select("*")
       .eq("case_id", caseId)
       .maybeSingle();
 
     if (config) {
-      const { id, case_id, created_at, updated_at, ...configCopy } = config as any;
-      await supabase.from(table as any).insert({ ...configCopy, case_id: newCaseId });
+      const configCopy = rebindToCase(config as unknown as PjeCalcRowGen, newCaseId);
+      await supabase.from(table as unknown as never).insert(configCopy as never);
     }
   }
 

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Trash2, CalendarDays, Info } from "lucide-react";
 
@@ -36,18 +37,17 @@ export function ExcecoesSabado({ caseId, globalSabadoDiaUtil }: Props) {
   const { data: excecoes = [] } = useQuery({
     queryKey: ["pjecalc_sabado_excecoes", caseId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("pjecalc_parametros_extras" as any)
+      const { data } = await fromUntyped("pjecalc_parametros_extras")
         .select("*")
         .eq("case_id", caseId)
         .eq("tipo", "sabado_excecao")
         .order("data_inicial");
-      return (data || []) as any[];
+      return (data || []) as unknown[];
     },
   });
 
   const addExcecao = async () => {
-    await supabase.from("pjecalc_parametros_extras" as any).insert({
+    await fromUntyped("pjecalc_parametros_extras").insert({
       case_id: caseId,
       tipo: 'sabado_excecao',
       data_inicial: new Date().toISOString().slice(0, 10),
@@ -59,12 +59,12 @@ export function ExcecoesSabado({ caseId, globalSabadoDiaUtil }: Props) {
   };
 
   const updateField = async (id: string, field: string, value: any) => {
-    await supabase.from("pjecalc_parametros_extras" as any).update({ [field]: value }).eq("id", id);
+    await fromUntyped("pjecalc_parametros_extras").update({ [field]: value }).eq("id", id);
     qc.invalidateQueries({ queryKey: ["pjecalc_sabado_excecoes", caseId] });
   };
 
   const removeExcecao = async (id: string) => {
-    await supabase.from("pjecalc_parametros_extras" as any).delete().eq("id", id);
+    await fromUntyped("pjecalc_parametros_extras").delete().eq("id", id);
     qc.invalidateQueries({ queryKey: ["pjecalc_sabado_excecoes", caseId] });
   };
 

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Save, Loader2, Search, Building2 } from "lucide-react";
@@ -36,6 +37,12 @@ export function ModuloCS({ caseId }: Props) {
     cnae: '',
     contribuicao_sindical: false,
     contribuicao_sindical_pos2017: false,
+    // PJe-Calc oficial: 3 períodos avançados (opcionais — sobrescrevem SIMPLES)
+    cs_devidos_data_inicial: '',
+    cs_devidos_data_final: '',
+    cs_pagos_data_inicial: '',
+    cs_pagos_data_final: '',
+    cs_mes_reclamacao: '',
   });
 
   useEffect(() => {
@@ -58,6 +65,11 @@ export function ModuloCS({ caseId }: Props) {
         cnae: (d.cnae as string) || '',
         contribuicao_sindical: (d.contribuicao_sindical as boolean) ?? false,
         contribuicao_sindical_pos2017: (d.contribuicao_sindical_pos2017 as boolean) ?? false,
+        cs_devidos_data_inicial: (d.cs_devidos_data_inicial as string) || '',
+        cs_devidos_data_final: (d.cs_devidos_data_final as string) || '',
+        cs_pagos_data_inicial: (d.cs_pagos_data_inicial as string) || '',
+        cs_pagos_data_final: (d.cs_pagos_data_final as string) || '',
+        cs_mes_reclamacao: (d.cs_mes_reclamacao as string) || '',
       });
     }
   }, [data]);
@@ -91,7 +103,13 @@ export function ModuloCS({ caseId }: Props) {
         periodos_simples, cnae: form.cnae || null,
         contribuicao_sindical: form.contribuicao_sindical,
         contribuicao_sindical_pos2017: form.contribuicao_sindical_pos2017,
-      } as any);
+        // PJe-Calc oficial: 3 períodos (Devidos, Pagos, Mês Reclamação) — opcionais
+        cs_devidos_data_inicial: form.cs_devidos_data_inicial || null,
+        cs_devidos_data_final: form.cs_devidos_data_final || null,
+        cs_pagos_data_inicial: form.cs_pagos_data_inicial || null,
+        cs_pagos_data_final: form.cs_pagos_data_final || null,
+        cs_mes_reclamacao: form.cs_mes_reclamacao || null,
+      });
       qc.invalidateQueries({ queryKey: ["pjecalc_cs_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
       toast.success("Contribuição Social configurada!");
@@ -181,6 +199,83 @@ export function ModuloCS({ caseId }: Props) {
           {form.contribuicao_sindical && (
             <div className="flex items-center gap-2 ml-5"><Checkbox checked={form.contribuicao_sindical_pos2017} onCheckedChange={v => setForm(p => ({ ...p, contribuicao_sindical_pos2017: !!v }))} /><Label className="text-xs">Incluir também anos pós-Nov/2017 (facultativa — Lei 13.467/2017 — requer autorização do empregado)</Label></div>
           )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-4">
+          <Accordion type="single" collapsible>
+            <AccordionItem value="periodos-avancados" className="border-none">
+              <AccordionTrigger className="py-2 text-sm font-medium hover:no-underline">
+                Períodos avançados (PJe-Calc oficial)
+              </AccordionTrigger>
+              <AccordionContent className="space-y-4 pt-2">
+                <p className="text-xs text-muted-foreground">
+                  Campos opcionais conforme tela oficial do PJe-Calc. Quando preenchidos, sobrescrevem o intervalo
+                  simples Início/Fim usado para retrocompatibilidade.
+                </p>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Sobre Salários Devidos</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Data inicial</Label>
+                      <Input
+                        type="date"
+                        value={form.cs_devidos_data_inicial}
+                        onChange={e => setForm(p => ({ ...p, cs_devidos_data_inicial: e.target.value }))}
+                        className="mt-1 h-8 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Data final</Label>
+                      <Input
+                        type="date"
+                        value={form.cs_devidos_data_final}
+                        onChange={e => setForm(p => ({ ...p, cs_devidos_data_final: e.target.value }))}
+                        className="mt-1 h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Sobre Salários Pagos</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Data inicial</Label>
+                      <Input
+                        type="date"
+                        value={form.cs_pagos_data_inicial}
+                        onChange={e => setForm(p => ({ ...p, cs_pagos_data_inicial: e.target.value }))}
+                        className="mt-1 h-8 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Data final</Label>
+                      <Input
+                        type="date"
+                        value={form.cs_pagos_data_final}
+                        onChange={e => setForm(p => ({ ...p, cs_pagos_data_final: e.target.value }))}
+                        className="mt-1 h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Mês da Reclamação</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Data</Label>
+                      <Input
+                        type="date"
+                        value={form.cs_mes_reclamacao}
+                        onChange={e => setForm(p => ({ ...p, cs_mes_reclamacao: e.target.value }))}
+                        className="mt-1 h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </CardContent>
       </Card>
       <GradeCSOcorrencias caseId={caseId} />

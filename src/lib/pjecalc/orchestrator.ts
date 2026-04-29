@@ -15,6 +15,7 @@
  * 6. Retornar resultado tipado
  */
 
+import Decimal from 'decimal.js';
 import { supabase } from "@/integrations/supabase/client";
 import {
   resolveCanonicalInput,
@@ -131,6 +132,7 @@ function toEngineFaltas(faltas: PjecalcFaltaRow[]): PjeFalta[] {
     data_final: f.data_final || '',
     justificada: f.justificada ?? false,
     justificativa: f.motivo || undefined,
+    reinicia: f.reiniciar_ferias ?? false,
   }));
 }
 
@@ -327,11 +329,27 @@ function toEngineCartaoPonto(cp: PjecalcCartaoPontoRow[]): PjeCartaoPonto[] {
   }));
 }
 
+/**
+ * Type guard: confirma que `v` é entrada `{ data: string; valor: number }`.
+ * Usado para validar payloads JSON do banco antes de injetar no engine.
+ */
+function isSaldoSaqueEntry(v: unknown): v is { data: string; valor: number } {
+  if (typeof v !== 'object' || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.data === 'string' && typeof o.valor === 'number';
+}
+
 function toEngineFgtsConfig(cfg: PjecalcFgtsConfigRow | null): PjeFGTSConfig {
   // Support both old (habilitado/percentual_multa) and new column names
   const apurar = cfg?.apurar ?? cfg?.habilitado ?? true;
   const multaPercentual = cfg?.multa_percentual ?? cfg?.percentual_multa ?? 40;
-  const saldosSaques = Array.isArray(cfg?.saldos_saques) ? cfg!.saldos_saques : [];
+  // saldos_saques vem como JSONB do banco. Filtra entradas malformadas
+  // antes de passar ao engine — assim eliminamos o `as any` mantendo
+  // resiliência contra dados ruins de migrations antigas.
+  const rawSaldos: unknown = cfg?.saldos_saques;
+  const saldosSaques: { data: string; valor: number }[] = Array.isArray(rawSaldos)
+    ? rawSaldos.filter(isSaldoSaqueEntry)
+    : [];
   return {
     apurar,
     destino: (cfg?.destino as PjeFGTSConfig['destino']) ?? 'pagar_reclamante',
@@ -341,7 +359,7 @@ function toEngineFgtsConfig(cfg: PjecalcFgtsConfigRow | null): PjeFGTSConfig {
     multa_percentual: multaPercentual,
     multa_base: (cfg?.multa_base as PjeFGTSConfig['multa_base']) ?? 'diferenca',
     multa_valor_informado: cfg?.multa_valor_informado ?? undefined,
-    saldos_saques: saldosSaques as any,
+    saldos_saques: saldosSaques,
     deduzir_saldo: cfg?.deduzir_saldo ?? false,
     lc110_10: cfg?.lc110_10 ?? false,
     lc110_05: cfg?.lc110_05 ?? false,
@@ -378,6 +396,13 @@ function toEngineCsConfig(cfg: PjecalcCsConfigRow | null): PjeCSConfig {
 function toEngineIrConfig(cfg: PjecalcIrConfigRow | null): PjeIRConfig {
   // Support both old (habilitado) and new column names (apurar)
   const apurar = cfg?.apurar ?? cfg?.habilitado ?? true;
+  // RRA Lei 7.713/88 art. 12-A — sub-flags vindas da UI ModuloIR.
+  // Quando ausentes na linha (view legacy), permanecem undefined → engine
+  // mantém auto-detect (NM cardinalidade > 1 dispara art_12a_rra).
+  const cfgExt = (cfg ?? {}) as unknown as Record<string, unknown>;
+  const apurarRra = cfgExt.apurar_rra as boolean | undefined;
+  const rraMesesRaw = cfgExt.rra_meses as number | undefined;
+  const rraParcelasRaw = cfgExt.rra_numero_parcelas as number | undefined;
   return {
     apurar,
     incidir_sobre_juros: cfg?.incidir_sobre_juros ?? false,
@@ -390,6 +415,12 @@ function toEngineIrConfig(cfg: PjecalcIrConfigRow | null): PjeIRConfig {
     deduzir_honorarios: cfg?.deduzir_honorarios ?? false,
     aposentado_65: cfg?.aposentado_65 ?? false,
     dependentes: cfg?.dependentes ?? 0,
+    // Sub-flags RRA (Lei 7.713/88 art. 12-A, incluído pela Lei 12.350/2010).
+    // Engine v3 consome em irpf-modulo-adapter.ts:88 (apurarRraFlag) e :185
+    // (computeNMRra) para forçar/desligar art_12a_rra.
+    apurar_rra: apurarRra,
+    rra_meses: rraMesesRaw && rraMesesRaw > 0 ? rraMesesRaw : undefined,
+    rra_numero_parcelas: rraParcelasRaw && rraParcelasRaw > 0 ? rraParcelasRaw : undefined,
   };
 }
 
@@ -706,7 +737,8 @@ export async function loadSalarioMinimoDB(): Promise<import('./engine-types').Pj
 async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types').PjeExcecaoCargaHoraria[]> {
   try {
     const { data } = await supabase
-      .from('pjecalc_excecoes_carga' as any)
+      // tabela custom pjecalc_* fora do schema gerado (src/types/supabase.ts)
+      .from('pjecalc_excecoes_carga' as never)
       .select('id, periodo_inicio, periodo_fim, carga_horaria_mensal')
       .eq('case_id', caseId);
     if (data && data.length > 0) {
@@ -727,7 +759,8 @@ async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types
 export async function loadExcecoesSabado(caseId: string): Promise<import('./engine-types').PjeExcecaoSabado[]> {
   try {
     const { data } = await supabase
-      .from('pjecalc_excecoes_sabado' as any)
+      // tabela custom pjecalc_* fora do schema gerado (src/types/supabase.ts)
+      .from('pjecalc_excecoes_sabado' as never)
       .select('id, data_inicio, data_fim, sabado_dia_util')
       .eq('case_id', caseId);
     if (data && data.length > 0) {
@@ -916,46 +949,152 @@ function multasConfigToVerbas(
     }
   }
 
-  // ── Equiparação Salarial (Art. 461 CLT) ──
+  // ── Equiparação Salarial (Art. 461 CLT + Súmula 6 TST) ──
+  // Diferença = paradigma_salario - empregado_salario (por competência).
+  // Reflexos: 13º (pro-rata 1/12), férias + 1/3 (1.3333/12), FGTS (8%).
   if (cfg.equiparacao_config) {
     const eq = cfg.equiparacao_config as {
       ativo: boolean;
       paradigma_nome: string;
+      paradigma_funcao?: string;
       periodo_inicio: string;
       periodo_fim: string;
       salarios: Array<{ competencia: string; salario_paradigma: string; salario_empregado: string }>;
     };
     if (eq.ativo && Array.isArray(eq.salarios) && eq.salarios.length > 0) {
+      const totalDiferenca = eq.salarios.reduce((acc, s) => {
+        const par = new Decimal(s.salario_paradigma || 0);
+        const emp = new Decimal(s.salario_empregado || 0);
+        const dif = Decimal.max(0, par.minus(emp));
+        return acc.plus(dif);
+      }, new Decimal(0));
+
       eq.salarios.forEach((s, idx) => {
-        const diferenca = Number(s.salario_paradigma || 0) - Number(s.salario_empregado || 0);
-        if (diferenca > 0) {
-          const v = defaultVerba(`equiparacao_auto_${idx}`, `Diferença Salarial - Equiparação ${eq.paradigma_nome || ''} (${s.competencia})`);
-          v.valor_informado_devido = diferenca;
-          v.periodo_inicio = s.competencia || eq.periodo_inicio || periodoInicio;
-          v.periodo_fim = s.competencia || eq.periodo_fim || periodoFim;
+        const par = new Decimal(s.salario_paradigma || 0);
+        const emp = new Decimal(s.salario_empregado || 0);
+        const diferenca = Decimal.max(0, par.minus(emp));
+        if (diferenca.gt(0)) {
+          const v = defaultVerba(`equiparacao_auto_${idx}`, `DIFERENCA EQUIPARACAO SALARIAL ${eq.paradigma_nome || ''} (${s.competencia})`.trim());
+          v.valor_informado_devido = diferenca.toDP(2).toNumber();
+          v.periodo_inicio = s.competencia ? `${s.competencia}-01` : (eq.periodo_inicio || periodoInicio);
+          v.periodo_fim = s.competencia ? `${s.competencia}-28` : (eq.periodo_fim || periodoFim);
           v.ocorrencia_pagamento = 'mensal';
           v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+          v.gerar_verba_reflexa = 'diferenca';
           v.ordem = 9040 + idx;
           result.push(v);
         }
       });
+
+      // Reflexos automáticos consolidados ao fim do período (Súmula 6 TST item VI).
+      if (totalDiferenca.gt(0)) {
+        const baseRef = totalDiferenca;
+        const dataReflexo = eq.periodo_fim || periodoFim || '';
+
+        // 13º Salário: 1/12 da diferença anual
+        const v13 = defaultVerba('equiparacao_reflexo_13', `REFLEXO EQUIPARACAO EM 13o SALARIO ${eq.paradigma_nome || ''}`.trim());
+        v13.valor_informado_devido = baseRef.times(new Decimal(1).div(12)).toDP(2).toNumber();
+        v13.periodo_inicio = eq.periodo_inicio || periodoInicio;
+        v13.periodo_fim = dataReflexo;
+        v13.ocorrencia_pagamento = 'desligamento';
+        v13.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+        v13.ordem = 9060;
+        result.push(v13);
+
+        // Férias + 1/3: 1.3333/12 da diferença
+        const vFerias = defaultVerba('equiparacao_reflexo_ferias', `REFLEXO EQUIPARACAO EM FERIAS + 1/3 ${eq.paradigma_nome || ''}`.trim());
+        vFerias.valor_informado_devido = baseRef.times(new Decimal('1.3333')).div(12).toDP(2).toNumber();
+        vFerias.periodo_inicio = eq.periodo_inicio || periodoInicio;
+        vFerias.periodo_fim = dataReflexo;
+        vFerias.ocorrencia_pagamento = 'desligamento';
+        vFerias.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+        vFerias.ordem = 9061;
+        result.push(vFerias);
+
+        // FGTS reflexo (8% da diferença total + reflexos).
+        const baseFgts = baseRef
+          .plus(baseRef.times(new Decimal(1).div(12)))
+          .plus(baseRef.times(new Decimal('1.3333')).div(12));
+        const vFgts = defaultVerba('equiparacao_reflexo_fgts', `REFLEXO EQUIPARACAO EM FGTS ${eq.paradigma_nome || ''}`.trim());
+        vFgts.valor_informado_devido = baseFgts.times(new Decimal('0.08')).toDP(2).toNumber();
+        vFgts.periodo_inicio = eq.periodo_inicio || periodoInicio;
+        vFgts.periodo_fim = dataReflexo;
+        vFgts.ocorrencia_pagamento = 'desligamento';
+        vFgts.incidencias = { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false };
+        vFgts.ordem = 9062;
+        result.push(vFgts);
+      }
     }
   }
 
-  // ── Estabilidade Provisória ──
+  // ── Estabilidade Provisória (Art. 10 ADCT / Art. 118 Lei 8.213/91) ──
   if (cfg.estabilidade_config) {
-    const est = cfg.estabilidade_config as { ativo: boolean; tipo: string; periodo_inicio: string; periodo_fim: string };
-    if (est.ativo && est.periodo_inicio && est.periodo_fim) {
-      const v = defaultVerba('estabilidade_auto', `Indenização Estabilidade (${est.tipo || 'provisória'})`);
-      v.valor = 'calculado';
-      v.multiplicador = 1;
-      v.periodo_inicio = est.periodo_inicio;
-      v.periodo_fim = est.periodo_fim;
-      v.ocorrencia_pagamento = 'mensal';
-      v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
-      if (historicos.length > 0) v.base_calculo.historicos = [historicos[0].id];
-      v.ordem = 9050;
-      result.push(v);
+    const est = cfg.estabilidade_config as {
+      ativo: boolean;
+      tipo: string;
+      periodo_inicio: string;
+      periodo_fim: string;
+      data_evento?: string;
+      meses_estabilidade?: string;
+      observacoes?: string;
+    };
+    if (est.ativo) {
+      // Mapa UI → engine (TipoEstabilidade)
+      const tipoMapa: Record<string, 'GESTANTE' | 'CIPA' | 'ACIDENTE_TRABALHO' | 'OUTRO'> = {
+        gestante: 'GESTANTE',
+        cipa: 'CIPA',
+        acidentaria: 'ACIDENTE_TRABALHO',
+        acidente: 'ACIDENTE_TRABALHO',
+        acidente_trabalho: 'ACIDENTE_TRABALHO',
+        outro: 'OUTRO',
+      };
+      const tipoNorm = tipoMapa[(est.tipo || 'gestante').toLowerCase()] || 'OUTRO';
+
+      // Determinar periodos: se UI nao forneceu, derivar de data_evento + meses
+      let inicio = est.periodo_inicio;
+      let fim = est.periodo_fim;
+      if ((!inicio || !fim) && est.data_evento) {
+        // Import dinamico — modulo registra-se em cima do registry
+        const meses = Number(est.meses_estabilidade || 0);
+        // Calculo simples inline (evita import circular):
+        // fim = data_evento + meses
+        const ev = new Date(est.data_evento + 'T00:00:00Z');
+        if (!Number.isNaN(ev.getTime())) {
+          if (!inicio) inicio = est.data_evento;
+          if (!fim && meses > 0) {
+            const dFim = new Date(ev.getTime());
+            dFim.setUTCMonth(dFim.getUTCMonth() + meses);
+            const yyyy = dFim.getUTCFullYear().toString().padStart(4, '0');
+            const mm = (dFim.getUTCMonth() + 1).toString().padStart(2, '0');
+            const dd = dFim.getUTCDate().toString().padStart(2, '0');
+            fim = `${yyyy}-${mm}-${dd}`;
+          }
+        }
+      }
+
+      if (inicio && fim) {
+        const v = defaultVerba('estabilidade_auto', `INDENIZACAO ESTABILIDADE (${tipoNorm})`);
+        v.valor = 'calculado';
+        v.multiplicador = 1;
+        v.periodo_inicio = inicio;
+        v.periodo_fim = fim;
+        v.ocorrencia_pagamento = 'mensal';
+        v.tipo_quantidade = 'informada';
+        v.quantidade_informada = 1;
+        v.tipo_divisor = 'informado';
+        v.divisor_informado = 1;
+        v.incidencias = {
+          fgts: true,
+          irpf: true,
+          contribuicao_social: true,
+          previdencia_privada: false,
+          pensao_alimenticia: false,
+        };
+        if (historicos.length > 0) v.base_calculo.historicos = [historicos[0].id];
+        v.ordem = 9050;
+        if (est.observacoes) v.comentarios = est.observacoes;
+        result.push(v);
+      }
     }
   }
 

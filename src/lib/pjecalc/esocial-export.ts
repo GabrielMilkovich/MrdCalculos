@@ -374,13 +374,36 @@ export function gerarS2501(
 // =====================================================
 
 export function downloadXml(xml: string, filename: string) {
-  const blob = new Blob([xml], { type: 'application/xml' });
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    throw new Error('downloadXml: ambiente sem suporte a File API.');
+  }
+  const safeName = (filename || 'esocial.xml')
+    .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
+    .trim()
+    .slice(0, 200) || 'esocial.xml';
+
+  const blob = new Blob([xml ?? ''], { type: 'application/xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  let a: HTMLAnchorElement | null = null;
+  try {
+    a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+  } finally {
+    try {
+      if (a && a.parentNode) a.parentNode.removeChild(a);
+    } catch {
+      /* ignore */
+    }
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 // =====================================================
@@ -391,6 +414,10 @@ export async function exportarESocialZip(
   config: ESocialConfig,
   result: PjeLiquidacaoResult,
 ): Promise<void> {
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    throw new Error('exportarESocialZip: ambiente sem suporte a File API.');
+  }
+
   const JSZip = (await import('jszip')).default;
   const zip = new JSZip();
 
@@ -398,10 +425,26 @@ export async function exportarESocialZip(
   zip.file('S-2501.xml', gerarS2501(config, result));
 
   const blob = await zip.generateAsync({ type: 'blob' });
+  const safeProc = (config.dados.nrProcTrab || 'processo').replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_');
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `esocial-${config.dados.nrProcTrab || 'processo'}.zip`;
-  a.click();
-  URL.revokeObjectURL(url);
+  let a: HTMLAnchorElement | null = null;
+  try {
+    a = document.createElement('a');
+    a.href = url;
+    a.download = `esocial-${safeProc}.zip`;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+  } finally {
+    try {
+      if (a && a.parentNode) a.parentNode.removeChild(a);
+    } catch {
+      /* ignore */
+    }
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
 }

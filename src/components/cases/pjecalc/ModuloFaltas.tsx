@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 
@@ -29,8 +30,7 @@ export function ModuloFaltas({ caseId }: Props) {
   const { data: faltas = [] } = useQuery({
     queryKey: ["pjecalc_faltas", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_faltas" as any)
+      const { data, error } = await fromUntyped("pjecalc_faltas")
         .select("*")
         .eq("case_id", caseId)
         .order("data_inicial");
@@ -45,7 +45,7 @@ export function ModuloFaltas({ caseId }: Props) {
     setSaving(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const { error } = await supabase.from("pjecalc_faltas" as any).insert({
+      const { error } = await fromUntyped("pjecalc_faltas").insert({
         case_id: caseId,
         data_inicial: today,
         data_final: today,
@@ -64,7 +64,7 @@ export function ModuloFaltas({ caseId }: Props) {
   };
 
   const updateField = async (id: string, patch: Partial<FaltaRow>) => {
-    const { error } = await supabase.from("pjecalc_faltas" as any).update(patch).eq("id", id);
+    const { error } = await fromUntyped("pjecalc_faltas").update(patch).eq("id", id);
     if (error) {
       toast.error("Erro ao salvar");
       return;
@@ -73,7 +73,7 @@ export function ModuloFaltas({ caseId }: Props) {
   };
 
   const removeFalta = async (id: string) => {
-    const { error } = await supabase.from("pjecalc_faltas" as any).delete().eq("id", id);
+    const { error } = await fromUntyped("pjecalc_faltas").delete().eq("id", id);
     if (error) { toast.error("Erro ao remover"); return; }
     invalidate();
   };
@@ -91,7 +91,7 @@ export function ModuloFaltas({ caseId }: Props) {
         </Button>
       </div>
 
-      <p className="text-[10px] text-amber-700 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo (campo "Reiniciar Férias") — CLT art. 130 controverso quanto a reiniciar período aquisitivo após falta. Flag persiste mas engine ainda usa redução clássica da tabela do art. 130. Aguarda PJC com <code>reiniciarFerias=true</code> como ground-truth (0/47 no corpus).</p>
+      <p className="text-[10px] text-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded border border-emerald-200 dark:border-emerald-900"><strong>✓ Reiniciar Férias implementado (v3.6).</strong> Quando marcado, a falta reinicia o período aquisitivo de férias a partir da data de retorno (data final + 1 dia), conforme Art. 130-A CLT (DL 2.318/87). Faltas anteriores ao retorno deixam de contar para a redutora do Art. 130.</p>
 
       {faltas.length === 0 ? (
         <Card>
@@ -130,7 +130,7 @@ export function ModuloFaltas({ caseId }: Props) {
                     />
                     Justificada
                   </label>
-                  <label className="flex items-center gap-2 text-xs pb-1">
+                  <label className="flex items-center gap-2 text-xs pb-1" title="Art. 130-A CLT: a partir da data de retorno (data_final + 1 dia), o período aquisitivo de férias reinicia. Faltas anteriores não contam para a redução do Art. 130.">
                     <Checkbox
                       defaultChecked={f.reiniciar_ferias ?? false}
                       onCheckedChange={(v) => updateField(f.id, { reiniciar_ferias: !!v })}

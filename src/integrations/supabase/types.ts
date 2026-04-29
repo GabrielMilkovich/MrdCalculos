@@ -1170,7 +1170,6 @@ export type Database = {
           max_retries: number | null
           metadata: Json
           mime_type: string | null
-          ocr_confianca: number | null
           ocr_confidence: number | null
           owner_user_id: string | null
           page_count: number | null
@@ -1205,7 +1204,6 @@ export type Database = {
           max_retries?: number | null
           metadata?: Json
           mime_type?: string | null
-          ocr_confianca?: number | null
           ocr_confidence?: number | null
           owner_user_id?: string | null
           page_count?: number | null
@@ -1240,7 +1238,6 @@ export type Database = {
           max_retries?: number | null
           metadata?: Json
           mime_type?: string | null
-          ocr_confianca?: number | null
           ocr_confidence?: number | null
           owner_user_id?: string | null
           page_count?: number | null

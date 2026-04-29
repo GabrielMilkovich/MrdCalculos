@@ -357,14 +357,24 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
               )}
             </div>
 
-            {/* Confidence */}
+            {/* Confidence — badge sempre visivel quando confianca existe (mesmo low) */}
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-sm text-muted-foreground">Confiança:</span>
-              <span className={cn("text-sm font-medium", getConfidenceColor(extraction.confianca))}>
-                {getConfidenceLabel(extraction.confianca)}
-              </span>
-              {extraction.confianca !== null && extraction.confianca < 0.5 && (
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <span className="text-sm text-muted-foreground">Confiança OCR:</span>
+              {extraction.confianca !== null && extraction.confianca !== undefined ? (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-xs font-mono",
+                    extraction.confianca >= 0.8 && "border-green-500 text-green-700 bg-green-50 dark:bg-green-950/30",
+                    extraction.confianca >= 0.5 && extraction.confianca < 0.8 && "border-amber-500 text-amber-700 bg-amber-50 dark:bg-amber-950/30",
+                    extraction.confianca < 0.5 && "border-red-500 text-red-700 bg-red-50 dark:bg-red-950/30",
+                  )}
+                >
+                  {getConfidenceLabel(extraction.confianca)}
+                  {extraction.confianca < 0.5 && <AlertTriangle className="h-3 w-3 ml-1" />}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-xs text-muted-foreground">N/A</Badge>
               )}
             </div>
 

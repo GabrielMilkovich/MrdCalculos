@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 
@@ -38,13 +39,12 @@ export function ModuloExcecoesCarga({ caseId }: Props) {
   const { data: excecoes = [], isLoading } = useQuery({
     queryKey: ["pjecalc_excecoes_carga", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_excecoes_carga" as any)
+      const { data, error } = await fromUntyped("pjecalc_excecoes_carga")
         .select("*")
         .eq("case_id", caseId)
         .order("periodo_inicio", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as any[];
+      return (data ?? []) as unknown[];
     },
   });
 
@@ -81,14 +81,12 @@ export function ModuloExcecoesCarga({ caseId }: Props) {
         carga_horaria_mensal: Number(editing.carga_horaria_mensal.replace(",", ".")),
       };
       if (editing.id) {
-        const { error } = await supabase
-          .from("pjecalc_excecoes_carga" as any)
+        const { error } = await fromUntyped("pjecalc_excecoes_carga")
           .update(payload)
           .eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("pjecalc_excecoes_carga" as any)
+        const { error } = await fromUntyped("pjecalc_excecoes_carga")
           .insert(payload);
         if (error) throw error;
       }
@@ -105,7 +103,7 @@ export function ModuloExcecoesCarga({ caseId }: Props) {
   const deleteExc = async (id: string) => {
     if (!confirm("Excluir esta exceção?")) return;
     try {
-      const { error } = await supabase.from("pjecalc_excecoes_carga" as any).delete().eq("id", id);
+      const { error } = await fromUntyped("pjecalc_excecoes_carga").delete().eq("id", id);
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["pjecalc_excecoes_carga", caseId] });
       toast.success("Exceção excluída!");

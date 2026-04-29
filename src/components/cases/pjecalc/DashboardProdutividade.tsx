@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import {
   BarChart3, Clock, Calculator, FileCheck, TrendingUp, AlertTriangle,
   CheckCircle2, RefreshCw,
@@ -17,11 +18,11 @@ export function DashboardProdutividade() {
       // Aggregate metrics from liquidation results and cases
       const [casesRes, liquidacoesRes] = await Promise.all([
         supabase.from("cases").select("id, status, criado_em").order("criado_em", { ascending: false }),
-        supabase.from("pjecalc_liquidacao_resultado" as any).select("case_id, created_at, total_bruto, total_liquido, engine_version").order("created_at", { ascending: false }),
+        fromUntyped("pjecalc_liquidacao_resultado").select("case_id, created_at, total_bruto, total_liquido, engine_version").order("created_at", { ascending: false }),
       ]);
 
       const cases = casesRes.data || [];
-      const liquidacoes = (liquidacoesRes as any).data || [];
+      const liquidacoes = (liquidacoesRes as Record<string, unknown>).data || [];
 
       const total = cases.length;
       const emAnalise = cases.filter((c: any) => c.status === 'em_analise').length;

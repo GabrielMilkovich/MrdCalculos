@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Trash2, ChevronDown, ChevronRight, Loader2, DollarSign } from "lucide-react";
 import { ImportadorFichaFinanceira } from "./ImportadorFichaFinanceira";
@@ -49,8 +50,7 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
   const { data: historicos = [] } = useQuery({
     queryKey: ["pjecalc_historico", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_historico_salarial" as any)
+      const { data, error } = await fromUntyped("pjecalc_historico_salarial")
         .select("*")
         .eq("case_id", caseId)
         .order("nome");
@@ -62,8 +62,7 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
   const { data: ocorrencias = [] } = useQuery({
     queryKey: ["pjecalc_historico_ocorrencias", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_historico_ocorrencias" as any)
+      const { data, error } = await fromUntyped("pjecalc_historico_ocorrencias")
         .select("*")
         .eq("case_id", caseId)
         .order("competencia");
@@ -97,7 +96,7 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
   const addHistorico = async () => {
     setAdding(true);
     try {
-      const { error } = await supabase.from("pjecalc_historico_salarial" as any).insert({
+      const { error } = await fromUntyped("pjecalc_historico_salarial").insert({
         case_id: caseId,
         nome: `Base ${historicos.length + 1}`,
         tipo_valor: 'VARIAVEL',
@@ -125,20 +124,20 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
     if (patch.incidencia_cs !== undefined) underlyingPatch.incide_inss = patch.incidencia_cs;
     if (patch.incide_ir !== undefined) underlyingPatch.incide_ir = patch.incide_ir;
     if (patch.observacoes !== undefined) underlyingPatch.observacoes = patch.observacoes;
-    const { error } = await supabase.from("pjecalc_hist_salarial" as any).update(underlyingPatch).eq("id", id);
+    const { error } = await fromUntyped("pjecalc_hist_salarial").update(underlyingPatch).eq("id", id);
     if (error) { toast.error("Erro ao salvar: " + error.message); return; }
     invalidate();
   };
 
   const removeHistorico = async (id: string) => {
-    const { error } = await supabase.from("pjecalc_historico_salarial" as any).delete().eq("id", id);
+    const { error } = await fromUntyped("pjecalc_historico_salarial").delete().eq("id", id);
     if (error) { toast.error("Erro ao remover"); return; }
     invalidate();
   };
 
   const addOcorrencia = async (histId: string) => {
     const today = new Date().toISOString().slice(0, 10);
-    const { error } = await supabase.from("pjecalc_historico_ocorrencias" as any).insert({
+    const { error } = await fromUntyped("pjecalc_historico_ocorrencias").insert({
       historico_id: histId, case_id: caseId,
       competencia: today, valor: 0, tipo: 'informado',
     });
@@ -147,13 +146,13 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
   };
 
   const updateOcorrencia = async (id: string, patch: Partial<OcorrenciaRow>) => {
-    const { error } = await supabase.from("pjecalc_historico_ocorrencias" as any).update(patch).eq("id", id);
+    const { error } = await fromUntyped("pjecalc_historico_ocorrencias").update(patch).eq("id", id);
     if (error) { toast.error("Erro ao salvar"); return; }
     invalidate();
   };
 
   const removeOcorrencia = async (id: string) => {
-    const { error } = await supabase.from("pjecalc_historico_ocorrencias" as any).delete().eq("id", id);
+    const { error } = await fromUntyped("pjecalc_historico_ocorrencias").delete().eq("id", id);
     if (error) { toast.error("Erro ao remover"); return; }
     invalidate();
   };

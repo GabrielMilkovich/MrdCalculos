@@ -1,5 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// =====================================================
+// parse-sentenca-jornada
+// Extrai regras objetivas de ajuste de jornada (em minutos) de
+// trechos de sentença/decisão judicial. Espelha o padrao da edge
+// `parse-ficha-financeira` (gpt-4o-mini com tool-calling).
+//
+// SECRETS NECESSARIOS no Supabase:
+//   - OPENAI_API_KEY  (Settings -> Edge Functions -> Secrets)
+//   - MISTRAL_API_KEY (apenas para ocr-document/process-document-mistral)
+// Configurar via dashboard https://supabase.com/dashboard ou CLI:
+//   supabase secrets set OPENAI_API_KEY=sk-... MISTRAL_API_KEY=...
+// =====================================================
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
@@ -18,7 +31,9 @@ serve(async (req) => {
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) {
-      return new Response(JSON.stringify({ error: "OPENAI_API_KEY não configurada" }), {
+      return new Response(JSON.stringify({
+        error: "OPENAI_API_KEY não configurada. Defina em Supabase Settings → Edge Functions → Secrets.",
+      }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -51,7 +66,8 @@ Retorne as regras detectadas.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o-mini",
+        temperature: 0.05,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -118,14 +134,24 @@ Retorne as regras detectadas.`;
     }
 
     const data = await response.json();
+    let parsed: unknown = null;
     const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) {
+    if (toolCall?.function?.arguments) {
+      parsed = JSON.parse(toolCall.function.arguments);
+    } else {
+      const content = data.choices?.[0]?.message?.content || "";
+      const jsonMatch = typeof content === "string" ? content.match(/\{[\s\S]*\}/) : null;
+      if (jsonMatch) {
+        try { parsed = JSON.parse(jsonMatch[0]); } catch { /* ignore */ }
+      }
+    }
+
+    if (!parsed) {
       return new Response(JSON.stringify({ error: "IA não retornou regras estruturadas" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const parsed = JSON.parse(toolCall.function.arguments);
     return new Response(JSON.stringify(parsed), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -88,14 +88,36 @@ export function downloadXML(
   meta: { processo?: string; cliente?: string; dataLiquidacao?: string; engineVersion?: string }
 ) {
   logger.warn('[DEPRECATED] downloadXML() generates simplified XML. Use exportPJCXml() from pjc-xml-real.ts.');
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    throw new Error('downloadXML: ambiente sem suporte a File API.');
+  }
   const xml = exportarXML(result, meta);
   const blob = new Blob([xml], { type: "application/xml;charset=utf-8" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `pjecalc_${meta.processo?.replace(/\D/g, "") || "liquidacao"}_${new Date().toISOString().slice(0, 10)}.xml`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const fallback = `pjecalc_${meta.processo?.replace(/\D/g, "") || "liquidacao"}_${new Date().toISOString().slice(0, 10)}.xml`;
+  const safeName = fallback
+    .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
+    .trim()
+    .slice(0, 200) || fallback;
+
+  let a: HTMLAnchorElement | null = null;
+  try {
+    a = document.createElement("a");
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+  } finally {
+    try {
+      if (a && a.parentNode) a.parentNode.removeChild(a);
+    } catch {
+      /* ignore */
+    }
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
 }

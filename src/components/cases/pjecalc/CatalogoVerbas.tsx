@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { BookOpen, Search, Loader2, Zap, UserMinus, Scale, Clock, Timer, ShieldAlert, LogOut, Handshake, PackagePlus, TrendingUp, Layers, DollarSign, Calendar, MapPin, Award, Bus, Heart, Baby, MinusCircle, Coins, AlertTriangle, Moon, Users } from "lucide-react";
 import { TEMPLATES_EXPRESSO, type TemplateExpresso } from "@/lib/pjecalc/templates-expresso";
@@ -146,7 +147,7 @@ export function CatalogoVerbas({ caseId, periodoInicio, periodoFim, ordemBase, o
       let ordem = ordemBase;
       for (const idx of selected) {
         const v = CATALOGO[idx];
-        await supabase.from("pjecalc_verbas" as any).insert({
+        await fromUntyped("pjecalc_verbas").insert({
           case_id: caseId,
           nome: v.nome,
           tipo: v.tipo,
@@ -177,7 +178,7 @@ export function CatalogoVerbas({ caseId, periodoInicio, periodoFim, ordemBase, o
     try {
       let ordem = ordemBase;
       for (const v of template.verbas) {
-        await supabase.from("pjecalc_verbas" as any).insert({
+        await fromUntyped("pjecalc_verbas").insert({
           case_id: caseId,
           nome: v.nome,
           tipo: v.tipo,
@@ -218,7 +219,7 @@ export function CatalogoVerbas({ caseId, periodoInicio, periodoFim, ordemBase, o
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={v => setTab(v as any)}>
+        <Tabs value={tab} onValueChange={v => setTab(v as Record<string, unknown>)}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="templates" className="text-xs">
               <PackagePlus className="h-3.5 w-3.5 mr-1" /> Lançamento Expresso

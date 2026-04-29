@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Play, Loader2, FileBarChart, Printer, FileCode, AlertTriangle, CheckCircle2, Info, XCircle, Lock, Unlock, Copy, MoreVertical, FileText, FileSpreadsheet, ClipboardCheck, GitCompareArrows, Download, Gavel } from "lucide-react";
 import { PainelRevisao } from "./PainelRevisao";
@@ -275,19 +276,23 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       } as PjeIRConfig;
 
       // Load combination-by-date data from pjecalc_atualizacao_config
-      let combinacoesIndice: any[] | undefined;
-      let combinacoesJuros: any[] | undefined;
+      let combinacoesIndice: unknown[] | undefined;
+      let combinacoesJuros: unknown[] | undefined;
       {
         const { data: calculoRow2 } = await supabase.from("pjecalc_calculos").select("id").eq("case_id", caseId).maybeSingle();
         if (calculoRow2) {
-          const { data: atConfigs } = await supabase.from("pjecalc_atualizacao_config" as any)
-            .select("*").eq("calculo_id", (calculoRow2 as any).id);
+          const calculoIdLocal = (calculoRow2 as { id: string }).id;
+          const { data: atConfigs } = await supabase
+            // tabela custom fora do schema gerado
+            .from("pjecalc_atualizacao_config" as never)
+            .select("*").eq("calculo_id", calculoIdLocal);
           if (atConfigs) {
-            for (const ac of atConfigs as any[]) {
+            type AtConfig = { tipo: string; combinacoes_indice?: string; combinacoes_juros?: string };
+            for (const ac of atConfigs as unknown as AtConfig[]) {
               if (ac.tipo === 'correcao' && ac.combinacoes_indice) {
-                try { combinacoesIndice = JSON.parse(ac.combinacoes_indice); } catch {}
+                try { combinacoesIndice = JSON.parse(ac.combinacoes_indice); } catch { /* ignore */ }
                 if (!combinacoesJuros && ac.combinacoes_juros) {
-                  try { combinacoesJuros = JSON.parse(ac.combinacoes_juros); } catch {}
+                  try { combinacoesJuros = JSON.parse(ac.combinacoes_juros); } catch { /* ignore */ }
                 }
               }
             }
@@ -434,13 +439,13 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         .maybeSingle();
       
       if (!calculoRow) throw new Error("Cálculo não encontrado. Execute 'Sincronizar Dados' primeiro.");
-      const calculoId = (calculoRow as any).id;
+      const calculoId = (calculoRow as { id: string }).id;
 
       // Delete previous resultado if exists
-      await supabase.from("pjecalc_resultado" as any).delete().eq("calculo_id", calculoId);
+      await fromUntyped("pjecalc_resultado").delete().eq("calculo_id", calculoId);
 
       // Persist resultado to REAL table (pjecalc_resultado)
-      const { error: resError } = await supabase.from("pjecalc_resultado" as any).insert({
+      const { error: resError } = await fromUntyped("pjecalc_resultado").insert({
         calculo_id: calculoId,
         total_bruto: result.resumo.principal_bruto,
         total_diferenca: result.resumo.principal_bruto,
@@ -457,7 +462,10 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         total_reclamante: result.resumo.liquido_reclamante,
         total_reclamado: result.resumo.total_reclamada,
         engine_version: '2.1.0',
-        resumo_verbas: result as any,
+        // pjecalc_resultado.resumo_verbas é JSONB; o engine retorna estrutura
+        // tipada via PjeCalcEngineV3.liquidar(). Usamos `unknown` para passar
+        // ao banco sem perder a tipagem do `result` em uso local acima.
+        resumo_verbas: result as unknown,
       });
       if (resError) {
         logger.error("ModuloResumo persistir resultado falhou", { error: String(resError) });
@@ -465,7 +473,27 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       }
 
       // ── Persistir ocorrências calculadas na tabela REAL (pjecalc_ocorrencia_calculo) ──
-      const ocRows: any[] = [];
+      type OcRow = {
+        calculo_id: string;
+        verba_base_id: string;
+        tipo: string;
+        nome: string;
+        competencia: string;
+        base_valor: number;
+        divisor: number;
+        multiplicador: number;
+        quantidade: number;
+        dobra: number;
+        devido: number;
+        pago: number;
+        diferenca: number;
+        correcao: number;
+        juros: number;
+        total: number;
+        origem: string;
+        ativa: boolean;
+      };
+      const ocRows: OcRow[] = [];
       for (const vr of result.verbas) {
         for (const oc of vr.ocorrencias) {
           ocRows.push({
@@ -492,13 +520,13 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       }
       if (ocRows.length > 0) {
         // Delete existing CALCULADA rows
-        await supabase.from("pjecalc_ocorrencia_calculo" as any)
+        await fromUntyped("pjecalc_ocorrencia_calculo")
           .delete()
           .eq("calculo_id", calculoId)
           .eq("origem", "CALCULADA");
         // Insert in batches of 500
         for (let i = 0; i < ocRows.length; i += 500) {
-          const { error: ocErr } = await supabase.from("pjecalc_ocorrencia_calculo" as any).insert(ocRows.slice(i, i + 500));
+          const { error: ocErr } = await fromUntyped("pjecalc_ocorrencia_calculo").insert(ocRows.slice(i, i + 500));
           if (ocErr) {
             logger.error("ModuloResumo persistir ocorrencias falhou", { error: String(ocErr) });
             toast.warning("Algumas ocorrências podem não ter sido salvas. Tente recalcular.");
@@ -683,7 +711,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
                     // Need to load configs for criterios report
                     gerarRelatorioCriteriosLegais(
                       res,
-                      resultado?.resultado ? { case_id: caseId, data_admissao: '', data_ajuizamento: '', estado: '', municipio: '', regime_trabalho: 'tempo_integral', carga_horaria_padrao: 220, prescricao_quinquenal: false, prescricao_fgts: false, prazo_aviso_previo: 'nao_apurar', projetar_aviso_indenizado: false, limitar_avos_periodo: false, zerar_valor_negativo: false, sabado_dia_util: true, considerar_feriado_estadual: false, considerar_feriado_municipal: false } as any : {} as any,
+                      resultado?.resultado ? { case_id: caseId, data_admissao: '', data_ajuizamento: '', estado: '', municipio: '', regime_trabalho: 'tempo_integral', carga_horaria_padrao: 220, prescricao_quinquenal: false, prescricao_fgts: false, prazo_aviso_previo: 'nao_apurar', projetar_aviso_indenizado: false, limitar_avos_periodo: false, zerar_valor_negativo: false, sabado_dia_util: true, considerar_feriado_estadual: false, considerar_feriado_municipal: false } as any : {} as Record<string, unknown>,
                       { indice: 'IPCA-E', epoca: 'mensal', juros_tipo: 'simples_mensal', juros_percentual: 1, juros_inicio: 'ajuizamento', multa_523: false, multa_523_percentual: 10, data_liquidacao: resultado?.data_liquidacao || '' },
                       { apurar: true, incidir_sobre_juros: false, cobrar_reclamado: false, tributacao_exclusiva_13: true, tributacao_separada_ferias: false, deduzir_cs: true, deduzir_prev_privada: false, deduzir_pensao: false, deduzir_honorarios: false, aposentado_65: false, dependentes: 0 },
                       { apurar_segurado: true, cobrar_reclamante: true, cs_sobre_salarios_pagos: false, aliquota_segurado_tipo: 'empregado', limitar_teto: true, apurar_empresa: true, apurar_sat: true, apurar_terceiros: true, aliquota_empregador_tipo: 'fixa', aliquota_empresa_fixa: 20, aliquota_sat_fixa: 2, aliquota_terceiros_fixa: 5.8, periodos_simples: [] },

@@ -342,7 +342,9 @@ function isModuleVerbaMatch(moduleId: string, verba: PjeVerba): boolean {
     case 'DSR':
       return includesAny(name, ['DSR', 'RSR', 'DESCANSO SEMANAL']);
     case 'SAL_SUBST':
-      return includesAny(name, ['SUBSTITUI', 'EQUIPARA']);
+      return name.includes('SUBSTITUI') && !includesAny(name, ['EQUIPARA', 'DIFERENCA EQUIPARACAO', 'DIFERENCA SALARIAL']);
+    case 'EQUIPARACAO_SALARIAL':
+      return includesAny(name, ['EQUIPARACAO SALARIAL', 'EQUIPARACAO', 'DIFERENCA SALARIAL EQUIPARACAO', 'DIFERENCA EQUIPARACAO']);
     case 'PLR_PROP':
       return includesAny(name, ['PLR', 'PARTICIPA']);
     case 'SALDO_SAL':

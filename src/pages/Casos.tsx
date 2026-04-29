@@ -83,7 +83,7 @@ export default function Casos() {
 
       return casesData.map(c => ({
         ...c,
-        arquivado: (c as any).arquivado === true,
+        arquivado: (c as Record<string, unknown>).arquivado === true,
         doc_count: docCounts.get(c.id) || 0,
         fact_count: factCounts.get(c.id) || 0,
         confirmed_fact_count: confirmedCounts.get(c.id) || 0,
@@ -125,7 +125,7 @@ export default function Casos() {
   const archiveCase = async (caseId: string, archive: boolean) => {
     const { error } = await supabase
       .from("cases")
-      .update({ arquivado: archive, arquivado_em: archive ? new Date().toISOString() : null } as any)
+      .update({ arquivado: archive, arquivado_em: archive ? new Date().toISOString() : null } as Record<string, unknown>)
       .eq("id", caseId);
     if (error) {
       toast.error(`Erro ao ${archive ? "arquivar" : "desarquivar"}: ${error.message}`);

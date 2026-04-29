@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { History, FileText, AlertTriangle, Edit, Trash2, Plus, RefreshCw, Lock } from "lucide-react";
 
 interface Props { caseId: string; }
@@ -28,13 +29,12 @@ export function AuditLog({ caseId }: Props) {
   const { data: logs = [] } = useQuery({
     queryKey: ["pjecalc_audit_log", caseId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("pjecalc_audit_log" as any)
+      const { data } = await fromUntyped("pjecalc_audit_log")
         .select("*")
         .eq("case_id", caseId)
         .order("created_at", { ascending: false })
         .limit(100);
-      return (data || []) as any[];
+      return (data || []) as unknown[];
     },
   });
 
@@ -100,7 +100,7 @@ export async function registrarAuditLog(
   opts?: { campo?: string; valorAnterior?: string; valorNovo?: string; justificativa?: string; metadata?: any }
 ) {
   const { data: { user } } = await supabase.auth.getUser();
-  await supabase.from("pjecalc_audit_log" as any).insert({
+  await fromUntyped("pjecalc_audit_log").insert({
     case_id: caseId,
     user_id: user?.id,
     modulo,

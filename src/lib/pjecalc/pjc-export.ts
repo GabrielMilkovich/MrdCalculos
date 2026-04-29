@@ -139,16 +139,38 @@ export function exportarPJC(data: PJCData): string {
 /** @deprecated Use exportPJCXml from pjc-xml-real.ts */
 export function downloadPJC(data: PJCData, nomeArquivo?: string) {
   logger.warn('[DEPRECATED] downloadPJC() generates MRDcalc JSON format. Use exportPJCXml() for real PJC XML.');
+  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    throw new Error('downloadPJC: ambiente sem suporte a File API.');
+  }
   const json = exportarPJC(data);
   const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = nomeArquivo || `PROCESSO_${data.processo.numero?.replace(/\D/g, '') || 'CALCULO'}_${data.processo.reclamante?.replace(/\s+/g, '_') || 'RECLAMANTE'}.PJC`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const fallback = `PROCESSO_${data.processo?.numero?.replace(/\D/g, '') || 'CALCULO'}_${data.processo?.reclamante?.replace(/\s+/g, '_') || 'RECLAMANTE'}.PJC`;
+  const safeName = (nomeArquivo || fallback)
+    .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
+    .trim()
+    .slice(0, 200) || fallback;
+
+  let a: HTMLAnchorElement | null = null;
+  try {
+    a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+  } finally {
+    try {
+      if (a && a.parentNode) a.parentNode.removeChild(a);
+    } catch {
+      /* ignore */
+    }
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /** @deprecated This parses the MRDcalc JSON format only. Use analyzePJC() from pjc-analyzer.ts for real PJC XML. */

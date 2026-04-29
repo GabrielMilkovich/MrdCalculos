@@ -82,7 +82,7 @@ export function ModuloHonorarios({ caseId }: Props) {
         percentual_sucumbenciais: items[0]?.percentual ? parseFloat(items[0].percentual) : 15,
         base_sucumbenciais: items[0]?.base || 'condenacao', apurar_contratuais: false,
         percentual_contratuais: 20, valor_fixo: null, items,
-      } as any);
+      } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_honorarios", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
       toast.success("Honorários salvos!");
@@ -185,7 +185,7 @@ export function ModuloHonorarios({ caseId }: Props) {
 
             <div className="border-t pt-2 mt-2">
               <p className="text-xs font-semibold text-muted-foreground mb-1">Imposto de Renda</p>
-              <p className="text-[10px] text-amber-700 mb-2 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — campos persistidos mas engine ainda não calcula IRPF sobre honorário (PF/PJ). Validação aguarda PJC com <code>apurarIRRF=true</code> (0/47 no corpus).</p>
+              <p className="text-[10px] text-emerald-700 mb-2 bg-emerald-50 dark:bg-emerald-950/20 p-1.5 rounded border border-emerald-200 dark:border-emerald-900">✓ <strong>Engine implementado</strong> — orchestrator propaga <code>apurar_ir</code> para <code>incidencias.irpf</code>; <code>ParcelasAtualizaveisHonorario</code> aplica retenção PF (tabela progressiva) ou PJ (1,5%).</p>
               <div className="space-y-2">
                 <div className="flex items-center gap-2" title="Quando marcado, retém IRPF do honorário. PF=tabela progressiva (Lei 7.713/88). PJ=1,5% fixo (IN RFB).">
                   <Checkbox checked={editForm.apurar_ir} onCheckedChange={v => setEditForm(p => ({ ...p, apurar_ir: !!v }))} />

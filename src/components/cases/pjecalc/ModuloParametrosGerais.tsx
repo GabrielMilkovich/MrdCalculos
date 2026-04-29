@@ -8,13 +8,32 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Save, Loader2 } from "lucide-react";
+import Decimal from "decimal.js";
+import { IBGECombobox } from "./IBGECombobox";
+
+Decimal.set({ precision: 20 });
+
+const CNJ_REGEX = /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/;
+const TRTS = Array.from({ length: 24 }, (_, i) => `TRT${String(i + 1).padStart(2, "0")}`);
+const TRFS = Array.from({ length: 6 }, (_, i) => `TRF${i + 1}`);
+const TJS = [
+  "TJAC","TJAL","TJAM","TJAP","TJBA","TJCE","TJDF","TJES","TJGO","TJMA","TJMG","TJMS","TJMT",
+  "TJPA","TJPB","TJPE","TJPI","TJPR","TJRJ","TJRN","TJRO","TJRR","TJRS","TJSC","TJSE","TJSP","TJTO",
+];
+
+function tribunaisPorJustica(j: string): string[] {
+  if (j === "FEDERAL") return TRFS;
+  if (j === "ESTADUAL") return TJS;
+  return TRTS;
+}
 
 // =====================================================
 // MÓDULO PARÂMETROS GERAIS — baseado em Calculo.java (PJe-Calc v2.15.1)
 // Persiste em pjecalc_calculos (uma linha por case_id).
-// TODO: dropdown de municipio_ibge hoje é text — plugar em tabela IBGE quando disponível.
+// Município IBGE: combobox via API oficial https://servicodados.ibge.gov.br
 // =====================================================
 
 interface Props { caseId: string; }
@@ -52,6 +71,13 @@ type FormState = {
   percentual_he_50: string;
   percentual_he_100: string;
   percentual_adicional_noturno: string;
+  // Bloco CNJ — paridade PJe-Calc oficial
+  cnj_numero_processo: string;
+  cnj_valor_causa: string;
+  cnj_tribunal: string;
+  cnj_justica: string;
+  cnj_vara: string;
+  cnj_doc_previdenciario: string;
 };
 
 const defaults: FormState = {
@@ -87,6 +113,12 @@ const defaults: FormState = {
   percentual_he_50: "50",
   percentual_he_100: "100",
   percentual_adicional_noturno: "20",
+  cnj_numero_processo: "",
+  cnj_valor_causa: "",
+  cnj_tribunal: "",
+  cnj_justica: "TRABALHO",
+  cnj_vara: "",
+  cnj_doc_previdenciario: "",
 };
 
 const UFS = [
@@ -102,8 +134,7 @@ export function ModuloParametrosGerais({ caseId }: Props) {
   const { data } = useQuery({
     queryKey: ["pjecalc_calculos", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_calculos" as any)
+      const { data, error } = await fromUntyped("pjecalc_calculos")
         .select("*")
         .eq("case_id", caseId)
         .maybeSingle();
@@ -115,6 +146,7 @@ export function ModuloParametrosGerais({ caseId }: Props) {
   useEffect(() => {
     if (!data) return;
     const d = data as unknown as Record<string, unknown>;
+    const dp = (d.dados_processo as Record<string, unknown> | null) ?? {};
     setForm({
       titulo: (d.titulo as string) ?? defaults.titulo,
       observacoes: (d.observacoes as string) ?? defaults.observacoes,
@@ -148,6 +180,12 @@ export function ModuloParametrosGerais({ caseId }: Props) {
       percentual_he_50: d.percentual_he_50?.toString() ?? defaults.percentual_he_50,
       percentual_he_100: d.percentual_he_100?.toString() ?? defaults.percentual_he_100,
       percentual_adicional_noturno: d.percentual_adicional_noturno?.toString() ?? defaults.percentual_adicional_noturno,
+      cnj_numero_processo: (dp.cnj_numero_processo as string) ?? "",
+      cnj_valor_causa: dp.cnj_valor_causa != null ? String(dp.cnj_valor_causa) : "",
+      cnj_tribunal: (dp.cnj_tribunal as string) ?? "",
+      cnj_justica: (dp.cnj_justica as string) ?? defaults.cnj_justica,
+      cnj_vara: (dp.cnj_vara as string) ?? "",
+      cnj_doc_previdenciario: (dp.cnj_doc_previdenciario as string) ?? "",
     });
   }, [data]);
 
@@ -166,6 +204,31 @@ export function ModuloParametrosGerais({ caseId }: Props) {
   const save = async () => {
     setSaving(true);
     try {
+      // Validar CNJ se preenchido
+      if (form.cnj_numero_processo && !CNJ_REGEX.test(form.cnj_numero_processo)) {
+        toast.error("Número CNJ inválido. Formato: NNNNNNN-NN.NNNN.N.NN.NNNN");
+        setSaving(false);
+        return;
+      }
+      // Decimal.js para valor da causa (paridade PJe-Calc)
+      let cnjValorCausa: string | null = null;
+      if (form.cnj_valor_causa.trim() !== "") {
+        try {
+          cnjValorCausa = new Decimal(form.cnj_valor_causa.replace(",", ".")).toFixed(2);
+        } catch {
+          toast.error("Valor da causa inválido.");
+          setSaving(false);
+          return;
+        }
+      }
+      const dadosProcesso = {
+        cnj_numero_processo: form.cnj_numero_processo || null,
+        cnj_valor_causa: cnjValorCausa,
+        cnj_tribunal: form.cnj_tribunal || null,
+        cnj_justica: form.cnj_justica || null,
+        cnj_vara: form.cnj_vara || null,
+        cnj_doc_previdenciario: form.cnj_doc_previdenciario || null,
+      };
       const payload = {
         case_id: caseId,
         titulo: form.titulo || null,
@@ -203,9 +266,9 @@ export function ModuloParametrosGerais({ caseId }: Props) {
         percentual_he_50: toNumOrNull(form.percentual_he_50),
         percentual_he_100: toNumOrNull(form.percentual_he_100),
         percentual_adicional_noturno: toNumOrNull(form.percentual_adicional_noturno),
+        dados_processo: dadosProcesso,
       };
-      const { error } = await supabase
-        .from("pjecalc_calculos" as any)
+      const { error } = await fromUntyped("pjecalc_calculos")
         .upsert(payload, { onConflict: "case_id" });
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["pjecalc_calculos", caseId] });
@@ -225,6 +288,75 @@ export function ModuloParametrosGerais({ caseId }: Props) {
           {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />} Salvar
         </Button>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Identificação CNJ (paridade PJe-Calc)</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="md:col-span-2">
+            <Label className="text-xs">Número do Processo (CNJ)</Label>
+            <Input
+              value={form.cnj_numero_processo}
+              onChange={(e) => setForm((p) => ({ ...p, cnj_numero_processo: e.target.value }))}
+              className="h-8 text-xs"
+              placeholder="NNNNNNN-NN.NNNN.N.NN.NNNN"
+            />
+            {form.cnj_numero_processo && !CNJ_REGEX.test(form.cnj_numero_processo) && (
+              <p className="text-[10px] text-destructive mt-0.5">Formato inválido</p>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs">Valor da Causa (R$)</Label>
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={form.cnj_valor_causa}
+              onChange={(e) => setForm((p) => ({ ...p, cnj_valor_causa: e.target.value }))}
+              className="h-8 text-xs"
+              placeholder="0,00"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Justiça</Label>
+            <Select
+              value={form.cnj_justica}
+              onValueChange={(v) => setForm((p) => ({ ...p, cnj_justica: v, cnj_tribunal: "" }))}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="TRABALHO">Trabalho</SelectItem>
+                <SelectItem value="FEDERAL">Federal</SelectItem>
+                <SelectItem value="ESTADUAL">Estadual</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Tribunal</Label>
+            <Select value={form.cnj_tribunal} onValueChange={(v) => setForm((p) => ({ ...p, cnj_tribunal: v }))}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>
+                {tribunaisPorJustica(form.cnj_justica).map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Vara</Label>
+            <Input
+              value={form.cnj_vara}
+              onChange={(e) => setForm((p) => ({ ...p, cnj_vara: e.target.value }))}
+              className="h-8 text-xs"
+              placeholder="Ex.: 1ª Vara do Trabalho de São Paulo"
+            />
+          </div>
+          <div className="md:col-span-3">
+            <Label className="text-xs">Documento Previdenciário (PIS/PASEP/NIT/CTPS)</Label>
+            <Input
+              value={form.cnj_doc_previdenciario}
+              onChange={(e) => setForm((p) => ({ ...p, cnj_doc_previdenciario: e.target.value }))}
+              className="h-8 text-xs"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm">Identificação</CardTitle></CardHeader>
@@ -268,8 +400,15 @@ export function ModuloParametrosGerais({ caseId }: Props) {
               <SelectContent>{UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          {/* TODO: trocar por combobox IBGE — hoje é texto livre */}
-          <div><Label className="text-xs">Município (IBGE)</Label><Input value={form.municipio_ibge} onChange={(e) => setForm((p) => ({ ...p, municipio_ibge: e.target.value }))} className="h-8 text-xs" placeholder="Ex.: 3550308" /></div>
+          <div>
+            <Label className="text-xs">Município (IBGE)</Label>
+            <IBGECombobox
+              value={form.municipio_ibge}
+              uf={form.uf || undefined}
+              onChange={(codigo) => setForm((p) => ({ ...p, municipio_ibge: codigo }))}
+              placeholder={form.uf ? "Selecione o município..." : "Selecione UF antes"}
+            />
+          </div>
         </CardContent>
       </Card>
 

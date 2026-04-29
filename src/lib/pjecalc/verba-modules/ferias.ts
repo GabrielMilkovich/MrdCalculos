@@ -13,7 +13,7 @@ import type {
   VerbaModule, VerbaModuleContext, ResolvedInputs,
   ReflectionSpec, IncidenceSpec, ModuleAuditEntry,
 } from './types';
-import type { PjeVerba } from '../engine-types';
+import type { PjeVerba, PjeFalta } from '../engine-types';
 import { registerVerbaModule } from './types';
 
 // ── Tabela Art. 130 CLT ──
@@ -23,6 +23,45 @@ function diasFeriasPorFaltas(faltas: number): number {
   if (faltas <= 23) return 18;
   if (faltas <= 32) return 12;
   return 0;
+}
+
+/**
+ * Art. 130-A CLT (DL 2.318/87) + jurisprudencia (Sumula 46 TST analoga):
+ *   Quando a falta tem flag reinicia=true (suspensao + retorno), o periodo
+ *   aquisitivo de ferias REINICIA a partir da data de retorno (data_final + 1).
+ *   Faltas anteriores sao desconsideradas para a redutora do art. 130 CLT.
+ *
+ *   Esta funcao pega a maior data_final entre faltas com reinicia=true e usa
+ *   como data de inicio do periodo aquisitivo "efetivo". Filtra entao apenas
+ *   faltas nao justificadas posteriores a esse marco.
+ */
+export function calcularInicioPeriodoAquisitivo(
+  inicioOriginal: string,
+  faltas: PjeFalta[],
+): { inicio: string; reiniciado: boolean; faltaQueReiniciou?: string } {
+  let inicio = inicioOriginal;
+  let reiniciado = false;
+  let faltaQueReiniciou: string | undefined;
+  for (const f of faltas) {
+    if (!f.reinicia) continue;
+    if (f.data_final > inicio) {
+      // data de retorno = data_final + 1 dia
+      const retorno = new Date(f.data_final);
+      retorno.setUTCDate(retorno.getUTCDate() + 1);
+      const iso = retorno.toISOString().slice(0, 10);
+      if (iso > inicio) {
+        inicio = iso;
+        reiniciado = true;
+        faltaQueReiniciou = f.id;
+      }
+    }
+  }
+  return { inicio, reiniciado, faltaQueReiniciou };
+}
+
+/** Conta faltas nao justificadas que ocorrem em (ou apos) o marco do periodo aquisitivo. */
+export function contarFaltasNoPeriodo(faltas: PjeFalta[], inicioPeriodo: string): number {
+  return faltas.filter(f => !f.justificada && f.data_inicial >= inicioPeriodo).length;
 }
 
 function resolveBase(ctx: VerbaModuleContext): { base: number; source: string } {
@@ -52,18 +91,34 @@ export class FeriasVencidasModule implements VerbaModule {
   resolveInputs(ctx: VerbaModuleContext, verba: PjeVerba): ResolvedInputs {
     const { base, source } = resolveBase(ctx);
 
-    // Contar faltas no período aquisitivo (simplificado: último ano)
-    const faltasCount = ctx.faltas.filter(f => !f.justificada).length;
+    // Art. 130-A CLT: aplicar reinicio do periodo aquisitivo se houver falta
+    //   com flag reinicia=true. O marco e ctx.admissao (default) ou data de
+    //   retorno da ultima falta grave.
+    const { inicio: marcoPeriodo, reiniciado, faltaQueReiniciou } =
+      calcularInicioPeriodoAquisitivo(ctx.admissao, ctx.faltas);
+
+    // Contar faltas nao justificadas DENTRO do periodo aquisitivo efetivo.
+    const faltasCount = contarFaltasNoPeriodo(ctx.faltas, marcoPeriodo);
     const dias = diasFeriasPorFaltas(faltasCount);
+
+    const quantidadeSource = reiniciado
+      ? `art130_clt:faltas=${faltasCount}|reiniciado=${marcoPeriodo}`
+      : `art130_clt:faltas=${faltasCount}`;
 
     return {
       base, baseSource: source,
       quantidade: dias,
-      quantidadeSource: `art130_clt:faltas=${faltasCount}`,
+      quantidadeSource,
       divisor: 30,
       divisorSource: 'padrao',
       multiplicador: new Decimal(4).div(3).toDP(4).toNumber(), // 1/3 constitucional
-      metadata: { faltasCount, tercoConstitucional: true },
+      metadata: {
+        faltasCount,
+        tercoConstitucional: true,
+        marcoPeriodoAquisitivo: marcoPeriodo,
+        reiniciado,
+        faltaQueReiniciou,
+      },
     };
   }
 

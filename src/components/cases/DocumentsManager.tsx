@@ -423,8 +423,13 @@ export function DocumentsManager({
           .eq("id", docId)
           .maybeSingle();
 
-        const hasOcr = docCheck && (docCheck as any).ocr_text &&
-                       ((docCheck as any).ocr_text as string).length >= 50;
+        // Tipo: ocr_text é coluna adicionada por migration recente, ainda
+        // não regenerada em src/integrations/supabase/types.ts. Tipamos
+        // explicitamente em vez de `as any`.
+        const docCheckTyped = docCheck as { ocr_text: string | null; status: string } | null;
+        const hasOcr = docCheckTyped &&
+                       typeof docCheckTyped.ocr_text === "string" &&
+                       docCheckTyped.ocr_text.length >= 50;
 
         if (hasOcr) {
           // Já tem OCR — nada a fazer nesse doc.
@@ -461,8 +466,10 @@ export function DocumentsManager({
 
         if (!docStatus) continue;
 
-        const s = (docStatus as any).status;
-        const ocrLen = ((docStatus as any).ocr_text as string | null)?.length ?? 0;
+        // ocr_text não está no schema gerado (migration nova). Cast explícito.
+        const docStatusTyped = docStatus as { id: string; status: string; ocr_text: string | null };
+        const s = docStatusTyped.status;
+        const ocrLen = (docStatusTyped.ocr_text ?? "").length;
         if (s === "ocr_done" || s === "ocr_partial" || (s === "extracted" && ocrLen >= 50)) {
           setBatchResults(prev => ({ ...prev, [docId]: "done" }));
           successCount++;
@@ -504,7 +511,8 @@ export function DocumentsManager({
     try {
       const { error } = await supabase
         .from("documents")
-        .update({ tipo: newType as any })
+        // tipo é string-livre na coluna; cast desnecessário
+        .update({ tipo: newType })
         .eq("id", documentId);
 
       if (error) throw error;

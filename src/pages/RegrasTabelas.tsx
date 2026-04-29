@@ -182,7 +182,7 @@ export default function RegrasTabelas() {
                     <CardContent>
                       {isSM ? (
                         <div className="text-2xl font-bold text-primary">
-                          R$ {(table.dados_json as any)?.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          R$ {(table.dados_json as Record<string, unknown>)?.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </div>
                       ) : (
                         <Table>

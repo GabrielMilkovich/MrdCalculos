@@ -116,6 +116,11 @@ export interface PjeFalta {
   data_final: string;
   justificada: boolean;
   justificativa?: string;
+  /** Art. 130-A CLT (DL 2.318/87) + jurisprudencia: quando a falta e grave (suspensao
+   *  com afastamento prolongado), o periodo aquisitivo de ferias REINICIA a partir
+   *  da data de retorno (data_final + 1 dia). Faltas anteriores sao desconsideradas
+   *  para o calculo da redutora do art. 130 CLT. */
+  reinicia?: boolean;
 }
 
 export interface PjeFeriasGozoPeriodo {
@@ -499,6 +504,27 @@ export interface PjeCSConfig {
    * Default false (preservar comportamento atual).
    */
   simples_nacional?: boolean;
+  /**
+   * PJe-Calc oficial — período "Sobre Salários Devidos" (data inicial).
+   * Se preenchido, sobrescreve o intervalo simples início/fim para fins de
+   * apuração de CS sobre salários DEVIDOS. Formato YYYY-MM-DD.
+   */
+  cs_devidos_data_inicial?: string;
+  /** PJe-Calc oficial — período "Sobre Salários Devidos" (data final). */
+  cs_devidos_data_final?: string;
+  /**
+   * PJe-Calc oficial — período "Sobre Salários Pagos" (data inicial).
+   * Se preenchido, sobrescreve o intervalo simples início/fim para fins de
+   * apuração de CS sobre salários PAGOS.
+   */
+  cs_pagos_data_inicial?: string;
+  /** PJe-Calc oficial — período "Sobre Salários Pagos" (data final). */
+  cs_pagos_data_final?: string;
+  /**
+   * PJe-Calc oficial — "Mês da Reclamação" (data única, formato YYYY-MM-DD).
+   * Usado como referência temporal para apuração da CS conforme tela oficial.
+   */
+  cs_mes_reclamacao?: string;
 }
 
 export interface PjeIRConfig {

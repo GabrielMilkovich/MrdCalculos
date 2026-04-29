@@ -42,7 +42,7 @@ import type {
 
  
 function fromView(name: string): any {
-  return supabase.from(name as any);
+  return supabase.from(name as Record<string, unknown>);
 }
 
 // =====================================================

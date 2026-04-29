@@ -30,7 +30,7 @@ async function unwrapFunctionsError(err: unknown): Promise<Error> {
     if (anyErr?.context && typeof anyErr.context.json === "function") {
       const body = await anyErr.context.json().catch(() => null);
       if (body && typeof body === "object") {
-        const parts = [(body as any).error, (body as any).hint].filter(Boolean);
+        const parts = [(body as Record<string, unknown>).error, (body as Record<string, unknown>).hint].filter(Boolean);
         if (parts.length > 0) return new Error(parts.join(" — "));
       }
       const text = await anyErr.context.text().catch(() => "");

@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -40,17 +41,28 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
   const queryClient = useQueryClient();
 
   // Load saved briefing
-  const { data: savedBriefing, isLoading: loadingSaved } = useQuery({
+  // case_briefings é uma tabela custom fora do schema gerado em
+  // src/types/supabase.ts; declaramos aqui o subset usado pelo UI.
+  interface CaseBriefingRow {
+    id: string;
+    case_id: string;
+    content: string;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string | null;
+  }
+  const { data: savedBriefing, isLoading: loadingSaved } = useQuery<CaseBriefingRow | null>({
     queryKey: ["case_briefing", caseId],
     queryFn: async () => {
       const { data } = await supabase
-        .from("case_briefings" as any)
+        // tabela custom fora do schema gerado
+        .from("case_briefings" as never)
         .select("*")
         .eq("case_id", caseId)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      return data as any;
+      return (data ?? null) as unknown as CaseBriefingRow | null;
     },
   });
 
@@ -151,16 +163,17 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
       const userId = session?.session?.user?.id ?? null;
 
       if (savedBriefing?.id) {
-        await (supabase.from("case_briefings" as any) as any)
-          .update({ content, updated_at: new Date().toISOString() })
-          .eq("id", savedBriefing.id);
+        // tabela custom case_briefings fora do schema gerado
+        const builder = fromUntyped("case_briefings") as unknown as {
+          update: (v: { content: string; updated_at: string }) => { eq: (col: string, val: string) => Promise<{ error: unknown }> };
+        };
+        await builder.update({ content, updated_at: new Date().toISOString() }).eq("id", savedBriefing.id);
       } else {
-        await (supabase.from("case_briefings" as any) as any)
-          .insert({
-            case_id: caseId,
-            content,
-            created_by: userId,
-          });
+        // tabela custom case_briefings fora do schema gerado
+        const builder = fromUntyped("case_briefings") as unknown as {
+          insert: (v: { case_id: string; content: string; created_by: string | null }) => Promise<{ error: unknown }>;
+        };
+        await builder.insert({ case_id: caseId, content, created_by: userId });
       }
       queryClient.invalidateQueries({ queryKey: ["case_briefing", caseId] });
     } catch (e) {
@@ -187,7 +200,7 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
             file_name: d.file_name,
             tipo: d.tipo,
             status: d.status,
-            ocr_confidence: d.ocr_confidence || d.ocr_confianca,
+            ocr_confidence: d.ocr_confidence,
           })),
           calculation_result: latestRun ? {
             resultado_bruto: latestRun.resultado_bruto,

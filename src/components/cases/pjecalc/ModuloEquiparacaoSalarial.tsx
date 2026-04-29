@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Decimal from "decimal.js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -111,10 +112,14 @@ export function ModuloEquiparacaoSalarial({ caseId }: Props) {
           <CardTitle className="text-sm">Art. 461 CLT - Equiparação Salarial</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-[10px] text-amber-700 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — CLT art. 461 + Súmula 6 TST: requer modelo de mercado salarial e validação de identidade de função. UI persiste paradigma e salários, mas engine ainda não consome esses dados para gerar diferenças. Aguarda PJC com equiparação ativa como ground-truth (0/47 no corpus).</p>
+          <p className="text-[10px] text-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded border border-emerald-200 dark:border-emerald-900">
+            <strong>Em produção — Súmula 6 TST + Art. 461 CLT.</strong>
+            <br />Apura a diferença entre o salário do paradigma e do empregado por
+            competência. Reflexos automáticos em 13º, férias + 1/3 e FGTS.
+          </p>
           <div className="flex items-center gap-2">
             <Checkbox checked={config.ativo} onCheckedChange={v => update({ ativo: !!v })} />
-            <Label className="text-xs">Apurar diferenças por equiparação salarial</Label>
+            <Label className="text-xs text-muted-foreground">Apurar diferenças por equiparação salarial</Label>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -167,13 +172,16 @@ export function ModuloEquiparacaoSalarial({ caseId }: Props) {
                 <thead><tr className="bg-muted/50 border-b border-border"><th className="p-2 text-left font-medium w-20">Ação</th><th className="p-2 text-left font-medium">Competência</th><th className="p-2 text-right font-medium">Sal. Paradigma</th><th className="p-2 text-right font-medium">Sal. Empregado</th><th className="p-2 text-right font-medium">Diferença</th></tr></thead>
                 <tbody>
                   {config.salarios.map((s, idx) => {
-                    const dif = Math.max(0, parseFloat(s.salario_paradigma || '0') - parseFloat(s.salario_empregado || '0'));
+                    const paradigma = new Decimal(s.salario_paradigma || '0');
+                    const empregado = new Decimal(s.salario_empregado || '0');
+                    const difDec = Decimal.max(0, paradigma.minus(empregado));
+                    const dif = difDec.toNumber();
                     return (
                       <tr key={idx} className="border-b border-border/50 hover:bg-muted/20">
                         <td className="p-2"><div className="flex gap-1"><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(idx)}><Pencil className="h-3 w-3" /></Button><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { if (window.confirm('Tem certeza que deseja excluir este registro de salário?')) update({ salarios: config.salarios.filter((_, i) => i !== idx) }); }}><Trash2 className="h-3 w-3 text-destructive" /></Button></div></td>
                         <td className="p-2 font-medium">{s.competencia || '---'}</td>
-                        <td className="p-2 text-right">{parseFloat(s.salario_paradigma || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                        <td className="p-2 text-right">{parseFloat(s.salario_empregado || '0').toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td className="p-2 text-right">{paradigma.toNumber().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td className="p-2 text-right">{empregado.toNumber().toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                         <td className="p-2 text-right font-medium text-green-600">{dif.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                       </tr>
                     );
