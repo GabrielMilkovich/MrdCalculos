@@ -71,60 +71,93 @@ function HealthDashboard() {
   const [checkingUrls, setCheckingUrls] = useState(false);
   const [urlResults, setUrlResults] = useState<Record<string, { ok: boolean; error?: string }>>({});
 
-  const { data: registry, isLoading } = useQuery({
+  // Tipos das tabelas custom do módulo reference_*. Não estão no schema
+  // gerado em src/integrations/supabase/types.ts — declaramos os subsets
+  // efetivamente lidos pelo UI para evitar `as any`.
+  interface RegistryRow {
+    id: string;
+    name: string;
+    status: 'ok' | 'warning' | 'broken' | string;
+    last_import_at: string | null;
+    [k: string]: unknown;
+  }
+  interface ImportRunRow {
+    id: string;
+    table_name?: string;
+    started_at: string | null;
+    result: 'success' | 'error' | 'failed' | 'pending' | string;
+    [k: string]: unknown;
+  }
+  interface SyncStatusRow {
+    id: string;
+    status: 'ok' | 'error' | string;
+    [k: string]: unknown;
+  }
+  interface SourceRow {
+    id: string;
+    name: string;
+    url: string | null;
+    [k: string]: unknown;
+  }
+
+  const { data: registry, isLoading } = useQuery<RegistryRow[]>({
     queryKey: ["reference_table_registry"],
     queryFn: async () => {
+      // tabela custom fora do schema gerado
       const { data, error } = await supabase.from("reference_table_registry" as any).select("*").order("name");
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as RegistryRow[];
     },
     refetchInterval: 60_000,
   });
 
-  const { data: importRuns } = useQuery({
+  const { data: importRuns } = useQuery<ImportRunRow[]>({
     queryKey: ["reference_import_runs_recent"],
     queryFn: async () => {
+      // tabela custom fora do schema gerado
       const { data, error } = await supabase.from("reference_import_runs" as any)
         .select("*").order("started_at", { ascending: false }).limit(30);
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as ImportRunRow[];
     },
     refetchInterval: 60_000,
   });
 
-  const { data: syncStatuses } = useQuery({
+  const { data: syncStatuses } = useQuery<SyncStatusRow[]>({
     queryKey: ["sync_status_all"],
     queryFn: async () => {
+      // tabela custom fora do schema gerado
       const { data, error } = await supabase.from("sync_status" as any).select("*");
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as SyncStatusRow[];
     },
     refetchInterval: 30_000,
   });
 
-  const { data: sources } = useQuery({
+  const { data: sources } = useQuery<SourceRow[]>({
     queryKey: ["reference_sources_all"],
     queryFn: async () => {
+      // tabela custom fora do schema gerado
       const { data, error } = await supabase.from("reference_sources" as any).select("*").order("name");
       if (error) throw error;
-      return (data || []) as any[];
+      return (data ?? []) as unknown as SourceRow[];
     },
   });
 
   // Derived metrics
   const totalTables = registry?.length || 0;
-  const okTables = registry?.filter((r: any) => r.status === 'ok').length || 0;
-  const warningTables = registry?.filter((r: any) => r.status === 'warning').length || 0;
-  const brokenTables = registry?.filter((r: any) => r.status === 'broken').length || 0;
-  const neverImported = registry?.filter((r: any) => !r.last_import_at).length || 0;
+  const okTables = registry?.filter((r) => r.status === 'ok').length || 0;
+  const warningTables = registry?.filter((r) => r.status === 'warning').length || 0;
+  const brokenTables = registry?.filter((r) => r.status === 'broken').length || 0;
+  const neverImported = registry?.filter((r) => !r.last_import_at).length || 0;
 
-  const recentErrors = (importRuns || []).filter((r: any) => r.result === 'error' || r.result === 'failed');
-  const last24hRuns = (importRuns || []).filter((r: any) => {
+  const recentErrors = (importRuns || []).filter((r) => r.result === 'error' || r.result === 'failed');
+  const last24hRuns = (importRuns || []).filter((r) => {
     if (!r.started_at) return false;
     return (Date.now() - new Date(r.started_at).getTime()) < 86_400_000;
   });
 
-  const syncErrors = (syncStatuses || []).filter((s: any) => s.status === 'error');
+  const syncErrors = (syncStatuses || []).filter((s) => s.status === 'error');
 
   // Source URL health check
   const checkSourceUrls = async () => {

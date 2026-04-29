@@ -91,7 +91,7 @@ export function ModuloFaltas({ caseId }: Props) {
         </Button>
       </div>
 
-      <p className="text-[10px] text-amber-700 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo (campo "Reiniciar Férias") — CLT art. 130 controverso quanto a reiniciar período aquisitivo após falta. Flag persiste mas engine ainda usa redução clássica da tabela do art. 130. Aguarda PJC com <code>reiniciarFerias=true</code> como ground-truth (0/47 no corpus).</p>
+      <p className="text-[10px] text-orange-800 bg-orange-50 dark:bg-orange-950/20 p-2 rounded border border-orange-200 dark:border-orange-900"><strong>🚧 Campo "Reiniciar Férias" não implementado — release v3.6.</strong> CLT art. 130 controverso. Engine usa redução clássica da tabela do art. 130; o checkbox abaixo está desabilitado até implementação.</p>
 
       {faltas.length === 0 ? (
         <Card>
@@ -130,10 +130,11 @@ export function ModuloFaltas({ caseId }: Props) {
                     />
                     Justificada
                   </label>
-                  <label className="flex items-center gap-2 text-xs pb-1">
+                  <label className="flex items-center gap-2 text-xs pb-1 text-muted-foreground" title="Campo desabilitado — não implementado no engine">
                     <Checkbox
                       defaultChecked={f.reiniciar_ferias ?? false}
                       onCheckedChange={(v) => updateField(f.id, { reiniciar_ferias: !!v })}
+                      disabled
                     />
                     Reiniciar Férias
                   </label>

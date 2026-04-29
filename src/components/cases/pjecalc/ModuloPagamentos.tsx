@@ -17,8 +17,8 @@ Decimal.set({ precision: 20 });
 // =====================================================
 // MÓDULO PAGAMENTOS — baseado em Pagamento.java (PJe-Calc v2.15.1)
 // Persiste em pjecalc_pagamentos.
-// TODO: dropdown de verba_base_id usa texto livre por ora; plugar em pjecalc_verba_base quando integrado.
-// TODO: dropdown de documento_id idem.
+// verba_base_id: select carregado de pjecalc_verba_base para o caso.
+// documento_id: select carregado de documents para o caso.
 // =====================================================
 
 interface Props { caseId: string; }
@@ -65,6 +65,35 @@ export function ModuloPagamentos({ caseId }: Props) {
         .order("competencia", { ascending: true });
       if (error) throw error;
       return (data ?? []) as any[];
+    },
+  });
+
+  // Opções para selects: verbas-base do caso e documentos do caso.
+  const { data: verbasBase = [] } = useQuery({
+    queryKey: ["pjecalc_verba_base_options", caseId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pjecalc_verba_base" as any)
+        .select("id, nome, codigo")
+        .eq("case_id", caseId)
+        .order("ordem", { ascending: true })
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []) as { id: string; nome: string | null; codigo: string | null }[];
+    },
+  });
+
+  const { data: docOptions = [] } = useQuery({
+    queryKey: ["case_documents_options", caseId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, file_name, tipo")
+        .eq("case_id", caseId)
+        .order("uploaded_em", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as { id: string; file_name: string | null; tipo: string | null }[];
     },
   });
 
@@ -242,15 +271,44 @@ export function ModuloPagamentos({ caseId }: Props) {
               <Label className="text-xs">Descrição</Label>
               <Input value={editing.descricao} onChange={(e) => setEditing((p) => ({ ...p, descricao: e.target.value }))} className="h-8 text-xs" />
             </div>
-            {/* TODO: trocar por select de documentos quando disponível */}
             <div>
-              <Label className="text-xs">Documento (ID)</Label>
-              <Input value={editing.documento_id} onChange={(e) => setEditing((p) => ({ ...p, documento_id: e.target.value }))} className="h-8 text-xs" placeholder="uuid opcional" />
+              <Label className="text-xs">Documento</Label>
+              <Select
+                value={editing.documento_id || "__none__"}
+                onValueChange={(v) =>
+                  setEditing((p) => ({ ...p, documento_id: v === "__none__" ? "" : v }))
+                }
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="(opcional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— sem documento —</SelectItem>
+                  {docOptions.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.file_name ?? d.id.slice(0, 8)}
+                      {d.tipo ? ` (${d.tipo})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            {/* TODO: trocar por select de verba_base quando disponível */}
             <div>
-              <Label className="text-xs">Verba Base (ID)</Label>
-              <Input value={editing.verba_base_id} onChange={(e) => setEditing((p) => ({ ...p, verba_base_id: e.target.value }))} className="h-8 text-xs" placeholder="uuid opcional" />
+              <Label className="text-xs">Verba Base</Label>
+              <Select
+                value={editing.verba_base_id || "__none__"}
+                onValueChange={(v) =>
+                  setEditing((p) => ({ ...p, verba_base_id: v === "__none__" ? "" : v }))
+                }
+              >
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="(opcional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— sem verba —</SelectItem>
+                  {verbasBase.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.codigo ? `[${v.codigo}] ` : ""}{v.nome ?? v.id.slice(0, 8)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="col-span-2 flex items-center gap-2">
               <Checkbox checked={editing.abatimento_global} onCheckedChange={(v) => setEditing((p) => ({ ...p, abatimento_global: !!v }))} />

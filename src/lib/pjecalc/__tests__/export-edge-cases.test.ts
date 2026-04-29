@@ -149,8 +149,11 @@ describe('Export edge cases — CSV', () => {
     expect(csv).toContain('0,00'); // BRL pt-BR
   });
 
-  it('preserva precisão para valores muito grandes (R$ 999 trilhões)', () => {
-    const big = new Decimal('999000000000000.55').toNumber();
+  it('preserva ordem de grandeza para valores muito grandes (R$ trilhões)', () => {
+    // Limitado pela precisão do Number JS (15-16 dígitos significativos).
+    // Para valores > 1e15 a perda de centavos é inerente do double — o que
+    // testamos é que NÃO há crash e NÃO há notação científica no output.
+    const big = 1234567890123.45;
     const result = makeMinimalResult({
       resumo: {
         ...makeEmptyResumo(),
@@ -161,8 +164,8 @@ describe('Export edge cases — CSV', () => {
     const csv = exportToCSV(result);
     // Não deve aparecer notação científica
     expect(csv).not.toMatch(/e\+/i);
-    // Deve formatar com separador pt-BR
-    expect(csv).toContain('999.000.000.000.000,55');
+    // Deve formatar com separador pt-BR (milhares com .)
+    expect(csv).toContain('1.234.567.890.123,45');
   });
 
   it('trata valores NaN / Infinity como 0 (sem crash)', () => {
@@ -340,11 +343,11 @@ describe('eSocial export — edge cases', () => {
       ambiente: '2',
       tpProcesso: '2',
       dados: {
-        cnpjEmpregador: '12345678000100',
+        cnpjEmpregador: '11222333000181', // CNPJ válido (DV correto)
         nomeEmpregador: 'Empresa & Cia <Ltda>',
         nrProcTrab: '00010002020205020001',
         perApurPgto: '2024-01',
-        cpfTrab: '12345678901',
+        cpfTrab: '11144477735', // CPF válido (DV correto)
         nmTrab: 'José da Silva & Filho',
         codCateg: '101',
         indContr: '1',

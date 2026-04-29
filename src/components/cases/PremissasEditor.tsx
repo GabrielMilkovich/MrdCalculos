@@ -36,6 +36,13 @@ import {
 import { cn } from "@/lib/utils";
 import {
   type PremissasCasoConfig,
+  type PremissaMetodoHE,
+  type PremissaDSR,
+  type PremissaCorrecao,
+  type PremissaJuros,
+  type PremissaMedia,
+  type PremissaBaseCalculo,
+  type PremissaPrescricao,
   type TipoDemissao,
   PREMISSAS_TRT3_PADRAO,
   validarPremissasCompletas,
@@ -222,7 +229,7 @@ export function PremissasEditor({
                   value={config.metodoHE.valor}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    metodoHE: { ...config.metodoHE, valor: v as any }
+                    metodoHE: { ...config.metodoHE, valor: v as PremissaMetodoHE['valor'] }
                   })}
                   disabled={isLocked || readOnly}
                 >
@@ -248,7 +255,7 @@ export function PremissasEditor({
                   value={config.dsr.metodo}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    dsr: { ...config.dsr, metodo: v as any }
+                    dsr: { ...config.dsr, metodo: v as PremissaDSR['metodo'] }
                   })}
                   disabled={isLocked || readOnly}
                 >
@@ -507,7 +514,7 @@ export function PremissasEditor({
                   value={config.correcao.indice}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    correcao: { ...config.correcao, indice: v as any }
+                    correcao: { ...config.correcao, indice: v as PremissaCorrecao['indice'] }
                   })}
                   disabled={isLocked || readOnly}
                 >
@@ -531,7 +538,7 @@ export function PremissasEditor({
                   value={config.correcao.marcoInicial}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    correcao: { ...config.correcao, marcoInicial: v as any }
+                    correcao: { ...config.correcao, marcoInicial: v as PremissaCorrecao['marcoInicial'] }
                   })}
                   disabled={isLocked || readOnly}
                 >
@@ -553,7 +560,7 @@ export function PremissasEditor({
                   value={config.juros.metodo}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    juros: { ...config.juros, metodo: v as any }
+                    juros: { ...config.juros, metodo: v as PremissaJuros['metodo'] }
                   })}
                   disabled={isLocked || readOnly}
                 >
@@ -576,7 +583,7 @@ export function PremissasEditor({
                   value={config.juros.marcoInicial}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    juros: { ...config.juros, marcoInicial: v as any }
+                    juros: { ...config.juros, marcoInicial: v as PremissaJuros['marcoInicial'] }
                   })}
                   disabled={isLocked || readOnly}
                 >
@@ -611,7 +618,7 @@ export function PremissasEditor({
                   value={config.media.periodo}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    media: { ...config.media, periodo: v as any }
+                    media: { ...config.media, periodo: v as PremissaMedia['periodo'] }
                   })}
                   disabled={isLocked || readOnly}
                 >
@@ -633,7 +640,7 @@ export function PremissasEditor({
                   value={config.media.tipoMedia}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    media: { ...config.media, tipoMedia: v as any }
+                    media: { ...config.media, tipoMedia: v as PremissaMedia['tipoMedia'] }
                   })}
                   disabled={isLocked || readOnly}
                 >
@@ -654,7 +661,7 @@ export function PremissasEditor({
                   value={config.basePericulosidade.base}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    basePericulosidade: { ...config.basePericulosidade, base: v as any }
+                    basePericulosidade: { ...config.basePericulosidade, base: v as PremissaBaseCalculo['base'] }
                   })}
                   disabled={isLocked || readOnly}
                 >
@@ -675,7 +682,7 @@ export function PremissasEditor({
                   value={config.baseInsalubridade.base}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    baseInsalubridade: { ...config.baseInsalubridade, base: v as any }
+                    baseInsalubridade: { ...config.baseInsalubridade, base: v as PremissaBaseCalculo['base'] }
                   })}
                   disabled={isLocked || readOnly}
                 >
@@ -721,7 +728,7 @@ export function PremissasEditor({
                   value={config.prescricao.tipoLimite}
                   onValueChange={(v) => setConfig({
                     ...config,
-                    prescricao: { ...config.prescricao, tipoLimite: v as any }
+                    prescricao: { ...config.prescricao, tipoLimite: v as PremissaPrescricao['tipoLimite'] }
                   })}
                   disabled={isLocked || readOnly}
                 >

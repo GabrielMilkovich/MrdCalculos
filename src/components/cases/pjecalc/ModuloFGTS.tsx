@@ -32,6 +32,7 @@ export function ModuloFGTS({ caseId }: Props) {
     excluir_aviso_multa: false,   // Excluir Aviso Prévio da base da multa
     perdas_monetarias: false,     // Perdas monetárias sobre FGTS
     deduzir_saldo: false, lc110_10: false, lc110_05: false,
+    data_inicial_incidencia: '', data_final_incidencia: '', // Período de incidência (paridade PJe-Calc)
   });
 
   useEffect(() => {
@@ -48,6 +49,8 @@ export function ModuloFGTS({ caseId }: Props) {
         excluir_aviso_multa: (d.excluir_aviso_multa as boolean) ?? false,
         perdas_monetarias: (d.perdas_monetarias as boolean) ?? false,
         deduzir_saldo: (d.deduzir_saldo as boolean) ?? false, lc110_10: (d.lc110_10 as boolean) ?? false, lc110_05: (d.lc110_05 as boolean) ?? false,
+        data_inicial_incidencia: (d.data_inicial_incidencia as string) ?? '',
+        data_final_incidencia: (d.data_final_incidencia as string) ?? '',
       });
     }
   }, [data]);
@@ -59,6 +62,8 @@ export function ModuloFGTS({ caseId }: Props) {
         case_id: caseId, ...form,
         multa_percentual: Number(form.multa_percentual),
         multa_valor_informado: form.multa_valor_informado ? parseFloat(form.multa_valor_informado) : null,
+        data_inicial_incidencia: form.data_inicial_incidencia || null,
+        data_final_incidencia: form.data_final_incidencia || null,
       } as any);
       qc.invalidateQueries({ queryKey: ["pjecalc_fgts_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
@@ -75,6 +80,29 @@ export function ModuloFGTS({ caseId }: Props) {
           {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />} Salvar
         </Button>
       </div>
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-sm">Período de Incidência (paridade PJe-Calc)</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs">Data Inicial</Label>
+            <Input
+              type="date"
+              value={form.data_inicial_incidencia}
+              onChange={e => setForm(p => ({ ...p, data_inicial_incidencia: e.target.value }))}
+              className="mt-1 h-8 text-xs"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Data Final</Label>
+            <Input
+              type="date"
+              value={form.data_final_incidencia}
+              onChange={e => setForm(p => ({ ...p, data_final_incidencia: e.target.value }))}
+              className="mt-1 h-8 text-xs"
+            />
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Depósitos</CardTitle></CardHeader>
         <CardContent className="space-y-3">

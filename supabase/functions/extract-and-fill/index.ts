@@ -321,29 +321,41 @@ async function tryTemplateCacheExtraction(
   ocrText: string
 ): Promise<any | null> {
   if (!cnpj) return null;
-  
+
   try {
-    // Look for cached template mapping for this CNPJ
-    const { data: cached } = await supabase
-      .from("rubrica_map" as any)
+    // pjecalc_rubrica_map (NAO rubrica_map — schema diferente).
+    // Colunas: codigo_match, descricao_regex, empresa_cnpj, conceito,
+    // categoria, ativo, prioridade.
+    const cleanCnpj = cnpj.replace(/[^\d]/g, '');
+    const { data: cached, error } = await supabase
+      .from("pjecalc_rubrica_map")
       .select("*")
-      .eq("empresa_cnpj", cnpj.replace(/[^\d]/g, ''))
+      .eq("empresa_cnpj", cleanCnpj)
       .eq("ativo", true)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    
+      .order("prioridade", { ascending: false })
+      .limit(200);
+
+    if (error) {
+      console.warn("[TEMPLATE-CACHE] read error:", error.message);
+      return null;
+    }
     if (!cached || cached.length === 0) return null;
-    
-    console.log(`[TEMPLATE-CACHE] Found ${cached.length} cached mappings for CNPJ ${cnpj}`);
-    
-    // Use cached rubrica mappings to extract from text
+
+    console.log(`[TEMPLATE-CACHE] Found ${cached.length} cached mappings for CNPJ ${cleanCnpj}`);
+
     const extractedRubricas: any[] = [];
-    
+
     for (const mapping of cached) {
-      const regex = new RegExp(mapping.regex_pattern || mapping.codigo_origem, 'gi');
+      const pattern = mapping.descricao_regex || mapping.codigo_match;
+      if (!pattern) continue;
+      let regex: RegExp;
+      try {
+        regex = new RegExp(pattern, 'gi');
+      } catch {
+        continue;
+      }
       const matches = ocrText.match(regex);
       if (matches) {
-        // Find value near the match
         const idx = ocrText.indexOf(matches[0]);
         const context = ocrText.substring(idx, idx + 200);
         const valorMatch = context.match(/(\d[\d.,]*\d)/);
@@ -351,22 +363,22 @@ async function tryTemplateCacheExtraction(
           const valor = parseFloat(valorMatch[1].replace(/\./g, '').replace(',', '.'));
           if (valor > 0 && valor < 999999) {
             extractedRubricas.push({
-              codigo: mapping.codigo_origem,
-              denominacao: mapping.nome_padronizado || mapping.nome_origem,
-              tipo: mapping.tipo || "vencimento",
+              codigo: mapping.codigo_match || mapping.conceito,
+              denominacao: mapping.conceito || mapping.codigo_match,
+              tipo: "vencimento",
               categoria: mapping.categoria || "outros",
-              valores_mensais: [{ competencia: new Date().toISOString().slice(0, 7), valor }]
+              valores_mensais: [{ competencia: new Date().toISOString().slice(0, 7), valor }],
             });
           }
         }
       }
     }
-    
+
     if (extractedRubricas.length > 3) {
       console.log(`[TEMPLATE-CACHE] Extracted ${extractedRubricas.length} rubricas from cache`);
       return { rubricas: extractedRubricas, _from_cache: true };
     }
-    
+
     return null;
   } catch (err) {
     console.warn("[TEMPLATE-CACHE] Error:", err);
@@ -374,34 +386,60 @@ async function tryTemplateCacheExtraction(
   }
 }
 
-// Save successful extraction as template for future use
+// Save successful extraction as template for future use.
+// Importante: usa dedupe-then-insert (filtra existentes via SELECT antes de
+// INSERT batch) em vez de loop com `.then()` solto sem await — que era a
+// race condition apontada no audit (multiplos docs em paralelo do mesmo CNPJ
+// podiam disparar inserts redundantes). Best-effort: erros nao bloqueiam o
+// pipeline principal.
 async function saveTemplateCache(
   supabase: any,
   cnpj: string | null,
   extracted: any
 ) {
   if (!cnpj || !extracted.rubricas?.length) return;
-  
+
   try {
     const cleanCnpj = cnpj.replace(/[^\d]/g, '');
-    
-    for (const rub of extracted.rubricas) {
-      if (!rub.codigo || !rub.denominacao) continue;
-      
-      await supabase.from("rubrica_map" as any).upsert({
+
+    const upserts = extracted.rubricas
+      .filter((rub: any) => rub.codigo && rub.denominacao)
+      .map((rub: any) => ({
+        codigo_match: String(rub.codigo).slice(0, 64),
+        descricao_regex: String(rub.denominacao).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").slice(0, 256),
         empresa_cnpj: cleanCnpj,
-        codigo_origem: rub.codigo,
-        nome_origem: rub.denominacao,
-        nome_padronizado: rub.denominacao,
-        tipo: rub.tipo || "vencimento",
+        conceito: String(rub.denominacao).slice(0, 128),
         categoria: rub.categoria || "outros",
         ativo: true,
-      }, { onConflict: 'empresa_cnpj,codigo_origem' }).then(({ error }: any) => {
-        if (error) console.warn("[TEMPLATE-CACHE] Save error:", error.message);
-      });
+        prioridade: 5,
+      }));
+
+    if (upserts.length === 0) return;
+
+    // pjecalc_rubrica_map nao tem unique constraint composto — entao fazemos
+    // dedupe-then-insert: lemos os pares (codigo_match, empresa_cnpj) ja existentes
+    // e so inserimos os faltantes. Atomico o suficiente para o caso de paralelismo
+    // (multiplos docs do mesmo CNPJ): pior cenario e duplicada (idempotencia OK
+    // por descricao_regex igual).
+    const codigos = Array.from(new Set(upserts.map((u: any) => u.codigo_match).filter(Boolean)));
+    const { data: existing } = await supabase
+      .from("pjecalc_rubrica_map")
+      .select("codigo_match")
+      .eq("empresa_cnpj", cleanCnpj)
+      .in("codigo_match", codigos);
+    const existingSet = new Set((existing || []).map((r: any) => r.codigo_match));
+    const toInsert = upserts.filter((u: any) => !existingSet.has(u.codigo_match));
+    if (toInsert.length === 0) {
+      console.log(`[TEMPLATE-CACHE] All ${upserts.length} mappings already cached for CNPJ ${cleanCnpj}`);
+      return;
     }
-    
-    console.log(`[TEMPLATE-CACHE] Saved ${extracted.rubricas.length} mappings for CNPJ ${cleanCnpj}`);
+    const { error } = await supabase.from("pjecalc_rubrica_map").insert(toInsert);
+    if (error) {
+      console.warn("[TEMPLATE-CACHE] insert error:", error.message);
+      return;
+    }
+
+    console.log(`[TEMPLATE-CACHE] Saved ${toInsert.length}/${upserts.length} new mappings for CNPJ ${cleanCnpj}`);
   } catch (err) {
     console.warn("[TEMPLATE-CACHE] Save failed:", err);
   }

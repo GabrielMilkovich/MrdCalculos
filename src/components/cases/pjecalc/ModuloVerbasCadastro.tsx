@@ -11,11 +11,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import {
+  BASES_TABELADAS,
+  HIST_SALARIAL_NOMES,
+  COMPORTAMENTOS_REFLEXO,
+  FRACAO_MES_MODOS,
+} from "@/lib/pjecalc/rubricas-oficiais";
+import { CatalogoCombobox } from "./CatalogoCombobox";
 
 // =====================================================
 // MÓDULO VERBAS — CRUD de VerbaDeCalculo (PJe-Calc v2.15.1 / VerbaDeCalculo.java)
 // Persiste em pjecalc_verba_base.
-// TODO: dropdown de hist_salarial_nome/base_tabelada hoje é texto — plugar em catálogo quando disponível.
+// hist_salarial_nome / base_tabelada: combobox sobre catálogo oficial,
+// com fallback para digitação livre via "Outro (digitar manualmente)".
 // =====================================================
 
 interface Props { caseId: string; }
@@ -362,18 +370,32 @@ export function ModuloVerbasCadastro({ caseId }: Props) {
                 <Label className="text-xs">Quantidade / Valor</Label>
                 <Input type="number" step="0.01" value={editing.quantidade_valor} onChange={(e) => setEditing((p) => ({ ...p, quantidade_valor: e.target.value }))} className="h-8 text-xs" />
               </div>
-              {/* TODO: dropdown quando existir catálogo */}
               <div>
                 <Label className="text-xs">Base Tabelada</Label>
-                <Input value={editing.base_tabelada} onChange={(e) => setEditing((p) => ({ ...p, base_tabelada: e.target.value }))} className="h-8 text-xs" />
+                <CatalogoCombobox
+                  value={editing.base_tabelada}
+                  onChange={(v) => setEditing((p) => ({ ...p, base_tabelada: v }))}
+                  options={BASES_TABELADAS}
+                  placeholder="Selecione a base..."
+                />
               </div>
               <div>
                 <Label className="text-xs">Histórico Salarial</Label>
-                <Input value={editing.hist_salarial_nome} onChange={(e) => setEditing((p) => ({ ...p, hist_salarial_nome: e.target.value }))} className="h-8 text-xs" />
+                <CatalogoCombobox
+                  value={editing.hist_salarial_nome}
+                  onChange={(v) => setEditing((p) => ({ ...p, hist_salarial_nome: v }))}
+                  options={HIST_SALARIAL_NOMES}
+                  placeholder="Selecione a rubrica..."
+                />
               </div>
               <div>
                 <Label className="text-xs">Comportamento Reflexo</Label>
-                <Input value={editing.comportamento_reflexo} onChange={(e) => setEditing((p) => ({ ...p, comportamento_reflexo: e.target.value }))} className="h-8 text-xs" />
+                <CatalogoCombobox
+                  value={editing.comportamento_reflexo}
+                  onChange={(v) => setEditing((p) => ({ ...p, comportamento_reflexo: v }))}
+                  options={COMPORTAMENTOS_REFLEXO}
+                  placeholder="Comum (default)"
+                />
               </div>
               <div>
                 <Label className="text-xs">Período Média Reflexo</Label>
@@ -381,7 +403,12 @@ export function ModuloVerbasCadastro({ caseId }: Props) {
               </div>
               <div>
                 <Label className="text-xs">Fração Mês Modo</Label>
-                <Input value={editing.fracao_mes_modo} onChange={(e) => setEditing((p) => ({ ...p, fracao_mes_modo: e.target.value }))} className="h-8 text-xs" />
+                <CatalogoCombobox
+                  value={editing.fracao_mes_modo}
+                  onChange={(v) => setEditing((p) => ({ ...p, fracao_mes_modo: v }))}
+                  options={FRACAO_MES_MODOS}
+                  placeholder="30 dias (default)"
+                />
               </div>
             </div>
 

@@ -94,7 +94,7 @@ export function ModuloEstabilidade({ caseId }: Props) {
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Shield className="h-5 w-5" /> Estabilidade Provisória
         </h2>
-        <Button onClick={save} disabled={saving} size="sm">
+        <Button onClick={save} disabled size="sm" title="Módulo desabilitado — não implementado">
           {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />} Salvar
         </Button>
       </div>
@@ -104,16 +104,22 @@ export function ModuloEstabilidade({ caseId }: Props) {
           <CardTitle className="text-sm">Configuração de Estabilidade</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-[10px] text-amber-700 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — gestante (Art. 10 ADCT + Súm. 244 TST), CIPA (Art. 10 ADCT) e acidentária (Art. 118 Lei 8.213) requerem motor próprio de indenização (salários do período + reflexos 13º/férias/FGTS). UI persiste configuração mas engine ainda não gera indenização automática. Aguarda PJC com estabilidade ativa como ground-truth (0/47 no corpus).</p>
+          <p className="text-[10px] text-orange-800 bg-orange-50 dark:bg-orange-950/20 p-2 rounded border border-orange-200 dark:border-orange-900">
+            <strong>🚧 Não implementado — entrará no release v3.6.</strong>
+            <br />Gestante (Art. 10 ADCT + Súm. 244 TST), CIPA (Art. 10 ADCT)
+            e acidentária (Art. 118 Lei 8.213) exigem motor próprio de
+            indenização (salários do período + reflexos 13º/férias/FGTS).
+            Os campos abaixo estão desabilitados até a entrega.
+          </p>
           <div className="flex items-center gap-2">
-            <Checkbox checked={config.ativo} onCheckedChange={v => update({ ativo: !!v })} />
-            <Label className="text-xs">Apurar indenização por estabilidade provisória</Label>
+            <Checkbox checked={config.ativo} onCheckedChange={v => update({ ativo: !!v })} disabled />
+            <Label className="text-xs text-muted-foreground">Apurar indenização por estabilidade provisória</Label>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Tipo de Estabilidade</Label>
-              <Select value={config.tipo} onValueChange={v => update({ tipo: v as TipoEstabilidade })}>
+              <Select value={config.tipo} onValueChange={v => update({ tipo: v as TipoEstabilidade })} disabled>
                 <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="gestante">Gestante (Art. 10 ADCT)</SelectItem>
@@ -130,7 +136,7 @@ export function ModuloEstabilidade({ caseId }: Props) {
                 value={config.meses_estabilidade}
                 onChange={e => update({ meses_estabilidade: e.target.value })}
                 className="h-8 text-xs mt-1"
-                disabled={config.tipo !== 'outro'}
+                disabled
               />
               {config.tipo !== 'outro' && (
                 <p className="text-[10px] text-muted-foreground mt-0.5">Auto: {tipoInfo.meses} meses ({tipoInfo.label})</p>
@@ -145,6 +151,7 @@ export function ModuloEstabilidade({ caseId }: Props) {
               value={config.data_evento}
               onChange={e => update({ data_evento: e.target.value })}
               className="h-8 text-xs mt-1"
+              disabled
             />
             <p className="text-[10px] text-muted-foreground mt-0.5">
               {config.tipo === 'gestante' ? 'Data do parto' :
@@ -157,11 +164,11 @@ export function ModuloEstabilidade({ caseId }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="text-xs">Período Início (Estabilidade)</Label>
-              <Input type="date" value={config.periodo_inicio} onChange={e => update({ periodo_inicio: e.target.value })} className="h-8 text-xs mt-1" />
+              <Input type="date" value={config.periodo_inicio} onChange={e => update({ periodo_inicio: e.target.value })} className="h-8 text-xs mt-1" disabled />
             </div>
             <div>
               <Label className="text-xs">Período Fim (Estabilidade)</Label>
-              <Input type="date" value={config.periodo_fim} onChange={e => update({ periodo_fim: e.target.value })} className="h-8 text-xs mt-1" />
+              <Input type="date" value={config.periodo_fim} onChange={e => update({ periodo_fim: e.target.value })} className="h-8 text-xs mt-1" disabled />
             </div>
           </div>
 
@@ -172,6 +179,7 @@ export function ModuloEstabilidade({ caseId }: Props) {
               onChange={e => update({ observacoes: e.target.value })}
               className="h-8 text-xs mt-1"
               placeholder="Ex: Empregada dispensada durante gestação. Súmula 244, III TST."
+              disabled
             />
           </div>
 

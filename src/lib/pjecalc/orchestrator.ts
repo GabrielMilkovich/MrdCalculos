@@ -327,11 +327,27 @@ function toEngineCartaoPonto(cp: PjecalcCartaoPontoRow[]): PjeCartaoPonto[] {
   }));
 }
 
+/**
+ * Type guard: confirma que `v` é entrada `{ data: string; valor: number }`.
+ * Usado para validar payloads JSON do banco antes de injetar no engine.
+ */
+function isSaldoSaqueEntry(v: unknown): v is { data: string; valor: number } {
+  if (typeof v !== 'object' || v === null) return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.data === 'string' && typeof o.valor === 'number';
+}
+
 function toEngineFgtsConfig(cfg: PjecalcFgtsConfigRow | null): PjeFGTSConfig {
   // Support both old (habilitado/percentual_multa) and new column names
   const apurar = cfg?.apurar ?? cfg?.habilitado ?? true;
   const multaPercentual = cfg?.multa_percentual ?? cfg?.percentual_multa ?? 40;
-  const saldosSaques = Array.isArray(cfg?.saldos_saques) ? cfg!.saldos_saques : [];
+  // saldos_saques vem como JSONB do banco. Filtra entradas malformadas
+  // antes de passar ao engine — assim eliminamos o `as any` mantendo
+  // resiliência contra dados ruins de migrations antigas.
+  const rawSaldos: unknown = cfg?.saldos_saques;
+  const saldosSaques: { data: string; valor: number }[] = Array.isArray(rawSaldos)
+    ? rawSaldos.filter(isSaldoSaqueEntry)
+    : [];
   return {
     apurar,
     destino: (cfg?.destino as PjeFGTSConfig['destino']) ?? 'pagar_reclamante',
@@ -341,7 +357,7 @@ function toEngineFgtsConfig(cfg: PjecalcFgtsConfigRow | null): PjeFGTSConfig {
     multa_percentual: multaPercentual,
     multa_base: (cfg?.multa_base as PjeFGTSConfig['multa_base']) ?? 'diferenca',
     multa_valor_informado: cfg?.multa_valor_informado ?? undefined,
-    saldos_saques: saldosSaques as any,
+    saldos_saques: saldosSaques,
     deduzir_saldo: cfg?.deduzir_saldo ?? false,
     lc110_10: cfg?.lc110_10 ?? false,
     lc110_05: cfg?.lc110_05 ?? false,
@@ -706,6 +722,7 @@ export async function loadSalarioMinimoDB(): Promise<import('./engine-types').Pj
 async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types').PjeExcecaoCargaHoraria[]> {
   try {
     const { data } = await supabase
+      // tabela custom pjecalc_* fora do schema gerado (src/types/supabase.ts)
       .from('pjecalc_excecoes_carga' as any)
       .select('id, periodo_inicio, periodo_fim, carga_horaria_mensal')
       .eq('case_id', caseId);
@@ -727,6 +744,7 @@ async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types
 export async function loadExcecoesSabado(caseId: string): Promise<import('./engine-types').PjeExcecaoSabado[]> {
   try {
     const { data } = await supabase
+      // tabela custom pjecalc_* fora do schema gerado (src/types/supabase.ts)
       .from('pjecalc_excecoes_sabado' as any)
       .select('id, data_inicio, data_fim, sabado_dia_util')
       .eq('case_id', caseId);

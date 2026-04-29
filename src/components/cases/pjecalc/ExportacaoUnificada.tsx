@@ -139,6 +139,10 @@ export function ExportacaoUnificada({
   const handleXlsx = async () => {
     if (selectedCount === 0) { toast.error("Selecione ao menos uma aba."); return; }
     setXlsxBusy(true);
+    // Progress indicator: mostra toast informativo se demorar > 1s
+    const slowToast = setTimeout(() => {
+      toast.loading("Gerando XLSX (planilhas grandes podem demorar)...", { id: 'xlsx-progress' });
+    }, 1000);
     try {
       const blob = await exportToExcel(result, params, sheets);
       downloadBlob(blob, `${fileBase}_calculo.xlsx`);
@@ -146,6 +150,8 @@ export function ExportacaoUnificada({
     } catch (e) {
       toast.error("Erro ao gerar XLSX: " + (e as Error).message);
     } finally {
+      clearTimeout(slowToast);
+      toast.dismiss('xlsx-progress');
       setXlsxBusy(false);
     }
   };
@@ -182,6 +188,9 @@ export function ExportacaoUnificada({
   const handlePjcDownload = () => {
     if (!params) { toast.error("Parâmetros do caso ausentes."); return; }
     setPjcBusy(true);
+    const slowToast = setTimeout(() => {
+      toast.loading("Gerando arquivo .PJC...", { id: 'pjc-progress' });
+    }, 1000);
     try {
       const payload = buildPjcPayload();
       const processoId = dadosProc.processo?.replace(/\D/g, '') || 'CALCULO';
@@ -192,6 +201,8 @@ export function ExportacaoUnificada({
     } catch (e) {
       toast.error("Erro ao gerar .PJC: " + (e as Error).message);
     } finally {
+      clearTimeout(slowToast);
+      toast.dismiss('pjc-progress');
       setPjcBusy(false);
     }
   };

@@ -19,12 +19,16 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
-// /documentos e /busca-semantica ficam ocultos do menu enquanto sao
-// wireframes (botoes sem onClick, KPIs hardcoded). Re-exibir quando
-// implementacao real estiver pronta. Ref STATE-OF-PRODUCTION.md P0-3.
+// /documentos e /busca foram re-habilitados apos implementacao real:
+//   - /busca: edge function `semantic-search` (pgvector + OpenAI embeddings).
+//   - /documentos: KPIs reais via query em `documents` filtrada por
+//     owner_user_id, com tabela de documentos recentes.
+// Ref STATE-OF-PRODUCTION.md P0-3.
 const mainNavItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
   { icon: Briefcase, label: "Casos", path: "/casos" },
+  { icon: FileText, label: "Documentos", path: "/documentos" },
+  { icon: Search, label: "Busca", path: "/busca" },
 ];
 
 const adminNavItems = [

@@ -10,7 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Calculator, Calendar, ChevronLeft, ChevronRight, Copy, Clock } from "lucide-react";
+import { Plus, Trash2, Loader2, Calculator, Calendar, ChevronLeft, ChevronRight, Copy, Clock, AlertTriangle } from "lucide-react";
+
+// Limite de amostragem aplicado pelo extract-and-fill (cartao de ponto).
+// Refs: supabase/functions/extract-and-fill/index.ts:1058 (prompt) e :1393 (loop).
+const OCR_CARTAO_PONTO_SAMPLE_LIMIT = 60;
 
 interface Props {
   caseId: string;
@@ -70,6 +74,31 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
         .order("data");
       return (data || []) as any[];
     },
+  });
+
+  // Detecta truncamento OCR: extract-and-fill capa o cartao de ponto em 60 dias
+  // como amostra (vide prompt em extract-and-fill/index.ts:1058). Se a apuracao
+  // diaria do caso tem >= 60 registros com origem='OCR', alertamos que HE
+  // pode estar subestimada por falta de amostra completa.
+  const { data: ocrSampleInfo } = useQuery({
+    queryKey: ["cartao_ponto_ocr_sample", caseId],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("pjecalc_apuracao_diaria" as any)
+        .select("*", { count: "exact", head: true })
+        .eq("origem", "OCR")
+        // calculo_id e o link real, mas nao temos aqui — filtra por presenca
+        // de qualquer linha OCR (pjecalc_apuracao_diaria nao tem case_id direto).
+        // Como aproximacao usamos calculo_id via subquery por case.
+        .in(
+          "calculo_id",
+          (await supabase.from("pjecalc_calculos").select("id").eq("case_id", caseId)).data?.map((r: any) => r.id) || ["__none__"],
+        );
+      if (error) return { ocrCount: 0, truncated: false };
+      const ocrCount = count || 0;
+      return { ocrCount, truncated: ocrCount >= OCR_CARTAO_PONTO_SAMPLE_LIMIT };
+    },
+    staleTime: 60_000,
   });
 
   // Resumo do mês
@@ -305,6 +334,25 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Warning de amostra OCR truncada */}
+      {ocrSampleInfo?.truncated && (
+        <Card className="border-amber-400 bg-amber-50/60 dark:bg-amber-950/20">
+          <CardContent className="p-3 flex items-start gap-2 text-xs">
+            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-amber-800 dark:text-amber-200">
+                Amostra de {OCR_CARTAO_PONTO_SAMPLE_LIMIT} dias detectada
+              </div>
+              <div className="text-amber-700 dark:text-amber-300/80">
+                A extração via OCR limitou-se aos primeiros {OCR_CARTAO_PONTO_SAMPLE_LIMIT} registros diários. Horas Extras
+                podem estar subestimadas. Verifique e complete os meses faltantes manualmente
+                ou via importação de CSV antes da liquidação.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Resumo do mês */}
       <div className="grid grid-cols-6 gap-2">

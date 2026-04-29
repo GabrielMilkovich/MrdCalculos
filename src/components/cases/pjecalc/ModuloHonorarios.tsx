@@ -185,17 +185,17 @@ export function ModuloHonorarios({ caseId }: Props) {
 
             <div className="border-t pt-2 mt-2">
               <p className="text-xs font-semibold text-muted-foreground mb-1">Imposto de Renda</p>
-              <p className="text-[10px] text-amber-700 mb-2 bg-amber-50 dark:bg-amber-950/20 p-1.5 rounded">🔬 Em estudo — campos persistidos mas engine ainda não calcula IRPF sobre honorário (PF/PJ). Validação aguarda PJC com <code>apurarIRRF=true</code> (0/47 no corpus).</p>
+              <p className="text-[10px] text-orange-800 mb-2 bg-orange-50 dark:bg-orange-950/20 p-1.5 rounded border border-orange-200 dark:border-orange-900"><strong>🚧 Não implementado — release v3.6.</strong> Engine ainda não calcula IRPF sobre honorário (PF/PJ). Campos desabilitados.</p>
               <div className="space-y-2">
                 <div className="flex items-center gap-2" title="Quando marcado, retém IRPF do honorário. PF=tabela progressiva (Lei 7.713/88). PJ=1,5% fixo (IN RFB).">
-                  <Checkbox checked={editForm.apurar_ir} onCheckedChange={v => setEditForm(p => ({ ...p, apurar_ir: !!v }))} />
-                  <Label className="text-xs">Apurar Imposto de Renda na Fonte</Label>
+                  <Checkbox checked={editForm.apurar_ir} onCheckedChange={v => setEditForm(p => ({ ...p, apurar_ir: !!v }))} disabled />
+                  <Label className="text-xs text-muted-foreground">Apurar Imposto de Renda na Fonte</Label>
                 </div>
                 {editForm.apurar_ir && (
                   <>
                     <div title="Pessoa Física: tabela progressiva IRPF. Pessoa Jurídica: alíquota fixa 1,5% (serviços profissionais).">
                       <Label className="text-xs">Tipo IR</Label>
-                      <Select value={editForm.tipo_imposto_renda || 'pessoa_fisica'} onValueChange={v => setEditForm(p => ({ ...p, tipo_imposto_renda: v }))}>
+                      <Select value={editForm.tipo_imposto_renda || 'pessoa_fisica'} onValueChange={v => setEditForm(p => ({ ...p, tipo_imposto_renda: v }))} disabled>
                         <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pessoa_fisica">Pessoa Física (tabela progressiva)</SelectItem>

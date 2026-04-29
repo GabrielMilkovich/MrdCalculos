@@ -498,6 +498,17 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   };
 
   // ── PARÂMETROS ──
+  // Highlight de campos criticos ausentes (vinculado ao completeness score)
+  // — campos marcados com "*" pintam a borda em amarelo quando vazios.
+  const missingCritical = {
+    estado: !formParams.estado,
+    municipio: !formParams.municipio?.trim(),
+    data_admissao: !formParams.data_admissao,
+    data_ajuizamento: !formParams.data_ajuizamento,
+    remuneracao: !formParams.maior_remuneracao && !formParams.ultima_remuneracao && historicos.length === 0,
+  };
+  const criticalCls = "border-yellow-400 ring-1 ring-yellow-400/40 bg-yellow-50/40 dark:bg-yellow-950/20";
+
   const renderParametros = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -507,28 +518,41 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
           Salvar
         </Button>
       </div>
+      {(missingCritical.estado || missingCritical.municipio || missingCritical.data_admissao || missingCritical.data_ajuizamento || missingCritical.remuneracao) && (
+        <Card className="border-yellow-400 bg-yellow-50/50 dark:bg-yellow-950/20">
+          <CardContent className="p-3 flex items-start gap-2 text-xs">
+            <AlertCircle className="h-4 w-4 text-yellow-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-yellow-800 dark:text-yellow-200">Campos críticos pendentes</div>
+              <div className="text-yellow-700 dark:text-yellow-300/80">
+                Preencha os campos destacados em amarelo para liberar a liquidação.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Localização</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4">
           <div>
             <Label className="text-xs">Estado *</Label>
             <Select value={formParams.estado} onValueChange={v => setFormParams(p => ({ ...p, estado: v }))}>
-              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className={cn("mt-1 h-8 text-xs", missingCritical.estado && criticalCls)}><SelectValue /></SelectTrigger>
               <SelectContent>{UFS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div>
             <Label className="text-xs">Município *</Label>
-            <Input value={formParams.municipio} onChange={e => setFormParams(p => ({ ...p, municipio: e.target.value }))} className="mt-1 h-8 text-xs" />
+            <Input value={formParams.municipio} onChange={e => setFormParams(p => ({ ...p, municipio: e.target.value }))} className={cn("mt-1 h-8 text-xs", missingCritical.municipio && criticalCls)} />
           </div>
         </CardContent>
       </Card>
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Datas do Contrato</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div><Label className="text-xs">Admissão *</Label><Input type="date" value={formParams.data_admissao} onChange={e => setFormParams(p => ({ ...p, data_admissao: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+          <div><Label className="text-xs">Admissão *</Label><Input type="date" value={formParams.data_admissao} onChange={e => setFormParams(p => ({ ...p, data_admissao: e.target.value }))} className={cn("mt-1 h-8 text-xs", missingCritical.data_admissao && criticalCls)} /></div>
           <div><Label className="text-xs">Demissão</Label><Input type="date" value={formParams.data_demissao} onChange={e => setFormParams(p => ({ ...p, data_demissao: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
-          <div><Label className="text-xs">Ajuizamento *</Label><Input type="date" value={formParams.data_ajuizamento} onChange={e => setFormParams(p => ({ ...p, data_ajuizamento: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
+          <div><Label className="text-xs">Ajuizamento *</Label><Input type="date" value={formParams.data_ajuizamento} onChange={e => setFormParams(p => ({ ...p, data_ajuizamento: e.target.value }))} className={cn("mt-1 h-8 text-xs", missingCritical.data_ajuizamento && criticalCls)} /></div>
           <div><Label className="text-xs">Data Inicial</Label><Input type="date" value={formParams.data_inicial} onChange={e => setFormParams(p => ({ ...p, data_inicial: e.target.value }))} className="mt-1 h-8 text-xs" /></div>
         </CardContent>
       </Card>
@@ -558,8 +582,8 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Remunerações</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4">
-          <div><Label className="text-xs">Maior Remuneração (R$)</Label><Input type="number" step="0.01" value={formParams.maior_remuneracao} onChange={e => setFormParams(p => ({ ...p, maior_remuneracao: e.target.value }))} className="mt-1 h-8 text-xs" placeholder="0,00" /></div>
-          <div><Label className="text-xs">Última Remuneração (R$)</Label><Input type="number" step="0.01" value={formParams.ultima_remuneracao} onChange={e => setFormParams(p => ({ ...p, ultima_remuneracao: e.target.value }))} className="mt-1 h-8 text-xs" placeholder="0,00" /></div>
+          <div><Label className="text-xs">Maior Remuneração (R$)</Label><Input type="number" step="0.01" value={formParams.maior_remuneracao} onChange={e => setFormParams(p => ({ ...p, maior_remuneracao: e.target.value }))} className={cn("mt-1 h-8 text-xs", missingCritical.remuneracao && criticalCls)} placeholder="0,00" /></div>
+          <div><Label className="text-xs">Última Remuneração (R$)</Label><Input type="number" step="0.01" value={formParams.ultima_remuneracao} onChange={e => setFormParams(p => ({ ...p, ultima_remuneracao: e.target.value }))} className={cn("mt-1 h-8 text-xs", missingCritical.remuneracao && criticalCls)} placeholder="0,00" /></div>
         </CardContent>
       </Card>
       <Card>

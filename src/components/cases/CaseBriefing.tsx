@@ -40,17 +40,28 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
   const queryClient = useQueryClient();
 
   // Load saved briefing
-  const { data: savedBriefing, isLoading: loadingSaved } = useQuery({
+  // case_briefings é uma tabela custom fora do schema gerado em
+  // src/types/supabase.ts; declaramos aqui o subset usado pelo UI.
+  interface CaseBriefingRow {
+    id: string;
+    case_id: string;
+    content: string;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string | null;
+  }
+  const { data: savedBriefing, isLoading: loadingSaved } = useQuery<CaseBriefingRow | null>({
     queryKey: ["case_briefing", caseId],
     queryFn: async () => {
       const { data } = await supabase
+        // tabela custom fora do schema gerado
         .from("case_briefings" as any)
         .select("*")
         .eq("case_id", caseId)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      return data as any;
+      return (data ?? null) as unknown as CaseBriefingRow | null;
     },
   });
 
@@ -151,16 +162,17 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
       const userId = session?.session?.user?.id ?? null;
 
       if (savedBriefing?.id) {
-        await (supabase.from("case_briefings" as any) as any)
-          .update({ content, updated_at: new Date().toISOString() })
-          .eq("id", savedBriefing.id);
+        // tabela custom case_briefings fora do schema gerado
+        const builder = supabase.from("case_briefings" as any) as unknown as {
+          update: (v: { content: string; updated_at: string }) => { eq: (col: string, val: string) => Promise<{ error: unknown }> };
+        };
+        await builder.update({ content, updated_at: new Date().toISOString() }).eq("id", savedBriefing.id);
       } else {
-        await (supabase.from("case_briefings" as any) as any)
-          .insert({
-            case_id: caseId,
-            content,
-            created_by: userId,
-          });
+        // tabela custom case_briefings fora do schema gerado
+        const builder = supabase.from("case_briefings" as any) as unknown as {
+          insert: (v: { case_id: string; content: string; created_by: string | null }) => Promise<{ error: unknown }>;
+        };
+        await builder.insert({ case_id: caseId, content, created_by: userId });
       }
       queryClient.invalidateQueries({ queryKey: ["case_briefing", caseId] });
     } catch (e) {
