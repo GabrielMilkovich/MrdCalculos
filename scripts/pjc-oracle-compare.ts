@@ -34,6 +34,8 @@ interface OracleFields {
   // outros campos comuns
   honorariosReclamante?: number;
   honorariosReclamado?: number;
+  // Sprint 2C: flag detectando RPV honorarios (oracle.liquidoExequente = bruto, nao liquido).
+  isRpvHonorarios?: boolean;
 }
 
 function num(s: string | undefined): number | undefined {
@@ -58,6 +60,23 @@ function extractOracle(xml: string): OracleFields {
   const gprec = extract(xml, 'gprec');
   const dados = extract(xml, 'dadosEstruturados');
 
+  // Detecta RPV de honorarios de advogado (Sprint 2C):
+  // descricao "HONORARIOS LIQUIDOS PARA <NOME>" + tipo ADV/OUT
+  // Nesses casos, liquidoExequente do oracle eh o BRUTO trabalhista,
+  // nao o liquido apos deducoes. Comparacao com engine.liquido_reclamante
+  // gera falso positivo. Solucao: marcar isRpvHonorarios para o caller
+  // comparar com engine.total_reclamada (princ_corr + juros + fgts) em vez.
+  // Detecta pelo nome da descricao (entidades HTML preservadas: &#193; = Á, &#205; = Í)
+  // ou pelo nomeCredor != nomeBeneficiario (oracle eh advogado, nao reclamante).
+  const descricao = (dados.descricao || '').toUpperCase();
+  const nomeCredor = (dados.nomeCredor || '').trim().toUpperCase();
+  const nomeBenef = (gprec.nomeBeneficiario || '').trim().toUpperCase();
+  const tipo = (gprec.tipo || '').toUpperCase();
+  const isRpvHonorarios =
+    (descricao.includes('HONOR') || descricao.includes('QUIDOS')) &&
+    (tipo === 'ADV' || tipo === 'OUT' ||
+     (nomeCredor.length > 0 && nomeBenef.length > 0 && nomeCredor !== nomeBenef));
+
   return {
     liquidoExequente: num(gprec.liquidoExequente),
     inssBeneficiario: num(gprec.inssBeneficiario),
@@ -72,6 +91,7 @@ function extractOracle(xml: string): OracleFields {
     inssReclamante: num(dados.inssReclamante),
     custasReclamado: num(dados.custasReclamado),
     hashLiquidacao: dados.hashLiquidacao,
+    isRpvHonorarios,
   };
 }
 
@@ -144,13 +164,19 @@ async function compareSinglePJC(pjcPath: string) {
   // (Antes mapeava para cs_empregador direto → -10% sistemático em 50/50 PJCs.)
   const inssExecutadoEng = r.cs_segurado + r.cs_empregador - inssNominal;
 
+  // Sprint 2C: tipos diferentes de RPV honorarios:
+  //  - tipo="OUT": oracle.liquidoExequente eh BRUTO (princ+juros+fgts) -> compara
+  //    com engine.total_reclamada
+  //  - tipo="ADV": oracle.liquidoExequente eh o LIQUIDO do reclamante apos
+  //    deducoes -> compara com engine.liquido_reclamante (comportamento padrao)
+  //  - reclamante normal: liquido_reclamante (padrao)
+  const xmlReread = readPjcXml(pjcPath);
+  const tipoOracle = (xmlReread.match(/<gprec>[\s\S]*?<tipo>([^<]+)<\/tipo>/)?.[1] || '').toUpperCase();
+  const usaTotalReclamada = oracle.isRpvHonorarios && tipoOracle === 'OUT';
+  const baseEngine = usaTotalReclamada ? r.total_reclamada : r.liquido_reclamante;
   const eng = {
-    // FIX 2026-04-29 (CEREBRO-CLAUDE Sprint 2): oracle <valorPrincipal> = LIQUIDO,
-    // nao BRUTO. Verificado em 15 PJCs sem excecao. Java Atualizacao.java:1183-1240.
-    // Antes mapeava para BRUTO (principal + juros + fgts), gerando "+5-20% inflado"
-    // falso positivo. Engine principal_corrigido real esta em +/- 2%.
-    valorPrincipal: r.liquido_reclamante,
-    liquidoExequente: r.liquido_reclamante,
+    valorPrincipal: baseEngine,
+    liquidoExequente: baseEngine,
     inssBeneficiario: inssNominal,
     inssReclamante: r.cs_segurado,
     inssExecutado: inssExecutadoEng,
