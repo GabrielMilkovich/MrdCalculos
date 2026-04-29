@@ -1,5 +1,18 @@
 import Decimal from 'decimal.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Mock o supabase client antes de importar calibration (que o usa para
+// registrarEvento/agregarMetricas — funcoes nao testadas aqui, pois
+// dependem de mock de banco. Os testes focam nas funcoes puras).
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: {
+    from: () => ({
+      select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }) }),
+      insert: async () => ({ error: null }),
+    }),
+  },
+}));
+
 import {
   CALIBRATION_THRESHOLDS,
   agregarMetricasFromEvents,
