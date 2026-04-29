@@ -17,6 +17,7 @@ import {
   SELIC_ACUMULADO,
   TR_ACUMULADO,
 } from './indices-fallback';
+import { IPCA_ACUMULADO } from './indices-fallback-ipca';
 import { logger } from '@/lib/logger';
 
 export type IndiceNome =
@@ -71,7 +72,7 @@ const FALLBACK_MAP: Record<IndiceNome, Record<string, number>> = {
   'TR':     TR_ACUMULADO,
   'TR_FGTS': TR_ACUMULADO,  // aproximação — DB deve ter a série calculada
   'INPC':   IPCA_E_ACUMULADO,
-  'IPCA':   IPCA_E_ACUMULADO,
+  'IPCA':   IPCA_ACUMULADO,
   'IGP-M':  IPCA_E_ACUMULADO,
   'IGP-DI': IPCA_E_ACUMULADO,
 };
