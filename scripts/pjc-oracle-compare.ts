@@ -145,7 +145,11 @@ async function compareSinglePJC(pjcPath: string) {
   const inssExecutadoEng = r.cs_segurado + r.cs_empregador - inssNominal;
 
   const eng = {
-    valorPrincipal: r.principal_corrigido + r.juros_mora + (r.fgts_total || 0),
+    // FIX 2026-04-29 (CEREBRO-CLAUDE Sprint 2): oracle <valorPrincipal> = LIQUIDO,
+    // nao BRUTO. Verificado em 15 PJCs sem excecao. Java Atualizacao.java:1183-1240.
+    // Antes mapeava para BRUTO (principal + juros + fgts), gerando "+5-20% inflado"
+    // falso positivo. Engine principal_corrigido real esta em +/- 2%.
+    valorPrincipal: r.liquido_reclamante,
     liquidoExequente: r.liquido_reclamante,
     inssBeneficiario: inssNominal,
     inssReclamante: r.cs_segurado,
