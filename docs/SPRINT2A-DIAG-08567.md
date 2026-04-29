@@ -5,6 +5,29 @@
 **Script:** `scripts/diag-outlier-08567.ts`
 **Output:** `/tmp/diag-08567.txt`
 
+> ⚠️ **STATUS: PARCIALMENTE REFUTADO em Sprint 2B (commit 221cd57).**
+>
+> Os gaps reportados aqui (correção +R$ 4.577, juros +R$ 1.866) eram
+> **inflados por bug no próprio script de diagnóstico**: Map.set sobrescrevia
+> entradas duplicadas de ApuracaoDeJuros na mesma competência (4 competências
+> afetadas: 2019-12, 2020-12, 2021-12, 2022-05). Após fix do script:
+>
+> - Gap correção real: **R$ 477 (+0,77%)** — não R$ 4.577
+> - Gap juros real: **R$ 809 (+5,02%)** — não R$ 1.866
+> - Gap total apuracao_juros: **R$ 1.286** — não R$ 6.443
+>
+> A hipótese de "espalhamento de verbas reflexas" também foi REFUTADA: o
+> PJC XML JÁ traz reflexa aglutinada (verba "13º SALÁRIO SOBRE HE - PARTE FIXA"
+> tem apenas 4 ocorrências: 2019-12-20, 2020-12-20, 2021-12-20, 2022-06-15).
+> Engine processa corretamente sem espalhar.
+>
+> **Causa real do gap líquido (R$ 9.947) ainda não identificada.** Apenas
+> R$ 1.286 (13%) explicado por correção+juros. Restante R$ 8.661 vem de
+> outras componentes (provável: FGTS R$ 4.430 + agregadores valorPrincipal
+> oracle).
+>
+> **Próximo: Sprint 2C — breakdown completo do líquido por componente.**
+
 ---
 
 ## Sumário executivo
