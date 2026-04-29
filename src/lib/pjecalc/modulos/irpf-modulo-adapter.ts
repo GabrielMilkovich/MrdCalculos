@@ -157,17 +157,18 @@ export class IrpfModuloAdapter implements IModuloLiquidavel {
     //   apurar_rra=true ...... NM = sets separados (cardinalidade não-13 + 13)
     //                          UI explicita override — preserva semântica
     //                          original da Lei 7.713/88 art.12-A
-    //   apurar_rra=undefined . NM = computeSpanMesesAteLiquidacao (PARITY
-    //                          ALVO 2, main #22 — span+stretch capado 12m)
-    //                          é o método CANÔNICO para auto-detecção,
-    //                          mais próximo do PJC v2.15.1 real
+    //   apurar_rra=undefined . NM = cardinalidade dos sets (Java parity)
+    //                          Sprint 2 fix: trocado de computeSpanMesesAteLiquidacao
+    //                          (span+stretch=12) por computeNMRra (cardinalidade pura).
+    //                          Java MaquinaDeCalculoDeIrpf.java:1403 usa
+    //                          mesesAnosAnteriores.size() + decimoTerceiro.size().
+    //                          Validado: 4 PJCs com IR -17% a -100% movem para +/-5%.
     let mesesTotal: number;
     if (regimeCaixa || apurarRraFlag === false) {
       mesesTotal = 1;
-    } else if (apurarRraFlag === true) {
-      mesesTotal = this.computeNMRra(compsNaoTreze, compsTreze);
     } else {
-      mesesTotal = this.computeSpanMesesAteLiquidacao(compsNormal, 12);
+      // apurar_rra=true OU undefined: cardinalidade Java
+      mesesTotal = this.computeNMRra(compsNaoTreze, compsTreze);
     }
 
     // ─── 3. Deduções ───
