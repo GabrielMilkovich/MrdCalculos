@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Save, Loader2 } from "lucide-react";
 import Decimal from "decimal.js";
@@ -133,8 +134,7 @@ export function ModuloParametrosGerais({ caseId }: Props) {
   const { data } = useQuery({
     queryKey: ["pjecalc_calculos", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_calculos" as any)
+      const { data, error } = await fromUntyped("pjecalc_calculos")
         .select("*")
         .eq("case_id", caseId)
         .maybeSingle();
@@ -268,8 +268,7 @@ export function ModuloParametrosGerais({ caseId }: Props) {
         percentual_adicional_noturno: toNumOrNull(form.percentual_adicional_noturno),
         dados_processo: dadosProcesso,
       };
-      const { error } = await supabase
-        .from("pjecalc_calculos" as any)
+      const { error } = await fromUntyped("pjecalc_calculos")
         .upsert(payload, { onConflict: "case_id" });
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["pjecalc_calculos", caseId] });

@@ -283,7 +283,7 @@ export function CalculationDetailView({ caseId, facts, onExecuteCalc }: Calculat
 
   const resultadoBruto = (latestRun.resultado_bruto as any) || {};
   const resultadoLiquido = (latestRun.resultado_liquido as any) || {};
-  const warnings = ((latestRun.warnings as any[]) || []);
+  const warnings = ((latestRun.warnings as unknown[]) || []);
   const porVerbaBruto = resultadoBruto.por_verba || {};
   const porVerbaLiquido = resultadoLiquido.por_verba || {};
   const totalBruto = resultadoBruto.total || 0;

@@ -59,13 +59,12 @@ export function ModuloPagamentos({ caseId }: Props) {
   const { data: pagamentos = [], isLoading } = useQuery({
     queryKey: ["pjecalc_pagamentos", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_pagamentos" as any)
+      const { data, error } = await fromUntyped("pjecalc_pagamentos")
         .select("*")
         .eq("case_id", caseId)
         .order("competencia", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as any[];
+      return (data ?? []) as unknown[];
     },
   });
 
@@ -73,8 +72,7 @@ export function ModuloPagamentos({ caseId }: Props) {
   const { data: verbasBase = [] } = useQuery({
     queryKey: ["pjecalc_verba_base_options", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_verba_base" as any)
+      const { data, error } = await fromUntyped("pjecalc_verba_base")
         .select("id, nome, codigo")
         .eq("case_id", caseId)
         .order("ordem", { ascending: true })
@@ -142,14 +140,12 @@ export function ModuloPagamentos({ caseId }: Props) {
         verba_base_id: editing.verba_base_id || null,
       };
       if (editing.id) {
-        const { error } = await supabase
-          .from("pjecalc_pagamentos" as any)
+        const { error } = await fromUntyped("pjecalc_pagamentos")
           .update(payload)
           .eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("pjecalc_pagamentos" as any)
+        const { error } = await fromUntyped("pjecalc_pagamentos")
           .insert(payload);
         if (error) throw error;
       }

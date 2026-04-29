@@ -116,6 +116,11 @@ export interface PjeFalta {
   data_final: string;
   justificada: boolean;
   justificativa?: string;
+  /** Art. 130-A CLT (DL 2.318/87) + jurisprudencia: quando a falta e grave (suspensao
+   *  com afastamento prolongado), o periodo aquisitivo de ferias REINICIA a partir
+   *  da data de retorno (data_final + 1 dia). Faltas anteriores sao desconsideradas
+   *  para o calculo da redutora do art. 130 CLT. */
+  reinicia?: boolean;
 }
 
 export interface PjeFeriasGozoPeriodo {

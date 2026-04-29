@@ -64,7 +64,7 @@ function rebindToCase<T extends PjeCalcRowGen>(
 export async function fecharCalculo(calculoId: string): Promise<void> {
   const { error } = await supabase
     // tabela custom fora do schema gerado
-    .from("pjecalc_liquidacao_resultado" as any)
+    .from("pjecalc_liquidacao_resultado" as never)
     .update({
       status: 'fechado',
       fechado_em: new Date().toISOString(),
@@ -81,7 +81,7 @@ export async function fecharCalculo(calculoId: string): Promise<void> {
 export async function reabrirCalculo(calculoId: string): Promise<void> {
   const { error } = await supabase
     // tabela custom fora do schema gerado
-    .from("pjecalc_liquidacao_resultado" as any)
+    .from("pjecalc_liquidacao_resultado" as never)
     .update({
       status: 'aberto',
       fechado_em: null,
@@ -124,7 +124,7 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
   // 2. Copy parametros
   const { data: params } = await supabase
     // tabela custom fora do schema gerado
-    .from("pjecalc_parametros" as any)
+    .from("pjecalc_parametros" as never)
     .select("*")
     .eq("case_id", caseId)
     .maybeSingle();
@@ -137,7 +137,7 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
   // 3. Copy faltas
   const { data: faltas } = await supabase
     // tabela custom fora do schema gerado
-    .from("pjecalc_faltas" as any)
+    .from("pjecalc_faltas" as never)
     .select("*")
     .eq("case_id", caseId);
 
@@ -151,7 +151,7 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
   // 4. Copy ferias
   const { data: ferias } = await supabase
     // tabela custom fora do schema gerado
-    .from("pjecalc_ferias" as any)
+    .from("pjecalc_ferias" as never)
     .select("*")
     .eq("case_id", caseId);
 
@@ -165,7 +165,7 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
   // 5. Copy historico salarial
   const { data: historicos } = await supabase
     // tabela custom fora do schema gerado
-    .from("pjecalc_historico_salarial" as any)
+    .from("pjecalc_historico_salarial" as never)
     .select("*")
     .eq("case_id", caseId);
 
@@ -179,7 +179,7 @@ export async function duplicarCalculo(caseId: string, novoCliente?: string): Pro
   // 6. Copy verbas
   const { data: verbas } = await supabase
     // tabela custom fora do schema gerado
-    .from("pjecalc_verbas" as any)
+    .from("pjecalc_verbas" as never)
     .select("*")
     .eq("case_id", caseId);
 

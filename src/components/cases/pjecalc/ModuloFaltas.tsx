@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 
@@ -29,8 +30,7 @@ export function ModuloFaltas({ caseId }: Props) {
   const { data: faltas = [] } = useQuery({
     queryKey: ["pjecalc_faltas", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_faltas" as any)
+      const { data, error } = await fromUntyped("pjecalc_faltas")
         .select("*")
         .eq("case_id", caseId)
         .order("data_inicial");
@@ -45,7 +45,7 @@ export function ModuloFaltas({ caseId }: Props) {
     setSaving(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const { error } = await supabase.from("pjecalc_faltas" as any).insert({
+      const { error } = await fromUntyped("pjecalc_faltas").insert({
         case_id: caseId,
         data_inicial: today,
         data_final: today,
@@ -64,7 +64,7 @@ export function ModuloFaltas({ caseId }: Props) {
   };
 
   const updateField = async (id: string, patch: Partial<FaltaRow>) => {
-    const { error } = await supabase.from("pjecalc_faltas" as any).update(patch).eq("id", id);
+    const { error } = await fromUntyped("pjecalc_faltas").update(patch).eq("id", id);
     if (error) {
       toast.error("Erro ao salvar");
       return;
@@ -73,7 +73,7 @@ export function ModuloFaltas({ caseId }: Props) {
   };
 
   const removeFalta = async (id: string) => {
-    const { error } = await supabase.from("pjecalc_faltas" as any).delete().eq("id", id);
+    const { error } = await fromUntyped("pjecalc_faltas").delete().eq("id", id);
     if (error) { toast.error("Erro ao remover"); return; }
     invalidate();
   };

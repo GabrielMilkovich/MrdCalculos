@@ -236,4 +236,132 @@ export class Pagamento implements EventoAtualizacao {
     }
     return excecao;
   }
+
+  // ─── Campos adicionais Java (linhas 835-1083) ────────────────────────
+  private descontoDaContribuicaoSocial: Decimal | null = null;
+  private apurarPrevidenciaPrivada: boolean = false;
+  private previdenciaPrivada: Decimal | null = null;
+  private apurarPensaoAlimenticia: boolean = false;
+  private pensaoAlimenticia: Decimal | null = null;
+  private apurarImpostoDoReclamante: boolean = false;
+  private impostoDoReclamante: Decimal | null = null;
+  private inssSobreSalariosDevidosOutrosDebitos: Decimal | null = null;
+  private inssSobreSalariosPagosOutrosDebitos: Decimal | null = null;
+  private jurosDePrevidenciaPrivadaOutrosDebitos: Decimal | null = null;
+  private impostoDeRendaDoReclamanteOutrosDebitos: Decimal | null = null;
+  private inssDezPorcento: Decimal | null = null;
+  private inssMeioPorcento: Decimal | null = null;
+  private custasJudiciaisOutrosDebitos: Decimal | null = null;
+  private custasJudiciaisDebitosCobrarDoReclamante: Decimal | null = null;
+
+  // Java getDescontoDaContribuicaoSocial / setDescontoDaContribuicaoSocial (linha 835)
+  getDescontoDaContribuicaoSocial(): Decimal | null { return this.descontoDaContribuicaoSocial; }
+  setDescontoDaContribuicaoSocial(v: Decimal | null): void { this.descontoDaContribuicaoSocial = v; }
+  // Java getApurarPrevidenciaPrivada / set (linha 843)
+  getApurarPrevidenciaPrivada(): boolean { return this.apurarPrevidenciaPrivada; }
+  setApurarPrevidenciaPrivada(v: boolean): void { this.apurarPrevidenciaPrivada = v; }
+  // Java getPrevidenciaPrivada / set (linha 851)
+  getPrevidenciaPrivada(): Decimal | null { return this.previdenciaPrivada; }
+  setPrevidenciaPrivada(v: Decimal | null): void { this.previdenciaPrivada = v; }
+  // Java getApurarPensaoAlimenticia / set (linha 859)
+  getApurarPensaoAlimenticia(): boolean { return this.apurarPensaoAlimenticia; }
+  setApurarPensaoAlimenticia(v: boolean): void { this.apurarPensaoAlimenticia = v; }
+  // Java getPensaoAlimenticia / set (linha 867)
+  getPensaoAlimenticia(): Decimal | null { return this.pensaoAlimenticia; }
+  setPensaoAlimenticia(v: Decimal | null): void { this.pensaoAlimenticia = v; }
+  // Java getApurarImpostoDoReclamante / set (linha 875)
+  getApurarImpostoDoReclamante(): boolean { return this.apurarImpostoDoReclamante; }
+  setApurarImpostoDoReclamante(v: boolean): void { this.apurarImpostoDoReclamante = v; }
+  // Java getImpostoDoReclamante / set (linha 883)
+  getImpostoDoReclamante(): Decimal | null { return this.impostoDoReclamante; }
+  setImpostoDoReclamante(v: Decimal | null): void { this.impostoDoReclamante = v; }
+  // Java getInssSobreSalariosDevidosOutrosDebitos / set (linha 907)
+  getInssSobreSalariosDevidosOutrosDebitos(): Decimal | null { return this.inssSobreSalariosDevidosOutrosDebitos; }
+  setInssSobreSalariosDevidosOutrosDebitos(v: Decimal | null): void { this.inssSobreSalariosDevidosOutrosDebitos = v; }
+  // Java getInssSobreSalariosPagosOutrosDebitos / set (linha 923)
+  getInssSobreSalariosPagosOutrosDebitos(): Decimal | null { return this.inssSobreSalariosPagosOutrosDebitos; }
+  setInssSobreSalariosPagosOutrosDebitos(v: Decimal | null): void { this.inssSobreSalariosPagosOutrosDebitos = v; }
+  // Java getJurosDePrevidenciaPrivadaOutrosDebitos / set (linha 939)
+  getJurosDePrevidenciaPrivadaOutrosDebitos(): Decimal | null { return this.jurosDePrevidenciaPrivadaOutrosDebitos; }
+  setJurosDePrevidenciaPrivadaOutrosDebitos(v: Decimal | null): void { this.jurosDePrevidenciaPrivadaOutrosDebitos = v; }
+  // Java getImpostoDeRendaDoReclamanteOutrosDebitos / set (linha 955)
+  getImpostoDeRendaDoReclamanteOutrosDebitos(): Decimal | null { return this.impostoDeRendaDoReclamanteOutrosDebitos; }
+  setImpostoDeRendaDoReclamanteOutrosDebitos(v: Decimal | null): void { this.impostoDeRendaDoReclamanteOutrosDebitos = v; }
+  // Java getInssDezPorcento / set (linha 971) — INSS 10% adicional Lei 8.036/90
+  getInssDezPorcento(): Decimal | null { return this.inssDezPorcento; }
+  setInssDezPorcento(v: Decimal | null): void { this.inssDezPorcento = v; }
+  // Java getInssMeioPorcento / set (linha 987) — INSS 0,5% adicional LC 110/2001
+  getInssMeioPorcento(): Decimal | null { return this.inssMeioPorcento; }
+  setInssMeioPorcento(v: Decimal | null): void { this.inssMeioPorcento = v; }
+  // Java getCustasJudiciaisOutrosDebitos / set (linha 1083)
+  getCustasJudiciaisOutrosDebitos(): Decimal | null { return this.custasJudiciaisOutrosDebitos; }
+  setCustasJudiciaisOutrosDebitos(v: Decimal | null): void { this.custasJudiciaisOutrosDebitos = v; }
+  // Java getCustasJudiciaisDebitosCobrarDoReclamante / set (linha 1219)
+  getCustasJudiciaisDebitosCobrarDoReclamante(): Decimal | null { return this.custasJudiciaisDebitosCobrarDoReclamante; }
+  setCustasJudiciaisDebitosCobrarDoReclamante(v: Decimal | null): void { this.custasJudiciaisDebitosCobrarDoReclamante = v; }
+
+  // ─── Metodos calculados Java ────────────────────────────────────────
+
+  /**
+   * Java getValorTotalDebitosReclamado — soma INSS Devidos/Pagos + IRPF +
+   * PrevPriv + Pensao + Custas Outros Debitos. Usado por relatorio de
+   * pagamento para resumo Outros Debitos do Reclamado.
+   */
+  getValorTotalOutrosDebitosReclamado(): Decimal {
+    let total = ZERO;
+    total = total.plus(this.inssSobreSalariosDevidosOutrosDebitos ?? ZERO);
+    total = total.plus(this.inssSobreSalariosPagosOutrosDebitos ?? ZERO);
+    total = total.plus(this.jurosDePrevidenciaPrivadaOutrosDebitos ?? ZERO);
+    total = total.plus(this.impostoDeRendaDoReclamanteOutrosDebitos ?? ZERO);
+    total = total.plus(this.custasJudiciaisOutrosDebitos ?? ZERO);
+    return total;
+  }
+
+  /**
+   * Java getValorTotalDebitosCobrarDoReclamante — soma das deducoes
+   * cobradas do reclamante (CS + IRPF + PrevPriv + Pensao + Custas
+   * Cobrar). Java linha ~1195+.
+   */
+  getValorTotalDebitosCobrarDoReclamante(): Decimal {
+    let total = ZERO;
+    total = total.plus(this.descontoDaContribuicaoSocial ?? ZERO);
+    total = total.plus(this.previdenciaPrivada ?? ZERO);
+    total = total.plus(this.pensaoAlimenticia ?? ZERO);
+    total = total.plus(this.impostoDoReclamante ?? ZERO);
+    total = total.plus(this.custasJudiciaisDebitosCobrarDoReclamante ?? ZERO);
+    return total;
+  }
+
+  /**
+   * Java getValorTotalDoPagamento — soma todas as parcelas e debitos
+   * recolhidos pelo reclamado. Total geral movimentado.
+   */
+  getValorTotalDoPagamento(): Decimal {
+    return (this.valorPagamento ?? ZERO)
+      .plus(this.getValorTotalOutrosDebitosReclamado())
+      .plus(this.inssDezPorcento ?? ZERO)
+      .plus(this.inssMeioPorcento ?? ZERO);
+  }
+
+  /**
+   * Java getValorAmortizadoNoCreditoDoReclamante — quanto do
+   * valorParcelaCreditoReclamante foi efetivamente amortizado contra
+   * Principal/FGTS/Multas (sobra eh devolvida como saldo).
+   */
+  getValorAmortizadoNoCreditoDoReclamante(): Decimal {
+    return (this.valorParcelaPrincipal ?? ZERO)
+      .plus(this.valorParcelaFgts ?? ZERO)
+      .plus(this.valorParcelaMultasDevidasReclamante ?? ZERO);
+  }
+
+  /**
+   * Java isPagamentoCompleto — verifica se valorPagamento cobre
+   * pelo menos as deducoes obrigatorias (CS + IRPF + Pensao).
+   */
+  isPagamentoCompleto(): boolean {
+    const minObrigatorio = (this.descontoDaContribuicaoSocial ?? ZERO)
+      .plus(this.impostoDoReclamante ?? ZERO)
+      .plus(this.pensaoAlimenticia ?? ZERO);
+    return (this.valorPagamento ?? ZERO).gte(minObrigatorio);
+  }
 }

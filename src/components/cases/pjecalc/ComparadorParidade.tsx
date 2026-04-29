@@ -317,7 +317,7 @@ export function buildParityDataFromGolden(
   engineResult: PjeLiquidacaoResult | null,
 ): ParityData {
   // Golden snapshot removed — return empty parity data
-  const snap = { rubricas: [] as any[], resumo: { bruto_devido_reclamante: 0, liquido_reclamante: 0, deducao_contribuicao_social: 0, contribuicao_social_salarios: 0, irpf_reclamante: 0, honorarios_liquidos: 0, total_reclamado: 0, fgts_total: 0 } };
+  const snap = { rubricas: [] as unknown[], resumo: { bruto_devido_reclamante: 0, liquido_reclamante: 0, deducao_contribuicao_social: 0, contribuicao_social_salarios: 0, irpf_reclamante: 0, honorarios_liquidos: 0, total_reclamado: 0, fgts_total: 0 } };
   const verbas: VerbaComparison[] = [];
 
   const normalize = (s: string) => s.toUpperCase()

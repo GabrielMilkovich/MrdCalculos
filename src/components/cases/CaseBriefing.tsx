@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -55,7 +56,7 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
     queryFn: async () => {
       const { data } = await supabase
         // tabela custom fora do schema gerado
-        .from("case_briefings" as any)
+        .from("case_briefings" as never)
         .select("*")
         .eq("case_id", caseId)
         .order("created_at", { ascending: false })
@@ -163,13 +164,13 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
 
       if (savedBriefing?.id) {
         // tabela custom case_briefings fora do schema gerado
-        const builder = supabase.from("case_briefings" as any) as unknown as {
+        const builder = fromUntyped("case_briefings") as unknown as {
           update: (v: { content: string; updated_at: string }) => { eq: (col: string, val: string) => Promise<{ error: unknown }> };
         };
         await builder.update({ content, updated_at: new Date().toISOString() }).eq("id", savedBriefing.id);
       } else {
         // tabela custom case_briefings fora do schema gerado
-        const builder = supabase.from("case_briefings" as any) as unknown as {
+        const builder = fromUntyped("case_briefings") as unknown as {
           insert: (v: { case_id: string; content: string; created_by: string | null }) => Promise<{ error: unknown }>;
         };
         await builder.insert({ case_id: caseId, content, created_by: userId });

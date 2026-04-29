@@ -284,7 +284,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
           const calculoIdLocal = (calculoRow2 as { id: string }).id;
           const { data: atConfigs } = await supabase
             // tabela custom fora do schema gerado
-            .from("pjecalc_atualizacao_config" as any)
+            .from("pjecalc_atualizacao_config" as never)
             .select("*").eq("calculo_id", calculoIdLocal);
           if (atConfigs) {
             type AtConfig = { tipo: string; combinacoes_indice?: string; combinacoes_juros?: string };

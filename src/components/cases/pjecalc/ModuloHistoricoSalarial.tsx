@@ -50,8 +50,7 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
   const { data: historicos = [] } = useQuery({
     queryKey: ["pjecalc_historico", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_historico_salarial" as any)
+      const { data, error } = await fromUntyped("pjecalc_historico_salarial")
         .select("*")
         .eq("case_id", caseId)
         .order("nome");
@@ -63,8 +62,7 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
   const { data: ocorrencias = [] } = useQuery({
     queryKey: ["pjecalc_historico_ocorrencias", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_historico_ocorrencias" as any)
+      const { data, error } = await fromUntyped("pjecalc_historico_ocorrencias")
         .select("*")
         .eq("case_id", caseId)
         .order("competencia");

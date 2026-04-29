@@ -27,7 +27,7 @@ export function GradeHistorico({ caseId, historicoId, historicoNome, periodoInic
     queryFn: async () => {
       const { data } = await fromUntyped("pjecalc_historico_ocorrencias")
         .select("*").eq("historico_id", historicoId).order("competencia");
-      return (data || []) as any[];
+      return (data || []) as unknown[];
     },
   });
 

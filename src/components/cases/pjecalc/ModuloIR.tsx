@@ -109,21 +109,20 @@ export function ModuloIR({ caseId }: Props) {
                 </div>
 
                 <div className="border-t pt-3 mt-3">
-                  <p className="text-xs font-semibold text-muted-foreground mb-1">RRA — Rendimentos Recebidos Acumuladamente (Art. 12-A Lei 7.713/88)</p>
-                  <p className="text-[10px] text-orange-800 mb-2 bg-orange-50 dark:bg-orange-950/20 p-1.5 rounded border border-orange-200 dark:border-orange-900"><strong>🚧 Não implementado — release v3.6.</strong> Engine ainda calcula IR via tabela progressiva tradicional; o fator <code>rraMeses</code> não é aplicado.</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">RRA — Rendimentos Recebidos Acumuladamente (Art. 12-A Lei 7.713/88)</p>
                   <div className="flex items-center gap-2" title="Quando processo abrange período > 12 meses, IR é calculado sobre média mensal (base / RRA_meses). Reduz alíquota efetiva. Aplicável em ações trabalhistas longas.">
-                    <Checkbox checked={form.apurar_rra} onCheckedChange={v => setForm(p => ({ ...p, apurar_rra: !!v }))} disabled />
-                    <Label className="text-xs text-muted-foreground">Apurar RRA</Label>
+                    <Checkbox checked={form.apurar_rra} onCheckedChange={v => setForm(p => ({ ...p, apurar_rra: !!v }))} />
+                    <Label className="text-xs">Apurar RRA</Label>
                   </div>
                   {form.apurar_rra && (
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <div title="Número de meses-calendário a que se referem os rendimentos.">
                         <Label className="text-xs">Meses-calendário</Label>
-                        <Input type="number" min={1} value={form.rra_meses} onChange={e => setForm(p => ({ ...p, rra_meses: parseInt(e.target.value) || 0 }))} className="h-7 text-xs mt-1" disabled />
+                        <Input type="number" min={1} value={form.rra_meses} onChange={e => setForm(p => ({ ...p, rra_meses: parseInt(e.target.value) || 0 }))} className="h-7 text-xs mt-1" />
                       </div>
                       <div title="Número de parcelas mensais (default = meses).">
                         <Label className="text-xs">Número de Parcelas</Label>
-                        <Input type="number" min={1} value={form.rra_numero_parcelas} onChange={e => setForm(p => ({ ...p, rra_numero_parcelas: parseInt(e.target.value) || 0 }))} className="h-7 text-xs mt-1" disabled />
+                        <Input type="number" min={1} value={form.rra_numero_parcelas} onChange={e => setForm(p => ({ ...p, rra_numero_parcelas: parseInt(e.target.value) || 0 }))} className="h-7 text-xs mt-1" />
                       </div>
                     </div>
                   )}

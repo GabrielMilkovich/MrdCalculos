@@ -31,7 +31,7 @@ export async function getSalariosMinimos(): Promise<SalarioMinimoEntry[]> {
 
   try {
     const { data, error } = await supabase
-      .from('pjecalc_salario_minimo' as any)
+      .from('pjecalc_salario_minimo' as never)
       .select('*')
       .order('competencia', { ascending: false });
 
@@ -52,7 +52,7 @@ export async function getINSSFaixas(): Promise<INSSFaixa[]> {
 
   try {
     const { data, error } = await supabase
-      .from('pjecalc_inss_faixas' as any)
+      .from('pjecalc_inss_faixas' as never)
       .select('*')
       .order('competencia_inicio', { ascending: false });
 
@@ -73,7 +73,7 @@ export async function getIRFaixas(): Promise<IRFaixa[]> {
 
   try {
     const { data, error } = await supabase
-      .from('pjecalc_ir_faixas' as any)
+      .from('pjecalc_ir_faixas' as never)
       .select('*')
       .order('competencia_inicio', { ascending: false });
 
@@ -94,7 +94,7 @@ export async function getIndicesCorrecao(indice?: string): Promise<IndiceCorreca
   if (cached) return cached;
 
   try {
-    let query = supabase.from('pjecalc_correcao_monetaria' as any).select('*');
+    let query = supabase.from('pjecalc_correcao_monetaria' as never).select('*');
     if (indice) query = query.eq('indice', indice);
     query = query.order('competencia', { ascending: false });
 

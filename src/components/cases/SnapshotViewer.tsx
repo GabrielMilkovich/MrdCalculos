@@ -276,10 +276,10 @@ export function SnapshotViewer({ caseId, onExecuteCalc }: SnapshotViewerProps) {
                     <Clock className="h-3 w-3" />
                     {safeFormatDate(snapshot.created_at)}
                   </div>
-                  {snapshot.warnings && (snapshot.warnings as any[]).length > 0 && (
+                  {snapshot.warnings && (snapshot.warnings as unknown[]).length > 0 && (
                     <div className="mt-2 flex items-center gap-1 text-xs text-amber-600">
                       <AlertTriangle className="h-3 w-3" />
-                      {(snapshot.warnings as any[]).length} avisos
+                      {(snapshot.warnings as unknown[]).length} avisos
                     </div>
                   )}
                 </CardContent>
@@ -333,14 +333,14 @@ export function SnapshotViewer({ caseId, onExecuteCalc }: SnapshotViewerProps) {
                 </div>
 
                 {/* Warnings */}
-                {selectedSnapshotData.warnings && (selectedSnapshotData.warnings as any[]).length > 0 && (
+                {selectedSnapshotData.warnings && (selectedSnapshotData.warnings as unknown[]).length > 0 && (
                   <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
                     <div className="flex items-center gap-2 text-amber-800 font-medium mb-2">
                       <AlertTriangle className="h-4 w-4" />
-                      Avisos ({(selectedSnapshotData.warnings as any[]).length})
+                      Avisos ({(selectedSnapshotData.warnings as unknown[]).length})
                     </div>
                     <ul className="text-sm text-amber-700 space-y-1">
-                      {(selectedSnapshotData.warnings as any[]).slice(0, 3).map((w, i) => (
+                      {(selectedSnapshotData.warnings as unknown[]).slice(0, 3).map((w, i) => (
                         <li key={i} className="flex items-start gap-2">
                           <ChevronRight className="h-4 w-4 mt-0.5 shrink-0" />
                           {typeof w === "string" ? w : w.message || JSON.stringify(w)}

@@ -394,6 +394,13 @@ function toEngineCsConfig(cfg: PjecalcCsConfigRow | null): PjeCSConfig {
 function toEngineIrConfig(cfg: PjecalcIrConfigRow | null): PjeIRConfig {
   // Support both old (habilitado) and new column names (apurar)
   const apurar = cfg?.apurar ?? cfg?.habilitado ?? true;
+  // RRA Lei 7.713/88 art. 12-A — sub-flags vindas da UI ModuloIR.
+  // Quando ausentes na linha (view legacy), permanecem undefined → engine
+  // mantém auto-detect (NM cardinalidade > 1 dispara art_12a_rra).
+  const cfgExt = (cfg ?? {}) as unknown as Record<string, unknown>;
+  const apurarRra = cfgExt.apurar_rra as boolean | undefined;
+  const rraMesesRaw = cfgExt.rra_meses as number | undefined;
+  const rraParcelasRaw = cfgExt.rra_numero_parcelas as number | undefined;
   return {
     apurar,
     incidir_sobre_juros: cfg?.incidir_sobre_juros ?? false,
@@ -406,6 +413,12 @@ function toEngineIrConfig(cfg: PjecalcIrConfigRow | null): PjeIRConfig {
     deduzir_honorarios: cfg?.deduzir_honorarios ?? false,
     aposentado_65: cfg?.aposentado_65 ?? false,
     dependentes: cfg?.dependentes ?? 0,
+    // Sub-flags RRA (Lei 7.713/88 art. 12-A, incluído pela Lei 12.350/2010).
+    // Engine v3 consome em irpf-modulo-adapter.ts:88 (apurarRraFlag) e :185
+    // (computeNMRra) para forçar/desligar art_12a_rra.
+    apurar_rra: apurarRra,
+    rra_meses: rraMesesRaw && rraMesesRaw > 0 ? rraMesesRaw : undefined,
+    rra_numero_parcelas: rraParcelasRaw && rraParcelasRaw > 0 ? rraParcelasRaw : undefined,
   };
 }
 
@@ -723,7 +736,7 @@ async function loadExcecoesCarga(caseId: string): Promise<import('./engine-types
   try {
     const { data } = await supabase
       // tabela custom pjecalc_* fora do schema gerado (src/types/supabase.ts)
-      .from('pjecalc_excecoes_carga' as any)
+      .from('pjecalc_excecoes_carga' as never)
       .select('id, periodo_inicio, periodo_fim, carga_horaria_mensal')
       .eq('case_id', caseId);
     if (data && data.length > 0) {
@@ -745,7 +758,7 @@ export async function loadExcecoesSabado(caseId: string): Promise<import('./engi
   try {
     const { data } = await supabase
       // tabela custom pjecalc_* fora do schema gerado (src/types/supabase.ts)
-      .from('pjecalc_excecoes_sabado' as any)
+      .from('pjecalc_excecoes_sabado' as never)
       .select('id, data_inicio, data_fim, sabado_dia_util')
       .eq('case_id', caseId);
     if (data && data.length > 0) {
@@ -960,20 +973,74 @@ function multasConfigToVerbas(
     }
   }
 
-  // ── Estabilidade Provisória ──
+  // ── Estabilidade Provisória (Art. 10 ADCT / Art. 118 Lei 8.213/91) ──
   if (cfg.estabilidade_config) {
-    const est = cfg.estabilidade_config as { ativo: boolean; tipo: string; periodo_inicio: string; periodo_fim: string };
-    if (est.ativo && est.periodo_inicio && est.periodo_fim) {
-      const v = defaultVerba('estabilidade_auto', `Indenização Estabilidade (${est.tipo || 'provisória'})`);
-      v.valor = 'calculado';
-      v.multiplicador = 1;
-      v.periodo_inicio = est.periodo_inicio;
-      v.periodo_fim = est.periodo_fim;
-      v.ocorrencia_pagamento = 'mensal';
-      v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
-      if (historicos.length > 0) v.base_calculo.historicos = [historicos[0].id];
-      v.ordem = 9050;
-      result.push(v);
+    const est = cfg.estabilidade_config as {
+      ativo: boolean;
+      tipo: string;
+      periodo_inicio: string;
+      periodo_fim: string;
+      data_evento?: string;
+      meses_estabilidade?: string;
+      observacoes?: string;
+    };
+    if (est.ativo) {
+      // Mapa UI → engine (TipoEstabilidade)
+      const tipoMapa: Record<string, 'GESTANTE' | 'CIPA' | 'ACIDENTE_TRABALHO' | 'OUTRO'> = {
+        gestante: 'GESTANTE',
+        cipa: 'CIPA',
+        acidentaria: 'ACIDENTE_TRABALHO',
+        acidente: 'ACIDENTE_TRABALHO',
+        acidente_trabalho: 'ACIDENTE_TRABALHO',
+        outro: 'OUTRO',
+      };
+      const tipoNorm = tipoMapa[(est.tipo || 'gestante').toLowerCase()] || 'OUTRO';
+
+      // Determinar periodos: se UI nao forneceu, derivar de data_evento + meses
+      let inicio = est.periodo_inicio;
+      let fim = est.periodo_fim;
+      if ((!inicio || !fim) && est.data_evento) {
+        // Import dinamico — modulo registra-se em cima do registry
+        const meses = Number(est.meses_estabilidade || 0);
+        // Calculo simples inline (evita import circular):
+        // fim = data_evento + meses
+        const ev = new Date(est.data_evento + 'T00:00:00Z');
+        if (!Number.isNaN(ev.getTime())) {
+          if (!inicio) inicio = est.data_evento;
+          if (!fim && meses > 0) {
+            const dFim = new Date(ev.getTime());
+            dFim.setUTCMonth(dFim.getUTCMonth() + meses);
+            const yyyy = dFim.getUTCFullYear().toString().padStart(4, '0');
+            const mm = (dFim.getUTCMonth() + 1).toString().padStart(2, '0');
+            const dd = dFim.getUTCDate().toString().padStart(2, '0');
+            fim = `${yyyy}-${mm}-${dd}`;
+          }
+        }
+      }
+
+      if (inicio && fim) {
+        const v = defaultVerba('estabilidade_auto', `INDENIZACAO ESTABILIDADE (${tipoNorm})`);
+        v.valor = 'calculado';
+        v.multiplicador = 1;
+        v.periodo_inicio = inicio;
+        v.periodo_fim = fim;
+        v.ocorrencia_pagamento = 'mensal';
+        v.tipo_quantidade = 'informada';
+        v.quantidade_informada = 1;
+        v.tipo_divisor = 'informado';
+        v.divisor_informado = 1;
+        v.incidencias = {
+          fgts: true,
+          irpf: true,
+          contribuicao_social: true,
+          previdencia_privada: false,
+          pensao_alimenticia: false,
+        };
+        if (historicos.length > 0) v.base_calculo.historicos = [historicos[0].id];
+        v.ordem = 9050;
+        if (est.observacoes) v.comentarios = est.observacoes;
+        result.push(v);
+      }
     }
   }
 

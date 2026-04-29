@@ -66,8 +66,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
       const inicioMes = `${mesAtual}-01`;
       const diasNoMes = new Date(ano, mes, 0).getDate();
       const fimMes = `${mesAtual}-${String(diasNoMes).padStart(2, '0')}`;
-      const { data } = await supabase
-        .from("pjecalc_ponto_diario" as any)
+      const { data } = await fromUntyped("pjecalc_ponto_diario")
         .select("*")
         .eq("case_id", caseId)
         .gte("data", inicioMes)
@@ -84,8 +83,7 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
   const { data: ocrSampleInfo } = useQuery({
     queryKey: ["cartao_ponto_ocr_sample", caseId],
     queryFn: async () => {
-      const { count, error } = await supabase
-        .from("pjecalc_apuracao_diaria" as any)
+      const { count, error } = await fromUntyped("pjecalc_apuracao_diaria")
         .select("*", { count: "exact", head: true })
         .eq("origem", "OCR")
         // calculo_id e o link real, mas nao temos aqui — filtra por presenca

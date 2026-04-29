@@ -90,7 +90,7 @@ export async function exportMRDState(caseId: string): Promise<MRDState> {
     while (hasMore) {
       const moreRes = await supabase
         // tabela custom fora do schema gerado
-        .from("pjecalc_ponto_diario" as any)
+        .from("pjecalc_ponto_diario" as never)
         .select("*")
         .eq("case_id", caseId)
         .order("data")

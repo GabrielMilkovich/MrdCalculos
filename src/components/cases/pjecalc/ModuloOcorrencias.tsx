@@ -29,7 +29,7 @@ export function ModuloOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, p
     queryFn: async () => {
       const { data } = await fromUntyped("pjecalc_verba_ocorrencias")
         .select("*").eq("verba_id", verbaId).order("competencia");
-      return (data || []) as any[];
+      return (data || []) as unknown[];
     },
   });
 

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import {
@@ -99,13 +100,12 @@ export function ModuloVerbasCadastro({ caseId }: Props) {
   const { data: verbas = [], isLoading } = useQuery({
     queryKey: ["pjecalc_verba_base", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_verba_base" as any)
+      const { data, error } = await fromUntyped("pjecalc_verba_base")
         .select("*")
         .eq("case_id", caseId)
         .order("ordem", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as any[];
+      return (data ?? []) as unknown[];
     },
   });
 
@@ -196,14 +196,12 @@ export function ModuloVerbasCadastro({ caseId }: Props) {
         observacoes: editing.observacoes || null,
       };
       if (editing.id) {
-        const { error } = await supabase
-          .from("pjecalc_verba_base" as any)
+        const { error } = await fromUntyped("pjecalc_verba_base")
           .update(payload)
           .eq("id", editing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("pjecalc_verba_base" as any)
+        const { error } = await fromUntyped("pjecalc_verba_base")
           .insert(payload);
         if (error) throw error;
       }
@@ -220,7 +218,7 @@ export function ModuloVerbasCadastro({ caseId }: Props) {
   const deleteVerba = async (id: string) => {
     if (!confirm("Excluir esta verba?")) return;
     try {
-      const { error } = await supabase.from("pjecalc_verba_base" as any).delete().eq("id", id);
+      const { error } = await fromUntyped("pjecalc_verba_base").delete().eq("id", id);
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["pjecalc_verba_base", caseId] });
       toast.success("Verba excluída!");

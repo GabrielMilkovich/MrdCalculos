@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Trash2, Calculator } from "lucide-react";
 
@@ -51,8 +52,7 @@ export function ModuloFerias({ caseId }: Props) {
   const { data: ferias = [] } = useQuery({
     queryKey: ["pjecalc_ferias", caseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pjecalc_ferias" as any)
+      const { data, error } = await fromUntyped("pjecalc_ferias")
         .select("*")
         .eq("case_id", caseId)
         .order("periodo_aquisitivo_inicio");
@@ -74,7 +74,7 @@ export function ModuloFerias({ caseId }: Props) {
   const addFerias = async () => {
     const today = new Date().toISOString().slice(0, 10);
     const nextYear = new Date(); nextYear.setFullYear(nextYear.getFullYear() + 1);
-    const { error } = await supabase.from("pjecalc_ferias" as any).insert({
+    const { error } = await fromUntyped("pjecalc_ferias").insert({
       case_id: caseId,
       periodo_aquisitivo_inicio: today,
       periodo_aquisitivo_fim: nextYear.toISOString().slice(0, 10),
@@ -91,13 +91,13 @@ export function ModuloFerias({ caseId }: Props) {
   };
 
   const updateField = async (id: string, patch: Partial<FeriasRow>) => {
-    const { error } = await supabase.from("pjecalc_ferias" as any).update(patch).eq("id", id);
+    const { error } = await fromUntyped("pjecalc_ferias").update(patch).eq("id", id);
     if (error) { toast.error("Erro ao salvar"); return; }
     invalidate();
   };
 
   const removeFerias = async (id: string) => {
-    const { error } = await supabase.from("pjecalc_ferias" as any).delete().eq("id", id);
+    const { error } = await fromUntyped("pjecalc_ferias").delete().eq("id", id);
     if (error) { toast.error("Erro ao remover"); return; }
     invalidate();
   };
