@@ -718,7 +718,18 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
     }, 0);
     if (fgtsOverride <= 0) fgtsOverride = undefined;
   }
-  
+
+  // Sprint 1 — Bug 4 (2026-04-29): respeitar `<gprec><depositoFgts>` do PJC.
+  // Java pré-computou o FGTS devido para o resumo (gprec). Quando o tag está
+  // EXPLICITAMENTE presente, o engine usa esse valor — Java é fonte de verdade
+  // para o resumo. Inclui o caso = 0 (FGTS satisfeito / já depositado / não
+  // devido) que antes era ignorado pelo engine, inflando `r.fgts_total`.
+  // Antes: antonio engine.depositoFgts=2020 vs oracle=0 (bug).
+  const gprecPresent = a.resultado.gprec_deposito_fgts_present === true;
+  if (gprecPresent) {
+    fgtsOverride = a.resultado.gprec_deposito_fgts ?? 0;
+  }
+
   // Destination mapping from PJC XML
   const destMap: Record<string, PjeFGTSConfig['destino']> = {
     'pagar_reclamante': 'pagar_reclamante',
