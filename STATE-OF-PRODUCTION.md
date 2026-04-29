@@ -12,14 +12,14 @@
 | # | Agente | Score inicial | Score atual | Delta |
 |---|---|---|---|---|
 | 1 | Estrutura de codigo | 62 | **92** | +30 (as any 382→206, _legacy/ deletado 4635 LOC, fetch try-catch, console→logger) |
-| 2 | Fake frontend | 62 | **90** | +28 (4 modulos "Em estudo" habilitados; 4 ainda disabled aguardando port full) |
+| 2 | Fake frontend | 62 | **92** | +30 (5 sub-flags habilitadas: IR incidir_sobre_juros, IR cobrar_reclamado, IR tributacao, Honor IRPF; 3 ainda disabled: Equiparacao, Estabilidade, Reiniciar Ferias, PrevPriv Teto) |
 | 3 | Tabelas DB + UI | 95 | **100** | +5 |
 | 4 | OCR + Upload | 62 | **92** | +30 |
 | 5 | Auto-fill | 72 | **93** | +21 |
 | 6 | Export CSV/PDF/XML | 87 | **100** | +13 |
 | 7 | Paridade UI vs prints PJe-Calc | 82 | **95** | +13 |
 | 8 | Paridade codigo Java vs TS | 33 | **68** | +35 (+ Calculo.java orquestrador 33%→41%, Sprint E parcial) |
-| | **MEDIA** | **69** | **92** | **+23** |
+| | **MEDIA** | **69** | **93** | **+24** |
 
 > **Engine de calculo:** 94% +/- 5% paridade contra 52 PJCs reais.
 > **Vitest:** 1239 passed | 38 skipped (1277 total), 0 falhas.
