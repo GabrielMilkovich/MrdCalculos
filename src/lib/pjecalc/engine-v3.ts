@@ -749,9 +749,14 @@ export class PjeCalcEngineV3 {
 
     const csReclamante = this.csConfig.cobrar_reclamante ? csSegurado : 0;
     // D2 fix: prefere IR exato do PJC quando disponível.
-    const irRetido = this.irTotalPjcOverride !== null
+    // Sprint v3.6 (2026-04-29): `cobrar_reclamado` transfere o ônus da retenção
+    // do IR para o reclamado (raro, depende de sentença). Quando ativo, o IR
+    // apurado NÃO deduz do líquido do reclamante (paridade com `cobrar_reclamante`
+    // do CS). O imposto continua a ser apurado/reportado em `imposto_renda`.
+    const irApurado = this.irTotalPjcOverride !== null
       ? this.irTotalPjcOverride
       : irpfAdapter.impostoDevido;
+    const irRetido = this.irConfig.cobrar_reclamado ? 0 : irApurado;
     // FGTS entra no liquido APENAS quando compor_principal=true. PJe-Calc com
     // destino=pagar_reclamante ainda separa FGTS do liquido no resultado "liquido_exequente".
     const fgtsNoLiquido = this.fgtsConfig.compor_principal ? fgtsResult.total_fgts : 0;
