@@ -985,6 +985,64 @@ export class Calculo {
   }
 
   /**
+   * Java Calculo.obterFaltasNaoJustificadas (linha 1096) — soma dias de
+   * faltas nao justificadas que coincidem com o periodo informado.
+   */
+  obterFaltasNaoJustificadas(periodo: { inicial: Date; final: Date } | { inicial: Date | null; final: Date | null }): number {
+    if (!periodo.inicial || !periodo.final) return 0;
+    let total = 0;
+    for (const f of this.faltas) {
+      const falta = f as {
+        getFaltaJustificada?(): boolean;
+        getPeriodoDaExcecao?(): { totalDeDiasCoincidentesComEste?(p: unknown): number };
+      };
+      if (falta.getFaltaJustificada?.()) continue;
+      const dias = falta.getPeriodoDaExcecao?.().totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+      total += dias;
+    }
+    return total;
+  }
+
+  /** Java Calculo.obterFaltasJustificadas (linha 1121). */
+  obterFaltasJustificadas(periodo: { inicial: Date | null; final: Date | null }): number {
+    if (!periodo.inicial || !periodo.final) return 0;
+    let total = 0;
+    for (const f of this.faltas) {
+      const falta = f as {
+        getFaltaJustificada?(): boolean;
+        getPeriodoDaExcecao?(): { totalDeDiasCoincidentesComEste?(p: unknown): number };
+      };
+      if (!falta.getFaltaJustificada?.()) continue;
+      const dias = falta.getPeriodoDaExcecao?.().totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+      total += dias;
+    }
+    return total;
+  }
+
+  /**
+   * Java Calculo.obterDiasFerias (linha 1146) — soma dias de ferias gozadas
+   * (3 periodos possiveis: gozo1, gozo2, gozo3) coincidentes com o periodo.
+   */
+  obterDiasFerias(periodo: { inicial: Date | null; final: Date | null }): number {
+    if (!periodo.inicial || !periodo.final) return 0;
+    let total = 0;
+    for (const f of this.listaDeFerias) {
+      const ferias = f as {
+        getPeriodoDeGozo1?(): { totalDeDiasCoincidentesComEste?(p: unknown): number; isValido?(): boolean } | null;
+        getPeriodoDeGozo2?(): { totalDeDiasCoincidentesComEste?(p: unknown): number; isValido?(): boolean } | null;
+        getPeriodoDeGozo3?(): { totalDeDiasCoincidentesComEste?(p: unknown): number; isValido?(): boolean } | null;
+      };
+      const g1 = ferias.getPeriodoDeGozo1?.();
+      const g2 = ferias.getPeriodoDeGozo2?.();
+      const g3 = ferias.getPeriodoDeGozo3?.();
+      if (g1) total += g1.totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+      if (g2) total += g2.totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+      if (g3) total += g3.totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+    }
+    return total;
+  }
+
+  /**
    * calcularTotalCorrigido — soma o total corrigido das verbas que compõem
    * o principal. Usado para totalização final do cálculo.
    */
