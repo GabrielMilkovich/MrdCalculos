@@ -17,6 +17,17 @@ Decimal.set({ precision: 20 });
 
 const CNJ_REGEX = /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/;
 const TRTS = Array.from({ length: 24 }, (_, i) => `TRT${String(i + 1).padStart(2, "0")}`);
+const TRFS = Array.from({ length: 6 }, (_, i) => `TRF${i + 1}`);
+const TJS = [
+  "TJAC","TJAL","TJAM","TJAP","TJBA","TJCE","TJDF","TJES","TJGO","TJMA","TJMG","TJMS","TJMT",
+  "TJPA","TJPB","TJPE","TJPI","TJPR","TJRJ","TJRN","TJRO","TJRR","TJRS","TJSC","TJSE","TJSP","TJTO",
+];
+
+function tribunaisPorJustica(j: string): string[] {
+  if (j === "FEDERAL") return TRFS;
+  if (j === "ESTADUAL") return TJS;
+  return TRTS;
+}
 
 // =====================================================
 // MÓDULO PARÂMETROS GERAIS — baseado em Calculo.java (PJe-Calc v2.15.1)
@@ -307,7 +318,10 @@ export function ModuloParametrosGerais({ caseId }: Props) {
           </div>
           <div>
             <Label className="text-xs">Justiça</Label>
-            <Select value={form.cnj_justica} onValueChange={(v) => setForm((p) => ({ ...p, cnj_justica: v }))}>
+            <Select
+              value={form.cnj_justica}
+              onValueChange={(v) => setForm((p) => ({ ...p, cnj_justica: v, cnj_tribunal: "" }))}
+            >
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="TRABALHO">Trabalho</SelectItem>
@@ -321,7 +335,7 @@ export function ModuloParametrosGerais({ caseId }: Props) {
             <Select value={form.cnj_tribunal} onValueChange={(v) => setForm((p) => ({ ...p, cnj_tribunal: v }))}>
               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {TRTS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                {tribunaisPorJustica(form.cnj_justica).map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
