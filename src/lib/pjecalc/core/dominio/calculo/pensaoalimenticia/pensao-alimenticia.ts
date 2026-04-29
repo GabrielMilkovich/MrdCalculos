@@ -1,9 +1,13 @@
 /**
  * PJe-Calc v2.15.1 — PensaoAlimenticia
- * Porte 1:1 de: br.jus.trt8.pjecalc.negocio.dominio.calculo.pensaoalimenticia.PensaoAlimenticia
+ * Porte SIMPLIFICADO de: br.jus.trt8.pjecalc.negocio.dominio.calculo.pensaoalimenticia.PensaoAlimenticia
  *
- * Calcula a pensão alimentícia como percentual sobre o líquido (ou bruto).
- * Pode incidir também sobre FGTS.
+ * AVISO (STATE-OF-PRODUCTION P0-2): este arquivo cobre apenas ~7% do
+ * Java original (637 LOC). Implementa `base × percentual` e `fgts × percentual`.
+ * NAO implementa: amortizacao por pagamento, base por tipo (liquido/bruto/bruto-INSS),
+ * `OcorrenciaDePensaoAlimenticia` (388 LOC Java), regras tributarias por termo de
+ * homologacao, isencao sobre 13o/ferias conforme termo. Use com cautela em pecas
+ * processuais — recomenda-se conferencia manual contra PJe-Calc oficial.
  */
 import Decimal from 'decimal.js';
 import { arredondarValorMonetario } from '../../../base/comum/utils';

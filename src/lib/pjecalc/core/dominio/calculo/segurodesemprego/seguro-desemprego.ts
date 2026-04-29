@@ -1,9 +1,14 @@
 /**
  * PJe-Calc v2.15.1 — SeguroDesemprego
- * Porte 1:1 de: br.jus.trt8.pjecalc.negocio.dominio.calculo.segurodesemprego.SeguroDesemprego
+ * Porte SIMPLIFICADO de: br.jus.trt8.pjecalc.negocio.dominio.calculo.segurodesemprego.SeguroDesemprego
  *
- * Lei 7.998/90 — seguro-desemprego por demissão sem justa causa.
- * Calcula valor das parcelas baseado nos últimos salários.
+ * AVISO (STATE-OF-PRODUCTION P0-2): este arquivo cobre apenas ~3% do Java
+ * original (1280 LOC distribuidos em 6 arquivos). Implementa `parcelas × valor`.
+ * NAO implementa: calculo do numero de parcelas conforme Lei 7.998/90 art.4o,
+ * faixas de valor por ano-base e SM, regra de carencia por solicitacao anterior
+ * (decreto 2.722/98), apuracao da media dos 3 ultimos salarios devidos.
+ * Use com cautela — valor em peca processual deve ser conferido manualmente
+ * contra PJe-Calc oficial.
  */
 import Decimal from 'decimal.js';
 import { arredondarValorMonetario } from '../../../base/comum/utils';
