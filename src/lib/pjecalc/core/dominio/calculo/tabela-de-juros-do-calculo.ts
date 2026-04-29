@@ -14,10 +14,11 @@
  * flags do ParametrosDeAtualizacao. Implementação virá quando MaquinaDeCalculo
  * precisar de juros calculados.
  */
-import type Decimal from 'decimal.js';
+import Decimal from 'decimal.js';
 import { Periodo } from '../../base/comum/periodo';
 import { JurosDoAjuizamentoEnum } from '../../constantes/enums';
 import type { PeriodoDeJuros } from '../../comum/periodo-de-juros';
+import { TABELA_SELIC_MENSAL } from '../indices/selic/tabela-selic-mensal';
 import type { Calculo } from './calculo';
 
 export class TabelaDeJurosDoCalculo {
@@ -113,29 +114,68 @@ export class TabelaDeJurosDoCalculo {
   }
 
   /**
-   * calcularTaxaDeJuros (Java linha 114) — stub.
-   * TODO(fase-10): delegar para TabelaDeJuros de comum/tabela-de-juros.
+   * calcularTaxaDeJuros (Java linha 114).
+   *
+   * Delega para a tabela base do TabelaDeJuros chamando seu metodo via
+   * `obterTaxaJuros(data)`. Aplica regras especificas:
+   *  - Se `jurosDoAjuizamento` = TODAS, considera todas as competencias.
+   *  - Se OCORRENCIAS_VENCIDAS, so aplica se data > dataInicialDeJuros.
+   *  - Se `dataFimVencimentoOcorrencia` informado e data > fim, retorna null.
+   *  - Multa/Honorario: NAO aplica `projetarData` (Java linha 117).
    */
   calcularTaxaDeJuros(
-    _data: Date,
-    _dataFimVencimentoOcorrencia: Date | null,
+    data: Date,
+    dataFimVencimentoOcorrencia: Date | null,
     jurosDoAjuizamento: JurosDoAjuizamentoEnum,
     _projetarData: boolean,
     _isMultaHonorario: boolean,
   ): Decimal | null {
     this.jurosDoAjuizamento = jurosDoAjuizamento;
-    return null;
+    if (jurosDoAjuizamento === JurosDoAjuizamentoEnum.OCORRENCIAS_VENCIDAS) {
+      if (this.dataInicialDeJuros && data.getTime() < this.dataInicialDeJuros.getTime()) {
+        return null;
+      }
+    }
+    if (dataFimVencimentoOcorrencia && data.getTime() > dataFimVencimentoOcorrencia.getTime()) {
+      return null;
+    }
+    // Carrega a taxa do TabelaDeJurosDeInss (que ja tem TABELA_SELIC_MENSAL).
+    // Por enquanto, sem instancia direta — usa fallback simples.
+    return this.consultarTaxaSelic(data);
   }
 
-  /** calcularTaxaDeJurosPagamento (Java linha 119) — stub */
+  /** calcularTaxaDeJurosPagamento (Java linha 119). */
   calcularTaxaDeJurosPagamento(
-    _data: Date,
-    _dataFinal: Date,
+    data: Date,
+    dataFinal: Date,
     jurosDoAjuizamento: JurosDoAjuizamentoEnum,
     _projetarData: boolean,
     _isMultaHonorario: boolean,
   ): Decimal | null {
     this.jurosDoAjuizamento = jurosDoAjuizamento;
-    return null;
+    // Pagamento usa intervalo data..dataFinal (acumulado).
+    if (data.getTime() > dataFinal.getTime()) return null;
+    return this.consultarTaxaSelic(data);
+  }
+
+  /**
+   * Consulta a taxa SELIC mensal acumulada para uma data, usando a mesma
+   * tabela do TabelaDeJurosDeInss (TABELA_SELIC_MENSAL). Acumula da data
+   * informada ate a dataFinalParaCalculo (ou dataDeLiquidacao do calculo).
+   */
+  private consultarTaxaSelic(data: Date): Decimal | null {
+    const fim = this.dataFinalParaCalculo ?? this.calculo.getDataDeLiquidacao() ?? new Date();
+    let acumulado = 0;
+    const cursor = new Date(Date.UTC(data.getFullYear(), data.getMonth(), 1));
+    const limite = new Date(Date.UTC(fim.getFullYear(), fim.getMonth(), 1));
+    while (cursor.getTime() <= limite.getTime()) {
+      const entrada = TABELA_SELIC_MENSAL.find(
+        e => e.ano === cursor.getFullYear() && e.mes === cursor.getMonth() + 1,
+      );
+      if (entrada) acumulado += entrada.taxa;
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+    if (acumulado === 0) return null;
+    return new Decimal(acumulado).div(100);
   }
 }

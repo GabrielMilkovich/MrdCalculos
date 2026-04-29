@@ -173,7 +173,7 @@ describe('VerbaModule — Equiparacao Salarial (Sumula 6 TST + Art. 461 CLT)', (
   it('getReflections declara 13o (1/12), férias + 1/3 (1.3333/12) e FGTS (8%)', () => {
     const reflections = mod.getReflections();
     const tipos = reflections.map((r) => r.tipo).sort();
-    expect(tipos).toEqual(['13_salario', 'fgts', 'ferias']);
+    expect(tipos).toEqual(['13_salario', 'ferias', 'fgts']);
 
     const r13 = reflections.find((r) => r.tipo === '13_salario');
     expect(r13?.divisor).toBe(12);

@@ -72,6 +72,19 @@ export interface CalculoPrevPrivInput {
   opcaoIndiceCorrecao: OpcaoIndiceCorrecaoPrevPriv;
   /** Taxa de juros por competencia (YYYY-MM → %). */
   taxaJurosPorCompetencia?: Record<string, Decimal>;
+  /**
+   * Teto mensal — Art. 6 LC 109/2001 + clausulas de plano de previdencia.
+   * Quando definido (> 0), a base mensal e CLAMPADA: o excedente nao gera
+   * contribuicao. Quando ausente/null/<=0, sem teto.
+   */
+  tetoMensal?: Decimal | null;
+  /**
+   * Modo de aplicacao de juros sobre PrevPriv atrasada.
+   *  - 'trabalhista' (default): usa taxaJurosPorCompetencia (mesma do principal).
+   *  - 'pago_atraso': aplica juros desde a data efetiva (tabela diferenciada).
+   *  - 'nenhum': nao aplica juros — taxaDeJuros = 0 em todas as ocorrencias.
+   */
+  modoJuros?: 'trabalhista' | 'pago_atraso' | 'nenhum';
 }
 
 function fmtComp(d: Date): string {
