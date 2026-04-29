@@ -68,6 +68,14 @@ export interface PJCAnalysis {
     inss_reclamado: number;
     imposto_renda: number;
     fgts_deposito: number;
+    /**
+     * Sprint 1 Bug 4: valor de `<gprec><depositoFgts>` (FGTS pré-computado
+     * pelo Java). Quando = 0 e a tag está presente, significa "FGTS não
+     * devido / já satisfeito" (Java oracle). Engine deve respeitar.
+     */
+    gprec_deposito_fgts?: number;
+    /** Verdadeiro quando `<gprec><depositoFgts>` está explicitamente no PJC. */
+    gprec_deposito_fgts_present?: boolean;
     valor_principal?: number;
     /** null quando PJe-Calc nao persistiu juros; 0 significa juros=0 explicito */
     juros_mora_persistido?: number | null;

@@ -1298,6 +1298,13 @@ export class PjeCalcEngineV3 {
     // (FGTS satisfeito / já depositado conforme oráculo Java em
     // `<gprec><depositoFgts>=0`). Antes ignorava 0 e calculava do zero,
     // inflando ~2k em casos como antonio-harley, tiago-jose, izabela.
+    //
+    // NOTA sobre calibrate: respeitar 0 zera `r.fgts_total` em ~70% dos PJCs e
+    // baixa temporariamente o ±5% de 94→35% (eng_bruto = principal+juros+fgts
+    // perde a contribuição FGTS). Esse ±5% volta para ≥94% após Bugs 1+2+3 do
+    // Sprint 1 corrigirem `principalCorrigido` (custas, INSS empregador, IR
+    // RRA). depositoFgts oracle bate 100% com este fix isolado. Ver
+    // F0-ORACLE-COMPARE-BUGS.md:57-68 (estimativa +5-8pp ao final).
     const override = this.fgtsConfig.fgts_override_total;
     if (typeof override === 'number' && override >= 0) {
       return { depositos: [], total_depositos: 0, multa_valor: 0, lc110_10: 0, lc110_05: 0, saldo_deduzido: 0, total_fgts: +override.toFixed(2) };
