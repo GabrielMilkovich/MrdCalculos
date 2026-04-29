@@ -215,6 +215,9 @@ export { SalarioFamilia } from './dominio/calculo/salariofamilia/salario-familia
 // ────────────── dominio/calculo/segurodesemprego ──────────────
 export { SeguroDesemprego } from './dominio/calculo/segurodesemprego/seguro-desemprego';
 
+// ────────────── dominio/calculo/previdenciaprivada ──────────────
+export { PrevidenciaPrivada } from './dominio/calculo/previdenciaprivada/previdencia-privada';
+
 // ────────────── dominio/juros (JurosSelicParaCorrecao) ──────────────
 export { obterTabelaSelicParaCorrecao } from './dominio/juros/juros-selic-para-correcao';
 
