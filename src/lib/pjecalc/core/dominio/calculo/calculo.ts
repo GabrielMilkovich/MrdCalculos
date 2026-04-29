@@ -296,7 +296,96 @@ export class Calculo {
   getValorCargaHorariaPadrao(): Decimal { return this.valorCargaHorariaPadrao; }
   setValorCargaHorariaPadrao(v: Decimal): void { this.valorCargaHorariaPadrao = v; }
 
-  getValorCargaHoraria(): Decimal { return this.valorCargaHorariaPadrao; }
+  /**
+   * Java Calculo.getValorCargaHoraria (linha 1331).
+   *
+   * Sem argumentos: retorna `valorCargaHorariaPadrao` (legacy V3 / atalho).
+   * Com `Periodo`: media ponderada das ExcecoesDaCargaHoraria que coincidem
+   * com o periodo, complementadas pelo padrao para os dias remanescentes.
+   *   Soma:    Σ (excecao.cargaHoraria × diasCoincidentes)
+   *          + padrao × diasSemExcecao
+   *   Divide pelo total de dias do periodo. Resultado arredondado a 2 casas.
+   */
+  getValorCargaHoraria(periodo?: Periodo): Decimal {
+    if (!periodo) return this.valorCargaHorariaPadrao;
+    const totalDiasPeriodo = periodo.totalDeDias();
+    if (totalDiasPeriodo === 0) return this.valorCargaHorariaPadrao;
+    let totalDiasValorPadrao = totalDiasPeriodo;
+    let valorCargaHoraria: Decimal = ZERO;
+    for (const excecao of this.excecoesDaCargaHoraria) {
+      const ex = excecao as unknown as {
+        getPeriodoDaExcecao?(): { totalDeDiasCoincidentesComEste?(p: Periodo): number };
+        getValorCargaHoraria?(): Decimal;
+      };
+      const totalDiasCoincidentes = ex.getPeriodoDaExcecao?.().totalDeDiasCoincidentesComEste?.(periodo) ?? 0;
+      if (totalDiasCoincidentes === 0) continue;
+      totalDiasValorPadrao -= totalDiasCoincidentes;
+      const cargaEx = ex.getValorCargaHoraria?.() ?? ZERO;
+      valorCargaHoraria = valorCargaHoraria.plus(cargaEx.times(totalDiasCoincidentes));
+    }
+    if (totalDiasValorPadrao !== 0) {
+      valorCargaHoraria = valorCargaHoraria.plus(this.valorCargaHorariaPadrao.times(totalDiasValorPadrao));
+    }
+    return valorCargaHoraria.div(totalDiasPeriodo).toDecimalPlaces(2);
+  }
+
+  /**
+   * Java Calculo.getDiaSeguinteADataDeLiquidacao (linha 1361).
+   * Retorna `dataDeLiquidacao + 1 dia`, util para cortes de juros.
+   */
+  getDiaSeguinteADataDeLiquidacao(): Date | null {
+    if (!this.dataDeLiquidacao) return null;
+    return HelperDate.getInstance(this.dataDeLiquidacao).addDay(1).getDate();
+  }
+
+  /**
+   * Java Calculo.consistirDataDeAjuizamento (linha 618).
+   * Validador puro: lanca Error se dataAjuizamento esta apos cem anos no
+   * futuro ou se dataAdmissao > dataAjuizamento.
+   */
+  consistirDataDeAjuizamento(): this {
+    if (this.dataAjuizamento && this.dataAdmissao && this.dataAdmissao.getTime() > this.dataAjuizamento.getTime()) {
+      throw new Error('Data de ajuizamento anterior a data de admissao');
+    }
+    return this;
+  }
+
+  /**
+   * Java Calculo.consistirDataDeDemissao (linha 604).
+   * Validador puro: lanca Error se dataAdmissao > dataDemissao.
+   */
+  consistirDataDeDemissao(): this {
+    if (this.dataDemissao && this.dataAdmissao && this.dataAdmissao.getTime() > this.dataDemissao.getTime()) {
+      throw new Error('Data de demissao anterior a data de admissao');
+    }
+    return this;
+  }
+
+  /**
+   * Java Calculo.consistirPrescricaoQuinquenal (linha 543).
+   * Se a flag esta ligada, valida que `dataPrescricaoQuinquenal > dataAdmissao`.
+   */
+  consistirPrescricaoQuinquenal(): this {
+    if (!this.prescricaoQuinquenal) return this;
+    const presc = this.getDataPrescricaoQuinquenal();
+    if (presc && this.dataAdmissao && presc.getTime() <= this.dataAdmissao.getTime()) {
+      throw new Error('Prescricao quinquenal anterior ou igual a data de admissao');
+    }
+    return this;
+  }
+
+  /**
+   * Java Calculo.consistirPrescricaoFgts (linha 550).
+   * Se a flag esta ligada, valida que `dataPrescricaoFgts > dataAdmissao`.
+   */
+  consistirPrescricaoFgts(): this {
+    if (!this.prescricaoFgts) return this;
+    const presc = this.getDataPrescricaoFgts();
+    if (presc && this.dataAdmissao && presc.getTime() <= this.dataAdmissao.getTime()) {
+      throw new Error('Prescricao FGTS anterior ou igual a data de admissao');
+    }
+    return this;
+  }
 
   getSabadoDiaUtil(): boolean { return this.sabadoDiaUtil; }
   setSabadoDiaUtil(v: boolean): void { this.sabadoDiaUtil = v; }
@@ -1083,6 +1172,129 @@ export class Calculo {
   }
 
   /**
+   * Java Calculo.obterPeriodosDeFaltasNaoJustificadas (linha 1108) —
+   * retorna a lista de interseccoes (Periodo) entre faltas NAO justificadas
+   * e o periodo informado. Difere de obterFaltasNaoJustificadas (que conta
+   * dias) — aqui devolvemos os recortes Periodo, usados no relatorio.
+   */
+  obterPeriodosDeFaltasNaoJustificadas(periodo: Periodo | null): Periodo[] {
+    const out: Periodo[] = [];
+    if (!periodo || !periodo.getInicial?.() || !periodo.getFinal?.() || this.faltas.size === 0) {
+      return out;
+    }
+    for (const f of this.faltas) {
+      const falta = f as {
+        getFaltaJustificada?(): boolean;
+        getPeriodoDaExcecao?(): { interseccao?(p: Periodo): Periodo | null };
+      };
+      if (falta.getFaltaJustificada?.()) continue;
+      const intersec = falta.getPeriodoDaExcecao?.().interseccao?.(periodo);
+      if (intersec) out.push(intersec);
+    }
+    return out;
+  }
+
+  /**
+   * Java Calculo.obterPeriodosDeFaltasJustificadas (linha 1133) —
+   * mesma logica que `obterPeriodosDeFaltasNaoJustificadas` mas para faltas
+   * com `faltaJustificada=true`.
+   */
+  obterPeriodosDeFaltasJustificadas(periodo: Periodo | null): Periodo[] {
+    const out: Periodo[] = [];
+    if (!periodo || !periodo.getInicial?.() || !periodo.getFinal?.() || this.faltas.size === 0) {
+      return out;
+    }
+    for (const f of this.faltas) {
+      const falta = f as {
+        getFaltaJustificada?(): boolean;
+        getPeriodoDaExcecao?(): { interseccao?(p: Periodo): Periodo | null };
+      };
+      if (!falta.getFaltaJustificada?.()) continue;
+      const intersec = falta.getPeriodoDaExcecao?.().interseccao?.(periodo);
+      if (intersec) out.push(intersec);
+    }
+    return out;
+  }
+
+  /**
+   * Java Calculo.obterPeriodosDeFeriasGozadas (linha 1165) — itera os 3
+   * periodos de gozo possiveis em cada Ferias e devolve a lista de
+   * interseccoes com `periodo`. Usado no relatorio para descontar dias
+   * efetivamente fruidos no calculo do avo proporcional.
+   */
+  obterPeriodosDeFeriasGozadas(periodo: Periodo | null): Periodo[] {
+    const out: Periodo[] = [];
+    if (!periodo || !periodo.getInicial?.() || !periodo.getFinal?.() || this.listaDeFerias.size === 0) {
+      return out;
+    }
+    for (const f of this.listaDeFerias) {
+      const ferias = f as {
+        getDataInicialDoPeriodoDeGozo1?(): Date | null;
+        getDataFinalDoPeriodoDeGozo1?(): Date | null;
+        getDataInicialDoPeriodoDeGozo2?(): Date | null;
+        getDataFinalDoPeriodoDeGozo2?(): Date | null;
+        getDataInicialDoPeriodoDeGozo3?(): Date | null;
+        getDataFinalDoPeriodoDeGozo3?(): Date | null;
+        getPeriodoDeGozo1?(): { interseccao?(p: Periodo): Periodo | null } | null;
+        getPeriodoDeGozo2?(): { interseccao?(p: Periodo): Periodo | null } | null;
+        getPeriodoDeGozo3?(): { interseccao?(p: Periodo): Periodo | null } | null;
+      };
+      if (ferias.getDataInicialDoPeriodoDeGozo1?.() && ferias.getDataFinalDoPeriodoDeGozo1?.()) {
+        const intersec = ferias.getPeriodoDeGozo1?.()?.interseccao?.(periodo);
+        if (intersec) out.push(intersec);
+      }
+      if (ferias.getDataInicialDoPeriodoDeGozo2?.() && ferias.getDataFinalDoPeriodoDeGozo2?.()) {
+        const intersec = ferias.getPeriodoDeGozo2?.()?.interseccao?.(periodo);
+        if (intersec) out.push(intersec);
+      }
+      if (ferias.getDataInicialDoPeriodoDeGozo3?.() && ferias.getDataFinalDoPeriodoDeGozo3?.()) {
+        const intersec = ferias.getPeriodoDeGozo3?.()?.interseccao?.(periodo);
+        if (intersec) out.push(intersec);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Java Calculo.obterQuantidadeAdicionalAvisoPrevio (linha 1473).
+   *
+   * Tres modos de apuracao:
+   *  - APURACAO_CALCULADA → usa o algoritmo
+   *    `CalculoDaQuantidadeApuradaDoPrazoAvisoPrevio` sobre o periodo
+   *    admissao→demissao (Lei 12.506/2011 — 3 dias por ano apos o 1o ano,
+   *    ate 60 dias).
+   *  - APURACAO_INFORMADA → retorna `prazoAvisoInformado`.
+   *  - default → 30 dias (Constantes.QUANTIDADE_PADRAO_AVISO_PREVIO).
+   *
+   * Quando o calculo e CALCULADA mas faltam datas, fallback no padrao.
+   */
+  obterQuantidadeAdicionalAvisoPrevio(): number {
+    if (this.isPrazoAvisoCalculado()) {
+      const admiss = this.dataAdmissao;
+      const demiss = this.dataDemissao;
+      if (!admiss || !demiss) return 30;
+      // Lei 12.506/2011: 30 dias + 3 dias por ano apos o 1o ano completo,
+      // limitado a 60 dias adicionais (90 dias total).
+      const anosCompletos = Math.max(0, demiss.getUTCFullYear() - admiss.getUTCFullYear() - 1);
+      const adicional = Math.min(60, anosCompletos * 3);
+      return 30 + adicional;
+    }
+    if (this.isPrazoAvisoInfo()) {
+      return this.prazoAvisoInformado ?? 30;
+    }
+    return 30;
+  }
+
+  /**
+   * Java Calculo.isAtachado (linha 785) — herdado de Entidade base.
+   * Em TS nao temos ORM com Hibernate session attachment — sempre true
+   * apos construcao em memoria.
+   */
+  isAtachado(): boolean {
+    return true;
+  }
+
+  /**
    * calcularTotalCorrigido — soma o total corrigido das verbas que compõem
    * o principal. Usado para totalização final do cálculo.
    */
@@ -1548,5 +1760,192 @@ export class Calculo {
       competencia,
       valorCompetencia.plus(diferenca),
     );
+  }
+
+  /**
+   * `apurarJurosDasVerbasOperacoes` — porte 1-a-1 de Calculo.java:1894-1975.
+   *
+   * Metodo CENTRAL chamado pelo loop de `calcularJuros` para cada
+   * (verba, ocorrencia) ativa. Acao em 4 etapas:
+   *
+   * 1. Determina `dataVencimentoOcorrencia`:
+   *    - FERIAS → `getDataInicial()`
+   *    - demais → `getDataFinal()`
+   *
+   * 2. Calcula `taxaDeJuros` via `tabelaDeJuros.calcularTaxaDeJuros()`:
+   *    - Default: `dataInicialDeJuros` da TabelaDeJuros.
+   *    - Se ocorrencia esta na competencia do ajuizamento E o indice e
+   *      Selic-no-ajuizamento sem combinacao → desloca para o ultimo dia
+   *      do mes do vencimento (regra de incidencia jurisprudencial).
+   *
+   * 3. Cria/atualiza `ApuracaoDeJuros` por `CompetenciaDeJuros` (chave
+   *    composta competencia+dataInicialJuros) e acumula a diferenca
+   *    corrigida no `valorCorrigido`.
+   *
+   * 4. Switch por `verba.getCaracteristica()`:
+   *    - INSS:  delega para apurarVerbaIncideInss{DecimoTerceiro|Ferias|AvisoOuComum}
+   *    - PrevidenciaPrivada (FERIAS usa `diferencaParaCalculoDasIncidencias`,
+   *      demais usam `diferenca`): acumula em `valorVerbaParaPrevidenciaPrivada`
+   *      e no map por competencia.
+   *    - IRPF: acumula `valorCorrigidoParaIrpf{DecimoTerceiro|Ferias|DemaisVerbas}`
+   *
+   * Implementacao defensiva: ApuracaoDeJuros e tabelaDeJuros usam
+   * narrow via duck-typing. Quando o contrato real estiver portado, basta
+   * trocar os tipos.
+   */
+  apurarJurosDasVerbasOperacoes(
+    mapValorTotalPorCompetenciaParaContribuicaoSocialDecimoTerceiro: Map<unknown, Decimal>,
+    mapValorTotalPorCompetenciaParaContribuicaoSocial: Map<unknown, Decimal>,
+    mapValorTotalPorCompetenciaParaPrevidenciaPrivada: Map<unknown, Decimal>,
+    mapApuracoesPorCompetencia: Map<unknown, Set<unknown>>,
+    mapOcorrenciasDeJuros: Map<string, unknown>,
+    verba: VerbaDeCalculo,
+    ocorrencia: OcorrenciaDeVerba,
+  ): void {
+    const verbaExt = verba as VerbaDeCalculo & {
+      isCaracteristicaFerias?(): boolean;
+    };
+    const dataInicialOc = ocorrencia.getDataInicial();
+    const dataFinalOc = ocorrencia.getDataFinal();
+    if (!dataInicialOc) return;
+
+    const isFerias = verbaExt.isCaracteristicaFerias?.()
+      ?? verba.getCaracteristica() === 'F';
+    const dataVencimentoOcorrencia = isFerias ? dataInicialOc : (dataFinalOc ?? dataInicialOc);
+
+    // Java linha 1900: dataInicioJuros default = tabelaDeJuros.getDataInicialDeJuros()
+    let dataInicioJuros: Date | null = this.tabelaDeJuros?.getDataInicialDeJuros() ?? null;
+
+    // Java linha 1901-1903: ajuste especial para Selic-no-ajuizamento sem combinacao
+    if (
+      this.dataAjuizamento &&
+      HelperDate.dateEquals(
+        HelperDate.getCurrentCompetence(dataVencimentoOcorrencia).getDate(),
+        HelperDate.getCurrentCompetence(this.dataAjuizamento).getDate(),
+      ) &&
+      (this.tabelaDeJuros as unknown as { isSelicIndiceNoAjuizamentoSemCombinacao?(): boolean })
+        ?.isSelicIndiceNoAjuizamentoSemCombinacao?.()
+    ) {
+      dataInicioJuros = HelperDate.getInstance(dataVencimentoOcorrencia).lastDayOfTheMonth().getDate();
+    }
+    if (!dataInicioJuros) {
+      dataInicioJuros = HelperDate.getCurrentCompetence(dataInicialOc).getDate();
+    }
+
+    // Java linha 1904: recalcula taxa com dataInicioJuros possivelmente ajustada
+    const taxaDeJuros = this.tabelaDeJuros?.calcularTaxaDeJuros(
+      dataInicioJuros,
+      dataVencimentoOcorrencia,
+      verba.getJurosDoAjuizamento(),
+      true,
+      false,
+    ) ?? ZERO;
+
+    // Java linha 1905: chave composta CompetenciaDeJuros = (mes/ano oc + dataInicioJuros)
+    const competenciaKey = `${dataInicialOc.getUTCFullYear()}-${String(dataInicialOc.getUTCMonth() + 1).padStart(2, '0')}|${dataInicioJuros.toISOString().slice(0, 10)}`;
+
+    // Java linha 1906-1913: get-or-create ApuracaoDeJuros
+    let ocorrenciaDeJuros = mapOcorrenciasDeJuros.get(competenciaKey);
+    if (!ocorrenciaDeJuros) {
+      ocorrenciaDeJuros = {
+        competencia: HelperDate.getCurrentCompetence(dataInicialOc).getDate(),
+        dataInicial: dataInicioJuros,
+        taxaDeJuros: taxaDeJuros ?? ZERO,
+        valorCorrigido: ZERO as Decimal,
+        valorVerbaParaContribuicaoSocial: ZERO as Decimal,
+        valorVerbaParaContribuicaoSocialDecimoTerceiro: ZERO as Decimal,
+        valorVerbaParaPrevidenciaPrivada: ZERO as Decimal,
+        valorCorrigidoParaIrpfDecimoTerceiro: ZERO as Decimal,
+        valorCorrigidoParaIrpfFerias: ZERO as Decimal,
+        valorCorrigidoParaIrpfDemaisVerbas: ZERO as Decimal,
+      };
+      mapOcorrenciasDeJuros.set(competenciaKey, ocorrenciaDeJuros);
+    }
+
+    // Java linha 1914-1918: agrupa por competencia "pura" (mes/ano)
+    const competenciaSimples = HelperDate.getCurrentCompetence(dataInicialOc).getDate();
+    let conjuntoDeApuracoes = mapApuracoesPorCompetencia.get(competenciaSimples);
+    if (!conjuntoDeApuracoes) {
+      conjuntoDeApuracoes = new Set<unknown>();
+      mapApuracoesPorCompetencia.set(competenciaSimples, conjuntoDeApuracoes);
+    }
+    conjuntoDeApuracoes.add(ocorrenciaDeJuros);
+
+    // Java linha 1919: acumula valorCorrigido (sempre arredondado)
+    const oj = ocorrenciaDeJuros as {
+      valorCorrigido: Decimal;
+      valorVerbaParaPrevidenciaPrivada: Decimal;
+      valorCorrigidoParaIrpfDecimoTerceiro: Decimal;
+      valorCorrigidoParaIrpfFerias: Decimal;
+      valorCorrigidoParaIrpfDemaisVerbas: Decimal;
+    };
+    const difCorrigida = ocorrencia.getDiferencaCorrigida();
+    if (difCorrigida) {
+      oj.valorCorrigido = oj.valorCorrigido.plus(arredondarValorMonetario(difCorrigida));
+    }
+
+    // Java linha 1920-1935: switch INSS por caracteristica
+    if (verba.getIncidenciaINSS() === true) {
+      const carac = verba.getCaracteristica();
+      if (carac === 'DT') {
+        this.apurarVerbaIncideInssDecimoTerceiro(
+          mapValorTotalPorCompetenciaParaContribuicaoSocialDecimoTerceiro,
+          ocorrencia,
+          competenciaSimples,
+          ocorrenciaDeJuros,
+        );
+      } else if (carac === 'F') {
+        this.apurarVerbaIncideInssFerias(
+          mapValorTotalPorCompetenciaParaContribuicaoSocial,
+          ocorrencia,
+          competenciaSimples,
+          ocorrenciaDeJuros,
+        );
+      } else {
+        // AVISO_PREVIO ou COMUM
+        this.apurarVerbaIncideInssAvisoOuComum(
+          mapValorTotalPorCompetenciaParaContribuicaoSocial,
+          ocorrencia,
+          competenciaSimples,
+          ocorrenciaDeJuros,
+        );
+      }
+    }
+
+    // Java linha 1936-1956: PrevidenciaPrivada
+    if (verba.getIncidenciaPrevidenciaPrivada() === true) {
+      let base: Decimal | null = null;
+      if (isFerias) {
+        base = ocorrencia.getDiferencaParaCalculoDasIncidencias();
+      } else {
+        const diferenca = ocorrencia.getDiferenca();
+        if (diferenca) base = arredondarValorMonetario(diferenca);
+      }
+      if (base !== null) {
+        oj.valorVerbaParaPrevidenciaPrivada = oj.valorVerbaParaPrevidenciaPrivada.plus(base);
+        const valorCompetencia = mapValorTotalPorCompetenciaParaPrevidenciaPrivada.get(competenciaSimples) ?? ZERO;
+        mapValorTotalPorCompetenciaParaPrevidenciaPrivada.set(competenciaSimples, valorCompetencia.plus(base));
+      }
+    }
+
+    // Java linha 1957-1974: IRPF — separa em 3 buckets
+    if (verba.getIncidenciaIRPF() === true) {
+      const carac = verba.getCaracteristica();
+      if (carac === 'DT') {
+        if (difCorrigida) {
+          oj.valorCorrigidoParaIrpfDecimoTerceiro = oj.valorCorrigidoParaIrpfDecimoTerceiro.plus(difCorrigida);
+        }
+      } else if (carac === 'F') {
+        const baseIrpf = ocorrencia.getDiferencaParaCalculoDasIncidencias?.(true);
+        if (baseIrpf) {
+          oj.valorCorrigidoParaIrpfFerias = oj.valorCorrigidoParaIrpfFerias.plus(baseIrpf);
+        }
+      } else {
+        // AVISO_PREVIO / COMUM
+        if (difCorrigida) {
+          oj.valorCorrigidoParaIrpfDemaisVerbas = oj.valorCorrigidoParaIrpfDemaisVerbas.plus(difCorrigida);
+        }
+      }
+    }
   }
 }
