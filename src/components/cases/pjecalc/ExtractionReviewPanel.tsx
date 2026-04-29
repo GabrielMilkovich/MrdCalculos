@@ -298,6 +298,57 @@ export function ExtractionReviewPanel({ caseId, pipelineId, onConfirmAll }: Prop
     },
   });
 
+  const [aplicandoDiv, setAplicandoDiv] = useState<string | null>(null);
+
+  const aceitarRecomendacao = async (
+    proposta: PropostaPersistida,
+    controversyId: string | null,
+  ) => {
+    setAplicandoDiv(proposta.id);
+    try {
+      const ok = await aprovarProposta(proposta.id, async (p) => {
+        const destino = DESTINO_CAMPO[p.campo];
+        if (!destino) {
+          return { ok: false, error: `Sem destino mapeado para campo ${p.campo}` };
+        }
+        const { data: row, error: errSel } = await supabase
+          .from(destino.tabela as keyof Database["public"]["Tables"])
+          .select("id")
+          .eq("case_id", caseId)
+          .maybeSingle();
+        if (errSel) return { ok: false, error: errSel.message };
+        const rowId = (row as { id?: string } | null)?.id;
+        if (!rowId) return { ok: false, error: `Sem registro em ${destino.tabela} para o caso` };
+        const update: Record<string, unknown> = { [destino.coluna]: p.valor_proposto };
+        const { error } = await supabase
+          .from(destino.tabela as keyof Database["public"]["Tables"])
+          .update(update)
+          .eq("id", rowId);
+        return { ok: !error, error: error?.message };
+      });
+      if (!ok) {
+        toast.error("Falha ao aplicar a recomendação");
+        return;
+      }
+      toast.success("Recomendação aplicada");
+      // Marca controversy como resolvida (se houver).
+      if (controversyId) {
+        await supabase
+          .from("case_controversies")
+          .update({
+            status: "resolvido",
+            valor_escolhido: String(proposta.valor_proposto ?? ""),
+            justificativa: `Recomendação aceita via matriz de autoridade (${proposta.doc_tipo}, score ${proposta.score_final.toFixed(1)}).`,
+            resolvido_em: new Date().toISOString(),
+          })
+          .eq("id", controversyId);
+      }
+      qc.invalidateQueries({ queryKey: ["cross_doc_divergences", caseId] });
+    } finally {
+      setAplicandoDiv(null);
+    }
+  };
+
   const handleConfirm = (id: string) => {
     updateItem.mutate({ id, updates: { status: "CONFIRMADO" } });
   };
@@ -535,6 +586,143 @@ export function ExtractionReviewPanel({ caseId, pipelineId, onConfirmAll }: Prop
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Cross-doc divergences (authority ranking) */}
+      {divergences.length > 0 && (
+        <Card className="border-amber-300/70 dark:border-amber-700/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Scale className="h-4 w-4 text-amber-600" />
+              Divergências entre Documentos
+              <Badge variant="secondary" className="text-[10px]">
+                {divergences.length}
+              </Badge>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Documentos divergem nestes campos. Ranking via matriz de autoridade
+              (peso documental × confiança da extração).
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-0">
+            {divergences.map((d) => {
+              const ranked = ordenarPorAuthority(d.campo, d.candidatos);
+              const winner = ranked[0];
+              const campoLabel = CAMPO_LABELS[d.campo] ?? d.campo;
+              const proposta = d.proposta;
+              return (
+                <div
+                  key={d.id}
+                  className="rounded-md border bg-muted/20 p-3 space-y-2"
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium">{campoLabel}</span>
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      {d.campo}
+                    </Badge>
+                    <Badge variant="destructive" className="text-[10px] gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {ranked.length} candidatos
+                    </Badge>
+                    {d.descricao && (
+                      <span className="text-[11px] text-muted-foreground italic">
+                        {d.descricao}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    {ranked.map((cand, idx) => {
+                      const score = new Decimal(cand.confianca).times(100).toFixed(0);
+                      const isWinner = idx === 0;
+                      return (
+                        <div
+                          key={`${d.id}-${idx}`}
+                          className={`flex items-center gap-2 rounded px-2 py-1.5 text-xs ${
+                            isWinner
+                              ? "bg-emerald-500/10 border border-emerald-500/30"
+                              : "bg-background border border-border/50"
+                          }`}
+                        >
+                          <Badge
+                            variant={isWinner ? "default" : "outline"}
+                            className="text-[9px] gap-0.5 shrink-0"
+                          >
+                            {isWinner ? (
+                              <>
+                                <Trophy className="h-2.5 w-2.5" />#1
+                              </>
+                            ) : (
+                              <>#{idx + 1}</>
+                            )}
+                          </Badge>
+                          <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
+                          <span className="font-medium truncate max-w-[180px]">
+                            {nomeDocumento(cand.doc_tipo)}
+                          </span>
+                          <span className="text-muted-foreground">→</span>
+                          <span className="font-mono truncate max-w-[200px]">
+                            {formatarValorDivergencia(cand.valor)}
+                          </span>
+                          <div className="flex-1" />
+                          <Badge variant="outline" className="text-[9px] font-mono">
+                            conf {score}%
+                          </Badge>
+                          {isWinner && (
+                            <Badge className="text-[9px] gap-0.5 bg-emerald-600 hover:bg-emerald-700">
+                              <Sparkles className="h-2.5 w-2.5" />
+                              Recomendado
+                            </Badge>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {proposta && (
+                    <div className="text-[10px] text-muted-foreground">
+                      Score final do vencedor: <span className="font-mono">{proposta.score_final.toFixed(1)}</span>
+                      {" • "}
+                      Resolução: <span className="font-mono">{proposta.motivo_resolucao ?? "—"}</span>
+                      {" • "}
+                      Vencedor: <span className="font-mono">{nomeDocumento(winner.doc_tipo)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    {proposta && (
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => aceitarRecomendacao(proposta, d.controversy_id)}
+                        disabled={aplicandoDiv === proposta.id}
+                      >
+                        {aplicandoDiv === proposta.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Check className="h-3 w-3" />
+                        )}
+                        Aceitar recomendação
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1"
+                      onClick={() =>
+                        toast.info(
+                          "Use o painel de propostas (aba Cálculo) para escolher manualmente outro documento.",
+                        )
+                      }
+                    >
+                      Escolher outro
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Items list */}
       <ScrollArea className="max-h-[500px]">
