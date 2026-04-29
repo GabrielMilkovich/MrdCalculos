@@ -120,12 +120,36 @@ async function compareSinglePJC(pjcPath: string) {
   const result: any = engine.liquidar();
   const r = result.resumo;
 
+  // INSS nominal segurado (= `inssBeneficiario` Java).
+  // Preferimos `r.cs_segurado_nominal` (totalSegurado do InssModuloAdapter — calculado
+  // a partir das faixas progressivas, espelha `valorTotalInssSeguradoReclamante` Java).
+  // Fallback para soma de cs_normal+cs_13 das apuracoes_juros do oracle quando o engine
+  // não populou. Ref Java: ResumoPrecatorioJrAdapterPadrao.java:239.
+  let inssNominalFromOracle = 0;
+  for (const it of (a.apuracao_juros || [])) {
+    inssNominalFromOracle += (it.cs_normal || 0) + (it.cs_13 || 0);
+  }
+  const inssNominal = (typeof r.cs_segurado_nominal === 'number' && r.cs_segurado_nominal > 0)
+    ? r.cs_segurado_nominal
+    : inssNominalFromOracle;
+
+  // FIX Sprint 1 Bug 2 (2026-04-29): inssExecutado Java NÃO é cs_empregador puro.
+  // Java: inssExecutado = (totalGeralInssSegurado + totalGeralInssEmpresa
+  //                      + totalGeralInssSAT + totalGeralInssTerceiros) − inssBeneficiario
+  // Ref Java: ResumoPrecatorioJrAdapterPadrao.java:241-251.
+  //   `cs_segurado` = totalGeralInssSegurado (CORRIGIDO + juros + multa)
+  //   `cs_empregador` = totalGeralInssEmpresa+SAT+Terceiros (CORRIGIDO + juros + multa)
+  //   `inssBeneficiario` é NOMINAL (sem correção/juros/multa).
+  // Logo: inssExecutado_engine = cs_segurado + cs_empregador − inssBeneficiario_nominal.
+  // (Antes mapeava para cs_empregador direto → -10% sistemático em 50/50 PJCs.)
+  const inssExecutadoEng = r.cs_segurado + r.cs_empregador - inssNominal;
+
   const eng = {
     valorPrincipal: r.principal_corrigido + r.juros_mora + (r.fgts_total || 0),
     liquidoExequente: r.liquido_reclamante,
-    inssBeneficiario: 0, // calc nominal abaixo
+    inssBeneficiario: inssNominal,
     inssReclamante: r.cs_segurado,
-    inssExecutado: r.cs_empregador,
+    inssExecutado: inssExecutadoEng,
     inssReclamado: r.cs_empregador,
     impostoRenda: r.ir_retido,
     depositoFgts: r.fgts_total,
@@ -134,11 +158,6 @@ async function compareSinglePJC(pjcPath: string) {
     honorariosReclamante: r.honorarios_contratuais,
     honorariosReclamado: r.honorarios_sucumbenciais,
   };
-
-  // INSS nominal (como pjc_inss usa)
-  let inssNominal = 0;
-  for (const it of (a.apuracao_juros || [])) inssNominal += (it.cs_normal || 0) + (it.cs_13 || 0);
-  eng.inssBeneficiario = inssNominal;
 
   return { oracle, eng, name: path.basename(pjcPath, path.extname(pjcPath)) };
 }

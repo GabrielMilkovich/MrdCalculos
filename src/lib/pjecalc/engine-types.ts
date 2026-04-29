@@ -1009,6 +1009,12 @@ export interface PjeResumo {
   juros_mora: number;
   fgts_total: number;
   cs_segurado: number;
+  /** INSS-Segurado NOMINAL (sem juros/multa/correção). Java equivalente:
+   *  `valorTotalInssSeguradoReclamante` (= `inssBeneficiario` no <gprec>).
+   *  Sprint 1 Bug 2: usado para derivar `inssExecutado` Java
+   *    = (cs_segurado + cs_empregador) − cs_segurado_nominal. Pode ser undefined
+   *    em paths legados/overrides — sempre acesse com fallback. */
+  cs_segurado_nominal?: number;
   cs_empregador: number;
   ir_retido: number;
   seguro_desemprego: number;

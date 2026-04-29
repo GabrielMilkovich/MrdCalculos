@@ -1019,6 +1019,68 @@ export class PjeCalcEngineV3 {
       - csReclamante - irRetido - honorariosContratuais
       - (pensaoTotal - pensaoSobreFgts) - pensaoFgtsDeduzLiquido).toFixed(2);
 
+    // ── Custas judiciais (Sprint 1 Bug 1) ──
+    // Popula `r.custas` e `r.custas_detalhadas` a partir de `custasConfig`.
+    // Fonte de verdade: PJC oracle (campo <custasJudiciais> = decisão do
+    // juiz, persistida pelo Java). `pjc-to-engine.buildCustasConfig` copia
+    // esse valor para `valor_minimo` quando há custas no PJC. Quando o
+    // usuário edita custas na UI (itens com valor_fixo / percentual), os
+    // itens substituem o valor agregado.
+    //
+    // Regras (espelham PjeCustasConfig + Java MaquinaDeCalculoDeCustas):
+    //   1) `apurar=false` ou `isento=true` ou `assistencia_judiciaria=true` → custas = 0
+    //   2) Se `itens` não-vazio com `apurar=true` → soma item.valor_fixo (ou
+    //      base × percentual). Cada item compõe `custas_detalhadas`.
+    //   3) Caso contrário → usa `valor_minimo` como valor agregado (rota PJC).
+    //
+    // NOTA: `r.custas` é débito do reclamado, não desconto do líquido reclamante,
+    // portanto NÃO entra em `liquido_reclamante` (preserva calibrate baseline).
+    let custasTotal = 0;
+    const custasDetalhadas: { tipo: string; descricao: string; valor: number }[] = [];
+    const custasCfg = this.custasConfig;
+    if (custasCfg && custasCfg.apurar && !custasCfg.isento && !custasCfg.assistencia_judiciaria) {
+      const itensApurados = (custasCfg.itens || []).filter(it => it.apurar);
+      if (itensApurados.length > 0) {
+        // Base para itens percentuais: bruto devido (principal + juros + FGTS).
+        // Java usa `brutoDevidoAoReclamante` (CustasJudiciais.java); aproximamos
+        // com `total_reclamada` (sem custas) para preservar paridade.
+        const baseCustas = principalCorrigido + jurosMora + fgtsResult.total_fgts;
+        for (const it of itensApurados) {
+          if (it.isento) continue;
+          let valor = 0;
+          if (typeof it.valor_fixo === 'number' && it.valor_fixo > 0) {
+            valor = it.valor_fixo;
+          } else if (it.percentual > 0) {
+            valor = +new Decimal(baseCustas).times(it.percentual).div(100)
+              .toDP(2, Decimal.ROUND_HALF_EVEN).toNumber();
+          }
+          if (it.valor_minimo > 0 && valor < it.valor_minimo) valor = it.valor_minimo;
+          if (typeof it.valor_maximo === 'number' && it.valor_maximo > 0 && valor > it.valor_maximo) {
+            valor = it.valor_maximo;
+          }
+          if (valor > 0) {
+            custasDetalhadas.push({ tipo: it.tipo, descricao: it.descricao, valor: +valor.toFixed(2) });
+            custasTotal += valor;
+          }
+        }
+      } else if (custasCfg.valor_minimo > 0) {
+        // Rota PJC: valor agregado vindo do oracle (<custasJudiciais>).
+        custasTotal = custasCfg.valor_minimo;
+        custasDetalhadas.push({
+          tipo: 'judiciais',
+          descricao: 'Custas judiciais',
+          valor: +custasTotal.toFixed(2),
+        });
+      }
+      // Aplica teto agregado (valor_maximo no nível da config), espelho
+      // do `aplicarTeto` Java.
+      if (typeof custasCfg.valor_maximo === 'number' && custasCfg.valor_maximo > 0
+          && custasTotal > custasCfg.valor_maximo) {
+        custasTotal = custasCfg.valor_maximo;
+      }
+      custasTotal = +custasTotal.toFixed(2);
+    }
+
     const resumo: PjeResumo = {
       principal_bruto: +principalBruto.toFixed(2),
       principal_corrigido: +principalCorrigido.toFixed(2),
@@ -1046,8 +1108,8 @@ export class PjeCalcEngineV3 {
             : 0)
       ).toFixed(2),
       honorarios_contratuais: +honorariosContratuais.toFixed(2),
-      custas: 0,
-      custas_detalhadas: [],
+      custas: custasTotal,
+      custas_detalhadas: custasDetalhadas,
       pensao_sobre_fgts: +pensaoSobreFgts.toFixed(2),
       pensao_total: +pensaoTotal.toFixed(2),
       contribuicao_sindical: 0,
@@ -1231,8 +1293,13 @@ export class PjeCalcEngineV3 {
     // em todos os 45 PJCs com OcorrenciaDeFgts populada.
     // Para casos novos (sem PJC), `fgts_override_total` é undefined e o
     // cálculo segue a fórmula simplificada abaixo.
+    //
+    // Sprint 1 Bug 4 (2026-04-29): aceita override === 0 como valor explícito
+    // (FGTS satisfeito / já depositado conforme oráculo Java em
+    // `<gprec><depositoFgts>=0`). Antes ignorava 0 e calculava do zero,
+    // inflando ~2k em casos como antonio-harley, tiago-jose, izabela.
     const override = this.fgtsConfig.fgts_override_total;
-    if (typeof override === 'number' && override > 0) {
+    if (typeof override === 'number' && override >= 0) {
       return { depositos: [], total_depositos: 0, multa_valor: 0, lc110_10: 0, lc110_05: 0, saldo_deduzido: 0, total_fgts: +override.toFixed(2) };
     }
     // Caso contrário, calcula se houver verba com incidência FGTS + diferença positiva.
