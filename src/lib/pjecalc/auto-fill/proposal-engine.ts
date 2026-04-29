@@ -13,6 +13,7 @@
  * Exposto como hook React `useAutoFillProposals(caseId)`.
  */
 import { supabase } from '@/integrations/supabase/client';
+import { registrarEvento as registrarCalibrationEvento } from './calibration';
 import {
   type CampoAutoFill,
   type CandidatoCampo,
@@ -172,6 +173,13 @@ export async function aprovarProposta(
     console.error('[proposal-engine] aprovar: update status', errUpdate.message);
     return false;
   }
+
+  // Fire-and-forget: registra evento de calibracao (matriz authority empirica).
+  // Trigger no banco tambem garante o registro caso este caminho falhe.
+  void registrarCalibrationEvento(propostaId, true).catch(err => {
+    console.warn('[proposal-engine] calibration event:', err);
+  });
+
   return true;
 }
 
@@ -181,7 +189,14 @@ export async function rejeitarProposta(propostaId: string): Promise<boolean> {
     .from('auto_fill_proposals')
     .update({ status: 'rejeitada' })
     .eq('id', propostaId);
-  return !error;
+  if (error) return false;
+
+  // Fire-and-forget: registra evento de calibracao.
+  void registrarCalibrationEvento(propostaId, false).catch(err => {
+    console.warn('[proposal-engine] calibration event:', err);
+  });
+
+  return true;
 }
 
 /**

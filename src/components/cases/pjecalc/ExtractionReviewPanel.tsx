@@ -4,6 +4,7 @@
  */
 
 import { useState } from "react";
+import Decimal from "decimal.js";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,10 +20,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Check, X, Edit2, Eye, AlertTriangle, FileText,
-  ChevronDown, ChevronUp, Filter, CheckCircle2,
-  Clock, Loader2
+  ChevronDown, ChevronUp, CheckCircle2,
+  Clock, Loader2, Trophy, Scale, Sparkles,
 } from "lucide-react";
 import type { Database } from "@/integrations/supabase/types";
+import {
+  ordenarPorAuthority,
+  nomeDocumento,
+  type CampoAutoFill,
+  type CandidatoCampo,
+  type DocumentoTipo,
+} from "@/lib/pjecalc/auto-fill/document-authority";
+import {
+  aprovarProposta,
+  type PropostaPersistida,
+} from "@/lib/pjecalc/auto-fill/proposal-engine";
+
+Decimal.set({ precision: 20 });
 
 interface Props {
   caseId: string;
@@ -73,6 +87,69 @@ const TARGET_LABELS: Record<string, string> = {
   pjecalc_hist_salarial: "Histórico",
 };
 
+/** Campos auto-fill validos (mantido aqui pra tipagem do mapa de destino). */
+const CAMPO_LABELS: Partial<Record<CampoAutoFill, string>> = {
+  data_admissao: "Data de Admissão",
+  data_demissao: "Data de Demissão",
+  data_ajuizamento: "Data de Ajuizamento",
+  numero_processo: "Número do Processo",
+  tribunal: "Tribunal",
+  vara: "Vara",
+  reclamante_nome: "Nome do Reclamante",
+  reclamante_cpf: "CPF do Reclamante",
+  reclamada_nome: "Nome da Reclamada",
+  reclamada_cnpj: "CNPJ da Reclamada",
+  cargo_funcao: "Cargo / Função",
+  salario_base: "Salário Base",
+  salario_competencia: "Salário (competência)",
+  tipo_demissao: "Tipo de Demissão",
+  jornada: "Jornada",
+  aviso_previo: "Aviso Prévio",
+};
+
+const DESTINO_CAMPO: Partial<Record<CampoAutoFill, { tabela: string; coluna: string }>> = {
+  data_admissao:    { tabela: "pjecalc_calculos", coluna: "data_admissao" },
+  data_demissao:    { tabela: "pjecalc_calculos", coluna: "data_demissao" },
+  data_ajuizamento: { tabela: "pjecalc_calculos", coluna: "data_ajuizamento" },
+  numero_processo:  { tabela: "pjecalc_calculos", coluna: "processo_cnj" },
+  tribunal:         { tabela: "pjecalc_calculos", coluna: "tribunal" },
+  vara:             { tabela: "pjecalc_calculos", coluna: "vara" },
+  reclamante_nome:  { tabela: "pjecalc_calculos", coluna: "reclamante_nome" },
+  reclamante_cpf:   { tabela: "pjecalc_calculos", coluna: "reclamante_cpf" },
+  reclamada_nome:   { tabela: "pjecalc_calculos", coluna: "reclamado_nome" },
+  reclamada_cnpj:   { tabela: "pjecalc_calculos", coluna: "reclamado_cnpj" },
+  cargo_funcao:     { tabela: "pjecalc_calculos", coluna: "cargo" },
+  salario_base:     { tabela: "pjecalc_parametros", coluna: "salario_base" },
+  tipo_demissao:    { tabela: "pjecalc_calculos", coluna: "tipo_demissao" },
+  jornada:          { tabela: "pjecalc_parametros", coluna: "jornada_contratual" },
+};
+
+interface ConflitanteRaw {
+  doc_tipo: DocumentoTipo;
+  valor: unknown;
+  score: number;
+}
+
+function isConflitanteArray(v: unknown): v is ConflitanteRaw[] {
+  if (!Array.isArray(v)) return false;
+  return v.every(
+    (item) =>
+      item !== null &&
+      typeof item === "object" &&
+      "doc_tipo" in item &&
+      "valor" in item,
+  );
+}
+
+function formatarValorDivergencia(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "string") return v;
+  if (typeof v === "number") {
+    return new Decimal(v).toFixed(2);
+  }
+  return JSON.stringify(v);
+}
+
 export function ExtractionReviewPanel({ caseId, pipelineId, onConfirmAll }: Props) {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<ExtractionStatus | "ALL">("ALL");
@@ -112,6 +189,95 @@ export function ExtractionReviewPanel({ caseId, pipelineId, onConfirmAll }: Prop
         .eq("id", pipelineId!)
         .single();
       return data as PipelineRow | null;
+    },
+  });
+
+  // Cross-doc divergences: case_controversies pendentes/controvertidas + propostas com conflitantes.
+  const { data: divergences = [] } = useQuery({
+    queryKey: ["cross_doc_divergences", caseId],
+    queryFn: async () => {
+      // Busca controversies abertas do caso (status pendente/controvertido).
+      const { data: controv, error: errC } = await supabase
+        .from("case_controversies")
+        .select("id, campo, descricao, status, document_ids")
+        .eq("case_id", caseId)
+        .in("status", ["pendente", "controvertido"]);
+      if (errC) throw errC;
+
+      // Busca propostas pendentes com conflitantes — aqui esta o ranking real.
+      const { data: propostas, error: errP } = await supabase
+        .from("auto_fill_proposals")
+        .select("*")
+        .eq("case_id", caseId)
+        .eq("status", "pendente");
+      if (errP) throw errP;
+
+      const propostasArr = (propostas ?? []) as PropostaPersistida[];
+      const controvArr = (controv ?? []) as Array<{
+        id: string;
+        campo: string | null;
+        descricao: string | null;
+        status: string | null;
+        document_ids: string[] | null;
+      }>;
+
+      // Cada divergencia = (controversy + proposta correspondente por campo) OU
+      // (proposta com conflitantes >= 1, mesmo sem controversy registrada).
+      const camposControv = new Set(
+        controvArr.map((c) => c.campo).filter((c): c is string => !!c),
+      );
+
+      type DivergenciaUI = {
+        id: string;
+        campo: CampoAutoFill;
+        controversy_id: string | null;
+        proposta: PropostaPersistida | null;
+        candidatos: CandidatoCampo<unknown>[];
+        descricao: string | null;
+      };
+
+      const out: DivergenciaUI[] = [];
+
+      for (const p of propostasArr) {
+        const conflitantes = isConflitanteArray(p.conflitantes) ? p.conflitantes : [];
+        if (conflitantes.length === 0) continue;
+        // Reconstroi candidatos (vencedor + perdedores) com authority×confianca.
+        const vencedor: CandidatoCampo<unknown> = {
+          doc_tipo: p.doc_tipo,
+          document_id: p.document_id ?? "",
+          valor: p.valor_proposto,
+          confianca: Number(p.confianca),
+          extraido_em: new Date(p.criado_em),
+          evidencia: p.evidencia ?? undefined,
+        };
+        const perdedores: CandidatoCampo<unknown>[] = conflitantes.map((c) => ({
+          doc_tipo: c.doc_tipo,
+          document_id: "",
+          valor: c.valor,
+          // c.score eh confianca (0-1) conforme conversao em proposal-engine.
+          confianca: typeof c.score === "number" ? c.score : 0,
+          extraido_em: new Date(p.criado_em),
+        }));
+        const controv = controvArr.find((cv) => cv.campo === p.campo);
+        out.push({
+          id: `prop-${p.id}`,
+          campo: p.campo,
+          controversy_id: controv?.id ?? null,
+          proposta: p,
+          candidatos: [vencedor, ...perdedores],
+          descricao: controv?.descricao ?? null,
+        });
+        if (controv) camposControv.delete(controv.campo as string);
+      }
+
+      // Controversies sem proposta correspondente — sem ranking, mas mostra info.
+      for (const cv of controvArr) {
+        if (!cv.campo || !camposControv.has(cv.campo)) continue;
+        // Sem proposta, nao temos candidatos nem score. Skip — UI fica vazia.
+        // (Mantemos comportamento existente do ControversyManager para esses.)
+      }
+
+      return out;
     },
   });
 

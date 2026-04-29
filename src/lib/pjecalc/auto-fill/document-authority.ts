@@ -69,7 +69,7 @@ export type CampoAutoFill =
  * Matriz de autoridade [campo][tipo] → score 0-100.
  * Score 0 = nao confiavel para esse campo. 100 = autoridade maxima.
  */
-const AUTHORITY_MATRIX: Record<CampoAutoFill, Partial<Record<DocumentoTipo, number>>> = {
+export const AUTHORITY_MATRIX: Record<CampoAutoFill, Partial<Record<DocumentoTipo, number>>> = {
   data_admissao: {
     CTPS: 100,
     TRCT: 90,
