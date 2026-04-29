@@ -143,6 +143,15 @@ async function main() {
       const xml = readPjc(arq);
       const analysis = analyzePJC(xml);
       const pjc_liq = analysis.resultado?.liquido_exequente ?? 0;
+      // Sprint 3 (2026-04-29): distinguir "PJC sem oracle <gprec>" de "erro real".
+      // PJCs em estado intermediário (verbas configuradas mas oracle não gerado pelo
+      // Java ainda) nao tem <gprec>. Antes eram contados como erro, distorcendo metrica.
+      const hasOracle = xml.includes('<gprec>');
+      if (!hasOracle) {
+        console.log('SEM_ORACLE (sem <gprec>)');
+        casos.push({ arquivo: nome, nome, pjc_liquido: 0, pjc_inss: 0, pjc_ir: 0, pjc_bruto: 0, eng_liquido: 0, eng_inss: 0, eng_ir: 0, eng_bruto: 0, delta_liquido: 0, delta_inss: 0, delta_ir: 0, delta_bruto: 0, regime: 'SEM_ORACLE', periodo_meses: 0, aprovado_5pct: false, aprovado_10pct: false, aprovado_20pct: false, erro: 'sem_oracle' });
+        continue;
+      }
       if (pjc_liq <= 0) {
         console.log('SKIP (líquido=0)');
         casos.push({ arquivo: nome, nome, pjc_liquido: 0, pjc_inss: 0, pjc_ir: 0, pjc_bruto: 0, eng_liquido: 0, eng_inss: 0, eng_ir: 0, eng_bruto: 0, delta_liquido: 0, delta_inss: 0, delta_ir: 0, delta_bruto: 0, regime: 'SKIP', periodo_meses: 0, aprovado_5pct: false, aprovado_10pct: false, aprovado_20pct: false, erro: 'líquido=0' });
@@ -253,6 +262,8 @@ async function main() {
 
   // Summary
   const validos = casos.filter(c => !c.erro && c.pjc_liquido > 0);
+  const semOracle = casos.filter(c => c.erro === 'sem_oracle');
+  const erros = casos.filter(c => c.erro && c.erro !== 'sem_oracle' && c.erro !== 'líquido=0');
   const n = validos.length || 1;
   const deltas = validos.map(c => c.delta_liquido);
   const avg = deltas.reduce((a, b) => a + b, 0) / n;
@@ -262,7 +273,7 @@ async function main() {
   console.log('\n' + '═'.repeat(60));
   console.log('  RELATÓRIO DE CALIBRAÇÃO V3 — MODO INDEPENDENTE');
   console.log('═'.repeat(60));
-  console.log(`  Total: ${casos.length} | Válidos: ${validos.length} | Erros: ${casos.length - validos.length}`);
+  console.log(`  Total: ${casos.length} | Válidos: ${validos.length} | Sem oracle: ${semOracle.length} | Erros: ${erros.length}`);
   console.log(`  ±5%:  ${aprov5}/${n} (${((aprov5 / n) * 100).toFixed(0)}%)`);
   console.log(`  ±10%: ${aprov10}/${n} (${((aprov10 / n) * 100).toFixed(0)}%)`);
   console.log(`  Média: ${avg > 0 ? '+' : ''}${avg.toFixed(2)}%`);
