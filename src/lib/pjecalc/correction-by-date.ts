@@ -256,6 +256,87 @@ function calcularFatorCorrecao(
 }
 
 /**
+ * Calcula fator de correção monetária mês-a-mês com clamp negativo individual.
+ * Sprint 2 H1 (2026-04-29): Java parity (`IndicePrecatorioUtils.java:36-43`).
+ *
+ * Diferença vs `calcularFatorCorrecao`:
+ *  - `calcularFatorCorrecao`: fator = acum(fim)/acum(ini), clamp uma vez no segmento
+ *  - Esta: itera mês-a-mês, fator_mes = acum[m]/acum[m-1], clamp em CADA mês
+ *
+ * Quando `ignorar_taxa_negativa=false`, retorna mesmo resultado (multiplicação
+ * acumulada equivale à razão). Quando =true, evita que deflação anule um mês
+ * de inflação posterior (caso antonio-harley deflação 2020-04/05).
+ */
+function calcularFatorCorrecaoMesAMes(
+  indice: string,
+  compOrigem: string,
+  compDestino: string,
+  indicesDB: PjeIndiceLoaded[],
+  warnings: WarningItem[],
+): number | null {
+  const canonicalIndice = canonical(indice);
+  const dados = indicesDB
+    .filter(i => i.indice === canonicalIndice)
+    .sort((a, b) => a.competencia.localeCompare(b.competencia));
+
+  if (dados.length === 0) {
+    warnings.push({
+      code: 'E003',
+      module: 'correcao',
+      message: `BLOQUEIO: Índice ${indice} sem dados para ${compOrigem}→${compDestino}.`,
+      competencia: compOrigem,
+      blocking: true,
+    });
+    return null;
+  }
+
+  const hoje = new Date();
+  const prevMonth = hoje.getMonth() === 0
+    ? `${hoje.getFullYear() - 1}-12`
+    : `${hoje.getFullYear()}-${String(hoje.getMonth()).padStart(2, '0')}`;
+  const compDestinoEfetivo =
+    compDestino.slice(0, 7) > prevMonth ? prevMonth + '-01' : compDestino;
+
+  const mesOrigem = (() => {
+    if (_sumula381Shift === false) return compOrigem.slice(0, 7);
+    const [ano, mes] = compOrigem.slice(0, 7).split('-').map(Number);
+    return mes === 12 ? `${ano + 1}-01` : `${ano}-${String(mes + 1).padStart(2, '0')}`;
+  })();
+
+  // Índices na janela [mesOrigem, compDestinoEfetivo]
+  const idxAnterior = dados.filter(i => i.competencia.slice(0, 7) < mesOrigem).pop();
+  const dentroJanela = dados.filter(i =>
+    i.competencia.slice(0, 7) >= mesOrigem &&
+    i.competencia.slice(0, 7) <= compDestinoEfetivo.slice(0, 7),
+  );
+
+  if (dentroJanela.length === 0 || !idxAnterior) {
+    // Sem dados para iterar — fallback para função original.
+    return calcularFatorCorrecao(indice, compOrigem, compDestino, indicesDB, warnings);
+  }
+
+  let acumPrev = Number(idxAnterior.acumulado);
+  if (!acumPrev || acumPrev === 0) {
+    return calcularFatorCorrecao(indice, compOrigem, compDestino, indicesDB, warnings);
+  }
+
+  let fatorTotal = 1;
+  for (const idx of dentroJanela) {
+    const acumCur = Number(idx.acumulado);
+    if (!acumCur) continue;
+    let fatorMes = acumCur / acumPrev;
+    if (fatorMes < 1) {
+      // Clamp mensal: deflação não anula inflação de outros meses
+      fatorMes = 1;
+    }
+    fatorTotal *= fatorMes;
+    acumPrev = acumCur;
+  }
+
+  return fatorTotal;
+}
+
+/**
  * Calcula fator de juros simples pro-rata die entre duas datas.
  * PJe-Calc usa dias exatos / 30, não meses inteiros.
  * Ex: 1 mês e 15 dias = 1.5%, não 1% nem 2%.
@@ -361,11 +442,19 @@ export function aplicarCorrecaoPorData(
       fatorTotal = fatorTotal.times(fatorEfetivo);
       regimes_aplicados.push({ tipo: 'correcao', indice: 'SELIC (correção + juros)', de: segInicio, ate: segFim, fator: fatorEfetivo });
     } else {
-      // Regular correction index
-      const fator = calcularFatorCorrecao(indice, segInicio, segFim, indicesDB, warnings);
+      // Regular correction index.
+      // Sprint 2 H1 (2026-04-29): quando `ignorar_taxa_negativa=true`, usa
+      // iteração mês-a-mês com clamp individual (Java parity
+      // IndicePrecatorioUtils.java:36-43). Antes clampava só o segmento inteiro
+      // — deflação anulava inflação de outros meses.
+      const fator = config.ignorar_taxa_negativa
+        ? calcularFatorCorrecaoMesAMes(indice, segInicio, segFim, indicesDB, warnings)
+        : calcularFatorCorrecao(indice, segInicio, segFim, indicesDB, warnings);
       if (fator === null) { hasBlockingError = true; continue; }
-      
+
       let fatorEfetivo = fator;
+      // Backward compat: se a iteração mês-a-mês ainda retornou < 1 (caso edge
+      // de fallback), aplica clamp final.
       if (config.ignorar_taxa_negativa && fator < 1) {
         warnings.push({
           code: 'W031',
@@ -375,7 +464,7 @@ export function aplicarCorrecaoPorData(
         });
         fatorEfetivo = 1;
       }
-      
+
       fatorTotal = fatorTotal.times(fatorEfetivo);
       regimes_aplicados.push({ tipo: 'correcao', indice, de: segInicio, ate: segFim, fator: fatorEfetivo });
     }
