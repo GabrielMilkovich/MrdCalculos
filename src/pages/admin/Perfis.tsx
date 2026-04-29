@@ -146,7 +146,7 @@ export default function Perfis() {
           descricao: data.descricao || null,
           config: data.config,
           calculadoras_incluidas: data.calculadoras_incluidas,
-        } as any)
+        } as Record<string, unknown>)
         .eq("id", id);
 
       if (error) throw error;

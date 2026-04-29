@@ -57,7 +57,7 @@ export function ModuloAjusteSentenca({ caseId, dataAdmissao, dataDemissao, carga
   const { data: rulesets = [], isLoading: loadingRulesets } = useQuery({
     queryKey: ["sentenca_rulesets", caseId],
     queryFn: async () => {
-      const { data, error } = await (supabase.from as any)("sentenca_rulesets")
+      const { data, error } = await (supabase.from as Record<string, unknown>)("sentenca_rulesets")
         .select("*")
         .eq("case_id", caseId)
         .order("created_at", { ascending: false });
@@ -68,7 +68,7 @@ export function ModuloAjusteSentenca({ caseId, dataAdmissao, dataDemissao, carga
 
   // Load daily records for preview
   const loadDailyRecords = useCallback(async (): Promise<DailyRecord[]> => {
-    const { data, error } = await (supabase.from as any)("pjecalc_ponto_diario")
+    const { data, error } = await (supabase.from as Record<string, unknown>)("pjecalc_ponto_diario")
       .select("*")
       .eq("case_id", caseId)
       .order("data", { ascending: true });
@@ -148,7 +148,7 @@ export function ModuloAjusteSentenca({ caseId, dataAdmissao, dataDemissao, carga
   // Save ruleset
   const handleSaveRuleset = async () => {
     try {
-      const { error } = await (supabase.from as any)("sentenca_rulesets").insert({
+      const { error } = await (supabase.from as Record<string, unknown>)("sentenca_rulesets").insert({
         case_id: caseId,
         nome: editingName,
         texto_sentenca: textoSentenca || null,
@@ -179,7 +179,7 @@ export function ModuloAjusteSentenca({ caseId, dataAdmissao, dataDemissao, carga
 
       // Persist to worktime_adjustments (upsert by case_id + data)
       for (const rec of result.records) {
-        await (supabase.from as any)("worktime_adjustments").upsert({
+        await (supabase.from as Record<string, unknown>)("worktime_adjustments").upsert({
           case_id: caseId,
           ponto_diario_id: rec.ponto_diario_id,
           data: rec.data,
@@ -205,7 +205,7 @@ export function ModuloAjusteSentenca({ caseId, dataAdmissao, dataDemissao, carga
 
   const deleteRuleset = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja excluir esta regra?')) return;
-    await (supabase.from as any)("sentenca_rulesets").delete().eq("id", id);
+    await (supabase.from as Record<string, unknown>)("sentenca_rulesets").delete().eq("id", id);
     qc.invalidateQueries({ queryKey: ["sentenca_rulesets", caseId] });
     toast.success("Regra excluída.");
   };

@@ -122,6 +122,8 @@ export interface PjecalcFaltaRow {
   motivo: string | null;
   observacoes: string | null;
   created_at: string;
+  /** Art. 130-A CLT: falta que reinicia o periodo aquisitivo de ferias. */
+  reiniciar_ferias?: boolean | null;
 }
 
 export interface PjecalcFaltaInsert {

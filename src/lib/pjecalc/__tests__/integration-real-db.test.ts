@@ -131,11 +131,11 @@ describe('Integration: Real DB indices vs PJe-Calc', { timeout: TEST_TIMEOUT }, 
       inputs.params.modo_calculo = 'independent';
       inputs.correcaoConfig.gt_closure = undefined;
       inputs.correcaoConfig.apuracao_juros_gt = undefined;
-      if ((inputs.csConfig as any).apuracao_juros_gt) {
-        (inputs.csConfig as any).apuracao_juros_gt = undefined;
+      if ((inputs.csConfig as Record<string, unknown>).apuracao_juros_gt) {
+        (inputs.csConfig as Record<string, unknown>).apuracao_juros_gt = undefined;
       }
-      if ((inputs.irConfig as any).apuracao_juros_gt) {
-        (inputs.irConfig as any).apuracao_juros_gt = undefined;
+      if ((inputs.irConfig as Record<string, unknown>).apuracao_juros_gt) {
+        (inputs.irConfig as Record<string, unknown>).apuracao_juros_gt = undefined;
       }
       if (!inputs.params.data_citacao) {
         inputs.params.data_citacao = inputs.params.data_ajuizamento;

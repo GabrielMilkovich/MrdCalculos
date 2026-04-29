@@ -642,7 +642,7 @@ function CsvImporter({ tipo, onImported }: { tipo: string; onImported: () => voi
         for (const [comp, vals] of compMap) {
           const { error } = await fromUntyped("pjecalc_imposto_renda").upsert({
             competencia: comp, deducao_dependente: vals.dep, deducao_aposentado_65: vals.apos,
-          } as any, { onConflict: "competencia" });
+          } as Record<string, unknown>, { onConflict: "competencia" });
           if (!error) inserted++;
         }
       } else if (tipo === "custas-judiciais") {

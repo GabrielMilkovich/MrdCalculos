@@ -131,6 +131,7 @@ function toEngineFaltas(faltas: PjecalcFaltaRow[]): PjeFalta[] {
     data_final: f.data_final || '',
     justificada: f.justificada ?? false,
     justificativa: f.motivo || undefined,
+    reinicia: f.reiniciar_ferias ?? false,
   }));
 }
 

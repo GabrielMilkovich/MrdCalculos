@@ -87,7 +87,7 @@ export default function Index() {
         if (existing) {
           existing.pending_count++;
         } else {
-          acc.push({ case_id: item.case_id, cliente: (item.cases as any)?.cliente || "—", pending_count: 1 });
+          acc.push({ case_id: item.case_id, cliente: (item.cases as Record<string, unknown>)?.cliente || "—", pending_count: 1 });
         }
         return acc;
       }, [] as ValidationPending[]);
@@ -107,7 +107,7 @@ export default function Index() {
       return (data || []).map((item) => ({
         id: item.id,
         case_id: item.case_id,
-        cliente: (item.cases as any)?.cliente || "—",
+        cliente: (item.cases as Record<string, unknown>)?.cliente || "—",
         executado_em: item.created_at,
         total_bruto: item.total_bruto || 0,
       })) as RecentCalculation[];

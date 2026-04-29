@@ -353,7 +353,7 @@ export function SnapshotViewer({ caseId, onExecuteCalc }: SnapshotViewerProps) {
             </Card>
 
             {/* Tabs for Details / Diff / Impugnation */}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Record<string, unknown>)}>
               <div className="flex items-center justify-between mb-4">
                 <TabsList>
                   <TabsTrigger value="details" className="gap-2">

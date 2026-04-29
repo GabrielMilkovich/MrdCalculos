@@ -53,7 +53,7 @@ function useTableQuery(tableName: string, orderBy: string, ascending = true) {
     queryKey: ["pjecalc_tabela_global", tableName],
     queryFn: async () => {
        
-      const q = (supabase as any).from(tableName).select("*").order(orderBy, { ascending });
+      const q = (supabase as Record<string, unknown>).from(tableName).select("*").order(orderBy, { ascending });
       const { data, error } = await q;
       if (error) {
         logger.warn(`[TabelasGlobais] ${tableName} fetch failed`, { error: error.message });

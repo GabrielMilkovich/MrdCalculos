@@ -61,7 +61,7 @@ export function ModuloIR({ caseId }: Props) {
   const save = async () => {
     setSaving(true);
     try {
-      await svc.upsertIrConfig({ case_id: caseId, ...form } as any);
+      await svc.upsertIrConfig({ case_id: caseId, ...form } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_ir_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
       toast.success("IR configurado!");

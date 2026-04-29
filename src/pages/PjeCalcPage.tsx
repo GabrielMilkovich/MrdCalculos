@@ -250,7 +250,7 @@ export default function PjeCalcPage() {
       pontos_facultativos: formParams.pontos_facultativos,
       tipo_mes: formParams.tipo_mes,
       comentarios: formParams.comentarios,
-    } as any, { onSuccess: () => resolve(), onError: (e: Error) => reject(e) });
+    } as Record<string, unknown>, { onSuccess: () => resolve(), onError: (e: Error) => reject(e) });
     });
   };
 
@@ -287,7 +287,7 @@ export default function PjeCalcPage() {
         considerar_feriado_municipal: formParams.considerar_feriado_municipal,
         tipo_mes: formParams.tipo_mes,
         comentarios: formParams.comentarios,
-      } as any, { onSuccess: () => resolve(), onError: (e: Error) => reject(e) });
+      } as Record<string, unknown>, { onSuccess: () => resolve(), onError: (e: Error) => reject(e) });
     });
   }, [caseId, formParams, calc.saveParams]);
 
@@ -344,8 +344,8 @@ export default function PjeCalcPage() {
         case 'atualizacao': return <ModuloAtualizacao caseId={caseId!} />;
         case 'resumo': return (<>
             <ModuloResumo caseId={caseId!} onBeforeLiquidar={async () => { await handleSaveParams(); }} />
-            {calc.rawResultado?.resultado && (calc.correcaoConfig as any)?.ente_publico && (
-              <ClassificacaoPrecatorio resumo={(calc.rawResultado.resultado as any).resumo} />
+            {calc.rawResultado?.resultado && (calc.correcaoConfig as Record<string, unknown>)?.ente_publico && (
+              <ClassificacaoPrecatorio resumo={(calc.rawResultado.resultado as Record<string, unknown>).resumo} />
             )}
           </>);
         case 'evolucao_debito': return calc.rawResultado?.resultado ? <EvolucaoDebito result={calc.rawResultado.resultado as any} /> : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidação primeiro.</CardContent></Card>;
@@ -353,8 +353,8 @@ export default function PjeCalcPage() {
         case 'fidelidade':
           return calc.rawResultado?.resultado
             ? <FidelidadePanel
-                fidelityReport={(calc.rawResultado as any).fidelityReport || null}
-                parityReport={(calc.rawResultado as any).parityReport || null}
+                fidelityReport={(calc.rawResultado as Record<string, unknown>).fidelityReport || null}
+                parityReport={(calc.rawResultado as Record<string, unknown>).parityReport || null}
               />
             : <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">Execute a liquidacao primeiro para ver o relatorio de fidelidade.</CardContent></Card>;
         case 'esocial': return <ModuloESocial caseId={caseId!} resultado={(calc.rawResultado?.resultado || null) as any} params={formParams} />;
@@ -365,7 +365,7 @@ export default function PjeCalcPage() {
         case 'rastreabilidade': return renderRastreabilidade();
         case 'auditoria': return <AuditLog caseId={caseId!} />;
         case 'dashboard': return <DashboardProdutividade />;
-        case 'ai_audit': return <AuditAgentPanel caseId={caseId!} calculoId={(calc as any).calculoId} />;
+        case 'ai_audit': return <AuditAgentPanel caseId={caseId!} calculoId={(calc as Record<string, unknown>).calculoId} />;
         default: return null;
       }
     })();

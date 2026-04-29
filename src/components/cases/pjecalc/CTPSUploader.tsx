@@ -121,7 +121,7 @@ export function CTPSUploader({ caseId, onExtracted }: Props) {
           await fromUntyped("pjecalc_parametros").upsert({
             case_id: caseId,
             [item.field_key === "admissao" ? "data_admissao" : "data_demissao"]: item.valor,
-          }, { onConflict: "case_id" } as any);
+          }, { onConflict: "case_id" } as Record<string, unknown>);
         }
       }
 

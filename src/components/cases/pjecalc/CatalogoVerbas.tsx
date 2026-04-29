@@ -219,7 +219,7 @@ export function CatalogoVerbas({ caseId, periodoInicio, periodoFim, ordemBase, o
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={v => setTab(v as any)}>
+        <Tabs value={tab} onValueChange={v => setTab(v as Record<string, unknown>)}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="templates" className="text-xs">
               <PackagePlus className="h-3.5 w-3.5 mr-1" /> Lançamento Expresso

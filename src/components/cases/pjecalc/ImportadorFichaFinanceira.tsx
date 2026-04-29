@@ -135,7 +135,7 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
           template_detectado: tipoDoc,
           empresa_detectada: parsed.empresa || null,
           status: "extraido",
-        } as any).select("id").single();
+        } as Record<string, unknown>).select("id").single();
 
         // Create extracao_items for each rubrica
         if (pipeline?.id && parsed.rubricas) {
@@ -220,9 +220,9 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
           }
 
           // Insert monthly occurrences via view (triggers → pjecalc_hist_salarial_mes)
-          if ((inserted as any)?.id) {
+          if ((inserted as Record<string, unknown>)?.id) {
             const ocorrencias = sorted.map((v) => ({
-              historico_id: (inserted as any).id,
+              historico_id: (inserted as Record<string, unknown>).id,
               case_id: caseId,
               competencia: v.competencia,
               valor: v.valor,

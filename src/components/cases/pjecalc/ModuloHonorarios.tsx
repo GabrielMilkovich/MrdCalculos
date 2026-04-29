@@ -82,7 +82,7 @@ export function ModuloHonorarios({ caseId }: Props) {
         percentual_sucumbenciais: items[0]?.percentual ? parseFloat(items[0].percentual) : 15,
         base_sucumbenciais: items[0]?.base || 'condenacao', apurar_contratuais: false,
         percentual_contratuais: 20, valor_fixo: null, items,
-      } as any);
+      } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_honorarios", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
       toast.success("Honorários salvos!");

@@ -64,7 +64,7 @@ export function ModuloFGTS({ caseId }: Props) {
         multa_valor_informado: form.multa_valor_informado ? parseFloat(form.multa_valor_informado) : null,
         data_inicial_incidencia: form.data_inicial_incidencia || null,
         data_final_incidencia: form.data_final_incidencia || null,
-      } as any);
+      } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_fgts_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
       toast.success("FGTS configurado!");

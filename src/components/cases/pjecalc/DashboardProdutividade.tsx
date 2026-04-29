@@ -22,7 +22,7 @@ export function DashboardProdutividade() {
       ]);
 
       const cases = casesRes.data || [];
-      const liquidacoes = (liquidacoesRes as any).data || [];
+      const liquidacoes = (liquidacoesRes as Record<string, unknown>).data || [];
 
       const total = cases.length;
       const emAnalise = cases.filter((c: any) => c.status === 'em_analise').length;

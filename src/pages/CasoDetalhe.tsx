@@ -951,7 +951,7 @@ export default function CasoDetalhe() {
             caseInfo={{
               cliente: caseData.cliente,
               numero_processo: caseData.numero_processo,
-              tribunal: (caseData as any).tribunal,
+              tribunal: (caseData as Record<string, unknown>).tribunal,
               status: caseData.status,
             }}
           />

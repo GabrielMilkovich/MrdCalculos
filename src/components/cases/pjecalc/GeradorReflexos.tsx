@@ -55,11 +55,11 @@ export function GeradorReflexos({ caseId }: Props) {
     const bases: VerbaBase[] = verbasPrincipais.map((v) => ({
       id: v.id,
       nome: v.nome,
-      ordem: (v as any).ordem || 0,
+      ordem: (v as Record<string, unknown>).ordem || 0,
       incidencias: {
-        fgts: (v as any).incidencia_fgts !== false,
-        irpf: (v as any).incidencia_irpf !== false,
-        cs: (v as any).incidencia_cs !== false,
+        fgts: (v as Record<string, unknown>).incidencia_fgts !== false,
+        irpf: (v as Record<string, unknown>).incidencia_irpf !== false,
+        cs: (v as Record<string, unknown>).incidencia_cs !== false,
       },
     }));
     const excludes = templates
@@ -99,7 +99,7 @@ export function GeradorReflexos({ caseId }: Props) {
           gerar_reflexo: r.gerar_reflexo,
           ordem: r.ordem,
           ativa: true,
-        } as any);
+        } as Record<string, unknown>);
       }
 
       qc.invalidateQueries({ queryKey: ["pjecalc_verbas", caseId] });

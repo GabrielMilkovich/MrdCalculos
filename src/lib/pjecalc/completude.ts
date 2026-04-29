@@ -76,10 +76,10 @@ export function calcularCompletude(input: CompletionInput): Record<string, Modul
   }
 
   // Config modules — read real config when available
-  status.fgts = (input.fgtsConfig as any)?.apurar || input.fgtsConfig?.habilitado ? 'preenchido' : 'nao_iniciado';
-  status.cs = (input.csConfig as any)?.apurar_segurado || (input.csConfig as any)?.apurar_empresa || input.csConfig?.habilitado ? 'preenchido' : 'nao_iniciado';
-  status.ir = (input.irConfig as any)?.apurar || input.irConfig?.habilitado ? 'preenchido' : 'nao_iniciado';
-  status.correcao = (input.correcaoConfig as any)?.data_liquidacao || input.correcaoConfig?.indice ? 'preenchido' : 'nao_iniciado';
+  status.fgts = (input.fgtsConfig as Record<string, unknown>)?.apurar || input.fgtsConfig?.habilitado ? 'preenchido' : 'nao_iniciado';
+  status.cs = (input.csConfig as Record<string, unknown>)?.apurar_segurado || (input.csConfig as Record<string, unknown>)?.apurar_empresa || input.csConfig?.habilitado ? 'preenchido' : 'nao_iniciado';
+  status.ir = (input.irConfig as Record<string, unknown>)?.apurar || input.irConfig?.habilitado ? 'preenchido' : 'nao_iniciado';
+  status.correcao = (input.correcaoConfig as Record<string, unknown>)?.data_liquidacao || input.correcaoConfig?.indice ? 'preenchido' : 'nao_iniciado';
   status.seguro = 'nao_iniciado';
   status.salario_familia = 'nao_iniciado';
   status.multas = 'nao_iniciado';

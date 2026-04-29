@@ -313,7 +313,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         sabado_dia_util: params.sabado_dia_util ?? true,
         considerar_feriado_estadual: params.considerar_feriado_estadual || false,
         considerar_feriado_municipal: params.considerar_feriado_municipal || false,
-        tipo_mes: ((params as any).tipo_mes as 'comercial' | 'civil') || 'comercial',
+        tipo_mes: ((params as Record<string, unknown>).tipo_mes as 'comercial' | 'civil') || 'comercial',
         comentarios: params.comentarios || '',
       });
     } else if (contract) {
@@ -321,7 +321,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
         ...prev,
         data_admissao: contract.data_admissao || '',
         data_demissao: contract.data_demissao || '',
-        carga_horaria_padrao: (contract.jornada_contratual as any)?.divisor || 220,
+        carga_horaria_padrao: (contract.jornada_contratual as Record<string, unknown>)?.divisor || 220,
       }));
     }
   }, [params, contract]);
@@ -483,7 +483,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
       case 'esocial': return (
         <ModuloESocial
           caseId={caseId}
-          resultado={(resultado as any) ?? null}
+          resultado={(resultado as Record<string, unknown>) ?? null}
           dadosProcesso={dadosProcesso as any}
           params={{ data_admissao: formParams.data_admissao, data_demissao: formParams.data_demissao }}
         />
@@ -736,7 +736,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                   tipo: 'principal', multiplicador: 1.5, divisor_informado: formParams.carga_horaria_padrao || 220,
                   periodo_inicio: periodo.inicio, periodo_fim: periodo.fim, ordem: verbas.length,
                 }).select("id").single();
-                const principalId = (principalData as any)?.id;
+                const principalId = (principalData as Record<string, unknown>)?.id;
                 if (principalId) {
                   const reflexas = [
                     { nome: '13º SALÁRIO SOBRE HORAS EXTRAS', caracteristica: '13_salario', ocorrencia_pagamento: 'dezembro', multiplicador: 1, divisor_informado: 12 },

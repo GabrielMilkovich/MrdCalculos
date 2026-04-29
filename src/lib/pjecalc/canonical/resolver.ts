@@ -173,7 +173,7 @@ export function resolveCanonicalInput(sources: ResolverSources): CanonicalCaseIn
     sabado_dia_util: resolveBool(p?.sabado_dia_util, true, src),
     considerar_feriado_estadual: resolveBool(p?.considerar_feriado_estadual, false, src),
     considerar_feriado_municipal: resolveBool(p?.considerar_feriado_municipal, false, src),
-    tipo_mes: resolved(((p as any)?.tipo_mes as 'civil' | 'comercial') || 'comercial', src, { isRequired: false }),
+    tipo_mes: resolved(((p as Record<string, unknown>)?.tipo_mes as 'civil' | 'comercial') || 'comercial', src, { isRequired: false }),
     estado: resolved(p?.estado || '', src, { isRequired: true, blocksCalculation: false }),
     municipio: resolved(p?.municipio || '', src, { isRequired: false }),
     carga_horaria_padrao: resolveNum(p?.carga_horaria_padrao, 220, src),

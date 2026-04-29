@@ -81,7 +81,7 @@ export function gerarRelatorioCriteriosLegais(
       <tr><th>Data de Admissão</th><td>${params.data_admissao || '—'}</td></tr>
       <tr><th>Data de Demissão</th><td>${params.data_demissao || '—'}</td></tr>
       <tr><th>Data de Ajuizamento</th><td>${params.data_ajuizamento || '—'}</td></tr>
-      <tr><th>Data de Citação</th><td>${(correcao as any).data_citacao || 'Não informada'}</td></tr>
+      <tr><th>Data de Citação</th><td>${(correcao as Record<string, unknown>).data_citacao || 'Não informada'}</td></tr>
       <tr><th>Período Inicial do Cálculo</th><td>${params.data_inicial || 'Admissão'}</td></tr>
       <tr><th>Período Final do Cálculo</th><td>${params.data_final || 'Demissão'}</td></tr>
       <tr><th>Estado / Município</th><td>${params.estado} / ${params.municipio || '—'}</td></tr>
@@ -105,11 +105,11 @@ export function gerarRelatorioCriteriosLegais(
   <div class="section">
     <table>
       <tr><th>Índice Principal</th><td>${indiceDescMap[correcao.indice] || correcao.indice}</td></tr>
-      ${(correcao as any).transicao_adc58 ? `
+      ${(correcao as Record<string, unknown>).transicao_adc58 ? `
       <tr class="destaque"><th>Transição ADC 58/59 STF</th><td>Sim</td></tr>
       <tr><th>Índice Pré-Citação</th><td>${indiceDescMap[correcao.indice] || correcao.indice}</td></tr>
-      <tr><th>Índice Pós-Citação</th><td>${indiceDescMap[(correcao as any).indice_pos_citacao] || (correcao as any).indice_pos_citacao || 'SELIC'}</td></tr>
-      <tr><th>Data de Citação</th><td>${(correcao as any).data_citacao || 'Não informada'}</td></tr>
+      <tr><th>Índice Pós-Citação</th><td>${indiceDescMap[(correcao as Record<string, unknown>).indice_pos_citacao] || (correcao as Record<string, unknown>).indice_pos_citacao || 'SELIC'}</td></tr>
+      <tr><th>Data de Citação</th><td>${(correcao as Record<string, unknown>).data_citacao || 'Não informada'}</td></tr>
       ` : `<tr><th>Transição ADC 58/59 STF</th><td>Não aplicada</td></tr>`}
       <tr><th>Época de Correção</th><td>${correcao.epoca === 'mensal' ? 'Mensal (por competência)' : `Data fixa: ${correcao.data_fixa}`}</td></tr>
       <tr><th>Data de Liquidação</th><td>${correcao.data_liquidacao}</td></tr>
@@ -120,9 +120,9 @@ export function gerarRelatorioCriteriosLegais(
   <h2>3. Juros de Mora</h2>
   <div class="section">
     <table>
-      <tr><th>Tipo</th><td>${correcao.juros_tipo === 'simples_mensal' ? `Simples — ${pct(correcao.juros_percentual)} a.m.` : correcao.juros_tipo === 'selic' ? 'Taxa SELIC (engloba correção)' : (correcao as any).juros_tipo === 'composto' ? 'Composto' : 'Não aplicado'}</td></tr>
+      <tr><th>Tipo</th><td>${correcao.juros_tipo === 'simples_mensal' ? `Simples — ${pct(correcao.juros_percentual)} a.m.` : correcao.juros_tipo === 'selic' ? 'Taxa SELIC (engloba correção)' : (correcao as Record<string, unknown>).juros_tipo === 'composto' ? 'Composto' : 'Não aplicado'}</td></tr>
       <tr><th>Início dos Juros</th><td>${correcao.juros_inicio === 'ajuizamento' ? 'Ajuizamento (Art. 883 CLT)' : correcao.juros_inicio === 'citacao' ? 'Citação (Art. 405 CC)' : 'Vencimento de cada parcela'}</td></tr>
-      <tr><th>Pro Rata Die</th><td>${(correcao as any).juros_pro_rata !== false ? 'Sim (Art. 39, §1º, Lei 8.177/91)' : 'Não'}</td></tr>
+      <tr><th>Pro Rata Die</th><td>${(correcao as Record<string, unknown>).juros_pro_rata !== false ? 'Sim (Art. 39, §1º, Lei 8.177/91)' : 'Não'}</td></tr>
     </table>
   </div>
 
@@ -130,7 +130,7 @@ export function gerarRelatorioCriteriosLegais(
   <div class="section">
     <table>
       <tr><th>Art. 523, §1º CPC</th><td>${correcao.multa_523 ? `Sim — ${pct(correcao.multa_523_percentual)}` : 'Não'}</td></tr>
-      <tr><th>Art. 467 CLT</th><td>${(correcao as any).multa_467 ? `Sim — ${pct((correcao as any).multa_467_percentual || 50)}` : 'Não'}</td></tr>
+      <tr><th>Art. 467 CLT</th><td>${(correcao as Record<string, unknown>).multa_467 ? `Sim — ${pct((correcao as Record<string, unknown>).multa_467_percentual || 50)}` : 'Não'}</td></tr>
     </table>
     <div class="nota">Art. 523 CPC: multa de 10% sobre o débito na fase de cumprimento. Art. 467 CLT: multa de 50% sobre parcelas incontroversas não pagas em audiência.</div>
   </div>
@@ -225,8 +225,8 @@ export function gerarRelatorioCriteriosLegais(
         <td>${v.nome}</td>
         <td>${v.tipo}</td>
         <td>${v.caracteristica}</td>
-        <td>${(v as any).ocorrencia_pagamento || '—'}</td>
-        <td>${[(v as any).incidencias?.fgts && 'FGTS', (v as any).incidencias?.contribuicao_social && 'CS', (v as any).incidencias?.irpf && 'IR'].filter(Boolean).join(', ') || '—'}</td>
+        <td>${(v as Record<string, unknown>).ocorrencia_pagamento || '—'}</td>
+        <td>${[(v as Record<string, unknown>).incidencias?.fgts && 'FGTS', (v as Record<string, unknown>).incidencias?.contribuicao_social && 'CS', (v as Record<string, unknown>).incidencias?.irpf && 'IR'].filter(Boolean).join(', ') || '—'}</td>
       </tr>`).join('')}
     </table>
   </div>

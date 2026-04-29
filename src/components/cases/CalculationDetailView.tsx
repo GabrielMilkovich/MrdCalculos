@@ -281,8 +281,8 @@ export function CalculationDetailView({ caseId, facts, onExecuteCalc }: Calculat
     );
   }
 
-  const resultadoBruto = (latestRun.resultado_bruto as any) || {};
-  const resultadoLiquido = (latestRun.resultado_liquido as any) || {};
+  const resultadoBruto = (latestRun.resultado_bruto as Record<string, unknown>) || {};
+  const resultadoLiquido = (latestRun.resultado_liquido as Record<string, unknown>) || {};
   const warnings = ((latestRun.warnings as unknown[]) || []);
   const porVerbaBruto = resultadoBruto.por_verba || {};
   const porVerbaLiquido = resultadoLiquido.por_verba || {};

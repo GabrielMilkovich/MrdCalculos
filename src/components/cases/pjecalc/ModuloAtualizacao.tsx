@@ -118,7 +118,7 @@ export function ModuloAtualizacao({ caseId }: Props) {
         juros_percentual: jurosForm.juros_percentual,
         juros_inicio: jurosForm.juros_inicio,
         combinacoes_juros: JSON.stringify(jurosForm.combinacoes_juros),
-      } as any);
+      } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_correcao_config", caseId] });
       toast.success("Tabela de juros salva!");
     } catch (e) { toast.error((e as Error).message); }
@@ -147,7 +147,7 @@ export function ModuloAtualizacao({ caseId }: Props) {
           aplicar_honorarios: form.aplicar_honorarios,
           aplicar_custas: form.aplicar_custas,
         },
-      } as any);
+      } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_correcao_config", caseId] });
       toast.success("Configuracao de atualizacao salva!");
     } catch (e) { toast.error((e as Error).message); }

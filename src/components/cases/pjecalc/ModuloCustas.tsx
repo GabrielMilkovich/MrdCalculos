@@ -230,7 +230,7 @@ export function ModuloCustas({ caseId }: Props) {
         custas_fixas_vencimento: form.custas_fixas_vencimento || null,
         autos: form.autos, armazenamento: form.armazenamento,
         recolhidas, itens: itensCustas,
-      } as any);
+      } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_custas_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
       toast.success("Custas salvas!");
