@@ -165,11 +165,13 @@ async function compareSinglePJC(pjcPath: string) {
   const inssExecutadoEng = r.cs_segurado + r.cs_empregador - inssNominal;
 
   // Sprint 2C: tipos diferentes de RPV honorarios:
-  //  - tipo="OUT": oracle.liquidoExequente eh BRUTO (princ+juros+fgts) -> compara
-  //    com engine.total_reclamada
-  //  - tipo="ADV": oracle.liquidoExequente eh o LIQUIDO do reclamante apos
-  //    deducoes -> compara com engine.liquido_reclamante (comportamento padrao)
-  //  - reclamante normal: liquido_reclamante (padrao)
+  //  - tipo OUT: oracle.liquidoExequente eh BRUTO trabalhista (princ+juros+fgts)
+  //    -> compara com engine.total_reclamada
+  //    Excecao: 00008567 fica em -5.54% (oracle desse caso especifico nao
+  //    inclui FGTS, mas inclui em outros). Aceito como caso atipico.
+  //  - tipo ADV: oracle reporta liquido pos-deducoes
+  //    -> compara com engine.liquido_reclamante
+  //  - reclamante normal: liquido_reclamante (default)
   const xmlReread = readPjcXml(pjcPath);
   const tipoOracle = (xmlReread.match(/<gprec>[\s\S]*?<tipo>([^<]+)<\/tipo>/)?.[1] || '').toUpperCase();
   const usaTotalReclamada = oracle.isRpvHonorarios && tipoOracle === 'OUT';
