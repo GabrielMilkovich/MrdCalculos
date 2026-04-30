@@ -856,8 +856,9 @@ export default function CasoDetalhe() {
           return (
             <DataExtractionValidationTab
               caseId={id!}
-              caseLabel={caseData.cliente}
-              documents={documents as Array<{ id: string; file_name?: string | null; ocr_text?: string | null; status?: string | null }>}
+              caseSlug={caseData.cliente ?? id!}
+              numeroProcesso={caseData.numero_processo ?? null}
+              mode="data_extraction"
             />
           );
         }

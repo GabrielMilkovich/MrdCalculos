@@ -1,0 +1,137 @@
+import { describe, expect, it } from 'vitest';
+import { getDefaultHint } from '../classification/hints';
+
+describe('getDefaultHint — DSR (avaliado primeiro)', () => {
+  it('DSR(Comissão) sugere DSR', () => {
+    expect(getDefaultHint('DSR(Comissão)')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'dsr',
+    });
+  });
+
+  it('DSR (Comissão) com espaço sugere DSR', () => {
+    expect(getDefaultHint('DSR (Comissão)')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'dsr',
+    });
+  });
+
+  it('int. prêmio no DSR sugere DSR (não premiação)', () => {
+    expect(getDefaultHint('int. prêmio no DSR')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'dsr',
+    });
+  });
+
+  it('DSR (H.Extra) sugere ignorar (HE não entra)', () => {
+    expect(getDefaultHint('DSR (H.Extra)')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+
+  it('DSR genérico sem H.Extra sugere DSR', () => {
+    expect(getDefaultHint('DSR')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'dsr',
+    });
+  });
+});
+
+describe('getDefaultHint — IGNORAR (HE e descontos)', () => {
+  it('HORAS EXT-COMISS sugere ignorar (não comissão)', () => {
+    expect(getDefaultHint('HORAS EXT-COMISS-50%')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('H.Extra sugere ignorar', () => {
+    expect(getDefaultHint('H.Extra 100%')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('INSS sugere ignorar', () => {
+    expect(getDefaultHint('INSS')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('IRRF sugere ignorar', () => {
+    expect(getDefaultHint('IRRF')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('Vale Transporte sugere ignorar', () => {
+    expect(getDefaultHint('Vale Transporte')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('Cesta Básica sugere ignorar', () => {
+    expect(getDefaultHint('Cesta Básica')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('PRESTACAO DE CARNE sugere ignorar', () => {
+    expect(getDefaultHint('PRESTACAO DE CARNE')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('INTERMEDICA SAUDE sugere ignorar', () => {
+    expect(getDefaultHint('INTERMEDICA SAUDE')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('Contribuição sindical sugere ignorar', () => {
+    expect(getDefaultHint('Contribuição Sindical')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+});
+
+describe('getDefaultHint — Comissão', () => {
+  it('Comissões sugere comissão', () => {
+    expect(getDefaultHint('Comissões')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'comissao',
+    });
+  });
+  it('COM. GARANTIA sugere comissão', () => {
+    expect(getDefaultHint('COM. GARANTIA')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'comissao',
+    });
+  });
+  it('COM.SEGUROS sugere comissão', () => {
+    expect(getDefaultHint('COM.SEGUROS')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'comissao',
+    });
+  });
+  it('Compl. Vendedor sugere comissão', () => {
+    expect(getDefaultHint('Compl. Vendedor Interno')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'comissao',
+    });
+  });
+});
+
+describe('getDefaultHint — Premiação', () => {
+  it('PREMIO ANTECIPADO sugere premiação', () => {
+    expect(getDefaultHint('PREMIO ANTECIPADO')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'premiacao',
+    });
+  });
+  it('CAMPANHA SERVICOS sugere premiação', () => {
+    expect(getDefaultHint('CAMPANHA SERVICOS')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'premiacao',
+    });
+  });
+  it('Bonificação sugere premiação', () => {
+    expect(getDefaultHint('Bonificação Anual')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'premiacao',
+    });
+  });
+});
+
+describe('getDefaultHint — null', () => {
+  it('rubrica desconhecida não retorna nada', () => {
+    expect(getDefaultHint('XYZ123')).toBeNull();
+    expect(getDefaultHint('FOO BAR')).toBeNull();
+  });
+});
+
+describe('getDefaultHint — motivos', () => {
+  it('hint inclui motivo descritivo', () => {
+    const r = getDefaultHint('DSR(Comissão)');
+    expect(r).not.toBeNull();
+    if (r) expect(r.motivo).toMatch(/dsr/i);
+  });
+});

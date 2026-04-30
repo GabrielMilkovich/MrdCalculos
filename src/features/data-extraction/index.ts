@@ -1,68 +1,91 @@
-/**
- * Barrel exports — feature data-extraction.
- */
+// Barrel exports — Modo Extração de Dados v2.
+
 export type {
   CaseMode,
-  Conflict,
-  ConflictResolution,
-  DocumentExtractedData,
-  ExtractionCategory,
-  ExtractionStatus,
-  FaltasRow,
-  FeriasRow,
-  GozoPeriodo,
-  HistoricoSalarialRow,
-  MergeResult,
-  SituacaoFerias,
-  SourceRef,
+  TipoExtracao,
   ValidationStatus,
+  ExtracaoStatus,
+  ClassificacaoOrigem,
+  CategoriaSlug,
+  Categoria,
+  RubricaExtraida,
+  CategoriaIncidenciaConfig,
+  GozoPeriodo,
+  SituacaoFerias,
+  FeriasExtraida,
+  FaltaExtraida,
+  HintResult,
+  DocumentoOrigem,
+  LinhaHistoricoSalarial,
+  CandidatoConflito,
+  ConflitoHistoricoSalarial,
+  ResolucaoConflito,
+  ComposicaoHistorico,
+  ConflitoFerias,
+  ResolucaoFerias,
+  ComposicaoFerias,
+  ConflitoFaltas,
+  ResolucaoFaltas,
+  ComposicaoFaltas,
+  HistoricoCsvPayload,
+  ZipExportPayload,
 } from './types';
 
-export {
-  CATEGORY_CSV_FILENAME,
-  CATEGORY_LABEL,
-  CSV_HEADERS,
-  EXTRACTION_MODEL,
-  MAX_JUSTIFICATIVA_LEN,
-  MAX_RELATIVA_LEN,
-  SITUACAO_FERIAS_LABEL,
-} from './constants';
+// Classification
+export { normalizeNomeRubrica } from './classification/normalize';
+export { getDefaultHint } from './classification/hints';
+export { lookupMemo, loadCaseMemos, memoKey } from './classification/memo';
+export { reclassificarRubrica } from './classification/apply';
 
-export {
-  formatBool,
-  formatDecimalBR,
-  sanitizeText,
-  validateCompetencia,
-  validateData,
-  validateRelativa,
-} from './sanitize';
+// Composer
+export { composeHistoricoSalarial } from './composer/historico-salarial';
+export { composeFerias } from './composer/ferias';
+export { composeFaltas, chaveFalta } from './composer/faltas';
 
+// Export
+export { sanitizeText } from './export/sanitize';
+export { formatNumeroBR, formatBoolBR, formatDataBR } from './export/format-br';
+export { buildHistoricoSalarialCSV } from './export/csv-historico';
+export { buildFeriasCSV } from './export/csv-ferias';
+export { buildFaltasCSV } from './export/csv-faltas';
+export { buildLeiaMe } from './export/leia-me';
 export {
-  buildFaltasCSV,
-  buildFeriasCSV,
-  buildHistoricoSalarialCSV,
-  countValidLines,
-} from './export-csv';
+  buildZip,
+  countCsvsToExport,
+  sanitizeFilename,
+  buildZipFilename,
+} from './export/zip';
+export { downloadZip } from './export/download';
 
+// API
+export { loadCategorias } from './api/categorias';
 export {
-  applyResolutions,
-  countPendingConflicts,
-  mergeFaltas,
-  mergeFerias,
-  mergeHistoricoSalarial,
-  mergeRows,
-} from './merge';
-
+  loadRubricasByCase,
+  loadRubricasByDocument,
+  deleteRubricasByDocument,
+  insertManualRubrica,
+  updateRubricaValor,
+  deleteRubrica,
+} from './api/rubricas';
 export {
-  buildExportZip,
-  downloadExportZip,
-  type ExportPayload,
-} from './export-zip';
-
+  loadCategoriaConfigs,
+  ensureCategoriaConfigs,
+  updateCategoriaConfig,
+} from './api/config';
+export {
+  loadFeriasByCase,
+  loadFaltasByCase,
+  loadFeriasByDocument,
+  loadFaltasByDocument,
+  deleteFeriasByDocument,
+  deleteFaltasByDocument,
+  toggleFeriasIncluir,
+  toggleFaltasIncluir,
+} from './api/ferias-faltas';
 export {
   extractDocument,
-  loadExtractedRows,
-  markValidated,
-  saveExtractedRows,
-  type ExtractResult,
-} from './extract';
+  setTipoExtracao,
+  setCompetenciaReferencia,
+  markValidationStatus,
+} from './api/extract';
+export type { ExtractResult } from './api/extract';

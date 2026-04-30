@@ -70,8 +70,8 @@ verify_jwt = true  # frontend (Tabelas)
 [functions.extract-and-fill]
 verify_jwt = true  # frontend (DocumentValidation, CasoDetalhe)
 
-[functions.extract-document-data]
-verify_jwt = true  # frontend (modo data_extraction — DataExtractionValidationTab)
+[functions.extract-document-rubricas]
+verify_jwt = true  # frontend (modo data_extraction v2 — DataExtractionValidationTab)
 
 [functions.parse-sentenca-jornada]
 verify_jwt = true  # frontend (ModuloAjusteSentenca)

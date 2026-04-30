@@ -1,140 +1,187 @@
-/**
- * Tipos do modo "Extração de Dados" — convertem texto OCR em linhas
- * tipadas para os 3 CSVs do PJe-Calc Cidadão (Histórico Salarial,
- * Férias, Faltas).
- *
- * Refs:
- *  - Spec do parser oficial: AbstractServicoDeParsing.java (TRT-8 v2.5.4+)
- *  - Briefing interno: docs/PLANO-DATA-EXTRACTION.md
- */
+// Tipos do módulo "Modo Extração de Dados v2".
+// Toda a feature gira em torno de rubricas individuais classificadas em 4
+// categorias (salário fixo, comissões, DSR, premiações), exportadas como
+// múltiplos CSVs no formato PJe-Calc Cidadão 2.5.4+.
 
 export type CaseMode = 'calculation' | 'data_extraction';
-export type ExtractionCategory = 'historico_salarial' | 'ferias' | 'faltas';
+
+export type TipoExtracao =
+  | 'nao_extrair'
+  | 'holerite'
+  | 'recibo_ferias'
+  | 'registro_faltas';
+
 export type ValidationStatus = 'pending' | 'validated' | 'rejected';
-export type ExtractionStatus = 'pending' | 'running' | 'success' | 'failed';
+export type ExtracaoStatus = 'pending' | 'running' | 'done' | 'failed';
 
-/** Origem rastreável da linha (qual documento, opcionalmente página). */
-export interface SourceRef {
-  documentId: string;
-  documentName: string;
-  page?: number;
-}
+export type ClassificacaoOrigem = 'none' | 'memo' | 'hint' | 'manual';
 
-// =====================================================
-// HISTÓRICO SALARIAL
-// =====================================================
+export type CategoriaSlug = 'salario_fixo' | 'comissao' | 'dsr' | 'premiacao';
 
-/**
- * Uma competência mensal com valor de salário base + flags de incidência
- * de FGTS e INSS. Ordem de colunas no CSV: ver export-csv.ts.
- */
-export interface HistoricoSalarialRow {
-  /** Competência no formato MM/yyyy (ex: "03/2024"). */
-  competencia: string;
-  /** Salário bruto da competência em decimal JS (ponto). Convertido para BR no CSV. */
-  valor: number;
-  /** Defaults: true. Marcar false APENAS com evidência explícita. */
-  incideFgts: boolean;
-  fgtsRecolhido: boolean;
-  incideInss: boolean;
-  inssRecolhido: boolean;
-  _source?: SourceRef;
-}
+export type Categoria = {
+  id: string;
+  slug: CategoriaSlug;
+  nome_exibicao: string;
+  nome_pjecalc: string;
+  ordem: number;
+  default_incide_fgts: boolean;
+  default_fgts_recolhido: boolean;
+  default_incide_inss: boolean;
+  default_inss_recolhido: boolean;
+};
 
-// =====================================================
-// FÉRIAS
-// =====================================================
-
-/**
- * G  = Gozadas
- * GP = Gozadas Parcialmente
- * NG = Não Gozadas
- * I  = Indenizadas
- * P  = Perdidas
- */
-export type SituacaoFerias = 'G' | 'GP' | 'NG' | 'I' | 'P';
-
-/** Período de gozo dentro de uma "relativa" (até 3 períodos por linha). */
-export interface GozoPeriodo {
-  inicio: string; // dd/MM/yyyy
-  fim: string;    // dd/MM/yyyy
-  dobra: boolean;
-}
-
-export interface FeriasRow {
-  /**
-   * Período aquisitivo no formato "aaaa/aaaa" (ex: "2023/2024").
-   * DEVE existir previamente no PJe-Calc — o parser apenas atualiza,
-   * não cria.
-   */
-  relativa: string;
-  /** Dias do período aquisitivo (geralmente 30). */
-  prazo: number;
-  situacao: SituacaoFerias;
-  dobraGeral: boolean;
-  abono: boolean;
-  diasAbono: number;
-  gozo1?: GozoPeriodo;
-  gozo2?: GozoPeriodo;
-  gozo3?: GozoPeriodo;
-  _source?: SourceRef;
-}
-
-// =====================================================
-// FALTAS
-// =====================================================
-
-export interface FaltasRow {
-  /** Início do período de falta. dd/MM/yyyy (1 dia: dataInicio == dataFim). */
-  dataInicio: string;
-  dataFim: string;
-  justificada: boolean;
-  /** TRUE apenas com evidência explícita. */
-  reiniciarPeriodoAquisitivo: boolean;
-  /**
-   * Texto livre, máximo 200 chars no servidor PJe-Calc.
-   * Sanitizado client-side: remove ; \n \r " e trunca em 200.
-   */
-  justificativa?: string;
-  _source?: SourceRef;
-}
-
-// =====================================================
-// PERSISTÊNCIA
-// =====================================================
-
-/** Linha da tabela `document_extracted_data`. */
-export interface DocumentExtractedData {
+export type RubricaExtraida = {
   id: string;
   document_id: string;
-  category: ExtractionCategory;
-  rows: HistoricoSalarialRow[] | FeriasRow[] | FaltasRow[];
-  validation_status: ValidationStatus;
-  extraction_status: ExtractionStatus;
-  extraction_error: string | null;
-  validated_by: string | null;
-  validated_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
+  case_id: string;
+  competencia: string;
+  codigo: string | null;
+  nome: string;
+  nome_normalizado: string;
+  valor: number;
+  quantidade: number | null;
+  desconto: number | null;
+  categoria_id: string | null;
+  classificacao_origem: ClassificacaoOrigem;
+  origem: 'ocr_ai' | 'manual';
+  ordem_no_documento: number;
+};
 
-// =====================================================
-// MERGE
-// =====================================================
+export type CategoriaIncidenciaConfig = {
+  case_id: string;
+  categoria_id: string;
+  incide_fgts: boolean;
+  fgts_recolhido: boolean;
+  incide_inss: boolean;
+  inss_recolhido: boolean;
+  natureza_indenizatoria: boolean;
+};
 
-export interface Conflict<T> {
-  /** Chave única (competência, relativa, intervalo de datas). */
-  key: string;
-  /** 2+ candidatos com mesma key e dados divergentes. */
-  candidates: T[];
-}
+export type GozoPeriodo = {
+  inicio: string; // dd/MM/yyyy
+  fim: string;
+  dobra: boolean;
+};
 
-export interface MergeResult<T> {
-  /** Linhas sem conflito (auto-resolvidas: idênticas deduplicadas). */
-  merged: T[];
-  /** Conflitos pendentes — UI deve resolver. */
-  conflicts: Conflict<T>[];
-}
+export type SituacaoFerias = 'G' | 'GP' | 'NG' | 'I' | 'P';
 
-/** Resolução de conflito do usuário: para cada `conflict.key`, o índice escolhido. */
-export type ConflictResolution = Map<string, number>;
+export type FeriasExtraida = {
+  id: string;
+  document_id: string;
+  case_id: string;
+  relativa: string; // aaaa/aaaa
+  prazo: number;
+  situacao: SituacaoFerias;
+  dobra_geral: boolean;
+  abono: boolean;
+  dias_abono: number;
+  gozo1: GozoPeriodo | null;
+  gozo2: GozoPeriodo | null;
+  gozo3: GozoPeriodo | null;
+  incluir: boolean;
+};
+
+export type FaltaExtraida = {
+  id: string;
+  document_id: string;
+  case_id: string;
+  data_inicio: string; // ISO yyyy-mm-dd no banco; converter para dd/MM/yyyy no CSV
+  data_fim: string;
+  justificada: boolean;
+  reiniciar_periodo_aquisitivo: boolean;
+  justificativa: string | null;
+  incluir: boolean;
+};
+
+// ---------- Classification ----------
+
+export type HintResult =
+  | { tipo: 'sugerir_categoria'; slug: CategoriaSlug; motivo: string }
+  | { tipo: 'sugerir_ignorar'; motivo: string }
+  | null;
+
+// ---------- Composer (Etapa B) ----------
+
+export type DocumentoOrigem = {
+  document_id: string;
+  document_name: string;
+  rubricas: RubricaExtraida[];
+};
+
+export type LinhaHistoricoSalarial = {
+  competencia: string;
+  valor: number;
+  documentos_origem: DocumentoOrigem[];
+};
+
+export type CandidatoConflito = {
+  document_id: string;
+  document_name: string;
+  valor_total: number;
+  rubricas: RubricaExtraida[];
+};
+
+export type ConflitoHistoricoSalarial = {
+  competencia: string;
+  candidatos: CandidatoConflito[];
+};
+
+export type ResolucaoConflito = {
+  competencia: string;
+  document_id_escolhido: string;
+};
+
+export type ComposicaoHistorico = {
+  linhas: LinhaHistoricoSalarial[];
+  conflitos: ConflitoHistoricoSalarial[];
+};
+
+export type ConflitoFerias = {
+  relativa: string;
+  candidatos: FeriasExtraida[];
+};
+
+export type ResolucaoFerias = {
+  relativa: string;
+  registro_id: string;
+};
+
+export type ComposicaoFerias = {
+  linhas: FeriasExtraida[];
+  conflitos: ConflitoFerias[];
+};
+
+export type ConflitoFaltas = {
+  chave: string; // "data_inicio|data_fim"
+  data_inicio: string;
+  data_fim: string;
+  candidatos: FaltaExtraida[];
+};
+
+export type ResolucaoFaltas = {
+  chave: string;
+  registro_id: string;
+};
+
+export type ComposicaoFaltas = {
+  linhas: FaltaExtraida[];
+  conflitos: ConflitoFaltas[];
+};
+
+// ---------- Export ZIP payload ----------
+
+export type HistoricoCsvPayload = {
+  slug: CategoriaSlug;
+  nomePjecalc: string;
+  csv: string;
+  config: CategoriaIncidenciaConfig;
+  linhas: number;
+};
+
+export type ZipExportPayload = {
+  caseSlug: string;
+  numeroProcesso: string | null;
+  historicoSalarialCSVs: HistoricoCsvPayload[];
+  feriasCsv: { csv: string; linhas: number } | null;
+  faltasCsv: { csv: string; linhas: number } | null;
+};
