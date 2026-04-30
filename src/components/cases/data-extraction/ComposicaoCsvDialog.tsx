@@ -28,15 +28,18 @@ import {
   ChevronRight,
   Download,
   FileSpreadsheet,
-  Info,
 } from 'lucide-react';
 import {
   type Categoria,
   type CategoriaIncidenciaConfig,
+  type ConflitoFaltas,
+  type ConflitoFerias,
   type ConflitoHistoricoSalarial,
-  type ResolucaoConflito,
   type FaltaExtraida,
   type FeriasExtraida,
+  type ResolucaoConflito,
+  type ResolucaoFaltas,
+  type ResolucaoFerias,
   type RubricaExtraida,
   type ZipExportPayload,
   composeFaltas,
@@ -49,7 +52,6 @@ import {
   downloadZip,
   ensureCategoriaConfigs,
   formatNumeroBR,
-  loadCategoriaConfigs,
   loadCategorias,
   loadFaltasByCase,
   loadFeriasByCase,
@@ -93,11 +95,17 @@ export function ComposicaoCsvDialog({
   });
 
   const [resolucoes, setResolucoes] = useState<ResolucaoConflito[]>([]);
+  const [resolucoesFerias, setResolucoesFerias] = useState<ResolucaoFerias[]>([]);
+  const [resolucoesFaltas, setResolucoesFaltas] = useState<ResolucaoFaltas[]>([]);
   const [downloading, setDownloading] = useState(false);
 
   // Reset resolutions on open
   useEffect(() => {
-    if (open) setResolucoes([]);
+    if (open) {
+      setResolucoes([]);
+      setResolucoesFerias([]);
+      setResolucoesFaltas([]);
+    }
   }, [open]);
 
   const docMap = useMemo(() => {
@@ -123,18 +131,19 @@ export function ComposicaoCsvDialog({
     }
     return {
       historicos: byCat,
-      ferias: composeFerias(data.ferias),
-      faltas: composeFaltas(data.faltas),
+      ferias: composeFerias(data.ferias, resolucoesFerias),
+      faltas: composeFaltas(data.faltas, resolucoesFaltas),
     };
-  }, [data, docMap, resolucoes]);
+  }, [data, docMap, resolucoes, resolucoesFerias, resolucoesFaltas]);
 
-  const totalConflitos =
-    composicoes?.historicos
-      ? Object.values(composicoes.historicos).reduce(
-          (s, h) => s + h.conflitos.length,
-          0,
-        )
-      : 0;
+  const totalConflitos = composicoes
+    ? Object.values(composicoes.historicos).reduce(
+        (s, h) => s + h.conflitos.length,
+        0,
+      ) +
+      composicoes.ferias.conflitos.length +
+      composicoes.faltas.conflitos.length
+    : 0;
 
   const handleDownload = async () => {
     if (!composicoes || !data) return;
@@ -251,54 +260,28 @@ export function ComposicaoCsvDialog({
                   ))}
 
                 {/* Férias */}
-                <SimpleCollapsible
-                  title="FÉRIAS"
-                  count={composicoes.ferias.linhas.length}
-                  conflitos={composicoes.ferias.conflitos.length}
-                >
-                  {composicoes.ferias.linhas.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
-                      Nenhum período de férias incluído.
-                    </p>
-                  ) : (
-                    <ul className="text-xs space-y-1">
-                      {composicoes.ferias.linhas.map((f) => (
-                        <li key={f.id} className="flex justify-between">
-                          <span className="font-mono">{f.relativa}</span>
-                          <span className="text-muted-foreground">
-                            {f.prazo}d · {situacaoLabel(f.situacao)}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </SimpleCollapsible>
+                <FeriasPanel
+                  linhas={composicoes.ferias.linhas}
+                  conflitos={composicoes.ferias.conflitos}
+                  onResolve={(relativa, registro_id) =>
+                    setResolucoesFerias((prev) => [
+                      ...prev.filter((r) => r.relativa !== relativa),
+                      { relativa, registro_id },
+                    ])
+                  }
+                />
 
                 {/* Faltas */}
-                <SimpleCollapsible
-                  title="FALTAS"
-                  count={composicoes.faltas.linhas.length}
-                  conflitos={composicoes.faltas.conflitos.length}
-                >
-                  {composicoes.faltas.linhas.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic">
-                      Nenhuma falta incluída.
-                    </p>
-                  ) : (
-                    <ul className="text-xs space-y-1">
-                      {composicoes.faltas.linhas.map((f) => (
-                        <li key={f.id} className="flex justify-between">
-                          <span className="font-mono">
-                            {toBR(f.data_inicio)} → {toBR(f.data_fim)}
-                          </span>
-                          <span className="text-muted-foreground">
-                            {f.justificada ? 'justif.' : 'injustif.'}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </SimpleCollapsible>
+                <FaltasPanel
+                  linhas={composicoes.faltas.linhas}
+                  conflitos={composicoes.faltas.conflitos}
+                  onResolve={(chave, registro_id) =>
+                    setResolucoesFaltas((prev) => [
+                      ...prev.filter((r) => r.chave !== chave),
+                      { chave, registro_id },
+                    ])
+                  }
+                />
               </>
             )}
           </div>
@@ -546,39 +529,243 @@ function ConflictResolver({
   );
 }
 
-function SimpleCollapsible({
-  title,
-  count,
+function FeriasPanel({
+  linhas,
   conflitos,
-  children,
+  onResolve,
 }: {
-  title: string;
-  count: number;
-  conflitos: number;
-  children: React.ReactNode;
+  linhas: FeriasExtraida[];
+  conflitos: ConflitoFerias[];
+  onResolve: (relativa: string, registro_id: string) => void;
 }) {
-  const [open, setOpen] = useState(count > 0);
+  const total = linhas.length + conflitos.length;
+  const [open, setOpen] = useState(total > 0);
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <div className="rounded-md border bg-card">
         <CollapsibleTrigger className="flex items-center justify-between w-full p-3 text-left hover:bg-muted/50 transition">
           <div className="flex items-center gap-2">
             {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            <span className="font-medium text-sm">{title}</span>
+            <span className="font-medium text-sm">FÉRIAS</span>
           </div>
           <div className="flex items-center gap-2">
-            {conflitos > 0 && (
-              <Badge variant="destructive" className="text-[10px]">{conflitos}</Badge>
+            {conflitos.length > 0 && (
+              <Badge variant="destructive" className="text-[10px]">
+                {conflitos.length} conflito(s)
+              </Badge>
             )}
-            <Badge variant="secondary" className="text-[10px]">{count}</Badge>
+            <Badge variant="secondary" className="text-[10px]">
+              {linhas.length} {linhas.length === 1 ? 'período' : 'períodos'}
+            </Badge>
           </div>
         </CollapsibleTrigger>
         <CollapsibleContent className="border-t">
-          <div className="p-3">{children}</div>
+          <div className="p-3 space-y-3">
+            {linhas.length === 0 && conflitos.length === 0 && (
+              <p className="text-xs text-muted-foreground italic">
+                Nenhum período de férias incluído.
+              </p>
+            )}
+            {linhas.length > 0 && (
+              <ul className="text-xs space-y-1">
+                {linhas.map((f) => (
+                  <li key={f.id} className="flex justify-between">
+                    <span className="font-mono">{f.relativa}</span>
+                    <span className="text-muted-foreground">
+                      {f.prazo}d · {situacaoLabel(f.situacao)}
+                      {f.abono ? ` · abono ${f.dias_abono}d` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {conflitos.map((c) => (
+              <FeriasConflictResolver
+                key={c.relativa}
+                conflito={c}
+                onResolve={(id) => onResolve(c.relativa, id)}
+              />
+            ))}
+          </div>
         </CollapsibleContent>
       </div>
     </Collapsible>
   );
+}
+
+function FaltasPanel({
+  linhas,
+  conflitos,
+  onResolve,
+}: {
+  linhas: FaltaExtraida[];
+  conflitos: ConflitoFaltas[];
+  onResolve: (chave: string, registro_id: string) => void;
+}) {
+  const total = linhas.length + conflitos.length;
+  const [open, setOpen] = useState(total > 0);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="rounded-md border bg-card">
+        <CollapsibleTrigger className="flex items-center justify-between w-full p-3 text-left hover:bg-muted/50 transition">
+          <div className="flex items-center gap-2">
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <span className="font-medium text-sm">FALTAS</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {conflitos.length > 0 && (
+              <Badge variant="destructive" className="text-[10px]">
+                {conflitos.length} conflito(s)
+              </Badge>
+            )}
+            <Badge variant="secondary" className="text-[10px]">
+              {linhas.length} {linhas.length === 1 ? 'ocorrência' : 'ocorrências'}
+            </Badge>
+          </div>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="border-t">
+          <div className="p-3 space-y-3">
+            {linhas.length === 0 && conflitos.length === 0 && (
+              <p className="text-xs text-muted-foreground italic">
+                Nenhuma falta incluída.
+              </p>
+            )}
+            {linhas.length > 0 && (
+              <ul className="text-xs space-y-1">
+                {linhas.map((f) => (
+                  <li key={f.id} className="flex justify-between">
+                    <span className="font-mono">
+                      {toBR(f.data_inicio)} → {toBR(f.data_fim)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {f.justificada ? 'justif.' : 'injustif.'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {conflitos.map((c) => (
+              <FaltasConflictResolver
+                key={c.chave}
+                conflito={c}
+                onResolve={(id) => onResolve(c.chave, id)}
+              />
+            ))}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+}
+
+function FeriasConflictResolver({
+  conflito,
+  onResolve,
+}: {
+  conflito: ConflitoFerias;
+  onResolve: (registro_id: string) => void;
+}) {
+  const [selected, setSelected] = useState<string | undefined>(undefined);
+  return (
+    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-2">
+      <div className="flex items-center gap-2 text-xs font-medium text-destructive">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Conflito em {conflito.relativa} — {conflito.candidatos.length} fontes divergem
+      </div>
+      <RadioGroup
+        value={selected}
+        onValueChange={(v) => {
+          setSelected(v);
+          onResolve(v);
+        }}
+        className="space-y-1.5"
+      >
+        {conflito.candidatos.map((c) => (
+          <Label
+            key={c.id}
+            htmlFor={`fer-${conflito.relativa}-${c.id}`}
+            className="flex items-start gap-2 cursor-pointer rounded p-1.5 hover:bg-background"
+          >
+            <RadioGroupItem
+              id={`fer-${conflito.relativa}-${c.id}`}
+              value={c.id}
+              className="mt-0.5"
+            />
+            <div className="flex-1 min-w-0 text-xs">
+              <div className="font-mono">
+                {c.prazo}d · {situacaoLabel(c.situacao)}
+                {c.abono ? ` · abono ${c.dias_abono}d` : ''}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Gozos: {gozosSummary(c)}
+              </p>
+            </div>
+          </Label>
+        ))}
+      </RadioGroup>
+    </div>
+  );
+}
+
+function FaltasConflictResolver({
+  conflito,
+  onResolve,
+}: {
+  conflito: ConflitoFaltas;
+  onResolve: (registro_id: string) => void;
+}) {
+  const [selected, setSelected] = useState<string | undefined>(undefined);
+  return (
+    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-2">
+      <div className="flex items-center gap-2 text-xs font-medium text-destructive">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        Conflito em {toBR(conflito.data_inicio)} → {toBR(conflito.data_fim)} —{' '}
+        {conflito.candidatos.length} fontes divergem
+      </div>
+      <RadioGroup
+        value={selected}
+        onValueChange={(v) => {
+          setSelected(v);
+          onResolve(v);
+        }}
+        className="space-y-1.5"
+      >
+        {conflito.candidatos.map((c) => (
+          <Label
+            key={c.id}
+            htmlFor={`fa-${conflito.chave}-${c.id}`}
+            className="flex items-start gap-2 cursor-pointer rounded p-1.5 hover:bg-background"
+          >
+            <RadioGroupItem
+              id={`fa-${conflito.chave}-${c.id}`}
+              value={c.id}
+              className="mt-0.5"
+            />
+            <div className="flex-1 min-w-0 text-xs">
+              <div className="font-medium">
+                {c.justificada ? 'Justificada' : 'Não justificada'}
+                {c.reiniciar_periodo_aquisitivo ? ' · reinicia período' : ''}
+              </div>
+              {c.justificativa && (
+                <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                  {c.justificativa}
+                </p>
+              )}
+            </div>
+          </Label>
+        ))}
+      </RadioGroup>
+    </div>
+  );
+}
+
+function gozosSummary(f: FeriasExtraida): string {
+  const gs = [f.gozo1, f.gozo2, f.gozo3].filter(Boolean) as Array<{
+    inicio: string;
+    fim: string;
+  }>;
+  if (gs.length === 0) return '—';
+  return gs.map((g) => `${g.inicio}–${g.fim}`).join(' · ');
 }
 
 // Helpers
