@@ -29,7 +29,7 @@ vi.mock("@/lib/supabase-untyped", () => ({
   fromUntyped: vi.fn(() => ({ insert: vi.fn().mockResolvedValue({ error: null }) })),
 }));
 
-import { reportError, copyToClipboard } from "../error-reporter";
+import { reportError, copyToClipboard, extractErrorMessage } from "../error-reporter";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 
@@ -77,5 +77,43 @@ describe("error-reporter", () => {
     });
     copyToClipboard("hello");
     expect(writeText).toHaveBeenCalledWith("hello");
+  });
+});
+
+describe("extractErrorMessage", () => {
+  it("Error instance: usa message + stack", () => {
+    const e = new Error("boom");
+    const r = extractErrorMessage(e);
+    expect(r.message).toBe("boom");
+    expect(r.stack).toBeDefined();
+  });
+
+  it("string: passa direto", () => {
+    expect(extractErrorMessage("just a string").message).toBe("just a string");
+  });
+
+  it("PostgrestError-like (objeto plain com message/code): NÃO retorna [object Object]", () => {
+    const pg = { code: "42703", message: 'column "x" does not exist', details: null, hint: null };
+    const r = extractErrorMessage(pg);
+    expect(r.message).toContain('column "x" does not exist');
+    expect(r.message).toContain("code=42703");
+    expect(r.message).not.toBe("[object Object]");
+  });
+
+  it("objeto sem message: serializa via JSON.stringify (não [object Object])", () => {
+    const r = extractErrorMessage({ foo: "bar", n: 42 });
+    expect(r.message).toContain("foo");
+    expect(r.message).toContain("bar");
+    expect(r.message).not.toBe("[object Object]");
+  });
+
+  it("null/undefined: fallback amigável", () => {
+    expect(extractErrorMessage(null).message).toBe("Erro desconhecido");
+    expect(extractErrorMessage(undefined).message).toBe("Erro desconhecido");
+  });
+
+  it("error_description (formato Supabase auth)", () => {
+    const r = extractErrorMessage({ error_description: "invalid grant" });
+    expect(r.message).toBe("invalid grant");
   });
 });

@@ -26,7 +26,7 @@ import Documentos from "./pages/Documentos";
 import RegrasTabelas from "./pages/RegrasTabelas";
 import NotFound from "./pages/NotFound";
 import { BetaParityBanner } from "./components/BetaParityBanner";
-import { reportError, installGlobalErrorHandlers } from "@/lib/error-reporter";
+import { reportError, installGlobalErrorHandlers, extractErrorMessage } from "@/lib/error-reporter";
 import { setLastMutationError } from "@/lib/last-mutation-status";
 
 installGlobalErrorHandlers();
@@ -34,26 +34,26 @@ installGlobalErrorHandlers();
 const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error, query) => {
-      const e = error instanceof Error ? error : new Error(String(error));
+      const { message, stack } = extractErrorMessage(error);
       void reportError({
-        message: e.message,
-        stack: e.stack,
+        message,
+        stack,
         source: "react-query",
         route: typeof window !== "undefined" ? window.location.pathname : undefined,
-        context: { kind: "query", queryKey: query.queryKey },
+        context: { kind: "query", queryKey: query.queryKey, raw: serializeRaw(error) },
       });
     },
   }),
   mutationCache: new MutationCache({
     onError: (error, _vars, _ctx, mutation) => {
-      const e = error instanceof Error ? error : new Error(String(error));
+      const { message, stack } = extractErrorMessage(error);
       setLastMutationError(true);
       void reportError({
-        message: e.message,
-        stack: e.stack,
+        message,
+        stack,
         source: "react-query",
         route: typeof window !== "undefined" ? window.location.pathname : undefined,
-        context: { kind: "mutation", mutationKey: mutation.options.mutationKey },
+        context: { kind: "mutation", mutationKey: mutation.options.mutationKey, raw: serializeRaw(error) },
       });
     },
     onSuccess: () => {
@@ -61,6 +61,20 @@ const queryClient = new QueryClient({
     },
   }),
 });
+
+/** Serializa erro pra inclusão no context (preserva code, hint, details). */
+function serializeRaw(err: unknown): unknown {
+  if (err === null || err === undefined) return null;
+  if (err instanceof Error) return { name: err.name, message: err.message };
+  if (typeof err === "object") {
+    try {
+      return JSON.parse(JSON.stringify(err));
+    } catch {
+      return String(err);
+    }
+  }
+  return err;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

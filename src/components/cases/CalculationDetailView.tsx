@@ -239,7 +239,7 @@ export function CalculationDetailView({ caseId, facts, onExecuteCalc }: Calculat
         .from("calculation_runs")
         .select("*")
         .eq("case_id", caseId)
-        .order("executado_em", { ascending: false })
+        .order("started_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (error) throw error;
@@ -346,8 +346,8 @@ export function CalculationDetailView({ caseId, facts, onExecuteCalc }: Calculat
     } catch { /* ignore */ }
   }
 
-  const executadoEm = latestRun.executado_em
-    ? format(new Date(latestRun.executado_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+  const executadoEm = latestRun.started_at
+    ? format(new Date(latestRun.started_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
     : "—";
 
   // Fact display helpers

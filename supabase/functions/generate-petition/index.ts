@@ -223,7 +223,7 @@ serve(async (req) => {
         .from("calculation_runs")
         .select("*")
         .eq("case_id", case_id)
-        .order("executado_em", { ascending: false })
+        .order("started_at", { ascending: false })
         .limit(1);
       calculationRun = runs?.[0];
     }

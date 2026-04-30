@@ -98,7 +98,7 @@ export function CaseBriefing({ caseId, caseInfo }: CaseBriefingProps) {
         .from("calculation_runs")
         .select("*")
         .eq("case_id", caseId)
-        .order("executado_em", { ascending: false })
+        .order("started_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       return data;

@@ -28,6 +28,47 @@ export interface ReportedError {
   context?: Record<string, unknown>;
 }
 
+/**
+ * Extrai mensagem legível de qualquer tipo de erro. Crítico porque:
+ *   - PostgrestError do supabase é objeto plain ({ code, message, details })
+ *   - String(plainObject) → "[object Object]"
+ *   - Erros de fetch podem ser TypeError sem message
+ *   - Strings simples passam direto
+ */
+export function extractErrorMessage(err: unknown): { message: string; stack?: string } {
+  if (err === null || err === undefined) return { message: "Erro desconhecido" };
+  if (err instanceof Error) return { message: err.message || err.name || "Erro", stack: err.stack };
+  if (typeof err === "string") return { message: err };
+  if (typeof err === "object") {
+    const obj = err as Record<string, unknown>;
+    // PostgrestError, fetch Response.error, axios, etc.
+    const msg =
+      (typeof obj.message === "string" && obj.message) ||
+      (typeof obj.error_description === "string" && obj.error_description) ||
+      (typeof obj.error === "string" && obj.error) ||
+      (typeof obj.statusText === "string" && obj.statusText) ||
+      "";
+    if (msg) {
+      // Inclui code/hint/details quando presentes (PostgrestError)
+      const extras: string[] = [];
+      if (typeof obj.code === "string" && obj.code) extras.push(`code=${obj.code}`);
+      if (typeof obj.hint === "string" && obj.hint) extras.push(`hint=${obj.hint}`);
+      if (typeof obj.details === "string" && obj.details) extras.push(`details=${obj.details}`);
+      return {
+        message: extras.length ? `${msg} (${extras.join(", ")})` : msg,
+        stack: typeof obj.stack === "string" ? obj.stack : undefined,
+      };
+    }
+    // Sem message — serializa o objeto inteiro pra preservar contexto
+    try {
+      return { message: JSON.stringify(err) };
+    } catch {
+      return { message: String(err) };
+    }
+  }
+  return { message: String(err) };
+}
+
 /** Habilita listeners globais. Chamado uma vez em main.tsx. Idempotente. */
 let installed = false;
 
@@ -37,21 +78,20 @@ export function installGlobalErrorHandlers(): void {
   installed = true;
 
   window.addEventListener("error", (ev: ErrorEvent) => {
-    const err = ev.error instanceof Error ? ev.error : new Error(ev.message);
+    const { message, stack } = extractErrorMessage(ev.error ?? ev.message);
     void reportError({
-      message: err.message,
-      stack: err.stack,
+      message,
+      stack,
       source: "window-error",
       route: getRoute(),
     });
   });
 
   window.addEventListener("unhandledrejection", (ev: PromiseRejectionEvent) => {
-    const reason = ev.reason;
-    const err = reason instanceof Error ? reason : new Error(String(reason));
+    const { message, stack } = extractErrorMessage(ev.reason);
     void reportError({
-      message: err.message,
-      stack: err.stack,
+      message,
+      stack,
       source: "unhandled-rejection",
       route: getRoute(),
     });

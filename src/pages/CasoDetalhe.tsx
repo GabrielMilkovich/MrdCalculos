@@ -171,7 +171,7 @@ export default function CasoDetalhe() {
   const { data: runs = [] } = useQuery({
     queryKey: ["calculation_runs", id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("calculation_runs").select("*").eq("case_id", id).order("executado_em", { ascending: false });
+      const { data, error } = await supabase.from("calculation_runs").select("*").eq("case_id", id).order("started_at", { ascending: false });
       if (error) throw error;
       return data;
     },
