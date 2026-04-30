@@ -11,6 +11,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isTerminal } from "@/lib/document-status";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -124,9 +125,13 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
     };
   }, [open, documentId, load]);
 
-  // Se o OCR ainda não terminou, faz polling até ocr_done/ocr_partial/failed.
+  // Se o OCR ainda não terminou, faz polling até atingir status terminal.
+  // CRÍTICO: precisa do guard isTerminal pra evitar loop infinito quando
+  // status='ocr_failed' AND ocr_text=null (caso real anterior ao fix).
   useEffect(() => {
     if (!open || !doc) return;
+    // Se já está em terminal (ok ou erro), não pollar.
+    if (isTerminal(doc.status)) return;
     const needsPoll = doc.status === "uploaded" || doc.status === "ocr_running" || !doc.ocr_text;
     if (!needsPoll) return;
 

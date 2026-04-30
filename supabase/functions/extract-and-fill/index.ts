@@ -2282,19 +2282,51 @@ serve(async (req) => {
       error_message: null,
     }).eq("id", document_id);
 
-    (globalThis as any).EdgeRuntime?.waitUntil?.(
-      processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated)
-    ) ?? processDocumentInBackground(document_id!, fileUrl, doc, MISTRAL_API_KEY, OPENAI_API_KEY, supabase, ocr_text_override, mark_validated);
+    // SÍNCRONO (commit pós-OCR-rewrite): EdgeRuntime.waitUntil mata tasks
+    // de background silenciosamente quando o pool de isolates é reciclado,
+    // deixando docs em status='extracting' indefinidamente. Roda inline.
+    // Mistral + OpenAI typical 15-60s; edge timeout 150s tem folga.
+    try {
+      const result = await processDocumentInBackground(
+        document_id!,
+        fileUrl,
+        doc,
+        MISTRAL_API_KEY,
+        OPENAI_API_KEY,
+        supabase,
+        ocr_text_override,
+        mark_validated,
+      );
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        document_id,
-        status: "processing",
-        message: "Extração iniciada em background. Acompanhe pelo status do documento.",
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          document_id,
+          status: "extracted",
+          result,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } catch (bgErr) {
+      const msg = bgErr instanceof Error ? bgErr.message : String(bgErr);
+      console.error(`[EXTRACT] processDocumentInBackground falhou para ${document_id}:`, bgErr);
+      try {
+        await supabase
+          .from("documents")
+          .update({
+            status: "failed",
+            error_message: msg.slice(0, 1000),
+            processing_completed_at: new Date().toISOString(),
+          })
+          .eq("id", document_id);
+      } catch {
+        // best-effort
+      }
+      return new Response(
+        JSON.stringify({ success: false, document_id, status: "failed", error: msg }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
   } catch (error) {
     console.error("[EXTRACT] Error:", error);

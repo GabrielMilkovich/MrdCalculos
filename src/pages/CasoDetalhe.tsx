@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { logger } from "@/lib/logger";
+import { isTerminal } from "@/lib/document-status";
 import { Progress } from "@/components/ui/progress";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
@@ -886,9 +887,11 @@ export default function CasoDetalhe() {
 
                 const t = toast.loading(`Extraindo dados de ${toExtract.length} documento(s)...`);
                 try {
-                  // Dispara todos em paralelo (extract-and-fill retorna 200
-                  // imediatamente e roda o processamento em background).
-                  await Promise.allSettled(
+                  // extract-and-fill agora é SÍNCRONO (commit pós-OCR). Cada
+                  // invoke retorna o resultado direto. Polling de 4min foi
+                  // removido — só esperamos os invokes resolverem em paralelo.
+                  const pollIds = toExtract.map((d: any) => d.id as string);
+                  const results = await Promise.allSettled(
                     toExtract.map((d: any) =>
                       supabase.functions.invoke("extract-and-fill", {
                         body: { document_id: d.id },
@@ -896,25 +899,28 @@ export default function CasoDetalhe() {
                     ),
                   );
 
-                  // Espera cada doc virar `extracted` (ou `failed`) antes de
-                  // navegar. Polling com timeout de 4 min por doc.
-                  const pollIds = toExtract.map((d: any) => d.id as string);
-                  const maxPolls = 80; // ~4 min com 3s por poll
+                  // Polling defensivo curto (15s max) pra confirmar status no
+                  // DB caso o invoke retorne mas o estado ainda esteja em
+                  // propagação. Reconhece TODOS terminais (não só 'extracted'/'failed').
                   let done = 0;
-                  for (let i = 0; i < maxPolls; i++) {
-                    await new Promise((r) => setTimeout(r, 3000));
+                  for (let i = 0; i < 8; i++) {
+                    await new Promise((r) => setTimeout(r, 2000));
                     const { data: statuses } = await supabase
                       .from("documents")
                       .select("id, status")
                       .in("id", pollIds);
-                    done = (statuses || []).filter((s: any) =>
-                      s.status === "extracted" || s.status === "failed",
-                    ).length;
+                    done = (statuses || []).filter((s: any) => isTerminal(s.status)).length;
                     toast.loading(`Extraindo... ${done}/${pollIds.length} concluído(s)`, { id: t });
                     if (done >= pollIds.length) break;
                   }
 
-                  toast.success(`Extração concluída (${done}/${pollIds.length}). Abrindo aba Cálculo...`, { id: t });
+                  // Conta erros pra mostrar mensagem mais útil
+                  const errCount = results.filter((r) => r.status === "rejected").length;
+                  if (errCount > 0) {
+                    toast.warning(`Extração: ${done - errCount}/${pollIds.length} ok, ${errCount} com erro. Abrindo aba Cálculo...`, { id: t });
+                  } else {
+                    toast.success(`Extração concluída (${done}/${pollIds.length}). Abrindo aba Cálculo...`, { id: t });
+                  }
                   queryClient.invalidateQueries({ queryKey: ["pjecalc_case_data"] });
                   queryClient.invalidateQueries({ queryKey: ["pjecalc_parametros", id] });
                   queryClient.invalidateQueries({ queryKey: ["pjecalc_historico", id] });
