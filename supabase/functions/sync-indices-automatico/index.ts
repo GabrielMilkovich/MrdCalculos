@@ -282,6 +282,18 @@ Deno.serve(async (req) => {
       // Skip if already up to date
       const currComp = currentCompetencia();
       if (fromDate.slice(0, 7) > currComp) {
+        // Já está em dia — limpa erro antigo (idempotente)
+        await sb.from("sync_status").upsert(
+          {
+            serie_id: serie.serieId,
+            serie_nome: serie.indice,
+            last_processed_date: lastComp || null,
+            status: "ok",
+            last_sync_attempt: new Date().toISOString(),
+            error_message: null,
+          },
+          { onConflict: "serie_id" }
+        );
         results[serie.indice] = {
           indice: serie.indice,
           fonte: serie.fonte,
@@ -297,6 +309,20 @@ Deno.serve(async (req) => {
       const points = await fetchSeriesFromBCB(serie.serieId, fromDate);
 
       if (points.length === 0) {
+        // Sem dados novos (BCB 404 ou intervalo vazio) — marca OK e limpa
+        // qualquer erro antigo de tentativas anteriores. Sem isso, o status
+        // ficaria 'ok' mas com error_message stale aparecendo na UI.
+        await sb.from("sync_status").upsert(
+          {
+            serie_id: serie.serieId,
+            serie_nome: serie.indice,
+            last_processed_date: lastComp || null,
+            status: "ok",
+            last_sync_attempt: new Date().toISOString(),
+            error_message: null,
+          },
+          { onConflict: "serie_id" }
+        );
         results[serie.indice] = {
           indice: serie.indice,
           fonte: serie.fonte,
@@ -322,6 +348,18 @@ Deno.serve(async (req) => {
         );
 
       if (rows.length === 0) {
+        // Pontos retornados mas todos antes do cursor — também limpa erro.
+        await sb.from("sync_status").upsert(
+          {
+            serie_id: serie.serieId,
+            serie_nome: serie.indice,
+            last_processed_date: lastComp || null,
+            status: "ok",
+            last_sync_attempt: new Date().toISOString(),
+            error_message: null,
+          },
+          { onConflict: "serie_id" }
+        );
         results[serie.indice] = {
           indice: serie.indice,
           fonte: serie.fonte,
