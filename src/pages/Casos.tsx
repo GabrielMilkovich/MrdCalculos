@@ -7,12 +7,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Search, Loader2, Briefcase, TrendingUp, FileStack,
-  CheckCircle2, Clock, Calculator, Scale, Archive
+  CheckCircle2, Clock, Calculator, Scale, Archive, FileSpreadsheet, Layers
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import type { CaseMode } from "@/features/data-extraction";
 
 interface CaseWithMetrics {
   id: string;
@@ -20,6 +21,7 @@ interface CaseWithMetrics {
   numero_processo: string | null;
   tribunal: string | null;
   status: "rascunho" | "em_analise" | "calculado" | "revisado";
+  mode: CaseMode;
   criado_em: string;
   arquivado: boolean;
   doc_count: number;
@@ -38,10 +40,17 @@ const STATUS_TABS = [
   { value: "arquivado", label: "Arquivados", icon: Archive },
 ];
 
+const MODE_TABS: { value: "all" | CaseMode; label: string; icon: typeof Layers }[] = [
+  { value: "all", label: "Todos os modos", icon: Layers },
+  { value: "calculation", label: "Cálculo Completo", icon: Calculator },
+  { value: "data_extraction", label: "Extração de Dados", icon: FileSpreadsheet },
+];
+
 export default function Casos() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [modeFilter, setModeFilter] = useState<"all" | CaseMode>("all");
   // Fetch cases with counts
   const { data: cases = [], isLoading } = useQuery({
     queryKey: ["cases-with-metrics"],
@@ -81,15 +90,20 @@ export default function Casos() {
         }
       });
 
-      return casesData.map(c => ({
-        ...c,
-        arquivado: (c as Record<string, unknown>).arquivado === true,
-        doc_count: docCounts.get(c.id) || 0,
-        fact_count: factCounts.get(c.id) || 0,
-        confirmed_fact_count: confirmedCounts.get(c.id) || 0,
-        snapshot_count: snapCounts.get(c.id) || 0,
-        total_bruto: latestTotals.get(c.id) || null,
-      })) as CaseWithMetrics[];
+      return casesData.map(c => {
+        const raw = c as Record<string, unknown>;
+        const rawMode = raw.mode;
+        return {
+          ...c,
+          arquivado: raw.arquivado === true,
+          mode: (rawMode === "data_extraction" ? "data_extraction" : "calculation") as CaseMode,
+          doc_count: docCounts.get(c.id) || 0,
+          fact_count: factCounts.get(c.id) || 0,
+          confirmed_fact_count: confirmedCounts.get(c.id) || 0,
+          snapshot_count: snapCounts.get(c.id) || 0,
+          total_bruto: latestTotals.get(c.id) || null,
+        };
+      }) as CaseWithMetrics[];
     },
   });
 
@@ -106,15 +120,28 @@ export default function Casos() {
       c.numero_processo?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus =
       statusFilter === "all" || statusFilter === "arquivado" || c.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesMode = modeFilter === "all" || c.mode === modeFilter;
+    return matchesSearch && matchesStatus && matchesMode;
   });
 
+  // Status counts respeitam o filtro de modo (mas não o de busca/status, pois eles
+  // estão sendo aplicados em paralelo). Mantém UX coerente: ao trocar modo, os
+  // contadores das tabs de status acompanham.
+  const statusScope = (cases: CaseWithMetrics[]) =>
+    modeFilter === "all" ? cases : cases.filter(c => c.mode === modeFilter);
+
   const statusCounts = STATUS_TABS.reduce((acc, tab) => {
-    if (tab.value === "arquivado") acc[tab.value] = archivedCases.length;
-    else if (tab.value === "all") acc[tab.value] = activeCases.length;
-    else acc[tab.value] = activeCases.filter(c => c.status === tab.value).length;
+    if (tab.value === "arquivado") acc[tab.value] = statusScope(archivedCases).length;
+    else if (tab.value === "all") acc[tab.value] = statusScope(activeCases).length;
+    else acc[tab.value] = statusScope(activeCases).filter(c => c.status === tab.value).length;
     return acc;
   }, {} as Record<string, number>);
+
+  const modeCounts: Record<"all" | CaseMode, number> = {
+    all: activeCases.length,
+    calculation: activeCases.filter(c => c.mode === "calculation").length,
+    data_extraction: activeCases.filter(c => c.mode === "data_extraction").length,
+  };
 
   // KPIs — apenas casos ativos
   const totalValue = activeCases.reduce((sum, c) => sum + (c.total_bruto || 0), 0);
@@ -227,31 +254,66 @@ export default function Casos() {
           </div>
         </div>
 
-        {/* Status Tabs */}
-        <div className="flex gap-1 p-1 bg-muted/50 rounded-lg w-fit">
-          {STATUS_TABS.map((tab) => {
-            const Icon = tab.icon;
-            const count = statusCounts[tab.value] || 0;
-            const isActive = statusFilter === tab.value;
-            return (
-              <button
-                key={tab.value}
-                onClick={() => setStatusFilter(tab.value)}
-                className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                  isActive
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Icon className="h-3 w-3" />
-                {tab.label}
-                <Badge variant={isActive ? "default" : "secondary"} className="text-[10px] h-4 px-1.5 ml-0.5">
-                  {count}
-                </Badge>
-              </button>
-            );
-          })}
+        {/* Filters: Status + Mode */}
+        <div className="flex flex-col gap-2">
+          {/* Status Tabs */}
+          <div className="flex gap-1 p-1 bg-muted/50 rounded-lg w-fit max-w-full overflow-x-auto">
+            {STATUS_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const count = statusCounts[tab.value] || 0;
+              const isActive = statusFilter === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  onClick={() => setStatusFilter(tab.value)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap",
+                    isActive
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Icon className="h-3 w-3" />
+                  {tab.label}
+                  <Badge variant={isActive ? "default" : "secondary"} className="text-[10px] h-4 px-1.5 ml-0.5">
+                    {count}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Mode Tabs (Cálculo Completo / Extração de Dados) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground/70 font-medium">
+              Modo
+            </span>
+            <div className="flex gap-1 p-1 bg-muted/30 rounded-lg w-fit border border-border/40">
+              {MODE_TABS.map((tab) => {
+                const Icon = tab.icon;
+                const count = modeCounts[tab.value];
+                const isActive = modeFilter === tab.value;
+                return (
+                  <button
+                    key={tab.value}
+                    onClick={() => setModeFilter(tab.value)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap",
+                      isActive
+                        ? "bg-card text-foreground shadow-sm ring-1 ring-primary/20"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="h-3 w-3" />
+                    {tab.label}
+                    <Badge variant={isActive ? "default" : "secondary"} className="text-[10px] h-4 px-1.5 ml-0.5">
+                      {count}
+                    </Badge>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Grid */}
@@ -286,6 +348,7 @@ export default function Casos() {
                 numeroProcesso={c.numero_processo}
                 tribunal={c.tribunal}
                 status={c.status}
+                mode={c.mode}
                 criadoEm={c.criado_em}
                 documentCount={c.doc_count}
                 factCount={c.fact_count}

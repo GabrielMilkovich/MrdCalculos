@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import {
   FileText, Calendar, ChevronRight, Clock, CheckCircle2,
   AlertCircle, FileStack, Sparkles, Calculator,
-  MoreVertical, Archive, ArchiveRestore, Trash2,
+  MoreVertical, Archive, ArchiveRestore, Trash2, FileSpreadsheet,
 } from "lucide-react";
+import type { CaseMode } from "@/features/data-extraction";
 import { Link } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -35,6 +36,7 @@ interface CaseCardProps {
   numeroProcesso?: string | null;
   tribunal?: string | null;
   status: "rascunho" | "em_analise" | "calculado" | "revisado";
+  mode?: CaseMode;
   criadoEm: string;
   documentCount?: number;
   factCount?: number;
@@ -56,11 +58,14 @@ const statusConfig = {
 const DEFAULT_STATUS_CFG = statusConfig.rascunho;
 
 export function CaseCard({
-  id, cliente, numeroProcesso, tribunal, status, criadoEm,
+  id, cliente, numeroProcesso, tribunal, status, mode = "calculation", criadoEm,
   documentCount = 0, factCount = 0, confirmedFactCount = 0,
   snapshotCount = 0, totalBruto,
   arquivado = false, onArchive, onDelete,
 }: CaseCardProps) {
+  const isExtraction = mode === "data_extraction";
+  const ModeIcon = isExtraction ? FileSpreadsheet : Calculator;
+  const modeLabel = isExtraction ? "Extração" : "Cálculo";
   const cfg = (status && statusConfig[status]) || DEFAULT_STATUS_CFG;
   const progressPercent = Math.min(100, ((cfg.step + 1) / 4) * 100);
   const StatusIcon = cfg.icon;
@@ -107,6 +112,17 @@ export function CaseCard({
                 )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border",
+                    isExtraction
+                      ? "bg-accent/10 text-accent border-accent/30"
+                      : "bg-primary/10 text-primary border-primary/30"
+                  )}
+                  title={isExtraction ? "Modo: Extração de Dados" : "Modo: Cálculo Completo"}
+                >
+                  <ModeIcon className="h-3 w-3" /> {modeLabel}
+                </span>
                 {arquivado && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
                     <Archive className="h-3 w-3" /> Arquivado
