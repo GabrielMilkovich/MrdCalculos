@@ -120,7 +120,7 @@ export function DataExtractionValidationTab({
       {step === "ocr" && (
         <DocumentOcrValidation
           caseId={caseId}
-          showExtractionTypeSelector
+          showExtractionTypeBadges
           advanceLabel="Avançar para extração"
           canAdvance={canAdvanceFromOcr}
           advanceBlockedReason={advanceBlockedReason}

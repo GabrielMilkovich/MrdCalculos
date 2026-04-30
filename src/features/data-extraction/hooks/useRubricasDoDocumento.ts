@@ -9,6 +9,7 @@ import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 import {
   loadRubricasByDocument,
   reclassificarRubrica,
@@ -155,12 +156,25 @@ export function useRubricasDoDocumento(documentId: string | null, caseId: string
     }
     try {
       await markValidationStatus(documentId, "validated");
+      // Telemetria (spec §6.5): contagem de modificações humanas pra
+      // calibrar threshold de confiança em iterações futuras.
+      const reclassificadas = rubricas.filter(
+        (r) => r.classificacao_origem === "manual",
+      ).length;
+      const manuais = rubricas.filter((r) => r.origem === "manual").length;
+      logger.info("auto_extraction_validated", {
+        caseId,
+        documentId,
+        rubricas_total: rubricas.length,
+        rubricas_reclassificadas: reclassificadas,
+        rubricas_manuais_adicionadas: manuais,
+      });
       invalidate();
       toast.success("Documento validado.");
     } catch (e) {
       toast.error(`Erro: ${(e as Error).message}`);
     }
-  }, [documentId, rubricas, invalidate]);
+  }, [documentId, rubricas, caseId, invalidate]);
 
   const reject = useCallback(async () => {
     if (!documentId) return;

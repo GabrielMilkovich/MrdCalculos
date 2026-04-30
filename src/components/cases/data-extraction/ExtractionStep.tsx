@@ -63,7 +63,7 @@ export function ExtractionStep({ caseId, onBack, onCompose }: Props) {
       const { data, error } = await supabase
         .from("documents")
         .select(
-          "id, file_name, storage_path, arquivo_url, mime_type, tipo_extracao, extracao_status, extracao_error, competencia_referencia, validation_status, uploaded_em",
+          "id, file_name, storage_path, arquivo_url, mime_type, tipo_extracao, extracao_status, extracao_error, extracao_origem, competencia_referencia, validation_status, uploaded_em",
         )
         .eq("case_id", caseId)
         .order("uploaded_em", { ascending: true });
@@ -80,6 +80,7 @@ export function ExtractionStep({ caseId, onBack, onCompose }: Props) {
           tipo_extracao: (d.tipo_extracao as ExtractDoc["tipo_extracao"]) ?? "nao_extrair",
           extracao_status: ((d.extracao_status as string) ?? "pending") as ExtractDoc["extracao_status"],
           extracao_error: (d.extracao_error as string | null) ?? null,
+          extracao_origem: ((d.extracao_origem as string) ?? "manual") as ExtractDoc["extracao_origem"],
           competencia_referencia: (d.competencia_referencia as string | null) ?? null,
           validation_status: ((d.validation_status as string) ?? "pending") as ExtractDoc["validation_status"],
           uploaded_em: (d.uploaded_em as string | null) ?? null,

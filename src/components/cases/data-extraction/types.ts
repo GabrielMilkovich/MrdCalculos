@@ -11,6 +11,7 @@ export type DocSummary = {
   tipo_extracao: TipoExtracao;
   extracao_status: "pending" | "running" | "done" | "failed";
   extracao_error: string | null;
+  extracao_origem: "manual" | "auto";
   competencia_referencia: string | null;
   validation_status: "pending" | "validated" | "rejected";
 };

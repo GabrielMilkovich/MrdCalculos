@@ -60,6 +60,100 @@ async function downloadBytes(url: string): Promise<ArrayBuffer> {
   return resp.arrayBuffer();
 }
 
+// =====================================================
+// Auto-detect tipo_extracao (espelho de §5 do spec)
+// =====================================================
+// Inline no edge function porque Deno não importa src/. Mantido em sync
+// manualmente com src/features/data-extraction/classification/auto-detect-tipo.ts.
+// Tests vivem no client; mudança aqui exige PR matched.
+// =====================================================
+
+type EdgeAutoDetectResult = {
+  tipo: "nao_extrair" | "holerite" | "recibo_ferias" | "registro_faltas";
+  confianca: "alta" | "media" | "baixa";
+  motivos: string[];
+};
+
+function autoDetectTipoExtracaoEdge(ocrText: string): EdgeAutoDetectResult {
+  if (!ocrText || ocrText.trim().length < 50) {
+    return { tipo: "nao_extrair", confianca: "baixa", motivos: ["OCR muito curto"] };
+  }
+
+  const SINAIS_HOLERITE: Array<{ pattern: RegExp; pontos: number; motivo: string }> = [
+    { pattern: /\b(recibo\s+de\s+pagamento|holerite|contracheque|contra-?cheque)\b/i, pontos: 10, motivo: "cabeçalho de holerite" },
+    { pattern: /\bvencimentos\b[\s\S]*?\bdescontos\b/i, pontos: 8, motivo: "colunas vencimentos/descontos" },
+    { pattern: /\bbase\s+(de\s+)?c[áa]lculo\s+(do\s+)?(inss|fgts|irrf)\b/i, pontos: 6, motivo: "base de cálculo INSS/FGTS" },
+    { pattern: /\brefer[êe]ncia\b[\s\S]*?\b\d{2}\/\d{4}\b/i, pontos: 4, motivo: "campo referência MM/AAAA" },
+    { pattern: /\b(comiss[õo]es?|dsr|pr[êe]mio)\b/i, pontos: 3, motivo: "rubrica típica de holerite" },
+  ];
+  const SINAIS_FERIAS: Array<{ pattern: RegExp; pontos: number; motivo: string }> = [
+    { pattern: /\b(recibo|aviso|comunicado)\s+de\s+f[ée]rias\b/i, pontos: 10, motivo: "cabeçalho de férias" },
+    { pattern: /\bper[íi]odo\s+aquisitivo\b/i, pontos: 8, motivo: "menção a período aquisitivo" },
+    { pattern: /\bper[íi]odo\s+de\s+gozo\b/i, pontos: 6, motivo: "menção a período de gozo" },
+    { pattern: /\babono\s+pecuni[áa]rio\b/i, pontos: 4, motivo: "abono pecuniário" },
+    { pattern: /\b1\/3\s+constitucional\b|\bter[çc]o\s+constitucional\b/i, pontos: 4, motivo: "terço constitucional" },
+  ];
+  const SINAIS_FALTAS: Array<{ pattern: RegExp; pontos: number; motivo: string }> = [
+    { pattern: /\b(folha|registro|controle)\s+de\s+(faltas|frequ[êe]ncia)\b/i, pontos: 10, motivo: "cabeçalho de faltas" },
+    { pattern: /\batestado\s+m[ée]dico\b/i, pontos: 8, motivo: "atestado médico" },
+    { pattern: /\bcid[\s:-]+[a-z]\d{2}/i, pontos: 6, motivo: "código CID" },
+    { pattern: /\baus[êe]ncia\s+(injustificada|justificada)\b/i, pontos: 6, motivo: "ausência justificada/injustificada" },
+  ];
+  const SINAIS_CARTAO_PONTO: Array<{ pattern: RegExp; pontos: number; motivo: string }> = [
+    { pattern: /\bcart[ãa]o\s+de\s+ponto\b|\bespelho\s+de\s+ponto\b/i, pontos: 10, motivo: "cabeçalho cartão/espelho de ponto" },
+    { pattern: /\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b[\s\S]{0,40}?\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b/i, pontos: 4, motivo: "duplas entrada/saída" },
+  ];
+
+  const score = (sinais: Array<{ pattern: RegExp; pontos: number; motivo: string }>) => {
+    let pontos = 0;
+    const motivos: string[] = [];
+    for (const s of sinais) {
+      if (s.pattern.test(ocrText)) {
+        pontos += s.pontos;
+        motivos.push(s.motivo);
+      }
+    }
+    return { pontos, motivos };
+  };
+
+  const scores: Record<string, { pontos: number; motivos: string[] }> = {
+    holerite: score(SINAIS_HOLERITE),
+    recibo_ferias: score(SINAIS_FERIAS),
+    registro_faltas: score(SINAIS_FALTAS),
+    cartao_ponto: score(SINAIS_CARTAO_PONTO),
+  };
+
+  const ordered = Object.entries(scores).sort((a, b) => b[1].pontos - a[1].pontos);
+  const [tipoMelhor, dadoMelhor] = ordered[0];
+  const segundo = ordered[1]?.[1].pontos ?? 0;
+
+  if (tipoMelhor === "cartao_ponto" && dadoMelhor.pontos >= 8) {
+    return {
+      tipo: "nao_extrair",
+      confianca: "alta",
+      motivos: ["Cartão de ponto detectado — extração de cartão de ponto não é suportada nesta versão.", ...dadoMelhor.motivos],
+    };
+  }
+  if (dadoMelhor.pontos < 6) {
+    return { tipo: "nao_extrair", confianca: "baixa", motivos: ["Sinais insuficientes para classificação automática"] };
+  }
+  if (dadoMelhor.pontos - segundo < 4) {
+    return {
+      tipo: "nao_extrair",
+      confianca: "baixa",
+      motivos: [`Empate técnico entre ${tipoMelhor} (${dadoMelhor.pontos}) e segundo lugar (${segundo})`],
+    };
+  }
+  return {
+    tipo: tipoMelhor as EdgeAutoDetectResult["tipo"],
+    confianca: dadoMelhor.pontos >= 12 ? "alta" : "media",
+    motivos: dadoMelhor.motivos,
+  };
+}
+
+const AUTO_EXTRACTION_RATE_LIMIT_PER_CASE = 30;
+const AUTO_EXTRACTION_RATE_WINDOW_MS = 60 * 60 * 1000;
+
 function detectDocType(text: string): string {
   const t = text.toLowerCase().slice(0, 5000);
   if (/cart[ãa]o\s*(de\s*)?ponto|espelho\s*de\s*ponto/.test(t)) return "cartao_ponto";
@@ -230,6 +324,102 @@ serve(async (req) => {
         .eq("id", document_id);
 
       console.log(`[ocr] doc ${document_id} concluído em ${durationMs}ms (${result.pages.length} páginas)`);
+
+      // =====================================================
+      // Auto-detect tipo_extracao + auto-disparo extract-document-rubricas
+      // (spec §5/§6). Fire-and-forget — falhas não bloqueiam o retorno do OCR.
+      // Só dispara quando:
+      //   - confiança = 'alta'
+      //   - tipo_extracao_origem ainda é default 'manual' (não foi escolhido pelo usuário)
+      //   - extracao_status === 'pending' (não foi extraído ainda)
+      //   - validation_status === 'pending'
+      //   - rate limit do caso não foi batido (30 auto-extrações/h)
+      // =====================================================
+      try {
+        const detect = autoDetectTipoExtracaoEdge(markdown);
+
+        // Lê estado atual do doc pra honrar tipo_extracao_origem='manual'
+        // existente. Se usuário já escolheu, NÃO sobrescreve.
+        const { data: latest } = await supabase
+          .from("documents")
+          .select("tipo_extracao_origem, tipo_extracao, validation_status, extracao_status, case_id")
+          .eq("id", document_id)
+          .single();
+
+        const userOverride = (latest as { tipo_extracao_origem?: string } | null)?.tipo_extracao_origem === "manual"
+          && ((latest as { tipo_extracao?: string } | null)?.tipo_extracao ?? "nao_extrair") !== "nao_extrair";
+
+        if (!userOverride) {
+          // Atualiza tipo_extracao_origem='auto' + confiança + motivos
+          await supabase
+            .from("documents")
+            .update({
+              tipo_extracao: detect.tipo,
+              tipo_extracao_origem: "auto",
+              tipo_extracao_confianca: detect.confianca,
+              tipo_extracao_motivos: detect.motivos,
+            })
+            .eq("id", document_id);
+        }
+
+        // Auto-disparo da extração estruturada
+        const podeAutoExtrair =
+          !userOverride &&
+          detect.tipo !== "nao_extrair" &&
+          detect.confianca === "alta" &&
+          (latest as { extracao_status?: string } | null)?.extracao_status === "pending" &&
+          (latest as { validation_status?: string } | null)?.validation_status === "pending";
+
+        if (podeAutoExtrair) {
+          // Rate limit: count auto-extrações deste caso na última hora
+          const sinceIso = new Date(Date.now() - AUTO_EXTRACTION_RATE_WINDOW_MS).toISOString();
+          const { count: autoCount } = await supabase
+            .from("documents")
+            .select("id", { count: "exact", head: true })
+            .eq("case_id", document.case_id)
+            .eq("extracao_origem", "auto")
+            .gte("processing_started_at", sinceIso);
+
+          if ((autoCount ?? 0) < AUTO_EXTRACTION_RATE_LIMIT_PER_CASE) {
+            // Marca origem='auto' antes de invocar (evita race com retry humano)
+            await supabase
+              .from("documents")
+              .update({ extracao_origem: "auto" })
+              .eq("id", document_id);
+
+            // Fire-and-forget — falha aqui não bloqueia retorno do OCR
+            supabase.functions
+              .invoke("extract-document-rubricas", {
+                body: { document_id, tipo_extracao: detect.tipo, origem: "auto" },
+              })
+              .then(() => {
+                console.log(`[ocr] auto-extração disparada pra doc ${document_id} (tipo=${detect.tipo})`);
+              })
+              .catch((err: unknown) => {
+                console.warn(`[ocr] auto-extração falhou pra doc ${document_id}:`, err);
+              });
+          } else {
+            await supabase
+              .from("documents")
+              .update({ extracao_skipped_reason: "rate_limit" })
+              .eq("id", document_id);
+            console.warn(`[ocr] rate limit (${autoCount}) atingido pro caso ${document.case_id}, doc ${document_id} marcado skipped`);
+          }
+        } else if (
+          !userOverride &&
+          detect.tipo !== "nao_extrair" &&
+          detect.confianca !== "alta"
+        ) {
+          // Confiança média/baixa — não auto-extrai, marca skipped pra UI saber
+          await supabase
+            .from("documents")
+            .update({ extracao_skipped_reason: "low_confidence" })
+            .eq("id", document_id);
+        }
+      } catch (autoErr) {
+        // Auto-detect/disparo NUNCA bloqueia o sucesso do OCR
+        console.warn(`[ocr] auto-detect/disparo falhou pra doc ${document_id}:`, autoErr);
+      }
 
       return jsonResponse({
         success: true,

@@ -6,6 +6,8 @@ export type {
   ValidationStatus,
   ExtracaoStatus,
   ClassificacaoOrigem,
+  Origem,
+  ConfiancaAuto,
   CategoriaSlug,
   Categoria,
   RubricaExtraida,
@@ -34,6 +36,8 @@ export type {
 // Classification
 export { normalizeNomeRubrica } from './classification/normalize';
 export { getDefaultHint } from './classification/hints';
+export { autoDetectTipoExtracao } from './classification/auto-detect-tipo';
+export type { AutoDetectResult } from './classification/auto-detect-tipo';
 export { lookupMemo, loadCaseMemos, memoKey } from './classification/memo';
 export { reclassificarRubrica } from './classification/apply';
 

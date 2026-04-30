@@ -85,9 +85,9 @@ export function ComposicaoCsvDialog({
         loadFaltasByCase(caseId),
         supabase
           .from('documents')
-          .select('id, file_name')
+          .select('id, file_name, extracao_origem')
           .eq('case_id', caseId)
-          .then((r) => (r.data ?? []) as Array<{ id: string; file_name: string | null }>),
+          .then((r) => (r.data ?? []) as Array<{ id: string; file_name: string | null; extracao_origem: string | null }>),
       ]);
       return { cats, configs, rubricas, ferias, faltas, docs };
     },
@@ -295,6 +295,22 @@ export function ComposicaoCsvDialog({
             </AlertDescription>
           </Alert>
         )}
+
+        {(() => {
+          const autoCount = (data?.docs ?? []).filter(
+            (d) => d.extracao_origem === "auto",
+          ).length;
+          if (autoCount === 0) return null;
+          return (
+            <Alert className="my-2 border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800/40">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-xs text-amber-900 dark:text-amber-100">
+                Esta composição inclui dados de {autoCount} documento(s) extraídos
+                automaticamente e validados manualmente. Tudo certo para gerar os CSVs.
+              </AlertDescription>
+            </Alert>
+          );
+        })()}
 
         <DialogFooter className="gap-2">
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>

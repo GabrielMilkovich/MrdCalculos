@@ -128,6 +128,19 @@ export function ExtractionSplitView({ doc, categorias }: Props) {
           </div>
         )}
 
+        {/* Banner amarelo: auto-extraído aguardando validação humana (spec §6) */}
+        {doc.extracao_origem === "auto" &&
+          doc.extracao_status === "done" &&
+          doc.validation_status === "pending" && (
+            <div className="mb-3 text-xs text-amber-900 dark:text-amber-100 flex items-start gap-2 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/40 p-2 rounded">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+              <span className="break-words">
+                <strong>Esta extração foi feita automaticamente.</strong> Revise as
+                rubricas, valores e categorias antes de validar.
+              </span>
+            </div>
+          )}
+
         {/* Grid 2 colunas */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3" style={{ minHeight: "500px" }}>
           {/* Esquerda: planilha/form variando por tipo */}

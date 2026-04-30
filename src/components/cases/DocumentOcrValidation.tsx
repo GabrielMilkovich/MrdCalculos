@@ -33,7 +33,11 @@ import {
 } from "lucide-react";
 import { logger } from "@/lib/logger";
 import { ExtractionTypeSelector } from "@/components/cases/data-extraction/ExtractionTypeSelector";
-import { setTipoExtracao, type TipoExtracao } from "@/features/data-extraction";
+import {
+  ExtractionTypeBadgeAndSelect,
+  type DocForBadge,
+} from "@/components/cases/data-extraction/ExtractionTypeBadgeAndSelect";
+import { setTipoExtracao, extractDocument, type TipoExtracao } from "@/features/data-extraction";
 import { DocumentPreview } from "@/components/cases/shared/DocumentPreview";
 
 interface DocRow {
@@ -50,6 +54,13 @@ interface DocRow {
   error_message: string | null;
   tipo: string | null;
   tipo_extracao: TipoExtracao | null;
+  // Auto-detect / auto-disparo (spec §5/§6)
+  tipo_extracao_origem: "manual" | "auto" | null;
+  tipo_extracao_confianca: "alta" | "media" | "baixa" | null;
+  tipo_extracao_motivos: string[] | null;
+  extracao_status: "pending" | "running" | "done" | "failed" | null;
+  extracao_origem: "manual" | "auto" | null;
+  validation_status: "pending" | "validated" | "rejected" | null;
   processing_started_at: string | null;
 }
 
@@ -65,6 +76,9 @@ interface Props {
   /** Quando true, mostra dropdown "Tipo de extração" no card de cada documento.
    *  Usado pelo modo data_extraction. */
   showExtractionTypeSelector?: boolean;
+  /** Quando true, usa ExtractionTypeBadgeAndSelect (com badge "sugerido"
+   *  + "auto-extraído"). Implica showExtractionTypeSelector=true. Spec §5/§6. */
+  showExtractionTypeBadges?: boolean;
   /** Texto do botão de avanço. Default: "Seguir para Cálculo". */
   advanceLabel?: string;
   /** Validador customizado para habilitar o botão de avanço. Recebe os docs
@@ -106,6 +120,7 @@ export function DocumentOcrValidation({
   onGoToCalculo,
   onValidated,
   showExtractionTypeSelector,
+  showExtractionTypeBadges,
   advanceLabel,
   canAdvance,
   advanceBlockedReason,
@@ -128,7 +143,7 @@ export function DocumentOcrValidation({
   const loadDocs = useCallback(async () => {
     const { data, error } = await supabase
       .from("documents")
-      .select("id, file_name, mime_type, storage_path, arquivo_url, status, ocr_text, ocr_confidence, ocr_validated, page_count, error_message, tipo, tipo_extracao, processing_started_at")
+      .select("id, file_name, mime_type, storage_path, arquivo_url, status, ocr_text, ocr_confidence, ocr_validated, page_count, error_message, tipo, tipo_extracao, tipo_extracao_origem, tipo_extracao_confianca, tipo_extracao_motivos, extracao_status, extracao_origem, validation_status, processing_started_at")
       .eq("case_id", caseId)
       .order("uploaded_em", { ascending: true });
     if (error) {
@@ -342,20 +357,43 @@ export function DocumentOcrValidation({
                       {doc.ocr_confidence ? ` · conf. ${Math.round(doc.ocr_confidence * 100)}%` : ""}
                     </div>
                   </div>
-                  {showExtractionTypeSelector && doc.ocr_validated && (
+                  {(showExtractionTypeSelector || showExtractionTypeBadges) && doc.ocr_validated && (
                     <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
-                      <ExtractionTypeSelector
-                        value={doc.tipo_extracao ?? "nao_extrair"}
-                        onChange={async (v) => {
-                          try {
-                            await setTipoExtracao(doc.id, v);
-                            await loadDocs();
-                            onValidated?.();
-                          } catch (err) {
-                            toast.error("Erro ao salvar tipo: " + (err as Error).message);
-                          }
-                        }}
-                      />
+                      {showExtractionTypeBadges ? (
+                        <ExtractionTypeBadgeAndSelect
+                          doc={doc as DocForBadge}
+                          onChange={async (novo, shouldReextract) => {
+                            try {
+                              await setTipoExtracao(doc.id, novo);
+                              if (shouldReextract && novo !== "nao_extrair") {
+                                // Re-dispara extração com o novo tipo. Edge fn
+                                // já faz DELETE+INSERT em rubricas_extraidas.
+                                logger.info("manual_tipo_change_reextract", {
+                                  documentId: doc.id, novo,
+                                });
+                                await extractDocument(doc.id, novo);
+                              }
+                              await loadDocs();
+                              onValidated?.();
+                            } catch (err) {
+                              toast.error("Erro ao salvar tipo: " + (err as Error).message);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <ExtractionTypeSelector
+                          value={doc.tipo_extracao ?? "nao_extrair"}
+                          onChange={async (v) => {
+                            try {
+                              await setTipoExtracao(doc.id, v);
+                              await loadDocs();
+                              onValidated?.();
+                            } catch (err) {
+                              toast.error("Erro ao salvar tipo: " + (err as Error).message);
+                            }
+                          }}
+                        />
+                      )}
                     </div>
                   )}
                   {doc.ocr_validated ? (

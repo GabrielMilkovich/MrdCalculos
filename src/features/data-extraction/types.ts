@@ -16,6 +16,9 @@ export type ExtracaoStatus = 'pending' | 'running' | 'done' | 'failed';
 
 export type ClassificacaoOrigem = 'none' | 'memo' | 'hint' | 'manual';
 
+export type Origem = 'manual' | 'auto';
+export type ConfiancaAuto = 'alta' | 'media' | 'baixa';
+
 export type CategoriaSlug = 'salario_fixo' | 'comissao' | 'dsr' | 'premiacao';
 
 export type Categoria = {
