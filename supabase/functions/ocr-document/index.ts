@@ -27,12 +27,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { arrayBufferToBase64 } from "../_shared/pdf-utils.ts";
 import { ocrBytes, runOcr, type MistralOcrOptions } from "../_shared/mistral-ocr.ts";
 
 const ABSOLUTE_MAX_BYTES = 30 * 1024 * 1024; // 30MB
 
 const IMAGE_MIMES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic"]);
+
+/** Helper inline pra evitar import pesado de pdf-utils. */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
 
 function detectMimeFromName(name: string | null | undefined): string {
   if (!name) return "application/pdf";

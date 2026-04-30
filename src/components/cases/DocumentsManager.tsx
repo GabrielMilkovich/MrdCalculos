@@ -454,9 +454,13 @@ export function DocumentsManager({
         continue;
       }
 
-      // Aguarda OCR concluir (status = ocr_done / ocr_partial) ou falhar.
-      const pollInterval = 3000;
-      const maxPolls = 100; // ~5 min max por documento (OCR longos são comuns)
+      // Aguarda OCR concluir. Como ocr-document agora é SÍNCRONO (commit 5a8df9d),
+      // o status final já vem do invoke acima — mas mantemos polling defensivo
+      // pra cobrir caso onde edge function timeout (>150s) força status update via
+      // cron, ou pra casos onde processo legado de ocr_running continua existindo.
+      // Reduzimos pra 60s max (era 5min) já que OCR síncrono completa em <30s.
+      const pollInterval = 2000;
+      const maxPolls = 30; // ~60s max — versão síncrona típico 5-15s
       let finished = false;
 
       for (let poll = 0; poll < maxPolls && !finished; poll++) {
@@ -470,15 +474,18 @@ export function DocumentsManager({
 
         if (!docStatus) continue;
 
-        // ocr_text não está no schema gerado (migration nova). Cast explícito.
         const docStatusTyped = docStatus as { id: string; status: string; ocr_text: string | null };
         const s = docStatusTyped.status;
         const ocrLen = (docStatusTyped.ocr_text ?? "").length;
+        // SUCESSO: ocr_done, ocr_partial, ou extracted com texto
         if (s === "ocr_done" || s === "ocr_partial" || (s === "extracted" && ocrLen >= 50)) {
           setBatchResults(prev => ({ ...prev, [docId]: "done" }));
           successCount++;
           finished = true;
-        } else if (s === "failed") {
+        }
+        // FALHA: cobre TODOS os terminais de erro — bug anterior só checava 'failed'
+        // mas cron + edge function setam 'ocr_failed'.
+        else if (s === "failed" || s === "ocr_failed" || s === "embedded_partial" && ocrLen < 50) {
           setBatchResults(prev => ({ ...prev, [docId]: "error" }));
           errorCount++;
           finished = true;
