@@ -133,7 +133,9 @@ export default function Documentos() {
       const pending = docs.filter(
         (d) => d.status === "ocr_running" || d.status === "uploaded",
       ).length;
-      const errored = docs.filter((d) => d.status === "failed").length;
+      const errored = docs.filter(
+        (d) => d.status === "failed" || d.status === "ocr_failed",
+      ).length;
       const recentUploads = docs.filter((d) => {
         if (!d.uploaded_em) return false;
         const t = Date.parse(d.uploaded_em);
