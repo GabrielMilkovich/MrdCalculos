@@ -33,6 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { IndexSyncStatusBadge } from "@/components/layout/IndexSyncStatusBadge";
 import { OfflineIndicator } from "@/components/layout/OfflineIndicator";
+import { RunningTasksIndicator } from "@/components/layout/RunningTasksIndicator";
 
 interface Breadcrumb {
   label: string;
@@ -102,6 +103,7 @@ export function Topbar({ breadcrumbs = [], title }: TopbarProps) {
 
         {/* Right */}
         <div className="flex items-center gap-2">
+          <RunningTasksIndicator />
           <OfflineIndicator />
           <IndexSyncStatusBadge />
           {/* Search */}
