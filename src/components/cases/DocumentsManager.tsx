@@ -310,49 +310,32 @@ export function DocumentsManager({
           continue;
         }
 
-        // Auto-dispara OCR e ESPERA o background terminar antes do próximo
-        // upload. Sem polling, `await invoke` retorna em ~500ms (handler
-        // responde 200 e dispara EdgeRuntime.waitUntil), e N invokes em
-        // sequência viram N background tasks competindo pelo pool de
-        // isolates do Supabase — todas killed silently, deixando docs
-        // travados em 'ocr_running'.
-        try {
-          const invokePromise = supabase.functions.invoke("ocr-document", {
-            body: { document_id: docData.id },
-          });
-          // Não aguardamos a Promise (não vai resolver em tempo útil pra
-          // documentos grandes); detectamos completion via polling do status.
-          invokePromise.catch((err) => {
+        // Upload concluído — atualiza progress IMEDIATAMENTE pra dar feedback
+        // ao usuário. Polling do OCR rola depois sem bloquear a UI visual.
+        successCount++;
+        setUploadProgress(((i + 1) / files.length) * 100);
+        // Atualiza lista de docs pra usuário ver o card aparecendo na tela
+        onDocumentsChange();
+
+        // Auto-dispara OCR (fire-and-forget) — o cron pg_cron + UI de status
+        // garantem recovery se travar. Sem polling bloqueante.
+        supabase.functions
+          .invoke("ocr-document", { body: { document_id: docData.id } })
+          .catch((err) => {
             logger.warn(`auto-OCR invoke falhou para ${file.name}:`, err);
           });
 
-          // Polling: até 4 minutos, checando a cada 3s. Evita disparar
-          // próximo OCR enquanto este ainda está em background.
-          const MAX_POLLS = 80;
-          const POLL_MS = 3000;
-          for (let p = 0; p < MAX_POLLS; p++) {
-            await new Promise((r) => setTimeout(r, POLL_MS));
-            const { data: status } = await supabase
-              .from("documents")
-              .select("status")
-              .eq("id", docData.id)
-              .single();
-            const s = status?.status;
-            if (s !== "ocr_running" && s !== "uploaded" && s !== "ocr_pending") {
-              break; // 'done' / 'failed' / 'ocr_failed' — pode prosseguir
-            }
-          }
-        } catch (err) {
-          logger.warn(`auto-OCR trigger falhou para ${file.name}:`, err);
+        // Se há mais arquivos pra subir, espera ~3s antes do próximo invoke
+        // (não bloqueia o usuário visualmente — apenas serializa os disparos
+        // de edge function pra evitar saturar o pool de isolates).
+        const isLast = i === files.length - 1;
+        if (!isLast) {
+          await new Promise((r) => setTimeout(r, 3000));
         }
-
-        successCount++;
-        setUploadProgress(((i + 1) / files.length) * 100);
       }
 
       if (successCount > 0) {
-        onDocumentsChange();
-        toast.success(`${successCount} documento(s) enviado(s). OCR rodando automaticamente...`);
+        toast.success(`${successCount} documento(s) enviado(s). OCR rodando em background...`);
       }
     } catch (error) {
       logger.error("Upload error", error);
