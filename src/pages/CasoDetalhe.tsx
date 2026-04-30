@@ -43,6 +43,7 @@ import { ValidationViewV2 } from "@/components/cases/ValidationViewV2";
 import { CalculatorSuggestions } from "@/components/cases/CalculatorSuggestions";
 import { DocumentsManager } from "@/components/cases/DocumentsManager";
 import { DocumentOcrValidation } from "@/components/cases/DocumentOcrValidation";
+import { DataExtractionValidationTab } from "@/components/cases/DataExtractionValidationTab";
 import { ProcessingMonitorPanel } from "@/components/cases/ProcessingMonitorPanel";
 import { CalculationDetailView } from "@/components/cases/CalculationDetailView";
 import { PetitionGenerator } from "@/components/cases/PetitionGenerator";
@@ -277,6 +278,11 @@ export default function CasoDetalhe() {
   const isTestCase = caseData.tags?.includes("teste_avancado");
   const canCalculate = isTestCase || (criticalFactsInCase.length > 0 && criticalFactsInCase.every(f => f.confirmado));
   const missingCriticalKeys = CRITICAL_FACTS.filter(k => !facts.some(f => f.chave === k));
+
+  // Modo do caso — definido na criação, imutável (default 'calculation' p/ casos legados).
+  const caseMode: 'calculation' | 'data_extraction' =
+    (caseData as { mode?: string }).mode === 'data_extraction' ? 'data_extraction' : 'calculation';
+  const isDataExtraction = caseMode === 'data_extraction';
   const chunksCount = Math.max(processingStats?.total_chunks ?? 0, chunksCountDirect ?? 0);
   const snapshotsCount = snapshotsData.length;
   // Use most recent total from either calc_snapshots or pjecalc_liquidacao_resultado
@@ -295,9 +301,26 @@ export default function CasoDetalhe() {
   const progressPercent = Math.round((progressSteps.filter(Boolean).length / progressSteps.length) * 100);
 
   // =====================================================
-  // WORKFLOW STEPS (simplified to 6)
+  // WORKFLOW STEPS — modo data_extraction só mostra Documentos + Validação.
+  // Modo calculation (default) preserva o fluxo original.
   // =====================================================
-  const workflowSteps = [
+  const workflowSteps = isDataExtraction
+    ? [
+        {
+          id: "documentos", label: "Documentos", icon: FileStack,
+          completed: documents.length > 0,
+          active: activeTab === "documentos",
+          count: documents.length,
+          tooltip: "Upload + OCR + classificação de documentos",
+        },
+        {
+          id: "validacao", label: "Validação", icon: ShieldCheck,
+          completed: false,
+          active: activeTab === "validacao",
+          tooltip: "Revisar dados extraídos e exportar CSVs PJe-Calc",
+        },
+      ]
+    : [
     ...(snapshotsCount > 0 ? [{
       id: "resumo", label: "Resumo", icon: FileText,
       completed: documents.length > 0 && facts.length > 0,
@@ -827,6 +850,17 @@ export default function CasoDetalhe() {
         );
 
       case "validacao":
+        // Modo data_extraction: tab de validação dedicada (revisar dados extraídos
+        // + exportar CSVs PJe-Calc Cidadão). Não usa DocumentOcrValidation legado.
+        if (isDataExtraction) {
+          return (
+            <DataExtractionValidationTab
+              caseId={id!}
+              caseLabel={caseData.cliente}
+              documents={documents as Array<{ id: string; file_name?: string | null; ocr_text?: string | null; status?: string | null }>}
+            />
+          );
+        }
         return (
           <div className="space-y-5">
             {/* OCR validation: revisão documento por documento */}
