@@ -27,6 +27,7 @@ import {
 
 // Module components
 import { AutoFillReviewPanel } from "./AutoFillReviewPanel";
+import { DivergenceReportButton } from "./DivergenceReportButton";
 import { ModuloDadosProcesso } from "./pjecalc/ModuloDadosProcesso";
 import { ModuloCartaoPonto } from "./pjecalc/ModuloCartaoPonto";
 import { ModuloCartaoPontoDiario } from "./pjecalc/ModuloCartaoPontoDiario";
@@ -464,7 +465,14 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
       case 'excecoes_juros': return <ModuloExcecoesJuros caseId={caseId} />;
 
       // 8. Resultado e Relatórios
-      case 'resumo': return <ModuloResumo caseId={caseId} />;
+      case 'resumo': return (
+        <div className="space-y-3">
+          <ModuloResumo caseId={caseId} />
+          <div className="flex justify-end pt-2 border-t">
+            <DivergenceReportButton caseId={caseId} />
+          </div>
+        </div>
+      );
       case 'ajuste_sentenca': return (
         <ModuloAjusteSentenca
           caseId={caseId}

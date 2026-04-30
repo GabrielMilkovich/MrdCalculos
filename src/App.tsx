@@ -19,6 +19,7 @@ import Busca from "./pages/Busca";
 import Documentos from "./pages/Documentos";
 import RegrasTabelas from "./pages/RegrasTabelas";
 import NotFound from "./pages/NotFound";
+import { BetaParityBanner } from "./components/BetaParityBanner";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <ErrorBoundary>
+        <BetaParityBanner />
         <Toaster />
         <Sonner />
         <BrowserRouter>
