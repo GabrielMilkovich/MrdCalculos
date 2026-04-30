@@ -32,6 +32,9 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { logger } from "@/lib/logger";
+import { ExtractionTypeSelector } from "@/components/cases/data-extraction/ExtractionTypeSelector";
+import { setTipoExtracao, type TipoExtracao } from "@/features/data-extraction";
+import { DocumentPreview } from "@/components/cases/shared/DocumentPreview";
 
 interface DocRow {
   id: string;
@@ -46,6 +49,7 @@ interface DocRow {
   page_count: number | null;
   error_message: string | null;
   tipo: string | null;
+  tipo_extracao: TipoExtracao | null;
   processing_started_at: string | null;
 }
 
@@ -54,10 +58,21 @@ const OCR_STALE_MS = 3 * 60 * 1000;
 
 interface Props {
   caseId: string;
-  /** Callback disparado quando o usuário clica "Seguir para Cálculo". */
+  /** Callback disparado quando o usuário clica no botão de avanço. */
   onGoToCalculo: () => Promise<void> | void;
   /** Disparado após qualquer mudança validada (Confirmar OCR, OCR executado, etc.). */
   onValidated?: () => void;
+  /** Quando true, mostra dropdown "Tipo de extração" no card de cada documento.
+   *  Usado pelo modo data_extraction. */
+  showExtractionTypeSelector?: boolean;
+  /** Texto do botão de avanço. Default: "Seguir para Cálculo". */
+  advanceLabel?: string;
+  /** Validador customizado para habilitar o botão de avanço. Recebe os docs
+   *  e retorna true se pode avançar. Default: todos validados. */
+  canAdvance?: (docs: DocRow[]) => boolean;
+  /** Mensagem opcional exibida no rodapé quando `canAdvance` retorna false
+   *  por motivo diferente de "OCR faltando". */
+  advanceBlockedReason?: string;
 }
 
 async function getFreshSignedUrl(storagePath: string): Promise<string | null> {
@@ -86,7 +101,15 @@ function exportTextAsCsv(text: string, fileName: string) {
   URL.revokeObjectURL(a.href);
 }
 
-export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Props) {
+export function DocumentOcrValidation({
+  caseId,
+  onGoToCalculo,
+  onValidated,
+  showExtractionTypeSelector,
+  advanceLabel,
+  canAdvance,
+  advanceBlockedReason,
+}: Props) {
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -105,7 +128,7 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
   const loadDocs = useCallback(async () => {
     const { data, error } = await supabase
       .from("documents")
-      .select("id, file_name, mime_type, storage_path, arquivo_url, status, ocr_text, ocr_confidence, ocr_validated, page_count, error_message, tipo, processing_started_at")
+      .select("id, file_name, mime_type, storage_path, arquivo_url, status, ocr_text, ocr_confidence, ocr_validated, page_count, error_message, tipo, tipo_extracao, processing_started_at")
       .eq("case_id", caseId)
       .order("uploaded_em", { ascending: true });
     if (error) {
@@ -293,12 +316,21 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
             {docs.map((doc) => {
               const hasOcr = !!(doc.ocr_text && doc.ocr_text.length >= 20);
               const isSelected = doc.id === selectedId;
+              const onSelect = () => setSelectedId(doc.id);
               return (
-                <button
+                <div
                   key={doc.id}
-                  type="button"
-                  onClick={() => setSelectedId(doc.id)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-md border text-left transition ${
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={isSelected}
+                  onClick={onSelect}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelect();
+                    }
+                  }}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-md border text-left transition cursor-pointer ${
                     isSelected ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
                   }`}
                 >
@@ -310,6 +342,22 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
                       {doc.ocr_confidence ? ` · conf. ${Math.round(doc.ocr_confidence * 100)}%` : ""}
                     </div>
                   </div>
+                  {showExtractionTypeSelector && doc.ocr_validated && (
+                    <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
+                      <ExtractionTypeSelector
+                        value={doc.tipo_extracao ?? "nao_extrair"}
+                        onChange={async (v) => {
+                          try {
+                            await setTipoExtracao(doc.id, v);
+                            await loadDocs();
+                            onValidated?.();
+                          } catch (err) {
+                            toast.error("Erro ao salvar tipo: " + (err as Error).message);
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
                   {doc.ocr_validated ? (
                     <Badge variant="default" className="gap-1 bg-green-600 text-[10px]">
                       <CheckCircle2 className="h-3 w-3" /> validado
@@ -320,14 +368,14 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
                     <Badge variant="outline" className="gap-1 text-[10px]">
                       <Loader2 className="h-3 w-3 animate-spin" /> OCR...
                     </Badge>
-                  ) : doc.status === "failed" ? (
+                  ) : doc.status === "failed" || doc.status === "ocr_failed" ? (
                     <Badge variant="destructive" className="gap-1 text-[10px]">
                       <AlertTriangle className="h-3 w-3" /> erro
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="text-[10px]">sem OCR</Badge>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -393,31 +441,13 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
                 />
               </div>
 
-              {/* Lado direito: PDF preview */}
-              <div className="flex flex-col border rounded-md min-h-[500px]">
-                <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 text-xs font-semibold">
-                  <span className="flex items-center gap-1.5">
-                    <Eye className="h-3.5 w-3.5" />
-                    Documento original
-                  </span>
-                  {pdfUrl && (
-                    <a href={pdfUrl} target="_blank" rel="noreferrer" className="text-xs underline text-muted-foreground hover:text-foreground">
-                      Nova aba
-                    </a>
-                  )}
-                </div>
-                <div className="flex-1 bg-muted/20 flex items-center justify-center overflow-hidden">
-                  {!pdfUrl ? (
-                    <span className="text-sm text-muted-foreground">URL indisponível.</span>
-                  ) : selected.mime_type?.startsWith("image/") ? (
-                    <img src={pdfUrl} alt={selected.file_name || ""} className="max-w-full max-h-full object-contain" />
-                  ) : (
-                    <object data={pdfUrl} type="application/pdf" className="w-full h-full">
-                      <iframe src={pdfUrl} title={selected.file_name || "preview"} className="w-full h-full border-0" />
-                    </object>
-                  )}
-                </div>
-              </div>
+              {/* Lado direito: PDF preview (componente compartilhado) */}
+              <DocumentPreview
+                storagePath={selected.storage_path}
+                arquivoUrl={selected.arquivo_url}
+                mimeType={selected.mime_type}
+                fileName={selected.file_name}
+              />
             </div>
 
             <div className="flex items-center gap-2 mt-3">
@@ -448,30 +478,46 @@ export function DocumentOcrValidation({ caseId, onGoToCalculo, onValidated }: Pr
         </Card>
       )}
 
-      {/* Rodapé: Seguir para Cálculo */}
-      <Card className={allValidated ? "border-primary/40 bg-primary/5" : "border-dashed"}>
-        <CardContent className="p-4 flex items-center gap-3">
-          <div className="flex-1">
-            <div className="text-sm font-medium">
-              {allValidated
-                ? "Todos os documentos validados!"
-                : `Valide ${docs.length - validatedCount} documento(s) restante(s) para seguir.`}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {allValidated
-                ? "Clique em 'Seguir para Cálculo' — os dados extraídos vão preencher os módulos do pjecalc automaticamente."
-                : `${ocrReadyCount}/${docs.length} com OCR pronto. Abra cada um acima, revise e confirme.`}
-            </div>
-          </div>
-          <Button
-            onClick={handleGoToCalculo}
-            disabled={!allValidated || advancing}
-          >
-            {advancing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <ArrowRight className="h-4 w-4 mr-1" />}
-            Seguir para Cálculo
-          </Button>
-        </CardContent>
-      </Card>
+      {/* Rodapé: avanço (default "Seguir para Cálculo", customizável via props) */}
+      {(() => {
+        const canGoNext = canAdvance ? canAdvance(docs) : allValidated;
+        // Se canAdvance retornou false mas allValidated é true, usar
+        // advanceBlockedReason; senão fallback pra texto padrão de OCR.
+        const blockedByCustom = !canGoNext && allValidated && advanceBlockedReason;
+        const label = advanceLabel ?? "Seguir para Cálculo";
+        return (
+          <Card className={canGoNext ? "border-primary/40 bg-primary/5" : "border-dashed"}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="flex-1">
+                <div className="text-sm font-medium">
+                  {canGoNext
+                    ? "Pronto para avançar."
+                    : blockedByCustom
+                      ? advanceBlockedReason
+                      : allValidated
+                        ? "Todos os documentos validados!"
+                        : `Valide ${docs.length - validatedCount} documento(s) restante(s) para seguir.`}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {canGoNext
+                    ? `Clique em '${label}' para continuar.`
+                    : blockedByCustom
+                      ? "Resolva o requisito acima para liberar o botão."
+                      : `${ocrReadyCount}/${docs.length} com OCR pronto. Abra cada um acima, revise e confirme.`}
+                </div>
+              </div>
+              <Button onClick={handleGoToCalculo} disabled={!canGoNext || advancing}>
+                {advancing ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <ArrowRight className="h-4 w-4 mr-1" />
+                )}
+                {label}
+              </Button>
+            </CardContent>
+          </Card>
+        );
+      })()}
     </div>
   );
 }
