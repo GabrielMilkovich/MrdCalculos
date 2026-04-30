@@ -2,13 +2,17 @@
 -- Recovery automático de OCR travado (definitivo)
 -- =====================================================
 -- Causa raiz: edge function ocr-document usa EdgeRuntime.waitUntil para
--- tasks de OCR (>150s wall-time). Quando 2+ tasks rodam concorrentemente,
--- o pool de isolates do Supabase fica saturado e tasks são killed
--- silenciosamente, deixando documents.status='ocr_running' indefinidamente.
+-- tasks de OCR (>150s wall-time). Background tasks são killed silently
+-- por: (a) pool de isolates saturado, (b) Mistral API timeout, ou (c)
+-- edge runtime cap. Sintoma: documents.status='ocr_running' indefinidamente
+-- com ocr_chunks_done=1/total=1 mas sem update final.
 --
--- Solução: cron job a cada 1 min reseta docs presos > 5 min.
--- Combina com fix client-side em DocumentsManager.tsx (polling de status
--- entre uploads pra serializar — evita o problema na origem).
+-- Threshold: 3 min. OCRs reais via Mistral completam em 6-15s (medido em
+-- 9 docs anteriores, incluindo PDF de 78 páginas em 12.5s). 3 min = 18x
+-- tempo típico, ainda lenient pra arquivos atípicos.
+--
+-- Combina com fix client-side em DocumentsManager.tsx (polling sequencial
+-- entre uploads — evita o problema na origem).
 -- =====================================================
 
 CREATE OR REPLACE FUNCTION public.recover_stale_ocr_documents()
@@ -23,12 +27,12 @@ BEGIN
   SET
     status = 'ocr_failed',
     error_message = COALESCE(d.error_message,
-      'OCR travado por mais de 5 minutos sem progresso. Provável: pool de isolates saturado por uploads concorrentes. Re-clique "Processar" para tentar novamente — se persistir, faça uploads em lotes menores.'),
+      'OCR travado por mais de 3 minutos sem progresso. OCRs típicos completam em 10-15s. Provável: pool de isolates do Supabase saturado, Mistral API timeout, ou edge runtime killou o background task. Re-clique "Processar" para tentar novamente — se persistir, verifique tamanho do PDF (>50MB) ou faça upload de um PDF por vez.'),
     processing_completed_at = NOW(),
     updated_at = NOW()
   WHERE d.status IN ('ocr_running', 'processing')
     AND d.processing_started_at IS NOT NULL
-    AND d.processing_started_at < NOW() - INTERVAL '5 minutes'
+    AND d.processing_started_at < NOW() - INTERVAL '3 minutes'
   RETURNING d.id, d.file_name, EXTRACT(EPOCH FROM (NOW() - d.processing_started_at))::int;
 END;
 $$;
