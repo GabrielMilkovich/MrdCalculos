@@ -3,11 +3,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Plus, Calculator, FileSpreadsheet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import type { CaseMode } from "@/features/data-extraction";
 
 export function CreateCaseDialog() {
   const [open, setOpen] = useState(false);
@@ -15,6 +17,7 @@ export function CreateCaseDialog() {
   const [cliente, setCliente] = useState("");
   const [numeroProcesso, setNumeroProcesso] = useState("");
   const [tribunal, setTribunal] = useState("");
+  const [mode, setMode] = useState<CaseMode>("calculation");
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -45,6 +48,7 @@ export function CreateCaseDialog() {
       tribunal: tribunal.trim() || null,
       criado_por: user.id,
       status: "rascunho",
+      mode,
     }).select("id").single();
 
     setLoading(false);
@@ -56,6 +60,7 @@ export function CreateCaseDialog() {
       setCliente("");
       setNumeroProcesso("");
       setTribunal("");
+      setMode("calculation");
       setOpen(false);
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       queryClient.invalidateQueries({ queryKey: ["cases-with-metrics"] });
@@ -109,6 +114,49 @@ export function CreateCaseDialog() {
               placeholder="Ex: 1ª Vara do Trabalho de São Paulo"
             />
           </div>
+
+          {/* Modo do caso — IMUTÁVEL após criação. */}
+          <div className="space-y-2">
+            <Label>Modo do caso *</Label>
+            <RadioGroup
+              value={mode}
+              onValueChange={(v) => setMode(v as CaseMode)}
+              className="gap-2"
+            >
+              <label
+                htmlFor="mode-calc"
+                className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-accent transition"
+              >
+                <RadioGroupItem value="calculation" id="mode-calc" className="mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Calculator className="h-4 w-4" /> Cálculo Completo
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Liquidação trabalhista completa no MRD Calc (engine 98% paridade PJe-Calc).
+                  </p>
+                </div>
+              </label>
+              <label
+                htmlFor="mode-extract"
+                className="flex items-start gap-3 rounded-md border p-3 cursor-pointer hover:bg-accent transition"
+              >
+                <RadioGroupItem value="data_extraction" id="mode-extract" className="mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <FileSpreadsheet className="h-4 w-4" /> Extração de Dados
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Extrai dados de documentos para gerar CSVs do PJe-Calc Cidadão (Histórico Salarial, Férias, Faltas), sem cálculo no MRD.
+                  </p>
+                </div>
+              </label>
+            </RadioGroup>
+            <p className="text-[11px] text-muted-foreground italic">
+              O modo é definido na criação e não pode ser alterado depois.
+            </p>
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
               Cancelar
