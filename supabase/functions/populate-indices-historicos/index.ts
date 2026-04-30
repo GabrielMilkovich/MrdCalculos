@@ -108,6 +108,12 @@ async function fetchBCBSeries(serieId: number, isDailyPeriodicity = false, windo
   const csvResp = await fetch(csvUrl);
   if (!csvResp.ok) {
     const body = await csvResp.text();
+    // 404 com "Value(s) not found" = sem dados no intervalo. Não é erro fatal —
+    // retorna vazio pra outras séries continuarem.
+    if (csvResp.status === 404 && (body.includes('not found') || body.includes('SGSNegocioException'))) {
+      console.info(`[populate-hist] BCB ${serieId}: sem dados no intervalo solicitado.`);
+      return [];
+    }
     throw new Error(`BCB API returned ${csvResp.status} for both JSON and CSV: ${body.slice(0, 200)}`);
   }
   

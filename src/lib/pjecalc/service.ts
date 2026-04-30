@@ -1177,3 +1177,24 @@ export async function deleteExcecaoJuros(id: string): Promise<void> {
   const { error } = await fromView('pjecalc_excecao_juros').delete().eq('id', id);
   if (error) throw error;
 }
+
+// ============================================================
+// Exceções de carga horária (PjeExcecaoCargaHoraria do engine)
+// ============================================================
+
+export interface ExcecaoCargaRow {
+  id: string;
+  case_id: string;
+  periodo_inicio: string; // yyyy-mm-dd
+  periodo_fim: string;
+  carga_horaria_mensal: number;
+}
+
+export async function getExcecoesCarga(caseId: string): Promise<ExcecaoCargaRow[]> {
+  const { data, error } = await fromView('pjecalc_excecoes_carga')
+    .select('id, case_id, periodo_inicio, periodo_fim, carga_horaria_mensal')
+    .eq('case_id', caseId)
+    .order('periodo_inicio', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as unknown as ExcecaoCargaRow[];
+}

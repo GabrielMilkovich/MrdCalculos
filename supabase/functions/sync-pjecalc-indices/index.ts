@@ -59,6 +59,19 @@ function isoToBcb(iso: string): string {
 async function fetchSeries(serieId: number, fromDate: string): Promise<BcbPoint[]> {
   const url = `${BCB_API}.${serieId}/dados?formato=json&dataInicial=${isoToBcb(fromDate)}`;
   const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+
+  // 404 com "Value(s) not found" = série existe mas o intervalo não tem
+  // dados ainda (publicação mensal pendente). Retorna vazio em vez de
+  // derrubar a sync.
+  if (resp.status === 404) {
+    const text = await resp.text();
+    if (text.includes('not found') || text.includes('SGSNegocioException')) {
+      console.info(`[sync-pjecalc] BCB ${serieId}: sem dados novos (404 esperado).`);
+      return [];
+    }
+    throw new Error(`BCB API ${serieId} returned 404 (série pode estar deprecada): ${text.slice(0, 200)}`);
+  }
+
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`BCB API ${serieId} returned ${resp.status}: ${text.slice(0, 200)}`);

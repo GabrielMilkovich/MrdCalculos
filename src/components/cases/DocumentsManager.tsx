@@ -309,20 +309,40 @@ export function DocumentsManager({
           continue;
         }
 
-        // Auto-dispara OCR SEQUENCIALMENTE (await). Evita que N uploads
-        // em lote disparem N OCRs paralelos — runtime do Supabase Edge tem
-        // pool limitado de isolates e chama concorrentes sao killed mid-
-        // execucao, deixando docs travados em status='ocr_running'.
-        // Aguardar cada um iniciar tambem permite que o backend devolva
-        // erro acionavel (401/404/etc.) ao usuario.
+        // Auto-dispara OCR e ESPERA o background terminar antes do próximo
+        // upload. Sem polling, `await invoke` retorna em ~500ms (handler
+        // responde 200 e dispara EdgeRuntime.waitUntil), e N invokes em
+        // sequência viram N background tasks competindo pelo pool de
+        // isolates do Supabase — todas killed silently, deixando docs
+        // travados em 'ocr_running'.
         try {
-          await supabase.functions.invoke("ocr-document", {
+          const invokePromise = supabase.functions.invoke("ocr-document", {
             body: { document_id: docData.id },
           });
+          // Não aguardamos a Promise (não vai resolver em tempo útil pra
+          // documentos grandes); detectamos completion via polling do status.
+          invokePromise.catch((err) => {
+            logger.warn(`auto-OCR invoke falhou para ${file.name}:`, err);
+          });
+
+          // Polling: até 4 minutos, checando a cada 3s. Evita disparar
+          // próximo OCR enquanto este ainda está em background.
+          const MAX_POLLS = 80;
+          const POLL_MS = 3000;
+          for (let p = 0; p < MAX_POLLS; p++) {
+            await new Promise((r) => setTimeout(r, POLL_MS));
+            const { data: status } = await supabase
+              .from("documents")
+              .select("status")
+              .eq("id", docData.id)
+              .single();
+            const s = status?.status;
+            if (s !== "ocr_running" && s !== "uploaded" && s !== "ocr_pending") {
+              break; // 'done' / 'failed' / 'ocr_failed' — pode prosseguir
+            }
+          }
         } catch (err) {
           logger.warn(`auto-OCR trigger falhou para ${file.name}:`, err);
-          // Não bloqueia o upload dos próximos — o usuario pode rodar OCR
-          // manualmente no split-view da aba Validação.
         }
 
         successCount++;

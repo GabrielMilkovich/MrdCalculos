@@ -180,20 +180,6 @@ interface PjeCalcInlineProps {
   caseId: string;
 }
 
-// ── Stub for new modules not yet implemented (Calculo.java) ──
-function ModuloStub({ titulo, descricao }: { titulo: string; descricao?: string }) {
-  return (
-    <Card className="rounded-sm border">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold">{titulo}</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-muted-foreground">
-        Em construção — {descricao || 'campos de Calculo.java a serem mapeados'}.
-      </CardContent>
-    </Card>
-  );
-}
-
 export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
   const queryClient = useQueryClient();
   const [activeModule, setActiveModule] = useState('dados_processo');
@@ -279,6 +265,16 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
     },
   });
 
+  const { data: cartaoPonto = [] } = useQuery({
+    queryKey: ["pjecalc_cartao_ponto", caseId],
+    queryFn: async () => {
+      const { data } = await fromUntyped("pjecalc_cartao_ponto")
+        .select("*")
+        .eq("case_id", caseId);
+      return (data ?? []) as unknown[];
+    },
+  });
+
   // FORM STATE
   const [formParams, setFormParams] = useState({
     estado: 'SP', municipio: '', data_admissao: '', data_demissao: '',
@@ -328,30 +324,14 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
     }
   }, [params, contract]);
 
-  // ── AUTO-SYNC: preencher módulos automaticamente ao abrir ──
+  // Auto-sync (preencher módulos automaticamente a partir do OCR) foi
+  // removido na refatoração para arquitetura "independent-only". Os campos
+  // são preenchidos via importação de .pjc ou manualmente. Mantido apenas
+  // o flag autoSyncDone para evitar warnings de useEffect com dep não
+  // utilizada — sem efeito colateral.
   useEffect(() => {
-    if (autoSyncDone) return;
-    // Wait for queries to settle
-    if (params !== undefined || contract !== undefined) {
-      // If params already exist, skip auto-sync
-      if (params?.id) {
-        setAutoSyncDone(true);
-        return;
-      }
-      // Run auto-sync
-      (async () => {
-        setSyncing(true);
-        setAutoSyncDone(true);
-        try {
-          logger.warn('syncFromValidation removed');
-        } catch (e) {
-          logger.warn("Auto-sync falhou", { error: e });
-        } finally {
-          setSyncing(false);
-        }
-      })();
-    }
-  }, [params, contract, autoSyncDone, caseId, queryClient]);
+    if (!autoSyncDone) setAutoSyncDone(true);
+  }, [autoSyncDone]);
 
   const saveParams = async () => {
     setSaving(true);
@@ -399,10 +379,11 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
       ferias,
       historicos,
       verbas,
-      cartaoPonto: [], // TODO: load cartao ponto for check
-      resultado
+      cartaoPonto,
+      dadosProcesso,
+      resultado,
     });
-  }, [formParams, faltas, ferias, historicos, verbas, resultado]);
+  }, [formParams, faltas, ferias, historicos, verbas, cartaoPonto, dadosProcesso, resultado]);
 
   const getStatusColor = (status: ModuleStatus) => {
     switch (status) {

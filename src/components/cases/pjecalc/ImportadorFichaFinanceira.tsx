@@ -244,19 +244,16 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
         toast.info("Importação como ocorrências será implementada em breve.");
       }
 
-      // Invalidate all related queries and auto-sync remaining modules
+      // Invalidate all related queries
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["pjecalc_historico", caseId] }),
         qc.invalidateQueries({ queryKey: ["pjecalc_historico_ocorrencias"] }),
       ]);
 
-      // Auto-sync removed (sync-from-validation deleted)
-      logger.warn('syncFromValidation removed');
-
       if (errorCount > 0) {
-        toast.warning(`${importedCount} rubrica(s) importada(s), ${errorCount} com erro. Verifique o console.`);
+        toast.warning(`${importedCount} rubrica(s) importada(s), ${errorCount} com erro.`);
       } else {
-        toast.success(`${importedCount} rubrica(s) importada(s) e módulos preenchidos automaticamente!`);
+        toast.success(`${importedCount} rubrica(s) importada(s).`);
       }
       onImported?.();
       setOpen(false);

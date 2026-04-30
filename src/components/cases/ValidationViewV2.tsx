@@ -226,10 +226,10 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
       
       if (!remaining?.length) {
         toast({
-          title: 'Sincronizando dados...',
-          description: 'Todas as extrações foram validadas. Sincronizando com os módulos de cálculo.',
+          title: 'Validação concluída',
+          description:
+            'Todas as extrações foram validadas. Importe um .pjc ou preencha os módulos de cálculo manualmente.',
         });
-        logger.warn('syncFromValidation removed');
         onValidationComplete?.();
       }
     },

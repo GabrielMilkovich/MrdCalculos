@@ -32,6 +32,18 @@ async function fetchBCBSeries(serieId: number, anoInicio: number, anoFim: number
   const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serieId}/dados?formato=json&dataInicial=${dataInicio}&dataFinal=${dataFim}`;
 
   const response = await fetch(url);
+
+  // 404 "Value(s) not found" = intervalo sem dados ainda; retorna vazio
+  // pra não derrubar sync de outras séries.
+  if (response.status === 404) {
+    const text = await response.text();
+    if (text.includes('not found') || text.includes('SGSNegocioException')) {
+      console.info(`[populate-bcb] BCB ${serieId}: sem dados em ${anoInicio}-${anoFim}.`);
+      return [];
+    }
+    throw new Error(`BCB API ${serieId} returned 404 (série deprecada?): ${text.slice(0, 200)}`);
+  }
+
   if (!response.ok) {
     throw new Error(`BCB API error for serie ${serieId}: ${response.status} ${response.statusText}`);
   }

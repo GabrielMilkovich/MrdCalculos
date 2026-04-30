@@ -167,9 +167,29 @@ async function fetchSeriesFromBCB(
         signal: AbortSignal.timeout(15000),
       });
 
+      // 404 com "Value(s) not found" = série existe mas não tem dados no
+      // intervalo solicitado (ex: IPCA-E de abril antes do IBGE publicar).
+      // Tratamos como "nada novo" — não é erro fatal, retorna vazio.
+      if (resp.status === 404) {
+        const text = await resp.text();
+        if (text.includes('not found') || text.includes('SGSNegocioException')) {
+          console.info(
+            `[sync-auto] BCB ${serieId}: sem dados novos a partir de ${fromDate} (404 esperado).`
+          );
+          return [];
+        }
+        // Outros 404 (ex: série inexistente) ainda são erro
+        throw new Error(
+          `BCB API serie ${serieId} returned 404 (série pode estar deprecada): ${text.slice(0, 200)}`
+        );
+      }
+
       if (!resp.ok) {
         const text = await resp.text();
-        if (attempt < retries) {
+        // Só faz retry pra 5xx ou timeouts. 4xx (exceto 404 acima) é erro do
+        // request — retry não vai resolver.
+        const isTransient = resp.status >= 500 || resp.status === 429;
+        if (isTransient && attempt < retries) {
           console.warn(
             `[sync-auto] BCB ${serieId} attempt ${attempt + 1} failed: ${resp.status}. Retrying...`
           );
@@ -189,6 +209,7 @@ async function fetchSeriesFromBCB(
       }
       return data as BcbPoint[];
     } catch (err) {
+      // Network errors / timeouts merecem retry
       if (attempt < retries) {
         console.warn(
           `[sync-auto] BCB ${serieId} attempt ${attempt + 1} error: ${err}. Retrying...`

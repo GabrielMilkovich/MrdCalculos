@@ -69,31 +69,21 @@ export function RegressionTestRunner() {
     total: number;
   }>>([]);
 
-  // Mock engine executor for demonstration
-  const mockEngineExecutor = async (inputs: TestScenario["inputs"]) => {
-    await new Promise((r) => setTimeout(r, 300 + Math.random() * 400));
-
-    const scenario = allScenarios.find(
-      (s) => s.inputs.contrato.data_admissao.getTime() === inputs.contrato.data_admissao.getTime()
+  // O motor legado (CalculationEngineV2) foi descontinuado. A suíte real de
+  // regressão hoje é o Vitest (`npx vitest run` na CLI — 1491 testes incluindo
+  // 21 PJCs reais com paridade ≥98%). Este painel exibe os cenários
+  // catalogados mas NÃO executa cálculos sintéticos com variância aleatória
+  // — isso era teatro. Para rodar de verdade, use a CLI ou GitHub Actions.
+  const noopEngineExecutor = async (
+    _inputs: TestScenario['inputs'],
+  ): Promise<{
+    totalBruto: number;
+    byRubrica: Record<string, number>;
+    warnings: string[];
+  }> => {
+    throw new Error(
+      'Motor legado descontinuado. Rode `npx vitest run` na CLI para a suíte real de regressão.',
     );
-
-    if (!scenario) {
-      throw new Error("Scenario not found");
-    }
-
-    const variance = (Math.random() - 0.5) * (scenario.expectedResults.tolerance || 1);
-    const totalBruto = scenario.expectedResults.totalBruto + variance;
-
-    const byRubrica: Record<string, number> = {};
-    for (const [key, value] of Object.entries(scenario.expectedResults.byRubrica)) {
-      byRubrica[key] = value + (Math.random() - 0.5) * 0.5;
-    }
-
-    return {
-      totalBruto,
-      byRubrica,
-      warnings: Math.random() > 0.8 ? ["Aviso de exemplo: verificar dados"] : [],
-    };
   };
 
   const getFilteredScenarios = () => {
@@ -114,7 +104,7 @@ export function RegressionTestRunner() {
       setCurrentScenario(scenario.id);
       setProgress(((i + 1) / scenarios.length) * 100);
 
-      const result = await runTestScenario(scenario, mockEngineExecutor);
+      const result = await runTestScenario(scenario, noopEngineExecutor);
       newResults.push(result);
       setResults([...newResults]);
     }
@@ -142,23 +132,42 @@ export function RegressionTestRunner() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Banner: motor legado descontinuado */}
+      <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800/40">
+        <CardContent className="py-3 flex items-start gap-3">
+          <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="text-xs space-y-1">
+            <p className="font-medium text-amber-900 dark:text-amber-100">
+              Motor legado descontinuado — execução desabilitada neste painel.
+            </p>
+            <p className="text-amber-800 dark:text-amber-200/80">
+              Os {allScenarios.length} cenários abaixo estão catalogados, mas a
+              suíte real de regressão é o Vitest (1491 testes, incluindo 21 PJCs
+              reais com paridade ≥98%). Rode <code className="font-mono">npx vitest run</code> na
+              CLI ou veja os resultados no GitHub Actions.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-xl font-bold">Suíte de Testes de Regressão</h2>
+          <h2 className="text-xl font-bold">Cenários de Regressão (read-only)</h2>
           <p className="text-sm text-muted-foreground">
-            {allScenarios.length} cenários de teste configurados (
+            {allScenarios.length} cenários catalogados (
             {scenariosByCategory.real_anonimizado.length} casos reais anonimizados)
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="gap-1">
             <Tag className="h-3 w-3" />
-            Engine v2.0.0
+            Suíte: Vitest CLI
           </Badge>
           <Button
             onClick={runAllTests}
-            disabled={isRunning}
+            disabled
+            title="Motor legado descontinuado — use Vitest CLI"
             className="gap-2"
           >
             {isRunning ? (
@@ -166,7 +175,7 @@ export function RegressionTestRunner() {
             ) : (
               <Play className="h-4 w-4" />
             )}
-            {isRunning ? "Executando..." : "Executar Todos"}
+            Executar (desabilitado)
           </Button>
         </div>
       </div>

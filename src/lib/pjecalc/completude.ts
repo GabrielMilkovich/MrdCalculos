@@ -13,6 +13,7 @@ interface CompletionInput {
   verbas: any[];
   cartaoPonto?: any[];
   resultado: any;
+  dadosProcesso?: any;
   fgtsConfig?: any;
   csConfig?: any;
   irConfig?: any;
@@ -21,11 +22,21 @@ interface CompletionInput {
 }
 
 export function calcularCompletude(input: CompletionInput): Record<string, ModuleStatus> {
-  const { params, faltas, ferias, historicos, verbas, resultado } = input;
+  const { params, faltas, ferias, historicos, verbas, resultado, dadosProcesso } = input;
   const status: Record<string, ModuleStatus> = {};
 
   // Dados do Processo
-  status.dados_processo = 'nao_iniciado'; // placeholder
+  if (!dadosProcesso) {
+    status.dados_processo = 'nao_iniciado';
+  } else {
+    const dp = dadosProcesso as Record<string, unknown>;
+    const numero = String(dp.numero_processo ?? '').trim();
+    const reclamante = String(dp.reclamante_nome ?? '').trim();
+    const reclamada = String(dp.reclamada_nome ?? '').trim();
+    if (!numero && !reclamante && !reclamada) status.dados_processo = 'nao_iniciado';
+    else if (!numero || !reclamante || !reclamada) status.dados_processo = 'incompleto';
+    else status.dados_processo = 'preenchido';
+  }
 
   // Parâmetros
   if (!params) {

@@ -123,13 +123,14 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       }
 
       // Load all module data in parallel via service layer
-      const [paramsRes, histData, faltasData, feriasData, verbasData, cartaoData] = await Promise.all([
+      const [paramsRes, histData, faltasData, feriasData, verbasData, cartaoData, excecoesCargaData] = await Promise.all([
         svc.getParametros(caseId),
         svc.getHistoricoSalarial(caseId),
         svc.getFaltas(caseId),
         svc.getFerias(caseId),
         svc.getVerbas(caseId),
         svc.getCartaoPonto(caseId),
+        svc.getExcecoesCarga(caseId),
       ]);
 
       // Load config tables in parallel
@@ -395,12 +396,19 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         aplicar_honorarios: atualizacaoRaw.aplicar_honorarios as boolean ?? false,
         aplicar_custas: atualizacaoRaw.aplicar_custas as boolean ?? false,
       } : {};
+      // Mapeia excecoesCargas para o shape do engine
+      const excecoesCargas: PjeExcecaoCargaHoraria[] = (excecoesCargaData ?? []).map((e) => ({
+        periodo_inicio: e.periodo_inicio,
+        periodo_fim: e.periodo_fim,
+        carga_horaria_mensal: Number(e.carga_horaria_mensal) || 0,
+      }));
+
       const engine = new PjeCalcEngineV3(
         params, historicos, faltas, ferias, verbasCast, cartaoPonto,
         fgtsConfig, csConfig, irConfig, correcaoConfigLocal,
         honorariosConfig, custasConfigLocal, seguroConfig,
         indicesDB, faixasINSSDB, faixasIRDB,
-        [], // excecoesCargas (TODO: carregar via loadExcecoesCarga quando disponível)
+        excecoesCargas,
         feriadosDB.map(f => ({ ...f, tipo: f.tipo as "estadual" | "facultativo" | "municipal" | "nacional" })),
         prevPrivadaConfig,
         pensaoConfig,
