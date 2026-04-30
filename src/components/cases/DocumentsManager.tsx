@@ -129,6 +129,7 @@ const statusConfig: Record<string, { label: string; icon: typeof Loader2; color:
   ocr: { label: "OCR em andamento", icon: Loader2, color: "text-blue-600", bgColor: "bg-blue-100" },
   ocr_running: { label: "OCR em andamento", icon: Loader2, color: "text-blue-600", bgColor: "bg-blue-100" },
   ocr_done: { label: "OCR concluído", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
+  ocr_failed: { label: "OCR falhou", icon: XCircle, color: "text-destructive", bgColor: "bg-destructive/10" },
   chunking: { label: "Dividindo em chunks", icon: Loader2, color: "text-purple-600", bgColor: "bg-purple-100" },
   chunk_pending: { label: "Aguardando indexação", icon: Database, color: "text-purple-600", bgColor: "bg-purple-100" },
   embedding: { label: "Gerando embeddings", icon: Loader2, color: "text-indigo-600", bgColor: "bg-indigo-100" },
@@ -526,6 +527,25 @@ export function DocumentsManager({
     toast.info("Cancelando processamento em lote...");
   }, []);
 
+  // Recuperar documentos travados em ocr_running > 5 min via RPC.
+  // Existe um pg_cron rodando a cada 1 min, mas o usuário pode querer
+  // forçar a recuperação imediata sem esperar o tick.
+  const recoverStaleDocs = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.rpc('recover_stale_ocr_documents');
+      if (error) throw error;
+      const recovered = (data ?? []) as Array<{ id: string; file_name: string; stale_seconds: number }>;
+      if (recovered.length === 0) {
+        toast.info('Nenhum documento travado encontrado.');
+      } else {
+        toast.success(`${recovered.length} documento(s) recuperado(s). Re-clique "Processar" para tentar novamente.`);
+        onDocumentsChange();
+      }
+    } catch (err) {
+      toast.error('Erro ao recuperar travados: ' + (err as Error).message);
+    }
+  }, [onDocumentsChange]);
+
   // Atualizar tipo de documento
   const updateDocType = useCallback(async (documentId: string, newType: string) => {
     try {
@@ -567,6 +587,17 @@ export function DocumentsManager({
     }
   }, [onDocumentsChange]);
 
+  // Detecta documentos potencialmente travados (status running mas sem
+  // mudança há >3 min). Usado pra mostrar botão "Recuperar travados".
+  const staleCount = documents.filter((d) => {
+    const s = (d.processing_status || d.status || 'uploaded') as string;
+    if (s !== 'ocr_running' && s !== 'processing') return false;
+    const startedAt = (d as { processing_started_at?: string }).processing_started_at;
+    if (!startedAt) return false;
+    const ageMs = Date.now() - new Date(startedAt).getTime();
+    return ageMs > 3 * 60 * 1000;
+  }).length;
+
   // Estatísticas
   const stats = {
     total: documents.length,
@@ -576,7 +607,7 @@ export function DocumentsManager({
     }).length,
     processing: documents.filter(d => {
       const s = (d.processing_status || d.status || "uploaded") as string;
-      return ["downloading", "ocr", "chunking", "embedding", "processing"].includes(s);
+      return ["downloading", "ocr", "ocr_running", "chunking", "embedding", "processing"].includes(s);
     }).length,
     indexed: documents.filter(d => {
       const s = (d.processing_status || d.status || "uploaded") as string;
@@ -781,6 +812,18 @@ export function DocumentsManager({
                 <span className="font-medium">{stats.failed}</span>
                 <span className="text-sm">erros</span>
               </div>
+            )}
+            {staleCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={recoverStaleDocs}
+                className="gap-1.5 h-8 text-xs border-amber-500/40 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-100"
+                title={`${staleCount} documento(s) parecem travados há mais de 3 minutos. Recovery automático roda a cada 1 min via cron, mas você pode forçar agora.`}
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Recuperar travados ({staleCount})
+              </Button>
             )}
           </div>
 
