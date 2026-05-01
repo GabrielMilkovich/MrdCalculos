@@ -1,32 +1,32 @@
 /**
- * CSV de Faltas — formato aceito por PJe-Calc 2.15.1.
+ * CSV de Faltas — formato oficial PJe-Calc Cidadão.
  *
- * Spec confirmada via decompilação do JAR oficial:
+ * Validado byte-a-byte contra modelo oficial:
+ *   modelo de exemplo csv/ExemploFaltas.csv
+ *
+ * Spec do parser:
  *   pjecalc-fonte/negocio/.../servicos/ServicoDeParsingDeFaltas.java
  *
  * Características obrigatórias:
- *   - 4 OU 5 colunas (justificativa é opcional).
+ *   - Header LITERAL exato (5 colunas com aspas duplas):
+ *       "INICIO";"FIM";"JUSTIFICADA";"REINICIAR_PER_AQ";"JUSTIFICATIVA"
+ *   - Aspas duplas em cada célula.
+ *   - Justificativa pode ser célula vazia (linha 4 do exemplo oficial:
+ *       "23/12/2018";"23/12/2018";"N";"N";   ← último ; sem aspas porque vazio
+ *     ou seja: trailing `;` mesmo sem conteúdo, sem aspas).
  *   - Encoding UTF-8.
- *   - Delimitador `;`.
- *   - Boolean `S` / `N`.
  *   - Datas `dd/MM/yyyy`.
- *   - Línea 0 é header (descarta).
- *
- * Campos:
- *   1. dataInicio                  (dd/MM/yyyy)
- *   2. dataFim                     (dd/MM/yyyy)
- *   3. justificada                 (S/N)
- *   4. reiniciarPeriodoAquisitivo  (S/N)
- *   5. justificativa               (texto, opcional, max 200 chars — código:
- *                                    `if (split.length > 4)` + `limitarTamanhoTexto(..., 200)`)
+ *   - Boolean `S` / `N`.
+ *   - Justificativa max 200 chars.
+ *   - Line ending CRLF.
  */
 import { formatBoolBR, formatDataBR } from './format-br';
 import { sanitizeText } from './sanitize';
 
 const HEADER =
-  'DataInicio;DataFim;Justificada;ReiniciarPeriodoAquisitivo;Justificativa';
+  '"INICIO";"FIM";"JUSTIFICADA";"REINICIAR_PER_AQ";"JUSTIFICATIVA"';
 const CRLF = '\r\n';
-const MAX_JUSTIFICATIVA = 200; // confirmado no parser Java
+const MAX_JUSTIFICATIVA = 200;
 
 export type FaltaCsvLinha = {
   data_inicio: string; // ISO yyyy-mm-dd
@@ -36,15 +36,22 @@ export type FaltaCsvLinha = {
   justificativa: string | null;
 };
 
+function q(s: string): string {
+  return `"${s}"`;
+}
+
 export function buildFaltasCSV(linhas: FaltaCsvLinha[]): string {
-  const rows = linhas.map((f) =>
-    [
-      formatDataBR(f.data_inicio),
-      formatDataBR(f.data_fim),
-      formatBoolBR(f.justificada),
-      formatBoolBR(f.reiniciar_periodo_aquisitivo),
-      sanitizeText(f.justificativa, MAX_JUSTIFICATIVA),
-    ].join(';'),
-  );
+  const rows = linhas.map((f) => {
+    const justRaw = sanitizeText(f.justificativa, MAX_JUSTIFICATIVA);
+    // Coluna justificativa: aspas só quando há conteúdo (alinha com modelo oficial)
+    const justCell = justRaw.length > 0 ? q(justRaw) : '';
+    return [
+      q(formatDataBR(f.data_inicio)),
+      q(formatDataBR(f.data_fim)),
+      q(formatBoolBR(f.justificada)),
+      q(formatBoolBR(f.reiniciar_periodo_aquisitivo)),
+      justCell,
+    ].join(';');
+  });
   return [HEADER, ...rows].join(CRLF) + CRLF;
 }

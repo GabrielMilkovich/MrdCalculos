@@ -50,10 +50,10 @@ describe("buildHoleriteZip", () => {
     const buf = new Uint8Array(await blob.arrayBuffer());
     const zip = await JSZip.loadAsync(buf);
     const csv = await zip.file("historico_salarial_comissao.csv")!.async("string");
-    const lines = csv.trim().split("\n");
+    const lines = csv.trim().split("\r\n");
     expect(lines.length).toBe(2); // header + 1 data row
-    // Soma 1158.82 + 154.04 = 1312.86 (sem separador de milhar)
-    expect(lines[1]).toContain("08/2016;1312,86");
+    // Soma 1158.82 + 154.04 = 1312.86 (com aspas, formato oficial)
+    expect(lines[1]).toContain('"08/2016";"1312,86"');
   });
 
   it("salario_familia tem natureza_indenizatoria (todas flags = N)", async () => {
@@ -69,8 +69,8 @@ describe("buildHoleriteZip", () => {
     const buf = new Uint8Array(await blob.arrayBuffer());
     const zip = await JSZip.loadAsync(buf);
     const csv = await zip.file("historico_salarial_salario_familia.csv")!.async("string");
-    const lines = csv.trim().split("\n");
-    expect(lines[1]).toMatch(/08\/2016;100,00;N;N;N;N$/);
+    const lines = csv.trim().split("\r\n");
+    expect(lines[1]).toBe('"08/2016";"100,00";"N";"N";"N";"N"');
   });
 
   it("Outras categorias têm FGTS+INSS=S por default", async () => {
@@ -84,9 +84,9 @@ describe("buildHoleriteZip", () => {
     const buf = new Uint8Array(await blob.arrayBuffer());
     const zip = await JSZip.loadAsync(buf);
     const csv = await zip.file("historico_salarial_comissao.csv")!.async("string");
-    const lines = csv.trim().split("\n");
+    const lines = csv.trim().split("\r\n");
     // FGTS=S, FGTSRecolhido=N, INSS=S, INSSRecolhido=N
-    expect(lines[1]).toMatch(/08\/2016;100,00;S;N;S;N$/);
+    expect(lines[1]).toBe('"08/2016";"100,00";"S";"N";"S";"N"');
   });
 
   it("ZIP vazio (todas linhas excluídas) só tem LEIA-ME", async () => {

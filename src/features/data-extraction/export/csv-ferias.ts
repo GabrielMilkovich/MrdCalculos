@@ -1,40 +1,35 @@
 /**
- * CSV de Férias — formato aceito por PJe-Calc 2.15.1.
+ * CSV de Férias — formato oficial PJe-Calc Cidadão.
  *
- * Spec confirmada via decompilação do JAR oficial:
+ * Validado byte-a-byte contra modelo oficial:
+ *   modelo de exemplo csv/ExemploFerias.csv
+ *
+ * Spec do parser:
  *   pjecalc-fonte/negocio/.../servicos/ServicoDeParsingDeFerias.java
  *   pjecalc-fonte/negocio/.../constantes/SituacaoDaFeriasEnum.java
  *
  * Características obrigatórias:
- *   - 15 colunas FIXAS na ordem abaixo.
- *   - Encoding UTF-8 (sem BOM).
- *   - Delimitador `;` (parser tem fallback `,`).
+ *   - Header LITERAL exato (15 colunas, sem aspas):
+ *       RELATIVAS;PRAZO;SITUACAO;DOBRA;ABONO;QTD_DIAS_ABONO;
+ *       G1INI;G1FIM;G1DOBRA;G2INI;G2FIM;G2DOBRA;G3INI;G3FIM;G3DOBRA
+ *   - **Gozos vazios → célula vazia (não "N")**. Linha do exemplo oficial:
+ *       2012/2013;30;G;N;S;10;20/01/2013;08/02/2013;N;;;;;;
+ *     (gozo2 e gozo3 vazios deixam dobra vazia também, NÃO "N").
+ *   - Encoding UTF-8.
+ *   - Delimitador `;`.
  *   - Boolean `S` / `N`.
  *   - Datas `dd/MM/yyyy`.
- *   - Línea 0 é header (parser descarta).
- *   - **IMPORTANTE**: parser BUSCA férias existentes pela `relativa`. Se não
- *     houver período aquisitivo cadastrado no cálculo com aquela `relativa`,
- *     a importação falha. Usuário deve criar os períodos aquisitivos antes.
- *
- * Campos:
- *   1. relativa             (texto, ex "2020/2021")
- *   2. prazo                (Integer, ex "30")
- *   3. situacao             (G | GP | NG | I | P — códigos curtos)
- *   4. dobra                (S/N)
- *   5. abono                (S/N)
- *   6. quantidadeDiasAbono  (Integer)
- *   7. dataInicialGozo1     (dd/MM/yyyy ou vazio)
- *   8. dataFinalGozo1       (dd/MM/yyyy ou vazio)
- *   9. dobraGozo1           (S/N)
- *   10-12. Gozo 2 (mesmo padrão)
- *   13-15. Gozo 3 (mesmo padrão)
+ *   - Situação: G | GP | NG | I | P (códigos curtos).
+ *   - Line ending CRLF.
+ *   - **IMPORTANTE**: parser BUSCA férias existentes pela `relativa`. Os
+ *     períodos aquisitivos precisam estar cadastrados antes da importação.
  */
 import type { GozoPeriodo, SituacaoFerias } from '../types';
 import { formatBoolBR } from './format-br';
 import { sanitizeText } from './sanitize';
 
 const HEADER =
-  'Relativa;Prazo;Situacao;Dobra;Abono;DiasAbono;DtIniGozo1;DtFimGozo1;DobraGozo1;DtIniGozo2;DtFimGozo2;DobraGozo2;DtIniGozo3;DtFimGozo3;DobraGozo3';
+  'RELATIVAS;PRAZO;SITUACAO;DOBRA;ABONO;QTD_DIAS_ABONO;G1INI;G1FIM;G1DOBRA;G2INI;G2FIM;G2DOBRA;G3INI;G3FIM;G3DOBRA';
 const CRLF = '\r\n';
 
 export type FeriasCsvLinha = {
@@ -49,11 +44,14 @@ export type FeriasCsvLinha = {
   gozo3: GozoPeriodo | null;
 };
 
+/** Gozo nulo → 3 strings vazias (formato do modelo oficial). */
+function gozoCols(g: GozoPeriodo | null): [string, string, string] {
+  if (!g) return ['', '', ''];
+  return [g.inicio, g.fim, formatBoolBR(g.dobra)];
+}
+
 export function buildFeriasCSV(linhas: FeriasCsvLinha[]): string {
   const rows = linhas.map((f) => {
-    const g1 = f.gozo1;
-    const g2 = f.gozo2;
-    const g3 = f.gozo3;
     return [
       sanitizeText(f.relativa, 50),
       String(f.prazo),
@@ -61,15 +59,9 @@ export function buildFeriasCSV(linhas: FeriasCsvLinha[]): string {
       formatBoolBR(f.dobra_geral),
       formatBoolBR(f.abono),
       String(f.dias_abono),
-      g1?.inicio ?? '',
-      g1?.fim ?? '',
-      g1 ? formatBoolBR(g1.dobra) : 'N',
-      g2?.inicio ?? '',
-      g2?.fim ?? '',
-      g2 ? formatBoolBR(g2.dobra) : 'N',
-      g3?.inicio ?? '',
-      g3?.fim ?? '',
-      g3 ? formatBoolBR(g3.dobra) : 'N',
+      ...gozoCols(f.gozo1),
+      ...gozoCols(f.gozo2),
+      ...gozoCols(f.gozo3),
     ].join(';');
   });
   return [HEADER, ...rows].join(CRLF) + CRLF;

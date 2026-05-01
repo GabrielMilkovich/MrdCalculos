@@ -1,34 +1,35 @@
 /**
- * CSV de Histórico Salarial — formato aceito por PJe-Calc 2.15.1.
+ * CSV de Histórico Salarial — formato oficial PJe-Calc Cidadão.
  *
- * Spec confirmada via decompilação do JAR oficial:
+ * Validado byte-a-byte contra modelo oficial baixado do próprio sistema:
+ *   modelo de exemplo csv/ExemploHistoricoSalarial.csv
+ *
+ * Spec do parser (decompilada):
  *   pjecalc-fonte/negocio/.../servicos/ServicoDeParsingDeHistoricoSalarial.java
  *   pjecalc-fonte/negocio/.../servicos/AbstractServicoDeParsing.java
  *
  * Características obrigatórias:
- *   - 6 colunas FIXAS na ordem abaixo.
+ *   - Header LITERAL exato:
+ *       "MES_ANO";"VALOR";"FGTS";"FGTS_REC.";"CONTRIBUICAO_SOCIAL";"CONTRIBUICAO_SOCIAL_REC."
+ *   - 6 colunas com aspas duplas em cada célula (header + dados).
  *   - Encoding UTF-8 (sem BOM) — `StandardCharsets.UTF_8` no parser.
- *   - Delimitador `;` (parser tem fallback `,` mas usamos `;`).
- *   - Decimal pt-BR: `1234,56` (parser também aceita `1.234,56`).
- *   - Boolean `S` / `N` (case-insensitive).
+ *   - Delimitador `;`.
+ *   - Decimal pt-BR: `1234,56`.
+ *   - Boolean `S` / `N`.
  *   - Competência `MM/yyyy`.
- *   - Linha 0 é header — parser descarta sem validar nomes.
- *   - Line ending CRLF (defensivo, parser aceita ambos).
- *
- * Campos (na ordem do parser):
- *   1. competencia             → MM/yyyy
- *   2. valor                   → BigDecimal
- *   3. incideFgts              → S/N
- *   4. incideFgtsRecolhido     → S/N (ou "RecolhidoFGTS" no nosso CSV)
- *   5. incideContribuicaoSocial → S/N (renomeamos como IncideINSS para o usuário)
- *   6. incideContribuicaoSocialRecolhida → S/N (renomeamos como RecolhidoINSS)
+ *   - Line ending CRLF (Windows-first).
  */
 import type { IncidenciaFlags, LinhaHistoricoSalarial } from '../types';
 import { formatBoolBR, formatNumeroBR } from './format-br';
 
 const HEADER =
-  'Competencia;Valor;IncideFGTS;RecolhidoFGTS;IncideINSS;RecolhidoINSS';
+  '"MES_ANO";"VALOR";"FGTS";"FGTS_REC.";"CONTRIBUICAO_SOCIAL";"CONTRIBUICAO_SOCIAL_REC."';
 const CRLF = '\r\n';
+
+/** Envelopa cada célula com aspas duplas (formato oficial). */
+function q(s: string): string {
+  return `"${s}"`;
+}
 
 export function buildHistoricoSalarialCSV(
   linhas: LinhaHistoricoSalarial[],
@@ -45,12 +46,12 @@ export function buildHistoricoSalarialCSV(
 
   const rows = linhas.map((l) =>
     [
-      l.competencia,
-      formatNumeroBR(l.valor),
-      formatBoolBR(eff.fgts),
-      formatBoolBR(eff.fgtsRec),
-      formatBoolBR(eff.inss),
-      formatBoolBR(eff.inssRec),
+      q(l.competencia),
+      q(formatNumeroBR(l.valor)),
+      q(formatBoolBR(eff.fgts)),
+      q(formatBoolBR(eff.fgtsRec)),
+      q(formatBoolBR(eff.inss)),
+      q(formatBoolBR(eff.inssRec)),
     ].join(';'),
   );
 

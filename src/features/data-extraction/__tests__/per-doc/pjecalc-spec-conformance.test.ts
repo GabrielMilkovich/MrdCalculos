@@ -30,7 +30,7 @@ describe("PJe-Calc spec — Histórico Salarial", () => {
     expect(header.split(";")).toHaveLength(6);
   });
 
-  it("Competência em MM/yyyy (parser usa SimpleDateFormat MM/yyyy)", () => {
+  it("Competência em MM/yyyy entre aspas (parser usa SimpleDateFormat MM/yyyy)", () => {
     const csv = buildHistoricoSalarialCSV(
       [{ competencia: "08/2019", valor: 1000 }],
       {
@@ -42,7 +42,7 @@ describe("PJe-Calc spec — Histórico Salarial", () => {
       },
     );
     const dataLine = csv.split(CRLF)[1];
-    expect(dataLine.startsWith("08/2019;")).toBe(true);
+    expect(dataLine.startsWith('"08/2019";')).toBe(true);
   });
 
   it("Decimal pt-BR (vírgula) — DecimalFormat #,##0.00", () => {
@@ -56,7 +56,7 @@ describe("PJe-Calc spec — Histórico Salarial", () => {
         natureza_indenizatoria: false,
       },
     );
-    expect(csv).toContain(";1467,89;");
+    expect(csv).toContain('"1467,89"');
   });
 
   it("Boolean S/N (parser AbstractServicoDeParsing.converterParaBoolean)", () => {
@@ -71,11 +71,11 @@ describe("PJe-Calc spec — Histórico Salarial", () => {
       },
     );
     const fields = csv.split(CRLF)[1].split(";");
-    // pos 2,3,4,5 = flags
-    expect(fields[2]).toBe("S");
-    expect(fields[3]).toBe("N");
-    expect(fields[4]).toBe("S");
-    expect(fields[5]).toBe("N");
+    // Cada célula vem com aspas: "08/2019";"100,00";"S";"N";"S";"N"
+    expect(fields[2]).toBe('"S"');
+    expect(fields[3]).toBe('"N"');
+    expect(fields[4]).toBe('"S"');
+    expect(fields[5]).toBe('"N"');
   });
 
   it("Line ending CRLF + termina com CRLF", () => {
@@ -166,7 +166,7 @@ describe("PJe-Calc spec — Faltas", () => {
     expect(header.split(";")).toHaveLength(5);
   });
 
-  it("Datas dd/MM/yyyy", () => {
+  it("Datas dd/MM/yyyy entre aspas", () => {
     const csv = buildFaltasCSV([
       {
         data_inicio: "2024-03-15",
@@ -177,8 +177,8 @@ describe("PJe-Calc spec — Faltas", () => {
       },
     ]);
     const fields = csv.split(CRLF)[1].split(";");
-    expect(fields[0]).toBe("15/03/2024");
-    expect(fields[1]).toBe("16/03/2024");
+    expect(fields[0]).toBe('"15/03/2024"');
+    expect(fields[1]).toBe('"16/03/2024"');
   });
 
   it("Justificativa truncada em 200 chars (limite do parser)", () => {
@@ -192,7 +192,9 @@ describe("PJe-Calc spec — Faltas", () => {
       },
     ]);
     const lastField = csv.split(CRLF)[1].split(";")[4];
-    expect(lastField.length).toBeLessThanOrEqual(200);
+    // Inclui as 2 aspas; conteúdo interno limitado a 200
+    const inner = lastField.replace(/^"|"$/g, "");
+    expect(inner.length).toBeLessThanOrEqual(200);
   });
 });
 
@@ -215,7 +217,7 @@ describe("PJe-Calc spec — Cartão de Ponto / Importar Jornada", () => {
     expect(header.split(";")).toHaveLength(13);
   });
 
-  it("Encoding ISO-8859-1 (default JVM com -Dfile.encoding=ISO-8859-1)", async () => {
+  it("Encoding UTF-8 (modelo oficial do PJe-Calc usa UTF-8)", async () => {
     const blob = buildCartaoPontoCSV({
       apuracoes: [],
       competencia_predominante: "03/2024",
@@ -223,7 +225,7 @@ describe("PJe-Calc spec — Cartão de Ponto / Importar Jornada", () => {
       data_final: "",
       warnings: [],
     } satisfies ParseCartaoPontoResult);
-    expect(blob.type).toBe("text/csv;charset=iso-8859-1");
+    expect(blob.type).toBe("text/csv;charset=utf-8");
   });
 
   it("Datas dd/MM/yyyy + horas HH:MM", async () => {

@@ -18,13 +18,13 @@ const linha = (over: Partial<LinhaHistoricoSalarial> = {}): LinhaHistoricoSalari
 });
 
 const HEADER =
-  'Competencia;Valor;IncideFGTS;RecolhidoFGTS;IncideINSS;RecolhidoINSS';
+  '"MES_ANO";"VALOR";"FGTS";"FGTS_REC.";"CONTRIBUICAO_SOCIAL";"CONTRIBUICAO_SOCIAL_REC."';
 const CRLF = '\r\n';
 
 describe('buildHistoricoSalarialCSV', () => {
-  it('header + 1 linha em formato BR (decimal vírgula, S/N)', () => {
+  it('header + 1 linha com aspas em cada célula (formato oficial)', () => {
     const csv = buildHistoricoSalarialCSV([linha({ valor: 3500.5 })], flags());
-    expect(csv).toBe(`${HEADER}${CRLF}03/2024;3500,50;S;S;S;S${CRLF}`);
+    expect(csv).toBe(`${HEADER}${CRLF}"03/2024";"3500,50";"S";"S";"S";"S"${CRLF}`);
   });
 
   it('lista vazia = só header + CRLF', () => {
@@ -36,7 +36,7 @@ describe('buildHistoricoSalarialCSV', () => {
       [linha()],
       flags({ natureza_indenizatoria: true }),
     );
-    expect(csv).toContain('03/2024;1000,00;N;N;N;N');
+    expect(csv).toContain('"03/2024";"1000,00";"N";"N";"N";"N"');
   });
 
   it('flags individuais respeitadas quando indenizatória=false', () => {
@@ -44,12 +44,12 @@ describe('buildHistoricoSalarialCSV', () => {
       [linha()],
       flags({ incide_fgts: true, fgts_recolhido: false, incide_inss: false, inss_recolhido: false }),
     );
-    expect(csv).toContain('03/2024;1000,00;S;N;N;N');
+    expect(csv).toContain('"03/2024";"1000,00";"S";"N";"N";"N"');
   });
 
   it('valor com >2 casas decimais é arredondado', () => {
     const csv = buildHistoricoSalarialCSV([linha({ valor: 3500.567 })], flags());
-    expect(csv).toContain('3500,57');
+    expect(csv).toContain('"3500,57"');
   });
 
   it('múltiplas linhas concatenadas com CRLF', () => {

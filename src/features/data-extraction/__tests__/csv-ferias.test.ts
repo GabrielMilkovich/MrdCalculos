@@ -17,20 +17,21 @@ const minima = (over: Partial<FeriasCsvLinha> = {}): FeriasCsvLinha => ({
 const CRLF = '\r\n';
 
 describe('buildFeriasCSV', () => {
-  it('15 colunas com gozos vazios entre delimitadores + dobra=N', () => {
+  it('15 colunas; gozos null deixam células VAZIAS (não "N") — formato oficial', () => {
     const csv = buildFeriasCSV([minima()]);
-    expect(csv).toContain('2023/2024;30;G;N;N;0;;;N;;;N;;;N');
+    // Oficial: 2015/2016;30;I;S;N;0;;;;;;;;;
+    expect(csv).toContain('2023/2024;30;G;N;N;0;;;;;;;;;');
   });
 
-  it('com gozo1 preenchido', () => {
+  it('com gozo1 preenchido (dobra=N)', () => {
     const csv = buildFeriasCSV([
       minima({
         abono: true,
         dias_abono: 10,
-        gozo1: { inicio: '01/06/2024', fim: '20/06/2024', dobra: false },
+        gozo1: { inicio: '20/01/2013', fim: '08/02/2013', dobra: false },
       }),
     ]);
-    expect(csv).toContain('2023/2024;30;G;N;S;10;01/06/2024;20/06/2024;N;;;N;;;N');
+    expect(csv).toContain('2023/2024;30;G;N;S;10;20/01/2013;08/02/2013;N;;;;;;');
   });
 
   it('com 3 gozos preenchidos + dobra mista', () => {

@@ -1,32 +1,37 @@
 /**
- * CSV de Cartão de Ponto — formato "Importar Jornada" do PJe-Calc 2.15.1.
+ * CSV de Cartão de Ponto — formato oficial "Importar Jornada" do PJe-Calc.
  *
- * Spec confirmada via decompilação do JAR oficial:
+ * Validado byte-a-byte contra modelo oficial:
+ *   modelo de exemplo csv/ExemploJornadaCartaoDePonto.csv
+ *
+ * Spec do parser:
  *   pjecalc-fonte/negocio/.../servicos/ServicoDeParsingDeCartaoDePonto.java
  *   método `importarJornadaCartaoDePonto` + `parseCartaoDePonto(dados, 13)`.
  *
  * Características obrigatórias:
  *   - **13 colunas** (LIMITE_COLUNAS_JORNADA = 13).
- *     Coluna 0 = data, colunas 1..12 = pares Entrada/Saída (até 6 turnos).
- *   - Encoding ISO-8859-1 (parser usa `new InputStreamReader(in)` sem charset
- *     explícito; JVM oficial roda com `-Dfile.encoding=ISO-8859-1`).
- *   - Delimitador `;` (parser tem fallback `,` quando linha não contém `;`).
+ *   - Header LITERAL exato (com acento agudo em "Saída"):
+ *       Data;Entrada1;Saída1;Entrada2;Saída2;Entrada3;Saída3;
+ *       Entrada4;Saída4;Entrada5;Saída5;Entrada6;Saída6
+ *   - Encoding UTF-8 (modelo oficial usa UTF-8 — bytes 0xC3 0xAD em "Saída").
+ *     O parser usa `InputStreamReader(in)` sem charset explícito, o que daria
+ *     ISO-8859-1 com a JVM oficial (-Dfile.encoding=ISO-8859-1). Como o
+ *     parser DESCARTA os nomes do header (Arrays.copyOfRange a partir do
+ *     índice 1), o encoding do header é IRRELEVANTE — apenas datas/horas
+ *     dos dados importam, e elas são ASCII puro.
+ *   - Sem aspas em torno das células (modelo oficial não usa).
+ *   - Delimitador `;`.
  *   - Datas `dd/MM/yyyy`, horas `HH:MM`.
- *   - Línea 0 é header — parser descarta nomes (não valida literais).
- *   - Line ending CRLF (Windows-first; BufferedReader aceita ambos).
+ *   - Line ending CRLF.
  *
- * NOTA: a tela do PJe-Calc mostra 14 colunas (com "Dia da Semana"), mas
- * isso é coluna VISUAL computada pela UI — NÃO faz parte do CSV.
- *
- * Em dias FALTA/FERIADO/FOLGA/FERIAS/ATESTADO/LICENÇA, as 12 marcações
- * ficam vazias — o PJe-Calc deduz pelo dia da semana / configuração.
+ * NOTA: a tela do PJe-Calc mostra coluna "Dia da Semana" mas é VISUAL —
+ * NÃO faz parte do CSV (limite é 13 colunas).
  */
 
 import type { ParseCartaoPontoResult } from '../../parsers/cartao-ponto';
-import { utf16ToLatin1 } from './encoding';
 
 const HEADER =
-  'DATA;Entrada 1;Saida 1;Entrada 2;Saida 2;Entrada 3;Saida 3;Entrada 4;Saida 4;Entrada 5;Saida 5;Entrada 6;Saida 6';
+  'Data;Entrada1;Saída1;Entrada2;Saída2;Entrada3;Saída3;Entrada4;Saída4;Entrada5;Saída5;Entrada6;Saída6';
 
 const N_PARES = 6;
 const CRLF = '\r\n';
@@ -46,8 +51,9 @@ export function buildCartaoPontoCSV(parsed: ParseCartaoPontoResult): Blob {
   }
 
   const csv = lines.join(CRLF) + CRLF;
-  const bytes = utf16ToLatin1(csv);
-  return new Blob([bytes], { type: 'text/csv;charset=iso-8859-1' });
+  // UTF-8 nativo (modelo oficial é UTF-8). TextEncoder default = UTF-8.
+  const bytes = new TextEncoder().encode(csv);
+  return new Blob([bytes], { type: 'text/csv;charset=utf-8' });
 }
 
 function formatDataBR(iso: string): string {
