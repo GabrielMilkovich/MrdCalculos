@@ -4,6 +4,7 @@ import {
   buildPjcZip,
   composePjcFilename,
   PJC_INNER_XML_NAME,
+  readPjcFile,
 } from "../../../export/pjc/zip";
 
 describe("composePjcFilename", () => {
@@ -62,5 +63,36 @@ describe("buildPjcZip", () => {
     // ASCII puro: cada byte = char
     const recovered = String.fromCharCode(...Array.from(recoveredBytes));
     expect(recovered).toBe(xml);
+  });
+});
+
+describe("readPjcFile", () => {
+  it("ZIP gerado pelo buildPjcZip volta exatamente o XML original", async () => {
+    const xml =
+      '<?xml version="1.0" encoding="ISO-8859-1"?><Calculo><nome>JOÃO</nome></Calculo>';
+    const bytes = await buildPjcZip(xml);
+    const back = await readPjcFile(bytes);
+    expect(back).toBe(xml);
+  });
+
+  it("Aceita XML cru (.pjc não-ZIP) com encoding ISO-8859-1", async () => {
+    // Bytes de '<Calculo><nome>JOÃO</nome></Calculo>' em Latin-1
+    const xml = "<Calculo><nome>JOÃO</nome></Calculo>";
+    const bytes = new Uint8Array(xml.length);
+    for (let i = 0; i < xml.length; i++) bytes[i] = xml.charCodeAt(i) & 0xff;
+    const back = await readPjcFile(bytes);
+    expect(back).toContain("<nome>JOÃO</nome>");
+  });
+
+  it("Aceita ArrayBuffer também", async () => {
+    const xml =
+      '<?xml version="1.0" encoding="ISO-8859-1"?><Calculo></Calculo>';
+    const bytes = await buildPjcZip(xml);
+    const ab = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    );
+    const back = await readPjcFile(ab);
+    expect(back).toBe(xml);
   });
 });

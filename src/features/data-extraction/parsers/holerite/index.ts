@@ -9,11 +9,12 @@
  */
 
 import { layoutGenericoV1 } from "./layouts/generico-v1";
+import { layoutViaVarejoV1 } from "./layouts/via-varejo-v1";
 import type { HoleriteParseResult, LayoutHolerite } from "./types";
 
 const LAYOUTS: LayoutHolerite[] = [
   // Adicionar layouts específicos aqui (mais específico primeiro):
-  // layoutViaVarejoV1,
+  layoutViaVarejoV1,
   // layoutMagazineLuizaV1,
   layoutGenericoV1, // fallback sempre por último
 ];

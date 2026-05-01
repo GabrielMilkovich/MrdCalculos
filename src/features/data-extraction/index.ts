@@ -143,8 +143,10 @@ export type {
 export {
   buildPjcZip,
   composePjcFilename,
+  readPjcFile,
   PJC_INNER_XML_NAME,
 } from './export/pjc/zip';
+export { parsePjcXml } from './export/pjc/importer';
 export {
   competenciaToEpochMs,
   isoToEpochMs,
