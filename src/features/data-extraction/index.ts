@@ -29,9 +29,11 @@ export type { AutoDetectResult } from './classification/auto-detect-tipo';
 export { parseCartaoPonto } from './parsers/cartao-ponto';
 export type {
   ApuracaoDiaria,
+  EventoDiario,
   Marcacao,
   OcorrenciaApuracao,
   ParseCartaoPontoResult,
+  TipoEvento,
 } from './parsers/cartao-ponto';
 export { parseFerias } from './parsers/ferias';
 export type { FeriasParseada, ParseFeriasResult } from './parsers/ferias';

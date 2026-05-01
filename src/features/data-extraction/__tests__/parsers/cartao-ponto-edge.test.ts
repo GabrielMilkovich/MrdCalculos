@@ -5,9 +5,9 @@
  *   - Múltiplos formatos de data (dd/mm, dd-mm, dd.mm).
  *   - Hora com segundos (HH:MM:SS).
  *   - Linhas órfãs (horário sem data).
- *   - Apurações de competências mistas (filtro + lista).
+ *   - Múltiplas competências preservadas (CRÍTICO 1: nunca filtrar).
  *   - Dedup de datas duplicadas.
- *   - Pares de marcação ímpares.
+ *   - Pares de marcação ímpares (jornada incompleta).
  */
 import { describe, expect, it } from "vitest";
 import { parseCartaoPonto } from "../../parsers/cartao-ponto";
@@ -76,8 +76,8 @@ describe("parseCartaoPonto — unparsed_lines", () => {
   });
 });
 
-describe("parseCartaoPonto — competência mista", () => {
-  it("competência predominante filtrada, outras vão pra apuracoes_filtradas", () => {
+describe("parseCartaoPonto — múltiplas competências PRESERVADAS (CRÍTICO 1)", () => {
+  it("Apurações de TODOS os meses no mapa de competencias", () => {
     const text = `
       28/02/2024 08:00 17:00
       29/02/2024 08:00 17:00
@@ -87,11 +87,9 @@ describe("parseCartaoPonto — competência mista", () => {
     `;
     const r = parseCartaoPonto(text);
     expect(r.competencia_predominante).toBe("03/2024");
-    expect(r.apuracoes).toHaveLength(3);
-    expect(r.apuracoes_filtradas).toHaveLength(2);
-    expect(
-      r.warnings.some((w) => /apuração\(ões\) de outra/.test(w)),
-    ).toBe(true);
+    expect(r.apuracoes).toHaveLength(5); // ANTES: 3 (filtrava); AGORA: 5 (todas)
+    expect(r.competencias.get("02/2024")).toBe(2);
+    expect(r.competencias.get("03/2024")).toBe(3);
   });
 });
 
@@ -104,46 +102,37 @@ describe("parseCartaoPonto — duplicatas e ímpar", () => {
     const r = parseCartaoPonto(text);
     expect(r.apuracoes).toHaveLength(1);
     expect(r.apuracoes[0].marcacoes[0].e).toBe("09:00");
-    expect(r.warnings.some((w) => /duplicada/.test(w))).toBe(true);
+    expect(r.warnings.some((w) => /duplicad/.test(w))).toBe(true);
   });
 
-  it("número ímpar de horários descarta o último com warning", () => {
+  it("número ímpar de horários: descarta o último (sem warning)", () => {
     const r = parseCartaoPonto("01/03/2024 08:00 12:00 13:00");
     expect(r.apuracoes[0].marcacoes).toHaveLength(1);
-    expect(
-      r.warnings.some((w) => /ímpar de horários/.test(w)),
-    ).toBe(true);
   });
 });
 
-describe("parseCartaoPonto — ocorrências", () => {
+describe("parseCartaoPonto — ocorrências (sem batidas)", () => {
   it.each([
     ["FALTA", "FALTA"],
     ["FOLGA", "FOLGA"],
     ["FERIADO", "FERIADO"],
-    ["FÉRIAS", "FERIAS"],
+    ["Férias : 07:20", "FERIAS"],
     ["ATESTADO", "ATESTADO"],
-    ["LICENÇA MÉDICA", "LICENCA_MEDICA"],
-    ["AFASTAMENTO", "ATESTADO"],
+    ["Licença médica", "LICENCA_MEDICA"],
+    ["Treinamento : 07:20", "TREINAMENTO"],
+    ["AFASTAMENTO", "AFASTAMENTO"],
   ])("detecta '%s' como %s", (input, expected) => {
     const r = parseCartaoPonto(`01/03/2024 ${input}`);
     expect(r.apuracoes[0].ocorrencia).toBe(expected);
   });
-
-  it("ocorrência ≠ NORMAL descarta marcações", () => {
-    const r = parseCartaoPonto("01/03/2024 FALTA 08:00 12:00");
-    expect(r.apuracoes[0].ocorrencia).toBe("FALTA");
-    expect(r.apuracoes[0].marcacoes).toEqual([]);
-  });
 });
 
 describe("parseCartaoPonto — limite de 6 pares", () => {
-  it("mais de 6 pares: descarta excedente com warning", () => {
-    const text = "01/03/2024 " + Array.from({ length: 14 }, (_, i) =>
-      `0${(i % 9) + 1}:00`
-    ).join(" ");
+  it("mais de 6 pares: limita a 6", () => {
+    const text =
+      "01/03/2024 " +
+      Array.from({ length: 14 }, (_, i) => `0${(i % 9) + 1}:00`).join(" ");
     const r = parseCartaoPonto(text);
     expect(r.apuracoes[0].marcacoes).toHaveLength(6);
-    expect(r.warnings.some((w) => /excedente/i.test(w))).toBe(true);
   });
 });

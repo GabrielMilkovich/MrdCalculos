@@ -1,0 +1,230 @@
+--- PAGE 1 ---
+
+GRUPO CASAS BAHIA S.A.
+CNPJ: 33.041.260/0501-88
+ENDEREÇO: PADRE PEDRO PINTO, 6600, VENDA NOVA, BELO HORIZONTE/MG
+CEP: 31660000
+
+# ROSICLEIA PEREIRA CHAVES
+
+MATRÍCULA 03508218 PIS 016538936807 CPF ADMISSÃO 06/06/2018 DEPARTAMENTO PF VENDA NOVA 4 CARGO VENDEDOR INTERNO
+
+LOCALIZAÇÃO sid.//04124707.04124715.04127366.00352845.00091456.00341118.03508218
+
+ESPELHO DE PONTO
+Período 16/06/2021 a 15/07/2021 - Data de emissão 13/08/2024
+
+|  DATA | BATIGIAS | AJUSTES | RESULTADO  |
+| --- | --- | --- | --- |
+|  16/06/2021 - Qua | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  17/06/2021 - Qui | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  18/06/2021 - Sex | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  19/06/2021 - Sáb | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  20/06/2021 - Dom | -- |  | Férias : 07:20  |
+|  21/06/2021 - Seg | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  22/06/2021 - Ter | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  23/06/2021 - Qua | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  24/06/2021 - Qui | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  25/06/2021 - Sex | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  26/06/2021 - Sáb | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  27/06/2021 - Dom | -- |  | Férias : 07:20  |
+|  28/06/2021 - Seg | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  29/06/2021 - Ter | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  30/06/2021 - Qua | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  01/07/2021 - Qui | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  02/07/2021 - Sex | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  03/07/2021 - Sáb | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  04/07/2021 - Dom | -- |  | Férias : 07:20  |
+|  05/07/2021 - Seg | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  06/07/2021 - Ter | -- |  | Horas Previstas : 07:20 Férias : 07:20  |
+|  07/07/2021 - Qua | 11:27 14:30 15:57 19:50 |  | Horas Trabalhadas : 06:56 Horas Previstas : 07:20 Banco de Horas Debito : -00:24  |
+|  08/07/2021 - Qui | 08:46 12:05 13:18 17:07 |  | Horas Trabalhadas : 07:08 Horas Previstas : 07:20 Banco de Horas Debito : -00:12  |
+|  09/07/2021 - Sex | 11:37 14:52 16:00 19:50 |  | Horas Trabalhadas : 07:05 Horas Previstas : 07:20 Banco de Horas Debito : -00:15  |
+|  10/07/2021 - Sáb | 08:36 12:12 13:17 16:47 |  | Horas Trabalhadas : 07:06 Horas Previstas : 07:20 Banco de Horas Debito : -00:14  |
+|  11/07/2021 - Dom | -- |  | DSR Semanal (dias) : 1  |
+|  12/07/2021 - Seg | 11:33 14:16 15:32 19:44 |  | Horas Trabalhadas : 06:55 Horas Previstas : 07:20 Banco de Horas Debito : -00:25  |
+|  13/07/2021 - Ter | 11:55 14:24 15:48 19:42 |  | Horas Trabalhadas : 06:23 Horas Previstas : 07:20 Banco de Horas Debito : -00:57  |
+|  14/07/2021 - Qua | -- |  | Horas Previstas : 07:20 Licença médica : 07:20  |
+|  15/07/2021 - Qui | -- |  | Horas Previstas : 07:20 Licença médica : 07:20  |
+
+--- PAGE 3 ---
+
+ESPELHO DE PONTO
+Período 16/07/2021 a 15/08/2021 - Data de emissão 13/08/2024
+
+| 16/07/2021 - Sex | 11:30* | 14:00* | 15:05* | 11:30 - Inserido | 14:00 - Inserido | 15:05 - Inserido | 19:50 - Inserido | Horas Trabalhadas : 07:15 | Horas Previstas : 07:20 |  |  |
+| 17/07/2021 - Sáb | 10:13 | 14:33 | 15:57 | 18:18 | Horas Trabalhadas : 06:41 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:39 |  |
+| 18/07/2021 - Dom | -- |  |  |  | DSR Semanal (dias) : 1 |  |  |  |
+| 19/07/2021 - Seg | 11:47 | 14:32 | 15:58 | 19:38 | Horas Trabalhadas : 06:25 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:55 |  |
+| 20/07/2021 - Ter | 11:23 | 13:58 | 15:32 | 19:35 | Horas Trabalhadas : 06:38 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:42 |  |
+| 21/07/2021 - Qua | 12:12 | 14:34 | 15:35 | 19:30* | 19:30 - Inserido | | Horas Trabalhadas : 06:17 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:03 |
+| 22/07/2021 - Qui | 12:06 | 14:07 | 15:15 | 19:43 | Horas Trabalhadas : 06:29 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:51 |  |
+| 23/07/2021 - Sex | 11:49 | 14:21 | 15:41 | 19:40 | Horas Trabalhadas : 06:31 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:49 |  |
+| 24/07/2021 - Sáb | 08:04 | 11:58 | 13:06 | 16:21 | Horas Trabalhadas : 07:09 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:11 |  |
+| 25/07/2021 - Dom | -- |  |  |  | DSR Semanal (dias) : 1 |  |  |  |
+| 26/07/2021 - Seg | 11:24 | 14:12 | 15:17 | 20:09 | Horas Trabalhadas : 07:40 | Horas Previstas : 07:20 | Banco de Horas 70% : 00:20 |  |
+| 27/07/2021 - Ter | 11:48 | 14:33 | 16:06 | 19:33 | Horas Trabalhadas : 06:12 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:08 |  |
+| 28/07/2021 - Qua | -- |  |  |  | DSR Semanal (dias) : 1 |  |  |  |
+| 29/07/2021 - Qui | 11:30 | 14:50 | 16:14 | 20:03 | Horas Trabalhadas : 07:09 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:11 |  |
+| 30/07/2021 - Sex | 11:55 | 14:22 | 15:42 | 20:05 | Horas Trabalhadas : 06:50 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:30 |  |
+| 31/07/2021 - Sáb | 09:51 | 14:37 | 15:58 | 18:31 | Horas Trabalhadas : 07:19 | Horas Previstas : 07:20 |  |  |
+| 01/08/2021 - Dom | 08:59 | 13:04 |  |  | Horas Trabalhadas : 04:05 | R.S.R. Trabalhado 0 % : 04:05 | DSR Semanal (dias) : 1 |  |
+| 02/08/2021 - Seg | 11:57 | 13:51 |  |  | Horas Trabalhadas : 01:54 | Horas Previstas : 07:20 | Banco de Horas Debito : -05:26 |  |
+| 03/08/2021 - Ter | -- |  |  |  | Horas Previstas : 07:20 | Licença médica : 07:20 |  |  |
+| 04/08/2021 - Qua | -- |  |  |  | DSR Semanal (dias) : 1 |  |  |  |
+| 05/08/2021 - Qui | 09:56 | 13:34 | 14:58 | 18:09 | Horas Trabalhadas : 06:49 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:31 |  |
+| 06/08/2021 - Sex | 11:51 | 13:59 | 15:10 | 19:28 | Horas Trabalhadas : 06:26 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:54 |  |
+| 07/08/2021 - Sáb | 08:47 | 12:03 | 13:39 | 17:50 | Horas Trabalhadas : 07:27 | Horas Previstas : 07:20 |  |  |
+| 08/08/2021 - Dom | -- |  |  |  | DSR Semanal (dias) : 1 |  |  |  |
+| 09/08/2021 - Seg | 11:20 | 15:41 | 16:47 | 19:55 | Horas Trabalhadas : 07:29 | Horas Previstas : 07:20 |  |  |
+| 10/08/2021 - Ter | 12:25 | 14:23 | 15:26 | 19:52 | Horas Trabalhadas : 06:24 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:56 |  |
+| 11/08/2021 - Qua | 11:22 | 15:58 | 17:03 | 19:46 | Horas Trabalhadas : 07:19 | Horas Previstas : 07:20 |  |  |
+| 12/08/2021 - Qui | 11:16 | 13:56 | 16:19 | 19:37 | Horas Trabalhadas : 05:58 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:22 | Intrajornada Sup. 2hs : 00:23 |
+| 13/08/2021 - Sex | 11:37 | 14:31 | 15:44 | 19:54 | Horas Trabalhadas : 07:04 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:16 |  |
+| 14/08/2021 - Sáb | 09:55 | 14:17 | 15:35 | 18:24 | Horas Trabalhadas : 07:11 | Horas Previstas : 07:20 |  |  |
+| 15/08/2021 - Dom | -- |  |  |  | Hora Extra Feriado 0% : 00:00 | FERIADO (dias) : 1 |  |  |
+
+--- PAGE 5 ---
+
+ESPELHO DE PONTO
+Período 16/08/2021 a 15/09/2021 - Data de emissão 13/08/2024
+
+| 16/08/2021 - Seg | 11:50 | 14:00 | 15:10 | 19:55 | Horas Trabalhadas : 06:55 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:25 |
+| 17/08/2021 - Ter | 11:54 | 14:26 | 15:53 | 19:40 | Horas Trabalhadas : 06:19 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:01 |
+| 18/08/2021 - Qua | 11:38 | 14:26 | 15:37 | 19:38 | Horas Trabalhadas : 06:49 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:31 |
+| 19/08/2021 - Qui | 11:10 | 14:53 | 16:15 | 18:14 | Horas Trabalhadas : 05:42 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:38 |
+| 20/08/2021 - Sex | 11:23 | 15:14 | 16:24 | 18:53 | 17:55 - Desconsiderado | Horas Trabalhadas : 06:20 | Horas Previstas : 07:20 |
+| 21/08/2021 - Sáb | -- | DSR Semanal (dias) : 1 |
+| 22/08/2021 - Dom | 11:54 | 14:10 | 15:24 | 19:42 | Horas Trabalhadas : 06:34 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:46 |
+| 23/08/2021 - Ter | 09:58 | 13:37 | 15:02 | 19:22 | Horas Trabalhadas : 07:59 | Horas Previstas : 07:20 | Banco de Horas 70% : 00:39 |
+| 25/08/2021 - Qua | 11:20 | 14:25 | 16:18 | 19:23 | Horas Trabalhadas : 06:10 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:10 |
+| 26/08/2021 - Qui | 11:47 | 13:16 | 14:25 | 19:47 | Horas Trabalhadas : 06:51 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:29 |
+| 27/08/2021 - Sex | 12:02 | 13:32 | 14:39 | 19:45* | 19:45 - Inserido | Horas Trabalhadas : 06:36 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:44 |
+| 28/08/2021 - Sáb | 09:56 | 13:31 | 14:40 | 18:43 | Horas Trabalhadas : 07:38 | Horas Previstas : 07:20 | Banco de Horas 70% : 00:18 |
+| 29/08/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+| 30/08/2021 - Seg | 08:40 | 11:36 | 12:55 | 16:54 | Horas Trabalhadas : 06:55 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:25 |
+| 31/08/2021 - Ter | 09:21 | 11:30 | 12:58 | 16:42 | Horas Trabalhadas : 05:53 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:27 |
+| 01/09/2021 - Qua | 08:35 | 11:30 | 12:40 | 16:56 | Horas Trabalhadas : 07:11 | Horas Previstas : 07:20 |
+| 02/09/2021 - Qui | 08:48 | 11:33 | 12:40 | 16:45 | Horas Trabalhadas : 06:50 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:30 |
+| 03/09/2021 - Sex | 09:19 | 12:15 | 13:45 | 17:08 | Horas Trabalhadas : 06:19 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:01 |
+| 04/09/2021 - Sáb | 08:05 | 12:05 | 13:19 | 16:33 | Horas Trabalhadas : 07:14 | Horas Previstas : 07:20 |
+| 05/09/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+| 06/09/2021 - Seg | 08:43 | 12:01 | 13:37 | 16:46 | Horas Trabalhadas : 06:27 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:53 |
+| 07/09/2021 - Ter | 08:32 | 11:04 | 12:07 | 14:20 | Horas Trabalhadas : 04:45 | Hora Extra Feriado 0% : 04:45 | FERIADO (dias) : 1 |
+| 08/09/2021 - Qua | 09:24 | 12:11 | 13:35 | 17:53 | Horas Trabalhadas : 07:05 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:15 |
+| 09/09/2021 - Qui | 09:25 | 12:13 | 13:48 | 16:50 | Horas Trabalhadas : 05:50 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:30 |
+| 10/09/2021 - Sex | 09:02 | 12:19 | 13:25 | 17:01 | Horas Trabalhadas : 06:53 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:27 |
+| 11/09/2021 - Sáb | 09:43 | 13:55 | 15:19 | 18:32 | Horas Trabalhadas : 07:25 | Horas Previstas : 07:20 |
+| 12/09/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+| 13/09/2021 - Seg | 08:30* | 12:00* | 13:05* | 16:50* | 08:30 - Inserido | 12:00 - Inserido | 13:05 - Inserido | 16:50 - Inserido | Horas Trabalhadas : 07:15 | Horas Previstas : 07:20 |
+| 14/09/2021 - Ter | 08:30* | 12:01 | 13:18 | 15:59 | 08:30 - Inserido | Horas Trabalhadas : 06:12 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:08 |
+| 15/09/2021 - Qua | 06:36 | 11:16 | 12:49 | 15:34 | Horas Trabalhadas : 07:25 | Horas Previstas : 07:20 |
+
+--- PAGE 7 ---
+
+ESPELHO DE PONTO
+Período 16/09/2021 a 15/10/2021 - Data de emissão 13/08/2024
+
+|  16/09/2021 - Qui | -- | Horas Previstas : 07:20 Treinamento : 07:20  |
+|  17/09/2021 - Sex | 08:32 | 12:19 | 13:46 | 17:06 | Horas Trabalhadas : 07:07 | Horas Previstas : 07:20 Banco de Horas Debito : -00:13  |
+|  18/09/2021 - Sáb | 10:02 | 14:16 | 16:01 | 18:22 | Horas Trabalhadas : 06:35 | Horas Previstas : 07:20 Banco de Horas Debito : -00:45  |
+|  19/09/2021 - Dom | -- | DSR Semanal (dias) : 1  |
+|  20/09/2021 - Seg | -- |   |
+|  21/09/2021 - Ter | 08:45 | 12:11 | 13:38 | 16:55 | Horas Trabalhadas : 06:43 | Horas Previstas : 07:20 Banco de Horas Debito : -00:37  |
+|  22/09/2021 - Qua | 09:07 | 11:52 | 13:08 | 16:26 | Horas Trabalhadas : 06:03 | Horas Previstas : 07:20 Banco de Horas Debito : -01:17  |
+|  23/09/2021 - Qui | 08:50 | 11:53 | 13:08 | 16:53 | Horas Trabalhadas : 06:48 | Horas Previstas : 07:20 Banco de Horas Debito : -00:32  |
+|  24/09/2021 - Sex | 09:28 | 12:32 | 14:05 | 17:13 | Horas Trabalhadas : 06:12 | Horas Previstas : 07:20 Banco de Horas Debito : -01:08  |
+|  25/09/2021 - Sáb | 09:59 | 14:15 | 15:29 | 18:19 | Horas Trabalhadas : 07:06 | Horas Previstas : 07:20 Banco de Horas Debito : -00:14  |
+|  26/09/2021 - Dom | -- | DSR Semanal (dias) : 1  |
+|  27/09/2021 - Seg | 08:51 | 11:50 | 13:07 | 16:32 | Horas Trabalhadas : 06:24 | Horas Previstas : 07:20 Banco de Horas Debito : -00:56  |
+|  28/09/2021 - Ter | 08:48 | 11:53 | 13:04 | 16:18 | Horas Trabalhadas : 06:19 | Horas Previstas : 07:20 Banco de Horas Debito : -01:01  |
+|  29/09/2021 - Qua | 08:46 | 11:50 | 13:03 | 16:20 | Horas Trabalhadas : 06:21 | Horas Previstas : 07:20 Banco de Horas Debito : -00:59  |
+|  30/09/2021 - Qui | 09:20 | 11:52 | 13:04 | 16:20 | Horas Trabalhadas : 05:48 | Horas Previstas : 07:20 Banco de Horas Debito : -01:32  |
+|  01/10/2021 - Sex | 09:11 | 12:06 | 13:34 | 17:09 | Horas Trabalhadas : 06:30 | Horas Previstas : 07:20 Banco de Horas Debito : -00:50  |
+|  02/10/2021 - Sáb | 08:42 | 12:01 | 13:21 | 16:56 | Horas Trabalhadas : 06:54 | Horas Previstas : 07:20 Banco de Horas Debito : -00:26  |
+|  03/10/2021 - Dom | -- | DSR Semanal (dias) : 1  |
+|  04/10/2021 - Seg | 08:32 | 12:04 | 13:16 | 16:23 | Horas Trabalhadas : 06:39 | Horas Previstas : 07:20 Banco de Horas Debito : -00:41  |
+|  05/10/2021 - Ter | 10:13 | 12:22 | 13:48 | 17:18 | Horas Trabalhadas : 05:39 | Horas Previstas : 07:20 Banco de Horas Debito : -01:41  |
+|  06/10/2021 - Qua | 08:47 | 11:52 | 13:08 | 16:26 | Horas Trabalhadas : 06:23 | Horas Previstas : 07:20 Banco de Horas Debito : -00:57  |
+|  07/10/2021 - Qui | 09:10 | 11:53 | 13:05 | 16:24 | Horas Trabalhadas : 06:02 | Horas Previstas : 07:20 Banco de Horas Debito : -01:18  |
+|  08/10/2021 - Sex | 08:30 | 11:53 | 13:17 | 17:40 | Horas Trabalhadas : 07:46 | Horas Previstas : 07:20 Banco de Horas 70% : 00:26  |
+|  09/10/2021 - Sáb | 08:35 | 12:45 | 14:02 | 16:54 | Horas Trabalhadas : 07:02 | Horas Previstas : 07:20 Banco de Horas Debito : -00:18  |
+|  10/10/2021 - Dom | -- | DSR Semanal (dias) : 1  |
+|  11/10/2021 - Seg | 09:04 | 12:20 | 13:41 | 16:51 | Horas Trabalhadas : 06:26 | Horas Previstas : 07:20 Banco de Horas Debito : -00:54  |
+|  12/10/2021 - Ter | -- | Hora Extra Feriado 0% : 00:00 FERIADO (dias) : 1  |
+|  13/10/2021 - Qua | 08:47 | 12:16 | 13:45 | 17:10 | Horas Trabalhadas : 06:54 | Horas Previstas : 07:20 Banco de Horas Debito : -00:26  |
+|  14/10/2021 - Qui | 08:31 | 12:01 | 13:14 | 17:46 | Horas Trabalhadas : 08:02 | Horas Previstas : 07:20 Banco de Horas 70% : 00:42  |
+|  15/10/2021 - Sex | 08:04 | 12:03 | 13:38 | 16:46 | Horas Trabalhadas : 07:07 | Horas Previstas : 07:20 Banco de Horas Debito : -00:13  |
+
+--- PAGE 9 ---
+
+ESPELHO DE PONTO
+Período 16/10/2021 a 15/11/2021 - Data de emissão 13/08/2024
+
+|  16/10/2021 - Sáb | 08:39 | 12:32 | 14:00 | 16:41 | Horas Trabalhadas : 06:34 | Horas Previstas : 07:20  |
+|  17/10/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+|  18/10/2021 - Seg | 09:27 | 11:57 | 13:07 | 16:24 | Horas Trabalhadas : 05:47 | Horas Previstas : 07:20  |
+|  19/10/2021 - Ter | 09:13 | 12:03 | 13:12 | 16:26 | Horas Trabalhadas : 06:04 | Horas Previstas : 07:20  |
+|  20/10/2021 - Qua | 08:30 | 12:01 | 13:31 | 16:39 | Horas Trabalhadas : 06:39 | Horas Previstas : 07:20  |
+|  21/10/2021 - Qui | 08:40 | 13:05 | 14:44 | 16:53 | Horas Trabalhadas : 06:34 | Horas Previstas : 07:20  |
+|  22/10/2021 - Sex | 09:20 | 12:15 | 13:39 | 17:39 | Horas Trabalhadas : 06:55 | Horas Previstas : 07:20  |
+|  23/10/2021 - Sáb | 09:54 | 13:44 | 15:11 | 18:21 | Horas Trabalhadas : 07:00 | Horas Previstas : 07:20  |
+|  24/10/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+|  25/10/2021 - Seg | 09:00 | 11:57 | 13:38 | 16:54 | Horas Trabalhadas : 06:13 | Horas Previstas : 07:20  |
+|  26/10/2021 - Ter | 10:05 | 12:03 | 13:10 | 17:44 | Horas Trabalhadas : 06:32 | Horas Previstas : 07:20  |
+|  27/10/2021 - Qua | 10:19 | 12:14 | 13:54 | 18:00 | Horas Trabalhadas : 06:01 | Horas Previstas : 07:20  |
+|  28/10/2021 - Qui | 11:34 | 13:31 | 14:49 | 19:27 | Horas Trabalhadas : 06:35 | Horas Previstas : 07:20  |
+|  29/10/2021 - Sex | 08:46 | 12:31 | 13:51 | 17:19 | Horas Trabalhadas : 07:13 | Horas Previstas : 07:20  |
+|  30/10/2021 - Sáb | 08:42 | 12:24 | 13:44 | 16:39 | Horas Trabalhadas : 06:37 | Horas Previstas : 07:20  |
+|  31/10/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+|  01/11/2021 - Seg | -- | Horas Previstas : 07:20 Banco de Horas Debito : -07:20  |
+|  02/11/2021 - Ter | 08:41 | 14:12 | Horas Trabalhadas : 05:31 | Hora Extra Feriado 0% : 05:31 FERIADO (dias) : 1  |
+|  03/11/2021 - Qua | 08:35 | 11:56 | 13:00 | 16:36 | Horas Trabalhadas : 06:57 | Horas Previstas : 07:20  |
+|  04/11/2021 - Qui | 08:33 | 12:06 | 13:10 | 16:34 | Horas Trabalhadas : 06:57 | Horas Previstas : 07:20  |
+|  05/11/2021 - Sex | 08:09 | 11:57 | 12:59 | 16:36 | Horas Trabalhadas : 07:25 | Horas Previstas : 07:20  |
+|  06/11/2021 - Sáb | 08:33 | 12:47 | 14:11 | 17:01 | Horas Trabalhadas : 07:04 | Horas Previstas : 07:20  |
+|  07/11/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+|  08/11/2021 - Seg | 09:07 | 12:12 | 13:17 | 16:18 | Horas Trabalhadas : 06:06 | Horas Previstas : 07:20  |
+|  09/11/2021 - Ter | 08:36 | 12:20 | 13:51 | 16:54 | Horas Trabalhadas : 06:47 | Horas Previstas : 07:20  |
+|  10/11/2021 - Qua | -- | DSR Semanal (dias) : 1 |
+|  11/11/2021 - Qui | 09:28 | 12:24 | 13:44 | 18:00 | Horas Trabalhadas : 07:12 | Horas Previstas : 07:20  |
+|  12/11/2021 - Sex | 09:31 | 12:03 | 13:18 | 17:18 | Horas Trabalhadas : 06:32 | Horas Previstas : 07:20  |
+|  13/11/2021 - Sáb | 10:02 | 14:11 | 15:40 | 19:16 | Horas Trabalhadas : 07:45 | Horas Previstas : 07:20  |
+|  14/11/2021 - Dom | 09:07 | 13:09 | Horas Trabalhadas : 04:02 | Horas Previstas : 07:20  |
+|  15/11/2021 - Seg | -- | Hora Extra Feriado 0% : 00:00 FERIADO (dias) : 1  |
+
+--- PAGE 11 ---
+
+ESPELHO DE PONTO
+Período 16/11/2021 a 15/12/2021 - Data de emissão 13/08/2024
+
+|  16/11/2021 - Ter | 08:02 | 11:59 | 13:14 | 16:28 | Horas Trabalhadas : 07:11 | Horas Previstas : 07:20 |
+|  17/11/2021 - Qua | 08:02 | 12:15 | 13:45 | 16:22 | Horas Trabalhadas : 06:50 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:30  |
+|  18/11/2021 - Qui | -- | DSR Semanal (dias) : 1 |
+|  19/11/2021 - Sex | 08:16 | 12:10 | 13:29 | 17:14 | Horas Trabalhadas : 07:39 | Horas Previstas : 07:20 | Banco de Horas 70% : 00:19  |
+|  20/11/2021 - Sáb | 08:00 | 12:42 | 14:06 | 16:47 | Horas Trabalhadas : 07:23 | Horas Previstas : 07:20 |
+|  21/11/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+|  22/11/2021 - Seg | 10:00 | 12:02 | 13:11 | 19:44 | Horas Trabalhadas : 08:35 | Horas Previstas : 07:20 | Banco de Horas 70% : 01:15  |
+|  23/11/2021 - Ter | 08:31 | 12:04 | 13:16 | 16:42 | Horas Trabalhadas : 06:59 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:21  |
+|  24/11/2021 - Qua | 08:22 | 12:04 | 13:54 | 16:36 | Horas Trabalhadas : 06:24 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:56  |
+|  25/11/2021 - Qui | 07:31 | 12:17 | 13:14 | 16:21 | Horas Trabalhadas : 07:53 | Horas Previstas : 07:20 | HE Com 70% - Intervalo : 00:03 Banco de Horas 70% : 00:30  |
+|  26/11/2021 - Sex | 05:40 | 12:00 | 13:25 | 20:43 | Horas Trabalhadas : 13:38 | Horas Previstas : 07:20 | Banco de Horas 70% : 02:00 Horas Extras Com 70% : 04:18  |
+|  27/11/2021 - Sáb | 09:54 | 13:39 | 14:54 | 20:33 | Horas Trabalhadas : 09:24 | Horas Previstas : 07:20 | Banco de Horas 70% : 02:00 Horas Extras Com 70% : 00:04  |
+|  28/11/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+|  29/11/2021 - Seg | -- |
+|  30/11/2021 - Ter | 08:03 | 12:03 | 13:14 |
+|  01/12/2021 - Qua | 08:06 | 12:06 | 13:44 | 16:30 | Horas Trabalhadas : 06:46 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:34  |
+|  02/12/2021 - Qui | 08:56 | 12:08 | 13:27 | 16:24 | Horas Trabalhadas : 06:09 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:11  |
+|  03/12/2021 - Sex | 08:24 | 12:00 | 13:04 | 16:55 | Horas Trabalhadas : 07:27 | Horas Previstas : 07:20 |
+|  04/12/2021 - Sáb | 08:02 | 12:36 | 13:41 | 16:40 | Horas Trabalhadas : 07:33 | Horas Previstas : 07:20 | Banco de Horas 70% : 00:13  |
+|  05/12/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+|  06/12/2021 - Seg | 08:12 | 12:45 | 14:03 | 16:30 | Horas Trabalhadas : 07:00 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:20  |
+|  07/12/2021 - Ter | 08:17 | 12:15 | 13:52 | 16:24 | Horas Trabalhadas : 06:30 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:50  |
+|  08/12/2021 - Qua | -- | Hora Extra Feriado 0% : 00:00 FERIADO (dias) : 1 |
+|  09/12/2021 - Qui | 08:30 | 12:07 | 13:43 | 16:47 | Horas Trabalhadas : 06:41 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:39  |
+|  10/12/2021 - Sex | 08:05 | 12:11 | 13:56 | 16:30 | Horas Trabalhadas : 06:40 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:40  |
+|  11/12/2021 - Sáb | 10:02 | 14:15 | 15:52 |
+|  12/12/2021 - Dom | -- | DSR Semanal (dias) : 1 |
+|  13/12/2021 - Seg | -- | DSR Semanal (dias) : 1 |
+|  14/12/2021 - Ter | 08:11 | 12:02 | 13:39 | 16:28 | Horas Trabalhadas : 06:40 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:40  |
+|  15/12/2021 - Qua | 08:59 | 12:00 | 13:36 | 18:51 | Horas Trabalhadas : 08:16 | Horas Previstas : 07:20 | Banco de Horas 70% : 00:56  |

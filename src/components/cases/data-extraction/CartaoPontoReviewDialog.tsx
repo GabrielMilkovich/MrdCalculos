@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -33,6 +34,7 @@ import {
   buildCartaoPontoCSV,
   triggerBlobDownload,
   type ApuracaoDiaria,
+  type EventoDiario,
   type Marcacao,
   type OcorrenciaApuracao,
   type ParseCartaoPontoResult,
@@ -121,8 +123,10 @@ export function CartaoPontoReviewDialog({
       ...prev,
       {
         data: prev[prev.length - 1]?.data ?? "",
+        dia_semana: null,
         ocorrencia: "NORMAL",
         marcacoes: fillMarcacoes([]),
+        eventos: [],
         observacao: null,
         _key: newKey(),
       },
@@ -133,12 +137,7 @@ export function CartaoPontoReviewDialog({
     setRows((prev) => prev.filter((r) => r._key !== key));
 
   const unparsedLines = parsed.unparsed_lines.map((u) => u.linha);
-  const warnings = [
-    ...parsed.warnings,
-    ...parsed.apuracoes_filtradas.map(
-      (a) => `Apuração de outra competência ignorada: ${a.data}.`,
-    ),
-  ];
+  const warnings = parsed.warnings;
 
   const handleConfirm = async () => {
     // Limpa marcações vazias antes de gerar CSV
@@ -146,19 +145,21 @@ export function CartaoPontoReviewDialog({
       .filter((r) => r.data) // descarta linhas sem data
       .map((r) => ({
         data: r.data,
+        dia_semana: r.dia_semana ?? null,
         ocorrencia: r.ocorrencia,
         marcacoes:
           r.ocorrencia === "NORMAL" ? trimMarcacoes(r.marcacoes) : [],
+        eventos: r.eventos ?? [],
         observacao: r.observacao,
       }));
     const blob = buildCartaoPontoCSV({
       apuracoes,
+      competencias: new Map(),
       competencia_predominante: parsed.competencia_predominante,
       data_inicial: apuracoes[0]?.data ?? "",
       data_final: apuracoes[apuracoes.length - 1]?.data ?? "",
       warnings: [],
       unparsed_lines: [],
-      apuracoes_filtradas: [],
     });
     triggerBlobDownload(blob, filename);
   };
@@ -202,6 +203,7 @@ export function CartaoPontoReviewDialog({
               <TableHead className="text-[10px] text-center" colSpan={6}>
                 3 pares E/S (E1 S1 E2 S2 E3 S3) — adicione mais com edição
               </TableHead>
+              <TableHead className="w-[140px] text-[10px]">Eventos</TableHead>
               <TableHead className="w-[40px] text-[10px]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -246,7 +248,16 @@ export function CartaoPontoReviewDialog({
                         onChange={(e) =>
                           updateMarcacao(r._key, idx, "e", e.target.value)
                         }
-                        className="h-7 text-[11px] font-mono w-[55px] px-1.5"
+                        title={
+                          r.marcacoes[idx]?.e_inserida
+                            ? "Batida inserida manualmente (asterisco no OCR)"
+                            : ""
+                        }
+                        className={`h-7 text-[11px] font-mono w-[55px] px-1.5 ${
+                          r.marcacoes[idx]?.e_inserida
+                            ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
+                            : ""
+                        }`}
                         disabled={r.ocorrencia !== "NORMAL"}
                       />
                       <Input
@@ -255,12 +266,24 @@ export function CartaoPontoReviewDialog({
                         onChange={(e) =>
                           updateMarcacao(r._key, idx, "s", e.target.value)
                         }
-                        className="h-7 text-[11px] font-mono w-[55px] px-1.5"
+                        title={
+                          r.marcacoes[idx]?.s_inserida
+                            ? "Batida inserida manualmente (asterisco no OCR)"
+                            : ""
+                        }
+                        className={`h-7 text-[11px] font-mono w-[55px] px-1.5 ${
+                          r.marcacoes[idx]?.s_inserida
+                            ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
+                            : ""
+                        }`}
                         disabled={r.ocorrencia !== "NORMAL"}
                       />
                     </div>
                   </TableCell>
                 ))}
+                <TableCell className="p-1">
+                  <EventosBadges eventos={r.eventos ?? []} />
+                </TableCell>
                 <TableCell className="p-1">
                   <Button
                     size="sm"
@@ -277,5 +300,52 @@ export function CartaoPontoReviewDialog({
         </Table>
       )}
     </ReviewLayout>
+  );
+}
+
+// =====================================================
+// Badges de eventos jurídicos preservados
+// =====================================================
+
+const EVENTO_LABEL: Record<string, { label: string; tone: string }> = {
+  horas_trabalhadas: { label: "HT", tone: "bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-200" },
+  horas_previstas: { label: "HP", tone: "bg-slate-100 text-slate-800 dark:bg-slate-900/40 dark:text-slate-200" },
+  banco_horas_debito: { label: "BH-", tone: "bg-rose-100 text-rose-800 dark:bg-rose-950/30 dark:text-rose-200" },
+  banco_horas_70: { label: "BH+70%", tone: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200" },
+  he_com_70: { label: "HE 70%", tone: "bg-amber-100 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" },
+  he_intervalo: { label: "HE Interv.", tone: "bg-amber-100 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" },
+  he_feriado_0: { label: "HE Feriado", tone: "bg-orange-100 text-orange-900 dark:bg-orange-950/30 dark:text-orange-200" },
+  rsr_trabalhado_0: { label: "RSR-Trab.", tone: "bg-purple-100 text-purple-800 dark:bg-purple-950/30 dark:text-purple-200" },
+  intrajornada_sup_2hs: { label: "Intra+2h", tone: "bg-pink-100 text-pink-800 dark:bg-pink-950/30 dark:text-pink-200" },
+  feriado_dias: { label: "Feriado", tone: "bg-orange-100 text-orange-900 dark:bg-orange-950/30 dark:text-orange-200" },
+  dsr_semanal_dias: { label: "DSR", tone: "bg-slate-100 text-slate-800 dark:bg-slate-900/40 dark:text-slate-200" },
+  ferias: { label: "Férias", tone: "bg-sky-100 text-sky-800 dark:bg-sky-950/30 dark:text-sky-200" },
+  licenca_medica: { label: "Lic. Méd.", tone: "bg-rose-100 text-rose-800 dark:bg-rose-950/30 dark:text-rose-200" },
+  treinamento: { label: "Trein.", tone: "bg-violet-100 text-violet-800 dark:bg-violet-950/30 dark:text-violet-200" },
+};
+
+function EventosBadges({ eventos }: { eventos: EventoDiario[] }) {
+  if (!eventos || eventos.length === 0) {
+    return <span className="text-[10px] text-muted-foreground">—</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-0.5">
+      {eventos.map((ev, i) => {
+        const meta = EVENTO_LABEL[ev.tipo] ?? {
+          label: ev.tipo,
+          tone: "bg-muted text-muted-foreground",
+        };
+        return (
+          <Badge
+            key={i}
+            variant="outline"
+            className={`text-[9px] font-normal ${meta.tone} border-transparent`}
+            title={`${ev.tipo}: ${ev.valor} (preservado do OCR)`}
+          >
+            {meta.label} {ev.valor}
+          </Badge>
+        );
+      })}
+    </div>
   );
 }

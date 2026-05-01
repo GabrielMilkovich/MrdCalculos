@@ -1,19 +1,36 @@
 /**
- * Parser determinístico de Cartão de Ponto.
+ * Parser determinístico de Cartão de Ponto / Espelho de Ponto.
+ *
+ * Estratégia (state machine por linha):
+ *   1. Localiza data dd/mm/yyyy (3 formatos: /, -, .) na linha.
+ *   2. Corta a linha em 2 partes:
+ *      a) ANTES dos marcadores de RESULTADO (Horas Trabalhadas, Horas
+ *         Previstas, Banco de Horas, Hora Extra, DSR, FERIADO, Férias,
+ *         Licença, Treinamento, R.S.R., Intrajornada, etc.) → BATIDAS.
+ *      b) DEPOIS dos marcadores → EVENTOS estruturados.
+ *   3. Detecta `*` em batidas (manualmente inseridas).
+ *   4. Detecta "Desconsiderado" / "Inserido" em ajustes.
+ *
+ * NUNCA mais filtra por competência predominante — devolve TODAS as
+ * apurações de TODOS os meses presentes no OCR. UI/CSV decidem o que fazer.
  *
  * Garantias:
- *   - Nunca descarta linha silenciosamente: tudo que tem dígito + algum padrão
- *     vai parar em `apuracoes` ou em `warnings`/`unparsed_lines`.
- *   - Aceita 3 formatos de data: `dd/mm/yyyy`, `dd-mm-yyyy`, `dd.mm.yyyy`.
- *   - Aceita hora com ou sem segundos (`HH:MM` ou `HH:MM:SS`).
- *   - Filtro por competência opcional — quando aplica, lista o que foi filtrado.
- *
- * O contrato com a UI é: o usuário vê `apuracoes` na tabela editável + tem
- * acesso a `warnings` (texto humano) + `unparsed_lines` (linhas suspeitas)
- * para conferir manualmente.
+ *   - Linhas com dado mas que não casam vão para `unparsed_lines`.
+ *   - Eventos preservam dados juridicamente relevantes (HE feriado 0%,
+ *     RSR trabalhado 0%, Intrajornada Sup. 2hs, Banco de Horas, etc.).
+ *   - Batidas inseridas manualmente são marcadas (`inserida: true`).
+ *   - Batidas desconsideradas são preservadas mas marcadas
+ *     (`desconsiderada: true`).
  */
 
-export type Marcacao = { e: string; s: string };
+export type Marcacao = {
+  e: string;
+  s: string;
+  e_inserida?: boolean;
+  s_inserida?: boolean;
+  e_desconsiderada?: boolean;
+  s_desconsiderada?: boolean;
+};
 
 export type OcorrenciaApuracao =
   | "NORMAL"
@@ -22,51 +39,149 @@ export type OcorrenciaApuracao =
   | "FOLGA"
   | "FERIAS"
   | "ATESTADO"
-  | "LICENCA_MEDICA";
+  | "LICENCA_MEDICA"
+  | "TREINAMENTO"
+  | "DSR"
+  | "AFASTAMENTO";
+
+export type TipoEvento =
+  | "horas_trabalhadas"
+  | "horas_previstas"
+  | "banco_horas_debito"
+  | "banco_horas_credito"
+  | "banco_horas_70"
+  | "he_com_70"
+  | "he_intervalo"
+  | "he_feriado_0"
+  | "he_feriado_100"
+  | "rsr_trabalhado_0"
+  | "intrajornada_sup_2hs"
+  | "intrajornada"
+  | "interjornada"
+  | "feriado_dias"
+  | "dsr_semanal_dias"
+  | "ferias"
+  | "licenca_medica"
+  | "treinamento"
+  | "atestado"
+  | "afastamento"
+  | "outro";
+
+export type EventoDiario = {
+  tipo: TipoEvento;
+  /** Valor literal extraído (ex: "06:30", "1", "-00:24"). */
+  valor: string;
+  /** Texto literal capturado, para auditoria/UI. */
+  raw: string;
+};
 
 export type ApuracaoDiaria = {
-  data: string; // "yyyy-mm-dd"
+  /** "yyyy-mm-dd". */
+  data: string;
+  /** Dia da semana (Qua, Qui, etc.) se detectado. */
+  dia_semana: string | null;
+  /** Tipo predominante: NORMAL = teve batidas; demais = ausência. */
   ocorrencia: OcorrenciaApuracao;
   marcacoes: Marcacao[];
+  /** Eventos de resultado (HT, HP, banco de horas, HE feriado, etc.). */
+  eventos: EventoDiario[];
+  /** Texto adicional não classificado da linha (auditoria). */
   observacao: string | null;
 };
 
 export type ParseCartaoPontoResult = {
   apuracoes: ApuracaoDiaria[];
-  competencia_predominante: string; // "MM/yyyy"
+  /** Mapa competência → quantidade de apurações naquele mês. */
+  competencias: Map<string, number>;
+  /** Competência com mais dias (informativo). UI/CSV não devem filtrar por isto. */
+  competencia_predominante: string;
   data_inicial: string;
   data_final: string;
   warnings: string[];
-  /** Linhas do OCR que pareciam ter dado mas não casaram em nenhum padrão. */
+  /** Linhas suspeitas (com dado mas sem casar com nenhum padrão). */
   unparsed_lines: Array<{ linha: number; conteudo: string }>;
-  /** Apurações filtradas por competência diferente da predominante (não vão pro CSV). */
-  apuracoes_filtradas: ApuracaoDiaria[];
 };
 
-// Aceita: 01/03/2024, 01-03-2024, 01.03.2024
-const RE_DATA = /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/;
-// Aceita: 08:00, 8:00, 08:00:30
-const RE_HORA = /\b(\d{1,2}):(\d{2})(?::\d{2})?\b/g;
-const RE_OCORRENCIA =
-  /\b(FALTA|FERIADO|FOLGA|F[ÉE]RIAS|ATESTADO|LICEN[ÇC]A\s*M[ÉE]DICA|AFASTAMENTO)\b/i;
-// Linha "tem dado" se contém qualquer dígito (heurística pra unparsed)
+// =====================================================
+// Padrões
+// =====================================================
+
+const RE_DATA_BR = /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/;
+const RE_DIA_SEMANA = /\b(Seg|Ter|Qua|Qui|Sex|S[áa]b|Dom)\b/i;
+
+/**
+ * Marcadores de RESULTADO/EVENTOS — PARTIR a linha aqui.
+ *
+ * Tudo ANTES desse marcador são batidas; tudo DEPOIS são eventos
+ * informativos (não devem virar batida).
+ */
+const MARCADORES_RESULTADO = [
+  /Horas?\s+Trabalhadas?/i,
+  /Horas?\s+Previstas?/i,
+  /Banco\s+de\s+Horas?/i,
+  /Hora\s+Extra/i,
+  /Horas?\s+Extras?/i,
+  /HE\s+Com/i,
+  /R\.?S\.?R\.?\s+Trabalhad/i,
+  /DSR\s+Semanal/i,
+  /Intrajornada/i,
+  /Interjornada/i,
+  /Inserido\b/i, // marcador de ajuste manual
+  /Desconsiderado\b/i,
+  /\bFERIADO\b/i,
+  /F[ée]rias\b/i,
+  /Licen[çc]a\s+m[ée]dica/i,
+  /Treinamento/i,
+  /Afastamento/i,
+];
+
+const RE_HORA_OPCIONAL_ASTERISCO = /\b(\d{1,2}):(\d{2})(?::\d{2})?(\*?)/g;
 const RE_TEM_DIGITO = /\d/;
 
-const MAX_MARCACOES = 6;
+// Eventos específicos a extrair com regex.
+const EVENT_PATTERNS: Array<{ tipo: TipoEvento; re: RegExp }> = [
+  { tipo: "horas_trabalhadas", re: /Horas?\s+Trabalhadas?\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "horas_previstas", re: /Horas?\s+Previstas?\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "banco_horas_debito", re: /Banco\s+de\s+Horas?\s+D[ée]bito\s*:?\s*(-?\d{1,3}:\d{2})/i },
+  { tipo: "banco_horas_70", re: /Banco\s+de\s+Horas?\s+70\s*%\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "he_com_70", re: /Horas?\s+Extras?\s+Com\s+70\s*%\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "he_intervalo", re: /HE\s+Com\s+70\s*%\s*-?\s*Intervalo\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "he_feriado_0", re: /Hora\s+Extra\s+Feriado\s+0\s*%\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "rsr_trabalhado_0", re: /R\.?S\.?R\.?\s+Trabalhad[ao]?\s+0\s*%\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "intrajornada_sup_2hs", re: /Intrajornada\s+Sup\.?\s+2hs?\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "feriado_dias", re: /FERIADO\s+\(dias?\)\s*:?\s*(\d+)/i },
+  { tipo: "dsr_semanal_dias", re: /DSR\s+Semanal\s+\(dias?\)\s*:?\s*(\d+)/i },
+  { tipo: "ferias", re: /F[ée]rias\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "licenca_medica", re: /Licen[çc]a\s+m[ée]dica\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "treinamento", re: /Treinamento\s*:?\s*(\d{1,3}:\d{2})/i },
+];
+
+const RE_OCORRENCIA_PURA =
+  /\b(FALTA|FERIADO|FOLGA|F[ÉE]RIAS|ATESTADO|LICEN[ÇC]A\s*M[ÉE]DICA|TREINAMENTO|AFASTAMENTO|DSR\s+Semanal)\b/i;
+
+// Linhas de metadados (cabeçalho/rodapé do espelho) — IGNORAR mesmo se
+// tiverem data válida. Ex: "ADMISSÃO 06/06/2018", "Data de emissão 13/08/2024",
+// "Período 16/06/2021 a 15/07/2021", "Juntado em: 21/08/2024".
+const RE_METADADO_LINHA =
+  /\b(ADMISS[ÃA]O|DEMISS[ÃA]O|EMISS[ÃA]O|MATR[ÍI]CULA|PIS|CARGO|DEPARTAMENTO|JUNTAD[OA]\s+EM|ASSINAD[OA]\s+ELETRONICAMENTE|N[ÚU]MERO\s+(?:do\s+)?PROCESSO|N[ÚU]MERO\s+(?:do\s+)?DOCUMENTO|VALIDAD[EO]|RAZ[ÃA]O\s+SOCIAL|CNPJ|CEP|ENDERE[ÇC]O|LOCALIZA[ÇC][ÃA]O|Per[íi]odo\s+\d{2}\/\d{2}\/\d{4}\s+a\s+\d{2}\/\d{2}\/\d{4})\b/i;
+
+// =====================================================
+// Parser
+// =====================================================
 
 export function parseCartaoPonto(
   ocrText: string,
-  competenciaRef?: string,
+  _competenciaRefIgnored?: string,
 ): ParseCartaoPontoResult {
   if (!ocrText || ocrText.trim().length === 0) {
     return {
       apuracoes: [],
-      competencia_predominante: competenciaRef ?? "",
+      competencias: new Map(),
+      competencia_predominante: "",
       data_inicial: "",
       data_final: "",
       warnings: ["OCR vazio."],
       unparsed_lines: [],
-      apuracoes_filtradas: [],
     };
   }
 
@@ -74,21 +189,27 @@ export function parseCartaoPonto(
   const apuracoes: ApuracaoDiaria[] = [];
   const warnings: string[] = [];
   const unparsed: Array<{ linha: number; conteudo: string }> = [];
-  const competenciaCount = new Map<string, number>();
+  const competencias = new Map<string, number>();
 
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    const line = raw.trim();
-    if (line.length === 0) continue;
+    const linhaSemPipes = raw.replace(/\|/g, " ").trim();
+    if (linhaSemPipes.length === 0) continue;
 
-    const dateMatch = line.match(RE_DATA);
+    const dateMatch = linhaSemPipes.match(RE_DATA_BR);
     if (!dateMatch) {
-      // Linha sem data: se tem horário OU palavra-chave, é suspeita.
-      const hasHora = /\d{1,2}:\d{2}/.test(line);
-      const hasOc = RE_OCORRENCIA.test(line);
-      if ((hasHora || hasOc) && RE_TEM_DIGITO.test(line)) {
-        unparsed.push({ linha: i + 1, conteudo: line });
+      // Linha sem data: marca como suspeita se tem horário ou ocorrência.
+      const hasHora = /\d{1,2}:\d{2}/.test(linhaSemPipes);
+      const hasOc = RE_OCORRENCIA_PURA.test(linhaSemPipes);
+      if ((hasHora || hasOc) && RE_TEM_DIGITO.test(linhaSemPipes)) {
+        unparsed.push({ linha: i + 1, conteudo: linhaSemPipes });
       }
+      continue;
+    }
+
+    // Filtra linhas de metadado (cabeçalho/rodapé) que têm data mas não
+    // representam apuração diária (ex: "ADMISSÃO 06/06/2018", "Período X a Y").
+    if (RE_METADADO_LINHA.test(linhaSemPipes)) {
       continue;
     }
 
@@ -101,65 +222,77 @@ export function parseCartaoPonto(
     }
     const data = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
     const competencia = `${mm.padStart(2, "0")}/${yyyy}`;
-    competenciaCount.set(
-      competencia,
-      (competenciaCount.get(competencia) ?? 0) + 1,
-    );
+    competencias.set(competencia, (competencias.get(competencia) ?? 0) + 1);
 
-    const ocorrencia = detectarOcorrencia(line);
-    const horarios = capturarHorarios(line);
+    const diaSemana = (linhaSemPipes.match(RE_DIA_SEMANA)?.[1] ?? null);
 
-    const marcacoes: Marcacao[] = [];
-    let j = 0;
-    while (j + 1 < horarios.length && marcacoes.length < MAX_MARCACOES) {
-      marcacoes.push({ e: horarios[j], s: horarios[j + 1] });
-      j += 2;
+    // Particiona a linha em "antes do primeiro marcador de resultado"
+    // e "depois". Tudo antes vira candidato a batida; tudo depois é evento.
+    const splitIdx = primeiraOcorrenciaMarcador(linhaSemPipes);
+    const parteBatidas =
+      splitIdx >= 0 ? linhaSemPipes.slice(0, splitIdx) : linhaSemPipes;
+    const parteEventos = splitIdx >= 0 ? linhaSemPipes.slice(splitIdx) : "";
+
+    // Captura horários da parte de batidas (após a data).
+    // Remove a data da string para não confundir o regex.
+    const semData = parteBatidas.replace(RE_DATA_BR, " ").replace(RE_DIA_SEMANA, " ");
+    const marcacoes = capturarMarcacoes(semData);
+
+    // Detecta "Desconsiderado" / "Inserido" e atribui à última marcação,
+    // se a regra cabível. (Heurística: melhor que nada — UI permite editar.)
+    if (/Desconsiderado/i.test(parteEventos) && marcacoes.length > 0) {
+      const last = marcacoes[marcacoes.length - 1];
+      last.s_desconsiderada = true;
     }
-    if (j < horarios.length) {
-      warnings.push(
-        `Linha ${i + 1} (${data}): número ímpar de horários (${horarios.length}). Última marcação descartada.`,
-      );
+
+    // Detecta ocorrência baseada na LINHA INTEIRA (não só parteEventos):
+    // se a linha cita uma ausência conhecida e não tem batidas, classificar.
+    // Se tem batidas + ocorrência, NORMAL prevalece (a ocorrência é de evento
+    // mascarado, ex: dia trabalhado em feriado).
+    let ocorrencia: OcorrenciaApuracao = "NORMAL";
+    if (marcacoes.length === 0) {
+      const fullLine = linhaSemPipes;
+      if (/F[ée]rias\b/i.test(fullLine)) ocorrencia = "FERIAS";
+      else if (/Licen[çc]a\s+m[ée]dica/i.test(fullLine))
+        ocorrencia = "LICENCA_MEDICA";
+      else if (/\bFERIADO\b/i.test(fullLine)) ocorrencia = "FERIADO";
+      else if (/DSR\s+Semanal/i.test(fullLine)) ocorrencia = "DSR";
+      else if (/Treinamento/i.test(fullLine)) ocorrencia = "TREINAMENTO";
+      else if (/Atestado/i.test(fullLine)) ocorrencia = "ATESTADO";
+      else if (/Afastamento/i.test(fullLine)) ocorrencia = "AFASTAMENTO";
+      else if (/\bFALTA\b/i.test(fullLine)) ocorrencia = "FALTA";
+      else if (/\bFOLGA\b/i.test(fullLine)) ocorrencia = "FOLGA";
+    } else {
+      // Tem batidas. Mas se cita FERIADO claramente, marca como FERIADO
+      // (para refletir caso "trabalhou em feriado").
+      if (/\bFERIADO\b/i.test(parteEventos) && /he_feriado|FERIADO\s+\(dias\)/i.test(parteEventos)) {
+        ocorrencia = "FERIADO";
+      }
     }
-    if (horarios.length > MAX_MARCACOES * 2) {
-      warnings.push(
-        `Linha ${i + 1} (${data}): mais de ${MAX_MARCACOES} pares de marcação detectados. Excedente descartado.`,
-      );
-    }
+
+    // Eventos estruturados.
+    const eventos = extrairEventos(parteEventos);
 
     apuracoes.push({
       data,
+      dia_semana: diaSemana,
       ocorrencia,
-      marcacoes: ocorrencia === "NORMAL" ? marcacoes : [],
+      marcacoes,
+      eventos,
       observacao: null,
     });
   }
 
-  // Filtra apenas a competência predominante (se houver) — UI pode reverter.
-  const competenciaPredominante = pickPredominant(competenciaCount, competenciaRef);
-  const apuracoesPredominantes: ApuracaoDiaria[] = [];
-  const apuracoesOutrasCompetencias: ApuracaoDiaria[] = [];
-  for (const a of apuracoes) {
-    const m = a.data.slice(5, 7);
-    const y = a.data.slice(0, 4);
-    if (`${m}/${y}` === competenciaPredominante) apuracoesPredominantes.push(a);
-    else apuracoesOutrasCompetencias.push(a);
-  }
-  if (apuracoesOutrasCompetencias.length > 0) {
-    warnings.push(
-      `${apuracoesOutrasCompetencias.length} apuração(ões) de outra(s) competência(s) foram filtradas. Veja "apuracoes_filtradas" para revisar.`,
-    );
-  }
-
-  // Dedup por data — última prevalece. Avisa quando dedupa.
+  // Dedup por data (última prevalece). Avisa se dedupar.
   const dedup = new Map<string, ApuracaoDiaria>();
   let dedupCount = 0;
-  for (const a of apuracoesPredominantes) {
+  for (const a of apuracoes) {
     if (dedup.has(a.data)) dedupCount++;
     dedup.set(a.data, a);
   }
   if (dedupCount > 0) {
     warnings.push(
-      `${dedupCount} apuração(ões) duplicada(s) por data — usada a última de cada dia.`,
+      `${dedupCount} apuração(ões) com data duplicada — usada a última de cada dia.`,
     );
   }
   const final = [...dedup.values()].sort((a, b) => a.data.localeCompare(b.data));
@@ -170,43 +303,77 @@ export function parseCartaoPonto(
     );
   }
 
+  // Predominante: informativo apenas. NÃO filtra.
+  let predominante = "";
+  let max = 0;
+  for (const [k, v] of competencias) {
+    if (v > max) {
+      predominante = k;
+      max = v;
+    }
+  }
+
   return {
     apuracoes: final,
-    competencia_predominante: competenciaPredominante,
+    competencias,
+    competencia_predominante: predominante,
     data_inicial: final[0]?.data ?? "",
     data_final: final[final.length - 1]?.data ?? "",
     warnings,
     unparsed_lines: unparsed,
-    apuracoes_filtradas: apuracoesOutrasCompetencias,
   };
 }
 
-function detectarOcorrencia(line: string): OcorrenciaApuracao {
-  const m = line.match(RE_OCORRENCIA);
-  if (!m) return "NORMAL";
-  const found = m[1]
-    .toUpperCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-  if (found.includes("FALTA")) return "FALTA";
-  if (found === "FERIADO") return "FERIADO";
-  if (found === "FOLGA") return "FOLGA";
-  if (found.includes("FERIAS")) return "FERIAS";
-  if (found === "ATESTADO" || found === "AFASTAMENTO") return "ATESTADO";
-  if (found.includes("LICENCA")) return "LICENCA_MEDICA";
-  return "NORMAL";
-}
+// =====================================================
+// Helpers
+// =====================================================
 
-function capturarHorarios(line: string): string[] {
-  const out: string[] = [];
-  for (const m of line.matchAll(RE_HORA)) {
-    const h = parseInt(m[1], 10);
-    const min = parseInt(m[2], 10);
-    if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
-      out.push(`${m[1].padStart(2, "0")}:${m[2]}`);
+function primeiraOcorrenciaMarcador(line: string): number {
+  let idx = -1;
+  for (const re of MARCADORES_RESULTADO) {
+    const m = line.match(re);
+    if (m && m.index !== undefined) {
+      if (idx === -1 || m.index < idx) idx = m.index;
     }
   }
-  return out;
+  return idx;
+}
+
+function capturarMarcacoes(s: string): Marcacao[] {
+  const horarios: Array<{ valor: string; inserida: boolean }> = [];
+  for (const m of s.matchAll(RE_HORA_OPCIONAL_ASTERISCO)) {
+    const h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if (h < 0 || h > 23 || min < 0 || min > 59) continue;
+    horarios.push({
+      valor: `${m[1].padStart(2, "0")}:${m[2]}`,
+      inserida: m[3] === "*",
+    });
+    if (horarios.length >= 12) break; // Limite: 6 pares
+  }
+  const marcacoes: Marcacao[] = [];
+  let j = 0;
+  while (j + 1 < horarios.length) {
+    const e = horarios[j];
+    const s_ = horarios[j + 1];
+    const m: Marcacao = { e: e.valor, s: s_.valor };
+    if (e.inserida) m.e_inserida = true;
+    if (s_.inserida) m.s_inserida = true;
+    marcacoes.push(m);
+    j += 2;
+  }
+  return marcacoes;
+}
+
+function extrairEventos(parte: string): EventoDiario[] {
+  const eventos: EventoDiario[] = [];
+  for (const { tipo, re } of EVENT_PATTERNS) {
+    const m = parte.match(re);
+    if (m) {
+      eventos.push({ tipo, valor: m[1], raw: m[0] });
+    }
+  }
+  return eventos;
 }
 
 function isValidDate(yyyy: string, mm: string, dd: string): boolean {
@@ -221,17 +388,4 @@ function isValidDate(yyyy: string, mm: string, dd: string): boolean {
     date.getUTCMonth() + 1 === m &&
     date.getUTCDate() === d
   );
-}
-
-function pickPredominant(counts: Map<string, number>, ref?: string): string {
-  if (ref && counts.has(ref)) return ref;
-  let best = "";
-  let max = 0;
-  for (const [k, v] of counts) {
-    if (v > max) {
-      best = k;
-      max = v;
-    }
-  }
-  return best;
 }
