@@ -1,19 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { buildFaltasCSV } from '../export/csv-faltas';
-import type { FaltaExtraida } from '../types';
+import { buildFaltasCSV, type FaltaCsvLinha } from '../export/csv-faltas';
 
-const minima = (over: Partial<FaltaExtraida> = {}): FaltaExtraida => ({
-  id: 'fa1',
-  document_id: 'd1',
-  case_id: 'c1',
+const minima = (over: Partial<FaltaCsvLinha> = {}): FaltaCsvLinha => ({
   data_inicio: '2024-03-15',
   data_fim: '2024-03-15',
   justificada: true,
   reiniciar_periodo_aquisitivo: false,
   justificativa: null,
-  incluir: true,
   ...over,
 });
+
+const CRLF = '\r\n';
 
 describe('buildFaltasCSV', () => {
   it('5 colunas, formata data ISO → dd/MM/yyyy', () => {
@@ -31,13 +28,13 @@ describe('buildFaltasCSV', () => {
 
   it('trunca justificativa em 200 chars', () => {
     const csv = buildFaltasCSV([minima({ justificativa: 'a'.repeat(300) })]);
-    const lastField = csv.split('\n')[1].split(';')[4];
+    const lastField = csv.split(CRLF)[1].split(';')[4];
     expect(lastField).toHaveLength(200);
   });
 
   it('justificativa null → string vazia', () => {
     const csv = buildFaltasCSV([minima({ justificativa: null })]);
-    expect(csv).toMatch(/15\/03\/2024;15\/03\/2024;S;N;\n/);
+    expect(csv).toContain(`15/03/2024;15/03/2024;S;N;${CRLF}`);
   });
 
   it('reiniciarPeriodoAquisitivo=true gera S na 4ª coluna', () => {
@@ -47,9 +44,9 @@ describe('buildFaltasCSV', () => {
     expect(csv).toContain(';N;S;');
   });
 
-  it('lista vazia = só header', () => {
+  it('lista vazia = só header em CRLF', () => {
     const csv = buildFaltasCSV([]);
-    expect(csv.split('\n').filter(Boolean)).toHaveLength(1);
-    expect(csv.split('\n')[0].split(';')).toHaveLength(5);
+    expect(csv.split(CRLF).filter(Boolean)).toHaveLength(1);
+    expect(csv.split(CRLF)[0].split(';')).toHaveLength(5);
   });
 });

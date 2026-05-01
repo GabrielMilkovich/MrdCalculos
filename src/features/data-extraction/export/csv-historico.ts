@@ -1,18 +1,35 @@
-import type {
-  IncidenciaFlags,
-  LinhaHistoricoSalarial,
-} from '../types';
+/**
+ * CSV de Histórico Salarial — formato aceito por PJe-Calc 2.15.1.
+ *
+ * Spec confirmada via decompilação do JAR oficial:
+ *   pjecalc-fonte/negocio/.../servicos/ServicoDeParsingDeHistoricoSalarial.java
+ *   pjecalc-fonte/negocio/.../servicos/AbstractServicoDeParsing.java
+ *
+ * Características obrigatórias:
+ *   - 6 colunas FIXAS na ordem abaixo.
+ *   - Encoding UTF-8 (sem BOM) — `StandardCharsets.UTF_8` no parser.
+ *   - Delimitador `;` (parser tem fallback `,` mas usamos `;`).
+ *   - Decimal pt-BR: `1234,56` (parser também aceita `1.234,56`).
+ *   - Boolean `S` / `N` (case-insensitive).
+ *   - Competência `MM/yyyy`.
+ *   - Linha 0 é header — parser descarta sem validar nomes.
+ *   - Line ending CRLF (defensivo, parser aceita ambos).
+ *
+ * Campos (na ordem do parser):
+ *   1. competencia             → MM/yyyy
+ *   2. valor                   → BigDecimal
+ *   3. incideFgts              → S/N
+ *   4. incideFgtsRecolhido     → S/N (ou "RecolhidoFGTS" no nosso CSV)
+ *   5. incideContribuicaoSocial → S/N (renomeamos como IncideINSS para o usuário)
+ *   6. incideContribuicaoSocialRecolhida → S/N (renomeamos como RecolhidoINSS)
+ */
+import type { IncidenciaFlags, LinhaHistoricoSalarial } from '../types';
 import { formatBoolBR, formatNumeroBR } from './format-br';
 
 const HEADER =
-  'Competencia;Valor;IncideFGTS;FGTSRecolhido;IncideINSS;INSSRecolhido';
+  'Competencia;Valor;IncideFGTS;RecolhidoFGTS;IncideINSS;RecolhidoINSS';
+const CRLF = '\r\n';
 
-/**
- * Gera CSV de Histórico Salarial para uma categoria.
- *
- * Toggle "natureza indenizatória" zera todas as 4 flags de incidência,
- * sobrescrevendo o que está em `flags`.
- */
 export function buildHistoricoSalarialCSV(
   linhas: LinhaHistoricoSalarial[],
   flags: IncidenciaFlags,
@@ -37,5 +54,5 @@ export function buildHistoricoSalarialCSV(
     ].join(';'),
   );
 
-  return [HEADER, ...rows].join('\n') + '\n';
+  return [HEADER, ...rows].join(CRLF) + CRLF;
 }

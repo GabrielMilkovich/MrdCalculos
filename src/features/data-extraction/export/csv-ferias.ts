@@ -1,9 +1,41 @@
+/**
+ * CSV de Férias — formato aceito por PJe-Calc 2.15.1.
+ *
+ * Spec confirmada via decompilação do JAR oficial:
+ *   pjecalc-fonte/negocio/.../servicos/ServicoDeParsingDeFerias.java
+ *   pjecalc-fonte/negocio/.../constantes/SituacaoDaFeriasEnum.java
+ *
+ * Características obrigatórias:
+ *   - 15 colunas FIXAS na ordem abaixo.
+ *   - Encoding UTF-8 (sem BOM).
+ *   - Delimitador `;` (parser tem fallback `,`).
+ *   - Boolean `S` / `N`.
+ *   - Datas `dd/MM/yyyy`.
+ *   - Línea 0 é header (parser descarta).
+ *   - **IMPORTANTE**: parser BUSCA férias existentes pela `relativa`. Se não
+ *     houver período aquisitivo cadastrado no cálculo com aquela `relativa`,
+ *     a importação falha. Usuário deve criar os períodos aquisitivos antes.
+ *
+ * Campos:
+ *   1. relativa             (texto, ex "2020/2021")
+ *   2. prazo                (Integer, ex "30")
+ *   3. situacao             (G | GP | NG | I | P — códigos curtos)
+ *   4. dobra                (S/N)
+ *   5. abono                (S/N)
+ *   6. quantidadeDiasAbono  (Integer)
+ *   7. dataInicialGozo1     (dd/MM/yyyy ou vazio)
+ *   8. dataFinalGozo1       (dd/MM/yyyy ou vazio)
+ *   9. dobraGozo1           (S/N)
+ *   10-12. Gozo 2 (mesmo padrão)
+ *   13-15. Gozo 3 (mesmo padrão)
+ */
 import type { GozoPeriodo, SituacaoFerias } from '../types';
 import { formatBoolBR } from './format-br';
 import { sanitizeText } from './sanitize';
 
 const HEADER =
-  'Relativa;Prazo;Situacao;DobraGeral;Abono;DiasAbono;DtIniGozo1;DtFimGozo1;DobraGozo1;DtIniGozo2;DtFimGozo2;DobraGozo2;DtIniGozo3;DtFimGozo3;DobraGozo3';
+  'Relativa;Prazo;Situacao;Dobra;Abono;DiasAbono;DtIniGozo1;DtFimGozo1;DobraGozo1;DtIniGozo2;DtFimGozo2;DobraGozo2;DtIniGozo3;DtFimGozo3;DobraGozo3';
+const CRLF = '\r\n';
 
 export type FeriasCsvLinha = {
   relativa: string; // "aaaa/aaaa"
@@ -17,12 +49,6 @@ export type FeriasCsvLinha = {
   gozo3: GozoPeriodo | null;
 };
 
-/**
- * 15 colunas. Gozos vazios (null) viram delimitador vazio + dobra='N'.
- *
- * Atenção: o parser do PJe-Calc Cidadão NÃO cria períodos aquisitivos —
- * ele só atualiza por `relativa`. UI precisa avisar (vai no LEIA-ME).
- */
 export function buildFeriasCSV(linhas: FeriasCsvLinha[]): string {
   const rows = linhas.map((f) => {
     const g1 = f.gozo1;
@@ -46,5 +72,5 @@ export function buildFeriasCSV(linhas: FeriasCsvLinha[]): string {
       g3 ? formatBoolBR(g3.dobra) : 'N',
     ].join(';');
   });
-  return [HEADER, ...rows].join('\n') + '\n';
+  return [HEADER, ...rows].join(CRLF) + CRLF;
 }

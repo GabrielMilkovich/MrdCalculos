@@ -118,6 +118,6 @@ describe("buildHoleriteZip", () => {
     const zip = await JSZip.loadAsync(buf);
     const readme = await zip.file("LEIA-ME.txt")!.async("string");
     expect(readme).toContain("provisório");
-    expect(readme).toContain("Avisos do parser");
+    expect(readme).toContain("AVISOS DO PARSER DO HOLERITE");
   });
 });

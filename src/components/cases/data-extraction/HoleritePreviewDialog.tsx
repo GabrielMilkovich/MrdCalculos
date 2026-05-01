@@ -1,17 +1,39 @@
 /**
- * HoleritePreviewDialog — preview da categorização do holerite antes de
- * gerar o ZIP final.
+ * HoleritePreviewDialog — UI v2 (estilo planilha) para revisar a
+ * categorização das rubricas antes de gerar o ZIP.
  *
- * Usuário vê todas as rubricas extraídas, agrupadas por categoria, e pode:
- *   - Toggle inclusão (☑/☐) por linha
- *   - Reclassificar (dropdown por linha)
- *   - Ver bloco "Ignorados" (descontos + hints "ignorar")
+ * Layout:
+ *   ┌─ Holerite 08/2019 — 11 rubricas ─────────────────────────────┐
+ *   │ [Buscar...] [Ações em lote ▼]      Mostrando 11 de 11        │
+ *   │                                                                │
+ *   │  ☑   Cod   Nome              Valor    Categoria       Flag    │
+ *   │  ☑  0501  DSR(Comissão)     272,64   DSR ▼          (hint)  │
+ *   │  ☑  0620  Comissões        1.158,82  Comissões ▼    (hint)  │
+ *   │  ☐  5560  INSS              -188,77  Ignorado ▼     (descto) │
+ *   │  ⚠  9999  BONUS XYZ          500,00  Salário Fixo ▼ (revise) │
+ *   │  ...                                                            │
+ *   ├────────────────────────────────────────────────────────────────┤
+ *   │ Total no ZIP final:                                            │
+ *   │   • Comissões        1.312,86                                  │
+ *   │   • DSR                272,64                                  │
+ *   │   • Premiações         461,44                                  │
+ *   │   • Salário Fixo       500,00 ⚠ revise                         │
+ *   ├────────────────────────────────────────────────────────────────┤
+ *   │ [Cancelar]                       [Confirmar e baixar ZIP]      │
+ *   └────────────────────────────────────────────────────────────────┘
  *
- * Estado vive só aqui — nada vai pro banco. Cancelar = nada baixado.
+ * Estado vive só no modal — sem persistência. Cancelar = nada salvo.
  * Confirmar = chama buildHoleriteZip + dispara download.
  */
-import { useMemo, useState } from "react";
-import { AlertTriangle, Download, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Download,
+  Loader2,
+  Search,
+  Sparkles,
+  XCircle,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +45,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -32,10 +55,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   buildHoleriteZip,
   triggerBlobDownload,
@@ -60,15 +93,24 @@ const CATEGORIA_LABELS: Record<CategoriaSlug, string> = {
   salario_familia: "Salário-família",
 };
 
-const CATEGORIA_OPTIONS: Array<{ value: CategoriaSlug | "ignorar"; label: string }> = [
-  { value: "salario_fixo", label: "Salário Fixo" },
-  { value: "comissao", label: "Comissões" },
-  { value: "dsr", label: "DSR" },
-  { value: "premiacao", label: "Premiações" },
-  { value: "minimo_garantido", label: "Mínimo Garantido" },
-  { value: "salario_familia", label: "Salário-família" },
-  { value: "ignorar", label: "Ignorar" },
+const CATEGORIA_ORDER: CategoriaSlug[] = [
+  "salario_fixo",
+  "comissao",
+  "dsr",
+  "premiacao",
+  "minimo_garantido",
+  "salario_familia",
 ];
+
+const ORIGEM_BADGE: Record<
+  LinhaClassificada["origem"],
+  { label: string; tone: "default" | "amber" | "muted" | "red" }
+> = {
+  hint: { label: "auto", tone: "default" },
+  fallback: { label: "revise", tone: "amber" },
+  desconto: { label: "desconto", tone: "muted" },
+  ignorar_hint: { label: "ignorado", tone: "muted" },
+};
 
 export function HoleritePreviewDialog({
   open,
@@ -78,33 +120,51 @@ export function HoleritePreviewDialog({
 }: Props) {
   const [linhas, setLinhas] = useState<LinhaClassificada[]>(classificacao.linhas);
   const [downloading, setDownloading] = useState(false);
+  const [search, setSearch] = useState("");
 
-  // Resetar quando classificacao mudar (novo doc)
-  useMemo(() => {
+  // Reset quando classificacao mudar (novo doc)
+  useEffect(() => {
     setLinhas(classificacao.linhas);
+    setSearch("");
   }, [classificacao]);
 
   const updateLinha = (key: string, patch: Partial<LinhaClassificada>) => {
     setLinhas((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   };
 
-  // Agrupa por categoria (ou "Ignorados") para renderização
-  const agrupado = useMemo(() => {
-    const grupos = new Map<CategoriaSlug, LinhaClassificada[]>();
-    const ignorados: LinhaClassificada[] = [];
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return linhas;
+    return linhas.filter((l) => {
+      const cod = (l.rubrica.codigo ?? "").toLowerCase();
+      const nome = l.rubrica.nome.toLowerCase();
+      return cod.includes(q) || nome.includes(q);
+    });
+  }, [linhas, search]);
+
+  const totals = useMemo(() => {
+    const map = new Map<CategoriaSlug, { soma: number; hasFallback: boolean }>();
     for (const l of linhas) {
-      if (l.categoria === null || !l.incluir) {
-        ignorados.push(l);
-        continue;
-      }
-      const list = grupos.get(l.categoria) ?? [];
-      list.push(l);
-      grupos.set(l.categoria, list);
+      if (!l.incluir || l.categoria === null) continue;
+      if (l.valorParaCsv <= 0) continue;
+      const cur = map.get(l.categoria) ?? { soma: 0, hasFallback: false };
+      cur.soma += l.valorParaCsv;
+      if (l.origem === "fallback") cur.hasFallback = true;
+      map.set(l.categoria, cur);
     }
-    return { grupos, ignorados };
+    return map;
   }, [linhas]);
 
-  const totalCategorias = agrupado.grupos.size;
+  const totalLinhasIncluidas = linhas.filter(
+    (l) => l.incluir && l.categoria !== null && l.valorParaCsv > 0,
+  ).length;
+
+  // Ações em lote
+  const setIncluirAll = (predicate: (l: LinhaClassificada) => boolean, v: boolean) => {
+    setLinhas((prev) =>
+      prev.map((l) => (predicate(l) ? { ...l, incluir: v } : l)),
+    );
+  };
 
   const handleConfirmar = async () => {
     setDownloading(true);
@@ -117,15 +177,20 @@ export function HoleritePreviewDialog({
     }
   };
 
+  const totalCategorias = totals.size;
+  const showingCount = filtered.length;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Preview da exportação</DialogTitle>
-          <DialogDescription>
-            Competência {classificacao.competencia} · layout{" "}
-            <code className="text-xs">{classificacao.layout_usado}</code> ·{" "}
-            {totalCategorias} categoria(s) com dados
+      <DialogContent className="max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
+        <DialogHeader className="space-y-1">
+          <DialogTitle>Conferir antes de baixar</DialogTitle>
+          <DialogDescription className="text-xs">
+            Holerite <strong>{classificacao.competencia}</strong> · layout{" "}
+            <code className="text-[10px]">{classificacao.layout_usado}</code> ·{" "}
+            {linhas.length} rubrica{linhas.length === 1 ? "" : "s"} extraída
+            {linhas.length === 1 ? "" : "s"} · {totalLinhasIncluidas} entram no
+            ZIP
           </DialogDescription>
         </DialogHeader>
 
@@ -142,30 +207,128 @@ export function HoleritePreviewDialog({
           </div>
         )}
 
-        <ScrollArea className="flex-1 -mx-6 px-6">
-          <div className="space-y-2 pb-2">
-            {[...agrupado.grupos.entries()]
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([slug, items]) => {
-                const total = items.reduce((s, l) => s + l.valorParaCsv, 0);
-                return (
-                  <CategoriaBlock
-                    key={slug}
-                    label={CATEGORIA_LABELS[slug]}
-                    total={total}
-                    items={items}
-                    onUpdate={updateLinha}
-                  />
-                );
-              })}
+        {/* Toolbar: busca + ações em lote */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por código ou nome..."
+              className="pl-7 h-8 text-xs"
+            />
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 text-xs">
+                Ações em lote
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="text-xs">
+              <DropdownMenuItem
+                onClick={() => setIncluirAll(() => true, true)}
+              >
+                Selecionar todas
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setIncluirAll(() => true, false)}
+              >
+                Limpar seleção
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setIncluirAll((l) => l.origem === "hint", true)}
+              >
+                Selecionar só "auto" (hint casado)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  setIncluirAll((l) => l.origem === "fallback", false)
+                }
+              >
+                Excluir todos "revise" (sem hint)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+            {showingCount} de {linhas.length}
+          </span>
+        </div>
 
-            {agrupado.ignorados.length > 0 && (
-              <IgnoradosBlock items={agrupado.ignorados} onUpdate={updateLinha} />
-            )}
+        {/* Tabela única */}
+        <ScrollArea className="flex-1 -mx-6 px-6">
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader className="bg-muted/30 sticky top-0">
+                <TableRow>
+                  <TableHead className="w-[40px] text-[10px]"></TableHead>
+                  <TableHead className="w-[60px] text-[10px]">Cód</TableHead>
+                  <TableHead className="text-[10px]">Nome</TableHead>
+                  <TableHead className="w-[100px] text-right text-[10px]">
+                    Valor
+                  </TableHead>
+                  <TableHead className="w-[180px] text-[10px]">
+                    Categoria
+                  </TableHead>
+                  <TableHead className="w-[80px] text-[10px]">Origem</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="text-center text-xs text-muted-foreground py-6"
+                    >
+                      Nenhuma rubrica casa com "{search}".
+                    </TableCell>
+                  </TableRow>
+                )}
+                {filtered.map((l) => (
+                  <LinhaRow key={l.key} linha={l} onUpdate={updateLinha} />
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </ScrollArea>
 
-        <DialogFooter>
+        {/* Resumo do CSV final */}
+        <div className="border rounded-md bg-muted/20 p-2.5 space-y-1">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Total que vai pro ZIP final ({totalCategorias} CSV
+            {totalCategorias === 1 ? "" : "s"})
+          </div>
+          {totals.size === 0 ? (
+            <div className="text-xs text-muted-foreground italic">
+              Nada selecionado — ZIP terá apenas LEIA-ME.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
+              {CATEGORIA_ORDER.map((slug) => {
+                const t = totals.get(slug);
+                if (!t) return null;
+                return (
+                  <div
+                    key={slug}
+                    className="flex justify-between items-center"
+                  >
+                    <span className="flex items-center gap-1">
+                      {CATEGORIA_LABELS[slug]}
+                      {t.hasFallback && (
+                        <AlertTriangle className="h-3 w-3 text-amber-600" />
+                      )}
+                    </span>
+                    <span className="font-mono font-semibold">
+                      R$ {t.soma.toFixed(2).replace(".", ",")}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -185,7 +348,7 @@ export function HoleritePreviewDialog({
             ) : (
               <Download className="h-3.5 w-3.5" />
             )}
-            Confirmar e baixar
+            Confirmar e baixar ZIP
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -194,91 +357,7 @@ export function HoleritePreviewDialog({
 }
 
 // =====================================================
-// Bloco por categoria
-// =====================================================
-
-function CategoriaBlock({
-  label,
-  total,
-  items,
-  onUpdate,
-}: {
-  label: string;
-  total: number;
-  items: LinhaClassificada[];
-  onUpdate: (key: string, patch: Partial<LinhaClassificada>) => void;
-}) {
-  const hasFallback = items.some((l) => l.origem === "fallback");
-  return (
-    <Collapsible defaultOpen>
-      <div className="rounded-md border bg-card">
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 text-left hover:bg-muted/50">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-medium text-sm">{label}</span>
-            <Badge variant="secondary" className="text-[10px]">
-              {items.length} rubrica(s)
-            </Badge>
-            {hasFallback && (
-              <Badge
-                variant="outline"
-                className="text-[10px] border-amber-400 text-amber-700 dark:text-amber-300"
-              >
-                revise
-              </Badge>
-            )}
-          </div>
-          <span className="font-mono text-sm font-semibold">
-            R$ {total.toFixed(2)}
-          </span>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="border-t">
-            {items.map((l) => (
-              <LinhaRow key={l.key} linha={l} onUpdate={onUpdate} />
-            ))}
-          </div>
-        </CollapsibleContent>
-      </div>
-    </Collapsible>
-  );
-}
-
-// =====================================================
-// Bloco "Ignorados"
-// =====================================================
-
-function IgnoradosBlock({
-  items,
-  onUpdate,
-}: {
-  items: LinhaClassificada[];
-  onUpdate: (key: string, patch: Partial<LinhaClassificada>) => void;
-}) {
-  return (
-    <Collapsible>
-      <div className="rounded-md border bg-muted/20">
-        <CollapsibleTrigger className="flex items-center justify-between w-full p-2 text-left hover:bg-muted/40">
-          <span className="text-xs text-muted-foreground">
-            Ignorados ({items.length})
-          </span>
-          <span className="text-[10px] text-muted-foreground">
-            descontos + hints "ignorar"
-          </span>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="border-t">
-            {items.map((l) => (
-              <LinhaRow key={l.key} linha={l} onUpdate={onUpdate} />
-            ))}
-          </div>
-        </CollapsibleContent>
-      </div>
-    </Collapsible>
-  );
-}
-
-// =====================================================
-// Linha individual (toggle + reclassify + valor)
+// Linha individual
 // =====================================================
 
 function LinhaRow({
@@ -293,52 +372,109 @@ function LinhaRow({
   const valorMostrado = venc !== null && venc > 0 ? venc : (desc ?? 0);
   const isDesconto = linha.origem === "desconto";
 
-  const currentValue: CategoriaSlug | "ignorar" =
-    linha.categoria ?? "ignorar";
+  const currentValue: CategoriaSlug | "ignorar" = linha.categoria ?? "ignorar";
+  const badge = ORIGEM_BADGE[linha.origem];
+
+  // Highlight por origem
+  const rowClass =
+    linha.origem === "fallback"
+      ? "bg-amber-50/40 hover:bg-amber-50/70 dark:bg-amber-950/10"
+      : isDesconto
+      ? "text-muted-foreground hover:bg-muted/40"
+      : !linha.incluir
+      ? "opacity-60 hover:bg-muted/30"
+      : "hover:bg-muted/30";
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-muted/30 border-t first:border-t-0">
-      <Checkbox
-        checked={linha.incluir}
-        onCheckedChange={(v) => onUpdate(linha.key, { incluir: Boolean(v) })}
-        disabled={isDesconto}
-      />
-      <span className="font-mono text-muted-foreground w-12">
+    <TableRow className={`text-xs ${rowClass}`}>
+      <TableCell className="p-1">
+        <Checkbox
+          checked={linha.incluir}
+          onCheckedChange={(v) => onUpdate(linha.key, { incluir: Boolean(v) })}
+          disabled={isDesconto}
+        />
+      </TableCell>
+      <TableCell className="p-1 font-mono text-[11px] text-muted-foreground">
         {linha.rubrica.codigo ?? "—"}
-      </span>
-      <span className="flex-1 truncate">{linha.rubrica.nome}</span>
-      <span
-        className={`font-mono w-20 text-right ${
-          isDesconto ? "text-muted-foreground italic" : ""
-        }`}
-      >
-        {isDesconto ? `-${valorMostrado.toFixed(2)}` : valorMostrado.toFixed(2)}
-      </span>
-      <Select
-        value={currentValue}
-        disabled={isDesconto}
-        onValueChange={(v) => {
-          if (v === "ignorar") {
-            onUpdate(linha.key, { categoria: null, incluir: false });
-          } else {
-            onUpdate(linha.key, {
-              categoria: v as CategoriaSlug,
-              incluir: linha.valorParaCsv > 0,
-            });
-          }
-        }}
-      >
-        <SelectTrigger className="h-6 text-[11px] w-[140px]">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {CATEGORIA_OPTIONS.map((o) => (
-            <SelectItem key={o.value} value={o.value} className="text-xs">
-              {o.label}
+      </TableCell>
+      <TableCell className="p-1 truncate max-w-0">
+        <span title={linha.rubrica.nome}>{linha.rubrica.nome}</span>
+      </TableCell>
+      <TableCell className="p-1 text-right font-mono text-[11px]">
+        {isDesconto ? (
+          <span className="text-rose-600 dark:text-rose-400">
+            -{valorMostrado.toFixed(2).replace(".", ",")}
+          </span>
+        ) : (
+          valorMostrado.toFixed(2).replace(".", ",")
+        )}
+      </TableCell>
+      <TableCell className="p-1">
+        <Select
+          value={currentValue}
+          disabled={isDesconto}
+          onValueChange={(v) => {
+            if (v === "ignorar") {
+              onUpdate(linha.key, { categoria: null, incluir: false });
+            } else {
+              onUpdate(linha.key, {
+                categoria: v as CategoriaSlug,
+                incluir: linha.valorParaCsv > 0,
+              });
+            }
+          }}
+        >
+          <SelectTrigger className="h-6 text-[11px] w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CATEGORIA_ORDER.map((slug) => (
+              <SelectItem key={slug} value={slug} className="text-xs">
+                {CATEGORIA_LABELS[slug]}
+              </SelectItem>
+            ))}
+            <SelectItem value="ignorar" className="text-xs">
+              Ignorar
             </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell className="p-1">
+        <OrigemBadge origem={linha.origem} hint={linha.hint} />
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function OrigemBadge({
+  origem,
+  hint,
+}: {
+  origem: LinhaClassificada["origem"];
+  hint: LinhaClassificada["hint"];
+}) {
+  const meta = ORIGEM_BADGE[origem];
+  const motivo = hint?.motivo ?? null;
+  const Icon =
+    origem === "hint"
+      ? Sparkles
+      : origem === "fallback"
+      ? AlertTriangle
+      : XCircle;
+  const tone =
+    meta.tone === "default"
+      ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300"
+      : meta.tone === "amber"
+      ? "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/20 dark:text-amber-200"
+      : "border-muted bg-muted/40 text-muted-foreground";
+  return (
+    <Badge
+      variant="outline"
+      className={`gap-1 text-[10px] font-normal ${tone}`}
+      title={motivo ?? meta.label}
+    >
+      <Icon className="h-2.5 w-2.5" />
+      {meta.label}
+    </Badge>
   );
 }

@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildHistoricoSalarialCSV } from '../export/csv-historico';
-import type { CategoriaIncidenciaConfig, LinhaHistoricoSalarial } from '../types';
+import type { IncidenciaFlags, LinhaHistoricoSalarial } from '../types';
 
-const cfg = (over: Partial<CategoriaIncidenciaConfig> = {}): CategoriaIncidenciaConfig => ({
-  case_id: 'c1',
-  categoria_id: 'cat',
+const flags = (over: Partial<IncidenciaFlags> = {}): IncidenciaFlags => ({
   incide_fgts: true,
   fgts_recolhido: true,
   incide_inss: true,
@@ -16,29 +14,27 @@ const cfg = (over: Partial<CategoriaIncidenciaConfig> = {}): CategoriaIncidencia
 const linha = (over: Partial<LinhaHistoricoSalarial> = {}): LinhaHistoricoSalarial => ({
   competencia: '03/2024',
   valor: 1000,
-  documentos_origem: [],
   ...over,
 });
 
+const HEADER =
+  'Competencia;Valor;IncideFGTS;RecolhidoFGTS;IncideINSS;RecolhidoINSS';
+const CRLF = '\r\n';
+
 describe('buildHistoricoSalarialCSV', () => {
-  it('header + 1 linha em formato BR', () => {
-    const csv = buildHistoricoSalarialCSV([linha({ valor: 3500.5 })], cfg());
-    expect(csv).toBe(
-      'Competencia;Valor;IncideFGTS;FGTSRecolhido;IncideINSS;INSSRecolhido\n' +
-        '03/2024;3500,50;S;S;S;S\n',
-    );
+  it('header + 1 linha em formato BR (decimal vírgula, S/N)', () => {
+    const csv = buildHistoricoSalarialCSV([linha({ valor: 3500.5 })], flags());
+    expect(csv).toBe(`${HEADER}${CRLF}03/2024;3500,50;S;S;S;S${CRLF}`);
   });
 
-  it('lista vazia = só header + newline', () => {
-    expect(buildHistoricoSalarialCSV([], cfg())).toBe(
-      'Competencia;Valor;IncideFGTS;FGTSRecolhido;IncideINSS;INSSRecolhido\n',
-    );
+  it('lista vazia = só header + CRLF', () => {
+    expect(buildHistoricoSalarialCSV([], flags())).toBe(`${HEADER}${CRLF}`);
   });
 
   it('natureza_indenizatoria=true zera todas as flags', () => {
     const csv = buildHistoricoSalarialCSV(
       [linha()],
-      cfg({ natureza_indenizatoria: true }),
+      flags({ natureza_indenizatoria: true }),
     );
     expect(csv).toContain('03/2024;1000,00;N;N;N;N');
   });
@@ -46,25 +42,25 @@ describe('buildHistoricoSalarialCSV', () => {
   it('flags individuais respeitadas quando indenizatória=false', () => {
     const csv = buildHistoricoSalarialCSV(
       [linha()],
-      cfg({ incide_fgts: true, fgts_recolhido: false, incide_inss: false, inss_recolhido: false }),
+      flags({ incide_fgts: true, fgts_recolhido: false, incide_inss: false, inss_recolhido: false }),
     );
     expect(csv).toContain('03/2024;1000,00;S;N;N;N');
   });
 
-  it('valor com >2 casas decimais é truncado/arredondado', () => {
-    const csv = buildHistoricoSalarialCSV([linha({ valor: 3500.567 })], cfg());
+  it('valor com >2 casas decimais é arredondado', () => {
+    const csv = buildHistoricoSalarialCSV([linha({ valor: 3500.567 })], flags());
     expect(csv).toContain('3500,57');
   });
 
-  it('múltiplas linhas concatenadas com \\n', () => {
+  it('múltiplas linhas concatenadas com CRLF', () => {
     const csv = buildHistoricoSalarialCSV(
       [
         linha({ competencia: '01/2024', valor: 100 }),
         linha({ competencia: '02/2024', valor: 200 }),
       ],
-      cfg(),
+      flags(),
     );
-    const lines = csv.split('\n').filter(Boolean);
+    const lines = csv.split(CRLF).filter(Boolean);
     expect(lines).toHaveLength(3); // header + 2 linhas
   });
 });

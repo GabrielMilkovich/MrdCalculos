@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildFeriasCSV } from '../export/csv-ferias';
-import type { FeriasExtraida } from '../types';
+import { buildFeriasCSV, type FeriasCsvLinha } from '../export/csv-ferias';
 
-const minima = (over: Partial<FeriasExtraida> = {}): FeriasExtraida => ({
-  id: 'f1',
-  document_id: 'd1',
-  case_id: 'c1',
+const minima = (over: Partial<FeriasCsvLinha> = {}): FeriasCsvLinha => ({
   relativa: '2023/2024',
   prazo: 30,
   situacao: 'G',
@@ -15,9 +11,10 @@ const minima = (over: Partial<FeriasExtraida> = {}): FeriasExtraida => ({
   gozo1: null,
   gozo2: null,
   gozo3: null,
-  incluir: true,
   ...over,
 });
+
+const CRLF = '\r\n';
 
 describe('buildFeriasCSV', () => {
   it('15 colunas com gozos vazios entre delimitadores + dobra=N', () => {
@@ -49,14 +46,14 @@ describe('buildFeriasCSV', () => {
     );
   });
 
-  it('lista vazia = só header', () => {
+  it('lista vazia = só header em CRLF', () => {
     const csv = buildFeriasCSV([]);
-    expect(csv.split('\n').filter(Boolean)).toHaveLength(1);
+    expect(csv.split(CRLF).filter(Boolean)).toHaveLength(1);
   });
 
   it('header tem 15 colunas separadas por ;', () => {
     const csv = buildFeriasCSV([]);
-    const header = csv.split('\n')[0];
+    const header = csv.split(CRLF)[0];
     expect(header.split(';')).toHaveLength(15);
   });
 });
