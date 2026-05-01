@@ -35,10 +35,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ExtractionTypeSelector } from "./ExtractionTypeSelector";
 import { HoleritePreviewDialog } from "./HoleritePreviewDialog";
+import { CartaoPontoReviewDialog } from "./CartaoPontoReviewDialog";
+import { FeriasReviewDialog } from "./FeriasReviewDialog";
+import { FaltasReviewDialog } from "./FaltasReviewDialog";
 import {
   generateExportForDocument,
-  triggerBlobDownload,
   type ClassificacaoHolerite,
+  type ParseCartaoPontoResult,
+  type ParseFaltasResult,
+  type ParseFeriasResult,
   type TipoExtracao,
 } from "@/features/data-extraction";
 
@@ -70,6 +75,21 @@ export function ExtractionTypeBadgeAndSelect({
     classificacao: ClassificacaoHolerite;
     filename: string;
   } | null>(null);
+  const [cartaoState, setCartaoState] = useState<{
+    parsed: ParseCartaoPontoResult;
+    ocrText: string;
+    filename: string;
+  } | null>(null);
+  const [feriasState, setFeriasState] = useState<{
+    parsed: ParseFeriasResult;
+    ocrText: string;
+    filename: string;
+  } | null>(null);
+  const [faltasState, setFaltasState] = useState<{
+    parsed: ParseFaltasResult;
+    ocrText: string;
+    filename: string;
+  } | null>(null);
 
   const isAutoSugerido =
     doc.tipo_extracao_origem === "auto" &&
@@ -83,7 +103,8 @@ export function ExtractionTypeBadgeAndSelect({
     doc.tipo_extracao !== "nao_extrair" &&
     doc.tipo_extracao !== null;
 
-  const buttonLabel = doc.tipo_extracao === "holerite" ? "Baixar ZIP" : "Baixar CSV";
+  const buttonLabel =
+    doc.tipo_extracao === "holerite" ? "Revisar e baixar ZIP" : "Revisar e baixar CSV";
 
   const tooltipDisabled =
     doc.ocr_validated !== true
@@ -100,14 +121,35 @@ export function ExtractionTypeBadgeAndSelect({
         setErrorMsg(result.error);
         return;
       }
-      if (result.kind === "preview") {
-        setPreviewState({
-          classificacao: result.preview,
-          filename: result.filename,
-        });
-        return;
+      switch (result.kind) {
+        case "holerite-preview":
+          setPreviewState({
+            classificacao: result.preview,
+            filename: result.filename,
+          });
+          break;
+        case "cartao-ponto-review":
+          setCartaoState({
+            parsed: result.parsed,
+            ocrText: result.ocr_text,
+            filename: result.filename,
+          });
+          break;
+        case "ferias-review":
+          setFeriasState({
+            parsed: result.parsed,
+            ocrText: result.ocr_text,
+            filename: result.filename,
+          });
+          break;
+        case "faltas-review":
+          setFaltasState({
+            parsed: result.parsed,
+            ocrText: result.ocr_text,
+            filename: result.filename,
+          });
+          break;
       }
-      triggerBlobDownload(result.blob, result.filename);
     } finally {
       setDownloading(false);
     }
@@ -201,6 +243,33 @@ export function ExtractionTypeBadgeAndSelect({
           onOpenChange={(o) => !o && setPreviewState(null)}
           classificacao={previewState.classificacao}
           filename={previewState.filename}
+        />
+      )}
+      {cartaoState && (
+        <CartaoPontoReviewDialog
+          open={cartaoState !== null}
+          onOpenChange={(o) => !o && setCartaoState(null)}
+          parsed={cartaoState.parsed}
+          ocrText={cartaoState.ocrText}
+          filename={cartaoState.filename}
+        />
+      )}
+      {feriasState && (
+        <FeriasReviewDialog
+          open={feriasState !== null}
+          onOpenChange={(o) => !o && setFeriasState(null)}
+          parsed={feriasState.parsed}
+          ocrText={feriasState.ocrText}
+          filename={feriasState.filename}
+        />
+      )}
+      {faltasState && (
+        <FaltasReviewDialog
+          open={faltasState !== null}
+          onOpenChange={(o) => !o && setFaltasState(null)}
+          parsed={faltasState.parsed}
+          ocrText={faltasState.ocrText}
+          filename={faltasState.filename}
         />
       )}
     </div>

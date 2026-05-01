@@ -1,22 +1,19 @@
 /**
- * Orquestrador de export por documento (v4).
+ * Orquestrador de export por documento.
  *
- * Recebe o ID do documento, busca OCR + tipo no banco e roteia para o
- * parser/builder correto. **Não persiste nada.** Estado vive só no
- * navegador.
+ * Lê OCR + tipo do banco e dispara o parser correto. **Não persiste nada.**
+ * Sempre devolve dados em formato "review-ready" — a UI obrigatoriamente
+ * abre o Review Dialog correspondente para o usuário revisar, editar e
+ * confirmar antes de baixar o CSV.
  *
- * Retorno:
- *   - Cartão/Férias/Faltas → `{ ok: true, blob, filename }` (download direto).
- *   - Holerite → `{ ok: true, preview, filename }` (UI deve abrir
- *     HoleritePreviewDialog antes de gerar o ZIP).
- *   - Erro → `{ ok: false, error }`.
+ * Não há mais "download direto" — todos os 4 tipos passam por revisão visual.
  */
 
 import { supabase } from '@/integrations/supabase/client';
 import { parseHolerite } from '../../parsers/holerite';
-import { parseCartaoPonto } from '../../parsers/cartao-ponto';
-import { parseFerias } from '../../parsers/ferias';
-import { parseFaltas } from '../../parsers/faltas';
+import { parseCartaoPonto, type ParseCartaoPontoResult } from '../../parsers/cartao-ponto';
+import { parseFerias, type ParseFeriasResult } from '../../parsers/ferias';
+import { parseFaltas, type ParseFaltasResult } from '../../parsers/faltas';
 import { buildCartaoPontoCSV } from './cartao-ponto-csv';
 import { buildFeriasCSVBlob } from './ferias-csv';
 import { buildFaltasCSVBlob } from './faltas-csv';
@@ -24,8 +21,34 @@ import { classifyHolerite, type ClassificacaoHolerite } from './holerite-classif
 import { buildHoleriteZip } from './holerite-zip';
 
 export type ExportResult =
-  | { ok: true; kind: 'blob'; blob: Blob; filename: string }
-  | { ok: true; kind: 'preview'; preview: ClassificacaoHolerite; filename: string }
+  | {
+      ok: true;
+      kind: 'holerite-preview';
+      preview: ClassificacaoHolerite;
+      ocr_text: string;
+      filename: string;
+    }
+  | {
+      ok: true;
+      kind: 'cartao-ponto-review';
+      parsed: ParseCartaoPontoResult;
+      ocr_text: string;
+      filename: string;
+    }
+  | {
+      ok: true;
+      kind: 'ferias-review';
+      parsed: ParseFeriasResult;
+      ocr_text: string;
+      filename: string;
+    }
+  | {
+      ok: true;
+      kind: 'faltas-review';
+      parsed: ParseFaltasResult;
+      ocr_text: string;
+      filename: string;
+    }
   | { ok: false; error: string };
 
 export async function generateExportForDocument(
@@ -33,7 +56,9 @@ export async function generateExportForDocument(
 ): Promise<ExportResult> {
   const { data: doc, error } = await supabase
     .from('documents')
-    .select('id, file_name, tipo_extracao, ocr_text, ocr_validated, competencia_referencia')
+    .select(
+      'id, file_name, tipo_extracao, ocr_text, ocr_validated, competencia_referencia',
+    )
     .eq('id', documentId)
     .single();
   if (error || !doc) return { ok: false, error: 'Documento não encontrado.' };
@@ -45,80 +70,50 @@ export async function generateExportForDocument(
   }
 
   const baseName = sanitizeFilename(doc.file_name ?? 'documento');
+  const ocrText = doc.ocr_text;
 
   switch (doc.tipo_extracao) {
     case 'holerite': {
-      const parsed = parseHolerite(doc.ocr_text);
-      if (parsed.rubricas.length === 0) {
-        return {
-          ok: false,
-          error:
-            parsed.warnings.join(' · ') ||
-            'Nenhuma rubrica extraída. Edite o OCR e tente novamente.',
-        };
-      }
+      const parsed = parseHolerite(ocrText);
       const preview = classifyHolerite(parsed);
       return {
         ok: true,
-        kind: 'preview',
+        kind: 'holerite-preview',
         preview,
+        ocr_text: ocrText,
         filename: `${baseName}_pjecalc.zip`,
       };
     }
     case 'cartao_ponto': {
       const parsed = parseCartaoPonto(
-        doc.ocr_text,
+        ocrText,
         doc.competencia_referencia ?? undefined,
       );
-      if (parsed.apuracoes.length === 0) {
-        return {
-          ok: false,
-          error:
-            parsed.warnings.join(' · ') ||
-            'Nenhuma apuração diária extraída. Edite o OCR e tente novamente.',
-        };
-      }
-      const blob = buildCartaoPontoCSV(parsed);
       return {
         ok: true,
-        kind: 'blob',
-        blob,
+        kind: 'cartao-ponto-review',
+        parsed,
+        ocr_text: ocrText,
         filename: `${baseName}_jornada.csv`,
       };
     }
     case 'recibo_ferias': {
-      const parsed = parseFerias(doc.ocr_text);
-      if (parsed.ferias.length === 0) {
-        return {
-          ok: false,
-          error:
-            parsed.warnings.join(' · ') ||
-            'Nenhum período de férias extraído. Edite o OCR e tente novamente.',
-        };
-      }
-      const blob = buildFeriasCSVBlob(parsed);
+      const parsed = parseFerias(ocrText);
       return {
         ok: true,
-        kind: 'blob',
-        blob,
+        kind: 'ferias-review',
+        parsed,
+        ocr_text: ocrText,
         filename: `${baseName}_ferias.csv`,
       };
     }
     case 'registro_faltas': {
-      const parsed = parseFaltas(doc.ocr_text);
-      if (parsed.faltas.length === 0) {
-        return {
-          ok: false,
-          error:
-            parsed.warnings.join(' · ') ||
-            'Nenhuma falta extraída. Edite o OCR e tente novamente.',
-        };
-      }
-      const blob = buildFaltasCSVBlob(parsed);
+      const parsed = parseFaltas(ocrText);
       return {
         ok: true,
-        kind: 'blob',
-        blob,
+        kind: 'faltas-review',
+        parsed,
+        ocr_text: ocrText,
         filename: `${baseName}_faltas.csv`,
       };
     }
@@ -149,13 +144,20 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
   }
 }
 
-/** Saneia nome de arquivo: tira extensão e troca chars problemáticos por `_`. */
 function sanitizeFilename(name: string): string {
-  return name
-    .replace(/\.[a-z0-9]+$/i, '')
-    .replace(/[^a-zA-Z0-9_-]/g, '_')
-    .slice(0, 100) || 'documento';
+  return (
+    name
+      .replace(/\.[a-z0-9]+$/i, '')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .slice(0, 100) || 'documento'
+  );
 }
 
-export { classifyHolerite, buildHoleriteZip };
+export {
+  classifyHolerite,
+  buildHoleriteZip,
+  buildCartaoPontoCSV,
+  buildFeriasCSVBlob,
+  buildFaltasCSVBlob,
+};
 export type { ClassificacaoHolerite, LinhaClassificada } from './holerite-classify';

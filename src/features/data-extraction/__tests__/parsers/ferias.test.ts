@@ -103,7 +103,7 @@ describe("parseFerias — múltiplos blocos", () => {
     `;
     const r = parseFerias(text);
     expect(r.ferias).toHaveLength(1);
-    expect(r.warnings.some((w) => /descartado/i.test(w))).toBe(true);
+    expect(r.warnings.some((w) => /ignorado/i.test(w))).toBe(true);
   });
 });
 
