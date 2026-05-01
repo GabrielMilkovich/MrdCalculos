@@ -18,7 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DocumentOcrValidation } from "./DocumentOcrValidation";
 import { ExtractionStepper, type ExtractionStep as Step } from "./data-extraction/ExtractionStepper";
 import { ExtractionStep } from "./data-extraction/ExtractionStep";
-import { ComposicaoCsvDialog } from "./data-extraction/ComposicaoCsvDialog";
+import { ComposicaoExportDialog } from "./data-extraction/ComposicaoExportDialog";
 
 interface Props {
   caseId: string;
@@ -136,7 +136,7 @@ export function DataExtractionValidationTab({
         />
       )}
 
-      <ComposicaoCsvDialog
+      <ComposicaoExportDialog
         open={openCompose}
         onOpenChange={setOpenCompose}
         caseId={caseId}

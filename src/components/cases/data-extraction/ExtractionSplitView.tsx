@@ -26,7 +26,9 @@ import { DocumentPreview } from "@/components/cases/shared/DocumentPreview";
 import { RubricasGrid } from "./RubricasGrid";
 import { FeriasForm } from "./FeriasForm";
 import { FaltasForm } from "./FaltasForm";
+import { JornadaGrid } from "./JornadaGrid";
 import { useRubricasDoDocumento } from "@/features/data-extraction/hooks/useRubricasDoDocumento";
+import { useCartaoPontoDoDocumento } from "@/features/data-extraction/hooks/useCartaoPontoDoDocumento";
 import type { Categoria, TipoExtracao } from "@/features/data-extraction";
 import type { DocSummary } from "./types";
 
@@ -44,19 +46,31 @@ export function ExtractionSplitView({ doc, categorias }: Props) {
   const qc = useQueryClient();
   const [editingComp, setEditingComp] = useState<string | null>(null);
 
-  // Hook compartilhado pra ações de competência/validate/reject
-  const { saveCompetencia, validate, reject } = useRubricasDoDocumento(doc.id, doc.case_id);
+  const tipoExtracao = doc.tipo_extracao as Exclude<TipoExtracao, "nao_extrair">;
+  const isHolerite = tipoExtracao === "holerite";
+  const isFerias = tipoExtracao === "recibo_ferias";
+  const isFaltas = tipoExtracao === "registro_faltas";
+  const isCartao = tipoExtracao === "cartao_ponto";
+
+  // Hook ações: cartão tem fluxo próprio (sem rubricas), demais usam useRubricasDoDocumento.
+  const rubHook = useRubricasDoDocumento(doc.id, doc.case_id);
+  const cartHook = useCartaoPontoDoDocumento(isCartao ? doc.id : null, doc.case_id);
+  const saveCompetencia = isCartao ? cartHook.saveCompetencia : rubHook.saveCompetencia;
+  const validate = isCartao ? cartHook.validate : rubHook.validate;
+  const reject = isCartao ? cartHook.reject : rubHook.reject;
 
   // Reset edit-mode quando troca de doc
   useEffect(() => {
     setEditingComp(null);
   }, [doc.id]);
 
-  const tipoExtracao = doc.tipo_extracao as Exclude<TipoExtracao, "nao_extrair">;
-  const isHolerite = tipoExtracao === "holerite";
-  const isFerias = tipoExtracao === "recibo_ferias";
-  const isFaltas = tipoExtracao === "registro_faltas";
-  const tipoLabel = isHolerite ? "Holerite" : isFerias ? "Recibo de Férias" : "Registro de Faltas";
+  const tipoLabel = isHolerite
+    ? "Holerite"
+    : isFerias
+      ? "Recibo de Férias"
+      : isFaltas
+        ? "Registro de Faltas"
+        : "Cartão de Ponto";
 
   return (
     <Card>
@@ -73,8 +87,8 @@ export function ExtractionSplitView({ doc, categorias }: Props) {
             <Badge variant="destructive" className="text-[10px] flex-shrink-0">rejeitado</Badge>
           )}
         </div>
-        {/* Competência (apenas pra holerite) */}
-        {isHolerite && (
+        {/* Competência (holerite + cartão de ponto) */}
+        {(isHolerite || isCartao) && (
           <div className="flex items-center gap-1.5 text-xs flex-shrink-0">
             <span className="text-muted-foreground">Comp:</span>
             {editingComp !== null ? (
@@ -158,6 +172,13 @@ export function ExtractionSplitView({ doc, categorias }: Props) {
           )}
           {isFerias && <FeriasForm documentId={doc.id} caseId={doc.case_id} />}
           {isFaltas && <FaltasForm documentId={doc.id} caseId={doc.case_id} />}
+          {isCartao && (
+            <JornadaGrid
+              documentId={doc.id}
+              caseId={doc.case_id}
+              competencia={doc.competencia_referencia ?? ""}
+            />
+          )}
 
           {/* Direita: PDF preview */}
           <DocumentPreview

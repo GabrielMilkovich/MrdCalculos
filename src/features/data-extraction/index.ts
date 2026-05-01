@@ -64,6 +64,8 @@ export { reclassificarRubrica } from './classification/apply';
 export { composeHistoricoSalarial } from './composer/historico-salarial';
 export { composeFerias } from './composer/ferias';
 export { composeFaltas, chaveFalta } from './composer/faltas';
+export { composeCartoesPonto } from './composer/cartao-ponto';
+export type { ComposicaoCartoesPonto } from './composer/cartao-ponto';
 
 // Export
 export { sanitizeText } from './export/sanitize';
@@ -105,6 +107,58 @@ export {
   toggleFeriasIncluir,
   toggleFaltasIncluir,
 } from './api/ferias-faltas';
+export {
+  loadCartaoPontoByDocument,
+  loadCartoesPontoByCase,
+  loadApuracoesByDocument,
+  loadApuracoesByCartao,
+  loadApuracoesByCase,
+  deleteCartaoPontoByDocument,
+  ensureCartaoPonto,
+  refreshCartaoBounds,
+  replaceApuracoes,
+} from './api/cartao-ponto';
+export type {
+  CartaoPontoExtraido,
+  ApuracaoExtraidaRow,
+} from './api/cartao-ponto';
+// Export PJC builder + zip + orquestrador final
+export {
+  buildPjcXml,
+  derivarPeriodosFerias,
+  brToEpochMs,
+} from './export/pjc/builder';
+export type {
+  PjcCalculoData,
+  PjcMeta,
+  PjcHistoricoSalarial,
+  PjcOcorrenciaHistorico,
+  PjcFerias,
+  PjcGozo,
+  PjcFalta,
+  PjcCartaoPonto,
+  PjcApuracaoDiaria,
+  PjcMarcacao,
+} from './export/pjc/builder';
+export {
+  buildPjcZip,
+  composePjcFilename,
+  PJC_INNER_XML_NAME,
+} from './export/pjc/zip';
+export {
+  competenciaToEpochMs,
+  isoToEpochMs,
+  utf16ToLatin1,
+} from './export/pjc/encoding';
+export { buildExport } from './export/build-export';
+export type { BuildExportInput, BuildExportOutput } from './export/build-export';
+export {
+  buildPjcCalculoData,
+  payloadsToHistoricos,
+} from './export/pjc/from-composicao';
+export type { BuildPjcInput } from './export/pjc/from-composicao';
+export { loadPjcMeta } from './api/pjc-meta';
+export type { PjcMetaCheck } from './api/pjc-meta';
 export {
   extractDocument,
   setTipoExtracao,
