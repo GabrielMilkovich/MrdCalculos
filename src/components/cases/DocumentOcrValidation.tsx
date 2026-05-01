@@ -37,7 +37,7 @@ import {
   ExtractionTypeBadgeAndSelect,
   type DocForBadge,
 } from "@/components/cases/data-extraction/ExtractionTypeBadgeAndSelect";
-import { setTipoExtracao, extractDocument, type TipoExtracao } from "@/features/data-extraction";
+import { setTipoExtracao, type TipoExtracao } from "@/features/data-extraction";
 import { DocumentPreview } from "@/components/cases/shared/DocumentPreview";
 
 interface DocRow {
@@ -87,6 +87,9 @@ interface Props {
   /** Mensagem opcional exibida no rodapé quando `canAdvance` retorna false
    *  por motivo diferente de "OCR faltando". */
   advanceBlockedReason?: string;
+  /** Quando true, mostra botão "Baixar CSV/ZIP" em cada doc com OCR validado.
+   *  Usado pelo modo data_extraction (v4). */
+  showDownloadButton?: boolean;
 }
 
 async function getFreshSignedUrl(storagePath: string): Promise<string | null> {
@@ -121,6 +124,7 @@ export function DocumentOcrValidation({
   onValidated,
   showExtractionTypeSelector,
   showExtractionTypeBadges,
+  showDownloadButton,
   advanceLabel,
   canAdvance,
   advanceBlockedReason,
@@ -362,17 +366,10 @@ export function DocumentOcrValidation({
                       {showExtractionTypeBadges ? (
                         <ExtractionTypeBadgeAndSelect
                           doc={doc as DocForBadge}
-                          onChange={async (novo, shouldReextract) => {
+                          showDownloadButton={showDownloadButton}
+                          onChange={async (novo) => {
                             try {
                               await setTipoExtracao(doc.id, novo);
-                              if (shouldReextract && novo !== "nao_extrair") {
-                                // Re-dispara extração com o novo tipo. Edge fn
-                                // já faz DELETE+INSERT em rubricas_extraidas.
-                                logger.info("manual_tipo_change_reextract", {
-                                  documentId: doc.id, novo,
-                                });
-                                await extractDocument(doc.id, novo);
-                              }
                               await loadDocs();
                               onValidated?.();
                             } catch (err) {

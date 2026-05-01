@@ -1,36 +1,22 @@
-// Barrel exports — Modo Extração de Dados v2.
+// Barrel exports — Modo Extração de Dados v4 (radical simplification).
+//
+// API pública mínima após o cleanup:
+//   - Tipos básicos
+//   - Parsers determinísticos
+//   - Hints + auto-detect
+//   - Builders CSV/ZIP por documento (export/per-doc/)
 
 export type {
   CaseMode,
   TipoExtracao,
   ValidationStatus,
   ExtracaoStatus,
-  ClassificacaoOrigem,
-  Origem,
-  ConfiancaAuto,
   CategoriaSlug,
-  Categoria,
-  RubricaExtraida,
-  CategoriaIncidenciaConfig,
   GozoPeriodo,
   SituacaoFerias,
-  FeriasExtraida,
-  FaltaExtraida,
   HintResult,
-  DocumentoOrigem,
   LinhaHistoricoSalarial,
-  CandidatoConflito,
-  ConflitoHistoricoSalarial,
-  ResolucaoConflito,
-  ComposicaoHistorico,
-  ConflitoFerias,
-  ResolucaoFerias,
-  ComposicaoFerias,
-  ConflitoFaltas,
-  ResolucaoFaltas,
-  ComposicaoFaltas,
-  HistoricoCsvPayload,
-  ZipExportPayload,
+  IncidenciaFlags,
 } from './types';
 
 // Classification
@@ -57,114 +43,29 @@ export type {
   RubricaParseada,
   LayoutHolerite,
 } from './parsers/holerite';
-export { lookupMemo, loadCaseMemos, memoKey } from './classification/memo';
-export { reclassificarRubrica } from './classification/apply';
 
-// Composer
-export { composeHistoricoSalarial } from './composer/historico-salarial';
-export { composeFerias } from './composer/ferias';
-export { composeFaltas, chaveFalta } from './composer/faltas';
-export { composeCartoesPonto } from './composer/cartao-ponto';
-export type { ComposicaoCartoesPonto } from './composer/cartao-ponto';
-
-// Export
+// CSV builders (texto)
 export { sanitizeText } from './export/sanitize';
 export { formatNumeroBR, formatBoolBR, formatDataBR } from './export/format-br';
 export { buildHistoricoSalarialCSV } from './export/csv-historico';
 export { buildFeriasCSV } from './export/csv-ferias';
+export type { FeriasCsvLinha } from './export/csv-ferias';
 export { buildFaltasCSV } from './export/csv-faltas';
-export { buildLeiaMe } from './export/leia-me';
-export {
-  buildZip,
-  countCsvsToExport,
-  sanitizeFilename,
-  buildZipFilename,
-} from './export/zip';
-export { downloadZip } from './export/download';
+export type { FaltaCsvLinha } from './export/csv-faltas';
 
-// API
-export { loadCategorias } from './api/categorias';
+// Per-doc export (entry-point principal da v4)
 export {
-  loadRubricasByCase,
-  loadRubricasByDocument,
-  deleteRubricasByDocument,
-  insertManualRubrica,
-  updateRubricaValor,
-  deleteRubrica,
-} from './api/rubricas';
-export {
-  loadCategoriaConfigs,
-  ensureCategoriaConfigs,
-  updateCategoriaConfig,
-} from './api/config';
-export {
-  loadFeriasByCase,
-  loadFaltasByCase,
-  loadFeriasByDocument,
-  loadFaltasByDocument,
-  deleteFeriasByDocument,
-  deleteFaltasByDocument,
-  toggleFeriasIncluir,
-  toggleFaltasIncluir,
-} from './api/ferias-faltas';
-export {
-  loadCartaoPontoByDocument,
-  loadCartoesPontoByCase,
-  loadApuracoesByDocument,
-  loadApuracoesByCartao,
-  loadApuracoesByCase,
-  deleteCartaoPontoByDocument,
-  ensureCartaoPonto,
-  refreshCartaoBounds,
-  replaceApuracoes,
-} from './api/cartao-ponto';
+  generateExportForDocument,
+  triggerBlobDownload,
+  classifyHolerite,
+  buildHoleriteZip,
+} from './export/per-doc';
 export type {
-  CartaoPontoExtraido,
-  ApuracaoExtraidaRow,
-} from './api/cartao-ponto';
-// Export PJC builder + zip + orquestrador final
-export {
-  buildPjcXml,
-  derivarPeriodosFerias,
-  brToEpochMs,
-} from './export/pjc/builder';
-export type {
-  PjcCalculoData,
-  PjcMeta,
-  PjcHistoricoSalarial,
-  PjcOcorrenciaHistorico,
-  PjcFerias,
-  PjcGozo,
-  PjcFalta,
-  PjcCartaoPonto,
-  PjcApuracaoDiaria,
-  PjcMarcacao,
-} from './export/pjc/builder';
-export {
-  buildPjcZip,
-  composePjcFilename,
-  readPjcFile,
-  PJC_INNER_XML_NAME,
-} from './export/pjc/zip';
-export { parsePjcXml } from './export/pjc/importer';
-export {
-  competenciaToEpochMs,
-  isoToEpochMs,
-  utf16ToLatin1,
-} from './export/pjc/encoding';
-export { buildExport } from './export/build-export';
-export type { BuildExportInput, BuildExportOutput } from './export/build-export';
-export {
-  buildPjcCalculoData,
-  payloadsToHistoricos,
-} from './export/pjc/from-composicao';
-export type { BuildPjcInput } from './export/pjc/from-composicao';
-export { loadPjcMeta } from './api/pjc-meta';
-export type { PjcMetaCheck } from './api/pjc-meta';
-export {
-  extractDocument,
-  setTipoExtracao,
-  setCompetenciaReferencia,
-  markValidationStatus,
-} from './api/extract';
-export type { ExtractResult } from './api/extract';
+  ExportResult,
+  ClassificacaoHolerite,
+  LinhaClassificada,
+} from './export/per-doc';
+export { utf16ToLatin1 } from './export/per-doc/encoding';
+
+// Document API mínimo (apenas o dropdown de tipo)
+export { setTipoExtracao } from './api/document-tipo';

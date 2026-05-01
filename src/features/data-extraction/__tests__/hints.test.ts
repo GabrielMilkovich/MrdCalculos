@@ -121,6 +121,50 @@ describe('getDefaultHint — Premiação', () => {
   });
 });
 
+describe('getDefaultHint — Salário-família', () => {
+  it('"Salário-família" → categoria salario_familia', () => {
+    expect(getDefaultHint('Salário-família')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'salario_familia',
+    });
+  });
+  it('"SALARIO FAMILIA" sem hífen → categoria salario_familia', () => {
+    expect(getDefaultHint('SALARIO FAMILIA')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'salario_familia',
+    });
+  });
+  it('"Sal. Família" abreviado → categoria salario_familia', () => {
+    expect(getDefaultHint('Sal. Família')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'salario_familia',
+    });
+  });
+});
+
+describe('getDefaultHint — Mínimo Garantido', () => {
+  it('"Mínimo Garantido" → categoria minimo_garantido', () => {
+    expect(getDefaultHint('Mínimo Garantido')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'minimo_garantido',
+    });
+  });
+  it('"GARANTIA MINIMA" → categoria minimo_garantido', () => {
+    expect(getDefaultHint('GARANTIA MINIMA')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'minimo_garantido',
+    });
+  });
+  // Importante: "COM. GARANTIA" deve continuar caindo em comissão (regex
+  // específico bate antes), não em mínimo garantido.
+  it('"COM. GARANTIA" continua sendo comissão (regex específico bate antes)', () => {
+    expect(getDefaultHint('COM. GARANTIA')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'comissao',
+    });
+  });
+});
+
 describe('getDefaultHint — null', () => {
   it('rubrica desconhecida não retorna nada', () => {
     expect(getDefaultHint('XYZ123')).toBeNull();

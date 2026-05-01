@@ -112,6 +112,25 @@ const HINTS_PREMIACAO: Array<{ pattern: RegExp; motivo: string }> = [
   },
 ];
 
+const HINTS_MINIMO_GARANTIDO: Array<{ pattern: RegExp; motivo: string }> = [
+  {
+    pattern: /\bm[íi]nimo\s+garantido\b/i,
+    motivo: 'Mínimo garantido — categoria Mínimo Garantido.',
+  },
+  {
+    pattern: /\bgarantia\s+min(?:ima)?\b/i,
+    motivo: 'Garantia mínima — categoria Mínimo Garantido.',
+  },
+];
+
+const HINTS_SALARIO_FAMILIA: Array<{ pattern: RegExp; motivo: string }> = [
+  {
+    // Aceita "salario familia", "salario-familia", "sal familia", "sal.familia"
+    pattern: /\bsal(?:[áa]rio)?[\s-.]*fam[íi]lia\b/i,
+    motivo: 'Salário-família — natureza indenizatória.',
+  },
+];
+
 /**
  * Sugere classificação automática para uma rubrica.
  *
@@ -136,6 +155,26 @@ export function getDefaultHint(nome: string): HintResult {
   for (const h of HINTS_IGNORAR) {
     if (h.pattern.test(norm)) {
       return { tipo: 'sugerir_ignorar', motivo: h.motivo };
+    }
+  }
+  // Salário-família e mínimo garantido antes de COMISSAO/PREMIACAO porque
+  // "garantia" pode aparecer em ambos contextos; o nome explícito vence.
+  for (const h of HINTS_SALARIO_FAMILIA) {
+    if (h.pattern.test(norm)) {
+      return {
+        tipo: 'sugerir_categoria',
+        slug: 'salario_familia',
+        motivo: h.motivo,
+      };
+    }
+  }
+  for (const h of HINTS_MINIMO_GARANTIDO) {
+    if (h.pattern.test(norm)) {
+      return {
+        tipo: 'sugerir_categoria',
+        slug: 'minimo_garantido',
+        motivo: h.motivo,
+      };
     }
   }
   for (const h of HINTS_COMISSAO) {

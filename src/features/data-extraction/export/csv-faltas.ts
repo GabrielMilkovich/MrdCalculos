@@ -1,4 +1,3 @@
-import type { FaltaExtraida } from '../types';
 import { formatBoolBR, formatDataBR } from './format-br';
 import { sanitizeText } from './sanitize';
 
@@ -7,7 +6,15 @@ const HEADER =
 
 const MAX_JUSTIFICATIVA = 200;
 
-export function buildFaltasCSV(linhas: FaltaExtraida[]): string {
+export type FaltaCsvLinha = {
+  data_inicio: string; // ISO yyyy-mm-dd
+  data_fim: string;
+  justificada: boolean;
+  reiniciar_periodo_aquisitivo: boolean;
+  justificativa: string | null;
+};
+
+export function buildFaltasCSV(linhas: FaltaCsvLinha[]): string {
   const rows = linhas.map((f) =>
     [
       formatDataBR(f.data_inicio),

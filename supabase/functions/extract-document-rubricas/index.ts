@@ -1,13 +1,20 @@
 // =====================================================
-// extract-document-rubricas — versão zero-LLM (v3)
+// extract-document-rubricas — DEPRECATED (v4 cleanup)
 // =====================================================
-// Reescrita completa: substitui chamada OpenAI por parsers determinísticos
-// inline. Match com src/features/data-extraction/parsers/* — mantido em
-// sync manualmente (Deno não importa src/).
+// Esta Edge Function foi DESATIVADA na v4 (Maio/2026). Ela não é mais
+// chamada por nenhum código do frontend.
 //
-// Tipos suportados: holerite, recibo_ferias, registro_faltas, cartao_ponto.
-// Pra holerite, biblioteca de layouts (apenas generico_v1 nesta fase A;
-// layouts específicos como via_varejo_v1 vêm na fase B).
+// O modo "Extração de Dados" agora gera CSV/ZIP no próprio browser, lendo
+// `documents.ocr_text` diretamente — ver
+// `src/features/data-extraction/export/per-doc/`. Sem persistência
+// estruturada em `rubricas_extraidas`/etc.
+//
+// Mantida no repositório por:
+//   - histórico de schema/migrations (tabelas continuam existindo)
+//   - eventual rollback / reaproveitamento
+//
+// Se você precisar editar isto: avalie se o consumo está realmente
+// reativado no frontend antes de gastar tempo aqui.
 // =====================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";

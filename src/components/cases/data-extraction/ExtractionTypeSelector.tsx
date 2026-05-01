@@ -18,6 +18,7 @@ const LABELS: Record<TipoExtracao, string> = {
   holerite: 'Holerite / Contracheque',
   recibo_ferias: 'Recibo de Férias',
   registro_faltas: 'Registro de Faltas',
+  cartao_ponto: 'Cartão de Ponto / Jornada',
 };
 
 export function ExtractionTypeSelector({ value, onChange, disabled }: Props) {

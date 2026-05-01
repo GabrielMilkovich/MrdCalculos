@@ -1,9 +1,21 @@
-import type { FeriasExtraida } from '../types';
+import type { GozoPeriodo, SituacaoFerias } from '../types';
 import { formatBoolBR } from './format-br';
 import { sanitizeText } from './sanitize';
 
 const HEADER =
   'Relativa;Prazo;Situacao;DobraGeral;Abono;DiasAbono;DtIniGozo1;DtFimGozo1;DobraGozo1;DtIniGozo2;DtFimGozo2;DobraGozo2;DtIniGozo3;DtFimGozo3;DobraGozo3';
+
+export type FeriasCsvLinha = {
+  relativa: string; // "aaaa/aaaa"
+  prazo: number;
+  situacao: SituacaoFerias;
+  dobra_geral: boolean;
+  abono: boolean;
+  dias_abono: number;
+  gozo1: GozoPeriodo | null;
+  gozo2: GozoPeriodo | null;
+  gozo3: GozoPeriodo | null;
+};
 
 /**
  * 15 colunas. Gozos vazios (null) viram delimitador vazio + dobra='N'.
@@ -11,7 +23,7 @@ const HEADER =
  * Atenção: o parser do PJe-Calc Cidadão NÃO cria períodos aquisitivos —
  * ele só atualiza por `relativa`. UI precisa avisar (vai no LEIA-ME).
  */
-export function buildFeriasCSV(linhas: FeriasExtraida[]): string {
+export function buildFeriasCSV(linhas: FeriasCsvLinha[]): string {
   const rows = linhas.map((f) => {
     const g1 = f.gozo1;
     const g2 = f.gozo2;

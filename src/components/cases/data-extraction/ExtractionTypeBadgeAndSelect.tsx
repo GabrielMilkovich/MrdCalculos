@@ -1,21 +1,23 @@
 /**
- * ExtractionTypeBadgeAndSelect — substitui o ExtractionTypeSelector simples
- * no card do DocumentOcrValidation quando `showExtractionTypeBadges=true`.
+ * ExtractionTypeBadgeAndSelect — badges + select de tipo + botão Baixar.
  *
- * Mostra:
- *   1. Badge "🤖 sugerido" quando tipo_extracao_origem='auto' (com tooltip
- *      explicando os motivos da detecção).
- *   2. Select editável pra usuário sobrescrever o tipo.
- *   3. Badge "auto-extraído" quando extracao_origem='auto' e ainda pending
- *      validação humana.
- *   4. Badge "erro" quando extracao_status='failed'.
+ * Renderizado dentro do DocumentOcrValidation (ver showExtractionTypeBadges).
  *
- * Mudança manual de tipo após auto-extração já ter rubricas: AlertDialog
- * confirma "Re-extrair com o novo tipo? Vai apagar as rubricas atuais."
+ * Layout:
+ *   [🤖 sugerido]  [Tipo: Holerite ▼]  [⬇ Baixar ZIP]
+ *
+ * O botão de download:
+ *   - aparece quando `showDownloadButton=true` (modo data_extraction v4)
+ *   - desabilita se `tipo_extracao === 'nao_extrair' | null`
+ *   - chama `generateExportForDocument(doc.id)`
+ *   - se holerite → abre HoleritePreviewDialog (preview antes de gerar ZIP)
+ *   - se outros → download direto
+ *   - mostra AlertDialog com erro se parser falhar
  */
 import { useState } from "react";
-import { Sparkles, AlertTriangle, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
@@ -25,7 +27,6 @@ import {
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -33,7 +34,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ExtractionTypeSelector } from "./ExtractionTypeSelector";
-import type { TipoExtracao } from "@/features/data-extraction";
+import { HoleritePreviewDialog } from "./HoleritePreviewDialog";
+import {
+  generateExportForDocument,
+  triggerBlobDownload,
+  type ClassificacaoHolerite,
+  type TipoExtracao,
+} from "@/features/data-extraction";
 
 export interface DocForBadge {
   id: string;
@@ -41,20 +48,28 @@ export interface DocForBadge {
   tipo_extracao_origem: "manual" | "auto" | null;
   tipo_extracao_confianca: "alta" | "media" | "baixa" | null;
   tipo_extracao_motivos: string[] | null;
-  extracao_status: "pending" | "running" | "done" | "failed" | null;
-  extracao_origem: "manual" | "auto" | null;
-  validation_status: "pending" | "validated" | "rejected" | null;
+  ocr_validated?: boolean | null;
 }
 
 interface Props {
   doc: DocForBadge;
-  /** Chamado quando o usuário muda o tipo. Recebe o novo tipo + flag
-   *  indicando se deve re-extrair (true quando havia rubricas auto-extraídas). */
-  onChange: (novo: TipoExtracao, shouldReextract: boolean) => Promise<void> | void;
+  /** Chamado quando o usuário muda o tipo. */
+  onChange: (novo: TipoExtracao) => Promise<void> | void;
+  /** Quando true, mostra botão "Baixar CSV/ZIP". */
+  showDownloadButton?: boolean;
 }
 
-export function ExtractionTypeBadgeAndSelect({ doc, onChange }: Props) {
-  const [pendingChange, setPendingChange] = useState<TipoExtracao | null>(null);
+export function ExtractionTypeBadgeAndSelect({
+  doc,
+  onChange,
+  showDownloadButton,
+}: Props) {
+  const [downloading, setDownloading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [previewState, setPreviewState] = useState<{
+    classificacao: ClassificacaoHolerite;
+    filename: string;
+  } | null>(null);
 
   const isAutoSugerido =
     doc.tipo_extracao_origem === "auto" &&
@@ -63,21 +78,39 @@ export function ExtractionTypeBadgeAndSelect({ doc, onChange }: Props) {
   const motivosTooltip =
     (doc.tipo_extracao_motivos ?? []).join(" · ") || "Detectado automaticamente.";
 
-  const isAutoExtraido =
-    doc.extracao_origem === "auto" &&
-    doc.extracao_status === "done" &&
-    doc.validation_status === "pending";
+  const canDownload =
+    doc.ocr_validated === true &&
+    doc.tipo_extracao !== "nao_extrair" &&
+    doc.tipo_extracao !== null;
 
-  const haveAutoData =
-    doc.extracao_status === "done" || doc.extracao_status === "running";
+  const buttonLabel = doc.tipo_extracao === "holerite" ? "Baixar ZIP" : "Baixar CSV";
 
-  const handleTipoChange = (novo: TipoExtracao) => {
-    // Se já tem dados auto-extraídos e usuário muda o tipo, pede confirmação
-    if (haveAutoData && novo !== doc.tipo_extracao) {
-      setPendingChange(novo);
-      return;
+  const tooltipDisabled =
+    doc.ocr_validated !== true
+      ? "Confirme o OCR antes de baixar."
+      : doc.tipo_extracao === "nao_extrair" || doc.tipo_extracao === null
+      ? "Selecione um tipo de extração antes."
+      : null;
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      const result = await generateExportForDocument(doc.id);
+      if (!result.ok) {
+        setErrorMsg(result.error);
+        return;
+      }
+      if (result.kind === "preview") {
+        setPreviewState({
+          classificacao: result.preview,
+          filename: result.filename,
+        });
+        return;
+      }
+      triggerBlobDownload(result.blob, result.filename);
+    } finally {
+      setDownloading(false);
     }
-    void onChange(novo, false);
   };
 
   return (
@@ -105,72 +138,71 @@ export function ExtractionTypeBadgeAndSelect({ doc, onChange }: Props) {
 
       <ExtractionTypeSelector
         value={doc.tipo_extracao ?? "nao_extrair"}
-        onChange={handleTipoChange}
+        onChange={(novo) => void onChange(novo)}
       />
 
-      {doc.extracao_status === "running" && (
-        <Badge variant="outline" className="gap-1 text-[10px]">
-          <Loader2 className="h-3 w-3 animate-spin" /> extraindo...
-        </Badge>
+      {showDownloadButton && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDownload}
+                  disabled={!canDownload || downloading}
+                  className="gap-1 h-8 text-xs"
+                >
+                  {downloading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Download className="h-3 w-3" />
+                  )}
+                  {buttonLabel}
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {tooltipDisabled && (
+              <TooltipContent side="top" className="text-xs">
+                {tooltipDisabled}
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
       )}
 
-      {isAutoExtraido && (
-        <Badge
-          variant="outline"
-          className="gap-1 text-[10px] text-amber-700 dark:text-amber-300 border-amber-400 bg-amber-50 dark:bg-amber-950/30"
-        >
-          <Sparkles className="h-3 w-3" /> auto-extraído
-        </Badge>
-      )}
-
-      {doc.extracao_status === "failed" && (
-        <Badge variant="destructive" className="gap-1 text-[10px]">
-          <AlertTriangle className="h-3 w-3" /> erro
-        </Badge>
-      )}
-
-      {/* Confirmação de re-extração ao trocar tipo */}
       <AlertDialog
-        open={pendingChange !== null}
-        onOpenChange={(open) => !open && setPendingChange(null)}
+        open={errorMsg !== null}
+        onOpenChange={(o) => !o && setErrorMsg(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Re-extrair com o novo tipo?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Este documento já tem dados extraídos. Mudar o tipo para{" "}
-              <strong>{tipoLabel(pendingChange ?? "nao_extrair")}</strong> vai
-              apagar tudo e re-extrair com o novo prompt.
+            <AlertDialogTitle>Não foi possível extrair</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              {errorMsg}
               <br />
               <br />
-              Suas classificações manuais serão perdidas.
+              <span className="text-muted-foreground">
+                Edite o OCR (na lateral esquerda do card) e tente baixar novamente.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const novo = pendingChange;
-                setPendingChange(null);
-                if (novo) void onChange(novo, true);
-              }}
-            >
-              Re-extrair
+            <AlertDialogAction onClick={() => setErrorMsg(null)}>
+              OK
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {previewState && (
+        <HoleritePreviewDialog
+          open={previewState !== null}
+          onOpenChange={(o) => !o && setPreviewState(null)}
+          classificacao={previewState.classificacao}
+          filename={previewState.filename}
+        />
+      )}
     </div>
   );
-}
-
-function tipoLabel(t: TipoExtracao): string {
-  return (
-    {
-      nao_extrair: "Não extrair",
-      holerite: "Holerite",
-      recibo_ferias: "Recibo de Férias",
-      registro_faltas: "Registro de Faltas",
-    } as const
-  )[t];
 }

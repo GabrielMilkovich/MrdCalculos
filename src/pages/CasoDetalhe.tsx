@@ -857,8 +857,6 @@ export default function CasoDetalhe() {
           return (
             <DataExtractionValidationTab
               caseId={id!}
-              caseSlug={caseData.cliente ?? id!}
-              numeroProcesso={caseData.numero_processo ?? null}
               mode="data_extraction"
             />
           );
