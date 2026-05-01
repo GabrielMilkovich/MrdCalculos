@@ -9,7 +9,8 @@ export type TipoExtracao =
   | 'nao_extrair'
   | 'holerite'
   | 'recibo_ferias'
-  | 'registro_faltas';
+  | 'registro_faltas'
+  | 'cartao_ponto';
 
 export type ValidationStatus = 'pending' | 'validated' | 'rejected';
 export type ExtracaoStatus = 'pending' | 'running' | 'done' | 'failed';

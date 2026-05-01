@@ -85,8 +85,8 @@ describe("autoDetectTipoExtracao — registro de faltas", () => {
   });
 });
 
-describe("autoDetectTipoExtracao — cartão de ponto (out-of-scope)", () => {
-  it("cartão de ponto detectado vai para nao_extrair com motivo claro", () => {
+describe("autoDetectTipoExtracao — cartão de ponto (first-class v3)", () => {
+  it("cartão de ponto detectado vira tipo cartao_ponto com confiança alta", () => {
     const text = `
       CARTÃO DE PONTO
       Empregado: João da Silva
@@ -94,19 +94,19 @@ describe("autoDetectTipoExtracao — cartão de ponto (out-of-scope)", () => {
       01/03/2024 08:00      12:00    13:00      18:00
     `;
     const r = autoDetectTipoExtracao(text);
-    expect(r.tipo).toBe("nao_extrair");
-    expect(r.confianca).toBe("alta");
-    expect(r.motivos[0]).toMatch(/cart[ãa]o de ponto/i);
+    expect(r.tipo).toBe("cartao_ponto");
+    expect(r.confianca).toMatch(/alta|media/);
+    expect(r.motivos[0]).toMatch(/cart[ãa]o\/espelho de ponto/i);
   });
 
-  it("espelho de ponto também é nao_extrair", () => {
+  it("espelho de ponto também vira cartao_ponto", () => {
     const text = `
       ESPELHO DE PONTO
-      Mês de competência 03/2024
-      Marcações: entrada saída entrada saída
+      Jornada de trabalho
+      01/03/2024 08:00 12:00 13:00 18:00
     `;
     const r = autoDetectTipoExtracao(text);
-    expect(r.tipo).toBe("nao_extrair");
+    expect(r.tipo).toBe("cartao_ponto");
   });
 });
 

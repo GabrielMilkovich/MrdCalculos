@@ -103,9 +103,25 @@ const SINAIS_CARTAO_PONTO: Sinal[] = [
     motivo: "cabeçalho cartão/espelho de ponto",
   },
   {
-    pattern: /\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b[\s\S]{0,40}?\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b/i,
+    pattern: /\bjornada\s+de\s+trabalho\b/i,
+    pontos: 8,
+    motivo: "jornada de trabalho",
+  },
+  {
+    pattern: /\bbatidas?\b[\s\S]{0,50}?\b(entrada|sa[íi]da)\b/i,
+    pontos: 6,
+    motivo: "colunas batidas/entrada/saída",
+  },
+  {
+    pattern:
+      /\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b[\s\S]{0,40}?\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b/i,
     pontos: 4,
     motivo: "duplas entrada/saída",
+  },
+  {
+    pattern: /\b\d{2}\/\d{2}\/\d{4}\b[\s\S]{0,100}?\b\d{1,2}:\d{2}\b[\s\S]{0,30}?\b\d{1,2}:\d{2}\b/i,
+    pontos: 4,
+    motivo: "data + múltiplos horários",
   },
 ];
 
@@ -120,7 +136,6 @@ const MIN_OCR_LENGTH = 50;
 const MIN_SCORE_TO_DETECT = 6;
 const MIN_GAP_TO_FIRST = 4;
 const SCORE_FOR_HIGH_CONFIDENCE = 12;
-const SCORE_FOR_HIGH_CARTAO_PONTO = 8;
 
 /**
  * Analisa o texto OCR e retorna o tipo de extração detectado + confiança.
@@ -156,19 +171,6 @@ export function autoDetectTipoExtracao(ocrText: string): AutoDetectResult {
   const ordered = [...entries].sort((a, b) => b[1].pontos - a[1].pontos);
   const [tipoMelhor, dadoMelhor] = ordered[0];
   const segundoPontos = ordered[1]?.[1].pontos ?? 0;
-
-  // Cartão de ponto detectado mas é out-of-scope
-  if (tipoMelhor === "cartao_ponto" && dadoMelhor.pontos >= SCORE_FOR_HIGH_CARTAO_PONTO) {
-    return {
-      tipo: "nao_extrair",
-      confianca: "alta",
-      motivos: [
-        "Cartão de ponto detectado — extração de cartão de ponto não é suportada nesta versão.",
-        ...dadoMelhor.motivos,
-      ],
-      scoresPorTipo: toRecord(scores),
-    };
-  }
 
   // Score baixo absoluto
   if (dadoMelhor.pontos < MIN_SCORE_TO_DETECT) {

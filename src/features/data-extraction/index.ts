@@ -38,6 +38,25 @@ export { normalizeNomeRubrica } from './classification/normalize';
 export { getDefaultHint } from './classification/hints';
 export { autoDetectTipoExtracao } from './classification/auto-detect-tipo';
 export type { AutoDetectResult } from './classification/auto-detect-tipo';
+
+// Parsers determinísticos (zero-LLM)
+export { parseCartaoPonto } from './parsers/cartao-ponto';
+export type {
+  ApuracaoDiaria,
+  Marcacao,
+  OcorrenciaApuracao,
+  ParseCartaoPontoResult,
+} from './parsers/cartao-ponto';
+export { parseFerias } from './parsers/ferias';
+export type { FeriasParseada, ParseFeriasResult } from './parsers/ferias';
+export { parseFaltas } from './parsers/faltas';
+export type { FaltaParseada, ParseFaltasResult } from './parsers/faltas';
+export { parseHolerite } from './parsers/holerite';
+export type {
+  HoleriteParseResult,
+  RubricaParseada,
+  LayoutHolerite,
+} from './parsers/holerite';
 export { lookupMemo, loadCaseMemos, memoKey } from './classification/memo';
 export { reclassificarRubrica } from './classification/apply';
 
