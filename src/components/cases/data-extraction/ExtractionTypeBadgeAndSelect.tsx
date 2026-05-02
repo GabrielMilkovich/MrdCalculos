@@ -183,6 +183,15 @@ export function ExtractionTypeBadgeAndSelect({
         onChange={(novo) => void onChange(novo)}
       />
 
+      {/* Marca visual da versão do build — fica na esquina inferior do select.
+          Permite ao usuário confirmar a olho nu se a versão nova está ativa. */}
+      <span
+        className="text-[9px] text-muted-foreground/60 select-none"
+        title="Versão do parser ativa (use para confirmar deploy)"
+      >
+        v3
+      </span>
+
       {showDownloadButton && (
         <TooltipProvider>
           <Tooltip>
