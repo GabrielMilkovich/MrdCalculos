@@ -4,13 +4,16 @@
  *
  * Recursos:
  *   - Lê texto OCR + ApuracaoDiaria[] do parser.
- *   - Tabela editável: data, ocorrência, 6 pares E/S por dia.
+ *   - Tabela editável: data, ocorrência, 6 pares E/S por dia (limite PJe-Calc).
  *   - Adicionar/remover linha.
  *   - Linhas do OCR não casadas ficam em amarelo no painel de referência.
  *   - Checkbox "conferi" obrigatório para liberar download.
+ *   - Avisa quando dia com ocorrência ≠ NORMAL tem batidas (serão descartadas
+ *     no CSV — PJe-Calc só aceita marcações em dias NORMAL) ou quando há mais
+ *     de 6 pares (serão truncados).
  */
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -64,14 +67,21 @@ function newKey(): string {
   return `r-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+const MAX_PARES = 6;
+
 function fillMarcacoes(marcs: Marcacao[]): Marcacao[] {
   const out: Marcacao[] = [...marcs];
-  while (out.length < 6) out.push({ e: "", s: "" });
-  return out.slice(0, 6);
+  while (out.length < MAX_PARES) out.push({ e: "", s: "" });
+  return out.slice(0, MAX_PARES);
 }
 
 function trimMarcacoes(marcs: Marcacao[]): Marcacao[] {
   return marcs.filter((m) => m.e || m.s);
+}
+
+/** Conta pares com ao menos uma batida preenchida (E ou S). */
+function paresPreenchidos(marcs: Marcacao[]): number {
+  return marcs.filter((m) => m.e || m.s).length;
 }
 
 export function CartaoPontoReviewDialog({
@@ -137,7 +147,40 @@ export function CartaoPontoReviewDialog({
     setRows((prev) => prev.filter((r) => r._key !== key));
 
   const unparsedLines = parsed.unparsed_lines.map((u) => u.linha);
-  const warnings = parsed.warnings;
+
+  // Detecta inconsistências que causam perda de dados no CSV:
+  //   1. Dia com ocorrência ≠ NORMAL ainda tem batidas preenchidas → batidas
+  //      serão descartadas pelo builder.
+  //   2. Dia NORMAL com mais de 6 pares preenchidos → excedente truncado.
+  const linhasComBatidaDescartada = useMemo(
+    () =>
+      sorted.filter(
+        (r) => r.ocorrencia !== "NORMAL" && paresPreenchidos(r.marcacoes) > 0,
+      ),
+    [sorted],
+  );
+  const linhasComCorte = useMemo(
+    () =>
+      sorted.filter(
+        (r) => r.ocorrencia === "NORMAL" && paresPreenchidos(r.marcacoes) > MAX_PARES,
+      ),
+    [sorted],
+  );
+
+  const warnings = useMemo(() => {
+    const ws = [...parsed.warnings];
+    if (linhasComBatidaDescartada.length > 0) {
+      ws.push(
+        `${linhasComBatidaDescartada.length} dia(s) com ocorrência ≠ NORMAL têm batidas — serão descartadas no CSV (PJe-Calc só aceita marcações em dias NORMAL).`,
+      );
+    }
+    if (linhasComCorte.length > 0) {
+      ws.push(
+        `${linhasComCorte.length} dia(s) com mais de ${MAX_PARES} pares E/S — excedente será truncado.`,
+      );
+    }
+    return ws;
+  }, [parsed.warnings, linhasComBatidaDescartada, linhasComCorte]);
 
   const handleConfirm = async () => {
     // Limpa marcações vazias antes de gerar CSV
@@ -177,9 +220,19 @@ export function CartaoPontoReviewDialog({
       onConfirm={handleConfirm}
     >
       <div className="p-2 flex items-center justify-between border-b sticky top-0 bg-background z-10">
-        <span className="text-[11px] text-muted-foreground">
-          Edite/adicione linhas conforme o OCR. Linhas amarelas no OCR (lado
-          esquerdo) precisam virar uma linha aqui.
+        <span className="text-[11px] text-muted-foreground flex items-center gap-2">
+          <span>
+            Edite/adicione linhas conforme o OCR. Linhas amarelas no OCR
+            precisam virar uma linha aqui.
+          </span>
+          {(linhasComBatidaDescartada.length > 0 ||
+            linhasComCorte.length > 0) && (
+            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 font-medium">
+              <AlertTriangle className="h-3 w-3" />
+              {linhasComBatidaDescartada.length + linhasComCorte.length}{" "}
+              dia(s) com perda de dados (linhas em amarelo)
+            </span>
+          )}
         </span>
         <Button
           variant="ghost"
@@ -200,8 +253,11 @@ export function CartaoPontoReviewDialog({
             <TableRow>
               <TableHead className="w-[120px] text-[10px]">Data</TableHead>
               <TableHead className="w-[110px] text-[10px]">Ocorrência</TableHead>
-              <TableHead className="text-[10px] text-center" colSpan={6}>
-                3 pares E/S (E1 S1 E2 S2 E3 S3) — adicione mais com edição
+              <TableHead
+                className="text-[10px] text-center"
+                colSpan={MAX_PARES * 2}
+              >
+                {MAX_PARES} pares E/S (E1 S1 … E{MAX_PARES} S{MAX_PARES})
               </TableHead>
               <TableHead className="w-[140px] text-[10px]">Eventos</TableHead>
               <TableHead className="w-[40px] text-[10px]"></TableHead>
@@ -209,7 +265,15 @@ export function CartaoPontoReviewDialog({
           </TableHeader>
           <TableBody>
             {sorted.map((r) => (
-              <TableRow key={r._key} className="text-xs">
+              <TableRow
+                key={r._key}
+                className={`text-xs ${
+                  (r.ocorrencia !== "NORMAL" && paresPreenchidos(r.marcacoes) > 0) ||
+                  (r.ocorrencia === "NORMAL" && paresPreenchidos(r.marcacoes) > MAX_PARES)
+                    ? "bg-amber-50 dark:bg-amber-950/10"
+                    : ""
+                }`}
+              >
                 <TableCell className="p-1">
                   <Input
                     type="date"
@@ -239,8 +303,8 @@ export function CartaoPontoReviewDialog({
                     </SelectContent>
                   </Select>
                 </TableCell>
-                {Array.from({ length: 3 }).map((_, idx) => (
-                  <TableCell key={`pair-${idx}`} className="p-1" colSpan={2}>
+                {Array.from({ length: MAX_PARES }).map((_, idx) => (
+                  <TableCell key={`pair-${idx}`} className="p-0.5" colSpan={2}>
                     <div className="flex gap-0.5">
                       <Input
                         placeholder={idx === 0 ? "08:00" : ""}
@@ -253,7 +317,7 @@ export function CartaoPontoReviewDialog({
                             ? "Batida inserida manualmente (asterisco no OCR)"
                             : ""
                         }
-                        className={`h-7 text-[11px] font-mono w-[55px] px-1.5 ${
+                        className={`h-7 text-[11px] font-mono w-[48px] px-1 ${
                           r.marcacoes[idx]?.e_inserida
                             ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
                             : ""
@@ -271,7 +335,7 @@ export function CartaoPontoReviewDialog({
                             ? "Batida inserida manualmente (asterisco no OCR)"
                             : ""
                         }
-                        className={`h-7 text-[11px] font-mono w-[55px] px-1.5 ${
+                        className={`h-7 text-[11px] font-mono w-[48px] px-1 ${
                           r.marcacoes[idx]?.s_inserida
                             ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
                             : ""

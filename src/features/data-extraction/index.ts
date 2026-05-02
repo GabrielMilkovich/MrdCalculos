@@ -70,7 +70,6 @@ export type {
   ClassificacaoHolerite,
   LinhaClassificada,
 } from './export/per-doc';
-export { utf16ToLatin1 } from './export/per-doc/encoding';
 
 // Document API mínimo (apenas o dropdown de tipo)
 export { setTipoExtracao } from './api/document-tipo';

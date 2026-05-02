@@ -79,6 +79,37 @@ const HINTS_IGNORAR: Array<{ pattern: RegExp; motivo: string }> = [
     pattern: /\bdesp\w*\s*(med|hosp)|\bdesp\.?med\b/i,
     motivo: 'Despesa médica/hospitalar — desconto, não entra.',
   },
+  // 13º salário (todas as variantes — adiantado, complemento, integral).
+  // PJe-Calc tem campo dedicado fora do Histórico Salarial.
+  {
+    pattern: /\b(13\s*[ºo°]?\s*sal\w*|13\s*sal\w+|decimo\s+terceiro|gratifica\w*\s*natalina|13\s*proporcional)\b/i,
+    motivo: '13º salário — campo separado no PJe-Calc, não entra no Histórico Salarial.',
+  },
+  // Aviso prévio (indenizado ou trabalhado) — verba rescisória
+  {
+    pattern: /\baviso\s*previo\b/i,
+    motivo: 'Aviso prévio — verba rescisória, não entra no Histórico Salarial.',
+  },
+  // Multas e indenizações de FGTS
+  {
+    pattern: /\b(multa\s*(?:de\s*)?(?:40|fgts)|fgts\s*multa|multa\s*rescis\w*)\b/i,
+    motivo: 'Multa rescisória/FGTS — não entra no Histórico Salarial.',
+  },
+  // Depósito de FGTS (linha informativa do holerite, não é remuneração)
+  {
+    pattern: /\b(deposito\s*fgts|fgts\s*(?:deposito|do\s*mes|mensal)?|fgts)\b/i,
+    motivo: 'FGTS é depósito do empregador — informativo, não entra como remuneração.',
+  },
+  // Férias proporcionais / indenizadas (rescisão)
+  {
+    pattern: /\bferias?\s*(proporcionais?|indenizad\w*|rescis\w*|vencidas?\s+e\s+indeniz\w*)\b/i,
+    motivo: 'Férias proporcionais/indenizadas — verba rescisória, fora do Histórico Salarial.',
+  },
+  // PIS/PASEP — não é remuneração mensal
+  {
+    pattern: /\b(pis(?:\/?\s*pasep)?|pasep)\b/i,
+    motivo: 'PIS/PASEP — não entra no Histórico Salarial.',
+  },
 ];
 
 const HINTS_COMISSAO: Array<{ pattern: RegExp; motivo: string }> = [

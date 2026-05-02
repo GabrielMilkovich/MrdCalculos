@@ -48,7 +48,8 @@ const RE_INDENIZADAS = /\bindeniza(?:d[ao]s?|tivas?)\b/i;
 const RE_NAO_GOZADAS = /\bn[ãa]o\s*gozadas?\b/i;
 const RE_PERDIDAS = /\bperdidas?\b/i;
 const RE_GOZADAS_PARC = /\bgozadas?\s*parcialmente\b/i;
-const RE_DOBRA_GERAL = /\bdobra(?:\s+geral)?\b/i;
+const RE_DOBRA_GENERICA =
+  /\b(?:em\s+dobra|em\s+dobro|dobrad[ao]|dobra\s+geral)\b/i;
 const RE_TEM_DIGITO = /\d/;
 
 const RE_BLOCO_FERIAS =
@@ -92,6 +93,62 @@ export function parseFerias(ocrText: string): ParseFeriasResult {
   return { ferias, warnings, unparsed_lines: unparsed };
 }
 
+/**
+ * Detecta se há "em dobra"/"em dobro"/"dobrad[oa]" numa janela de ±60 chars
+ * em torno do match de um gozo, capturando expressões como:
+ *   - "Período de gozo: 01/06/2024 a 30/06/2024 (em dobra)"
+ *   - "Gozo em dobro: 01/06/2024 a 30/06/2024"
+ *
+ * `prevEnd`/`nextStart` limitam a janela para que ela não invada matches
+ * vizinhos — caso contrário um "em dobra" no gozo seguinte vazaria para o
+ * gozo anterior.
+ */
+const RE_DOBRA_GENERICA_GLOBAL =
+  /\b(?:em\s+dobra|em\s+dobro|dobrad[ao]|dobra\s+geral)\b/gi;
+
+/**
+ * Computa array de gozos atribuindo cada menção de "em dobra/dobro" ao gozo
+ * mais próximo (proximidade textual). Limite de 60 chars de distância evita
+ * que menções de header (dobra geral) marquem gozos individuais.
+ */
+function computeGozosWithDobra(
+  bloco: string,
+  matches: Array<{ idx: number; len: number; inicio: string; fim: string }>,
+): Array<{ inicio: string; fim: string; dobra: boolean }> {
+  const result = matches.map((m) => ({
+    inicio: m.inicio,
+    fim: m.fim,
+    dobra: false,
+  }));
+  if (matches.length === 0) return result;
+
+  const dobraMarks = [...bloco.matchAll(RE_DOBRA_GENERICA_GLOBAL)].map((m) => ({
+    idx: m.index ?? 0,
+    len: m[0].length,
+  }));
+
+  for (const d of dobraMarks) {
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < matches.length; i++) {
+      const m = matches[i];
+      const mEnd = m.idx + m.len;
+      let dist: number;
+      if (d.idx >= m.idx && d.idx < mEnd) dist = 0; // dentro do match
+      else if (d.idx >= mEnd) dist = d.idx - mEnd; // depois
+      else dist = m.idx - (d.idx + d.len); // antes
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx >= 0 && bestDist <= 60) {
+      result[bestIdx].dobra = true;
+    }
+  }
+  return result;
+}
+
 function splitInBlocks(text: string): string[] {
   const matches = [...text.matchAll(RE_BLOCO_FERIAS)];
   if (matches.length === 0) return [text];
@@ -120,40 +177,76 @@ function parseOneBlock(
   }
   const relativa = `${relativaMatch[1]}/${relativaMatch[2]}`;
 
+  // PJe-Calc rejeita prazo > 60 dias. Capamos com warning para o usuário
+  // poder ajustar manualmente. Prazo 0 cai no default 30.
   const prazoMatch = bloco.match(RE_PRAZO);
-  const prazo = prazoMatch ? parseInt(prazoMatch[1], 10) : 30;
+  const prazoBruto = prazoMatch ? parseInt(prazoMatch[1], 10) : 30;
+  let prazo = prazoBruto;
   if (!prazoMatch) {
     warnings.push(`Bloco ${idx + 1} (${relativa}): prazo não detectado, usando 30 dias.`);
+  } else if (prazoBruto <= 0) {
+    prazo = 30;
+    warnings.push(
+      `Bloco ${idx + 1} (${relativa}): prazo inválido (${prazoBruto}) — usando 30 dias.`,
+    );
+  } else if (prazoBruto > 60) {
+    prazo = 60;
+    warnings.push(
+      `Bloco ${idx + 1} (${relativa}): prazo ${prazoBruto} dias acima do limite PJe-Calc (60) — capado em 60.`,
+    );
   }
 
   // Gozos: tenta primeiro com label, fallback com data-a-data.
+  // Cada gozo guarda o offset do match no bloco para detectar "em dobra"
+  // próximo a ele (janela ±60 chars).
+  type GozoCand = { inicio: string; fim: string; dobra: boolean };
   const gozoMatchesLabeled = [...bloco.matchAll(RE_GOZO_LABELED)].slice(0, 3);
-  let gozos: Array<{ inicio: string; fim: string }> = gozoMatchesLabeled.map(
-    (m) => ({ inicio: m[1], fim: m[2] }),
+  let firstGozoIdx = bloco.length;
+  let gozos: GozoCand[] = computeGozosWithDobra(
+    bloco,
+    gozoMatchesLabeled.map((m) => ({ idx: m.index ?? 0, len: m[0].length, inicio: m[1], fim: m[2] })),
   );
+  if (gozos.length > 0) firstGozoIdx = gozoMatchesLabeled[0].index ?? 0;
   if (gozos.length === 0) {
     // Fallback: pega todos "data a data" no bloco e remove o do aquisitivo.
     const aqMatch = bloco.match(RE_AQUISITIVO_DATAS);
     const aqRange = aqMatch ? `${aqMatch[1]}|${aqMatch[2]}` : null;
-    const dataAdata = [...bloco.matchAll(RE_DATA_A_DATA)]
-      .map((m) => ({ inicio: m[1], fim: m[2] }))
-      .filter((g) => `${g.inicio}|${g.fim}` !== aqRange);
-    gozos = dataAdata.slice(0, 3);
+    const dataAdata = [...bloco.matchAll(RE_DATA_A_DATA)].filter(
+      (m) => `${m[1]}|${m[2]}` !== aqRange,
+    );
+    gozos = computeGozosWithDobra(
+      bloco,
+      dataAdata.slice(0, 3).map((m) => ({
+        idx: m.index ?? 0,
+        len: m[0].length,
+        inicio: m[1],
+        fim: m[2],
+      })),
+    );
     if (gozos.length > 0) {
+      firstGozoIdx = dataAdata[0].index ?? 0;
       warnings.push(
         `Bloco ${idx + 1} (${relativa}): gozos detectados sem label explícito — confirme.`,
       );
     }
   }
-  const dobraGeral = RE_DOBRA_GERAL.test(bloco);
+  // dobra_geral: (a) menção explícita antes de qualquer gozo (header), (b)
+  // qualquer "em dobra" sem gozos no bloco, ou (c) todos os gozos detectados
+  // estão marcados como em dobra.
+  const headerSlice = bloco.slice(0, Math.min(firstGozoIdx, 200));
+  const dobraGeralExplicita = RE_DOBRA_GENERICA.test(headerSlice);
+  const todosGozosDobra = gozos.length > 0 && gozos.every((g) => g.dobra);
+  const dobraGeral = dobraGeralExplicita || todosGozosDobra;
+  // Quando o recibo todo é em dobra, propaga para cada gozo individual.
+  const finalDobra = (g: GozoCand): boolean => g.dobra || dobraGeral;
   const gozo1 = gozos[0]
-    ? { inicio: gozos[0].inicio, fim: gozos[0].fim, dobra: false }
+    ? { inicio: gozos[0].inicio, fim: gozos[0].fim, dobra: finalDobra(gozos[0]) }
     : null;
   const gozo2 = gozos[1]
-    ? { inicio: gozos[1].inicio, fim: gozos[1].fim, dobra: false }
+    ? { inicio: gozos[1].inicio, fim: gozos[1].fim, dobra: finalDobra(gozos[1]) }
     : null;
   const gozo3 = gozos[2]
-    ? { inicio: gozos[2].inicio, fim: gozos[2].fim, dobra: false }
+    ? { inicio: gozos[2].inicio, fim: gozos[2].fim, dobra: finalDobra(gozos[2]) }
     : null;
 
   let situacao: SituacaoFerias = "NG";

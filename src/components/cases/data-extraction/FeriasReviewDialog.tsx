@@ -49,6 +49,81 @@ function newKey(): string {
   return `f-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+const RE_DATA_BR = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+
+/** Valida data dd/MM/yyyy considerando dias por mês e ano bissexto. */
+function isDataBRValida(s: string): boolean {
+  const m = s.match(RE_DATA_BR);
+  if (!m) return false;
+  const dia = parseInt(m[1], 10);
+  const mes = parseInt(m[2], 10);
+  const ano = parseInt(m[3], 10);
+  if (mes < 1 || mes > 12 || dia < 1) return false;
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  return dia <= ultimoDia;
+}
+
+/** Converte dd/MM/yyyy → Date (00:00 local). */
+function dataBRToDate(s: string): Date | null {
+  if (!isDataBRValida(s)) return null;
+  const m = s.match(RE_DATA_BR)!;
+  return new Date(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10));
+}
+
+/** Erros por linha de férias (chave = `_key`). */
+type RowErrors = {
+  relativa?: string;
+  prazo?: string;
+  gozos?: string;
+  /** Erros pontuais por gozo. */
+  gozoCampos?: Partial<Record<"gozo1" | "gozo2" | "gozo3", { inicio?: boolean; fim?: boolean }>>;
+};
+
+function validateRow(r: Row): RowErrors {
+  const errs: RowErrors = {};
+  if (!/^\d{4}\/\d{4}$/.test(r.relativa)) {
+    errs.relativa = "Relativa precisa estar em aaaa/aaaa.";
+  }
+  if (r.prazo < 0 || r.prazo > 60) {
+    errs.prazo = "Prazo deve estar entre 0 e 60 dias.";
+  }
+  const gozoCampos: NonNullable<RowErrors["gozoCampos"]> = {};
+  const intervalos: Array<{ ini: Date; fim: Date }> = [];
+  for (const field of ["gozo1", "gozo2", "gozo3"] as const) {
+    const g = r[field];
+    if (!g) continue;
+    const iniOk = isDataBRValida(g.inicio);
+    const fimOk = isDataBRValida(g.fim);
+    if (!iniOk || !fimOk) {
+      gozoCampos[field] = { inicio: !iniOk, fim: !fimOk };
+      continue;
+    }
+    const ini = dataBRToDate(g.inicio)!;
+    const fim = dataBRToDate(g.fim)!;
+    if (fim < ini) {
+      gozoCampos[field] = { inicio: true, fim: true };
+      continue;
+    }
+    intervalos.push({ ini, fim });
+  }
+  // Detecta sobreposição de gozos.
+  for (let i = 0; i < intervalos.length; i++) {
+    for (let j = i + 1; j < intervalos.length; j++) {
+      const a = intervalos[i];
+      const b = intervalos[j];
+      if (a.ini <= b.fim && b.ini <= a.fim) {
+        errs.gozos = "Períodos de gozo sobrepostos.";
+      }
+    }
+  }
+  if (Object.keys(gozoCampos).length > 0) errs.gozoCampos = gozoCampos;
+  return errs;
+}
+
+function rowHasErrors(e: RowErrors): boolean {
+  return !!(e.relativa || e.prazo || e.gozos || (e.gozoCampos && Object.keys(e.gozoCampos).length > 0));
+}
+
 export function FeriasReviewDialog({
   open,
   onOpenChange,
@@ -65,6 +140,17 @@ export function FeriasReviewDialog({
   const sorted = useMemo(
     () => [...rows].sort((a, b) => a.relativa.localeCompare(b.relativa)),
     [rows],
+  );
+
+  const errosPorLinha = useMemo(() => {
+    const map = new Map<string, RowErrors>();
+    for (const r of sorted) map.set(r._key, validateRow(r));
+    return map;
+  }, [sorted]);
+
+  const totalErros = useMemo(
+    () => Array.from(errosPorLinha.values()).filter(rowHasErrors).length,
+    [errosPorLinha],
   );
 
   const updateRow = (key: string, patch: Partial<Row>) =>
@@ -111,7 +197,7 @@ export function FeriasReviewDialog({
 
   const handleConfirm = async () => {
     const ferias: FeriasParseada[] = sorted
-      .filter((r) => r.relativa.match(/^\d{4}\/\d{4}$/))
+      .filter((r) => !rowHasErrors(errosPorLinha.get(r._key) ?? {}))
       .map((r) => ({
         relativa: r.relativa,
         prazo: r.prazo,
@@ -142,10 +228,16 @@ export function FeriasReviewDialog({
       warnings={parsed.warnings}
       contadores={{ extraidos: rows.length, etiqueta: "período" }}
       onConfirm={handleConfirm}
+      confirmDisabled={totalErros > 0}
     >
       <div className="p-2 flex items-center justify-between border-b sticky top-0 bg-background z-10">
         <span className="text-[11px] text-muted-foreground">
-          Edite/adicione períodos. Relativa precisa estar em "aaaa/aaaa".
+          Edite/adicione períodos. Relativa em "aaaa/aaaa", datas em "dd/mm/aaaa".
+          {totalErros > 0 && (
+            <span className="ml-2 text-destructive font-medium">
+              {totalErros} período(s) com erro — corrija antes de baixar.
+            </span>
+          )}
         </span>
         <Button
           variant="ghost"
@@ -166,6 +258,7 @@ export function FeriasReviewDialog({
             <FeriasRow
               key={r._key}
               row={r}
+              errors={errosPorLinha.get(r._key) ?? {}}
               onUpdate={(patch) => updateRow(r._key, patch)}
               onUpdateGozo={(field, patch) => updateGozo(r._key, field, patch)}
               onRemove={() => removeRow(r._key)}
@@ -179,11 +272,13 @@ export function FeriasReviewDialog({
 
 function FeriasRow({
   row,
+  errors,
   onUpdate,
   onUpdateGozo,
   onRemove,
 }: {
   row: Row;
+  errors: RowErrors;
   onUpdate: (patch: Partial<Row>) => void;
   onUpdateGozo: (
     field: "gozo1" | "gozo2" | "gozo3",
@@ -191,6 +286,7 @@ function FeriasRow({
   ) => void;
   onRemove: () => void;
 }) {
+  const errClass = "border-destructive ring-1 ring-destructive/40";
   return (
     <div className="p-2 space-y-2">
       <div className="flex items-center gap-1.5">
@@ -198,7 +294,8 @@ function FeriasRow({
           placeholder="2023/2024"
           value={row.relativa}
           onChange={(e) => onUpdate({ relativa: e.target.value })}
-          className="h-7 text-[11px] font-mono w-[100px]"
+          className={`h-7 text-[11px] font-mono w-[100px] ${errors.relativa ? errClass : ""}`}
+          title={errors.relativa}
         />
         <Input
           type="number"
@@ -206,7 +303,8 @@ function FeriasRow({
           max={60}
           value={row.prazo}
           onChange={(e) => onUpdate({ prazo: parseInt(e.target.value, 10) || 0 })}
-          className="h-7 text-[11px] w-[60px]"
+          className={`h-7 text-[11px] w-[60px] ${errors.prazo ? errClass : ""}`}
+          title={errors.prazo}
         />
         <Select
           value={row.situacao}
@@ -263,6 +361,7 @@ function FeriasRow({
       <div className="space-y-1">
         {(["gozo1", "gozo2", "gozo3"] as const).map((field, idx) => {
           const g = row[field];
+          const gErr = errors.gozoCampos?.[field];
           return (
             <div key={field} className="flex items-center gap-1.5 text-[11px]">
               <span className="text-muted-foreground w-[60px]">
@@ -272,14 +371,16 @@ function FeriasRow({
                 placeholder="dd/mm/aaaa"
                 value={g?.inicio ?? ""}
                 onChange={(e) => onUpdateGozo(field, { inicio: e.target.value })}
-                className="h-7 text-[11px] font-mono w-[110px]"
+                className={`h-7 text-[11px] font-mono w-[110px] ${gErr?.inicio ? errClass : ""}`}
+                title={gErr?.inicio ? "Data inválida (use dd/mm/aaaa)" : undefined}
               />
               <span className="text-muted-foreground">a</span>
               <Input
                 placeholder="dd/mm/aaaa"
                 value={g?.fim ?? ""}
                 onChange={(e) => onUpdateGozo(field, { fim: e.target.value })}
-                className="h-7 text-[11px] font-mono w-[110px]"
+                className={`h-7 text-[11px] font-mono w-[110px] ${gErr?.fim ? errClass : ""}`}
+                title={gErr?.fim ? "Data inválida ou anterior ao início" : undefined}
               />
               <label className="flex items-center gap-1 ml-1">
                 <Checkbox
@@ -304,6 +405,11 @@ function FeriasRow({
             </div>
           );
         })}
+        {errors.gozos && (
+          <div className="text-[10px] text-destructive pl-[68px]">
+            ⚠ {errors.gozos}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -126,22 +126,49 @@ export function parseFaltas(ocrText: string): ParseFaltasResult {
     });
   }
 
-  // Dedup por (data_inicio, data_fim) — última prevalece.
-  const dedup = new Map<string, FaltaParseada>();
-  let dedupCount = 0;
+  // Dedup mantendo múltiplas faltas legítimas no mesmo intervalo:
+  //   - Duplicatas EXATAS (mesma justificada + mesma justificativa) → 1 só.
+  //   - Faltas "vazias" (sem justificativa) absorvidas por entradas com info
+  //     no mesmo intervalo (a vazia foi só uma menção genérica).
+  //   - Múltiplos atestados/justificativas distintas no mesmo dia → preserva
+  //     todas (PJe-Calc aceita várias linhas com mesma data).
+  const groups = new Map<string, FaltaParseada[]>();
   for (const f of faltas) {
     const k = `${f.data_inicio}|${f.data_fim}`;
-    if (dedup.has(k)) dedupCount++;
-    dedup.set(k, f);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(f);
+  }
+  let dedupCount = 0;
+  const final: FaltaParseada[] = [];
+  for (const grupo of groups.values()) {
+    if (grupo.length === 1) {
+      final.push(grupo[0]);
+      continue;
+    }
+    const seen = new Set<string>();
+    const unique: FaltaParseada[] = [];
+    for (const f of grupo) {
+      const fp = faltaFingerprint(f);
+      if (seen.has(fp)) {
+        dedupCount++;
+        continue;
+      }
+      seen.add(fp);
+      unique.push(f);
+    }
+    // Se há entrada(s) com informação, descarta as totalmente vazias.
+    const hasInfo = unique.some((f) => faltaFingerprint(f) !== "N|");
+    const filtered = hasInfo
+      ? unique.filter((f) => faltaFingerprint(f) !== "N|")
+      : unique;
+    final.push(...filtered);
   }
   if (dedupCount > 0) {
     warnings.push(
-      `${dedupCount} falta(s) duplicada(s) por intervalo — usada a última de cada par.`,
+      `${dedupCount} falta(s) duplicada(s) (texto idêntico) consolidada(s).`,
     );
   }
-  const final = [...dedup.values()].sort((a, b) =>
-    a.data_inicio.localeCompare(b.data_inicio),
-  );
+  final.sort((a, b) => a.data_inicio.localeCompare(b.data_inicio));
 
   if (final.length === 0 && unparsed.length === 0) {
     warnings.push(
@@ -154,6 +181,12 @@ export function parseFaltas(ocrText: string): ParseFaltasResult {
 
 function isoDate(yyyy: string, mm: string, dd: string): string {
   return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+}
+
+/** Identifica falta por (justificada, justificativa normalizada). */
+function faltaFingerprint(f: FaltaParseada): string {
+  const j = (f.justificativa ?? "").trim().toLowerCase();
+  return `${f.justificada ? "S" : "N"}|${j}`;
 }
 
 function isValidDate(yyyy: string, mm: string, dd: string): boolean {
