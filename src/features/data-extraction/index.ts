@@ -26,7 +26,7 @@ export { autoDetectTipoExtracao } from './classification/auto-detect-tipo';
 export type { AutoDetectResult } from './classification/auto-detect-tipo';
 
 // Parsers determinísticos (zero-LLM)
-export { parseCartaoPonto } from './parsers/cartao-ponto';
+export { parseCartaoPonto, PARSER_VERSION as CARTAO_PONTO_PARSER_VERSION } from './parsers/cartao-ponto';
 export type {
   ApuracaoDiaria,
   EventoDiario,

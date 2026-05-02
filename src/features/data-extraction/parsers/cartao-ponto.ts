@@ -100,13 +100,26 @@ export type ParseCartaoPontoResult = {
   warnings: string[];
   /** Linhas suspeitas (com dado mas sem casar com nenhum padrão). */
   unparsed_lines: Array<{ linha: number; conteudo: string }>;
+  /**
+   * Versão do parser. Útil para a UI exibir e para o usuário confirmar que
+   * está rodando a versão correta após deploy.
+   */
+  parser_version: string;
 };
+
+export const PARSER_VERSION = "cartao-ponto-v3-2026-05-01";
 
 // =====================================================
 // Padrões
 // =====================================================
 
 const RE_DATA_BR = /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/;
+/**
+ * Regex tolerante a OCR sujo: aceita `O` no lugar de `0`, `S` no lugar
+ * de `5`, `I` no lugar de `1`, separador com espaço extra. Aplicado como
+ * SEGUNDA tentativa quando RE_DATA_BR falha.
+ */
+const RE_DATA_BR_FUZZY = /\b([0-9OISZ]{1,2})\s*[\/.\-]\s*([0-9OISZ]{1,2})\s*[\/.\-]\s*([0-9OISZ]{4})\b/i;
 const RE_DIA_SEMANA = /\b(Seg|Ter|Qua|Qui|Sex|S[áa]b|Dom)\b/i;
 
 /**
@@ -182,6 +195,7 @@ export function parseCartaoPonto(
       data_final: "",
       warnings: ["OCR vazio."],
       unparsed_lines: [],
+      parser_version: PARSER_VERSION,
     };
   }
 
@@ -196,7 +210,36 @@ export function parseCartaoPonto(
     const linhaSemPipes = raw.replace(/\|/g, " ").trim();
     if (linhaSemPipes.length === 0) continue;
 
-    const dateMatch = linhaSemPipes.match(RE_DATA_BR);
+    let dateMatch = linhaSemPipes.match(RE_DATA_BR);
+    let dataCorrigida = false;
+    if (!dateMatch) {
+      // Tentativa fuzzy: corrige OCR sujo (O→0, I→1, S→5, Z→2).
+      const fuzzyMatch = linhaSemPipes.match(RE_DATA_BR_FUZZY);
+      if (fuzzyMatch) {
+        const ddF = fuzzyMatch[1].replace(/[OI]/gi, (c) =>
+          c.toUpperCase() === "O" ? "0" : "1",
+        ).replace(/S/gi, "5").replace(/Z/gi, "2");
+        const mmF = fuzzyMatch[2].replace(/[OI]/gi, (c) =>
+          c.toUpperCase() === "O" ? "0" : "1",
+        ).replace(/S/gi, "5").replace(/Z/gi, "2");
+        const yyyyF = fuzzyMatch[3].replace(/[OI]/gi, (c) =>
+          c.toUpperCase() === "O" ? "0" : "1",
+        ).replace(/S/gi, "5").replace(/Z/gi, "2");
+        if (
+          /^\d{1,2}$/.test(ddF) &&
+          /^\d{1,2}$/.test(mmF) &&
+          /^\d{4}$/.test(yyyyF)
+        ) {
+          dateMatch = [
+            fuzzyMatch[0],
+            ddF,
+            mmF,
+            yyyyF,
+          ] as RegExpMatchArray;
+          dataCorrigida = true;
+        }
+      }
+    }
     if (!dateMatch) {
       // Linha sem data: marca como suspeita se tem horário ou ocorrência.
       const hasHora = /\d{1,2}:\d{2}/.test(linhaSemPipes);
@@ -205,6 +248,11 @@ export function parseCartaoPonto(
         unparsed.push({ linha: i + 1, conteudo: linhaSemPipes });
       }
       continue;
+    }
+    if (dataCorrigida) {
+      warnings.push(
+        `Linha ${i + 1}: data corrigida de OCR sujo (O→0, I→1, S→5, Z→2). Confira manualmente.`,
+      );
     }
 
     // Filtra linhas de metadado (cabeçalho/rodapé) que têm data mas não
@@ -321,6 +369,7 @@ export function parseCartaoPonto(
     data_final: final[final.length - 1]?.data ?? "",
     warnings,
     unparsed_lines: unparsed,
+    parser_version: PARSER_VERSION,
   };
 }
 
