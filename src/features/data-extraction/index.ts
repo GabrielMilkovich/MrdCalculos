@@ -61,6 +61,9 @@ export {
   triggerBlobDownload,
   classifyHolerite,
   buildHoleriteZip,
+  buildCartaoPontoCSV,
+  buildFeriasCSVBlob,
+  buildFaltasCSVBlob,
 } from './export/per-doc';
 export type {
   ExportResult,
