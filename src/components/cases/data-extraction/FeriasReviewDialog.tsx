@@ -28,6 +28,7 @@ import {
   type SituacaoFerias,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { AIRetryButton } from "./AIRetryButton";
 
 interface Props {
   open: boolean;
@@ -35,6 +36,7 @@ interface Props {
   parsed: ParseFeriasResult;
   ocrText: string;
   filename: string;
+  documentId?: string;
 }
 
 const SITUACOES: Array<{ value: SituacaoFerias; label: string }> = [
@@ -132,12 +134,15 @@ export function FeriasReviewDialog({
   parsed,
   ocrText,
   filename,
+  documentId,
 }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
+  const [aiOverride, setAiOverride] = useState<ParseFeriasResult | null>(null);
+  const effectiveParsed = aiOverride ?? parsed;
 
   useEffect(() => {
-    setRows(parsed.ferias.map((f) => ({ ...f, _key: newKey() })));
-  }, [parsed]);
+    setRows(effectiveParsed.ferias.map((f) => ({ ...f, _key: newKey() })));
+  }, [effectiveParsed]);
 
   const sorted = useMemo(
     () => [...rows].sort((a, b) => a.relativa.localeCompare(b.relativa)),
@@ -155,7 +160,10 @@ export function FeriasReviewDialog({
     [errosPorLinha],
   );
 
-  const confidence = useMemo(() => scoreFerias(parsed, ocrText), [parsed, ocrText]);
+  const confidence = useMemo(
+    () => scoreFerias(effectiveParsed, ocrText),
+    [effectiveParsed, ocrText],
+  );
 
   const updateRow = (key: string, patch: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r._key === key ? { ...r, ...patch } : r)));
@@ -197,7 +205,7 @@ export function FeriasReviewDialog({
   const removeRow = (key: string) =>
     setRows((prev) => prev.filter((r) => r._key !== key));
 
-  const unparsedLines = parsed.unparsed_lines.map((u) => u.linha);
+  const unparsedLines = effectiveParsed.unparsed_lines.map((u) => u.linha);
 
   const handleConfirm = async () => {
     const ferias: FeriasParseada[] = sorted
@@ -229,9 +237,22 @@ export function FeriasReviewDialog({
       subtitle={`${rows.length} período(s) · ${filename}`}
       ocrText={ocrText}
       unparsedLines={unparsedLines}
-      warnings={parsed.warnings}
+      warnings={effectiveParsed.warnings}
       contadores={{ extraidos: rows.length, etiqueta: "período" }}
-      headerSlot={<ConfidenceBadge score={confidence} />}
+      headerSlot={
+        <>
+          <ConfidenceBadge score={confidence} />
+          {documentId && (
+            <AIRetryButton
+              tipo="recibo_ferias"
+              documentId={documentId}
+              ocrText={ocrText}
+              onResult={(r) => setAiOverride(r)}
+              emphatic={confidence.level === "baixa"}
+            />
+          )}
+        </>
+      }
       onConfirm={handleConfirm}
       confirmDisabled={totalErros > 0}
     >

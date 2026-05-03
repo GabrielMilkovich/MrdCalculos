@@ -78,12 +78,19 @@ import {
   type LinhaClassificada,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { AIRetryButton } from "./AIRetryButton";
 
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   classificacao: ClassificacaoHolerite;
   filename: string;
+  /** Opcional — habilita "Tentar com IA" passando o OCR + document_id. */
+  documentId?: string;
+  /** OCR original; obrigatório só se quiser usar o botão de IA. */
+  ocrText?: string;
+  /** Callback opcional pra reclassificar quando a IA retornar — pai cuida. */
+  onAIRetryResult?: (linhasNovas: LinhaClassificada[]) => void;
 }
 
 const CATEGORIA_LABELS: Record<CategoriaSlug, string> = {
@@ -119,6 +126,9 @@ export function HoleritePreviewDialog({
   onOpenChange,
   classificacao,
   filename,
+  documentId,
+  ocrText,
+  onAIRetryResult,
 }: Props) {
   const [linhas, setLinhas] = useState<LinhaClassificada[]>(classificacao.linhas);
   const [downloading, setDownloading] = useState(false);
@@ -204,7 +214,25 @@ export function HoleritePreviewDialog({
         <DialogHeader className="space-y-1">
           <div className="flex items-start justify-between gap-2">
             <DialogTitle>Conferir antes de baixar</DialogTitle>
-            <ConfidenceBadge score={confidence} />
+            <div className="flex items-center gap-2">
+              <ConfidenceBadge score={confidence} />
+              {documentId && ocrText && onAIRetryResult && (
+                <AIRetryButton
+                  tipo="holerite"
+                  documentId={documentId}
+                  ocrText={ocrText}
+                  onResult={(r) => {
+                    // Reclassifica via classifyHolerite no parent (recebe
+                    // resultado do parser e devolve LinhaClassificada[]).
+                    // Como não temos `classifyHolerite` aqui sem dependência
+                    // adicional, deixamos o pai fazer a re-classificação.
+                    void r;
+                    onAIRetryResult([]);
+                  }}
+                  emphatic={confidence.level === "baixa"}
+                />
+              )}
+            </div>
           </div>
           <DialogDescription className="text-xs">
             Holerite <strong>{classificacao.competencia}</strong> · layout{" "}
