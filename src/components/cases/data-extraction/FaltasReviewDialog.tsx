@@ -20,7 +20,8 @@ import {
   type ParseFaltasResult,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
-import { AIRetryButton } from "./AIRetryButton";
+import { AICopilotBanner } from "./AICopilotBanner";
+import { useAICopilot } from "./useAICopilot";
 
 interface Props {
   open: boolean;
@@ -46,8 +47,14 @@ export function FaltasReviewDialog({
   documentId,
 }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
-  const [aiOverride, setAiOverride] = useState<ParseFaltasResult | null>(null);
-  const effectiveParsed = aiOverride ?? parsed;
+  const copilot = useAICopilot({
+    tipo: "registro_faltas",
+    documentId: documentId ?? null,
+    ocrText,
+    parsed,
+    enabled: !!documentId,
+  });
+  const effectiveParsed = copilot.effective;
 
   useEffect(() => {
     setRows(effectiveParsed.faltas.map((f) => ({ ...f, _key: newKey() })));
@@ -102,8 +109,11 @@ export function FaltasReviewDialog({
   };
 
   const confidence = useMemo(
-    () => scoreFaltas(effectiveParsed, ocrText),
-    [effectiveParsed, ocrText],
+    () =>
+      copilot.modo === "ia" && copilot.iaScore
+        ? copilot.iaScore
+        : copilot.regexScore,
+    [copilot.modo, copilot.iaScore, copilot.regexScore],
   );
 
   return (
@@ -117,18 +127,18 @@ export function FaltasReviewDialog({
       warnings={effectiveParsed.warnings}
       contadores={{ extraidos: rows.length, etiqueta: "falta" }}
       headerSlot={
-        <>
+        <div className="flex items-center gap-2 flex-wrap">
           <ConfidenceBadge score={confidence} />
-          {documentId && (
-            <AIRetryButton
-              tipo="registro_faltas"
-              documentId={documentId}
-              ocrText={ocrText}
-              onResult={(r) => setAiOverride(r)}
-              emphatic={confidence.level === "baixa"}
-            />
-          )}
-        </>
+          <AICopilotBanner
+            loading={copilot.loading}
+            erro={copilot.erro}
+            regexScore={copilot.regexScore}
+            iaScore={copilot.iaScore}
+            reconciliacao={copilot.reconciliacao}
+            modo={copilot.modo}
+            onModoChange={copilot.setModo}
+          />
+        </div>
       }
       onConfirm={handleConfirm}
     >

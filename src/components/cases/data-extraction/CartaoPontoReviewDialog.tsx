@@ -44,7 +44,9 @@ import {
   type ParseCartaoPontoResult,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
-import { AIRetryButton } from "./AIRetryButton";
+import { AICopilotBanner } from "./AICopilotBanner";
+import { useAICopilot } from "./useAICopilot";
+import { checkHorasTrabalhadas } from "@/features/data-extraction";
 
 interface Props {
   open: boolean;
@@ -98,10 +100,16 @@ export function CartaoPontoReviewDialog({
   documentId,
 }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
-  // Quando a IA é usada, substituímos `parsed` por um override local —
-  // o resto do dialog continua trabalhando com o tipo `ParseCartaoPontoResult`.
-  const [aiOverride, setAiOverride] = useState<ParseCartaoPontoResult | null>(null);
-  const effectiveParsed = aiOverride ?? parsed;
+  // Co-piloto IA: dispara em paralelo, reconcilia regex × IA, e devolve
+  // `effective` já com a melhor fonte aplicada por dia (cartão-ponto).
+  const copilot = useAICopilot({
+    tipo: "cartao_ponto",
+    documentId: documentId ?? null,
+    ocrText,
+    parsed,
+    enabled: !!documentId,
+  });
+  const effectiveParsed = copilot.effective;
 
   // Inicializa quando o parsed (ou override IA) mudar
   useEffect(() => {
@@ -159,10 +167,79 @@ export function CartaoPontoReviewDialog({
   const unparsedLines = effectiveParsed.unparsed_lines.map((u) => u.linha);
 
   // Score de confiança da extração + datas fora da janela de competência.
+  // Usa o resultado da fonte ativa (regex/IA/reconciliado) — calculado
+  // dentro do hook do co-piloto.
   const confidence = useMemo(
-    () => scoreCartaoPonto(effectiveParsed, ocrText),
-    [effectiveParsed, ocrText],
+    () =>
+      copilot.modo === "ia" && copilot.iaScore
+        ? copilot.iaScore
+        : copilot.regexScore,
+    [copilot.modo, copilot.iaScore, copilot.regexScore],
   );
+
+  // Mapa de discrepância de Horas Trabalhadas por data — destaca dias
+  // onde a soma das batidas não bate com o evento HT do OCR.
+  const htDiscPorData = useMemo(() => {
+    const m = new Map<string, boolean>();
+    for (const a of effectiveParsed.apuracoes) {
+      if (a.marcacoes.length === 0) continue;
+      m.set(a.data, !checkHorasTrabalhadas(a).ok);
+    }
+    return m;
+  }, [effectiveParsed]);
+
+  // Atalhos de teclado: J/K navegam pra próxima/anterior linha duvidosa
+  // (HT divergente ou pares > 6). Acelera revisão em jornadas grandes.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      // Ignora quando user está digitando num input/textarea
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key !== "j" && e.key !== "k" && e.key !== "J" && e.key !== "K") return;
+      e.preventDefault();
+      const indicesDuvidosos: number[] = [];
+      sorted.forEach((r, idx) => {
+        if (htDiscPorData.get(r.data) || paresPreenchidos(r.marcacoes) > MAX_PARES) {
+          indicesDuvidosos.push(idx);
+        }
+      });
+      if (indicesDuvidosos.length === 0) return;
+      const ativo = document.activeElement as HTMLElement | null;
+      const linhaAtiva = ativo?.closest("tr");
+      const idxAtual = linhaAtiva
+        ? Array.from(linhaAtiva.parentElement?.children ?? []).indexOf(linhaAtiva)
+        : -1;
+      let proximo: number;
+      if (e.key === "j" || e.key === "J") {
+        proximo =
+          indicesDuvidosos.find((i) => i > idxAtual) ?? indicesDuvidosos[0];
+      } else {
+        const anteriores = indicesDuvidosos.filter((i) => i < idxAtual);
+        proximo =
+          anteriores.length > 0
+            ? anteriores[anteriores.length - 1]
+            : indicesDuvidosos[indicesDuvidosos.length - 1];
+      }
+      const tr = document.querySelectorAll(
+        "tbody tr",
+      )[proximo] as HTMLElement | undefined;
+      if (tr) {
+        tr.scrollIntoView({ block: "center", behavior: "smooth" });
+        const firstInput = tr.querySelector("input") as HTMLInputElement | null;
+        firstInput?.focus();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, sorted, htDiscPorData]);
 
   // Calcula linhas do OCR que mencionam datas fora de qualquer janela
   // detectada — são highlightadas em vermelho no painel de referência.
@@ -240,18 +317,18 @@ export function CartaoPontoReviewDialog({
       warnings={warnings}
       contadores={{ extraidos: rows.length, etiqueta: "apuração" }}
       headerSlot={
-        <>
+        <div className="flex items-center gap-2 flex-wrap">
           <ConfidenceBadge score={confidence} />
-          {documentId && (
-            <AIRetryButton
-              tipo="cartao_ponto"
-              documentId={documentId}
-              ocrText={ocrText}
-              onResult={(r) => setAiOverride(r)}
-              emphatic={confidence.level === "baixa"}
-            />
-          )}
-        </>
+          <AICopilotBanner
+            loading={copilot.loading}
+            erro={copilot.erro}
+            regexScore={copilot.regexScore}
+            iaScore={copilot.iaScore}
+            reconciliacao={copilot.reconciliacao}
+            modo={copilot.modo}
+            onModoChange={copilot.setModo}
+          />
+        </div>
       }
       onConfirm={handleConfirm}
     >
@@ -299,14 +376,23 @@ export function CartaoPontoReviewDialog({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((r) => (
+            {sorted.map((r) => {
+              const htDisc = htDiscPorData.get(r.data) ?? false;
+              const corteExc = paresPreenchidos(r.marcacoes) > MAX_PARES;
+              const cls = htDisc
+                ? "bg-rose-50 dark:bg-rose-950/15"
+                : corteExc
+                  ? "bg-amber-50 dark:bg-amber-950/10"
+                  : "";
+              return (
               <TableRow
                 key={r._key}
-                className={`text-xs ${
-                  paresPreenchidos(r.marcacoes) > MAX_PARES
-                    ? "bg-amber-50 dark:bg-amber-950/10"
-                    : ""
-                }`}
+                title={
+                  htDisc
+                    ? "Soma de batidas não bate com Horas Trabalhadas do OCR — revise"
+                    : undefined
+                }
+                className={`text-xs ${cls}`}
               >
                 <TableCell className="p-1">
                   <Input
@@ -393,7 +479,8 @@ export function CartaoPontoReviewDialog({
                   </Button>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       )}

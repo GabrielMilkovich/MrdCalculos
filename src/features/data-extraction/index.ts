@@ -89,6 +89,27 @@ export {
 } from './quality/window';
 export type { JanelaPeriodo } from './quality/window';
 
+// Validação cruzada (soma de batidas × evento Horas Trabalhadas).
+export {
+  hhmmToMin,
+  somarBatidasMin,
+  checkHorasTrabalhadas,
+  diasComDiscrepancia,
+  formatDiff,
+} from './quality/cross-validation';
+export type { CrossCheckResult } from './quality/cross-validation';
+
+// Reconciliação multi-fonte (regex × IA) — co-piloto inteligente.
+export {
+  reconcileCartaoPonto,
+  reconciliacaoToParseResult,
+} from './llm/reconciliation';
+export type {
+  ReconciliacaoCartaoPonto,
+  ApuracaoReconciliada,
+  StatusReconciliacao,
+} from './llm/reconciliation';
+
 // LLM fallback (OpenAI gpt-4o-mini via edge function `extract-via-llm`).
 export { extractViaLLM } from './llm/client';
 export type { LLMExtractionResponse } from './llm/client';
