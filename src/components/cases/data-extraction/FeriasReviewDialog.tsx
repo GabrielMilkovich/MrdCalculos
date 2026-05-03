@@ -20,12 +20,14 @@ import {
 import { ReviewLayout } from "./ReviewLayout";
 import {
   buildFeriasCSVBlob,
+  scoreFerias,
   triggerBlobDownload,
   type FeriasParseada,
   type GozoPeriodo,
   type ParseFeriasResult,
   type SituacaoFerias,
 } from "@/features/data-extraction";
+import { ConfidenceBadge } from "./ConfidenceBadge";
 
 interface Props {
   open: boolean;
@@ -153,6 +155,8 @@ export function FeriasReviewDialog({
     [errosPorLinha],
   );
 
+  const confidence = useMemo(() => scoreFerias(parsed, ocrText), [parsed, ocrText]);
+
   const updateRow = (key: string, patch: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r._key === key ? { ...r, ...patch } : r)));
 
@@ -227,6 +231,7 @@ export function FeriasReviewDialog({
       unparsedLines={unparsedLines}
       warnings={parsed.warnings}
       contadores={{ extraidos: rows.length, etiqueta: "período" }}
+      headerSlot={<ConfidenceBadge score={confidence} />}
       onConfirm={handleConfirm}
       confirmDisabled={totalErros > 0}
     >

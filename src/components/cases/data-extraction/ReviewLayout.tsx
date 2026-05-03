@@ -44,9 +44,13 @@ interface Props {
   ocrText: string;
   /** Linhas (1-based) do OCR que ficaram sem casar com nenhum item. */
   unparsedLines?: number[];
+  /** Linhas do OCR (1-based) com data fora da janela do espelho. */
+  outOfWindowLines?: number[];
   warnings?: string[];
   /** Total de itens extraídos vs total estimado pelo OCR (informativo). */
   contadores?: { extraidos: number; etiqueta: string };
+  /** Slot opcional para a badge de confiança no header. */
+  headerSlot?: ReactNode;
   children: ReactNode;
   onConfirm: () => Promise<void> | void;
   confirmDisabled?: boolean;
@@ -59,8 +63,10 @@ export function ReviewLayout({
   subtitle,
   ocrText,
   unparsedLines,
+  outOfWindowLines,
   warnings,
   contadores,
+  headerSlot,
   children,
   onConfirm,
   confirmDisabled,
@@ -72,6 +78,10 @@ export function ReviewLayout({
   const unparsedSet = useMemo(
     () => new Set(unparsedLines ?? []),
     [unparsedLines],
+  );
+  const outOfWindowSet = useMemo(
+    () => new Set(outOfWindowLines ?? []),
+    [outOfWindowLines],
   );
 
   const handleConfirm = async () => {
@@ -95,6 +105,7 @@ export function ReviewLayout({
           {subtitle && (
             <DialogDescription className="text-xs">{subtitle}</DialogDescription>
           )}
+          {headerSlot && <div className="flex items-center gap-2 pt-1">{headerSlot}</div>}
         </DialogHeader>
 
         {/* Avisos */}
@@ -149,15 +160,14 @@ export function ReviewLayout({
                 {linhasOcr.map((linha, idx) => {
                   const linhaNum = idx + 1;
                   const isUnparsed = unparsedSet.has(linhaNum);
+                  const isOutOfWindow = outOfWindowSet.has(linhaNum);
+                  const cls = isOutOfWindow
+                    ? "bg-rose-100 dark:bg-rose-900/40 px-1 rounded"
+                    : isUnparsed
+                      ? "bg-amber-100 dark:bg-amber-900/40 px-1 rounded"
+                      : "";
                   return (
-                    <div
-                      key={linhaNum}
-                      className={
-                        isUnparsed
-                          ? "bg-amber-100 dark:bg-amber-900/40 px-1 rounded"
-                          : ""
-                      }
-                    >
+                    <div key={linhaNum} className={cls}>
                       <span className="text-muted-foreground select-none">
                         {String(linhaNum).padStart(3, " ")}
                         {"  "}

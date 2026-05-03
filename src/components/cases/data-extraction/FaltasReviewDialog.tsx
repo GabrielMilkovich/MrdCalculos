@@ -14,10 +14,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { ReviewLayout } from "./ReviewLayout";
 import {
   buildFaltasCSVBlob,
+  scoreFaltas,
   triggerBlobDownload,
   type FaltaParseada,
   type ParseFaltasResult,
 } from "@/features/data-extraction";
+import { ConfidenceBadge } from "./ConfidenceBadge";
 
 interface Props {
   open: boolean;
@@ -94,6 +96,8 @@ export function FaltasReviewDialog({
     triggerBlobDownload(blob, filename);
   };
 
+  const confidence = useMemo(() => scoreFaltas(parsed, ocrText), [parsed, ocrText]);
+
   return (
     <ReviewLayout
       open={open}
@@ -104,6 +108,7 @@ export function FaltasReviewDialog({
       unparsedLines={unparsedLines}
       warnings={parsed.warnings}
       contadores={{ extraidos: rows.length, etiqueta: "falta" }}
+      headerSlot={<ConfidenceBadge score={confidence} />}
       onConfirm={handleConfirm}
     >
       <div className="p-2 flex items-center justify-between border-b sticky top-0 bg-background z-10">
