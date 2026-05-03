@@ -15,6 +15,7 @@
  *     Marca como "fallback" para o preview destacar em amber.
  */
 
+import Decimal from 'decimal.js';
 import type { CategoriaSlug, HintResult } from '../../types';
 import type { RubricaParseada } from '../../parsers/holerite/types';
 import { getDefaultHint } from '../../classification/hints';
@@ -116,15 +117,20 @@ export function classifyHolerite(
  * Soma os `valorParaCsv` por categoria, considerando apenas linhas
  * `incluir=true` e categoria não-nula. Categorias sem soma (>0) não entram
  * no resultado.
+ *
+ * Devolve `Decimal` (não `number`) — soma de valores monetários NUNCA pode
+ * usar float nativo. Quem consome (CSV builder, LEIA-ME) já chama
+ * `formatNumeroBR(decimal)` corretamente.
  */
 export function aggregateByCategoria(
   linhas: LinhaClassificada[],
-): Map<CategoriaSlug, number> {
-  const out = new Map<CategoriaSlug, number>();
+): Map<CategoriaSlug, Decimal> {
+  const out = new Map<CategoriaSlug, Decimal>();
   for (const l of linhas) {
     if (!l.incluir || l.categoria === null) continue;
     if (l.valorParaCsv <= 0) continue;
-    out.set(l.categoria, (out.get(l.categoria) ?? 0) + l.valorParaCsv);
+    const cur = out.get(l.categoria) ?? new Decimal(0);
+    out.set(l.categoria, cur.plus(l.valorParaCsv));
   }
   return out;
 }

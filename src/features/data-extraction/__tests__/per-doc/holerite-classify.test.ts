@@ -125,7 +125,7 @@ describe("aggregateByCategoria", () => {
       ],
     });
     const buckets = aggregateByCategoria(r.linhas);
-    expect(buckets.get("comissao")).toBe(1250);
+    expect(buckets.get("comissao")?.toNumber()).toBe(1250);
   });
 
   it("Categoria sem soma>0 não entra no map", () => {
@@ -166,7 +166,7 @@ describe("aggregateByCategoria", () => {
     });
     r.linhas[0].categoria = "premiacao";
     const buckets = aggregateByCategoria(r.linhas);
-    expect(buckets.get("premiacao")).toBe(1000);
+    expect(buckets.get("premiacao")?.toNumber()).toBe(1000);
     expect(buckets.has("comissao")).toBe(false);
   });
 });

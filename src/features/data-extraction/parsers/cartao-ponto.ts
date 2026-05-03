@@ -360,16 +360,51 @@ export function parseCartaoPonto(
     });
   }
 
-  // Dedup por data (última prevalece). Avisa se dedupar.
+  // Dedup por data: tenta MERGEAR (turno manhã + turno tarde no mesmo dia)
+  // antes de cair no fallback "última prevalece". O warning detalha as
+  // datas dedupadas pra auditoria humana.
   const dedup = new Map<string, ApuracaoDiaria>();
-  let dedupCount = 0;
+  const datasDedupadas: string[] = [];
   for (const a of apuracoes) {
-    if (dedup.has(a.data)) dedupCount++;
-    dedup.set(a.data, a);
+    const existente = dedup.get(a.data);
+    if (!existente) {
+      dedup.set(a.data, a);
+      continue;
+    }
+    datasDedupadas.push(a.data);
+    // Heurística de merge: turnos disjuntos no mesmo dia (manhã + tarde
+    // separados em 2 linhas pelo OCR) são unidos. Sobreposição temporal
+    // dos intervalos cai no fallback "última prevalece" pra evitar
+    // chumbar dados conflitantes (caso de retificação ambígua).
+    const totalMarc = existente.marcacoes.length + a.marcacoes.length;
+    const overlap = existente.marcacoes.some((m1) =>
+      a.marcacoes.some(
+        (m2) =>
+          m1.e !== "" && m1.s !== "" && m2.e !== "" && m2.s !== "" &&
+          m1.e <= m2.s && m2.e <= m1.s,
+      ),
+    );
+    if (totalMarc <= 6 && !overlap) {
+      const merged: ApuracaoDiaria = {
+        ...a,
+        marcacoes: [...existente.marcacoes, ...a.marcacoes].sort((x, y) =>
+          (x.e || x.s).localeCompare(y.e || y.s),
+        ),
+        eventos: a.eventos.length > 0 ? a.eventos : existente.eventos,
+      };
+      dedup.set(a.data, merged);
+    } else {
+      // Fallback: última prevalece (comportamento legado).
+      dedup.set(a.data, a);
+    }
   }
-  if (dedupCount > 0) {
+  if (datasDedupadas.length > 0) {
+    const lista = datasDedupadas.slice(0, 10).join(", ");
+    const sufixo = datasDedupadas.length > 10
+      ? ` ... e mais ${datasDedupadas.length - 10}`
+      : "";
     warnings.push(
-      `${dedupCount} apuração(ões) com data duplicada — usada a última de cada dia.`,
+      `${datasDedupadas.length} apuração(ões) com data duplicada — datas: ${lista}${sufixo}. Verifique se houve retificação no espelho.`,
     );
   }
   const final = [...dedup.values()].sort((a, b) => a.data.localeCompare(b.data));

@@ -35,8 +35,14 @@ const RE_DATA_UNICA = /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/;
 // Palavras-chave amplas para detectar linha relevante.
 const RE_LINHA_FALTA =
   /\b(falt\w*|aus[êe]nc\w+|n[ãa]o\s*compareceu|atestado|licen[çc]a|afastamento|abon\w*)\b/i;
+// Justificativa: regex CONSERVADORA — exige contexto explícito quando o
+// termo for ambíguo. "consulta agendada" sozinho NÃO é prova de
+// justificativa (o empregado pode ter agendado e faltado; só
+// "consulta médica" / "consulta cardiológica" qualificam). Mesma lógica
+// para "licença" — apenas com qualificador (médica/gestante/paternidade).
+// Decisão jurídica: errar para "injustificada" como default em ambiguidade.
 const RE_JUSTIFICATIVA =
-  /\b(atestado|m[ée]dico|cid[\s:-]+[a-z]\d{2,3}|licen[çc]a|m[ée]d\.?\b|hospital|consulta|sa[úu]de|gestante|gala|nojo|doa[çc][ãa]o\s+(?:de\s+)?sangue)\b/i;
+  /\b(atestado|m[ée]dico|cid[\s:-]+[a-z]\d{2,3}|m[ée]d\.?\s|hospital|interna[çc][ãa]o|cirurgia|gestante|gala|nojo|doa[çc][ãa]o\s+(?:de\s+)?sangue|licen[çc]a\s+(?:m[ée]dica|gestante|paternidade|maternidade|p[ée]ssimo|nojo|gala)|consulta\s+(?:m[ée]dica|odontol[oó]gica|psicol[oó]gica|hospitalar|com\s+(?:dr|dra|m[ée]dico)))\b/i;
 const RE_INJUSTIFICADA = /\b(injustifica\w*|sem\s+justifica\w*|n[ãa]o\s+justifica\w*)\b/i;
 const RE_REINICIA = /\breinicia\s+(?:o\s+)?per[íi]odo\s+aquisitivo\b/i;
 

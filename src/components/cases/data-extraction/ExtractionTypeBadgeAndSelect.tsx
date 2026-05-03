@@ -39,6 +39,7 @@ import { CartaoPontoReviewDialog } from "./CartaoPontoReviewDialog";
 import { FeriasReviewDialog } from "./FeriasReviewDialog";
 import { FaltasReviewDialog } from "./FaltasReviewDialog";
 import {
+  CARTAO_PONTO_PARSER_VERSION,
   generateExportForDocument,
   type ClassificacaoHolerite,
   type HoleriteParseResult,
@@ -196,13 +197,14 @@ export function ExtractionTypeBadgeAndSelect({
         onChange={(novo) => void onChange(novo)}
       />
 
-      {/* Marca visual da versão do build — fica na esquina inferior do select.
-          Permite ao usuário confirmar a olho nu se a versão nova está ativa. */}
+      {/* Marca visual da versão do parser ativa — permite confirmar a
+          olho nu se o deploy novo está em produção. Mostra o
+          PARSER_VERSION real declarado em cartao-ponto.ts. */}
       <span
-        className="text-[9px] text-muted-foreground/60 select-none"
+        className="text-[9px] text-muted-foreground/60 select-none font-mono"
         title="Versão do parser ativa (use para confirmar deploy)"
       >
-        v3
+        {CARTAO_PONTO_PARSER_VERSION.replace(/^cartao-ponto-/, "")}
       </span>
 
       {showDownloadButton && (

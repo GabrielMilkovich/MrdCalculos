@@ -132,7 +132,10 @@ describe("Holerite — fuzzer determinístico (classify + agregação)", () => {
           const h = gerarHolerite(rng);
           const c = classifyHolerite(h);
           const agg = aggregateByCategoria(c.linhas);
-          const totalAgg = [...agg.values()].reduce((a, b) => a + b, 0);
+          const totalAgg = [...agg.values()].reduce(
+            (a, b) => a + b.toNumber(),
+            0,
+          );
           const totalManual = c.linhas
             .filter((l) => l.incluir && l.categoria !== null && l.valorParaCsv > 0)
             .reduce((a, l) => a + l.valorParaCsv, 0);

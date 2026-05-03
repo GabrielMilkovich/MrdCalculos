@@ -209,6 +209,9 @@ describe("PJe-Calc spec — Cartão de Ponto / Importar Jornada", () => {
       data_inicial: "",
       data_final: "",
       warnings: [],
+      unparsed_lines: [],
+      competencias: new Map(),
+      parser_version: "test",
     } satisfies ParseCartaoPontoResult);
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let s = "";
@@ -224,6 +227,9 @@ describe("PJe-Calc spec — Cartão de Ponto / Importar Jornada", () => {
       data_inicial: "",
       data_final: "",
       warnings: [],
+      unparsed_lines: [],
+      competencias: new Map(),
+      parser_version: "test",
     } satisfies ParseCartaoPontoResult);
     expect(blob.type).toBe("text/csv;charset=utf-8");
   });
@@ -236,12 +242,17 @@ describe("PJe-Calc spec — Cartão de Ponto / Importar Jornada", () => {
           ocorrencia: "NORMAL",
           marcacoes: [{ e: "08:00", s: "12:00" }],
           observacao: null,
+          dia_semana: null,
+          eventos: [],
         },
       ],
       competencia_predominante: "03/2024",
       data_inicial: "2024-03-01",
       data_final: "2024-03-01",
       warnings: [],
+      unparsed_lines: [],
+      competencias: new Map(),
+      parser_version: "test",
     } satisfies ParseCartaoPontoResult);
     const bytes = new Uint8Array(await blob.arrayBuffer());
     let s = "";

@@ -43,7 +43,10 @@ describe("Holerite — invariantes universais (todas fixtures)", () => {
 
       it("I2: soma agregada == soma manual de incluir=true", () => {
         const aggregated = aggregateByCategoria(classified.linhas);
-        const totalAgg = [...aggregated.values()].reduce((a, b) => a + b, 0);
+        const totalAgg = [...aggregated.values()].reduce(
+          (a, b) => a + b.toNumber(),
+          0,
+        );
         const totalManual = classified.linhas
           .filter((l) => l.incluir && l.categoria !== null && l.valorParaCsv > 0)
           .reduce((a, l) => a + l.valorParaCsv, 0);

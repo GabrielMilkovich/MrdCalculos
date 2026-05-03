@@ -201,6 +201,9 @@ describe("Conformidade byte-a-byte — Jornada Cartão de Ponto", () => {
       data_inicial: "",
       data_final: "",
       warnings: [],
+      unparsed_lines: [],
+      competencias: new Map(),
+      parser_version: "test",
     } satisfies ParseCartaoPontoResult);
     const text = await blob.text();
     const expectedHeader = oficial.split(CRLF)[0];
@@ -219,12 +222,17 @@ describe("Conformidade byte-a-byte — Jornada Cartão de Ponto", () => {
             { e: "13:50", s: "20:10" },
           ],
           observacao: null,
+          dia_semana: null,
+          eventos: [],
         },
       ],
       competencia_predominante: "10/2018",
       data_inicial: "2018-10-29",
       data_final: "2018-10-29",
       warnings: [],
+      unparsed_lines: [],
+      competencias: new Map(),
+      parser_version: "test",
     } satisfies ParseCartaoPontoResult);
     const text = await blob.text();
     const dataLine = text.split(CRLF)[1];
@@ -239,6 +247,9 @@ describe("Conformidade byte-a-byte — Jornada Cartão de Ponto", () => {
       data_inicial: "",
       data_final: "",
       warnings: [],
+      unparsed_lines: [],
+      competencias: new Map(),
+      parser_version: "test",
     } satisfies ParseCartaoPontoResult);
     expect(blob.type).toBe("text/csv;charset=utf-8");
   });

@@ -35,6 +35,9 @@ export type GozoPeriodo = {
 
 export type SituacaoFerias = 'G' | 'GP' | 'NG' | 'I' | 'P';
 
+/** Nível de confiança da auto-detecção de tipo de extração. */
+export type ConfiancaAuto = 'alta' | 'media' | 'baixa';
+
 // ---------- Classification ----------
 
 export type HintResult =
@@ -47,7 +50,8 @@ export type HintResult =
 /** Linha agregada de Histórico Salarial (1 competência + 1 valor somado). */
 export type LinhaHistoricoSalarial = {
   competencia: string; // "MM/yyyy"
-  valor: number;
+  /** Valor monetário. Aceita `Decimal` (preferido) ou `number` (legado). */
+  valor: import('decimal.js').default | number;
 };
 
 /** Flags de incidência usadas pelo CSV de Histórico Salarial. */
