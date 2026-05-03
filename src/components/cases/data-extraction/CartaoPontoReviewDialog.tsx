@@ -169,15 +169,11 @@ export function CartaoPontoReviewDialog({
   const unparsedLines = effectiveParsed.unparsed_lines.map((u) => u.linha);
 
   // Score de confiança da extração + datas fora da janela de competência.
-  // Usa o resultado da fonte ativa (regex/IA/reconciliado) — calculado
-  // dentro do hook do co-piloto.
-  const confidence = useMemo(
-    () =>
-      copilot.modo === "ia" && copilot.iaScore
-        ? copilot.iaScore
-        : copilot.regexScore,
-    [copilot.modo, copilot.iaScore, copilot.regexScore],
-  );
+  // Usa o resultado EFETIVO (regex / IA / reconciliado já com overrides) —
+  // calculado dentro do hook do co-piloto. Garante que o badge reflete a
+  // melhor fonte aplicada, não fica preso no score regex inicial quando
+  // a IA já consolidou uma versão melhor.
+  const confidence = copilot.effectiveScore;
 
   // Mapa de discrepância de Horas Trabalhadas por data — destaca dias
   // onde a soma das batidas não bate com o evento HT do OCR.
@@ -286,7 +282,13 @@ export function CartaoPontoReviewDialog({
       headerSlot={
         <div className="flex flex-col gap-1.5 w-full">
           <div className="flex items-center gap-2 flex-wrap">
-            <ConfidenceBadge score={confidence} />
+            <ConfidenceBadge
+              score={confidence}
+              iaSalvouDias={
+                copilot.modo !== "regex" &&
+                (copilot.reconciliacao?.contadores.onlyIa ?? 0) > 0
+              }
+            />
             <AICopilotBanner
               loading={copilot.loading}
               loadingDeep={copilot.loadingDeep}

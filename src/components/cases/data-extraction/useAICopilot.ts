@@ -56,6 +56,12 @@ interface AICopilotState<T extends LLMTipoDoc> {
   iaScore: ConfidenceScore | null;
   /** Score da extração regex (sempre presente). */
   regexScore: ConfidenceScore;
+  /**
+   * Score do resultado EFETIVO aplicado (já considera modo + reconciliação +
+   * overrides manuais). É este que o badge da UI deve mostrar — assim, quando
+   * a reconciliação melhora a extração, o usuário vê o ganho refletido.
+   */
+  effectiveScore: ConfidenceScore;
   /** Reconciliação calculada (apenas cartão-ponto). */
   reconciliacao: ReconciliacaoCartaoPonto | null;
   /** Modo de exibição atual. */
@@ -77,7 +83,11 @@ interface UseAICopilotArgs<T extends LLMTipoDoc> {
   parsed: ResultByTipo[T];
   /** Quando false, não dispara a IA (ex: teste local sem rede). */
   enabled?: boolean;
-  /** Margem mínima de score IA - score regex pra auto-aplicar (default 10). */
+  /**
+   * Margem mínima de score IA - score regex pra auto-aplicar IA (default 5).
+   * Para cartão-ponto, a auto-aplicação é decidida via reconciliação, não
+   * pela margem direta — esta margem só vale para os outros 3 tipos.
+   */
   margemAutoAplicar?: number;
 }
 
@@ -128,7 +138,7 @@ export function useAICopilot<T extends LLMTipoDoc>(
     ocrText,
     parsed,
     enabled = true,
-    margemAutoAplicar = 10,
+    margemAutoAplicar = 5,
   } = args;
 
   const [iaResult, setIaResult] = useState<ResultByTipo[T] | null>(null);
@@ -313,10 +323,20 @@ export function useAICopilot<T extends LLMTipoDoc>(
     return parsed;
   }, [modo, iaResult, reconciliacao, parsed, tipo, overrides]);
 
+  // Score do resultado efetivo. Sempre que o effective muda (modo, IA chegou,
+  // override aplicado), recalcula. Isso faz o badge refletir o ganho real
+  // — não fica preso no score regex inicial.
+  const effectiveScore = useMemo<ConfidenceScore>(() => {
+    if (modo === "regex") return regexScore;
+    if (modo === "ia" && iaScore) return iaScore;
+    return calcScore(tipo, effective, ocrText);
+  }, [modo, iaScore, regexScore, tipo, effective, ocrText]);
+
   return {
     iaResult,
     iaScore,
     regexScore,
+    effectiveScore,
     reconciliacao,
     modo,
     setModo,

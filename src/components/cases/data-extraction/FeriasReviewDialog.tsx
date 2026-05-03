@@ -168,13 +168,7 @@ export function FeriasReviewDialog({
     [errosPorLinha],
   );
 
-  const confidence = useMemo(
-    () =>
-      copilot.modo === "ia" && copilot.iaScore
-        ? copilot.iaScore
-        : copilot.regexScore,
-    [copilot.modo, copilot.iaScore, copilot.regexScore],
-  );
+  const confidence = copilot.effectiveScore;
 
   // Atalhos J/K — pula entre períodos com erro (relativa/datas/overlap).
   useKeyboardNavigation({
