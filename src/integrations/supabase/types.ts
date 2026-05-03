@@ -1158,19 +1158,34 @@ export type Database = {
         ]
       }
       documents: {
+        // NOTA: campos abaixo de `versao_documento` foram adicionados
+        // manualmente porque as migrations 20260429000001..20260430200000
+        // ainda não foram refletidas via `supabase gen types typescript`.
+        // Quando regenerar (próximo PR de DBA), confira que as colunas
+        // permaneceram aqui — não removê-las até confirmar.
         Row: {
           arquivo_url: string | null
           case_id: string | null
           competencia: string | null
+          competencia_referencia: string | null
           error_message: string | null
+          extracao_error: string | null
+          extracao_origem: string
+          extracao_skipped_reason: string | null
+          extracao_status: string
           file_name: string | null
           hash: string | null
           hash_integridade: string | null
           id: string
+          layout_usado: string | null
           max_retries: number | null
           metadata: Json
           mime_type: string | null
           ocr_confidence: number | null
+          ocr_text: string | null
+          ocr_validated: boolean
+          ocr_validated_at: string | null
+          ocr_validated_by: string | null
           owner_user_id: string | null
           page_count: number | null
           periodo_fim: string | null
@@ -1185,26 +1200,41 @@ export type Database = {
           status: string
           storage_path: string | null
           tipo: string | null
+          tipo_extracao: string
+          tipo_extracao_confianca: string | null
+          tipo_extracao_motivos: string[] | null
+          tipo_extracao_origem: string
           updated_at: string | null
           uploaded_em: string | null
           validado: boolean | null
           validado_em: string | null
           validado_por: string | null
+          validation_status: string
           versao_documento: number | null
         }
         Insert: {
           arquivo_url?: string | null
           case_id?: string | null
           competencia?: string | null
+          competencia_referencia?: string | null
           error_message?: string | null
+          extracao_error?: string | null
+          extracao_origem?: string
+          extracao_skipped_reason?: string | null
+          extracao_status?: string
           file_name?: string | null
           hash?: string | null
           hash_integridade?: string | null
           id?: string
+          layout_usado?: string | null
           max_retries?: number | null
           metadata?: Json
           mime_type?: string | null
           ocr_confidence?: number | null
+          ocr_text?: string | null
+          ocr_validated?: boolean
+          ocr_validated_at?: string | null
+          ocr_validated_by?: string | null
           owner_user_id?: string | null
           page_count?: number | null
           periodo_fim?: string | null
@@ -1219,26 +1249,41 @@ export type Database = {
           status?: string
           storage_path?: string | null
           tipo?: string | null
+          tipo_extracao?: string
+          tipo_extracao_confianca?: string | null
+          tipo_extracao_motivos?: string[] | null
+          tipo_extracao_origem?: string
           updated_at?: string | null
           uploaded_em?: string | null
           validado?: boolean | null
           validado_em?: string | null
           validado_por?: string | null
+          validation_status?: string
           versao_documento?: number | null
         }
         Update: {
           arquivo_url?: string | null
           case_id?: string | null
           competencia?: string | null
+          competencia_referencia?: string | null
           error_message?: string | null
+          extracao_error?: string | null
+          extracao_origem?: string
+          extracao_skipped_reason?: string | null
+          extracao_status?: string
           file_name?: string | null
           hash?: string | null
           hash_integridade?: string | null
           id?: string
+          layout_usado?: string | null
           max_retries?: number | null
           metadata?: Json
           mime_type?: string | null
           ocr_confidence?: number | null
+          ocr_text?: string | null
+          ocr_validated?: boolean
+          ocr_validated_at?: string | null
+          ocr_validated_by?: string | null
           owner_user_id?: string | null
           page_count?: number | null
           periodo_fim?: string | null
@@ -1253,6 +1298,10 @@ export type Database = {
           status?: string
           storage_path?: string | null
           tipo?: string | null
+          tipo_extracao?: string
+          tipo_extracao_confianca?: string | null
+          tipo_extracao_motivos?: string[] | null
+          tipo_extracao_origem?: string
           updated_at?: string | null
           uploaded_em?: string | null
           validado?: boolean | null

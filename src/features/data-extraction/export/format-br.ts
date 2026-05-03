@@ -3,9 +3,20 @@
  *   - Decimal: vírgula, sem separador de milhar.
  *   - Booleano: 'S' ou 'N'.
  *   - Data: dd/MM/yyyy (entrada ISO yyyy-mm-dd).
+ *
+ * IMPORTANTE: aceita `Decimal` do decimal.js OU `number`. Para valores
+ * que vão para o CSV (rubricas, somas, valores monetários) PREFIRA SEMPRE
+ * `Decimal` — `number` é tolerado apenas para retro-compatibilidade.
+ * Esta camada não promove `number` em `Decimal` automaticamente nem faz
+ * arredondamento bancário; cabe ao chamador agregar com Decimal antes.
  */
+import Decimal from 'decimal.js';
 
-export function formatNumeroBR(n: number, decimals = 2): string {
+export function formatNumeroBR(n: Decimal | number, decimals = 2): string {
+  if (n instanceof Decimal) {
+    if (!n.isFinite()) return (0).toFixed(decimals).replace('.', ',');
+    return n.toFixed(decimals).replace('.', ',');
+  }
   if (!Number.isFinite(n)) return (0).toFixed(decimals).replace('.', ',');
   return n.toFixed(decimals).replace('.', ',');
 }

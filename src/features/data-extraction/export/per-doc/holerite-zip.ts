@@ -16,8 +16,10 @@
  */
 
 import JSZip from 'jszip';
+import Decimal from 'decimal.js';
 import type { CategoriaSlug, IncidenciaFlags } from '../../types';
 import { buildHistoricoSalarialCSV } from '../csv-historico';
+import { formatNumeroBR } from '../format-br';
 import type { ClassificacaoHolerite } from './holerite-classify';
 import { aggregateByCategoria } from './holerite-classify';
 
@@ -94,7 +96,7 @@ export async function buildHoleriteZip(
 
 function buildReadme(
   classificacao: ClassificacaoHolerite,
-  buckets: Map<CategoriaSlug, number>,
+  buckets: Map<CategoriaSlug, Decimal>,
 ): string {
   const lines: string[] = [];
   lines.push(`HOLERITE — competência ${classificacao.competencia}`);
@@ -123,7 +125,7 @@ function buildReadme(
       lines.push('');
       lines.push(`* historico_salarial_${slug}.csv`);
       lines.push(`    Histórico Salarial a criar:  ${meta.nome_pjecalc}`);
-      lines.push(`    Soma da competência:         R$ ${soma.toFixed(2)}`);
+      lines.push(`    Soma da competência:         R$ ${formatNumeroBR(soma)}`);
       const f = meta.default_flags;
       if (f.natureza_indenizatoria) {
         lines.push(`    Flags sugeridas:             Natureza indenizatória (FGTS=N, INSS=N)`);

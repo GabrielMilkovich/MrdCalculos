@@ -6,10 +6,13 @@ const baseResult = (
   apuracoes: ParseCartaoPontoResult["apuracoes"],
 ): ParseCartaoPontoResult => ({
   apuracoes,
+  competencias: new Map([["03/2024", apuracoes.length]]),
   competencia_predominante: "03/2024",
   data_inicial: apuracoes[0]?.data ?? "",
   data_final: apuracoes[apuracoes.length - 1]?.data ?? "",
   warnings: [],
+  unparsed_lines: [],
+  parser_version: "test",
 });
 
 const CRLF = "\r\n";
@@ -22,7 +25,7 @@ describe("buildCartaoPontoCSV — formato Importar Jornada", () => {
           data: "2024-03-01",
           ocorrencia: "NORMAL",
           marcacoes: [{ e: "08:00", s: "12:00" }],
-          observacao: null,
+          observacao: null, dia_semana: null, eventos: [],
         },
       ]),
     );
@@ -43,7 +46,7 @@ describe("buildCartaoPontoCSV — formato Importar Jornada", () => {
             { e: "08:00", s: "12:00" },
             { e: "13:00", s: "17:00" },
           ],
-          observacao: null,
+          observacao: null, dia_semana: null, eventos: [],
         },
       ]),
     );
@@ -59,7 +62,7 @@ describe("buildCartaoPontoCSV — formato Importar Jornada", () => {
           data: "2024-03-02",
           ocorrencia: "FOLGA",
           marcacoes: [],
-          observacao: null,
+          observacao: null, dia_semana: null, eventos: [],
         },
       ]),
     );
@@ -71,8 +74,8 @@ describe("buildCartaoPontoCSV — formato Importar Jornada", () => {
   it("CRLF em todas as linhas + final", async () => {
     const blob = buildCartaoPontoCSV(
       baseResult([
-        { data: "2024-03-01", ocorrencia: "NORMAL", marcacoes: [], observacao: null },
-        { data: "2024-03-02", ocorrencia: "FOLGA", marcacoes: [], observacao: null },
+        { data: "2024-03-01", ocorrencia: "NORMAL", marcacoes: [], observacao: null, dia_semana: null, eventos: [] },
+        { data: "2024-03-02", ocorrencia: "FOLGA", marcacoes: [], observacao: null, dia_semana: null, eventos: [] },
       ]),
     );
     const text = await blob.text();
@@ -83,7 +86,7 @@ describe("buildCartaoPontoCSV — formato Importar Jornada", () => {
   it("Encoding UTF-8 (modelo oficial é UTF-8)", async () => {
     const blob = buildCartaoPontoCSV(
       baseResult([
-        { data: "2024-03-01", ocorrencia: "NORMAL", marcacoes: [{ e: "08:00", s: "12:00" }], observacao: null },
+        { data: "2024-03-01", ocorrencia: "NORMAL", marcacoes: [{ e: "08:00", s: "12:00" }], observacao: null, dia_semana: null, eventos: [] },
       ]),
     );
     expect(blob.type).toBe("text/csv;charset=utf-8");
@@ -99,7 +102,7 @@ describe("buildCartaoPontoCSV — formato Importar Jornada", () => {
             e: `0${i}:00`,
             s: `0${i}:30`,
           })),
-          observacao: null,
+          observacao: null, dia_semana: null, eventos: [],
         },
       ]),
     );

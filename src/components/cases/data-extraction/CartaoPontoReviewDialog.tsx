@@ -265,6 +265,7 @@ export function CartaoPontoReviewDialog({
       data_final: apuracoes[apuracoes.length - 1]?.data ?? "",
       warnings: [],
       unparsed_lines: [],
+      parser_version: effectiveParsed.parser_version,
     });
     triggerBlobDownload(blob, filename);
   };
