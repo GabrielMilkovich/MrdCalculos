@@ -18,7 +18,11 @@ import { parseCartaoPonto } from "../../parsers/cartao-ponto";
 
 const FIXTURE_PATH = join(
   __dirname,
-  "__fixtures__/cartao-rosicleia-casas-bahia-jun-dez-2021.txt",
+  "..",
+  "_fixtures",
+  "cartao-ponto",
+  "rosicleia",
+  "ocr.txt",
 );
 const ocrText = readFileSync(FIXTURE_PATH, "utf-8");
 
