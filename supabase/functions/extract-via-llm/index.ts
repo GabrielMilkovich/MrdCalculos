@@ -68,6 +68,8 @@ async function sha256Hex(s: string): Promise<string> {
 // com response_format = { type: "json_schema", json_schema: {...} }).
 // Schema é STRICT: extra props não são permitidas.
 
+// OpenAI Structured Outputs (strict): TODAS as props em `properties` precisam
+// estar em `required`. Opcionalidade se expressa com type: ["X", "null"].
 const SCHEMA_CARTAO_PONTO = {
   name: "ParseCartaoPontoOutput",
   strict: true,
@@ -81,7 +83,14 @@ const SCHEMA_CARTAO_PONTO = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["data", "ocorrencia", "marcacoes", "eventos"],
+          required: [
+            "data",
+            "dia_semana",
+            "ocorrencia",
+            "marcacoes",
+            "eventos",
+            "observacao",
+          ],
           properties: {
             data: { type: "string", description: "yyyy-MM-dd" },
             dia_semana: { type: ["string", "null"] },
@@ -106,14 +115,21 @@ const SCHEMA_CARTAO_PONTO = {
               items: {
                 type: "object",
                 additionalProperties: false,
-                required: ["e", "s"],
+                required: [
+                  "e",
+                  "s",
+                  "e_inserida",
+                  "s_inserida",
+                  "e_desconsiderada",
+                  "s_desconsiderada",
+                ],
                 properties: {
                   e: { type: "string", description: "HH:MM ou vazio" },
                   s: { type: "string", description: "HH:MM ou vazio" },
-                  e_inserida: { type: "boolean" },
-                  s_inserida: { type: "boolean" },
-                  e_desconsiderada: { type: "boolean" },
-                  s_desconsiderada: { type: "boolean" },
+                  e_inserida: { type: ["boolean", "null"] },
+                  s_inserida: { type: ["boolean", "null"] },
+                  e_desconsiderada: { type: ["boolean", "null"] },
+                  s_desconsiderada: { type: ["boolean", "null"] },
                 },
               },
             },
@@ -122,11 +138,11 @@ const SCHEMA_CARTAO_PONTO = {
               items: {
                 type: "object",
                 additionalProperties: false,
-                required: ["tipo", "valor"],
+                required: ["tipo", "valor", "raw"],
                 properties: {
                   tipo: { type: "string" },
                   valor: { type: "string" },
-                  raw: { type: "string" },
+                  raw: { type: ["string", "null"] },
                 },
               },
             },
