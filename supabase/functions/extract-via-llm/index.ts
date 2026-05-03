@@ -140,7 +140,35 @@ const SCHEMA_CARTAO_PONTO = {
                 additionalProperties: false,
                 required: ["tipo", "valor", "raw"],
                 properties: {
-                  tipo: { type: "string" },
+                  // Enum espelha exatamente os tipos aceitos pelo Zod no
+                  // front (TipoEvento). Sem enum aqui, o LLM retornaria
+                  // strings livres ("Horas Trabalhadas") que o Zod rejeita.
+                  tipo: {
+                    type: "string",
+                    enum: [
+                      "horas_trabalhadas",
+                      "horas_previstas",
+                      "banco_horas_debito",
+                      "banco_horas_credito",
+                      "banco_horas_70",
+                      "he_com_70",
+                      "he_intervalo",
+                      "he_feriado_0",
+                      "he_feriado_100",
+                      "rsr_trabalhado_0",
+                      "intrajornada_sup_2hs",
+                      "intrajornada",
+                      "interjornada",
+                      "feriado_dias",
+                      "dsr_semanal_dias",
+                      "ferias",
+                      "licenca_medica",
+                      "treinamento",
+                      "atestado",
+                      "afastamento",
+                      "outro",
+                    ],
+                  },
                   valor: { type: "string" },
                   raw: { type: ["string", "null"] },
                 },
@@ -313,7 +341,14 @@ Você está processando um ESPELHO DE PONTO. Para cada dia útil:
 - Se o dia tem 3 horários ímpares (sem par), preserve o último como E sem S (s = "").
 - Ocorrência: NORMAL se houve trabalho; FERIADO/FOLGA/FALTA/FERIAS/etc. quando explicitamente mencionado E não houver batidas.
 - IGNORAR linhas que mencionem "aprovado pelo usuário", "aprovado pelo colaborador", "homologado", "registrado eletronicamente", "assinado eletronicamente" — são timestamps de aprovação, não jornada.
-- Eventos estruturados (Horas Trabalhadas, HE feriado, banco de horas, RSR, intrajornada) devem virar entradas em \`eventos\` com \`tipo\` apropriado e \`valor\` no formato HH:MM ou número.`,
+- Eventos estruturados (Horas Trabalhadas, HE feriado, banco de horas, RSR, intrajornada) devem virar entradas em \`eventos\`. O \`tipo\` deve ser EXATAMENTE um dos valores do enum (snake_case: "horas_trabalhadas", "banco_horas_debito", "he_feriado_100", etc.) — nunca em português livre. O \`valor\` é HH:MM ou número (ex: "06:30", "1", "-00:24").
+
+EDGE CASES CRÍTICOS:
+- DIA DA SEMANA: se o OCR diz "21/08/2024 - Ter" mas 21/08/2024 é uma quarta-feira, copie a data correta e DESCARTE o dia-da-semana errado (deixe \`dia_semana\` null). Use o calendário gregoriano padrão para validar.
+- PREFIXOS DE BATIDA: linhas como "REC: 08:30", "ATRASO: 09:00", "MANUAL: 18:30" — extraia APENAS o horário (08:30, 09:00, 18:30). O prefixo é metadado de origem, não tipo de evento.
+- TRAVESSIA DE MEIA-NOITE: se um par tem S < E (ex: E=22:00 S=02:00), MANTENHA como par E/S na MESMA apuração — o segundo turno encerrou no dia seguinte. NÃO crie apuração no dia seguinte com S sozinho.
+- LINHAS-CONTINUAÇÃO: se uma linha começa SEM data (ex: "| | 16:50 | |") logo após uma linha COM data, agregue os horários à apuração da data anterior — o OCR partiu uma linha de tabela longa em duas.
+- Verifique sempre a soma E/S vs evento "Horas Trabalhadas" do dia. Se divergir mais que 5 minutos sem motivo claro (intervalos pequenos somam ±10min), priorize as batidas literais sobre o totalizador — o totalizador pode estar arredondado.`,
 
   recibo_ferias: `${SYSTEM_PROMPT_BASE}
 
