@@ -219,7 +219,13 @@ export function parseCartaoPonto(
     };
   }
 
-  const lines = ocrText.split(/\r?\n/);
+  // Pré-processamento: mescla linhas-continuação que o OCR quebra quando
+  // a célula da tabela tem muito conteúdo. Padrão típico (Casas Bahia):
+  //   | 13/09/2021 - Seg | 08:30* | 12:00* | 13:05* | ... |
+  //   |  | 16:50* |  |  |  | 16:50 - Inserido |  |
+  // A 2ª linha começa SEM data mas com batidas. Se não mesclarmos, a
+  // batida 16:50 fica órfã em `unparsed_lines` e o CSV perde uma E/S.
+  const lines = mesclarContinuacoes(ocrText.split(/\r?\n/));
   const apuracoes: ApuracaoDiaria[] = [];
   const warnings: string[] = [];
   const unparsed: Array<{ linha: number; conteudo: string }> = [];
@@ -424,6 +430,49 @@ function extrairTagsBatidas(texto: string): {
   return { inseridas, desconsideradas, texto: limpo };
 }
 
+/**
+ * Mescla linhas-continuação ao final da última linha-âncora (com data).
+ *
+ * Detecção de continuação (regra conservadora):
+ *   1. Linha NÃO contém data dd/MM/yyyy.
+ *   2. Linha contém ao menos uma hora HH:MM.
+ *   3. Linha começa com `|` (formato tabela markdown) — sinal claro de
+ *      que o OCR está renderizando uma linha de tabela quebrada.
+ *
+ * Quando os 3 critérios casam, a linha é concatenada à última linha-âncora
+ * encontrada (que tinha data). Outras linhas (ex: header, rodapé,
+ * "Estou ciente...") passam intactas para o output.
+ */
+function mesclarContinuacoes(lines: string[]): string[] {
+  const out: string[] = [];
+  let ultimaAncoraIdx = -1;
+  for (const linha of lines) {
+    const limpa = linha.replace(/\|/g, " ").trim();
+    const temData = RE_DATA_BR.test(limpa);
+    const temHora = /\b\d{1,2}:\d{2}\b/.test(limpa);
+    const comecaComPipe = /^\s*\|/.test(linha);
+
+    if (temData) {
+      out.push(linha);
+      ultimaAncoraIdx = out.length - 1;
+      continue;
+    }
+    if (
+      !temData &&
+      temHora &&
+      comecaComPipe &&
+      ultimaAncoraIdx >= 0 &&
+      !RE_METADADO_LINHA.test(limpa) &&
+      !RE_TIMESTAMP_APROVACAO.test(limpa)
+    ) {
+      out[ultimaAncoraIdx] = `${out[ultimaAncoraIdx]} ${linha}`;
+      continue;
+    }
+    out.push(linha);
+  }
+  return out;
+}
+
 function primeiraOcorrenciaMarcador(line: string): number {
   let idx = -1;
   for (const re of MARCADORES_RESULTADO) {
@@ -447,26 +496,26 @@ function capturarMarcacoes(
     const min = parseInt(m[2], 10);
     if (h < 0 || h > 23 || min < 0 || min > 59) continue;
     const valor = `${m[1].padStart(2, "0")}:${m[2]}`;
+    // Batida desconsiderada: foi anulada pelo sistema, NÃO entra no CSV.
+    // Continua no fluxo apenas para marcar a `desconsiderada` flag em
+    // batidas reais (caso venha repetida no texto compacto).
+    if (desconsideradasExternas.has(valor)) continue;
     horarios.push({
       valor,
       inserida: m[3] === "*" || inseridasExternas.has(valor),
-      desconsiderada: desconsideradasExternas.has(valor),
+      desconsiderada: false,
     });
     if (horarios.length >= 12) break; // Limite: 6 pares
   }
-  // Completa com horários da lista "X:XX - Inserido"/"Desconsiderado" que
-  // não aparecem na forma compacta. Acontece quando o OCR omite o token
-  // compacto da última batida e ela só sobrevive na lista expandida.
+  // Completa com horários da lista "X:XX - Inserido" que NÃO aparecem na
+  // forma compacta. Acontece quando o OCR omite o token compacto da última
+  // batida e ela só sobrevive na lista expandida (caso clássico Rosicleia
+  // 16/07/2021). Desconsideradas NÃO são completadas — foram anuladas.
   const presentes = new Set(horarios.map((h) => h.valor));
   const adicionados: H[] = [];
   for (const ext of inseridasExternas) {
     if (!presentes.has(ext) && horarios.length + adicionados.length < 12) {
       adicionados.push({ valor: ext, inserida: true, desconsiderada: false });
-    }
-  }
-  for (const ext of desconsideradasExternas) {
-    if (!presentes.has(ext) && horarios.length + adicionados.length < 12) {
-      adicionados.push({ valor: ext, inserida: false, desconsiderada: true });
     }
   }
   if (adicionados.length > 0) {

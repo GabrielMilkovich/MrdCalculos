@@ -163,6 +163,31 @@ describe("Fixture Rosicleia — ocorrências de ausência", () => {
   });
 });
 
+describe("Fixture Rosicleia — bugs reais reportados pelo usuário", () => {
+  const r = parseCartaoPonto(ocrText);
+
+  it("20/08/2021: '17:55 - Desconsiderado' NÃO entra no CSV", () => {
+    const a = r.apuracoes.find((x) => x.data === "2021-08-20");
+    expect(a).toBeDefined();
+    // Apenas as 4 batidas reais (11:23/15:14/16:24/18:53) — 17:55 foi
+    // anulada pelo sistema e não deve aparecer.
+    expect(a!.marcacoes).toHaveLength(2);
+    expect(a!.marcacoes[0]).toMatchObject({ e: "11:23", s: "15:14" });
+    expect(a!.marcacoes[1]).toMatchObject({ e: "16:24", s: "18:53" });
+    const todasHoras = a!.marcacoes.flatMap((m) => [m.e, m.s]);
+    expect(todasHoras).not.toContain("17:55");
+  });
+
+  it("13/09/2021: 4ª batida (16:50) está em linha-continuação — deve ser mesclada", () => {
+    const a = r.apuracoes.find((x) => x.data === "2021-09-13");
+    expect(a).toBeDefined();
+    expect(a!.marcacoes).toHaveLength(2);
+    expect(a!.marcacoes[0]).toMatchObject({ e: "08:30", s: "12:00" });
+    expect(a!.marcacoes[1]).toMatchObject({ e: "13:05", s: "16:50" });
+    expect(a!.marcacoes.every((m) => m.e_inserida || m.s_inserida)).toBe(true);
+  });
+});
+
 describe("Fixture Rosicleia — batidas inseridas (asterisco)", () => {
   const r = parseCartaoPonto(ocrText);
 
