@@ -210,7 +210,7 @@ export function HoleritePreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
+      <DialogContent className="w-[96vw] max-w-[1500px] max-h-[94vh] overflow-hidden flex flex-col">
         <DialogHeader className="space-y-1">
           <div className="flex items-start justify-between gap-2">
             <DialogTitle>Conferir antes de baixar</DialogTitle>

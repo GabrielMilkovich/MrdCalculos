@@ -96,7 +96,7 @@ export function ReviewLayout({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[94vh] overflow-hidden flex flex-col">
+      <DialogContent className="w-[96vw] max-w-[1600px] max-h-[94vh] overflow-hidden flex flex-col sm:w-[96vw]">
         <DialogHeader className="space-y-1">
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -156,7 +156,7 @@ export function ReviewLayout({
               Texto do OCR (referência)
             </div>
             <ScrollArea className="flex-1 min-h-0">
-              <pre className="text-[11px] font-mono leading-relaxed p-2 whitespace-pre-wrap">
+              <pre className="text-xs font-mono leading-relaxed p-2 whitespace-pre-wrap">
                 {linhasOcr.map((linha, idx) => {
                   const linhaNum = idx + 1;
                   const isUnparsed = unparsedSet.has(linhaNum);
