@@ -29,6 +29,14 @@ interface RequestBody {
   document_id: string;
   tipo_doc: "cartao_ponto" | "recibo_ferias" | "registro_faltas" | "holerite";
   ocr_text: string;
+  /**
+   * "extract" (default): extrai estrutura direto do OCR original.
+   * "deep": passa o OCR por uma 1ª etapa de limpeza/normalização (pré-LLM)
+   *         antes de extrair. Custa 2× mais tokens, mas reconstrói linhas
+   *         multilinha, normaliza dia-da-semana errado e completa buracos
+   *         de calendário. Use quando o regex está indo mal.
+   */
+  mode?: "extract" | "deep";
 }
 
 const TIPO_DOC_VALIDOS = new Set([
@@ -327,6 +335,51 @@ Você está processando um HOLERITE/CONTRACHEQUE. Extraia:
 };
 
 // =====================================================
+// Limpeza profunda do OCR (modo "deep")
+// =====================================================
+
+const PROMPT_LIMPEZA = `Você é um especialista em recuperação de OCR de documentos trabalhistas brasileiros (espelhos de ponto, holerites, recibos de férias, registros de faltas).
+
+Sua tarefa: receber um TEXTO OCR cru (pode ter ruído, linhas quebradas, dia-da-semana errado, dias de calendário pulados) e devolver uma versão LIMPA e NORMALIZADA preservando 100% dos dados originais.
+
+REGRAS:
+1. Reconstrua linhas de tabela quebradas em multilinha (quando uma linha começa com '|' mas não tem data, anexe à linha-âncora anterior).
+2. Corrija dia-da-semana quando errado pela data (ex: "21/08/2021 - Sim" sendo sábado → corrija para "21/08/2021 - Sáb"). Use calendário gregoriano.
+3. Quando detectar buracos de calendário DENTRO do período declarado em "Período X a Y" (ex: pulou 24/08), adicione a linha faltante no formato " | DD/MM/YYYY - Dia | -- |  | [SEM REGISTRO NO OCR ORIGINAL] |".
+4. NUNCA invente batidas, ocorrências ou eventos — só reorganize o que JÁ existe no OCR.
+5. Mantenha intactos timestamps de aprovação eletrônica ("aprovado pelo usuário no dia X às Y") — eles são metadados, não dados.
+6. NÃO traduza nem simplifique nomes de eventos (mantenha "Horas Trabalhadas", "Banco de Horas Debito" etc).
+7. Devolva APENAS o OCR limpo, sem comentários, sem markdown, sem cabeçalho. O texto LIMPO deve ser plug-and-play no parser.`;
+
+async function limparOcr(ocr: string, apiKey: string): Promise<{ limpo: string; usage: { prompt_tokens?: number; completion_tokens?: number } }> {
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      temperature: 0,
+      messages: [
+        { role: "system", content: PROMPT_LIMPEZA },
+        {
+          role: "user",
+          content: `OCR cru:\n\n${ocr}\n\nDevolva o OCR LIMPO (apenas o texto, sem nada antes ou depois).`,
+        },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`OpenAI cleanup error ${res.status}: ${t.slice(0, 300)}`);
+  }
+  const j = await res.json();
+  const limpo: string = j.choices?.[0]?.message?.content ?? "";
+  return { limpo: limpo.trim() || ocr, usage: j.usage ?? {} };
+}
+
+// =====================================================
 // Handler
 // =====================================================
 
@@ -383,7 +436,9 @@ serve(async (req) => {
       return jsonResponse({ error: "forbidden" }, 403);
     }
 
-    const ocrHash = await sha256Hex(body.ocr_text);
+    const mode = body.mode ?? "extract";
+    // Hash inclui mode pra cache não confundir extract vs deep.
+    const ocrHash = await sha256Hex(`${mode}::${body.ocr_text}`);
 
     // Cache lookup
     const { data: cacheHit } = await supabaseAdmin
@@ -409,11 +464,27 @@ serve(async (req) => {
 
     // Trunca OCR muito grande pra evitar custo descontrolado.
     const MAX_OCR_CHARS = 60_000;
-    const ocrTrim =
+    let ocrTrim =
       body.ocr_text.length > MAX_OCR_CHARS
         ? body.ocr_text.slice(0, MAX_OCR_CHARS) +
           "\n[...OCR truncado para limite de contexto...]"
         : body.ocr_text;
+
+    // Modo "deep": passa o OCR por uma 1ª etapa de limpeza/normalização
+    // (corrige multilinha, dia-da-semana, sinaliza buracos de calendário)
+    // antes da extração estruturada.
+    let cleanupUsage: { prompt_tokens?: number; completion_tokens?: number } = {};
+    let ocrLimpo: string | null = null;
+    if (mode === "deep") {
+      try {
+        const cleanup = await limparOcr(ocrTrim, OPENAI_API_KEY);
+        ocrTrim = cleanup.limpo;
+        ocrLimpo = cleanup.limpo;
+        cleanupUsage = cleanup.usage;
+      } catch (e) {
+        console.warn("Cleanup OCR falhou, prosseguindo com OCR cru:", e);
+      }
+    }
 
     const systemPrompt = PROMPT_POR_TIPO[body.tipo_doc];
     const schema = SCHEMAS[body.tipo_doc];
@@ -464,6 +535,12 @@ serve(async (req) => {
     }
 
     const usage = aiJson.usage ?? {};
+    const totalUsage = {
+      prompt_tokens:
+        (usage.prompt_tokens ?? 0) + (cleanupUsage.prompt_tokens ?? 0),
+      completion_tokens:
+        (usage.completion_tokens ?? 0) + (cleanupUsage.completion_tokens ?? 0),
+    };
 
     // Cacheia (UNIQUE constraint blinda race em concurrent calls).
     const { error: insertErr } = await supabaseAdmin
@@ -476,8 +553,8 @@ serve(async (req) => {
           tipo_doc: body.tipo_doc,
           model: MODEL,
           output_json: output,
-          prompt_tokens: usage.prompt_tokens ?? null,
-          completion_tokens: usage.completion_tokens ?? null,
+          prompt_tokens: totalUsage.prompt_tokens || null,
+          completion_tokens: totalUsage.completion_tokens || null,
         },
         {
           onConflict: "document_id,ocr_hash,tipo_doc,model",
@@ -491,11 +568,10 @@ serve(async (req) => {
     return jsonResponse({
       output,
       cached: false,
+      mode,
+      ocr_limpo: ocrLimpo,
       model: MODEL,
-      usage: {
-        prompt_tokens: usage.prompt_tokens,
-        completion_tokens: usage.completion_tokens,
-      },
+      usage: totalUsage,
     });
   } catch (e) {
     console.error("extract-via-llm error:", e);

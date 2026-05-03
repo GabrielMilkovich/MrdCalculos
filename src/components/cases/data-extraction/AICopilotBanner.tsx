@@ -8,7 +8,7 @@
  *   - Saiba qual fonte está aplicada
  *   - Possa forçar regex/IA/reconciliado com 1 clique
  */
-import { CheckCircle2, AlertTriangle, AlertOctagon, Loader2, Sparkles } from "lucide-react";
+import { CheckCircle2, AlertTriangle, AlertOctagon, Loader2, Sparkles, Wand2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,22 +21,27 @@ import type { ConfidenceScore, ReconciliacaoCartaoPonto } from "@/features/data-
 
 interface Props {
   loading: boolean;
+  loadingDeep?: boolean;
   erro: string | null;
   regexScore: ConfidenceScore;
   iaScore: ConfidenceScore | null;
   reconciliacao: ReconciliacaoCartaoPonto | null;
   modo: "regex" | "ia" | "reconciliado";
   onModoChange: (modo: "regex" | "ia" | "reconciliado") => void;
+  /** Quando provido, exibe botão "Análise Profunda" pra reprocessar IA com cleanup. */
+  onRunDeep?: () => void;
 }
 
 export function AICopilotBanner({
   loading,
+  loadingDeep = false,
   erro,
   regexScore,
   iaScore,
   reconciliacao,
   modo,
   onModoChange,
+  onRunDeep,
 }: Props) {
   return (
     <TooltipProvider>
@@ -179,6 +184,32 @@ export function AICopilotBanner({
               >
                 co-piloto
               </Button>
+            )}
+            {onRunDeep && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-[10px] px-2 gap-1 border-violet-300 text-violet-900 dark:border-violet-700 dark:text-violet-200"
+                    onClick={onRunDeep}
+                    disabled={loadingDeep}
+                  >
+                    {loadingDeep ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-3 w-3" />
+                    )}
+                    {loadingDeep ? "limpando…" : "análise profunda"}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  Limpa o OCR (corrige multilinha, dia-da-semana, completa
+                  buracos de calendário) ANTES de re-extrair com a IA.
+                  Custa ~2× mais tokens, mas pega bugs sutis. Use quando
+                  desconfiar de erros silenciosos.
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
         )}

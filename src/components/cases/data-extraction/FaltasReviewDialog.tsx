@@ -22,6 +22,7 @@ import {
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { AICopilotBanner } from "./AICopilotBanner";
 import { useAICopilot } from "./useAICopilot";
+import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
 interface Props {
   open: boolean;
@@ -116,6 +117,20 @@ export function FaltasReviewDialog({
     [copilot.modo, copilot.iaScore, copilot.regexScore],
   );
 
+  // Atalhos J/K — pula entre faltas com data inválida ou intervalo invertido.
+  useKeyboardNavigation({
+    enabled: open,
+    selector: "[data-row-key]",
+    isProblema: (idx) => {
+      const r = sorted[idx];
+      if (!r) return false;
+      const iniOk = /^\d{4}-\d{2}-\d{2}$/.test(r.data_inicio);
+      const fimOk = /^\d{4}-\d{2}-\d{2}$/.test(r.data_fim);
+      if (!iniOk || !fimOk) return true;
+      return r.data_inicio > r.data_fim;
+    },
+  });
+
   return (
     <ReviewLayout
       open={open}
@@ -131,12 +146,14 @@ export function FaltasReviewDialog({
           <ConfidenceBadge score={confidence} />
           <AICopilotBanner
             loading={copilot.loading}
+            loadingDeep={copilot.loadingDeep}
             erro={copilot.erro}
             regexScore={copilot.regexScore}
             iaScore={copilot.iaScore}
             reconciliacao={copilot.reconciliacao}
             modo={copilot.modo}
             onModoChange={copilot.setModo}
+            onRunDeep={documentId ? () => void copilot.runDeep() : undefined}
           />
         </div>
       }
@@ -164,6 +181,7 @@ export function FaltasReviewDialog({
           {sorted.map((r) => (
             <FaltaRow
               key={r._key}
+              dataRowKey={r._key}
               row={r}
               onUpdate={(patch) => updateRow(r._key, patch)}
               onRemove={() => removeRow(r._key)}
@@ -179,13 +197,15 @@ function FaltaRow({
   row,
   onUpdate,
   onRemove,
+  dataRowKey,
 }: {
   row: Row;
   onUpdate: (patch: Partial<Row>) => void;
   onRemove: () => void;
+  dataRowKey?: string;
 }) {
   return (
-    <div className="p-2 space-y-1.5">
+    <div className="p-2 space-y-1.5 transition-shadow" data-row-key={dataRowKey}>
       <div className="flex items-center gap-1.5">
         <span className="text-[11px] text-muted-foreground w-[40px]">De</span>
         <Input

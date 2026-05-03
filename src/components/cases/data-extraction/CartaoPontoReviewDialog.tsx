@@ -45,7 +45,9 @@ import {
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { AICopilotBanner } from "./AICopilotBanner";
+import { ReconciliationDivergenceList } from "./ReconciliationDivergenceList";
 import { useAICopilot } from "./useAICopilot";
+import { useKeyboardNavigation } from "./useKeyboardNavigation";
 import { checkHorasTrabalhadas } from "@/features/data-extraction";
 
 interface Props {
@@ -188,58 +190,20 @@ export function CartaoPontoReviewDialog({
     return m;
   }, [effectiveParsed]);
 
-  // Atalhos de teclado: J/K navegam pra próxima/anterior linha duvidosa
-  // (HT divergente ou pares > 6). Acelera revisão em jornadas grandes.
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      // Ignora quando user está digitando num input/textarea
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-      if (e.key !== "j" && e.key !== "k" && e.key !== "J" && e.key !== "K") return;
-      e.preventDefault();
-      const indicesDuvidosos: number[] = [];
-      sorted.forEach((r, idx) => {
-        if (htDiscPorData.get(r.data) || paresPreenchidos(r.marcacoes) > MAX_PARES) {
-          indicesDuvidosos.push(idx);
-        }
-      });
-      if (indicesDuvidosos.length === 0) return;
-      const ativo = document.activeElement as HTMLElement | null;
-      const linhaAtiva = ativo?.closest("tr");
-      const idxAtual = linhaAtiva
-        ? Array.from(linhaAtiva.parentElement?.children ?? []).indexOf(linhaAtiva)
-        : -1;
-      let proximo: number;
-      if (e.key === "j" || e.key === "J") {
-        proximo =
-          indicesDuvidosos.find((i) => i > idxAtual) ?? indicesDuvidosos[0];
-      } else {
-        const anteriores = indicesDuvidosos.filter((i) => i < idxAtual);
-        proximo =
-          anteriores.length > 0
-            ? anteriores[anteriores.length - 1]
-            : indicesDuvidosos[indicesDuvidosos.length - 1];
-      }
-      const tr = document.querySelectorAll(
-        "tbody tr",
-      )[proximo] as HTMLElement | undefined;
-      if (tr) {
-        tr.scrollIntoView({ block: "center", behavior: "smooth" });
-        const firstInput = tr.querySelector("input") as HTMLInputElement | null;
-        firstInput?.focus();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, sorted, htDiscPorData]);
+  // Atalhos J/K — pula para próxima/anterior linha duvidosa
+  // (HT divergente ou pares > 6).
+  useKeyboardNavigation({
+    enabled: open,
+    selector: "tr[data-row-data]",
+    isProblema: (idx) => {
+      const r = sorted[idx];
+      if (!r) return false;
+      return (
+        htDiscPorData.get(r.data) === true ||
+        paresPreenchidos(r.marcacoes) > MAX_PARES
+      );
+    },
+  });
 
   // Calcula linhas do OCR que mencionam datas fora de qualquer janela
   // detectada — são highlightadas em vermelho no painel de referência.
@@ -317,17 +281,41 @@ export function CartaoPontoReviewDialog({
       warnings={warnings}
       contadores={{ extraidos: rows.length, etiqueta: "apuração" }}
       headerSlot={
-        <div className="flex items-center gap-2 flex-wrap">
-          <ConfidenceBadge score={confidence} />
-          <AICopilotBanner
-            loading={copilot.loading}
-            erro={copilot.erro}
-            regexScore={copilot.regexScore}
-            iaScore={copilot.iaScore}
-            reconciliacao={copilot.reconciliacao}
-            modo={copilot.modo}
-            onModoChange={copilot.setModo}
-          />
+        <div className="flex flex-col gap-1.5 w-full">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ConfidenceBadge score={confidence} />
+            <AICopilotBanner
+              loading={copilot.loading}
+              loadingDeep={copilot.loadingDeep}
+              erro={copilot.erro}
+              regexScore={copilot.regexScore}
+              iaScore={copilot.iaScore}
+              reconciliacao={copilot.reconciliacao}
+              modo={copilot.modo}
+              onModoChange={copilot.setModo}
+              onRunDeep={documentId ? () => void copilot.runDeep() : undefined}
+            />
+          </div>
+          {copilot.modo === "reconciliado" && copilot.reconciliacao && (
+            <ReconciliationDivergenceList
+              reconciliacao={copilot.reconciliacao}
+              overrides={copilot.overrides}
+              onChooseRegex={(d) => copilot.setOverride(d, "regex")}
+              onChooseIA={(d) => copilot.setOverride(d, "ia")}
+              onJumpTo={(d) => {
+                // Encontra a row pela data e scrolla
+                const tr = document.querySelector(
+                  `tr[data-row-data="${d}"]`,
+                ) as HTMLElement | null;
+                tr?.scrollIntoView({ block: "center", behavior: "smooth" });
+                tr?.classList.add("ring-2", "ring-violet-500");
+                setTimeout(
+                  () => tr?.classList.remove("ring-2", "ring-violet-500"),
+                  1500,
+                );
+              }}
+            />
+          )}
         </div>
       }
       onConfirm={handleConfirm}
@@ -387,12 +375,13 @@ export function CartaoPontoReviewDialog({
               return (
               <TableRow
                 key={r._key}
+                data-row-data={r.data}
                 title={
                   htDisc
                     ? "Soma de batidas não bate com Horas Trabalhadas do OCR — revise"
                     : undefined
                 }
-                className={`text-xs ${cls}`}
+                className={`text-xs transition-shadow ${cls}`}
               >
                 <TableCell className="p-1">
                   <Input

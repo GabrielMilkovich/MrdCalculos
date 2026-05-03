@@ -30,6 +30,7 @@ import {
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { AICopilotBanner } from "./AICopilotBanner";
 import { useAICopilot } from "./useAICopilot";
+import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
 interface Props {
   open: boolean;
@@ -175,6 +176,17 @@ export function FeriasReviewDialog({
     [copilot.modo, copilot.iaScore, copilot.regexScore],
   );
 
+  // Atalhos J/K — pula entre períodos com erro (relativa/datas/overlap).
+  useKeyboardNavigation({
+    enabled: open,
+    selector: "[data-row-key]",
+    isProblema: (idx) => {
+      const r = sorted[idx];
+      if (!r) return false;
+      return rowHasErrors(errosPorLinha.get(r._key) ?? {});
+    },
+  });
+
   const updateRow = (key: string, patch: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r._key === key ? { ...r, ...patch } : r)));
 
@@ -254,12 +266,14 @@ export function FeriasReviewDialog({
           <ConfidenceBadge score={confidence} />
           <AICopilotBanner
             loading={copilot.loading}
+            loadingDeep={copilot.loadingDeep}
             erro={copilot.erro}
             regexScore={copilot.regexScore}
             iaScore={copilot.iaScore}
             reconciliacao={copilot.reconciliacao}
             modo={copilot.modo}
             onModoChange={copilot.setModo}
+            onRunDeep={documentId ? () => void copilot.runDeep() : undefined}
           />
         </div>
       }
@@ -293,6 +307,7 @@ export function FeriasReviewDialog({
           {sorted.map((r) => (
             <FeriasRow
               key={r._key}
+              dataRowKey={r._key}
               row={r}
               errors={errosPorLinha.get(r._key) ?? {}}
               onUpdate={(patch) => updateRow(r._key, patch)}
@@ -312,6 +327,7 @@ function FeriasRow({
   onUpdate,
   onUpdateGozo,
   onRemove,
+  dataRowKey,
 }: {
   row: Row;
   errors: RowErrors;
@@ -321,10 +337,11 @@ function FeriasRow({
     patch: Partial<GozoPeriodo> | null,
   ) => void;
   onRemove: () => void;
+  dataRowKey?: string;
 }) {
   const errClass = "border-destructive ring-1 ring-destructive/40";
   return (
-    <div className="p-2 space-y-2">
+    <div className="p-2 space-y-2 transition-shadow" data-row-key={dataRowKey}>
       <div className="flex items-center gap-1.5">
         <Input
           placeholder="2023/2024"
