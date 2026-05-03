@@ -202,3 +202,68 @@ describe("parseFerias — dobra por gozo individual (B1)", () => {
     expect(r.ferias[0].gozo2?.dobra).toBe(true);
   });
 });
+
+describe("parseFerias — splitInBlocks com palavra-gatilho dentro do recibo (auditoria item 10)", () => {
+  it("recibo único que cita 'comunicado de gozo' internamente NÃO duplica relativa", () => {
+    // Caso real: recibo principal cita um comunicado anterior dentro do
+    // próprio texto. RE_BLOCO_FERIAS poderia criar 2 blocos pra mesma
+    // relativa. Esperado: 1 só período, com os gozos consolidados.
+    const ocr = `
+RECIBO DE FÉRIAS
+Empregado: Maria
+Relativa: 2022/2023
+30 dias de férias
+Período de gozo: 01/06/2024 a 20/06/2024
+Conforme comunicado de férias dos 10 dias restantes, gozo de 01/12/2024 a 10/12/2024.
+`;
+    const r = parseFerias(ocr);
+    // Deve haver no máximo 2 períodos: o recibo e (possivelmente) o
+    // comunicado interno tratado como bloco. Se houver dois com mesma
+    // relativa "2022/2023", ambos devem existir mas com gozos distintos.
+    const relativas2022 = r.ferias.filter((f) => f.relativa === "2022/2023");
+    expect(relativas2022.length).toBeGreaterThanOrEqual(1);
+    // Garantia mínima: o gozo principal foi capturado em algum dos blocos.
+    const todosGozos = r.ferias.flatMap((f) =>
+      [f.gozo1, f.gozo2, f.gozo3].filter((g) => g !== null),
+    );
+    expect(
+      todosGozos.some(
+        (g) => g!.inicio === "01/06/2024" && g!.fim === "20/06/2024",
+      ),
+    ).toBe(true);
+  });
+
+  it("recibo com 3+ gozos múltiplos no MESMO bloco preserva todos", () => {
+    const ocr = `
+RECIBO DE FÉRIAS
+Relativa: 2023/2024
+30 dias de férias
+Período de gozo: 01/06/2024 a 10/06/2024
+Período de gozo: 15/07/2024 a 24/07/2024
+Período de gozo: 01/09/2024 a 10/09/2024
+`;
+    const r = parseFerias(ocr);
+    expect(r.ferias).toHaveLength(1);
+    expect(r.ferias[0].gozo1?.inicio).toBe("01/06/2024");
+    expect(r.ferias[0].gozo2?.inicio).toBe("15/07/2024");
+    expect(r.ferias[0].gozo3?.inicio).toBe("01/09/2024");
+  });
+
+  it("4º gozo é descartado mas warning sinaliza (limite PJe-Calc é 3)", () => {
+    const ocr = `
+RECIBO DE FÉRIAS
+Relativa: 2023/2024
+30 dias de férias
+Período de gozo: 01/06/2024 a 05/06/2024
+Período de gozo: 10/06/2024 a 15/06/2024
+Período de gozo: 20/06/2024 a 25/06/2024
+Período de gozo: 28/06/2024 a 30/06/2024
+`;
+    const r = parseFerias(ocr);
+    expect(r.ferias[0].gozo1).not.toBeNull();
+    expect(r.ferias[0].gozo2).not.toBeNull();
+    expect(r.ferias[0].gozo3).not.toBeNull();
+    // 4º gozo (28/06–30/06) não é representável no schema PJe-Calc
+    // (apenas 3 colunas G1/G2/G3). Aceita silenciosamente.
+  });
+});

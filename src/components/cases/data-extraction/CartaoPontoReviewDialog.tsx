@@ -259,7 +259,9 @@ export function CartaoPontoReviewDialog({
       }));
     const blob = buildCartaoPontoCSV({
       apuracoes,
-      competencias: new Map(),
+      // Preserva competências da fonte ativa (regex/IA/reconciliada)
+      // — útil pra futuras validações de "CSV mistura competências".
+      competencias: effectiveParsed.competencias,
       competencia_predominante: effectiveParsed.competencia_predominante,
       data_inicial: apuracoes[0]?.data ?? "",
       data_final: apuracoes[apuracoes.length - 1]?.data ?? "",
