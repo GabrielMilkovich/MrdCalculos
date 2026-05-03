@@ -78,19 +78,24 @@ import {
   type LinhaClassificada,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
-import { AIRetryButton } from "./AIRetryButton";
+import { AICopilotBanner } from "./AICopilotBanner";
+import { useAICopilot } from "./useAICopilot";
+import {
+  classifyHolerite,
+  type HoleriteParseResult,
+} from "@/features/data-extraction";
 
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   classificacao: ClassificacaoHolerite;
+  /** HoleriteParseResult cru — necessário pro co-piloto IA reclassificar. */
+  parsed?: HoleriteParseResult;
   filename: string;
-  /** Opcional — habilita "Tentar com IA" passando o OCR + document_id. */
+  /** Opcional — habilita o co-piloto IA. */
   documentId?: string;
-  /** OCR original; obrigatório só se quiser usar o botão de IA. */
+  /** OCR original — necessário pro co-piloto. */
   ocrText?: string;
-  /** Callback opcional pra reclassificar quando a IA retornar — pai cuida. */
-  onAIRetryResult?: (linhasNovas: LinhaClassificada[]) => void;
 }
 
 const CATEGORIA_LABELS: Record<CategoriaSlug, string> = {
@@ -125,20 +130,45 @@ export function HoleritePreviewDialog({
   open,
   onOpenChange,
   classificacao,
+  parsed,
   filename,
   documentId,
   ocrText,
-  onAIRetryResult,
 }: Props) {
-  const [linhas, setLinhas] = useState<LinhaClassificada[]>(classificacao.linhas);
+  // Co-piloto IA: dispara em paralelo. Quando IA termina, reclassifica
+  // o output e o user pode trocar entre regex/IA via banner.
+  const copilot = useAICopilot({
+    tipo: "holerite",
+    documentId: documentId ?? null,
+    ocrText: ocrText ?? "",
+    parsed: parsed ?? {
+      competencia: classificacao.competencia,
+      rubricas: classificacao.linhas.map((l) => l.rubrica),
+      layout_usado: classificacao.layout_usado,
+      warnings: classificacao.warnings,
+    },
+    enabled: !!documentId && !!ocrText,
+  });
+
+  // Reclassifica o resultado IA quando ele chegar.
+  const effectiveClassificacao = useMemo<ClassificacaoHolerite>(() => {
+    if (copilot.modo === "ia" && copilot.iaResult) {
+      return classifyHolerite(copilot.iaResult);
+    }
+    return classificacao;
+  }, [copilot.modo, copilot.iaResult, classificacao]);
+
+  const [linhas, setLinhas] = useState<LinhaClassificada[]>(
+    effectiveClassificacao.linhas,
+  );
   const [downloading, setDownloading] = useState(false);
   const [search, setSearch] = useState("");
 
-  // Reset quando classificacao mudar (novo doc)
+  // Reset quando classificacao efetiva mudar (novo doc OU troca regex/IA).
   useEffect(() => {
-    setLinhas(classificacao.linhas);
+    setLinhas(effectiveClassificacao.linhas);
     setSearch("");
-  }, [classificacao]);
+  }, [effectiveClassificacao]);
 
   const updateLinha = (key: string, patch: Partial<LinhaClassificada>) => {
     setLinhas((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -173,19 +203,18 @@ export function HoleritePreviewDialog({
 
   // Score de confiança da extração (recalcula quando linhas mudam, p.ex.
   // se o usuário corrige rubricas).
-  const confidence = useMemo(
-    () =>
-      scoreHolerite(
-        {
-          competencia: classificacao.competencia,
-          rubricas: linhas.map((l) => l.rubrica),
-          layout_usado: classificacao.layout_usado,
-          warnings: classificacao.warnings,
-        },
-        "",
-      ),
-    [classificacao.competencia, classificacao.layout_usado, classificacao.warnings, linhas],
-  );
+  const confidence = useMemo(() => {
+    if (copilot.modo === "ia" && copilot.iaScore) return copilot.iaScore;
+    return scoreHolerite(
+      {
+        competencia: effectiveClassificacao.competencia,
+        rubricas: linhas.map((l) => l.rubrica),
+        layout_usado: effectiveClassificacao.layout_usado,
+        warnings: effectiveClassificacao.warnings,
+      },
+      ocrText ?? "",
+    );
+  }, [copilot.modo, copilot.iaScore, effectiveClassificacao, linhas, ocrText]);
 
   // Ações em lote
   const setIncluirAll = (predicate: (l: LinhaClassificada) => boolean, v: boolean) => {
@@ -212,31 +241,28 @@ export function HoleritePreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[1500px] max-h-[94vh] overflow-hidden flex flex-col">
         <DialogHeader className="space-y-1">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
             <DialogTitle>Conferir antes de baixar</DialogTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <ConfidenceBadge score={confidence} />
-              {documentId && ocrText && onAIRetryResult && (
-                <AIRetryButton
-                  tipo="holerite"
-                  documentId={documentId}
-                  ocrText={ocrText}
-                  onResult={(r) => {
-                    // Reclassifica via classifyHolerite no parent (recebe
-                    // resultado do parser e devolve LinhaClassificada[]).
-                    // Como não temos `classifyHolerite` aqui sem dependência
-                    // adicional, deixamos o pai fazer a re-classificação.
-                    void r;
-                    onAIRetryResult([]);
-                  }}
-                  emphatic={confidence.level === "baixa"}
-                />
-              )}
+              <AICopilotBanner
+                loading={copilot.loading}
+                loadingDeep={copilot.loadingDeep}
+                erro={copilot.erro}
+                regexScore={copilot.regexScore}
+                iaScore={copilot.iaScore}
+                reconciliacao={copilot.reconciliacao}
+                modo={copilot.modo}
+                onModoChange={copilot.setModo}
+                onRunDeep={
+                  documentId && ocrText ? () => void copilot.runDeep() : undefined
+                }
+              />
             </div>
           </div>
           <DialogDescription className="text-xs">
-            Holerite <strong>{classificacao.competencia}</strong> · layout{" "}
-            <code className="text-[10px]">{classificacao.layout_usado}</code> ·{" "}
+            Holerite <strong>{effectiveClassificacao.competencia}</strong> · layout{" "}
+            <code className="text-[10px]">{effectiveClassificacao.layout_usado}</code> ·{" "}
             {linhas.length} rubrica{linhas.length === 1 ? "" : "s"} extraída
             {linhas.length === 1 ? "" : "s"} · {totalLinhasIncluidas} entram no
             ZIP

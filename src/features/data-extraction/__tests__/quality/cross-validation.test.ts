@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkFaltas,
+  checkFerias,
+  checkHoleriteTotais,
   checkHorasTrabalhadas,
+  checkSomaMensalHT,
   diasComDiscrepancia,
   formatDiff,
   hhmmToMin,
@@ -139,5 +143,189 @@ describe("formatDiff", () => {
     expect(formatDiff(0)).toBe("+00:00");
     expect(formatDiff(65)).toBe("+01:05");
     expect(formatDiff(-90)).toBe("-01:30");
+  });
+});
+
+describe("checkSomaMensalHT", () => {
+  it("OK quando soma diária ≈ total mensal no rodapé", () => {
+    const ocr = `
+      | 01/06/2024 - Seg | Horas Trabalhadas : 08:00 |
+      | 02/06/2024 - Ter | Horas Trabalhadas : 08:00 |
+      Horas Trabalhadas 16:00
+    `;
+    const r = checkSomaMensalHT(
+      [
+        ap({
+          data: "2024-06-01",
+          marcacoes: [{ e: "08:00", s: "16:00" }],
+          eventos: [{ tipo: "horas_trabalhadas", valor: "08:00", raw: "" }],
+        }),
+        ap({
+          data: "2024-06-02",
+          marcacoes: [{ e: "08:00", s: "16:00" }],
+          eventos: [{ tipo: "horas_trabalhadas", valor: "08:00", raw: "" }],
+        }),
+      ],
+      ocr,
+    );
+    expect(r).not.toBeNull();
+    expect(r!.ok).toBe(true);
+  });
+
+  it("FALHA quando soma diária diverge do total mensal", () => {
+    const ocr = `
+      | 01/06/2024 - Seg | Horas Trabalhadas : 08:00 |
+      Horas Trabalhadas 50:00
+    `;
+    const r = checkSomaMensalHT(
+      [
+        ap({
+          data: "2024-06-01",
+          marcacoes: [{ e: "08:00", s: "16:00" }],
+          eventos: [{ tipo: "horas_trabalhadas", valor: "08:00", raw: "" }],
+        }),
+      ],
+      ocr,
+    );
+    expect(r).not.toBeNull();
+    expect(r!.ok).toBe(false);
+  });
+
+  it("retorna null quando OCR não tem total mensal claro", () => {
+    expect(checkSomaMensalHT([], "")).toBeNull();
+  });
+});
+
+describe("checkHoleriteTotais", () => {
+  it("OK quando soma proventos == total bruto no OCR", () => {
+    const ocr = `
+      Salario Base R$ 3.000,00
+      Comissoes R$ 500,00
+      INSS R$ 270,00
+      IRRF R$ 100,00
+      Total Vencimentos: 3.500,00
+      Total Descontos: 370,00
+      Liquido a Receber: 3.130,00
+    `;
+    const r = checkHoleriteTotais(
+      [
+        { nome: "Salario Base", valor_vencimento: 3000, valor_desconto: null },
+        { nome: "Comissoes", valor_vencimento: 500, valor_desconto: null },
+        { nome: "INSS", valor_vencimento: null, valor_desconto: 270 },
+        { nome: "IRRF", valor_vencimento: null, valor_desconto: 100 },
+      ],
+      ocr,
+    );
+    expect(r.ok).toBe(true);
+    expect(r.somaProventos).toBe(3500);
+    expect(r.somaDescontos).toBe(370);
+  });
+
+  it("FALHA quando soma de proventos diverge do total bruto", () => {
+    const ocr = `
+      Salario R$ 1.000,00
+      Total Vencimentos: 5.000,00
+    `;
+    const r = checkHoleriteTotais(
+      [{ nome: "Salario", valor_vencimento: 1000, valor_desconto: null }],
+      ocr,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.diffBruto).toBe(-4000);
+  });
+
+  it("OK quando OCR não tem totais (ignora cross-check)", () => {
+    const r = checkHoleriteTotais(
+      [{ nome: "Salario", valor_vencimento: 1000, valor_desconto: null }],
+      "OCR sem totais explícitos",
+    );
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe("checkFerias", () => {
+  it("OK quando dias de gozo + abono == prazo", () => {
+    const r = checkFerias({
+      prazo: 30,
+      situacao: "G",
+      abono: true,
+      dias_abono: 10,
+      gozo1: { inicio: "01/06/2024", fim: "20/06/2024" },
+      gozo2: null,
+      gozo3: null,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.diasGozados).toBe(20);
+  });
+
+  it("FALHA quando dias gozados não fecham", () => {
+    const r = checkFerias({
+      prazo: 30,
+      situacao: "G",
+      abono: false,
+      dias_abono: 0,
+      gozo1: { inicio: "01/06/2024", fim: "10/06/2024" },
+      gozo2: null,
+      gozo3: null,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.diff).toBe(-20);
+  });
+
+  it("OK quando situação NG (sem gozos)", () => {
+    expect(
+      checkFerias({
+        prazo: 30,
+        situacao: "NG",
+        abono: false,
+        dias_abono: 0,
+        gozo1: null,
+        gozo2: null,
+        gozo3: null,
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("3 gozos somando exatamente o prazo", () => {
+    const r = checkFerias({
+      prazo: 30,
+      situacao: "G",
+      abono: false,
+      dias_abono: 0,
+      gozo1: { inicio: "01/06/2024", fim: "10/06/2024" },
+      gozo2: { inicio: "15/06/2024", fim: "24/06/2024" },
+      gozo3: { inicio: "01/07/2024", fim: "10/07/2024" },
+    });
+    expect(r.ok).toBe(true);
+    expect(r.diasGozados).toBe(30);
+  });
+});
+
+describe("checkFaltas", () => {
+  it("OK quando faltas em ordem sem overlap", () => {
+    const r = checkFaltas([
+      { data_inicio: "2024-06-01", data_fim: "2024-06-01" },
+      { data_inicio: "2024-06-15", data_fim: "2024-06-15" },
+    ]);
+    expect(r.ok).toBe(true);
+    expect(r.problemas).toHaveLength(0);
+  });
+
+  it("FALHA com intervalos sobrepostos", () => {
+    const r = checkFaltas([
+      { data_inicio: "2024-06-01", data_fim: "2024-06-15" },
+      { data_inicio: "2024-06-10", data_fim: "2024-06-20" },
+    ]);
+    expect(r.ok).toBe(false);
+    expect(r.problemas[0].tipo).toBe("overlap");
+  });
+
+  it("FALHA com ordem quebrada", () => {
+    const r = checkFaltas([
+      { data_inicio: "2024-06-15", data_fim: "2024-06-15" },
+      { data_inicio: "2024-06-01", data_fim: "2024-06-01" },
+    ]);
+    expect(r.ok).toBe(false);
+    expect(r.problemas.some((p) => p.tipo === "ordem-quebrada")).toBe(true);
   });
 });

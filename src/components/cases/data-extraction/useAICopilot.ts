@@ -228,11 +228,10 @@ export function useAICopilot<T extends LLMTipoDoc>(
     };
   }, [enabled, documentId, ocrText, tipo]);
 
-  // Auto-aplicação inteligente
+  // Auto-aplicação inteligente + auto-deep quando muita divergência.
+  const [autoDeepDisparado, setAutoDeepDisparado] = useState(false);
   useEffect(() => {
     if (!iaResult || !iaScore) return;
-    // Cartão-Ponto: se houver reconciliação E pouca divergência, vai pro modo
-    // reconciliado (o melhor de cada fonte). Senão usa a melhor isolada.
     if (tipo === "cartao_ponto" && reconciliacao) {
       const total = reconciliacao.contadores.total || 1;
       const pctDivergente =
@@ -241,8 +240,6 @@ export function useAICopilot<T extends LLMTipoDoc>(
           reconciliacao.contadores.htDiscrepancias) /
           total) *
         100;
-      // Sempre vai pra reconciliado quando temos as 2 fontes — usuário vê
-      // os contadores e só edita os divergentes.
       setModo("reconciliado");
       if (pctDivergente > 0) {
         toast.message(
@@ -250,9 +247,23 @@ export function useAICopilot<T extends LLMTipoDoc>(
           { duration: 4000 },
         );
       }
+      // AUTO-DEEP: se muita divergência (>20%) E ainda não disparou, roda
+      // o modo profundo automaticamente — limpa OCR e re-extrai.
+      if (
+        pctDivergente >= 20 &&
+        !autoDeepDisparado &&
+        documentId &&
+        ocrText
+      ) {
+        setAutoDeepDisparado(true);
+        toast.message(
+          "Muita divergência detectada — disparando análise profunda automaticamente.",
+          { duration: 3000 },
+        );
+        void runDeep();
+      }
       return;
     }
-    // Outros tipos: troca pra IA se score significativamente maior.
     if (iaScore.score >= regexScore.score + margemAutoAplicar) {
       setModo("ia");
       toast.success(
@@ -260,7 +271,17 @@ export function useAICopilot<T extends LLMTipoDoc>(
         { duration: 3500 },
       );
     }
-  }, [tipo, iaResult, iaScore, regexScore, reconciliacao, margemAutoAplicar]);
+  }, [
+    tipo,
+    iaResult,
+    iaScore,
+    regexScore,
+    reconciliacao,
+    margemAutoAplicar,
+    autoDeepDisparado,
+    documentId,
+    ocrText,
+  ]);
 
   const effective = useMemo<ResultByTipo[T]>(() => {
     if (modo === "ia" && iaResult) return iaResult;

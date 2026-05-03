@@ -195,8 +195,15 @@ Falta 20/03/2024 injustificada
   });
 });
 
-describe("validateAntiAlucinacao — holerite (no-op por design)", () => {
-  it("não bloqueia mesmo com nome de rubrica não-textual idêntico (aceitação intencional)", () => {
+describe("validateAntiAlucinacao — holerite (substring fuzzy)", () => {
+  const ocr = `
+    Salário Base R$ 3.000,00
+    Comissões R$ 500,00
+    INSS R$ 270,00
+    Vale Transporte R$ 50,00
+  `;
+
+  it("aceita rubricas cujo nome aparece no OCR (case-insensitive, sem acentos)", () => {
     expect(() =>
       validateAntiAlucinacao(
         "holerite",
@@ -204,18 +211,45 @@ describe("validateAntiAlucinacao — holerite (no-op por design)", () => {
           competencia: "01/2024",
           layout_usado: "llm_v1",
           rubricas: [
-            {
-              codigo: "1",
-              nome: "QUALQUER COISA",
-              valor_vencimento: 100,
-              valor_desconto: null,
-              quantidade: null,
-              ordem: 0,
-            },
+            { codigo: "1", nome: "Salario Base", valor_vencimento: 3000, valor_desconto: null, quantidade: null, ordem: 0 },
+            { codigo: "2", nome: "COMISSOES", valor_vencimento: 500, valor_desconto: null, quantidade: null, ordem: 1 },
           ],
         },
-        "OCR sem essa rubrica",
+        ocr,
       ),
     ).not.toThrow();
+  });
+
+  it("REJEITA quando IA inventa rubrica que não está no OCR", () => {
+    expect(() =>
+      validateAntiAlucinacao(
+        "holerite",
+        {
+          competencia: "01/2024",
+          layout_usado: "llm_v1",
+          rubricas: [
+            { codigo: "X", nome: "Adicional Periculosidade", valor_vencimento: 999, valor_desconto: null, quantidade: null, ordem: 0 },
+          ],
+        },
+        ocr,
+      ),
+    ).toThrow(LLMExtractError);
+  });
+
+  it("aceita nome com 1 palavra significativa que existe", () => {
+    // "Plano Saude" → "saude" deveria estar mas não está → falha
+    expect(() =>
+      validateAntiAlucinacao(
+        "holerite",
+        {
+          competencia: "01/2024",
+          layout_usado: "llm_v1",
+          rubricas: [
+            { codigo: "1", nome: "Plano Saude", valor_vencimento: null, valor_desconto: 100, quantidade: null, ordem: 0 },
+          ],
+        },
+        ocr,
+      ),
+    ).toThrow(LLMExtractError);
   });
 });

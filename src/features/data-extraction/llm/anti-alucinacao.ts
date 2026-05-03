@@ -117,6 +117,33 @@ export function validateAntiAlucinacao(
         });
       }
     }
+  } else if (tipo === "holerite") {
+    const o = output as HoleriteLLMOutput;
+    // Normaliza OCR: lowercase + remove acentos/pontuação pra match fuzzy.
+    const ocrNorm = ocr
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9 ]+/g, " ");
+    for (const r of o.rubricas) {
+      if (!r.nome || r.nome.length < 3) continue;
+      const nomeNorm = r.nome
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/[^a-z0-9 ]+/g, " ")
+        .trim();
+      if (nomeNorm.length < 3) continue;
+      // Toda palavra significativa (>3 chars) do nome deve aparecer no OCR.
+      const palavras = nomeNorm.split(/\s+/).filter((p) => p.length >= 3);
+      if (palavras.length === 0) continue;
+      const hit = palavras.some((p) => ocrNorm.includes(p));
+      if (!hit) {
+        throw new LLMExtractError({
+          code: "alucinacao",
+          message: `LLM gerou rubrica "${r.nome}" cujas palavras não estão no OCR`,
+        });
+      }
+    }
   }
-  // holerite: não validamos por nome (variações de OCR), no-op intencional.
 }

@@ -11,6 +11,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { parseHolerite } from '../../parsers/holerite';
+import type { HoleriteParseResult } from '../../parsers/holerite/types';
 import { parseCartaoPonto, type ParseCartaoPontoResult } from '../../parsers/cartao-ponto';
 import { parseFerias, type ParseFeriasResult } from '../../parsers/ferias';
 import { parseFaltas, type ParseFaltasResult } from '../../parsers/faltas';
@@ -25,6 +26,9 @@ export type ExportResult =
       ok: true;
       kind: 'holerite-preview';
       preview: ClassificacaoHolerite;
+      /** HoleriteParseResult cru — necessário pro co-piloto IA. */
+      parsed: HoleriteParseResult;
+      document_id: string;
       ocr_text: string;
       filename: string;
     }
@@ -32,6 +36,7 @@ export type ExportResult =
       ok: true;
       kind: 'cartao-ponto-review';
       parsed: ParseCartaoPontoResult;
+      document_id: string;
       ocr_text: string;
       filename: string;
     }
@@ -39,6 +44,7 @@ export type ExportResult =
       ok: true;
       kind: 'ferias-review';
       parsed: ParseFeriasResult;
+      document_id: string;
       ocr_text: string;
       filename: string;
     }
@@ -46,6 +52,7 @@ export type ExportResult =
       ok: true;
       kind: 'faltas-review';
       parsed: ParseFaltasResult;
+      document_id: string;
       ocr_text: string;
       filename: string;
     }
@@ -80,6 +87,8 @@ export async function generateExportForDocument(
         ok: true,
         kind: 'holerite-preview',
         preview,
+        parsed,
+        document_id: documentId,
         ocr_text: ocrText,
         filename: `${baseName}_pjecalc.zip`,
       };
@@ -93,6 +102,7 @@ export async function generateExportForDocument(
         ok: true,
         kind: 'cartao-ponto-review',
         parsed,
+        document_id: documentId,
         ocr_text: ocrText,
         filename: `${baseName}_jornada.csv`,
       };
@@ -103,6 +113,7 @@ export async function generateExportForDocument(
         ok: true,
         kind: 'ferias-review',
         parsed,
+        document_id: documentId,
         ocr_text: ocrText,
         filename: `${baseName}_ferias.csv`,
       };
@@ -113,6 +124,7 @@ export async function generateExportForDocument(
         ok: true,
         kind: 'faltas-review',
         parsed,
+        document_id: documentId,
         ocr_text: ocrText,
         filename: `${baseName}_faltas.csv`,
       };
