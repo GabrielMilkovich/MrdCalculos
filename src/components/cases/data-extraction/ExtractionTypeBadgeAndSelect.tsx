@@ -41,6 +41,7 @@ import { FaltasReviewDialog } from "./FaltasReviewDialog";
 import {
   generateExportForDocument,
   type ClassificacaoHolerite,
+  type HoleriteParseResult,
   type ParseCartaoPontoResult,
   type ParseFaltasResult,
   type ParseFeriasResult,
@@ -73,20 +74,26 @@ export function ExtractionTypeBadgeAndSelect({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewState, setPreviewState] = useState<{
     classificacao: ClassificacaoHolerite;
+    parsed: HoleriteParseResult;
+    documentId: string;
+    ocrText: string;
     filename: string;
   } | null>(null);
   const [cartaoState, setCartaoState] = useState<{
     parsed: ParseCartaoPontoResult;
+    documentId: string;
     ocrText: string;
     filename: string;
   } | null>(null);
   const [feriasState, setFeriasState] = useState<{
     parsed: ParseFeriasResult;
+    documentId: string;
     ocrText: string;
     filename: string;
   } | null>(null);
   const [faltasState, setFaltasState] = useState<{
     parsed: ParseFaltasResult;
+    documentId: string;
     ocrText: string;
     filename: string;
   } | null>(null);
@@ -125,12 +132,16 @@ export function ExtractionTypeBadgeAndSelect({
         case "holerite-preview":
           setPreviewState({
             classificacao: result.preview,
+            parsed: result.parsed,
+            documentId: result.document_id,
+            ocrText: result.ocr_text,
             filename: result.filename,
           });
           break;
         case "cartao-ponto-review":
           setCartaoState({
             parsed: result.parsed,
+            documentId: result.document_id,
             ocrText: result.ocr_text,
             filename: result.filename,
           });
@@ -138,6 +149,7 @@ export function ExtractionTypeBadgeAndSelect({
         case "ferias-review":
           setFeriasState({
             parsed: result.parsed,
+            documentId: result.document_id,
             ocrText: result.ocr_text,
             filename: result.filename,
           });
@@ -145,6 +157,7 @@ export function ExtractionTypeBadgeAndSelect({
         case "faltas-review":
           setFaltasState({
             parsed: result.parsed,
+            documentId: result.document_id,
             ocrText: result.ocr_text,
             filename: result.filename,
           });
@@ -251,6 +264,9 @@ export function ExtractionTypeBadgeAndSelect({
           open={previewState !== null}
           onOpenChange={(o) => !o && setPreviewState(null)}
           classificacao={previewState.classificacao}
+          parsed={previewState.parsed}
+          documentId={previewState.documentId}
+          ocrText={previewState.ocrText}
           filename={previewState.filename}
         />
       )}
@@ -259,6 +275,7 @@ export function ExtractionTypeBadgeAndSelect({
           open={cartaoState !== null}
           onOpenChange={(o) => !o && setCartaoState(null)}
           parsed={cartaoState.parsed}
+          documentId={cartaoState.documentId}
           ocrText={cartaoState.ocrText}
           filename={cartaoState.filename}
         />
@@ -268,6 +285,7 @@ export function ExtractionTypeBadgeAndSelect({
           open={feriasState !== null}
           onOpenChange={(o) => !o && setFeriasState(null)}
           parsed={feriasState.parsed}
+          documentId={feriasState.documentId}
           ocrText={feriasState.ocrText}
           filename={feriasState.filename}
         />
@@ -277,6 +295,7 @@ export function ExtractionTypeBadgeAndSelect({
           open={faltasState !== null}
           onOpenChange={(o) => !o && setFaltasState(null)}
           parsed={faltasState.parsed}
+          documentId={faltasState.documentId}
           ocrText={faltasState.ocrText}
           filename={faltasState.filename}
         />

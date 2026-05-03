@@ -89,15 +89,24 @@ export {
 } from './quality/window';
 export type { JanelaPeriodo } from './quality/window';
 
-// Validação cruzada (soma de batidas × evento Horas Trabalhadas).
+// Validação cruzada (soma de batidas × evento Horas Trabalhadas + outros).
 export {
   hhmmToMin,
   somarBatidasMin,
   checkHorasTrabalhadas,
   diasComDiscrepancia,
   formatDiff,
+  checkSomaMensalHT,
+  checkHoleriteTotais,
+  checkFerias,
+  checkFaltas,
 } from './quality/cross-validation';
-export type { CrossCheckResult } from './quality/cross-validation';
+export type {
+  CrossCheckResult,
+  CheckHoleriteTotaisResult,
+  CheckFeriasResult,
+  CheckFaltasResult,
+} from './quality/cross-validation';
 
 // Reconciliação multi-fonte (regex × IA) — co-piloto inteligente.
 export {
