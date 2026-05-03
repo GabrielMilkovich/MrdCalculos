@@ -163,6 +163,29 @@ describe("Cartão-Ponto — invariantes universais (todas fixtures)", () => {
         }
       });
 
+      it("I8: nenhuma linha do CSV vem de timestamp de aprovação eletrônica", async () => {
+        // Sinaliza qualquer batida cuja única origem no OCR é uma frase
+        // contendo "aprovado/homologado/registrado/validado" — esse é o
+        // bug clássico de timestamp de assinatura virando jornada fantasma.
+        const csv = await csvFromOcr(f.ocr);
+        const linhasOcr = f.ocr.split(/\r?\n/);
+        for (const linha of csv.split("\r\n").slice(1)) {
+          if (!linha) continue;
+          const data = linha.split(";")[0];
+          // Onde essa data aparece no OCR?
+          const ocorrenciasOcr = linhasOcr.filter((l) => l.includes(data));
+          if (ocorrenciasOcr.length === 0) continue; // round-trip já cobre
+          // Se TODAS as menções dessa data são linhas de aprovação, é bug.
+          const todasSaoAprovacao = ocorrenciasOcr.every((l) =>
+            /\b(aprovad|homologad|registrad\w*\s+eletronicamente|validad\w*\s+(?:pelo|por|em)|assinad\w*\s+eletronicamente)\b/i.test(l),
+          );
+          expect(
+            todasSaoAprovacao,
+            `Data ${data} no CSV mas todas suas menções no OCR são de aprovação eletrônica`,
+          ).toBe(false);
+        }
+      });
+
       it("I7: encoding UTF-8 + separador ; + line ending CRLF + termina com CRLF", async () => {
         const csv = await csvFromOcr(f.ocr);
         expect(csv.endsWith("\r\n")).toBe(true);

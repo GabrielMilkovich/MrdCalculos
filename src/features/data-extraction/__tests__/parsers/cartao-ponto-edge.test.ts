@@ -137,3 +137,47 @@ describe("parseCartaoPonto — limite de 6 pares", () => {
     expect(r.apuracoes[0].marcacoes).toHaveLength(6);
   });
 });
+
+describe("parseCartaoPonto — timestamps de aprovação eletrônica (CRÍTICO)", () => {
+  it("'aprovado pelo usuário no dia DD/MM/YYYY às HH:MM' não cria batida fantasma", () => {
+    const ocr = `
+| 14/12/2021 - Ter | 08:00 | 12:00 | 13:00 | 17:00 | Horas Trabalhadas : 08:00 |
+| 15/12/2021 - Qua | 08:00 | 12:00 | 13:00 | 17:00 | Horas Trabalhadas : 08:00 |
+
+aprovado pelo usuário Maria da Silva no dia 20/12/2021 às 10:14
+aprovado pelo colaborador no dia 29/12/2021 às 14:42
+`;
+    const r = parseCartaoPonto(ocr);
+    expect(r.apuracoes.find((a) => a.data === "2021-12-20"), "20/12 não pode existir").toBeUndefined();
+    expect(r.apuracoes.find((a) => a.data === "2021-12-29"), "29/12 não pode existir").toBeUndefined();
+    expect(r.apuracoes).toHaveLength(2);
+  });
+
+  it("'aprovado em DD/MM/YYYY' (sem 'pelo') também é filtrado", () => {
+    const ocr = `
+01/06/2024 08:00 12:00
+Aprovado em 05/06/2024 às 09:30
+`;
+    const r = parseCartaoPonto(ocr);
+    expect(r.apuracoes).toHaveLength(1);
+    expect(r.apuracoes[0].data).toBe("2024-06-01");
+  });
+
+  it("'homologado' também é filtrado", () => {
+    const ocr = `
+01/06/2024 08:00 12:00
+Homologado pelo gestor em 05/06/2024 às 14:00
+`;
+    const r = parseCartaoPonto(ocr);
+    expect(r.apuracoes).toHaveLength(1);
+  });
+
+  it("'registrado eletronicamente' também é filtrado", () => {
+    const ocr = `
+01/06/2024 08:00 12:00
+Registrado eletronicamente em 05/06/2024 às 14:00
+`;
+    const r = parseCartaoPonto(ocr);
+    expect(r.apuracoes).toHaveLength(1);
+  });
+});

@@ -180,9 +180,23 @@ const RE_OCORRENCIA_PURA =
 
 // Linhas de metadados (cabeçalho/rodapé do espelho) — IGNORAR mesmo se
 // tiverem data válida. Ex: "ADMISSÃO 06/06/2018", "Data de emissão 13/08/2024",
-// "Período 16/06/2021 a 15/07/2021", "Juntado em: 21/08/2024".
+// "Período 16/06/2021 a 15/07/2021", "Juntado em: 21/08/2024",
+// "aprovado pelo usuário no dia 20/12/2021 às 10:14".
+//
+// Os timestamps de aprovação/assinatura/homologação são particularmente
+// nocivos: o parser detectaria a data + hora e CRIARIA uma batida fantasma
+// ("inventaria jornada onde não houve trabalho"). Filtramos antes do split.
 const RE_METADADO_LINHA =
-  /\b(ADMISS[ÃA]O|DEMISS[ÃA]O|EMISS[ÃA]O|MATR[ÍI]CULA|PIS|CARGO|DEPARTAMENTO|JUNTAD[OA]\s+EM|ASSINAD[OA]\s+ELETRONICAMENTE|N[ÚU]MERO\s+(?:do\s+)?PROCESSO|N[ÚU]MERO\s+(?:do\s+)?DOCUMENTO|VALIDAD[EO]|RAZ[ÃA]O\s+SOCIAL|CNPJ|CEP|ENDERE[ÇC]O|LOCALIZA[ÇC][ÃA]O|Per[íi]odo\s+\d{2}\/\d{2}\/\d{4}\s+a\s+\d{2}\/\d{2}\/\d{4})\b/i;
+  /\b(ADMISS[ÃA]O|DEMISS[ÃA]O|EMISS[ÃA]O|MATR[ÍI]CULA|PIS|CARGO|DEPARTAMENTO|JUNTAD[OA]\s+EM|ASSINAD[OA]\s+ELETRONICAMENTE|N[ÚU]MERO\s+(?:do\s+)?PROCESSO|N[ÚU]MERO\s+(?:do\s+)?DOCUMENTO|VALIDAD[EO]|RAZ[ÃA]O\s+SOCIAL|CNPJ|CEP|ENDERE[ÇC]O|LOCALIZA[ÇC][ÃA]O|Per[íi]odo\s+\d{2}\/\d{2}\/\d{4}\s+a\s+\d{2}\/\d{2}\/\d{4}|APROVAD[OA]\b|HOMOLOGAD[OA]\b|REGISTRAD[OA]\s+ELETRONICAMENTE|VALIDAD[OA]\s+(?:PELO|POR|EM)|CONFIRMAD[OA]\s+(?:PELO|POR|EM))\b/i;
+
+/**
+ * Padrão "no dia DD/MM/YYYY às HH:MM" / "em DD/MM/YYYY às HH:MM" — sinal
+ * canônico de timestamp de aprovação/assinatura. Aplicado mesmo se a linha
+ * não casar com RE_METADADO_LINHA, porque às vezes o OCR só preserva o
+ * fragmento "às HH:MM" sem a palavra-chave anterior.
+ */
+const RE_TIMESTAMP_APROVACAO =
+  /\b(?:no\s+dia|em)\s+\d{1,2}\/\d{1,2}\/\d{4}\s+(?:[àa]s|as)\s+\d{1,2}:\d{2}\b/i;
 
 // =====================================================
 // Parser
@@ -266,8 +280,12 @@ export function parseCartaoPonto(
     }
 
     // Filtra linhas de metadado (cabeçalho/rodapé) que têm data mas não
-    // representam apuração diária (ex: "ADMISSÃO 06/06/2018", "Período X a Y").
-    if (RE_METADADO_LINHA.test(linhaSemPipes)) {
+    // representam apuração diária (ex: "ADMISSÃO 06/06/2018", "Período X a Y",
+    // "aprovado pelo usuário no dia 20/12/2021 às 10:14").
+    if (
+      RE_METADADO_LINHA.test(linhaSemPipes) ||
+      RE_TIMESTAMP_APROVACAO.test(linhaSemPipes)
+    ) {
       continue;
     }
 
