@@ -116,7 +116,8 @@ Período 16/08/2021 a 15/09/2021 - Data de emissão 13/08/2024
 | 10/09/2021 - Sex | 09:02 | 12:19 | 13:25 | 17:01 | Horas Trabalhadas : 06:53 | Horas Previstas : 07:20 | Banco de Horas Debito : -00:27 |
 | 11/09/2021 - Sáb | 09:43 | 13:55 | 15:19 | 18:32 | Horas Trabalhadas : 07:25 | Horas Previstas : 07:20 |
 | 12/09/2021 - Dom | -- | DSR Semanal (dias) : 1 |
-| 13/09/2021 - Seg | 08:30* | 12:00* | 13:05* | 16:50* | 08:30 - Inserido | 12:00 - Inserido | 13:05 - Inserido | 16:50 - Inserido | Horas Trabalhadas : 07:15 | Horas Previstas : 07:20 |
+| 13/09/2021 - Seg | 08:30* | 12:00* | 13:05* |  | 08:30 - Inserido | 12:00 - Inserido | 13:05 - Inserido | | Horas Trabalhadas : 07:15 | Horas Previstas : 07:20 |  |
+|  | 16:50* |  |  |  | 16:50 - Inserido |  |  |  |
 | 14/09/2021 - Ter | 08:30* | 12:01 | 13:18 | 15:59 | 08:30 - Inserido | Horas Trabalhadas : 06:12 | Horas Previstas : 07:20 | Banco de Horas Debito : -01:08 |
 | 15/09/2021 - Qua | 06:36 | 11:16 | 12:49 | 15:34 | Horas Trabalhadas : 07:25 | Horas Previstas : 07:20 |
 
