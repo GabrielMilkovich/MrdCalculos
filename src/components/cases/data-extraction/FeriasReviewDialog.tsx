@@ -28,7 +28,8 @@ import {
   type SituacaoFerias,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
-import { AIRetryButton } from "./AIRetryButton";
+import { AICopilotBanner } from "./AICopilotBanner";
+import { useAICopilot } from "./useAICopilot";
 
 interface Props {
   open: boolean;
@@ -137,8 +138,14 @@ export function FeriasReviewDialog({
   documentId,
 }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
-  const [aiOverride, setAiOverride] = useState<ParseFeriasResult | null>(null);
-  const effectiveParsed = aiOverride ?? parsed;
+  const copilot = useAICopilot({
+    tipo: "recibo_ferias",
+    documentId: documentId ?? null,
+    ocrText,
+    parsed,
+    enabled: !!documentId,
+  });
+  const effectiveParsed = copilot.effective;
 
   useEffect(() => {
     setRows(effectiveParsed.ferias.map((f) => ({ ...f, _key: newKey() })));
@@ -161,8 +168,11 @@ export function FeriasReviewDialog({
   );
 
   const confidence = useMemo(
-    () => scoreFerias(effectiveParsed, ocrText),
-    [effectiveParsed, ocrText],
+    () =>
+      copilot.modo === "ia" && copilot.iaScore
+        ? copilot.iaScore
+        : copilot.regexScore,
+    [copilot.modo, copilot.iaScore, copilot.regexScore],
   );
 
   const updateRow = (key: string, patch: Partial<Row>) =>
@@ -240,18 +250,18 @@ export function FeriasReviewDialog({
       warnings={effectiveParsed.warnings}
       contadores={{ extraidos: rows.length, etiqueta: "período" }}
       headerSlot={
-        <>
+        <div className="flex items-center gap-2 flex-wrap">
           <ConfidenceBadge score={confidence} />
-          {documentId && (
-            <AIRetryButton
-              tipo="recibo_ferias"
-              documentId={documentId}
-              ocrText={ocrText}
-              onResult={(r) => setAiOverride(r)}
-              emphatic={confidence.level === "baixa"}
-            />
-          )}
-        </>
+          <AICopilotBanner
+            loading={copilot.loading}
+            erro={copilot.erro}
+            regexScore={copilot.regexScore}
+            iaScore={copilot.iaScore}
+            reconciliacao={copilot.reconciliacao}
+            modo={copilot.modo}
+            onModoChange={copilot.setModo}
+          />
+        </div>
       }
       onConfirm={handleConfirm}
       confirmDisabled={totalErros > 0}
