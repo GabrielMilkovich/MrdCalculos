@@ -127,6 +127,10 @@ const RE_DIA_SEMANA = /\b(Seg|Ter|Qua|Qui|Sex|S[áa]b|Dom)\b/i;
  *
  * Tudo ANTES desse marcador são batidas; tudo DEPOIS são eventos
  * informativos (não devem virar batida).
+ *
+ * NOTA: "Inserido" e "Desconsiderado" NÃO são marcadores — são tags de
+ * batida individual (formato "X:XX - Inserido"). Tratados separadamente
+ * em `extrairTagsBatidas` antes do split.
  */
 const MARCADORES_RESULTADO = [
   /Horas?\s+Trabalhadas?/i,
@@ -139,14 +143,16 @@ const MARCADORES_RESULTADO = [
   /DSR\s+Semanal/i,
   /Intrajornada/i,
   /Interjornada/i,
-  /Inserido\b/i, // marcador de ajuste manual
-  /Desconsiderado\b/i,
   /\bFERIADO\b/i,
   /F[ée]rias\b/i,
   /Licen[çc]a\s+m[ée]dica/i,
   /Treinamento/i,
   /Afastamento/i,
 ];
+
+/** Padrão de tag de batida: "X:XX - Inserido" ou "X:XX - Desconsiderado". */
+const RE_BATIDA_TAG =
+  /\b(\d{1,2}):(\d{2})\s*[-–]\s*(Inserid[oa]|Desconsiderad[oa])\b/gi;
 
 const RE_HORA_OPCIONAL_ASTERISCO = /\b(\d{1,2}):(\d{2})(?::\d{2})?(\*?)/g;
 const RE_TEM_DIGITO = /\d/;
@@ -207,8 +213,12 @@ export function parseCartaoPonto(
 
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
-    const linhaSemPipes = raw.replace(/\|/g, " ").trim();
-    if (linhaSemPipes.length === 0) continue;
+    const linhaBruta = raw.replace(/\|/g, " ").trim();
+    if (linhaBruta.length === 0) continue;
+    // Remove tags "X:XX - Inserido/Desconsiderado" antes de qualquer split
+    // (Inserido/Desconsiderado NÃO são divisores de batidas/eventos).
+    const { inseridas, desconsideradas, texto: linhaSemPipes } =
+      extrairTagsBatidas(linhaBruta);
 
     let dateMatch = linhaSemPipes.match(RE_DATA_BR);
     let dataCorrigida = false;
@@ -283,15 +293,10 @@ export function parseCartaoPonto(
 
     // Captura horários da parte de batidas (após a data).
     // Remove a data da string para não confundir o regex.
-    const semData = parteBatidas.replace(RE_DATA_BR, " ").replace(RE_DIA_SEMANA, " ");
-    const marcacoes = capturarMarcacoes(semData);
-
-    // Detecta "Desconsiderado" / "Inserido" e atribui à última marcação,
-    // se a regra cabível. (Heurística: melhor que nada — UI permite editar.)
-    if (/Desconsiderado/i.test(parteEventos) && marcacoes.length > 0) {
-      const last = marcacoes[marcacoes.length - 1];
-      last.s_desconsiderada = true;
-    }
+    const semData = parteBatidas
+      .replace(RE_DATA_BR, " ")
+      .replace(RE_DIA_SEMANA, " ");
+    const marcacoes = capturarMarcacoes(semData, inseridas, desconsideradas);
 
     // Detecta ocorrência baseada na LINHA INTEIRA (não só parteEventos):
     // se a linha cita uma ausência conhecida e não tem batidas, classificar.
@@ -377,6 +382,30 @@ export function parseCartaoPonto(
 // Helpers
 // =====================================================
 
+/**
+ * Extrai do texto as tags "X:XX - Inserido" / "X:XX - Desconsiderado" e
+ * devolve:
+ *   - `inseridas`: Set de horários (HH:MM) marcados como inseridos
+ *   - `desconsideradas`: idem para desconsiderados
+ *   - `texto`: cópia do texto sem essas tags (substituídas por espaços),
+ *     evitando que aparecem como batidas duplicadas no parser principal.
+ */
+function extrairTagsBatidas(texto: string): {
+  inseridas: Set<string>;
+  desconsideradas: Set<string>;
+  texto: string;
+} {
+  const inseridas = new Set<string>();
+  const desconsideradas = new Set<string>();
+  for (const m of texto.matchAll(RE_BATIDA_TAG)) {
+    const hhmm = `${m[1].padStart(2, "0")}:${m[2]}`;
+    if (/^I/i.test(m[3])) inseridas.add(hhmm);
+    else desconsideradas.add(hhmm);
+  }
+  const limpo = texto.replace(RE_BATIDA_TAG, " ");
+  return { inseridas, desconsideradas, texto: limpo };
+}
+
 function primeiraOcorrenciaMarcador(line: string): number {
   let idx = -1;
   for (const re of MARCADORES_RESULTADO) {
@@ -388,26 +417,57 @@ function primeiraOcorrenciaMarcador(line: string): number {
   return idx;
 }
 
-function capturarMarcacoes(s: string): Marcacao[] {
-  const horarios: Array<{ valor: string; inserida: boolean }> = [];
+function capturarMarcacoes(
+  s: string,
+  inseridasExternas: Set<string> = new Set(),
+  desconsideradasExternas: Set<string> = new Set(),
+): Marcacao[] {
+  type H = { valor: string; inserida: boolean; desconsiderada: boolean };
+  const horarios: H[] = [];
   for (const m of s.matchAll(RE_HORA_OPCIONAL_ASTERISCO)) {
     const h = parseInt(m[1], 10);
     const min = parseInt(m[2], 10);
     if (h < 0 || h > 23 || min < 0 || min > 59) continue;
+    const valor = `${m[1].padStart(2, "0")}:${m[2]}`;
     horarios.push({
-      valor: `${m[1].padStart(2, "0")}:${m[2]}`,
-      inserida: m[3] === "*",
+      valor,
+      inserida: m[3] === "*" || inseridasExternas.has(valor),
+      desconsiderada: desconsideradasExternas.has(valor),
     });
     if (horarios.length >= 12) break; // Limite: 6 pares
   }
+  // Completa com horários da lista "X:XX - Inserido"/"Desconsiderado" que
+  // não aparecem na forma compacta. Acontece quando o OCR omite o token
+  // compacto da última batida e ela só sobrevive na lista expandida.
+  const presentes = new Set(horarios.map((h) => h.valor));
+  const adicionados: H[] = [];
+  for (const ext of inseridasExternas) {
+    if (!presentes.has(ext) && horarios.length + adicionados.length < 12) {
+      adicionados.push({ valor: ext, inserida: true, desconsiderada: false });
+    }
+  }
+  for (const ext of desconsideradasExternas) {
+    if (!presentes.has(ext) && horarios.length + adicionados.length < 12) {
+      adicionados.push({ valor: ext, inserida: false, desconsiderada: true });
+    }
+  }
+  if (adicionados.length > 0) {
+    horarios.push(...adicionados);
+    // Reordena cronologicamente — batidas reais sempre estão em ordem.
+    horarios.sort((a, b) => a.valor.localeCompare(b.valor));
+  }
   const marcacoes: Marcacao[] = [];
   let j = 0;
-  while (j + 1 < horarios.length) {
+  // Pares E/S; horário órfão na ponta (ímpar) vira E sem S — preserva a
+  // batida no CSV em vez de descartá-la silenciosamente.
+  while (j < horarios.length) {
     const e = horarios[j];
     const s_ = horarios[j + 1];
-    const m: Marcacao = { e: e.valor, s: s_.valor };
+    const m: Marcacao = { e: e.valor, s: s_?.valor ?? "" };
     if (e.inserida) m.e_inserida = true;
-    if (s_.inserida) m.s_inserida = true;
+    if (e.desconsiderada) m.e_desconsiderada = true;
+    if (s_?.inserida) m.s_inserida = true;
+    if (s_?.desconsiderada) m.s_desconsiderada = true;
     marcacoes.push(m);
     j += 2;
   }

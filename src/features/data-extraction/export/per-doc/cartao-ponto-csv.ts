@@ -41,12 +41,16 @@ export function buildCartaoPontoCSV(parsed: ParseCartaoPontoResult): Blob {
 
   for (const ap of parsed.apuracoes) {
     const cols: string[] = new Array(N_PARES * 2).fill('');
-    if (ap.ocorrencia === 'NORMAL') {
-      ap.marcacoes.slice(0, N_PARES).forEach((m, i) => {
-        cols[i * 2] = m.e;
-        cols[i * 2 + 1] = m.s;
-      });
-    }
+    // Sempre emitimos as batidas que existirem, independentemente da
+    // ocorrência. PJe-Calc não tem coluna de "tipo de dia" — feriado
+    // trabalhado, ATESTADO parcial e similares precisam das batidas reais
+    // para o cálculo. Dias sem batidas (FALTA/FOLGA/FERIAS integrais) saem
+    // como linha de colunas vazias, o que o PJe-Calc trata como dia sem
+    // jornada.
+    ap.marcacoes.slice(0, N_PARES).forEach((m, i) => {
+      cols[i * 2] = m.e;
+      cols[i * 2 + 1] = m.s;
+    });
     lines.push([formatDataBR(ap.data), ...cols].join(';'));
   }
 

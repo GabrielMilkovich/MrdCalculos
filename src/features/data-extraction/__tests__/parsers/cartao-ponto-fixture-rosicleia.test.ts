@@ -162,25 +162,54 @@ describe("Fixture Rosicleia — ocorrências de ausência", () => {
 describe("Fixture Rosicleia — batidas inseridas (asterisco)", () => {
   const r = parseCartaoPonto(ocrText);
 
-  it("16/07/2021: 4 batidas inseridas (todas com *)", () => {
+  it("16/07/2021: 4 batidas reais (a 4ª 19:50 não pode ser perdida)", () => {
     const a = r.apuracoes.find((x) => x.data === "2021-07-16");
     expect(a).toBeDefined();
-    // 11:30* 14:00* 15:05* (... 19:50 - Inserido aparece numa linha-evento depois)
-    expect(a!.marcacoes.length).toBeGreaterThanOrEqual(1);
-    // Pelo menos uma marcação tem flag e_inserida ou s_inserida
-    const temFlagInserida = a!.marcacoes.some(
-      (m) => m.e_inserida || m.s_inserida,
-    );
-    expect(temFlagInserida).toBe(true);
+    expect(a!.marcacoes).toHaveLength(2);
+    expect(a!.marcacoes[0]).toMatchObject({ e: "11:30", s: "14:00" });
+    expect(a!.marcacoes[1]).toMatchObject({ e: "15:05", s: "19:50" });
+    // Todas inseridas (asterisco no OCR + lista "Inserido")
+    expect(a!.marcacoes.every((m) => m.e_inserida && m.s_inserida)).toBe(true);
   });
 
-  it("13/09/2021: 4 batidas todas inseridas", () => {
+  it("13/09/2021: 4 batidas todas inseridas, sem duplicação", () => {
     const a = r.apuracoes.find((x) => x.data === "2021-09-13");
     expect(a).toBeDefined();
-    expect(a!.marcacoes.length).toBeGreaterThanOrEqual(1);
-    const todasInseridas = a!.marcacoes.every(
-      (m) => m.e_inserida || m.s_inserida,
-    );
-    expect(todasInseridas).toBe(true);
+    expect(a!.marcacoes).toHaveLength(2);
+    expect(a!.marcacoes[0]).toMatchObject({ e: "08:30", s: "12:00" });
+    expect(a!.marcacoes[1]).toMatchObject({ e: "13:05", s: "16:50" });
+    expect(a!.marcacoes.every((m) => m.e_inserida || m.s_inserida)).toBe(true);
+  });
+});
+
+describe("Fixture Rosicleia — feriado trabalhado preserva batidas (CRÍTICO)", () => {
+  const r = parseCartaoPonto(ocrText);
+
+  it("02/11/2021 (Finados): batidas 08:41/14:12 preservadas mesmo sendo feriado", () => {
+    const a = r.apuracoes.find((x) => x.data === "2021-11-02");
+    expect(a).toBeDefined();
+    expect(a!.marcacoes).toHaveLength(1);
+    expect(a!.marcacoes[0]).toMatchObject({ e: "08:41", s: "14:12" });
+    expect(a!.eventos.find((e) => e.tipo === "he_feriado_0")?.valor).toBe("05:31");
+  });
+});
+
+describe("Fixture Rosicleia — batidas ímpares (3ª sem par)", () => {
+  const r = parseCartaoPonto(ocrText);
+
+  it("30/11/2021: 3 horários (08:03 12:03 13:14) preservam a 3ª como E sem S", () => {
+    const a = r.apuracoes.find((x) => x.data === "2021-11-30");
+    expect(a).toBeDefined();
+    expect(a!.marcacoes).toHaveLength(2);
+    expect(a!.marcacoes[0]).toMatchObject({ e: "08:03", s: "12:03" });
+    expect(a!.marcacoes[1]).toMatchObject({ e: "13:14", s: "" });
+  });
+
+  it("11/12/2021: 3 horários (10:02 14:15 15:52) preservam a 3ª como E sem S", () => {
+    const a = r.apuracoes.find((x) => x.data === "2021-12-11");
+    expect(a).toBeDefined();
+    expect(a!.marcacoes).toHaveLength(2);
+    expect(a!.marcacoes[0]).toMatchObject({ e: "10:02", s: "14:15" });
+    expect(a!.marcacoes[1]).toMatchObject({ e: "15:52", s: "" });
   });
 });

@@ -105,9 +105,10 @@ describe("parseCartaoPonto — duplicatas e ímpar", () => {
     expect(r.warnings.some((w) => /duplicad/.test(w))).toBe(true);
   });
 
-  it("número ímpar de horários: descarta o último (sem warning)", () => {
+  it("número ímpar de horários: preserva o último como E sem S (batida órfã)", () => {
     const r = parseCartaoPonto("01/03/2024 08:00 12:00 13:00");
-    expect(r.apuracoes[0].marcacoes).toHaveLength(1);
+    expect(r.apuracoes[0].marcacoes).toHaveLength(2);
+    expect(r.apuracoes[0].marcacoes[1]).toEqual({ e: "13:00", s: "" });
   });
 });
 
