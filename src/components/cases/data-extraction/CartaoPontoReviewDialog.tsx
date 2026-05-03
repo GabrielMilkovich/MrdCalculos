@@ -44,6 +44,7 @@ import {
   type ParseCartaoPontoResult,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { AIRetryButton } from "./AIRetryButton";
 
 interface Props {
   open: boolean;
@@ -51,6 +52,8 @@ interface Props {
   parsed: ParseCartaoPontoResult;
   ocrText: string;
   filename: string;
+  /** Opcional — habilita o botão "Tentar com IA". */
+  documentId?: string;
 }
 
 const OCORRENCIAS: OcorrenciaApuracao[] = [
@@ -92,19 +95,24 @@ export function CartaoPontoReviewDialog({
   parsed,
   ocrText,
   filename,
+  documentId,
 }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
+  // Quando a IA é usada, substituímos `parsed` por um override local —
+  // o resto do dialog continua trabalhando com o tipo `ParseCartaoPontoResult`.
+  const [aiOverride, setAiOverride] = useState<ParseCartaoPontoResult | null>(null);
+  const effectiveParsed = aiOverride ?? parsed;
 
-  // Inicializa quando o parsed mudar
+  // Inicializa quando o parsed (ou override IA) mudar
   useEffect(() => {
     setRows(
-      parsed.apuracoes.map((a) => ({
+      effectiveParsed.apuracoes.map((a) => ({
         ...a,
         marcacoes: fillMarcacoes(a.marcacoes),
         _key: newKey(),
       })),
     );
-  }, [parsed]);
+  }, [effectiveParsed]);
 
   const sorted = useMemo(
     () => [...rows].sort((a, b) => (a.data ?? "").localeCompare(b.data ?? "")),
@@ -148,12 +156,12 @@ export function CartaoPontoReviewDialog({
   const removeRow = (key: string) =>
     setRows((prev) => prev.filter((r) => r._key !== key));
 
-  const unparsedLines = parsed.unparsed_lines.map((u) => u.linha);
+  const unparsedLines = effectiveParsed.unparsed_lines.map((u) => u.linha);
 
   // Score de confiança da extração + datas fora da janela de competência.
   const confidence = useMemo(
-    () => scoreCartaoPonto(parsed, ocrText),
-    [parsed, ocrText],
+    () => scoreCartaoPonto(effectiveParsed, ocrText),
+    [effectiveParsed, ocrText],
   );
 
   // Calcula linhas do OCR que mencionam datas fora de qualquer janela
@@ -185,14 +193,14 @@ export function CartaoPontoReviewDialog({
   );
 
   const warnings = useMemo(() => {
-    const ws = [...parsed.warnings];
+    const ws = [...effectiveParsed.warnings];
     if (linhasComCorte.length > 0) {
       ws.push(
         `${linhasComCorte.length} dia(s) com mais de ${MAX_PARES} pares E/S — excedente será truncado.`,
       );
     }
     return ws;
-  }, [parsed.warnings, linhasComCorte]);
+  }, [effectiveParsed.warnings, linhasComCorte]);
 
   const handleConfirm = async () => {
     // Limpa marcações vazias antes de gerar CSV. Preserva batidas
@@ -211,7 +219,7 @@ export function CartaoPontoReviewDialog({
     const blob = buildCartaoPontoCSV({
       apuracoes,
       competencias: new Map(),
-      competencia_predominante: parsed.competencia_predominante,
+      competencia_predominante: effectiveParsed.competencia_predominante,
       data_inicial: apuracoes[0]?.data ?? "",
       data_final: apuracoes[apuracoes.length - 1]?.data ?? "",
       warnings: [],
@@ -225,13 +233,26 @@ export function CartaoPontoReviewDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Revisar jornada — Cartão de Ponto"
-      subtitle={`${rows.length} apurações detectadas em ${parsed.competencias.size} competência(s) · ${filename} · parser ${parsed.parser_version}`}
+      subtitle={`${rows.length} apurações detectadas em ${effectiveParsed.competencias.size} competência(s) · ${filename} · parser ${effectiveParsed.parser_version}`}
       ocrText={ocrText}
       unparsedLines={unparsedLines}
       outOfWindowLines={outOfWindowLines}
       warnings={warnings}
       contadores={{ extraidos: rows.length, etiqueta: "apuração" }}
-      headerSlot={<ConfidenceBadge score={confidence} />}
+      headerSlot={
+        <>
+          <ConfidenceBadge score={confidence} />
+          {documentId && (
+            <AIRetryButton
+              tipo="cartao_ponto"
+              documentId={documentId}
+              ocrText={ocrText}
+              onResult={(r) => setAiOverride(r)}
+              emphatic={confidence.level === "baixa"}
+            />
+          )}
+        </>
+      }
       onConfirm={handleConfirm}
     >
       <div className="p-2 flex items-center justify-between border-b sticky top-0 bg-background z-10">

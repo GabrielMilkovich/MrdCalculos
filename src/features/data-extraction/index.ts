@@ -88,3 +88,29 @@ export {
   datasForaDaJanela,
 } from './quality/window';
 export type { JanelaPeriodo } from './quality/window';
+
+// LLM fallback (OpenAI gpt-4o-mini via edge function `extract-via-llm`).
+export { extractViaLLM } from './llm/client';
+export type { LLMExtractionResponse } from './llm/client';
+export {
+  validateAntiAlucinacao,
+  LLMExtractError,
+} from './llm/anti-alucinacao';
+export type { LLMExtractionError } from './llm/anti-alucinacao';
+export {
+  validateLLMOutput,
+  LLM_SCHEMAS,
+} from './llm/schemas';
+export type {
+  LLMTipoDoc,
+  CartaoPontoLLMOutput,
+  FeriasLLMOutput,
+  FaltasLLMOutput,
+  HoleriteLLMOutput,
+} from './llm/schemas';
+export {
+  llmToCartaoPontoResult,
+  llmToFeriasResult,
+  llmToFaltasResult,
+  llmToHoleriteResult,
+} from './llm/adapters';

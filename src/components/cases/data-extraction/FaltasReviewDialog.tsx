@@ -20,6 +20,7 @@ import {
   type ParseFaltasResult,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { AIRetryButton } from "./AIRetryButton";
 
 interface Props {
   open: boolean;
@@ -27,6 +28,7 @@ interface Props {
   parsed: ParseFaltasResult;
   ocrText: string;
   filename: string;
+  documentId?: string;
 }
 
 type Row = FaltaParseada & { _key: string };
@@ -41,12 +43,15 @@ export function FaltasReviewDialog({
   parsed,
   ocrText,
   filename,
+  documentId,
 }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
+  const [aiOverride, setAiOverride] = useState<ParseFaltasResult | null>(null);
+  const effectiveParsed = aiOverride ?? parsed;
 
   useEffect(() => {
-    setRows(parsed.faltas.map((f) => ({ ...f, _key: newKey() })));
-  }, [parsed]);
+    setRows(effectiveParsed.faltas.map((f) => ({ ...f, _key: newKey() })));
+  }, [effectiveParsed]);
 
   const sorted = useMemo(
     () => [...rows].sort((a, b) => a.data_inicio.localeCompare(b.data_inicio)),
@@ -72,7 +77,7 @@ export function FaltasReviewDialog({
   const removeRow = (key: string) =>
     setRows((prev) => prev.filter((r) => r._key !== key));
 
-  const unparsedLines = parsed.unparsed_lines.map((u) => u.linha);
+  const unparsedLines = effectiveParsed.unparsed_lines.map((u) => u.linha);
 
   const handleConfirm = async () => {
     const faltas: FaltaParseada[] = sorted
@@ -96,7 +101,10 @@ export function FaltasReviewDialog({
     triggerBlobDownload(blob, filename);
   };
 
-  const confidence = useMemo(() => scoreFaltas(parsed, ocrText), [parsed, ocrText]);
+  const confidence = useMemo(
+    () => scoreFaltas(effectiveParsed, ocrText),
+    [effectiveParsed, ocrText],
+  );
 
   return (
     <ReviewLayout
@@ -106,9 +114,22 @@ export function FaltasReviewDialog({
       subtitle={`${rows.length} ocorrência(s) · ${filename}`}
       ocrText={ocrText}
       unparsedLines={unparsedLines}
-      warnings={parsed.warnings}
+      warnings={effectiveParsed.warnings}
       contadores={{ extraidos: rows.length, etiqueta: "falta" }}
-      headerSlot={<ConfidenceBadge score={confidence} />}
+      headerSlot={
+        <>
+          <ConfidenceBadge score={confidence} />
+          {documentId && (
+            <AIRetryButton
+              tipo="registro_faltas"
+              documentId={documentId}
+              ocrText={ocrText}
+              onResult={(r) => setAiOverride(r)}
+              emphatic={confidence.level === "baixa"}
+            />
+          )}
+        </>
+      }
       onConfirm={handleConfirm}
     >
       <div className="p-2 flex items-center justify-between border-b sticky top-0 bg-background z-10">
