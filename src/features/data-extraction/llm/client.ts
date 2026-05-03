@@ -30,6 +30,8 @@ export interface LLMExtractionResponse {
   output: unknown;
   cached: boolean;
   model: string;
+  mode?: "extract" | "deep";
+  ocr_limpo?: string | null;
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -42,7 +44,7 @@ export interface LLMExtractionResponse {
  */
 export async function extractViaLLM<T extends LLMTipoDoc>(
   tipo: T,
-  args: { document_id: string; ocr_text: string },
+  args: { document_id: string; ocr_text: string; mode?: "extract" | "deep" },
 ): Promise<{
   output: T extends "cartao_ponto"
     ? CartaoPontoLLMOutput
@@ -53,6 +55,8 @@ export async function extractViaLLM<T extends LLMTipoDoc>(
         : HoleriteLLMOutput;
   cached: boolean;
   model: string;
+  mode: "extract" | "deep";
+  ocr_limpo: string | null;
   usage?: LLMExtractionResponse["usage"];
 }> {
   const { data, error } = await supabase.functions.invoke<LLMExtractionResponse>(
@@ -62,6 +66,7 @@ export async function extractViaLLM<T extends LLMTipoDoc>(
         document_id: args.document_id,
         tipo_doc: tipo,
         ocr_text: args.ocr_text,
+        mode: args.mode ?? "extract",
       },
     },
   );
@@ -104,6 +109,8 @@ export async function extractViaLLM<T extends LLMTipoDoc>(
     output: validated as never,
     cached: data.cached,
     model: data.model,
+    mode: data.mode ?? "extract",
+    ocr_limpo: data.ocr_limpo ?? null,
     usage: data.usage,
   };
 }

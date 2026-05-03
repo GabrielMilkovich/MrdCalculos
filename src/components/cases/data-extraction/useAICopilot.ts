@@ -60,12 +60,14 @@ interface AICopilotState<T extends LLMTipoDoc> {
   reconciliacao: ReconciliacaoCartaoPonto | null;
   /** Modo de exibição atual. */
   modo: "regex" | "ia" | "reconciliado";
-  /** Resultado efetivo aplicado no dialog (modo atual). */
+  /** Resultado efetivo aplicado no dialog (modo atual + overrides). */
   effective: ResultByTipo[T];
   /** Loading. */
   loading: boolean;
   /** Erro humano (se houve falha na IA). */
   erro: string | null;
+  /** Overrides manuais por data (apenas cartão-ponto, modo reconciliado). */
+  overrides: Map<string, "regex" | "ia">;
 }
 
 interface UseAICopilotArgs<T extends LLMTipoDoc> {
@@ -82,6 +84,14 @@ interface UseAICopilotArgs<T extends LLMTipoDoc> {
 interface UseAICopilotResult<T extends LLMTipoDoc> extends AICopilotState<T> {
   /** Força aplicação manual da fonte (usuário clicou em algo). */
   setModo: (modo: "regex" | "ia" | "reconciliado") => void;
+  /** Define manualmente a fonte para um dia específico (cartão-ponto). */
+  setOverride: (data: string, fonte: "regex" | "ia") => void;
+  /** Remove um override manual. */
+  clearOverride: (data: string) => void;
+  /** Re-roda IA em modo profundo (limpa OCR + extrai). */
+  runDeep: () => Promise<void>;
+  /** Loading do modo profundo (separado do auto-trigger). */
+  loadingDeep: boolean;
 }
 
 function calcScore<T extends LLMTipoDoc>(
@@ -123,8 +133,57 @@ export function useAICopilot<T extends LLMTipoDoc>(
 
   const [iaResult, setIaResult] = useState<ResultByTipo[T] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingDeep, setLoadingDeep] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [modo, setModo] = useState<"regex" | "ia" | "reconciliado">("regex");
+  const [overrides, setOverrides] = useState<Map<string, "regex" | "ia">>(new Map());
+
+  const runDeep = async () => {
+    if (!documentId || !ocrText) return;
+    setLoadingDeep(true);
+    setErro(null);
+    try {
+      const { output, usage } = await extractViaLLM(tipo, {
+        document_id: documentId,
+        ocr_text: ocrText,
+        mode: "deep",
+      });
+      const result = adaptarLLM(tipo, output);
+      setIaResult(result);
+      const tokens =
+        (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0);
+      toast.success(
+        `Análise profunda da IA aplicada (${tokens.toLocaleString("pt-BR")} tokens). Confira as mudanças.`,
+        { duration: 4000 },
+      );
+    } catch (e) {
+      if (e instanceof LLMExtractError) {
+        setErro(e.payload.message);
+        toast.error(`IA profunda falhou: ${e.payload.message}`);
+      } else {
+        const msg = (e as Error).message;
+        setErro(msg);
+        toast.error(`IA profunda falhou: ${msg}`);
+      }
+    } finally {
+      setLoadingDeep(false);
+    }
+  };
+
+  const setOverride = (data: string, fonte: "regex" | "ia") => {
+    setOverrides((prev) => {
+      const next = new Map(prev);
+      next.set(data, fonte);
+      return next;
+    });
+  };
+  const clearOverride = (data: string) => {
+    setOverrides((prev) => {
+      const next = new Map(prev);
+      next.delete(data);
+      return next;
+    });
+  };
 
   const regexScore = useMemo(() => calcScore(tipo, parsed, ocrText), [tipo, parsed, ocrText]);
   const iaScore = useMemo(
@@ -206,13 +265,32 @@ export function useAICopilot<T extends LLMTipoDoc>(
   const effective = useMemo<ResultByTipo[T]>(() => {
     if (modo === "ia" && iaResult) return iaResult;
     if (modo === "reconciliado" && reconciliacao && tipo === "cartao_ponto") {
+      // Aplica overrides manuais antes de gerar o resultado final.
+      const reconAjustada =
+        overrides.size === 0
+          ? reconciliacao
+          : {
+              ...reconciliacao,
+              dias: reconciliacao.dias.map((d) => {
+                const ov = overrides.get(d.data);
+                if (!ov) return d;
+                const fonte =
+                  ov === "regex" ? d.fontes.regex : d.fontes.ia;
+                if (!fonte) return d;
+                return {
+                  ...d,
+                  escolhida: fonte,
+                  origemEscolhida: ov,
+                };
+              }),
+            };
       return reconciliacaoToParseResult(
-        reconciliacao,
+        reconAjustada,
         parsed as ParseCartaoPontoResult,
       ) as never;
     }
     return parsed;
-  }, [modo, iaResult, reconciliacao, parsed, tipo]);
+  }, [modo, iaResult, reconciliacao, parsed, tipo, overrides]);
 
   return {
     iaResult,
@@ -223,6 +301,11 @@ export function useAICopilot<T extends LLMTipoDoc>(
     setModo,
     effective,
     loading,
+    loadingDeep,
     erro,
+    overrides,
+    setOverride,
+    clearOverride,
+    runDeep,
   };
 }
