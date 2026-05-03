@@ -84,6 +84,36 @@ describe("parseFerias — relativa antiga", () => {
   });
 });
 
+describe("parseFerias — prazo (B3)", () => {
+  it("prazo > 60 é capado em 60 com warning", () => {
+    const r = parseFerias(`
+      RECIBO DE FÉRIAS
+      Relativa: 2023/2024
+      80 dias de férias
+    `);
+    expect(r.ferias[0].prazo).toBe(60);
+    expect(r.warnings.some((w) => /prazo/i.test(w))).toBe(true);
+  });
+
+  it("prazo 0 vira default 30 com warning", () => {
+    const r = parseFerias(`
+      RECIBO DE FÉRIAS
+      Relativa: 2023/2024
+      0 dias de férias
+    `);
+    expect(r.ferias[0].prazo).toBe(30);
+  });
+
+  it("prazo válido (10..60) preservado", () => {
+    const r = parseFerias(`
+      RECIBO DE FÉRIAS
+      Relativa: 2023/2024
+      20 dias de férias
+    `);
+    expect(r.ferias[0].prazo).toBe(20);
+  });
+});
+
 describe("parseFerias — abono pecuniário", () => {
   it("'abono pecuniário de 10 dias'", () => {
     const r = parseFerias(`
@@ -116,5 +146,59 @@ describe("parseFerias — dobra geral", () => {
       Período em dobra
     `);
     expect(r.ferias[0].dobra_geral).toBe(true);
+  });
+});
+
+describe("parseFerias — dobra por gozo individual (B1)", () => {
+  it("'(em dobra)' depois do gozo → gozo.dobra=true", () => {
+    const r = parseFerias(`
+      RECIBO DE FÉRIAS
+      Relativa: 2023/2024
+      Período de gozo: 01/06/2024 a 30/06/2024 (em dobra)
+    `);
+    expect(r.ferias[0].gozo1?.dobra).toBe(true);
+  });
+
+  it("'em dobro' antes do gozo → gozo.dobra=true", () => {
+    const r = parseFerias(`
+      RECIBO DE FÉRIAS
+      Relativa: 2023/2024
+      Gozo em dobro: 01/06/2024 a 30/06/2024
+    `);
+    expect(r.ferias[0].gozo1?.dobra).toBe(true);
+  });
+
+  it("apenas gozo 2 em dobra, gozo 1 e 3 normais", () => {
+    const r = parseFerias(`
+      RECIBO DE FÉRIAS
+      Relativa: 2023/2024
+      Período de gozo: 01/06/2024 a 10/06/2024
+      Período de gozo: 15/06/2024 a 24/06/2024 em dobra
+      Período de gozo: 01/07/2024 a 10/07/2024
+    `);
+    expect(r.ferias[0].gozo1?.dobra).toBe(false);
+    expect(r.ferias[0].gozo2?.dobra).toBe(true);
+    expect(r.ferias[0].gozo3?.dobra).toBe(false);
+  });
+
+  it("gozo sem mencionar dobra → false (não regride)", () => {
+    const r = parseFerias(`
+      RECIBO DE FÉRIAS
+      Relativa: 2023/2024
+      Período de gozo: 01/06/2024 a 30/06/2024
+    `);
+    expect(r.ferias[0].gozo1?.dobra).toBe(false);
+  });
+
+  it("dobra geral marcada também propaga para todos os gozos detectados", () => {
+    const r = parseFerias(`
+      RECIBO DE FÉRIAS — em dobra
+      Relativa: 2023/2024
+      Período de gozo: 01/06/2024 a 10/06/2024
+      Período de gozo: 15/06/2024 a 24/06/2024
+    `);
+    expect(r.ferias[0].dobra_geral).toBe(true);
+    expect(r.ferias[0].gozo1?.dobra).toBe(true);
+    expect(r.ferias[0].gozo2?.dobra).toBe(true);
   });
 });

@@ -107,7 +107,7 @@ describe("parseFaltas — reinicia período aquisitivo", () => {
 });
 
 describe("parseFaltas — dedup", () => {
-  it("intervalo duplicado usa última, emite warning", () => {
+  it("vazia + preenchida no mesmo dia → 1 falta enriquecida", () => {
     const text = `
       Falta 15/03/2024
       Falta 15/03/2024 atestado médico
@@ -115,6 +115,37 @@ describe("parseFaltas — dedup", () => {
     const r = parseFaltas(text);
     expect(r.faltas).toHaveLength(1);
     expect(r.faltas[0].justificada).toBe(true);
-    expect(r.warnings.some((w) => /duplicada/.test(w))).toBe(true);
+  });
+
+  it("duplicata exata (mesmo texto) → 1 falta + warning", () => {
+    const text = `
+      Falta 15/03/2024 atestado médico
+      Falta 15/03/2024 atestado médico
+    `;
+    const r = parseFaltas(text);
+    expect(r.faltas).toHaveLength(1);
+    expect(r.warnings.some((w) => /duplicad/i.test(w))).toBe(true);
+  });
+
+  it("dois atestados distintos no mesmo dia preserva AMBAS as faltas", () => {
+    const text = `
+      Falta 15/03/2024 atestado consulta cardiologista
+      Falta 15/03/2024 atestado hospital municipal
+    `;
+    const r = parseFaltas(text);
+    expect(r.faltas).toHaveLength(2);
+    expect(r.faltas[0].data_inicio).toBe("2024-03-15");
+    expect(r.faltas[1].data_inicio).toBe("2024-03-15");
+    expect(r.faltas[0].justificativa).not.toBe(r.faltas[1].justificativa);
+  });
+
+  it("entrada sem justificativa absorvida por outra com justificativa (mesmo dia)", () => {
+    const text = `
+      Falta 20/04/2024 injustificada
+      Falta 20/04/2024 atestado médico
+    `;
+    const r = parseFaltas(text);
+    expect(r.faltas).toHaveLength(1);
+    expect(r.faltas[0].justificada).toBe(true);
   });
 });

@@ -61,13 +61,15 @@ export {
   triggerBlobDownload,
   classifyHolerite,
   buildHoleriteZip,
+  buildCartaoPontoCSV,
+  buildFeriasCSVBlob,
+  buildFaltasCSVBlob,
 } from './export/per-doc';
 export type {
   ExportResult,
   ClassificacaoHolerite,
   LinhaClassificada,
 } from './export/per-doc';
-export { utf16ToLatin1 } from './export/per-doc/encoding';
 
 // Document API mínimo (apenas o dropdown de tipo)
 export { setTipoExtracao } from './api/document-tipo';

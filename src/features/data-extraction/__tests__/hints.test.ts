@@ -165,6 +165,54 @@ describe('getDefaultHint — Mínimo Garantido', () => {
   });
 });
 
+describe('getDefaultHint — verbas rescisórias e 13º (não entram no histórico salarial)', () => {
+  it('13º salário sugere ignorar', () => {
+    expect(getDefaultHint('13º Salário')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('"DECIMO TERCEIRO" sugere ignorar', () => {
+    expect(getDefaultHint('DECIMO TERCEIRO ADIANTADO')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('"13 SALARIO" sem ordinal sugere ignorar', () => {
+    expect(getDefaultHint('13 SALARIO')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('Aviso prévio indenizado sugere ignorar', () => {
+    expect(getDefaultHint('Aviso Prévio Indenizado')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('Aviso prévio trabalhado sugere ignorar (verba rescisória)', () => {
+    expect(getDefaultHint('Aviso Prévio Trabalhado')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('Multa 40% FGTS sugere ignorar', () => {
+    expect(getDefaultHint('Multa 40% FGTS')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('Férias indenizadas sugere ignorar', () => {
+    expect(getDefaultHint('Férias Indenizadas')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('Férias proporcionais sugere ignorar (rescisão)', () => {
+    expect(getDefaultHint('Férias Proporcionais')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('FGTS depósito (linha informativa) sugere ignorar', () => {
+    expect(getDefaultHint('FGTS')).toMatchObject({ tipo: 'sugerir_ignorar' });
+    expect(getDefaultHint('Depósito FGTS')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('PIS PASEP sugere ignorar', () => {
+    expect(getDefaultHint('PIS')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('Salário base não confunde com verbas rescisórias', () => {
+    // "Salário Base" deve NÃO ser ignorado (cai em fallback salario_fixo).
+    expect(getDefaultHint('Salário Base')).toBeNull();
+  });
+});
+
 describe('getDefaultHint — null', () => {
   it('rubrica desconhecida não retorna nada', () => {
     expect(getDefaultHint('XYZ123')).toBeNull();
