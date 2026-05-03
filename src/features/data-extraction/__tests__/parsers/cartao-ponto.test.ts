@@ -28,10 +28,12 @@ describe("parseCartaoPonto — dia normal", () => {
     ]);
   });
 
-  it("1 dia com 3 horários → 1 marcação (último horário ignorado)", () => {
+  it("1 dia com 3 horários → 2 marcações (3ª como E sem S, preserva batida órfã)", () => {
     const text = "01/03/2024 08:00 12:00 13:00";
     const r = parseCartaoPonto(text);
-    expect(r.apuracoes[0].marcacoes).toHaveLength(1);
+    expect(r.apuracoes[0].marcacoes).toHaveLength(2);
+    expect(r.apuracoes[0].marcacoes[0]).toEqual({ e: "08:00", s: "12:00" });
+    expect(r.apuracoes[0].marcacoes[1]).toEqual({ e: "13:00", s: "" });
   });
 
   it("dia com 0 horários (NORMAL) → marcações vazias sem crash", () => {

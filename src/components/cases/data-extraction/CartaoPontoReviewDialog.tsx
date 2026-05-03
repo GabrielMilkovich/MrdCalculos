@@ -5,12 +5,12 @@
  * Recursos:
  *   - Lê texto OCR + ApuracaoDiaria[] do parser.
  *   - Tabela editável: data, ocorrência, 6 pares E/S por dia (limite PJe-Calc).
+ *   - Batidas são exportadas independentemente da ocorrência — feriado
+ *     trabalhado, atestado parcial e similares preservam as batidas.
  *   - Adicionar/remover linha.
  *   - Linhas do OCR não casadas ficam em amarelo no painel de referência.
  *   - Checkbox "conferi" obrigatório para liberar download.
- *   - Avisa quando dia com ocorrência ≠ NORMAL tem batidas (serão descartadas
- *     no CSV — PJe-Calc só aceita marcações em dias NORMAL) ou quando há mais
- *     de 6 pares (serão truncados).
+ *   - Avisa quando há mais de 6 pares preenchidos (excedente truncado).
  */
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Plus, Trash2 } from "lucide-react";
@@ -148,50 +148,35 @@ export function CartaoPontoReviewDialog({
 
   const unparsedLines = parsed.unparsed_lines.map((u) => u.linha);
 
-  // Detecta inconsistências que causam perda de dados no CSV:
-  //   1. Dia com ocorrência ≠ NORMAL ainda tem batidas preenchidas → batidas
-  //      serão descartadas pelo builder.
-  //   2. Dia NORMAL com mais de 6 pares preenchidos → excedente truncado.
-  const linhasComBatidaDescartada = useMemo(
-    () =>
-      sorted.filter(
-        (r) => r.ocorrencia !== "NORMAL" && paresPreenchidos(r.marcacoes) > 0,
-      ),
-    [sorted],
-  );
+  // Detecta dias com mais de 6 pares preenchidos — excedente é truncado pelo
+  // builder (PJe-Calc tem limite de 6 pares E/S por dia).
   const linhasComCorte = useMemo(
     () =>
-      sorted.filter(
-        (r) => r.ocorrencia === "NORMAL" && paresPreenchidos(r.marcacoes) > MAX_PARES,
-      ),
+      sorted.filter((r) => paresPreenchidos(r.marcacoes) > MAX_PARES),
     [sorted],
   );
 
   const warnings = useMemo(() => {
     const ws = [...parsed.warnings];
-    if (linhasComBatidaDescartada.length > 0) {
-      ws.push(
-        `${linhasComBatidaDescartada.length} dia(s) com ocorrência ≠ NORMAL têm batidas — serão descartadas no CSV (PJe-Calc só aceita marcações em dias NORMAL).`,
-      );
-    }
     if (linhasComCorte.length > 0) {
       ws.push(
         `${linhasComCorte.length} dia(s) com mais de ${MAX_PARES} pares E/S — excedente será truncado.`,
       );
     }
     return ws;
-  }, [parsed.warnings, linhasComBatidaDescartada, linhasComCorte]);
+  }, [parsed.warnings, linhasComCorte]);
 
   const handleConfirm = async () => {
-    // Limpa marcações vazias antes de gerar CSV
+    // Limpa marcações vazias antes de gerar CSV. Preserva batidas
+    // independentemente da ocorrência (feriado trabalhado, atestado parcial,
+    // etc. precisam das batidas no CSV).
     const apuracoes: ApuracaoDiaria[] = sorted
       .filter((r) => r.data) // descarta linhas sem data
       .map((r) => ({
         data: r.data,
         dia_semana: r.dia_semana ?? null,
         ocorrencia: r.ocorrencia,
-        marcacoes:
-          r.ocorrencia === "NORMAL" ? trimMarcacoes(r.marcacoes) : [],
+        marcacoes: trimMarcacoes(r.marcacoes),
         eventos: r.eventos ?? [],
         observacao: r.observacao,
       }));
@@ -225,12 +210,11 @@ export function CartaoPontoReviewDialog({
             Edite/adicione linhas conforme o OCR. Linhas amarelas no OCR
             precisam virar uma linha aqui.
           </span>
-          {(linhasComBatidaDescartada.length > 0 ||
-            linhasComCorte.length > 0) && (
+          {linhasComCorte.length > 0 && (
             <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 font-medium">
               <AlertTriangle className="h-3 w-3" />
-              {linhasComBatidaDescartada.length + linhasComCorte.length}{" "}
-              dia(s) com perda de dados (linhas em amarelo)
+              {linhasComCorte.length} dia(s) com mais de {MAX_PARES} pares
+              (excedente truncado)
             </span>
           )}
         </span>
@@ -268,8 +252,7 @@ export function CartaoPontoReviewDialog({
               <TableRow
                 key={r._key}
                 className={`text-xs ${
-                  (r.ocorrencia !== "NORMAL" && paresPreenchidos(r.marcacoes) > 0) ||
-                  (r.ocorrencia === "NORMAL" && paresPreenchidos(r.marcacoes) > MAX_PARES)
+                  paresPreenchidos(r.marcacoes) > MAX_PARES
                     ? "bg-amber-50 dark:bg-amber-950/10"
                     : ""
                 }`}
@@ -322,7 +305,7 @@ export function CartaoPontoReviewDialog({
                             ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
                             : ""
                         }`}
-                        disabled={r.ocorrencia !== "NORMAL"}
+                        
                       />
                       <Input
                         placeholder={idx === 0 ? "12:00" : ""}
@@ -340,7 +323,7 @@ export function CartaoPontoReviewDialog({
                             ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
                             : ""
                         }`}
-                        disabled={r.ocorrencia !== "NORMAL"}
+                        
                       />
                     </div>
                   </TableCell>
