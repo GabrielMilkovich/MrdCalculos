@@ -73,3 +73,18 @@ export type {
 
 // Document API mínimo (apenas o dropdown de tipo)
 export { setTipoExtracao } from './api/document-tipo';
+
+// Quality scoring (0-100 + reasons)
+export {
+  scoreCartaoPonto,
+  scoreFerias,
+  scoreFaltas,
+  scoreHolerite,
+} from './quality/score';
+export type { ConfidenceScore, ConfianceLevel } from './quality/score';
+export {
+  detectarJanelasPeriodo,
+  dataDentroDeAlgumaJanela,
+  datasForaDaJanela,
+} from './quality/window';
+export type { JanelaPeriodo } from './quality/window';

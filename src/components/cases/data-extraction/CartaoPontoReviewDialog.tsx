@@ -35,6 +35,7 @@ import {
 import { ReviewLayout } from "./ReviewLayout";
 import {
   buildCartaoPontoCSV,
+  scoreCartaoPonto,
   triggerBlobDownload,
   type ApuracaoDiaria,
   type EventoDiario,
@@ -42,6 +43,7 @@ import {
   type OcorrenciaApuracao,
   type ParseCartaoPontoResult,
 } from "@/features/data-extraction";
+import { ConfidenceBadge } from "./ConfidenceBadge";
 
 interface Props {
   open: boolean;
@@ -148,6 +150,32 @@ export function CartaoPontoReviewDialog({
 
   const unparsedLines = parsed.unparsed_lines.map((u) => u.linha);
 
+  // Score de confiança da extração + datas fora da janela de competência.
+  const confidence = useMemo(
+    () => scoreCartaoPonto(parsed, ocrText),
+    [parsed, ocrText],
+  );
+
+  // Calcula linhas do OCR que mencionam datas fora de qualquer janela
+  // detectada — são highlightadas em vermelho no painel de referência.
+  const outOfWindowLines = useMemo(() => {
+    if (!confidence.datasForaJanela?.length) return [] as number[];
+    const set = new Set<number>();
+    const linhas = ocrText.split(/\r?\n/);
+    const datasBR = confidence.datasForaJanela.map((iso) =>
+      iso.split("-").reverse().join("/"),
+    );
+    for (let i = 0; i < linhas.length; i++) {
+      for (const d of datasBR) {
+        if (linhas[i].includes(d)) {
+          set.add(i + 1);
+          break;
+        }
+      }
+    }
+    return [...set];
+  }, [confidence.datasForaJanela, ocrText]);
+
   // Detecta dias com mais de 6 pares preenchidos — excedente é truncado pelo
   // builder (PJe-Calc tem limite de 6 pares E/S por dia).
   const linhasComCorte = useMemo(
@@ -200,8 +228,10 @@ export function CartaoPontoReviewDialog({
       subtitle={`${rows.length} apurações detectadas em ${parsed.competencias.size} competência(s) · ${filename} · parser ${parsed.parser_version}`}
       ocrText={ocrText}
       unparsedLines={unparsedLines}
+      outOfWindowLines={outOfWindowLines}
       warnings={warnings}
       contadores={{ extraidos: rows.length, etiqueta: "apuração" }}
+      headerSlot={<ConfidenceBadge score={confidence} />}
       onConfirm={handleConfirm}
     >
       <div className="p-2 flex items-center justify-between border-b sticky top-0 bg-background z-10">

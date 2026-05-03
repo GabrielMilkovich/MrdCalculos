@@ -71,11 +71,13 @@ import {
 } from "@/components/ui/table";
 import {
   buildHoleriteZip,
+  scoreHolerite,
   triggerBlobDownload,
   type CategoriaSlug,
   type ClassificacaoHolerite,
   type LinhaClassificada,
 } from "@/features/data-extraction";
+import { ConfidenceBadge } from "./ConfidenceBadge";
 
 interface Props {
   open: boolean;
@@ -159,6 +161,22 @@ export function HoleritePreviewDialog({
     (l) => l.incluir && l.categoria !== null && l.valorParaCsv > 0,
   ).length;
 
+  // Score de confiança da extração (recalcula quando linhas mudam, p.ex.
+  // se o usuário corrige rubricas).
+  const confidence = useMemo(
+    () =>
+      scoreHolerite(
+        {
+          competencia: classificacao.competencia,
+          rubricas: linhas.map((l) => l.rubrica),
+          layout_usado: classificacao.layout_usado,
+          warnings: classificacao.warnings,
+        },
+        "",
+      ),
+    [classificacao.competencia, classificacao.layout_usado, classificacao.warnings, linhas],
+  );
+
   // Ações em lote
   const setIncluirAll = (predicate: (l: LinhaClassificada) => boolean, v: boolean) => {
     setLinhas((prev) =>
@@ -184,7 +202,10 @@ export function HoleritePreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[92vh] overflow-hidden flex flex-col">
         <DialogHeader className="space-y-1">
-          <DialogTitle>Conferir antes de baixar</DialogTitle>
+          <div className="flex items-start justify-between gap-2">
+            <DialogTitle>Conferir antes de baixar</DialogTitle>
+            <ConfidenceBadge score={confidence} />
+          </div>
           <DialogDescription className="text-xs">
             Holerite <strong>{classificacao.competencia}</strong> · layout{" "}
             <code className="text-[10px]">{classificacao.layout_usado}</code> ·{" "}
