@@ -181,3 +181,40 @@ Registrado eletronicamente em 05/06/2024 às 14:00
     expect(r.apuracoes).toHaveLength(1);
   });
 });
+
+describe("parseCartaoPonto — falsos positivos do filtro de metadado (auditoria item 9)", () => {
+  it("nome de empresa 'Homologadora de Empregos LTDA' NÃO deve pegar dias úteis", () => {
+    const ocr = `
+HOMOLOGADORA DE EMPREGOS LTDA
+CNPJ: 12.345.678/0001-99
+Período 01/03/2024 a 31/03/2024
+| 01/03/2024 - Sex | 08:00 | 12:00 | 13:00 | 17:00 |
+| 02/03/2024 - Sáb | 08:00 | 12:00 |
+`;
+    const r = parseCartaoPonto(ocr);
+    // As 2 datas com batidas devem virar apurações — apenas o cabeçalho
+    // (linha "Período X a Y" + razão social) deve ser ignorado.
+    expect(r.apuracoes).toHaveLength(2);
+    expect(r.apuracoes[0].marcacoes[0]).toMatchObject({ e: "08:00", s: "12:00" });
+  });
+
+  it("frase 'Aprovador: João Silva' isolada NÃO filtra dias com batidas no mesmo OCR", () => {
+    const ocr = `
+| 01/03/2024 - Sex | 08:00 | 12:00 | 13:00 | 17:00 |
+Aprovador: João Silva
+| 02/03/2024 - Sáb | 08:00 | 12:00 |
+`;
+    const r = parseCartaoPonto(ocr);
+    expect(r.apuracoes).toHaveLength(2);
+  });
+
+  it("'Conferido por Maria' como assinatura no rodapé NÃO afeta dias", () => {
+    const ocr = `
+| 15/04/2024 - Seg | 09:00 | 13:00 | 14:00 | 18:00 |
+Conferido por Maria Souza em 20/04/2024
+`;
+    const r = parseCartaoPonto(ocr);
+    expect(r.apuracoes).toHaveLength(1);
+    expect(r.apuracoes[0].data).toBe("2024-04-15");
+  });
+});

@@ -16,6 +16,13 @@ import type { GozoPeriodo, SituacaoFerias } from "../types";
 export type FeriasParseada = {
   relativa: string; // "aaaa/aaaa"
   prazo: number;
+  /**
+   * 'detectado' = prazo extraído explicitamente do texto do recibo.
+   * 'default' = não foi possível detectar; assumido 30 dias (CLT 130).
+   *   Quando 'default', o dialog mostra borda amber pra forçar revisão.
+   * 'ajustado' = parser aplicou cap (>60→60 ou ≤0→30).
+   */
+  prazo_origem?: 'detectado' | 'default' | 'ajustado';
   situacao: SituacaoFerias;
   dobra_geral: boolean;
   abono: boolean;
@@ -182,15 +189,19 @@ function parseOneBlock(
   const prazoMatch = bloco.match(RE_PRAZO);
   const prazoBruto = prazoMatch ? parseInt(prazoMatch[1], 10) : 30;
   let prazo = prazoBruto;
+  let prazoOrigem: 'detectado' | 'default' | 'ajustado' = 'detectado';
   if (!prazoMatch) {
+    prazoOrigem = 'default';
     warnings.push(`Bloco ${idx + 1} (${relativa}): prazo não detectado, usando 30 dias.`);
   } else if (prazoBruto <= 0) {
     prazo = 30;
+    prazoOrigem = 'ajustado';
     warnings.push(
       `Bloco ${idx + 1} (${relativa}): prazo inválido (${prazoBruto}) — usando 30 dias.`,
     );
   } else if (prazoBruto > 60) {
     prazo = 60;
+    prazoOrigem = 'ajustado';
     warnings.push(
       `Bloco ${idx + 1} (${relativa}): prazo ${prazoBruto} dias acima do limite PJe-Calc (60) — capado em 60.`,
     );
@@ -273,6 +284,7 @@ function parseOneBlock(
   return {
     relativa,
     prazo,
+    prazo_origem: prazoOrigem,
     situacao,
     dobra_geral: dobraGeral,
     abono,

@@ -355,9 +355,30 @@ function FeriasRow({
           min={0}
           max={60}
           value={row.prazo}
-          onChange={(e) => onUpdate({ prazo: parseInt(e.target.value, 10) || 0 })}
-          className={`h-7 text-[11px] w-[60px] ${errors.prazo ? errClass : ""}`}
-          title={errors.prazo}
+          onChange={(e) =>
+            onUpdate({
+              prazo: parseInt(e.target.value, 10) || 0,
+              // Edição manual sai do default — confiamos no usuário.
+              prazo_origem: "detectado",
+            })
+          }
+          className={`h-7 text-[11px] w-[60px] ${
+            errors.prazo
+              ? errClass
+              : row.prazo_origem === "default"
+                ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
+                : row.prazo_origem === "ajustado"
+                  ? "border-amber-300"
+                  : ""
+          }`}
+          title={
+            errors.prazo ??
+            (row.prazo_origem === "default"
+              ? "Prazo NÃO foi detectado no recibo — assumido 30 dias (CLT 130). Confirme antes de baixar."
+              : row.prazo_origem === "ajustado"
+                ? "Prazo foi ajustado pelo parser (cap 60 dias do PJe-Calc). Confira."
+                : undefined)
+          }
         />
         <Select
           value={row.situacao}
