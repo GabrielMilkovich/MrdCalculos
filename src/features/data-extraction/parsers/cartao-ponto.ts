@@ -87,13 +87,28 @@ export type ApuracaoDiaria = {
   eventos: EventoDiario[];
   /** Texto adicional não classificado da linha (auditoria). */
   observacao: string | null;
+  /**
+   * Número da linha (1-based) do OCR onde a apuração foi originalmente
+   * capturada. Usado pela UI para navegação bidirecional (clique na linha
+   * da tabela → scroll na linha do OCR de origem).
+   */
+  ocr_line?: number;
 };
 
 export type ParseCartaoPontoResult = {
   apuracoes: ApuracaoDiaria[];
   /** Mapa competência → quantidade de apurações naquele mês. */
   competencias: Map<string, number>;
-  /** Competência com mais dias (informativo). UI/CSV não devem filtrar por isto. */
+  /**
+   * Competência com mais dias — APENAS INFORMATIVO (ex: para mostrar no
+   * subtítulo do dialog "predominantemente 06/2024").
+   *
+   * **NÃO USE PARA FILTRAR**. UI/CSV/cálculo devem operar sobre TODAS as
+   * apurações de TODAS as competências presentes em \`apuracoes\`. O parser
+   * v3 explicitamente devolve dados de TODOS os meses do OCR — filtrar
+   * por predominante reintroduz o bug histórico de "espelho de 6 meses
+   * só exporta o mês com mais dias".
+   */
   competencia_predominante: string;
   data_inicial: string;
   data_final: string;
@@ -389,21 +404,24 @@ export function parseCartaoPonto(
       marcacoes,
       eventos,
       observacao: null,
+      ocr_line: i + 1, // 1-based — UI usa pra scroll bidirecional
     });
   }
 
   // Dedup por data: tenta MERGEAR (turno manhã + turno tarde no mesmo dia)
-  // antes de cair no fallback "última prevalece". O warning detalha as
-  // datas dedupadas pra auditoria humana.
+  // antes de cair no fallback "última prevalece". Os dois caminhos têm
+  // SIGNIFICADOS DIFERENTES e produzem warnings DISTINTOS:
+  //   - merge: turnos disjuntos foram unidos (auditoria leve, dados ok)
+  //   - última-prevalece: dados conflitantes, parser escolheu um (revisar!)
   const dedup = new Map<string, ApuracaoDiaria>();
-  const datasDedupadas: string[] = [];
+  const datasMergedas: string[] = [];
+  const datasUltimaPrevalece: string[] = [];
   for (const a of apuracoes) {
     const existente = dedup.get(a.data);
     if (!existente) {
       dedup.set(a.data, a);
       continue;
     }
-    datasDedupadas.push(a.data);
     // Heurística de merge: turnos disjuntos no mesmo dia (manhã + tarde
     // separados em 2 linhas pelo OCR) são unidos. Sobreposição temporal
     // dos intervalos cai no fallback "última prevalece" pra evitar
@@ -423,20 +441,36 @@ export function parseCartaoPonto(
           (x.e || x.s).localeCompare(y.e || y.s),
         ),
         eventos: a.eventos.length > 0 ? a.eventos : existente.eventos,
+        // Para fins de navegação bidirecional, preserva a linha-âncora ORIGINAL
+        // (a 1ª aparição da data), não a do turno mesclado depois.
+        ocr_line: existente.ocr_line ?? a.ocr_line,
       };
       dedup.set(a.data, merged);
+      datasMergedas.push(a.data);
     } else {
-      // Fallback: última prevalece (comportamento legado).
+      // Fallback: última prevalece (comportamento legado). Sinaliza
+      // separadamente porque AQUI HÁ PERDA DE DADOS — uma das ocorrências
+      // sumiu. Operador deve revisar manualmente.
       dedup.set(a.data, a);
+      datasUltimaPrevalece.push(a.data);
     }
   }
-  if (datasDedupadas.length > 0) {
-    const lista = datasDedupadas.slice(0, 10).join(", ");
-    const sufixo = datasDedupadas.length > 10
-      ? ` ... e mais ${datasDedupadas.length - 10}`
-      : "";
+  if (datasMergedas.length > 0) {
+    const lista = datasMergedas.slice(0, 10).join(", ");
+    const sufixo =
+      datasMergedas.length > 10 ? ` ... e mais ${datasMergedas.length - 10}` : "";
     warnings.push(
-      `${datasDedupadas.length} apuração(ões) com data duplicada — datas: ${lista}${sufixo}. Verifique se houve retificação no espelho.`,
+      `${datasMergedas.length} apuração(ões) com 2 turnos disjuntos no mesmo dia — turnos UNIDOS automaticamente: ${lista}${sufixo}.`,
+    );
+  }
+  if (datasUltimaPrevalece.length > 0) {
+    const lista = datasUltimaPrevalece.slice(0, 10).join(", ");
+    const sufixo =
+      datasUltimaPrevalece.length > 10
+        ? ` ... e mais ${datasUltimaPrevalece.length - 10}`
+        : "";
+    warnings.push(
+      `${datasUltimaPrevalece.length} apuração(ões) com data duplicada e turnos sobrepostos/conflitantes — última leitura PREVALECEU (perda de dado possível): ${lista}${sufixo}. Verifique se houve retificação no espelho.`,
     );
   }
   const final = [...dedup.values()].sort((a, b) => a.data.localeCompare(b.data));

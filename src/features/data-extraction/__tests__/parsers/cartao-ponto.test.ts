@@ -109,14 +109,33 @@ describe("parseCartaoPonto — múltiplas competências (NUNCA mais filtra)", ()
     expect(r.data_final).toBe("2024-04-28");
   });
 
-  it("dedup por data: linhas duplicadas ficam só uma (warning)", () => {
+  it("dedup por data: turnos disjuntos (manhã+tarde) → MERGE com warning", () => {
     const text = `
       01/03/2024 08:00 12:00
       01/03/2024 13:00 17:00
     `;
     const r = parseCartaoPonto(text);
     expect(r.apuracoes).toHaveLength(1);
-    expect(r.warnings.some((w) => /duplicad/.test(w))).toBe(true);
+    // Marcações de manhã + tarde combinadas (4 batidas em 2 pares).
+    expect(r.apuracoes[0].marcacoes.length).toBe(2);
+    // Warning específico de merge — IMP-3 do auditor exige distinguir
+    // merge legítimo de "última-prevalece" (que indica perda de dado).
+    expect(r.warnings.some((w) => /turnos\s+(disjuntos|UNIDOS)/i.test(w))).toBe(
+      true,
+    );
+  });
+
+  it("dedup por data: turnos sobrepostos → última prevalece com warning distinto", () => {
+    const text = `
+      01/03/2024 08:00 12:00
+      01/03/2024 09:00 18:00
+    `;
+    const r = parseCartaoPonto(text);
+    expect(r.apuracoes).toHaveLength(1);
+    // Última leitura prevalece — perda de dado possível, warning específico.
+    expect(
+      r.warnings.some((w) => /PREVALECEU|sobrepostos|conflitantes/i.test(w)),
+    ).toBe(true);
   });
 });
 
