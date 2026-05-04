@@ -47,10 +47,19 @@ export interface LLMExtractionResponse {
 /**
  * Invoca a edge function, valida com Zod, valida anti-alucinação.
  * Devolve o output validado.
+ *
+ * Aceita `signal: AbortSignal` opcional para cancelamento explícito (timeout
+ * do client ou ação manual do usuário). Quando signal.aborted, lança
+ * `LLMExtractError` com code='rede' e a razão repassada.
  */
 export async function extractViaLLM<T extends LLMTipoDoc>(
   tipo: T,
-  args: { document_id: string; ocr_text: string; mode?: "extract" | "deep" },
+  args: {
+    document_id: string;
+    ocr_text: string;
+    mode?: "extract" | "deep";
+    signal?: AbortSignal;
+  },
 ): Promise<{
   output: T extends "cartao_ponto"
     ? CartaoPontoLLMOutput
@@ -68,21 +77,37 @@ export async function extractViaLLM<T extends LLMTipoDoc>(
   ocrCharsProcessados: number | null;
   usage?: LLMExtractionResponse["usage"];
 }> {
-  const { data, error } = await supabase.functions.invoke<LLMExtractionResponse>(
-    "extract-via-llm",
-    {
-      body: {
-        document_id: args.document_id,
-        tipo_doc: tipo,
-        ocr_text: args.ocr_text,
-        mode: args.mode ?? "extract",
-      },
-    },
-  );
-  if (error) {
+  // Aborto pré-flight (caso o usuário tenha cancelado antes da chamada começar).
+  if (args.signal?.aborted) {
     throw new LLMExtractError({
       code: "rede",
-      message: `Falha ao chamar IA: ${error.message}`,
+      message: "IA cancelada antes da chamada",
+    });
+  }
+  // supabase-js 2.36+ aceita AbortSignal via FunctionInvokeOptions.
+  // Tipagem ainda não cobre, daí o cast — funciona em runtime.
+  const invokeOpts: Record<string, unknown> = {
+    body: {
+      document_id: args.document_id,
+      tipo_doc: tipo,
+      ocr_text: args.ocr_text,
+      mode: args.mode ?? "extract",
+    },
+  };
+  if (args.signal) invokeOpts.signal = args.signal;
+
+  const { data, error } = await supabase.functions.invoke<LLMExtractionResponse>(
+    "extract-via-llm",
+    invokeOpts as Parameters<typeof supabase.functions.invoke>[1],
+  );
+  if (error) {
+    // AbortError do fetch vira erro normal aqui — distingue por nome.
+    const msg = (error as { name?: string }).name === "AbortError"
+      ? "IA cancelada"
+      : `Falha ao chamar IA: ${error.message}`;
+    throw new LLMExtractError({
+      code: "rede",
+      message: msg,
       detalhes: error,
     });
   }

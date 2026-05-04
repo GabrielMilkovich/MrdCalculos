@@ -18,7 +18,7 @@
  * Errors são silenciosos no toast (já tratados no `extractViaLLM`) — o
  * hook só expõe `error` pra UI mostrar discreto se quiser.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   extractViaLLM,
@@ -99,6 +99,12 @@ interface UseAICopilotArgs<T extends LLMTipoDoc> {
    * pela margem direta — esta margem só vale para os outros 3 tipos.
    */
   margemAutoAplicar?: number;
+  /**
+   * Timeout em ms para a chamada à IA. Quando excede, o fetch é abortado
+   * e o usuário vê `erro` populado. Default 120s (suficiente pra OCR de
+   * 213 apurações + gpt-4o + cleanup deep).
+   */
+  timeoutMs?: number;
 }
 
 interface UseAICopilotResult<T extends LLMTipoDoc> extends AICopilotState<T> {
@@ -112,6 +118,12 @@ interface UseAICopilotResult<T extends LLMTipoDoc> extends AICopilotState<T> {
   runDeep: () => Promise<void>;
   /** Loading do modo profundo (separado do auto-trigger). */
   loadingDeep: boolean;
+  /**
+   * Cancela a chamada IA em andamento (initial extract OU deep). Aborta
+   * o fetch via AbortController e faz `loading=false`. Usado pelo botão
+   * cancelar no banner.
+   */
+  cancelar: () => void;
 }
 
 function calcScore<T extends LLMTipoDoc>(
@@ -149,6 +161,7 @@ export function useAICopilot<T extends LLMTipoDoc>(
     parsed,
     enabled = true,
     margemAutoAplicar = 5,
+    timeoutMs = 120_000,
   } = args;
 
   const [iaResult, setIaResult] = useState<ResultByTipo[T] | null>(null);
@@ -179,6 +192,19 @@ export function useAICopilot<T extends LLMTipoDoc>(
   const [ocrTruncado, setOcrTruncado] = useState(false);
   const [ocrCharsOriginais, setOcrCharsOriginais] = useState<number | null>(null);
   const [ocrCharsProcessados, setOcrCharsProcessados] = useState<number | null>(null);
+
+  // AbortController da chamada IA atualmente em andamento (initial extract OU
+  // deep). Permite timeout no client e cancelamento manual via botão cancelar.
+  const abortRef = useRef<AbortController | null>(null);
+
+  const cancelar = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setLoading(false);
+    setLoadingDeep(false);
+  };
 
   // Persiste overrides em qualquer mudança (debounce não necessário — Map é
   // pequeno e localStorage é síncrono e rápido para <100 chaves).
@@ -223,6 +249,11 @@ export function useAICopilot<T extends LLMTipoDoc>(
 
   const runDeep = async () => {
     if (!documentId || !ocrText) return;
+    // Cancela qualquer chamada anterior em flight.
+    if (abortRef.current) abortRef.current.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     setLoadingDeep(true);
     setErro(null);
     try {
@@ -230,6 +261,7 @@ export function useAICopilot<T extends LLMTipoDoc>(
         document_id: documentId,
         ocr_text: ocrText,
         mode: "deep",
+        signal: ctrl.signal,
       });
       const { output, usage } = resp;
       setOcrTruncado(resp.ocrTruncado);
@@ -253,6 +285,8 @@ export function useAICopilot<T extends LLMTipoDoc>(
         toast.error(`IA falhou ao limpar OCR: ${msg}`);
       }
     } finally {
+      clearTimeout(timer);
+      if (abortRef.current === ctrl) abortRef.current = null;
       setLoadingDeep(false);
     }
   };
@@ -286,13 +320,34 @@ export function useAICopilot<T extends LLMTipoDoc>(
     );
   }, [tipo, parsed, iaResult]);
 
-  // Dispara IA em background ao montar
+  // Dispara IA em background ao montar.
+  //
+  // Robustez:
+  //   - AbortController + timeout (timeoutMs, default 120s) garantem que o
+  //     spinner NUNCA fica eterno mesmo se a edge function travar/hang.
+  //   - Quando o effect roda novamente (ocrText muda) ou desmonta, o
+  //     controller é abortado E o `setLoading(false)` é chamado
+  //     incondicionalmente — o spinner reflete o estado real.
   useEffect(() => {
     if (!enabled || !documentId || !ocrText || ocrText.length < 20) return;
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     let cancelado = false;
+    const timer = setTimeout(() => {
+      if (!cancelado) {
+        setErro(
+          `IA demorou mais de ${Math.round(timeoutMs / 1000)}s e foi cancelada. Tente novamente ou clique em "limpar OCR e tentar".`,
+        );
+        ctrl.abort();
+      }
+    }, timeoutMs);
     setLoading(true);
     setErro(null);
-    extractViaLLM(tipo, { document_id: documentId, ocr_text: ocrText })
+    extractViaLLM(tipo, {
+      document_id: documentId,
+      ocr_text: ocrText,
+      signal: ctrl.signal,
+    })
       .then((resp) => {
         if (cancelado) return;
         const { output, cached } = resp;
@@ -318,12 +373,18 @@ export function useAICopilot<T extends LLMTipoDoc>(
         }
       })
       .finally(() => {
-        if (!cancelado) setLoading(false);
+        clearTimeout(timer);
+        if (abortRef.current === ctrl) abortRef.current = null;
+        // Sempre desliga o spinner — mesmo se foi cancelado pelo cleanup,
+        // o componente continua montado (apenas re-rodamos o effect).
+        setLoading(false);
       });
     return () => {
       cancelado = true;
+      clearTimeout(timer);
+      ctrl.abort();
     };
-  }, [enabled, documentId, ocrText, tipo]);
+  }, [enabled, documentId, ocrText, tipo, timeoutMs]);
 
   // Auto-aplicação inteligente + auto-deep quando muita divergência.
   const [autoDeepDisparado, setAutoDeepDisparado] = useState(false);
@@ -444,5 +505,6 @@ export function useAICopilot<T extends LLMTipoDoc>(
     ocrTruncado,
     ocrCharsOriginais,
     ocrCharsProcessados,
+    cancelar,
   };
 }

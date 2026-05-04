@@ -151,6 +151,7 @@ export function FaltasReviewDialog({
             ocrTruncado={copilot.ocrTruncado}
             ocrCharsOriginais={copilot.ocrCharsOriginais}
             ocrCharsProcessados={copilot.ocrCharsProcessados}
+            onCancelar={copilot.cancelar}
           />
         </div>
       }
