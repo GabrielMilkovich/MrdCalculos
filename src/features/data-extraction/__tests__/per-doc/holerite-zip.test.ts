@@ -100,10 +100,18 @@ describe("buildHoleriteZip", () => {
     const blob = await buildHoleriteZip(classif);
     const buf = new Uint8Array(await blob.arrayBuffer());
     const zip = await JSZip.loadAsync(buf);
-    const files = Object.keys(zip.files);
-    expect(files).toEqual(["LEIA-ME.txt"]);
+    const files = Object.keys(zip.files).sort();
+    // Auditoria sempre presente (mesmo sem CSV oficial gerado), para
+    // registrar o que foi descartado e por quê.
+    expect(files).toEqual(["LEIA-ME.txt", "auditoria_completa.csv"]);
     const readme = await zip.file("LEIA-ME.txt")!.async("string");
     expect(readme).toContain("todas as rubricas foram excluídas");
+    // Auditoria registra a rubrica que ficou de fora.
+    const auditoria = await zip
+      .file("auditoria_completa.csv")!
+      .async("string");
+    expect(auditoria).toContain("Comissões");
+    expect(auditoria).toContain("N"); // incluido=N
   });
 
   it("LEIA-ME inclui warnings do parser", async () => {

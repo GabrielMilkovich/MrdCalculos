@@ -20,7 +20,8 @@ import Decimal from 'decimal.js';
 import type { CategoriaSlug, IncidenciaFlags } from '../../types';
 import { buildHistoricoSalarialCSV } from '../csv-historico';
 import { formatNumeroBR } from '../format-br';
-import type { ClassificacaoHolerite } from './holerite-classify';
+import { sanitizeText } from '../sanitize';
+import type { ClassificacaoHolerite, LinhaClassificada } from './holerite-classify';
 import { aggregateByCategoria } from './holerite-classify';
 
 type CategoriaMeta = {
@@ -90,8 +91,58 @@ export async function buildHoleriteZip(
     zip.file(`historico_salarial_${slug}.csv`, csv);
   }
 
+  // CSV de auditoria — TODAS as rubricas com classificação atribuída.
+  // Não importa para o PJe-Calc; serve para o operador (ou cliente) revisar
+  // depois "o que entrou em cada bucket" e "o que foi descartado".
+  zip.file('auditoria_completa.csv', buildAuditoriaCSV(classificacao));
+
   zip.file('LEIA-ME.txt', buildReadme(classificacao, buckets));
   return zip.generateAsync({ type: 'blob' });
+}
+
+/**
+ * CSV de AUDITORIA — não é importado pelo PJe-Calc. É uma planilha-trilha:
+ * todas as rubricas extraídas com a categoria atribuída, valor que entrou
+ * no CSV oficial, e razão da escolha (hint, fallback, desconto, ignorado).
+ *
+ * Colunas:
+ *   Ordem; Codigo; Nome; Vencimento; Desconto; Quantidade;
+ *   Categoria; Valor_para_CSV; Origem_classificacao; Incluido
+ *
+ * Não tem aspas (formato simples), encoding UTF-8, decimal vírgula BR.
+ * Linhas com nome contendo `;` ou `"` são sanitizadas via `sanitizeText`.
+ */
+function buildAuditoriaCSV(classificacao: ClassificacaoHolerite): string {
+  const HEADER =
+    'Ordem;Codigo;Nome;Vencimento;Desconto;Quantidade;Categoria;Valor_no_CSV;Origem;Incluido';
+  const rows = classificacao.linhas.map((l) => formatLinhaAuditoria(l));
+  return [HEADER, ...rows].join('\r\n') + '\r\n';
+}
+
+function formatLinhaAuditoria(l: LinhaClassificada): string {
+  const r = l.rubrica;
+  const v = (n: number | null): string =>
+    n === null ? '' : formatNumeroBR(new Decimal(n));
+  const cat =
+    l.categoria === null
+      ? l.origem === 'desconto'
+        ? '(desconto)'
+        : l.origem === 'ignorar_hint'
+          ? '(ignorado por hint)'
+          : '(ignorado)'
+      : l.categoria;
+  return [
+    String(r.ordem),
+    sanitizeText(r.codigo, 20),
+    sanitizeText(r.nome, 80),
+    v(r.valor_vencimento),
+    v(r.valor_desconto),
+    v(r.quantidade),
+    cat,
+    formatNumeroBR(new Decimal(l.valorParaCsv)),
+    l.origem,
+    l.incluir ? 'S' : 'N',
+  ].join(';');
 }
 
 function buildReadme(
@@ -101,6 +152,42 @@ function buildReadme(
   const lines: string[] = [];
   lines.push(`HOLERITE — competência ${classificacao.competencia}`);
   lines.push(`Layout detectado: ${classificacao.layout_usado}`);
+
+  // Cross-check informativo: soma proventos vs soma descontos vs total
+  // que entra no PJe-Calc (somente buckets não-indenizatórios). Permite
+  // o operador validar que não houve perda de rubrica relevante.
+  const somaProventos = classificacao.linhas
+    .filter((l) => l.rubrica.valor_vencimento && l.rubrica.valor_vencimento > 0)
+    .reduce(
+      (acc, l) => acc.plus(new Decimal(l.rubrica.valor_vencimento ?? 0)),
+      new Decimal(0),
+    );
+  const somaDescontos = classificacao.linhas
+    .filter((l) => l.rubrica.valor_desconto && l.rubrica.valor_desconto > 0)
+    .reduce(
+      (acc, l) => acc.plus(new Decimal(l.rubrica.valor_desconto ?? 0)),
+      new Decimal(0),
+    );
+  const somaCsvOficial = [...buckets.values()].reduce(
+    (acc, v) => acc.plus(v),
+    new Decimal(0),
+  );
+  const liquidoEsperado = somaProventos.minus(somaDescontos);
+
+  lines.push('');
+  lines.push('TOTAIS DO DOCUMENTO (informativo)');
+  lines.push('---------------------------------');
+  lines.push(`  Soma de proventos extraídos:  R$ ${formatNumeroBR(somaProventos)}`);
+  lines.push(`  Soma de descontos extraídos:  R$ ${formatNumeroBR(somaDescontos)}`);
+  lines.push(`  Líquido esperado (P - D):     R$ ${formatNumeroBR(liquidoEsperado)}`);
+  lines.push(`  Total que entra nos CSVs:     R$ ${formatNumeroBR(somaCsvOficial)}`);
+  lines.push(
+    '  (CSVs incluem apenas categorias remuneratórias para cálculo trabalhista —',
+  );
+  lines.push(
+    '   diferenças entre proventos e CSV são naturais e refletem rubricas indenizatórias',
+  );
+  lines.push('   ou descartadas conscientemente.)');
   lines.push('');
   lines.push('COMO IMPORTAR NO PJe-CALC CIDADÃO');
   lines.push('==================================');
@@ -137,6 +224,14 @@ function buildReadme(
     }
   }
 
+  lines.push('');
+  lines.push('AUDITORIA');
+  lines.push('---------');
+  lines.push('  Veja `auditoria_completa.csv` neste ZIP para a trilha completa:');
+  lines.push('  todas as rubricas extraídas, com a categoria atribuída, o valor');
+  lines.push('  que entrou no CSV oficial, e a razão da escolha (hint, fallback,');
+  lines.push('  desconto, ignorado). Útil para revisão posterior ou para anexar');
+  lines.push('  ao processo como prova da metodologia de extração.');
   lines.push('');
   lines.push('FORMATO DOS CSVs (informativo)');
   lines.push('------------------------------');

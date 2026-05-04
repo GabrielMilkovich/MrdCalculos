@@ -11,6 +11,7 @@
  * arredondamento bancário; cabe ao chamador agregar com Decimal antes.
  */
 import Decimal from 'decimal.js';
+import { dataIsoToBr, isDataBRValida } from './validation';
 
 export function formatNumeroBR(n: Decimal | number, decimals = 2): string {
   if (n instanceof Decimal) {
@@ -28,10 +29,11 @@ export function formatBoolBR(b: boolean): 'S' | 'N' {
 /**
  * "2024-03-15" → "15/03/2024".
  * Aceita também já em "dd/MM/yyyy" (idempotente). Inválido → string vazia.
+ *
+ * VALIDA semanticamente: 2024-13-45 → "" (não tenta produzir lixo).
  */
 export function formatDataBR(isoOrBr: string): string {
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(isoOrBr)) return isoOrBr;
-  const m = isoOrBr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return '';
-  return `${m[3]}/${m[2]}/${m[1]}`;
+  if (isDataBRValida(isoOrBr)) return isoOrBr;
+  const out = dataIsoToBr(isoOrBr);
+  return out ?? '';
 }
