@@ -234,14 +234,14 @@ export function AICopilotBanner({
                     ) : (
                       <Wand2 className="h-3 w-3" />
                     )}
-                    {loadingDeep ? "limpando…" : "análise profunda"}
+                    {loadingDeep ? "limpando…" : "limpar OCR e tentar"}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
-                  Limpa o OCR (corrige multilinha, dia-da-semana, completa
-                  buracos de calendário) ANTES de re-extrair com a IA.
-                  Custa ~2× mais tokens, mas pega bugs sutis. Use quando
-                  desconfiar de erros silenciosos.
+                  Re-roda a IA em modo profundo: primeiro corrige o OCR
+                  (multilinha quebrada, dia-da-semana errado, buracos de
+                  calendário), depois extrai. Custa ~2× mais tokens mas
+                  pega bugs sutis. Use quando desconfiar de erros silenciosos.
                 </TooltipContent>
               </Tooltip>
             )}

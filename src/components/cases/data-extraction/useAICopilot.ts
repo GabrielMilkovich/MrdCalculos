@@ -156,10 +156,70 @@ export function useAICopilot<T extends LLMTipoDoc>(
   const [loadingDeep, setLoadingDeep] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [modo, setModo] = useState<"regex" | "ia" | "reconciliado">("regex");
-  const [overrides, setOverrides] = useState<Map<string, "regex" | "ia">>(new Map());
+  // Persistência: overrides e modo são salvos no localStorage por documentId
+  // para que o usuário não perca o trabalho de revisão se fechar o dialog
+  // sem confirmar (ex: trocar de aba, recarregar acidentalmente).
+  const overridesStorageKey = documentId
+    ? `ai-copilot:overrides:${tipo}:${documentId}`
+    : null;
+  const modoStorageKey = documentId
+    ? `ai-copilot:modo:${tipo}:${documentId}`
+    : null;
+  const [overrides, setOverrides] = useState<Map<string, "regex" | "ia">>(() => {
+    if (!overridesStorageKey || typeof window === "undefined") return new Map();
+    try {
+      const raw = window.localStorage.getItem(overridesStorageKey);
+      if (!raw) return new Map();
+      const obj = JSON.parse(raw) as Record<string, "regex" | "ia">;
+      return new Map(Object.entries(obj));
+    } catch {
+      return new Map();
+    }
+  });
   const [ocrTruncado, setOcrTruncado] = useState(false);
   const [ocrCharsOriginais, setOcrCharsOriginais] = useState<number | null>(null);
   const [ocrCharsProcessados, setOcrCharsProcessados] = useState<number | null>(null);
+
+  // Persiste overrides em qualquer mudança (debounce não necessário — Map é
+  // pequeno e localStorage é síncrono e rápido para <100 chaves).
+  useEffect(() => {
+    if (!overridesStorageKey || typeof window === "undefined") return;
+    try {
+      if (overrides.size === 0) {
+        window.localStorage.removeItem(overridesStorageKey);
+      } else {
+        const obj: Record<string, "regex" | "ia"> = {};
+        for (const [k, v] of overrides) obj[k] = v;
+        window.localStorage.setItem(overridesStorageKey, JSON.stringify(obj));
+      }
+    } catch {
+      // Quota exceeded ou storage desabilitado — ignora silenciosamente.
+    }
+  }, [overrides, overridesStorageKey]);
+
+  // Persiste/restaura modo escolhido manualmente.
+  useEffect(() => {
+    if (!modoStorageKey || typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(modoStorageKey);
+      if (raw === "regex" || raw === "ia" || raw === "reconciliado") {
+        setModo(raw);
+      }
+    } catch {
+      // ignore
+    }
+    // Roda apenas quando o documentId muda — não sobrepor a persistência
+    // depois de o usuário escolher manualmente.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId]);
+  useEffect(() => {
+    if (!modoStorageKey || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(modoStorageKey, modo);
+    } catch {
+      // ignore
+    }
+  }, [modo, modoStorageKey]);
 
   const runDeep = async () => {
     if (!documentId || !ocrText) return;
@@ -180,17 +240,17 @@ export function useAICopilot<T extends LLMTipoDoc>(
       const tokens =
         (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0);
       toast.success(
-        `Análise profunda da IA aplicada (${tokens.toLocaleString("pt-BR")} tokens). Confira as mudanças.`,
+        `IA re-extraiu após limpar OCR (${tokens.toLocaleString("pt-BR")} tokens). Confira as mudanças.`,
         { duration: 4000 },
       );
     } catch (e) {
       if (e instanceof LLMExtractError) {
         setErro(e.payload.message);
-        toast.error(`IA profunda falhou: ${e.payload.message}`);
+        toast.error(`IA falhou ao limpar OCR: ${e.payload.message}`);
       } else {
         const msg = (e as Error).message;
         setErro(msg);
-        toast.error(`IA profunda falhou: ${msg}`);
+        toast.error(`IA falhou ao limpar OCR: ${msg}`);
       }
     } finally {
       setLoadingDeep(false);
@@ -294,7 +354,7 @@ export function useAICopilot<T extends LLMTipoDoc>(
       ) {
         setAutoDeepDisparado(true);
         toast.message(
-          "Muita divergência detectada — disparando análise profunda automaticamente.",
+          "Muita divergência detectada — limpando OCR e re-extraindo automaticamente.",
           { duration: 3000 },
         );
         void runDeep();
