@@ -9,10 +9,12 @@
 
 import type {
   ApuracaoDiaria,
+  EventoDiario,
   Marcacao,
   ParseCartaoPontoResult,
+  TipoEvento,
 } from "../parsers/cartao-ponto";
-import { checkHorasTrabalhadas } from "../quality/cross-validation";
+import { checkHorasTrabalhadas, hhmmToMin } from "../quality/cross-validation";
 
 export type StatusReconciliacao =
   /** Ambas fontes concordam — auto-aceito. */
@@ -75,6 +77,81 @@ function diffMarcacoes(a: Marcacao[], b: Marcacao[]): string {
   return `regex: [${sa}]  IA: [${sb}]`;
 }
 
+/** Mapa de eventos por tipo, com valor literal. Tipos duplicados → último vence. */
+function indexarEventos(eventos: EventoDiario[]): Map<TipoEvento, string> {
+  const m = new Map<TipoEvento, string>();
+  for (const e of eventos) m.set(e.tipo, e.valor);
+  return m;
+}
+
+/**
+ * Compara dois conjuntos de eventos. Retorna lista de diferenças significativas
+ * encontradas — ignora rótulos puramente cosméticos. Para valores HH:MM,
+ * tolera ±1 minuto (arredondamento de OCR).
+ *
+ * Eventos onde ambas fontes têm o mesmo tipo mas valores diferentes são o
+ * sinal mais grave: indica que regex ou IA parou na linha errada do OCR.
+ */
+function diffEventos(
+  a: EventoDiario[],
+  b: EventoDiario[],
+): { diferentes: string[]; soRegex: TipoEvento[]; soIa: TipoEvento[] } {
+  const idxA = indexarEventos(a);
+  const idxB = indexarEventos(b);
+  const diferentes: string[] = [];
+  const soRegex: TipoEvento[] = [];
+  const soIa: TipoEvento[] = [];
+  const tiposA = new Set(idxA.keys());
+  const tiposB = new Set(idxB.keys());
+  for (const t of tiposA) {
+    if (!tiposB.has(t)) {
+      soRegex.push(t);
+      continue;
+    }
+    const va = idxA.get(t)!;
+    const vb = idxB.get(t)!;
+    if (va === vb) continue;
+    // Tolerância ±1 min para valores HH:MM (arredondamento OCR).
+    const ma = hhmmToMin(va);
+    const mb = hhmmToMin(vb);
+    if (ma !== null && mb !== null && Math.abs(ma - mb) <= 1) continue;
+    diferentes.push(`${t}: regex=${va} | IA=${vb}`);
+  }
+  for (const t of tiposB) {
+    if (!tiposA.has(t)) soIa.push(t);
+  }
+  return { diferentes, soRegex, soIa };
+}
+
+/**
+ * "Riqueza" de eventos: quanto mais tipos juridicamente relevantes (HE,
+ * banco de horas, RSR, intrajornada), mais valiosa a apuração.
+ */
+const PESO_EVENTO_RELEVANTE: Partial<Record<TipoEvento, number>> = {
+  horas_trabalhadas: 3,
+  he_com_70: 5,
+  he_intervalo: 5,
+  he_feriado_0: 5,
+  he_feriado_100: 5,
+  banco_horas_debito: 4,
+  banco_horas_credito: 4,
+  banco_horas_70: 4,
+  rsr_trabalhado_0: 4,
+  intrajornada_sup_2hs: 3,
+  intrajornada: 2,
+  interjornada: 2,
+  feriado_dias: 2,
+  dsr_semanal_dias: 2,
+  horas_previstas: 1,
+};
+
+function pesoEventos(eventos: EventoDiario[]): number {
+  return eventos.reduce(
+    (sum, e) => sum + (PESO_EVENTO_RELEVANTE[e.tipo] ?? 1),
+    0,
+  );
+}
+
 /**
  * Reconciliação por dia.
  *
@@ -134,7 +211,16 @@ export function reconcileCartaoPonto(
     } else if (r && i) {
       const ocOk = r.ocorrencia === i.ocorrencia;
       const marcOk = marcacoesIguais(r.marcacoes, i.marcacoes);
-      if (ocOk && marcOk) {
+      // Diff de EVENTOS (HT, banco horas, HE feriado, intrajornada, etc.).
+      // Antes da v3.1, dois dias com batidas iguais mas eventos diferentes
+      // passavam como AGREE — bug semântico, porque eventos divergentes
+      // indicam que uma das fontes leu o totalizador errado da linha.
+      const eventosDiff = diffEventos(r.eventos, i.eventos);
+      const eventosOk =
+        eventosDiff.diferentes.length === 0 &&
+        eventosDiff.soRegex.length === 0 &&
+        eventosDiff.soIa.length === 0;
+      if (ocOk && marcOk && eventosOk) {
         status = "agree";
         escolhida = r;
         origemEscolhida = "regex";
@@ -152,7 +238,27 @@ export function reconcileCartaoPonto(
             detalhe: diffMarcacoes(r.marcacoes, i.marcacoes),
           });
         }
-        // Escolhe a melhor por cross-check HT.
+        if (!eventosOk) {
+          const partes: string[] = [];
+          if (eventosDiff.diferentes.length > 0) {
+            partes.push(`valores divergentes [${eventosDiff.diferentes.join("; ")}]`);
+          }
+          if (eventosDiff.soRegex.length > 0) {
+            partes.push(`só regex: ${eventosDiff.soRegex.join(", ")}`);
+          }
+          if (eventosDiff.soIa.length > 0) {
+            partes.push(`só IA: ${eventosDiff.soIa.join(", ")}`);
+          }
+          diffs.push({
+            campo: "eventos",
+            detalhe: partes.join(" — "),
+          });
+        }
+        // Escolha automática em cascata:
+        //   1. Cross-check HT — fonte cuja soma E/S bate vence
+        //   2. Mais marcações preenchidas
+        //   3. Mais "peso" de eventos juridicamente relevantes (HE, banco...)
+        //   4. Empate → regex (mais previsível)
         const htR = checkHorasTrabalhadas(r);
         const htI = checkHorasTrabalhadas(i);
         if (htR.ok && !htI.ok) {
@@ -161,15 +267,27 @@ export function reconcileCartaoPonto(
         } else if (!htR.ok && htI.ok) {
           escolhida = i;
           origemEscolhida = "ia";
-        } else if (
-          i.marcacoes.filter((m) => m.e || m.s).length >
-          r.marcacoes.filter((m) => m.e || m.s).length
-        ) {
-          escolhida = i;
-          origemEscolhida = "ia";
         } else {
-          escolhida = r;
-          origemEscolhida = "regex";
+          const marcR = r.marcacoes.filter((m) => m.e || m.s).length;
+          const marcI = i.marcacoes.filter((m) => m.e || m.s).length;
+          if (marcI > marcR) {
+            escolhida = i;
+            origemEscolhida = "ia";
+          } else if (marcR > marcI) {
+            escolhida = r;
+            origemEscolhida = "regex";
+          } else {
+            // Empate em batidas — desempata por riqueza de eventos.
+            const pesoR = pesoEventos(r.eventos);
+            const pesoI = pesoEventos(i.eventos);
+            if (pesoI > pesoR) {
+              escolhida = i;
+              origemEscolhida = "ia";
+            } else {
+              escolhida = r;
+              origemEscolhida = "regex";
+            }
+          }
         }
       }
     } else {

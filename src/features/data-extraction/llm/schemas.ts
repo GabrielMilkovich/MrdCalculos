@@ -21,10 +21,10 @@ import { z } from "zod";
 const Marcacao = z.object({
   e: z.string().regex(/^\d{2}:\d{2}$|^$/, "HH:MM ou vazio"),
   s: z.string().regex(/^\d{2}:\d{2}$|^$/, "HH:MM ou vazio"),
-  e_inserida: z.boolean().optional(),
-  s_inserida: z.boolean().optional(),
-  e_desconsiderada: z.boolean().optional(),
-  s_desconsiderada: z.boolean().optional(),
+  e_inserida: z.boolean().nullable().optional(),
+  s_inserida: z.boolean().nullable().optional(),
+  e_desconsiderada: z.boolean().nullable().optional(),
+  s_desconsiderada: z.boolean().nullable().optional(),
 });
 
 const Ocorrencia = z.enum([
@@ -74,7 +74,7 @@ const ApuracaoDiaria = z.object({
       z.object({
         tipo: TipoEvento,
         valor: z.string(),
-        raw: z.string().optional().default(""),
+        raw: z.string().nullable().optional().transform((v) => v ?? ""),
       }),
     )
     .default([]),

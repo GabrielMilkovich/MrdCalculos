@@ -109,13 +109,7 @@ export function FaltasReviewDialog({
     triggerBlobDownload(blob, filename);
   };
 
-  const confidence = useMemo(
-    () =>
-      copilot.modo === "ia" && copilot.iaScore
-        ? copilot.iaScore
-        : copilot.regexScore,
-    [copilot.modo, copilot.iaScore, copilot.regexScore],
-  );
+  const confidence = copilot.effectiveScore;
 
   // Atalhos J/K — pula entre faltas com data inválida ou intervalo invertido.
   useKeyboardNavigation({
@@ -154,6 +148,9 @@ export function FaltasReviewDialog({
             modo={copilot.modo}
             onModoChange={copilot.setModo}
             onRunDeep={documentId ? () => void copilot.runDeep() : undefined}
+            ocrTruncado={copilot.ocrTruncado}
+            ocrCharsOriginais={copilot.ocrCharsOriginais}
+            ocrCharsProcessados={copilot.ocrCharsProcessados}
           />
         </div>
       }

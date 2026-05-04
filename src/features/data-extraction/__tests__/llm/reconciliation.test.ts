@@ -112,6 +112,82 @@ describe("reconcileCartaoPonto", () => {
     expect(r.contadores.onlyIa).toBe(1);
   });
 
+  it("status=differ quando batidas iguais mas EVENTOS divergem (regressão IMP-2)", () => {
+    // Cenário real: regex e IA pegaram batidas iguais (4h), mas leram o
+    // totalizador de Horas Trabalhadas em linhas diferentes do OCR. Antes do
+    // fix, isso passava como AGREE silencioso — bug semântico que mascarava
+    // erro de pareamento. Regex tem HT correto (4h), IA leu 8h (linha errada).
+    const r = reconcileCartaoPonto(
+      result([
+        ap({
+          data: "2024-01-01",
+          marcacoes: [{ e: "08:00", s: "12:00" }], // 4h
+          eventos: [{ tipo: "horas_trabalhadas", valor: "04:00", raw: "" }], // bate
+        }),
+      ]),
+      result([
+        ap({
+          data: "2024-01-01",
+          marcacoes: [{ e: "08:00", s: "12:00" }], // 4h
+          eventos: [{ tipo: "horas_trabalhadas", valor: "08:00", raw: "" }], // não bate
+        }),
+      ]),
+    );
+    expect(r.dias[0].status).toBe("differ");
+    expect(r.dias[0].diffs.some((d) => d.campo === "eventos")).toBe(true);
+    // IA tem HT divergente da soma E/S, regex tem HT correto → escolhe regex.
+    expect(r.dias[0].origemEscolhida).toBe("regex");
+  });
+
+  it("status=differ quando IA traz EVENTO que regex não pegou", () => {
+    // Regex perdeu o evento "he_feriado_100" (layout novo). IA pegou.
+    const r = reconcileCartaoPonto(
+      result([
+        ap({
+          data: "2024-01-01",
+          marcacoes: [{ e: "08:00", s: "12:00" }],
+          eventos: [{ tipo: "horas_trabalhadas", valor: "04:00", raw: "" }],
+        }),
+      ]),
+      result([
+        ap({
+          data: "2024-01-01",
+          marcacoes: [{ e: "08:00", s: "12:00" }],
+          eventos: [
+            { tipo: "horas_trabalhadas", valor: "04:00", raw: "" },
+            { tipo: "he_feriado_100", valor: "04:00", raw: "" },
+          ],
+        }),
+      ]),
+    );
+    expect(r.dias[0].status).toBe("differ");
+    const evDiff = r.dias[0].diffs.find((d) => d.campo === "eventos");
+    expect(evDiff).toBeDefined();
+    expect(evDiff?.detalhe).toContain("he_feriado_100");
+    // IA tem mais peso de eventos relevantes → escolhe IA no desempate.
+    expect(r.dias[0].origemEscolhida).toBe("ia");
+  });
+
+  it("eventos com diferença ≤1 min ainda contam como agree (tolerância OCR)", () => {
+    const r = reconcileCartaoPonto(
+      result([
+        ap({
+          data: "2024-01-01",
+          marcacoes: [{ e: "08:00", s: "12:00" }],
+          eventos: [{ tipo: "horas_trabalhadas", valor: "04:00", raw: "" }],
+        }),
+      ]),
+      result([
+        ap({
+          data: "2024-01-01",
+          marcacoes: [{ e: "08:00", s: "12:00" }],
+          eventos: [{ tipo: "horas_trabalhadas", valor: "04:01", raw: "" }],
+        }),
+      ]),
+    );
+    expect(r.dias[0].status).toBe("agree");
+  });
+
   it("htDiscrepancia marcada quando soma das batidas não bate com HT", () => {
     const r = reconcileCartaoPonto(
       result([

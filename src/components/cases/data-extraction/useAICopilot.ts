@@ -56,6 +56,12 @@ interface AICopilotState<T extends LLMTipoDoc> {
   iaScore: ConfidenceScore | null;
   /** Score da extração regex (sempre presente). */
   regexScore: ConfidenceScore;
+  /**
+   * Score do resultado EFETIVO aplicado (já considera modo + reconciliação +
+   * overrides manuais). É este que o badge da UI deve mostrar — assim, quando
+   * a reconciliação melhora a extração, o usuário vê o ganho refletido.
+   */
+  effectiveScore: ConfidenceScore;
   /** Reconciliação calculada (apenas cartão-ponto). */
   reconciliacao: ReconciliacaoCartaoPonto | null;
   /** Modo de exibição atual. */
@@ -68,6 +74,16 @@ interface AICopilotState<T extends LLMTipoDoc> {
   erro: string | null;
   /** Overrides manuais por data (apenas cartão-ponto, modo reconciliado). */
   overrides: Map<string, "regex" | "ia">;
+  /**
+   * Sinaliza que o OCR enviado à IA foi truncado pelo edge function (>60k
+   * chars). A extração IA pode estar incompleta — UI deve alertar o operador
+   * e não auto-aplicar a IA sobre o regex sem confirmação.
+   */
+  ocrTruncado: boolean;
+  /** Tamanho do OCR original quando houve truncamento (chars). */
+  ocrCharsOriginais: number | null;
+  /** Tamanho processado pela IA quando houve truncamento. */
+  ocrCharsProcessados: number | null;
 }
 
 interface UseAICopilotArgs<T extends LLMTipoDoc> {
@@ -77,7 +93,11 @@ interface UseAICopilotArgs<T extends LLMTipoDoc> {
   parsed: ResultByTipo[T];
   /** Quando false, não dispara a IA (ex: teste local sem rede). */
   enabled?: boolean;
-  /** Margem mínima de score IA - score regex pra auto-aplicar (default 10). */
+  /**
+   * Margem mínima de score IA - score regex pra auto-aplicar IA (default 5).
+   * Para cartão-ponto, a auto-aplicação é decidida via reconciliação, não
+   * pela margem direta — esta margem só vale para os outros 3 tipos.
+   */
   margemAutoAplicar?: number;
 }
 
@@ -128,7 +148,7 @@ export function useAICopilot<T extends LLMTipoDoc>(
     ocrText,
     parsed,
     enabled = true,
-    margemAutoAplicar = 10,
+    margemAutoAplicar = 5,
   } = args;
 
   const [iaResult, setIaResult] = useState<ResultByTipo[T] | null>(null);
@@ -136,34 +156,101 @@ export function useAICopilot<T extends LLMTipoDoc>(
   const [loadingDeep, setLoadingDeep] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [modo, setModo] = useState<"regex" | "ia" | "reconciliado">("regex");
-  const [overrides, setOverrides] = useState<Map<string, "regex" | "ia">>(new Map());
+  // Persistência: overrides e modo são salvos no localStorage por documentId
+  // para que o usuário não perca o trabalho de revisão se fechar o dialog
+  // sem confirmar (ex: trocar de aba, recarregar acidentalmente).
+  const overridesStorageKey = documentId
+    ? `ai-copilot:overrides:${tipo}:${documentId}`
+    : null;
+  const modoStorageKey = documentId
+    ? `ai-copilot:modo:${tipo}:${documentId}`
+    : null;
+  const [overrides, setOverrides] = useState<Map<string, "regex" | "ia">>(() => {
+    if (!overridesStorageKey || typeof window === "undefined") return new Map();
+    try {
+      const raw = window.localStorage.getItem(overridesStorageKey);
+      if (!raw) return new Map();
+      const obj = JSON.parse(raw) as Record<string, "regex" | "ia">;
+      return new Map(Object.entries(obj));
+    } catch {
+      return new Map();
+    }
+  });
+  const [ocrTruncado, setOcrTruncado] = useState(false);
+  const [ocrCharsOriginais, setOcrCharsOriginais] = useState<number | null>(null);
+  const [ocrCharsProcessados, setOcrCharsProcessados] = useState<number | null>(null);
+
+  // Persiste overrides em qualquer mudança (debounce não necessário — Map é
+  // pequeno e localStorage é síncrono e rápido para <100 chaves).
+  useEffect(() => {
+    if (!overridesStorageKey || typeof window === "undefined") return;
+    try {
+      if (overrides.size === 0) {
+        window.localStorage.removeItem(overridesStorageKey);
+      } else {
+        const obj: Record<string, "regex" | "ia"> = {};
+        for (const [k, v] of overrides) obj[k] = v;
+        window.localStorage.setItem(overridesStorageKey, JSON.stringify(obj));
+      }
+    } catch {
+      // Quota exceeded ou storage desabilitado — ignora silenciosamente.
+    }
+  }, [overrides, overridesStorageKey]);
+
+  // Persiste/restaura modo escolhido manualmente.
+  useEffect(() => {
+    if (!modoStorageKey || typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(modoStorageKey);
+      if (raw === "regex" || raw === "ia" || raw === "reconciliado") {
+        setModo(raw);
+      }
+    } catch {
+      // ignore
+    }
+    // Roda apenas quando o documentId muda — não sobrepor a persistência
+    // depois de o usuário escolher manualmente.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId]);
+  useEffect(() => {
+    if (!modoStorageKey || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(modoStorageKey, modo);
+    } catch {
+      // ignore
+    }
+  }, [modo, modoStorageKey]);
 
   const runDeep = async () => {
     if (!documentId || !ocrText) return;
     setLoadingDeep(true);
     setErro(null);
     try {
-      const { output, usage } = await extractViaLLM(tipo, {
+      const resp = await extractViaLLM(tipo, {
         document_id: documentId,
         ocr_text: ocrText,
         mode: "deep",
       });
+      const { output, usage } = resp;
+      setOcrTruncado(resp.ocrTruncado);
+      setOcrCharsOriginais(resp.ocrCharsOriginais);
+      setOcrCharsProcessados(resp.ocrCharsProcessados);
       const result = adaptarLLM(tipo, output);
       setIaResult(result);
       const tokens =
         (usage?.prompt_tokens ?? 0) + (usage?.completion_tokens ?? 0);
       toast.success(
-        `Análise profunda da IA aplicada (${tokens.toLocaleString("pt-BR")} tokens). Confira as mudanças.`,
+        `IA re-extraiu após limpar OCR (${tokens.toLocaleString("pt-BR")} tokens). Confira as mudanças.`,
         { duration: 4000 },
       );
     } catch (e) {
       if (e instanceof LLMExtractError) {
         setErro(e.payload.message);
-        toast.error(`IA profunda falhou: ${e.payload.message}`);
+        toast.error(`IA falhou ao limpar OCR: ${e.payload.message}`);
       } else {
         const msg = (e as Error).message;
         setErro(msg);
-        toast.error(`IA profunda falhou: ${msg}`);
+        toast.error(`IA falhou ao limpar OCR: ${msg}`);
       }
     } finally {
       setLoadingDeep(false);
@@ -206,11 +293,21 @@ export function useAICopilot<T extends LLMTipoDoc>(
     setLoading(true);
     setErro(null);
     extractViaLLM(tipo, { document_id: documentId, ocr_text: ocrText })
-      .then(({ output, cached }) => {
+      .then((resp) => {
         if (cancelado) return;
+        const { output, cached } = resp;
+        setOcrTruncado(resp.ocrTruncado);
+        setOcrCharsOriginais(resp.ocrCharsOriginais);
+        setOcrCharsProcessados(resp.ocrCharsProcessados);
         const result = adaptarLLM(tipo, output);
         setIaResult(result);
         if (!cached) toast.success("IA terminou — co-piloto ativo.", { duration: 2000 });
+        if (resp.ocrTruncado) {
+          toast.warning(
+            `OCR truncado pela IA: ${resp.ocrCharsProcessados}/${resp.ocrCharsOriginais} chars analisados. Extração pode estar incompleta.`,
+            { duration: 6000 },
+          );
+        }
       })
       .catch((e: unknown) => {
         if (cancelado) return;
@@ -257,14 +354,19 @@ export function useAICopilot<T extends LLMTipoDoc>(
       ) {
         setAutoDeepDisparado(true);
         toast.message(
-          "Muita divergência detectada — disparando análise profunda automaticamente.",
+          "Muita divergência detectada — limpando OCR e re-extraindo automaticamente.",
           { duration: 3000 },
         );
         void runDeep();
       }
       return;
     }
-    if (iaScore.score >= regexScore.score + margemAutoAplicar) {
+    // Quando OCR foi truncado, NUNCA auto-aplica IA — extração pode estar
+    // incompleta e operador precisa decidir conscientemente.
+    if (
+      iaScore.score >= regexScore.score + margemAutoAplicar &&
+      !ocrTruncado
+    ) {
       setModo("ia");
       toast.success(
         `IA aplicada automaticamente (confiança IA ${iaScore.score} vs regex ${regexScore.score}).`,
@@ -281,6 +383,7 @@ export function useAICopilot<T extends LLMTipoDoc>(
     autoDeepDisparado,
     documentId,
     ocrText,
+    ocrTruncado,
   ]);
 
   const effective = useMemo<ResultByTipo[T]>(() => {
@@ -313,10 +416,20 @@ export function useAICopilot<T extends LLMTipoDoc>(
     return parsed;
   }, [modo, iaResult, reconciliacao, parsed, tipo, overrides]);
 
+  // Score do resultado efetivo. Sempre que o effective muda (modo, IA chegou,
+  // override aplicado), recalcula. Isso faz o badge refletir o ganho real
+  // — não fica preso no score regex inicial.
+  const effectiveScore = useMemo<ConfidenceScore>(() => {
+    if (modo === "regex") return regexScore;
+    if (modo === "ia" && iaScore) return iaScore;
+    return calcScore(tipo, effective, ocrText);
+  }, [modo, iaScore, regexScore, tipo, effective, ocrText]);
+
   return {
     iaResult,
     iaScore,
     regexScore,
+    effectiveScore,
     reconciliacao,
     modo,
     setModo,
@@ -328,5 +441,8 @@ export function useAICopilot<T extends LLMTipoDoc>(
     setOverride,
     clearOverride,
     runDeep,
+    ocrTruncado,
+    ocrCharsOriginais,
+    ocrCharsProcessados,
   };
 }

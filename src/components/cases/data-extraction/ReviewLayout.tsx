@@ -71,7 +71,13 @@ export function ReviewLayout({
   onConfirm,
   confirmDisabled,
 }: Props) {
-  const [conferido, setConferido] = useState(false);
+  // Checklist de 3 itens dirigidos — força atenção em pontos específicos
+  // antes de liberar o download. UX gate: única coisa entre revisão
+  // visual e o CSV juridicamente vinculante.
+  const [conferiuDatas, setConferiuDatas] = useState(false);
+  const [conferiuValores, setConferiuValores] = useState(false);
+  const [conferiuCobertura, setConferiuCobertura] = useState(false);
+  const conferido = conferiuDatas && conferiuValores && conferiuCobertura;
   const [downloading, setDownloading] = useState(false);
 
   const linhasOcr = useMemo(() => ocrText.split(/\r?\n/), [ocrText]);
@@ -156,7 +162,10 @@ export function ReviewLayout({
               Texto do OCR (referência)
             </div>
             <ScrollArea className="flex-1 min-h-0">
-              <pre className="text-xs font-mono leading-relaxed p-2 whitespace-pre-wrap">
+              <pre
+                className="text-xs font-mono leading-relaxed p-2 whitespace-pre-wrap"
+                data-ocr-pre
+              >
                 {linhasOcr.map((linha, idx) => {
                   const linhaNum = idx + 1;
                   const isUnparsed = unparsedSet.has(linhaNum);
@@ -167,7 +176,11 @@ export function ReviewLayout({
                       ? "bg-amber-100 dark:bg-amber-900/40 px-1 rounded"
                       : "";
                   return (
-                    <div key={linhaNum} className={cls}>
+                    <div
+                      key={linhaNum}
+                      className={`transition-colors ${cls}`}
+                      data-ocr-line={linhaNum}
+                    >
                       <span className="text-muted-foreground select-none">
                         {String(linhaNum).padStart(3, " ")}
                         {"  "}
@@ -189,17 +202,46 @@ export function ReviewLayout({
           </div>
         </div>
 
-        {/* Gate de confirmação */}
-        <label className="flex items-center gap-2 text-xs select-none border-t pt-3">
-          <Checkbox
-            checked={conferido}
-            onCheckedChange={(v) => setConferido(Boolean(v))}
-          />
-          <span>
-            <strong>Conferi</strong> que todos os dados relevantes do OCR estão
-            na tabela ao lado e que nada importante está faltando.
-          </span>
-        </label>
+        {/* Gate de confirmação — checklist de 3 itens dirigidos */}
+        <div className="border-t pt-3 space-y-1.5">
+          <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">
+            Confirme antes de baixar:
+          </p>
+          <label className="flex items-start gap-2 text-xs select-none cursor-pointer">
+            <Checkbox
+              checked={conferiuDatas}
+              onCheckedChange={(v) => setConferiuDatas(Boolean(v))}
+              className="mt-0.5"
+            />
+            <span>
+              <strong>Datas</strong> conferem com o período do documento — sem
+              datas fora da janela e sem dias faltando.
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-xs select-none cursor-pointer">
+            <Checkbox
+              checked={conferiuValores}
+              onCheckedChange={(v) => setConferiuValores(Boolean(v))}
+              className="mt-0.5"
+            />
+            <span>
+              <strong>Valores</strong> (horários / rubricas / dias) batem com o
+              OCR — soma de batidas corresponde ao Horas Trabalhadas declarado.
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-xs select-none cursor-pointer">
+            <Checkbox
+              checked={conferiuCobertura}
+              onCheckedChange={(v) => setConferiuCobertura(Boolean(v))}
+              className="mt-0.5"
+            />
+            <span>
+              <strong>Cobertura</strong> completa — nenhuma linha amarela do OCR
+              ficou sem virar uma linha aqui, e eventos relevantes (HE, banco
+              de horas, faltas) foram preservados.
+            </span>
+          </label>
+        </div>
 
         <DialogFooter className="gap-2">
           <Button

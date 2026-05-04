@@ -237,6 +237,15 @@ export function HoleritePreviewDialog({
   const totalCategorias = totals.size;
   const showingCount = filtered.length;
 
+  // Bloqueia download quando competência não foi detectada/é inválida.
+  // Holerite sem competência válida (MM/yyyy entre 01-12) não tem como
+  // entrar corretamente no histórico salarial — o engine de cálculo
+  // alocaria as rubricas em mês indefinido. Erro juridicamente grave.
+  const RE_COMPETENCIA_VALIDA = /^(0[1-9]|1[0-2])\/\d{4}$/;
+  const competenciaInvalida =
+    !effectiveClassificacao.competencia ||
+    !RE_COMPETENCIA_VALIDA.test(effectiveClassificacao.competencia);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[1500px] max-h-[94vh] overflow-hidden flex flex-col">
@@ -257,6 +266,9 @@ export function HoleritePreviewDialog({
                 onRunDeep={
                   documentId && ocrText ? () => void copilot.runDeep() : undefined
                 }
+                ocrTruncado={copilot.ocrTruncado}
+                ocrCharsOriginais={copilot.ocrCharsOriginais}
+                ocrCharsProcessados={copilot.ocrCharsProcessados}
               />
             </div>
           </div>
@@ -268,6 +280,25 @@ export function HoleritePreviewDialog({
             ZIP
           </DialogDescription>
         </DialogHeader>
+
+        {competenciaInvalida && (
+          <div className="border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded p-2 text-xs space-y-0.5">
+            <div className="flex items-center gap-1.5 font-medium text-rose-900 dark:text-rose-100">
+              <AlertTriangle className="h-3.5 w-3.5" /> Competência inválida —
+              download bloqueado
+            </div>
+            <p className="text-[11px] text-rose-900/80 dark:text-rose-100/80">
+              A competência detectada é{" "}
+              <code className="text-[10px] bg-rose-100 dark:bg-rose-950/40 px-1 rounded">
+                {effectiveClassificacao.competencia || "(vazio)"}
+              </code>
+              . Holerites devem ter competência no formato MM/AAAA (mês
+              01–12). Sem competência válida, as rubricas não podem entrar
+              corretamente no histórico salarial. Reabra o documento e ajuste
+              a competência manualmente, ou re-execute a IA em modo profundo.
+            </p>
+          </div>
+        )}
 
         {classificacao.warnings.length > 0 && (
           <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-xs space-y-0.5">
@@ -415,8 +446,15 @@ export function HoleritePreviewDialog({
           <Button
             size="sm"
             onClick={handleConfirmar}
-            disabled={downloading || totalCategorias === 0}
+            disabled={
+              downloading || totalCategorias === 0 || competenciaInvalida
+            }
             className="gap-1.5"
+            title={
+              competenciaInvalida
+                ? `Competência "${effectiveClassificacao.competencia || "vazia"}" inválida. Corrija antes de baixar — o cálculo trabalhista não pode alocar rubricas sem mês de referência válido.`
+                : undefined
+            }
           >
             {downloading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

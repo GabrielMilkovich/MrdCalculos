@@ -49,6 +49,7 @@ import { ReconciliationDivergenceList } from "./ReconciliationDivergenceList";
 import { useAICopilot } from "./useAICopilot";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 import { checkHorasTrabalhadas } from "@/features/data-extraction";
+import { applyHoraMask, normalizeHoraOnBlur } from "./hora-mask";
 
 interface Props {
   open: boolean;
@@ -169,15 +170,11 @@ export function CartaoPontoReviewDialog({
   const unparsedLines = effectiveParsed.unparsed_lines.map((u) => u.linha);
 
   // Score de confiança da extração + datas fora da janela de competência.
-  // Usa o resultado da fonte ativa (regex/IA/reconciliado) — calculado
-  // dentro do hook do co-piloto.
-  const confidence = useMemo(
-    () =>
-      copilot.modo === "ia" && copilot.iaScore
-        ? copilot.iaScore
-        : copilot.regexScore,
-    [copilot.modo, copilot.iaScore, copilot.regexScore],
-  );
+  // Usa o resultado EFETIVO (regex / IA / reconciliado já com overrides) —
+  // calculado dentro do hook do co-piloto. Garante que o badge reflete a
+  // melhor fonte aplicada, não fica preso no score regex inicial quando
+  // a IA já consolidou uma versão melhor.
+  const confidence = copilot.effectiveScore;
 
   // Mapa de discrepância de Horas Trabalhadas por data — destaca dias
   // onde a soma das batidas não bate com o evento HT do OCR.
@@ -233,6 +230,42 @@ export function CartaoPontoReviewDialog({
     [sorted],
   );
 
+  // Apurações cuja DATA está fora da janela do espelho — provavelmente são
+  // timestamps de aprovação eletrônica vazando como apuração. O score
+  // detecta e penaliza, mas o usuário precisava deletar uma a uma. Bulk
+  // delete em 1 clique resolve.
+  const rowsForaDaJanela = useMemo(() => {
+    if (!confidence.datasForaJanela || confidence.datasForaJanela.length === 0) {
+      return [] as Row[];
+    }
+    const datasFora = new Set(confidence.datasForaJanela);
+    return sorted.filter((r) => datasFora.has(r.data));
+  }, [sorted, confidence.datasForaJanela]);
+
+  const removeRowsForaDaJanela = () => {
+    if (rowsForaDaJanela.length === 0) return;
+    const keysParaRemover = new Set(rowsForaDaJanela.map((r) => r._key));
+    setRows((prev) => prev.filter((r) => !keysParaRemover.has(r._key)));
+  };
+
+  /**
+   * Scroll bidirecional: clique numa linha da tabela rola o painel OCR
+   * para a linha-origem daquela apuração e pisca por 1.5s.
+   */
+  const scrollOcrToLine = (ocrLine: number | undefined) => {
+    if (!ocrLine) return;
+    const el = document.querySelector(
+      `[data-ocr-line="${ocrLine}"]`,
+    ) as HTMLElement | null;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-violet-500", "ring-inset");
+    setTimeout(
+      () => el.classList.remove("ring-2", "ring-violet-500", "ring-inset"),
+      1500,
+    );
+  };
+
   const warnings = useMemo(() => {
     const ws = [...effectiveParsed.warnings];
     if (linhasComCorte.length > 0) {
@@ -286,7 +319,13 @@ export function CartaoPontoReviewDialog({
       headerSlot={
         <div className="flex flex-col gap-1.5 w-full">
           <div className="flex items-center gap-2 flex-wrap">
-            <ConfidenceBadge score={confidence} />
+            <ConfidenceBadge
+              score={confidence}
+              iaSalvouDias={
+                copilot.modo !== "regex" &&
+                (copilot.reconciliacao?.contadores.onlyIa ?? 0) > 0
+              }
+            />
             <AICopilotBanner
               loading={copilot.loading}
               loadingDeep={copilot.loadingDeep}
@@ -297,6 +336,9 @@ export function CartaoPontoReviewDialog({
               modo={copilot.modo}
               onModoChange={copilot.setModo}
               onRunDeep={documentId ? () => void copilot.runDeep() : undefined}
+              ocrTruncado={copilot.ocrTruncado}
+              ocrCharsOriginais={copilot.ocrCharsOriginais}
+              ocrCharsProcessados={copilot.ocrCharsProcessados}
             />
           </div>
           {copilot.modo === "reconciliado" && copilot.reconciliacao && (
@@ -337,14 +379,28 @@ export function CartaoPontoReviewDialog({
             </span>
           )}
         </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs gap-1"
-          onClick={addRow}
-        >
-          <Plus className="h-3 w-3" /> Dia
-        </Button>
+        <div className="flex items-center gap-1">
+          {rowsForaDaJanela.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1 border-rose-300 text-rose-900 dark:border-rose-700 dark:text-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+              onClick={removeRowsForaDaJanela}
+              title={`Remove em lote ${rowsForaDaJanela.length} apuração(ões) com data fora do período do espelho — geralmente são timestamps de aprovação eletrônica vazando como jornada.`}
+            >
+              <Trash2 className="h-3 w-3" />
+              Remover {rowsForaDaJanela.length} fora-janela
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={addRow}
+          >
+            <Plus className="h-3 w-3" /> Dia
+          </Button>
+        </div>
       </div>
       {sorted.length === 0 ? (
         <div className="p-6 text-xs text-muted-foreground text-center">
@@ -386,12 +442,20 @@ export function CartaoPontoReviewDialog({
                 }
                 className={`text-xs transition-shadow ${cls}`}
               >
-                <TableCell className="p-1">
+                <TableCell
+                  className="p-1"
+                  onClick={() => scrollOcrToLine(r.ocr_line)}
+                  title={
+                    r.ocr_line
+                      ? `Clique para ver a linha ${r.ocr_line} no OCR`
+                      : undefined
+                  }
+                >
                   <Input
                     type="date"
                     value={r.data}
                     onChange={(e) => updateRow(r._key, { data: e.target.value })}
-                    className="h-7 text-[11px] font-mono"
+                    className={`h-7 text-[11px] font-mono ${r.ocr_line ? "cursor-pointer" : ""}`}
                   />
                 </TableCell>
                 <TableCell className="p-1">
@@ -422,7 +486,20 @@ export function CartaoPontoReviewDialog({
                         placeholder={idx === 0 ? "08:00" : ""}
                         value={r.marcacoes[idx]?.e ?? ""}
                         onChange={(e) =>
-                          updateMarcacao(r._key, idx, "e", e.target.value)
+                          updateMarcacao(
+                            r._key,
+                            idx,
+                            "e",
+                            applyHoraMask(e.target.value),
+                          )
+                        }
+                        onBlur={(e) =>
+                          updateMarcacao(
+                            r._key,
+                            idx,
+                            "e",
+                            normalizeHoraOnBlur(e.target.value),
+                          )
                         }
                         title={
                           r.marcacoes[idx]?.e_inserida
@@ -434,13 +511,26 @@ export function CartaoPontoReviewDialog({
                             ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
                             : ""
                         }`}
-                        
+
                       />
                       <Input
                         placeholder={idx === 0 ? "12:00" : ""}
                         value={r.marcacoes[idx]?.s ?? ""}
                         onChange={(e) =>
-                          updateMarcacao(r._key, idx, "s", e.target.value)
+                          updateMarcacao(
+                            r._key,
+                            idx,
+                            "s",
+                            applyHoraMask(e.target.value),
+                          )
+                        }
+                        onBlur={(e) =>
+                          updateMarcacao(
+                            r._key,
+                            idx,
+                            "s",
+                            normalizeHoraOnBlur(e.target.value),
+                          )
                         }
                         title={
                           r.marcacoes[idx]?.s_inserida

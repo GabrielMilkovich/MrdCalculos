@@ -253,3 +253,144 @@ describe("validateAntiAlucinacao — holerite (substring fuzzy)", () => {
     ).toThrow(LLMExtractError);
   });
 });
+
+describe("validateAntiAlucinacao — anti-alucinação CONTEXTUAL (cartão-ponto)", () => {
+  it("REJEITA hora que existe no OCR mas em outro dia (cross-day)", () => {
+    // OCR: dia 14 tem 08:00, dia 15 tem 22:00. IA tenta plantar 22:00 no dia 14.
+    const ocr = `
+| 14/12/2021 - Ter | 08:00 | 12:00 |
+| 15/12/2021 - Qua | 09:00 | 13:00 | 18:00 | 22:00 |
+`;
+    expect(() =>
+      validateAntiAlucinacao(
+        "cartao_ponto",
+        {
+          apuracoes: [
+            {
+              data: "2021-12-14",
+              ocorrencia: "NORMAL",
+              marcacoes: [{ e: "08:00", s: "22:00" }], // 22:00 vazado do dia 15
+              eventos: [],
+            },
+          ],
+        },
+        ocr,
+      ),
+    ).toThrow(/não aparece em nenhuma linha do OCR contendo essa data/i);
+  });
+
+  it("aceita hora em linha-continuação (±2 linhas vizinhas)", () => {
+    // OCR com batidas em linha-continuação que parser regex consegue mesclar.
+    const ocr = `
+| 16/07/2021 - Sex | 11:30 | 12:00 | 13:00 |
+|  | 16:50 |  |  |
+| 17/07/2021 - Sab | 09:00 | 13:00 |
+`;
+    expect(() =>
+      validateAntiAlucinacao(
+        "cartao_ponto",
+        {
+          apuracoes: [
+            {
+              data: "2021-07-16",
+              ocorrencia: "NORMAL",
+              marcacoes: [
+                { e: "11:30", s: "12:00" },
+                { e: "13:00", s: "16:50" }, // 16:50 está na linha de continuação
+              ],
+              eventos: [],
+            },
+          ],
+        },
+        ocr,
+      ),
+    ).not.toThrow();
+  });
+});
+
+describe("validateAntiAlucinacao — anti-alucinação fuzzy (holerite)", () => {
+  it("REJEITA rubrica inventada com palavra similar do OCR (Patronal vs Empregado)", () => {
+    const ocr = `
+RECIBO DE PAGAMENTO
+0001 SALARIO BASE         3.000,00
+3001 INSS EMPREGADO                    270,00
+`;
+    // IA inventa "INSS Patronal" — palavra "INSS" existe, mas o NOME INTEIRO
+    // "INSS Patronal" não aparece com similaridade ≥75% em nenhum trecho.
+    expect(() =>
+      validateAntiAlucinacao(
+        "holerite",
+        {
+          competencia: "01/2024",
+          layout_usado: "llm_v1",
+          rubricas: [
+            {
+              codigo: "9999",
+              nome: "INSS Patronal",
+              valor_vencimento: null,
+              valor_desconto: 220,
+              quantidade: null,
+              ordem: 0,
+            },
+          ],
+        },
+        ocr,
+      ),
+    ).toThrow(/similaridade.*75/i);
+  });
+
+  it("aceita variação OCR legítima ('CONTRIB. SINDICAL' vs 'Contribuição Sindical')", () => {
+    const ocr = `
+RECIBO DE PAGAMENTO
+0001 SALARIO BASE         3.000,00
+9001 CONTRIB. SINDICAL                  30,00
+`;
+    expect(() =>
+      validateAntiAlucinacao(
+        "holerite",
+        {
+          competencia: "01/2024",
+          layout_usado: "llm_v1",
+          rubricas: [
+            {
+              codigo: "9001",
+              nome: "Contribuição Sindical",
+              valor_vencimento: null,
+              valor_desconto: 30,
+              quantidade: null,
+              ordem: 0,
+            },
+          ],
+        },
+        ocr,
+      ),
+    ).not.toThrow();
+  });
+
+  it("aceita rubrica com nome exatamente igual ao OCR", () => {
+    const ocr = `
+0001 SALARIO BASE         3.000,00
+0190 COMISSAO                500,00
+`;
+    expect(() =>
+      validateAntiAlucinacao(
+        "holerite",
+        {
+          competencia: "01/2024",
+          layout_usado: "llm_v1",
+          rubricas: [
+            {
+              codigo: "0001",
+              nome: "Salario Base",
+              valor_vencimento: 3000,
+              valor_desconto: null,
+              quantidade: null,
+              ordem: 0,
+            },
+          ],
+        },
+        ocr,
+      ),
+    ).not.toThrow();
+  });
+});

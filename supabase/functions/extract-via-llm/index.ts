@@ -2,9 +2,9 @@
 // extract-via-llm
 // =====================================================
 // Re-extrai um documento (cartão-ponto, férias, faltas, holerite) via LLM
-// quando o parser determinístico tem confiança baixa. Usa OpenAI
-// gpt-4o-mini com Structured Outputs (response_format json_schema) para
-// garantir que o JSON casa com o schema esperado.
+// quando o parser determinístico tem confiança baixa. Usa OpenAI com
+// Structured Outputs (response_format json_schema) para garantir que o JSON
+// casa com o schema esperado.
 //
 // Fluxo:
 //   1. Auth: JWT do header → user
@@ -17,13 +17,20 @@
 //
 // Anti-alucinação: o front valida o output novamente com Zod e aplica
 // invariantes (datas ⊆ OCR, etc.) antes de aceitar.
+//
+// Modelo: configurável via env var OPENAI_MODEL. Default `gpt-4o` por
+// qualidade superior em extração estruturada de documentos trabalhistas
+// brasileiros (gpt-4o-mini erra ~3x mais em layouts não-padrão segundo
+// auditoria interna). Mude para `gpt-4o-mini` se custo importar mais que
+// qualidade. ATENÇÃO: trocar de modelo invalida 100% do cache acumulado
+// — re-extrações dispararão novas chamadas pagas até o cache reaquecer.
 // =====================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-const MODEL = "gpt-4o";
+const MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o";
 
 interface RequestBody {
   document_id: string;
@@ -68,6 +75,8 @@ async function sha256Hex(s: string): Promise<string> {
 // com response_format = { type: "json_schema", json_schema: {...} }).
 // Schema é STRICT: extra props não são permitidas.
 
+// OpenAI Structured Outputs (strict): TODAS as props em `properties` precisam
+// estar em `required`. Opcionalidade se expressa com type: ["X", "null"].
 const SCHEMA_CARTAO_PONTO = {
   name: "ParseCartaoPontoOutput",
   strict: true,
@@ -81,7 +90,14 @@ const SCHEMA_CARTAO_PONTO = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["data", "ocorrencia", "marcacoes", "eventos"],
+          required: [
+            "data",
+            "dia_semana",
+            "ocorrencia",
+            "marcacoes",
+            "eventos",
+            "observacao",
+          ],
           properties: {
             data: { type: "string", description: "yyyy-MM-dd" },
             dia_semana: { type: ["string", "null"] },
@@ -106,14 +122,21 @@ const SCHEMA_CARTAO_PONTO = {
               items: {
                 type: "object",
                 additionalProperties: false,
-                required: ["e", "s"],
+                required: [
+                  "e",
+                  "s",
+                  "e_inserida",
+                  "s_inserida",
+                  "e_desconsiderada",
+                  "s_desconsiderada",
+                ],
                 properties: {
                   e: { type: "string", description: "HH:MM ou vazio" },
                   s: { type: "string", description: "HH:MM ou vazio" },
-                  e_inserida: { type: "boolean" },
-                  s_inserida: { type: "boolean" },
-                  e_desconsiderada: { type: "boolean" },
-                  s_desconsiderada: { type: "boolean" },
+                  e_inserida: { type: ["boolean", "null"] },
+                  s_inserida: { type: ["boolean", "null"] },
+                  e_desconsiderada: { type: ["boolean", "null"] },
+                  s_desconsiderada: { type: ["boolean", "null"] },
                 },
               },
             },
@@ -122,11 +145,39 @@ const SCHEMA_CARTAO_PONTO = {
               items: {
                 type: "object",
                 additionalProperties: false,
-                required: ["tipo", "valor"],
+                required: ["tipo", "valor", "raw"],
                 properties: {
-                  tipo: { type: "string" },
+                  // Enum espelha exatamente os tipos aceitos pelo Zod no
+                  // front (TipoEvento). Sem enum aqui, o LLM retornaria
+                  // strings livres ("Horas Trabalhadas") que o Zod rejeita.
+                  tipo: {
+                    type: "string",
+                    enum: [
+                      "horas_trabalhadas",
+                      "horas_previstas",
+                      "banco_horas_debito",
+                      "banco_horas_credito",
+                      "banco_horas_70",
+                      "he_com_70",
+                      "he_intervalo",
+                      "he_feriado_0",
+                      "he_feriado_100",
+                      "rsr_trabalhado_0",
+                      "intrajornada_sup_2hs",
+                      "intrajornada",
+                      "interjornada",
+                      "feriado_dias",
+                      "dsr_semanal_dias",
+                      "ferias",
+                      "licenca_medica",
+                      "treinamento",
+                      "atestado",
+                      "afastamento",
+                      "outro",
+                    ],
+                  },
                   valor: { type: "string" },
-                  raw: { type: "string" },
+                  raw: { type: ["string", "null"] },
                 },
               },
             },
@@ -297,7 +348,14 @@ Você está processando um ESPELHO DE PONTO. Para cada dia útil:
 - Se o dia tem 3 horários ímpares (sem par), preserve o último como E sem S (s = "").
 - Ocorrência: NORMAL se houve trabalho; FERIADO/FOLGA/FALTA/FERIAS/etc. quando explicitamente mencionado E não houver batidas.
 - IGNORAR linhas que mencionem "aprovado pelo usuário", "aprovado pelo colaborador", "homologado", "registrado eletronicamente", "assinado eletronicamente" — são timestamps de aprovação, não jornada.
-- Eventos estruturados (Horas Trabalhadas, HE feriado, banco de horas, RSR, intrajornada) devem virar entradas em \`eventos\` com \`tipo\` apropriado e \`valor\` no formato HH:MM ou número.`,
+- Eventos estruturados (Horas Trabalhadas, HE feriado, banco de horas, RSR, intrajornada) devem virar entradas em \`eventos\`. O \`tipo\` deve ser EXATAMENTE um dos valores do enum (snake_case: "horas_trabalhadas", "banco_horas_debito", "he_feriado_100", etc.) — nunca em português livre. O \`valor\` é HH:MM ou número (ex: "06:30", "1", "-00:24").
+
+EDGE CASES CRÍTICOS:
+- DIA DA SEMANA: se o OCR diz "21/08/2024 - Ter" mas 21/08/2024 é uma quarta-feira, copie a data correta e DESCARTE o dia-da-semana errado (deixe \`dia_semana\` null). Use o calendário gregoriano padrão para validar.
+- PREFIXOS DE BATIDA: linhas como "REC: 08:30", "ATRASO: 09:00", "MANUAL: 18:30" — extraia APENAS o horário (08:30, 09:00, 18:30). O prefixo é metadado de origem, não tipo de evento.
+- TRAVESSIA DE MEIA-NOITE: se um par tem S < E (ex: E=22:00 S=02:00), MANTENHA como par E/S na MESMA apuração — o segundo turno encerrou no dia seguinte. NÃO crie apuração no dia seguinte com S sozinho.
+- LINHAS-CONTINUAÇÃO: se uma linha começa SEM data (ex: "| | 16:50 | |") logo após uma linha COM data, agregue os horários à apuração da data anterior — o OCR partiu uma linha de tabela longa em duas.
+- Verifique sempre a soma E/S vs evento "Horas Trabalhadas" do dia. Se divergir mais que 5 minutos sem motivo claro (intervalos pequenos somam ±10min), priorize as batidas literais sobre o totalizador — o totalizador pode estar arredondado.`,
 
   recibo_ferias: `${SYSTEM_PROMPT_BASE}
 
@@ -440,7 +498,8 @@ serve(async (req) => {
     // Hash inclui mode pra cache não confundir extract vs deep.
     const ocrHash = await sha256Hex(`${mode}::${body.ocr_text}`);
 
-    // Cache lookup
+    // Cache lookup primário: por (document_id, ocr_hash, tipo_doc, model).
+    // Hit aqui significa "este documento exato já foi extraído".
     const { data: cacheHit } = await supabaseAdmin
       .from("llm_extractions")
       .select("output_json, prompt_tokens, completion_tokens, model, criado_em")
@@ -454,6 +513,7 @@ serve(async (req) => {
       return jsonResponse({
         output: cacheHit.output_json,
         cached: true,
+        cache_source: "primary",
         model: cacheHit.model,
         usage: {
           prompt_tokens: cacheHit.prompt_tokens,
@@ -462,13 +522,85 @@ serve(async (req) => {
       });
     }
 
+    // Cache lookup SECUNDÁRIO: por (ocr_hash, tipo_doc, model) ignorando
+    // document_id. Dois documentos com OCR idêntico (mesmo PDF reupado, ou
+    // empregados duplicados em cases distintos do mesmo escritório) não
+    // pagam duas vezes pela OpenAI. Privacidade: o filtro respeita
+    // ownership via case do usuário — só consideramos hits em cases do
+    // próprio user, NÃO de outros tenants.
+    //
+    // O lookup busca a extração mais recente de QUALQUER documento do user
+    // com o mesmo ocr_hash + tipo + model. Se encontrar, COPIA para o
+    // document_id atual (cria nova linha no cache, idempotente via UNIQUE).
+    const { data: secondaryHit } = await supabaseAdmin
+      .from("llm_extractions")
+      .select(
+        "output_json, prompt_tokens, completion_tokens, model, case_id, document_id, criado_em",
+      )
+      .eq("ocr_hash", ocrHash)
+      .eq("tipo_doc", body.tipo_doc)
+      .eq("model", MODEL)
+      .neq("document_id", body.document_id)
+      .order("criado_em", { ascending: false })
+      .limit(20);
+
+    if (secondaryHit && secondaryHit.length > 0) {
+      // Filtra hits para apenas cases do user atual (defesa em profundidade
+      // — RLS já protege, mas service_role bypassa, então checamos aqui).
+      const caseIdsHit = [...new Set(secondaryHit.map((h) => h.case_id).filter(Boolean))];
+      const { data: casesDoUser } = await supabaseAdmin
+        .from("cases")
+        .select("id")
+        .in("id", caseIdsHit)
+        .eq("criado_por", user.id);
+      const idsValidos = new Set((casesDoUser ?? []).map((c) => c.id));
+      const hitValido = secondaryHit.find((h) => idsValidos.has(h.case_id));
+      if (hitValido) {
+        // Copia para o document_id atual.
+        await supabaseAdmin
+          .from("llm_extractions")
+          .upsert(
+            {
+              document_id: body.document_id,
+              case_id: doc.case_id,
+              ocr_hash: ocrHash,
+              tipo_doc: body.tipo_doc,
+              model: MODEL,
+              output_json: hitValido.output_json,
+              prompt_tokens: hitValido.prompt_tokens,
+              completion_tokens: hitValido.completion_tokens,
+            },
+            {
+              onConflict: "document_id,ocr_hash,tipo_doc,model",
+              ignoreDuplicates: true,
+            },
+          );
+        console.log(
+          `[extract-via-llm] cache hit secundário: doc ${body.document_id} reaproveitou extração de ${hitValido.document_id} (mesmo OCR hash).`,
+        );
+        return jsonResponse({
+          output: hitValido.output_json,
+          cached: true,
+          cache_source: "secondary",
+          model: hitValido.model,
+          usage: {
+            prompt_tokens: hitValido.prompt_tokens,
+            completion_tokens: hitValido.completion_tokens,
+          },
+        });
+      }
+    }
+
     // Trunca OCR muito grande pra evitar custo descontrolado.
+    // Quando trunca, sinalizamos no payload (`ocr_truncado`) para a UI
+    // alertar o operador — extração IA pode estar incompleta.
     const MAX_OCR_CHARS = 60_000;
-    let ocrTrim =
-      body.ocr_text.length > MAX_OCR_CHARS
-        ? body.ocr_text.slice(0, MAX_OCR_CHARS) +
-          "\n[...OCR truncado para limite de contexto...]"
-        : body.ocr_text;
+    const ocrCharsOriginais = body.ocr_text.length;
+    const ocrTruncado = ocrCharsOriginais > MAX_OCR_CHARS;
+    let ocrTrim = ocrTruncado
+      ? body.ocr_text.slice(0, MAX_OCR_CHARS) +
+        "\n[...OCR truncado para limite de contexto...]"
+      : body.ocr_text;
 
     // Modo "deep": passa o OCR por uma 1ª etapa de limpeza/normalização
     // (corrige multilinha, dia-da-semana, sinaliza buracos de calendário)
@@ -570,6 +702,9 @@ serve(async (req) => {
       cached: false,
       mode,
       ocr_limpo: ocrLimpo,
+      ocr_truncado: ocrTruncado,
+      ocr_chars_originais: ocrCharsOriginais,
+      ocr_chars_processados: ocrTrim.length,
       model: MODEL,
       usage: totalUsage,
     });

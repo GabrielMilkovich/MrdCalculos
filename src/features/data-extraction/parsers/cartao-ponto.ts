@@ -87,13 +87,28 @@ export type ApuracaoDiaria = {
   eventos: EventoDiario[];
   /** Texto adicional não classificado da linha (auditoria). */
   observacao: string | null;
+  /**
+   * Número da linha (1-based) do OCR onde a apuração foi originalmente
+   * capturada. Usado pela UI para navegação bidirecional (clique na linha
+   * da tabela → scroll na linha do OCR de origem).
+   */
+  ocr_line?: number;
 };
 
 export type ParseCartaoPontoResult = {
   apuracoes: ApuracaoDiaria[];
   /** Mapa competência → quantidade de apurações naquele mês. */
   competencias: Map<string, number>;
-  /** Competência com mais dias (informativo). UI/CSV não devem filtrar por isto. */
+  /**
+   * Competência com mais dias — APENAS INFORMATIVO (ex: para mostrar no
+   * subtítulo do dialog "predominantemente 06/2024").
+   *
+   * **NÃO USE PARA FILTRAR**. UI/CSV/cálculo devem operar sobre TODAS as
+   * apurações de TODAS as competências presentes em \`apuracoes\`. O parser
+   * v3 explicitamente devolve dados de TODOS os meses do OCR — filtrar
+   * por predominante reintroduz o bug histórico de "espelho de 6 meses
+   * só exporta o mês com mais dias".
+   */
   competencia_predominante: string;
   data_inicial: string;
   data_final: string;
@@ -115,12 +130,20 @@ export const PARSER_VERSION = "cartao-ponto-v3-2026-05-01";
 
 const RE_DATA_BR = /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/;
 /**
+ * Data com separador ESPAÇO (ex: "01 03 2024"). Comum em OCR onde o `/`
+ * é dropado. Aplicado entre RE_DATA_BR e RE_DATA_BR_FUZZY pra não vazar
+ * em strings tipo "21 horas 2024".
+ */
+const RE_DATA_BR_ESPACO = /\b(\d{1,2})\s+(\d{1,2})\s+(\d{4})\b/;
+/**
  * Regex tolerante a OCR sujo: aceita `O` no lugar de `0`, `S` no lugar
  * de `5`, `I` no lugar de `1`, separador com espaço extra. Aplicado como
- * SEGUNDA tentativa quando RE_DATA_BR falha.
+ * ÚLTIMA tentativa quando as duas anteriores falharem.
  */
 const RE_DATA_BR_FUZZY = /\b([0-9OISZ]{1,2})\s*[\/.\-]\s*([0-9OISZ]{1,2})\s*[\/.\-]\s*([0-9OISZ]{4})\b/i;
-const RE_DIA_SEMANA = /\b(Seg|Ter|Qua|Qui|Sex|S[áa]b|Dom)\b/i;
+// Dia da semana abreviado: aceita ponto opcional ("Seg.", "Sáb.") e
+// variações de caixa ("SEG", "sex"). Captura SEM o ponto para uniformizar.
+const RE_DIA_SEMANA = /\b(Seg|Ter|Qua|Qui|Sex|S[áa]b|Dom)\.?\b/i;
 
 /**
  * Marcadores de RESULTADO/EVENTOS — PARTIR a linha aqui.
@@ -158,16 +181,25 @@ const RE_HORA_OPCIONAL_ASTERISCO = /\b(\d{1,2}):(\d{2})(?::\d{2})?(\*?)/g;
 const RE_TEM_DIGITO = /\d/;
 
 // Eventos específicos a extrair com regex.
+// IMPORTANTE: ordem importa — os mais específicos vêm primeiro para que
+// `intrajornada_sup_2hs` (mais restritivo) ganhe sobre `intrajornada`
+// (mais genérico) quando ambos casariam.
 const EVENT_PATTERNS: Array<{ tipo: TipoEvento; re: RegExp }> = [
   { tipo: "horas_trabalhadas", re: /Horas?\s+Trabalhadas?\s*:?\s*(\d{1,3}:\d{2})/i },
   { tipo: "horas_previstas", re: /Horas?\s+Previstas?\s*:?\s*(\d{1,3}:\d{2})/i },
   { tipo: "banco_horas_debito", re: /Banco\s+de\s+Horas?\s+D[ée]bito\s*:?\s*(-?\d{1,3}:\d{2})/i },
+  { tipo: "banco_horas_credito", re: /Banco\s+de\s+Horas?\s+Cr[ée]dito\s*:?\s*(-?\d{1,3}:\d{2})/i },
   { tipo: "banco_horas_70", re: /Banco\s+de\s+Horas?\s+70\s*%\s*:?\s*(\d{1,3}:\d{2})/i },
-  { tipo: "he_com_70", re: /Horas?\s+Extras?\s+Com\s+70\s*%\s*:?\s*(\d{1,3}:\d{2})/i },
   { tipo: "he_intervalo", re: /HE\s+Com\s+70\s*%\s*-?\s*Intervalo\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "he_com_70", re: /Horas?\s+Extras?\s+Com\s+70\s*%\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "he_feriado_100", re: /Hora\s+Extra\s+Feriado\s+100\s*%\s*:?\s*(\d{1,3}:\d{2})/i },
   { tipo: "he_feriado_0", re: /Hora\s+Extra\s+Feriado\s+0\s*%\s*:?\s*(\d{1,3}:\d{2})/i },
   { tipo: "rsr_trabalhado_0", re: /R\.?S\.?R\.?\s+Trabalhad[ao]?\s+0\s*%\s*:?\s*(\d{1,3}:\d{2})/i },
   { tipo: "intrajornada_sup_2hs", re: /Intrajornada\s+Sup\.?\s+2hs?\s*:?\s*(\d{1,3}:\d{2})/i },
+  // `intrajornada` simples — só casa quando NÃO há "Sup. 2hs" antes do valor
+  // (evita capturar duas vezes o mesmo evento em layouts onde aparecem juntos).
+  { tipo: "intrajornada", re: /Intrajornada(?!\s+Sup\.?\s+2hs?)\s*:?\s*(\d{1,3}:\d{2})/i },
+  { tipo: "interjornada", re: /Interjornada\s*:?\s*(\d{1,3}:\d{2})/i },
   { tipo: "feriado_dias", re: /FERIADO\s+\(dias?\)\s*:?\s*(\d+)/i },
   { tipo: "dsr_semanal_dias", re: /DSR\s+Semanal\s+\(dias?\)\s*:?\s*(\d+)/i },
   { tipo: "ferias", re: /F[ée]rias\s*:?\s*(\d{1,3}:\d{2})/i },
@@ -242,6 +274,21 @@ export function parseCartaoPonto(
 
     let dateMatch = linhaSemPipes.match(RE_DATA_BR);
     let dataCorrigida = false;
+    // Tentativa intermediária: separador ESPAÇO ("01 03 2024"). Só vale
+    // se a tripla 2+2+4 dígitos com espaços REALMENTE parece data
+    // (mês entre 1-12). Senão pula para o próximo fallback.
+    if (!dateMatch) {
+      const espacoMatch = linhaSemPipes.match(RE_DATA_BR_ESPACO);
+      if (espacoMatch) {
+        const [, ddE, mmE, yyyyE] = espacoMatch;
+        const m = parseInt(mmE, 10);
+        const d = parseInt(ddE, 10);
+        const y = parseInt(yyyyE, 10);
+        if (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1900 && y <= 2100) {
+          dateMatch = espacoMatch;
+        }
+      }
+    }
     if (!dateMatch) {
       // Tentativa fuzzy: corrige OCR sujo (O→0, I→1, S→5, Z→2).
       const fuzzyMatch = linhaSemPipes.match(RE_DATA_BR_FUZZY);
@@ -357,21 +404,24 @@ export function parseCartaoPonto(
       marcacoes,
       eventos,
       observacao: null,
+      ocr_line: i + 1, // 1-based — UI usa pra scroll bidirecional
     });
   }
 
   // Dedup por data: tenta MERGEAR (turno manhã + turno tarde no mesmo dia)
-  // antes de cair no fallback "última prevalece". O warning detalha as
-  // datas dedupadas pra auditoria humana.
+  // antes de cair no fallback "última prevalece". Os dois caminhos têm
+  // SIGNIFICADOS DIFERENTES e produzem warnings DISTINTOS:
+  //   - merge: turnos disjuntos foram unidos (auditoria leve, dados ok)
+  //   - última-prevalece: dados conflitantes, parser escolheu um (revisar!)
   const dedup = new Map<string, ApuracaoDiaria>();
-  const datasDedupadas: string[] = [];
+  const datasMergedas: string[] = [];
+  const datasUltimaPrevalece: string[] = [];
   for (const a of apuracoes) {
     const existente = dedup.get(a.data);
     if (!existente) {
       dedup.set(a.data, a);
       continue;
     }
-    datasDedupadas.push(a.data);
     // Heurística de merge: turnos disjuntos no mesmo dia (manhã + tarde
     // separados em 2 linhas pelo OCR) são unidos. Sobreposição temporal
     // dos intervalos cai no fallback "última prevalece" pra evitar
@@ -391,20 +441,36 @@ export function parseCartaoPonto(
           (x.e || x.s).localeCompare(y.e || y.s),
         ),
         eventos: a.eventos.length > 0 ? a.eventos : existente.eventos,
+        // Para fins de navegação bidirecional, preserva a linha-âncora ORIGINAL
+        // (a 1ª aparição da data), não a do turno mesclado depois.
+        ocr_line: existente.ocr_line ?? a.ocr_line,
       };
       dedup.set(a.data, merged);
+      datasMergedas.push(a.data);
     } else {
-      // Fallback: última prevalece (comportamento legado).
+      // Fallback: última prevalece (comportamento legado). Sinaliza
+      // separadamente porque AQUI HÁ PERDA DE DADOS — uma das ocorrências
+      // sumiu. Operador deve revisar manualmente.
       dedup.set(a.data, a);
+      datasUltimaPrevalece.push(a.data);
     }
   }
-  if (datasDedupadas.length > 0) {
-    const lista = datasDedupadas.slice(0, 10).join(", ");
-    const sufixo = datasDedupadas.length > 10
-      ? ` ... e mais ${datasDedupadas.length - 10}`
-      : "";
+  if (datasMergedas.length > 0) {
+    const lista = datasMergedas.slice(0, 10).join(", ");
+    const sufixo =
+      datasMergedas.length > 10 ? ` ... e mais ${datasMergedas.length - 10}` : "";
     warnings.push(
-      `${datasDedupadas.length} apuração(ões) com data duplicada — datas: ${lista}${sufixo}. Verifique se houve retificação no espelho.`,
+      `${datasMergedas.length} apuração(ões) com 2 turnos disjuntos no mesmo dia — turnos UNIDOS automaticamente: ${lista}${sufixo}.`,
+    );
+  }
+  if (datasUltimaPrevalece.length > 0) {
+    const lista = datasUltimaPrevalece.slice(0, 10).join(", ");
+    const sufixo =
+      datasUltimaPrevalece.length > 10
+        ? ` ... e mais ${datasUltimaPrevalece.length - 10}`
+        : "";
+    warnings.push(
+      `${datasUltimaPrevalece.length} apuração(ões) com data duplicada e turnos sobrepostos/conflitantes — última leitura PREVALECEU (perda de dado possível): ${lista}${sufixo}. Verifique se houve retificação no espelho.`,
     );
   }
   const final = [...dedup.values()].sort((a, b) => a.data.localeCompare(b.data));
@@ -468,16 +534,23 @@ function extrairTagsBatidas(texto: string): {
 /**
  * Mescla linhas-continuação ao final da última linha-âncora (com data).
  *
- * Detecção de continuação (regra conservadora):
+ * Detecção de continuação (duas heurísticas — pipe ou indentada):
  *   1. Linha NÃO contém data dd/MM/yyyy.
  *   2. Linha contém ao menos uma hora HH:MM.
- *   3. Linha começa com `|` (formato tabela markdown) — sinal claro de
- *      que o OCR está renderizando uma linha de tabela quebrada.
+ *   3.a Linha começa com `|` (tabela markdown) — sinal claro de quebra
+ *       de célula longa em duas linhas.
+ *   3.b OU linha começa com espaço/tab (indentada) E só contém horários
+ *       e/ou tags de batida — alguns OCRs descartam o pipe na quebra
+ *       (Casas Bahia v2 faz isso em ~5% dos dias).
+ *   4. Não pode ser linha de metadado (cabeçalho/rodapé) nem timestamp
+ *      de aprovação eletrônica.
  *
- * Quando os 3 critérios casam, a linha é concatenada à última linha-âncora
- * encontrada (que tinha data). Outras linhas (ex: header, rodapé,
- * "Estou ciente...") passam intactas para o output.
+ * Quando casa, concatena à última âncora. Sem âncora prévia, deixa
+ * intacta (vai virar `unparsed_lines` no parser principal).
  */
+const RE_SO_HORARIOS_E_RUIDO =
+  /^[\s\d:|*\-–.,()/\\]*$|^[\s\d:|*\-–.,()/\\]*(?:Inserid[oa]|Desconsiderad[oa])[\s\d:|*\-–.,()/\\a-z]*$/i;
+
 function mesclarContinuacoes(lines: string[]): string[] {
   const out: string[] = [];
   let ultimaAncoraIdx = -1;
@@ -486,20 +559,22 @@ function mesclarContinuacoes(lines: string[]): string[] {
     const temData = RE_DATA_BR.test(limpa);
     const temHora = /\b\d{1,2}:\d{2}\b/.test(limpa);
     const comecaComPipe = /^\s*\|/.test(linha);
+    const comecaIndentada = /^[ \t]+\S/.test(linha);
+    const soHorariosERuido = RE_SO_HORARIOS_E_RUIDO.test(limpa);
 
     if (temData) {
       out.push(linha);
       ultimaAncoraIdx = out.length - 1;
       continue;
     }
-    if (
+    const podeSerContinuacao =
       !temData &&
       temHora &&
-      comecaComPipe &&
       ultimaAncoraIdx >= 0 &&
       !RE_METADADO_LINHA.test(limpa) &&
-      !RE_TIMESTAMP_APROVACAO.test(limpa)
-    ) {
+      !RE_TIMESTAMP_APROVACAO.test(limpa) &&
+      (comecaComPipe || (comecaIndentada && soHorariosERuido));
+    if (podeSerContinuacao) {
       out[ultimaAncoraIdx] = `${out[ultimaAncoraIdx]} ${linha}`;
       continue;
     }
