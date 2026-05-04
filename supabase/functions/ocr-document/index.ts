@@ -282,9 +282,56 @@ serve(async (req) => {
         result = await ocrBytes(new Uint8Array(buffer), document.file_name ?? "documento.pdf", mistralOpts);
       }
 
-      const markdown = result.pages
-        .map((p, i) => `--- PAGE ${i + 1} ---\n\n${p.markdown}`)
-        .join("\n\n");
+      // Validação de continuidade de páginas: o Mistral retorna `index` em cada
+      // page (0-based ou 1-based dependendo do tier). Detectamos gaps na sequência
+      // — uma página pulada normalmente significa falha no OCR daquela página
+      // específica (output vazio que o servidor descartou). Sem isso, o markdown
+      // saía com numeração sequencial 1..N sem revelar o buraco.
+      const indices = result.pages.map((p) => p.index).sort((a, b) => a - b);
+      const paginasFaltando: number[] = [];
+      if (indices.length > 0) {
+        const minIdx = indices[0];
+        const maxIdx = indices[indices.length - 1];
+        const presentes = new Set(indices);
+        for (let i = minIdx; i <= maxIdx; i++) {
+          if (!presentes.has(i)) paginasFaltando.push(i);
+        }
+      }
+
+      // Página vazia (markdown < 5 chars depois de trim) também é sinal de
+      // falha silenciosa do OCR — seguimos mas registramos.
+      const paginasVaziasIdx = result.pages
+        .filter((p) => (p.markdown ?? "").trim().length < 5)
+        .map((p) => p.index);
+
+      const ocrWarnings: string[] = [];
+      if (paginasFaltando.length > 0) {
+        ocrWarnings.push(
+          `OCR retornou ${result.pages.length} páginas mas a sequência tem ${paginasFaltando.length} buraco(s) [índices ${paginasFaltando.slice(0, 10).join(", ")}${paginasFaltando.length > 10 ? "..." : ""}]. Páginas podem ter falhado no servidor de OCR.`,
+        );
+      }
+      if (paginasVaziasIdx.length > 0) {
+        ocrWarnings.push(
+          `${paginasVaziasIdx.length} página(s) com markdown vazio (índices ${paginasVaziasIdx.slice(0, 5).join(", ")}). Pode ser página em branco do PDF original ou falha de OCR.`,
+        );
+      }
+
+      // Markdown usa o índice REAL retornado pelo Mistral, não o índice
+      // sequencial. Inclui placeholder visível para páginas faltando.
+      const markdownChunks: string[] = [];
+      if (indices.length > 0) {
+        for (let i = indices[0]; i <= indices[indices.length - 1]; i++) {
+          const page = result.pages.find((p) => p.index === i);
+          if (page) {
+            markdownChunks.push(`--- PAGE ${i + 1} ---\n\n${page.markdown}`);
+          } else {
+            markdownChunks.push(
+              `--- PAGE ${i + 1} ---\n\n[PÁGINA AUSENTE NO RETORNO DO OCR]`,
+            );
+          }
+        }
+      }
+      const markdown = markdownChunks.join("\n\n");
 
       const docType = detectDocType(markdown);
       const currentTipo = (document as { tipo?: string }).tipo;
@@ -320,6 +367,12 @@ serve(async (req) => {
             ocr_doc_type: docType,
             text_length: markdown.length,
             extracted_text_preview: markdown.slice(0, 500),
+            // Telemetria de retry/qualidade do OCR (IMP-4 + IMP-7).
+            ocr_retries_used: result.retries_used ?? 0,
+            ocr_pages_retornadas: result.pages.length,
+            ocr_paginas_faltando: paginasFaltando,
+            ocr_paginas_vazias: paginasVaziasIdx,
+            ocr_warnings_qualidade: ocrWarnings,
             mistral_model: result.model,
             mistral_usage: result.usage,
           },

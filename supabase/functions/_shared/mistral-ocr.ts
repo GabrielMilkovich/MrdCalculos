@@ -52,6 +52,10 @@ export interface MistralOcrResult {
   model: string;
   /** Tokens de input processados (se a API retornar). */
   usage?: { pages_processed?: number };
+  /** Telemetria de execução: tentativas até sucesso (0 = primeira tentativa). */
+  retries_used?: number;
+  /** Tempo total em ms desde a 1ª tentativa até retorno (inclui backoffs). */
+  duration_ms?: number;
 }
 
 /** Erro estruturado da API Mistral. */
@@ -234,6 +238,7 @@ export async function runOcr(
   };
 
   let lastErr: Error | null = null;
+  const t0 = Date.now();
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const resp = await fetchWithTimeout(
@@ -258,10 +263,20 @@ export async function runOcr(
           dimensions: p.dimensions as MistralOcrPage["dimensions"],
           images: p.images as MistralOcrPage["images"],
         }));
+        if (attempt > 0) {
+          // Sinaliza pra observabilidade que o retry foi necessário —
+          // taxa de retry > 5% indica problema sistêmico (Mistral degradado
+          // ou quota perto do limite).
+          console.log(
+            `[mistral-ocr] sucesso após ${attempt} retry(s) em ${Date.now() - t0}ms`,
+          );
+        }
         return {
           pages,
           model: (data.model as string) || model,
           usage: data.usage as MistralOcrResult["usage"],
+          retries_used: attempt,
+          duration_ms: Date.now() - t0,
         };
       }
 
@@ -273,13 +288,22 @@ export async function runOcr(
         retriable,
       );
       if (!retriable) throw lastErr;
+      console.warn(
+        `[mistral-ocr] tentativa ${attempt + 1}/${maxRetries} falhou (${resp.status}) — retry em ${backoffDelay(retryBaseMs, attempt)}ms`,
+      );
       await delay(backoffDelay(retryBaseMs, attempt));
     } catch (err) {
       lastErr = err instanceof Error ? err : new Error(String(err));
+      console.warn(
+        `[mistral-ocr] tentativa ${attempt + 1}/${maxRetries} falhou (network/timeout) — retry em ${backoffDelay(retryBaseMs, attempt)}ms`,
+      );
       await delay(backoffDelay(retryBaseMs, attempt));
     }
   }
 
+  console.error(
+    `[mistral-ocr] esgotou ${maxRetries} retries em ${Date.now() - t0}ms — desistindo`,
+  );
   throw lastErr ?? new MistralOcrError("OCR falhou sem erro reportado");
 }
 
