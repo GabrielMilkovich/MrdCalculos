@@ -229,6 +229,24 @@ export function CartaoPontoReviewDialog({
     [sorted],
   );
 
+  // Apurações cuja DATA está fora da janela do espelho — provavelmente são
+  // timestamps de aprovação eletrônica vazando como apuração. O score
+  // detecta e penaliza, mas o usuário precisava deletar uma a uma. Bulk
+  // delete em 1 clique resolve.
+  const rowsForaDaJanela = useMemo(() => {
+    if (!confidence.datasForaJanela || confidence.datasForaJanela.length === 0) {
+      return [] as Row[];
+    }
+    const datasFora = new Set(confidence.datasForaJanela);
+    return sorted.filter((r) => datasFora.has(r.data));
+  }, [sorted, confidence.datasForaJanela]);
+
+  const removeRowsForaDaJanela = () => {
+    if (rowsForaDaJanela.length === 0) return;
+    const keysParaRemover = new Set(rowsForaDaJanela.map((r) => r._key));
+    setRows((prev) => prev.filter((r) => !keysParaRemover.has(r._key)));
+  };
+
   const warnings = useMemo(() => {
     const ws = [...effectiveParsed.warnings];
     if (linhasComCorte.length > 0) {
@@ -342,14 +360,28 @@ export function CartaoPontoReviewDialog({
             </span>
           )}
         </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-xs gap-1"
-          onClick={addRow}
-        >
-          <Plus className="h-3 w-3" /> Dia
-        </Button>
+        <div className="flex items-center gap-1">
+          {rowsForaDaJanela.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1 border-rose-300 text-rose-900 dark:border-rose-700 dark:text-rose-200 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+              onClick={removeRowsForaDaJanela}
+              title={`Remove em lote ${rowsForaDaJanela.length} apuração(ões) com data fora do período do espelho — geralmente são timestamps de aprovação eletrônica vazando como jornada.`}
+            >
+              <Trash2 className="h-3 w-3" />
+              Remover {rowsForaDaJanela.length} fora-janela
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={addRow}
+          >
+            <Plus className="h-3 w-3" /> Dia
+          </Button>
+        </div>
       </div>
       {sorted.length === 0 ? (
         <div className="p-6 text-xs text-muted-foreground text-center">
