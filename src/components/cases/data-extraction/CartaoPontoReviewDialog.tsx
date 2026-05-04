@@ -410,16 +410,16 @@ export function CartaoPontoReviewDialog({
         <Table>
           <TableHeader className="sticky top-[42px] bg-background z-10">
             <TableRow>
-              <TableHead className="w-[120px] text-[10px]">Data</TableHead>
-              <TableHead className="w-[110px] text-[10px]">Ocorrência</TableHead>
+              <TableHead className="w-[140px] text-[11px]">Data</TableHead>
+              <TableHead className="w-[130px] text-[11px]">Ocorrência</TableHead>
               <TableHead
-                className="text-[10px] text-center"
+                className="text-[11px] text-center"
                 colSpan={MAX_PARES * 2}
               >
                 {MAX_PARES} pares E/S (E1 S1 … E{MAX_PARES} S{MAX_PARES})
               </TableHead>
-              <TableHead className="w-[140px] text-[10px]">Eventos</TableHead>
-              <TableHead className="w-[40px] text-[10px]"></TableHead>
+              <TableHead className="w-[160px] text-[11px]">Eventos</TableHead>
+              <TableHead className="w-[44px] text-[11px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -440,10 +440,10 @@ export function CartaoPontoReviewDialog({
                     ? "Soma de batidas não bate com Horas Trabalhadas do OCR — revise"
                     : undefined
                 }
-                className={`text-xs transition-shadow ${cls}`}
+                className={`text-[13px] transition-shadow ${cls}`}
               >
                 <TableCell
-                  className="p-1"
+                  className="p-1.5"
                   onClick={() => scrollOcrToLine(r.ocr_line)}
                   title={
                     r.ocr_line
@@ -455,10 +455,10 @@ export function CartaoPontoReviewDialog({
                     type="date"
                     value={r.data}
                     onChange={(e) => updateRow(r._key, { data: e.target.value })}
-                    className={`h-7 text-[11px] font-mono ${r.ocr_line ? "cursor-pointer" : ""}`}
+                    className={`h-9 text-[13px] font-mono ${r.ocr_line ? "cursor-pointer" : ""}`}
                   />
                 </TableCell>
-                <TableCell className="p-1">
+                <TableCell className="p-1.5">
                   <Select
                     value={r.ocorrencia}
                     onValueChange={(v) =>
@@ -467,12 +467,12 @@ export function CartaoPontoReviewDialog({
                       })
                     }
                   >
-                    <SelectTrigger className="h-7 text-[11px]">
+                    <SelectTrigger className="h-9 text-[13px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {OCORRENCIAS.map((o) => (
-                        <SelectItem key={o} value={o} className="text-xs">
+                        <SelectItem key={o} value={o} className="text-[13px]">
                           {o}
                         </SelectItem>
                       ))}
@@ -480,8 +480,8 @@ export function CartaoPontoReviewDialog({
                   </Select>
                 </TableCell>
                 {Array.from({ length: MAX_PARES }).map((_, idx) => (
-                  <TableCell key={`pair-${idx}`} className="p-0.5" colSpan={2}>
-                    <div className="flex gap-0.5">
+                  <TableCell key={`pair-${idx}`} className="p-1" colSpan={2}>
+                    <div className="flex gap-1">
                       <Input
                         placeholder={idx === 0 ? "08:00" : ""}
                         value={r.marcacoes[idx]?.e ?? ""}
@@ -506,7 +506,7 @@ export function CartaoPontoReviewDialog({
                             ? "Batida inserida manualmente (asterisco no OCR)"
                             : ""
                         }
-                        className={`h-7 text-[11px] font-mono w-[48px] px-1 ${
+                        className={`h-9 text-[13px] font-mono w-[60px] px-1.5 ${
                           r.marcacoes[idx]?.e_inserida
                             ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
                             : ""
@@ -537,7 +537,7 @@ export function CartaoPontoReviewDialog({
                             ? "Batida inserida manualmente (asterisco no OCR)"
                             : ""
                         }
-                        className={`h-7 text-[11px] font-mono w-[48px] px-1 ${
+                        className={`h-9 text-[13px] font-mono w-[60px] px-1.5 ${
                           r.marcacoes[idx]?.s_inserida
                             ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
                             : ""
