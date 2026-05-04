@@ -30,6 +30,12 @@ interface Props {
   onModoChange: (modo: "regex" | "ia" | "reconciliado") => void;
   /** Quando provido, exibe botão "Análise Profunda" pra reprocessar IA com cleanup. */
   onRunDeep?: () => void;
+  /** Quando true, OCR enviado à IA foi truncado (>60k chars) — mostra alerta. */
+  ocrTruncado?: boolean;
+  /** Tamanho original do OCR (chars) quando houve truncamento. */
+  ocrCharsOriginais?: number | null;
+  /** Tamanho efetivamente processado pela IA quando houve truncamento. */
+  ocrCharsProcessados?: number | null;
 }
 
 export function AICopilotBanner({
@@ -42,7 +48,14 @@ export function AICopilotBanner({
   modo,
   onModoChange,
   onRunDeep,
+  ocrTruncado = false,
+  ocrCharsOriginais = null,
+  ocrCharsProcessados = null,
 }: Props) {
+  const truncadoPct =
+    ocrTruncado && ocrCharsOriginais && ocrCharsProcessados
+      ? Math.round((ocrCharsProcessados / ocrCharsOriginais) * 100)
+      : null;
   return (
     <TooltipProvider>
       <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -66,6 +79,27 @@ export function AICopilotBanner({
               </Badge>
             </TooltipTrigger>
             <TooltipContent>{erro}</TooltipContent>
+          </Tooltip>
+        )}
+
+        {ocrTruncado && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge
+                variant="outline"
+                className="gap-1 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200 border-amber-400"
+              >
+                <AlertTriangle className="h-3 w-3" />
+                <span>
+                  IA viu {truncadoPct ?? "<100"}% do OCR
+                </span>
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              O OCR ultrapassou o limite de contexto da IA ({ocrCharsProcessados?.toLocaleString("pt-BR")}/{ocrCharsOriginais?.toLocaleString("pt-BR")} chars analisados).
+              A extração da IA pode estar incompleta — auto-aplicação foi
+              desabilitada. Confira manualmente a parte final do documento.
+            </TooltipContent>
           </Tooltip>
         )}
 

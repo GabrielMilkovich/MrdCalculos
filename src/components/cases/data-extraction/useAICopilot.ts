@@ -74,6 +74,16 @@ interface AICopilotState<T extends LLMTipoDoc> {
   erro: string | null;
   /** Overrides manuais por data (apenas cartão-ponto, modo reconciliado). */
   overrides: Map<string, "regex" | "ia">;
+  /**
+   * Sinaliza que o OCR enviado à IA foi truncado pelo edge function (>60k
+   * chars). A extração IA pode estar incompleta — UI deve alertar o operador
+   * e não auto-aplicar a IA sobre o regex sem confirmação.
+   */
+  ocrTruncado: boolean;
+  /** Tamanho do OCR original quando houve truncamento (chars). */
+  ocrCharsOriginais: number | null;
+  /** Tamanho processado pela IA quando houve truncamento. */
+  ocrCharsProcessados: number | null;
 }
 
 interface UseAICopilotArgs<T extends LLMTipoDoc> {
@@ -147,17 +157,24 @@ export function useAICopilot<T extends LLMTipoDoc>(
   const [erro, setErro] = useState<string | null>(null);
   const [modo, setModo] = useState<"regex" | "ia" | "reconciliado">("regex");
   const [overrides, setOverrides] = useState<Map<string, "regex" | "ia">>(new Map());
+  const [ocrTruncado, setOcrTruncado] = useState(false);
+  const [ocrCharsOriginais, setOcrCharsOriginais] = useState<number | null>(null);
+  const [ocrCharsProcessados, setOcrCharsProcessados] = useState<number | null>(null);
 
   const runDeep = async () => {
     if (!documentId || !ocrText) return;
     setLoadingDeep(true);
     setErro(null);
     try {
-      const { output, usage } = await extractViaLLM(tipo, {
+      const resp = await extractViaLLM(tipo, {
         document_id: documentId,
         ocr_text: ocrText,
         mode: "deep",
       });
+      const { output, usage } = resp;
+      setOcrTruncado(resp.ocrTruncado);
+      setOcrCharsOriginais(resp.ocrCharsOriginais);
+      setOcrCharsProcessados(resp.ocrCharsProcessados);
       const result = adaptarLLM(tipo, output);
       setIaResult(result);
       const tokens =
@@ -216,11 +233,21 @@ export function useAICopilot<T extends LLMTipoDoc>(
     setLoading(true);
     setErro(null);
     extractViaLLM(tipo, { document_id: documentId, ocr_text: ocrText })
-      .then(({ output, cached }) => {
+      .then((resp) => {
         if (cancelado) return;
+        const { output, cached } = resp;
+        setOcrTruncado(resp.ocrTruncado);
+        setOcrCharsOriginais(resp.ocrCharsOriginais);
+        setOcrCharsProcessados(resp.ocrCharsProcessados);
         const result = adaptarLLM(tipo, output);
         setIaResult(result);
         if (!cached) toast.success("IA terminou — co-piloto ativo.", { duration: 2000 });
+        if (resp.ocrTruncado) {
+          toast.warning(
+            `OCR truncado pela IA: ${resp.ocrCharsProcessados}/${resp.ocrCharsOriginais} chars analisados. Extração pode estar incompleta.`,
+            { duration: 6000 },
+          );
+        }
       })
       .catch((e: unknown) => {
         if (cancelado) return;
@@ -274,7 +301,12 @@ export function useAICopilot<T extends LLMTipoDoc>(
       }
       return;
     }
-    if (iaScore.score >= regexScore.score + margemAutoAplicar) {
+    // Quando OCR foi truncado, NUNCA auto-aplica IA — extração pode estar
+    // incompleta e operador precisa decidir conscientemente.
+    if (
+      iaScore.score >= regexScore.score + margemAutoAplicar &&
+      !ocrTruncado
+    ) {
       setModo("ia");
       toast.success(
         `IA aplicada automaticamente (confiança IA ${iaScore.score} vs regex ${regexScore.score}).`,
@@ -291,6 +323,7 @@ export function useAICopilot<T extends LLMTipoDoc>(
     autoDeepDisparado,
     documentId,
     ocrText,
+    ocrTruncado,
   ]);
 
   const effective = useMemo<ResultByTipo[T]>(() => {
@@ -348,5 +381,8 @@ export function useAICopilot<T extends LLMTipoDoc>(
     setOverride,
     clearOverride,
     runDeep,
+    ocrTruncado,
+    ocrCharsOriginais,
+    ocrCharsProcessados,
   };
 }

@@ -299,6 +299,9 @@ export function CartaoPontoReviewDialog({
               modo={copilot.modo}
               onModoChange={copilot.setModo}
               onRunDeep={documentId ? () => void copilot.runDeep() : undefined}
+              ocrTruncado={copilot.ocrTruncado}
+              ocrCharsOriginais={copilot.ocrCharsOriginais}
+              ocrCharsProcessados={copilot.ocrCharsProcessados}
             />
           </div>
           {copilot.modo === "reconciliado" && copilot.reconciliacao && (

@@ -32,6 +32,12 @@ export interface LLMExtractionResponse {
   model: string;
   mode?: "extract" | "deep";
   ocr_limpo?: string | null;
+  /** True quando o edge truncou o OCR antes de enviar à OpenAI (>60k chars). */
+  ocr_truncado?: boolean;
+  /** Tamanho original do OCR enviado pelo client (pré-truncamento). */
+  ocr_chars_originais?: number;
+  /** Tamanho efetivamente processado pela OpenAI. */
+  ocr_chars_processados?: number;
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -57,6 +63,9 @@ export async function extractViaLLM<T extends LLMTipoDoc>(
   model: string;
   mode: "extract" | "deep";
   ocr_limpo: string | null;
+  ocrTruncado: boolean;
+  ocrCharsOriginais: number | null;
+  ocrCharsProcessados: number | null;
   usage?: LLMExtractionResponse["usage"];
 }> {
   const { data, error } = await supabase.functions.invoke<LLMExtractionResponse>(
@@ -111,6 +120,9 @@ export async function extractViaLLM<T extends LLMTipoDoc>(
     model: data.model,
     mode: data.mode ?? "extract",
     ocr_limpo: data.ocr_limpo ?? null,
+    ocrTruncado: data.ocr_truncado ?? false,
+    ocrCharsOriginais: data.ocr_chars_originais ?? null,
+    ocrCharsProcessados: data.ocr_chars_processados ?? null,
     usage: data.usage,
   };
 }

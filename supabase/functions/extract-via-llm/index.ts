@@ -2,9 +2,9 @@
 // extract-via-llm
 // =====================================================
 // Re-extrai um documento (cartão-ponto, férias, faltas, holerite) via LLM
-// quando o parser determinístico tem confiança baixa. Usa OpenAI
-// gpt-4o-mini com Structured Outputs (response_format json_schema) para
-// garantir que o JSON casa com o schema esperado.
+// quando o parser determinístico tem confiança baixa. Usa OpenAI com
+// Structured Outputs (response_format json_schema) para garantir que o JSON
+// casa com o schema esperado.
 //
 // Fluxo:
 //   1. Auth: JWT do header → user
@@ -17,13 +17,20 @@
 //
 // Anti-alucinação: o front valida o output novamente com Zod e aplica
 // invariantes (datas ⊆ OCR, etc.) antes de aceitar.
+//
+// Modelo: configurável via env var OPENAI_MODEL. Default `gpt-4o` por
+// qualidade superior em extração estruturada de documentos trabalhistas
+// brasileiros (gpt-4o-mini erra ~3x mais em layouts não-padrão segundo
+// auditoria interna). Mude para `gpt-4o-mini` se custo importar mais que
+// qualidade. ATENÇÃO: trocar de modelo invalida 100% do cache acumulado
+// — re-extrações dispararão novas chamadas pagas até o cache reaquecer.
 // =====================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
-const MODEL = "gpt-4o";
+const MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o";
 
 interface RequestBody {
   document_id: string;
@@ -514,12 +521,15 @@ serve(async (req) => {
     }
 
     // Trunca OCR muito grande pra evitar custo descontrolado.
+    // Quando trunca, sinalizamos no payload (`ocr_truncado`) para a UI
+    // alertar o operador — extração IA pode estar incompleta.
     const MAX_OCR_CHARS = 60_000;
-    let ocrTrim =
-      body.ocr_text.length > MAX_OCR_CHARS
-        ? body.ocr_text.slice(0, MAX_OCR_CHARS) +
-          "\n[...OCR truncado para limite de contexto...]"
-        : body.ocr_text;
+    const ocrCharsOriginais = body.ocr_text.length;
+    const ocrTruncado = ocrCharsOriginais > MAX_OCR_CHARS;
+    let ocrTrim = ocrTruncado
+      ? body.ocr_text.slice(0, MAX_OCR_CHARS) +
+        "\n[...OCR truncado para limite de contexto...]"
+      : body.ocr_text;
 
     // Modo "deep": passa o OCR por uma 1ª etapa de limpeza/normalização
     // (corrige multilinha, dia-da-semana, sinaliza buracos de calendário)
@@ -621,6 +631,9 @@ serve(async (req) => {
       cached: false,
       mode,
       ocr_limpo: ocrLimpo,
+      ocr_truncado: ocrTruncado,
+      ocr_chars_originais: ocrCharsOriginais,
+      ocr_chars_processados: ocrTrim.length,
       model: MODEL,
       usage: totalUsage,
     });
