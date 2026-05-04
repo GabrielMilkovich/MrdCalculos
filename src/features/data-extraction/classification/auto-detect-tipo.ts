@@ -5,9 +5,7 @@
  * pontos no tipo correspondente. O tipo com mais pontos vence, mas só
  * "alta confiança" se score >= 12 e diferença pra 2º lugar >= 4.
  *
- * Tipos detectáveis: holerite, recibo_ferias, registro_faltas.
- * Cartão de ponto é detectado mas marcado como `nao_extrair` com motivo
- * claro (out-of-scope desta versão).
+ * Tipos detectáveis: holerite, recibo_ferias, registro_faltas, cartao_ponto.
  *
  * Auto-disparo de extração só ocorre quando confiança = 'alta' (§6 do
  * spec). 'media' espera clique humano, 'baixa' fica em pending.

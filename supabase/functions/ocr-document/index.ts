@@ -69,7 +69,12 @@ async function downloadBytes(url: string): Promise<ArrayBuffer> {
 // =====================================================
 
 type EdgeAutoDetectResult = {
-  tipo: "nao_extrair" | "holerite" | "recibo_ferias" | "registro_faltas";
+  tipo:
+    | "nao_extrair"
+    | "holerite"
+    | "recibo_ferias"
+    | "registro_faltas"
+    | "cartao_ponto";
   confianca: "alta" | "media" | "baixa";
   motivos: string[];
 };
@@ -99,9 +104,14 @@ function autoDetectTipoExtracaoEdge(ocrText: string): EdgeAutoDetectResult {
     { pattern: /\bcid[\s:-]+[a-z]\d{2}/i, pontos: 6, motivo: "código CID" },
     { pattern: /\baus[êe]ncia\s+(injustificada|justificada)\b/i, pontos: 6, motivo: "ausência justificada/injustificada" },
   ];
+  // Sinais de cartão-ponto sincronizados com o client
+  // (src/features/data-extraction/classification/auto-detect-tipo.ts).
   const SINAIS_CARTAO_PONTO: Array<{ pattern: RegExp; pontos: number; motivo: string }> = [
     { pattern: /\bcart[ãa]o\s+de\s+ponto\b|\bespelho\s+de\s+ponto\b/i, pontos: 10, motivo: "cabeçalho cartão/espelho de ponto" },
+    { pattern: /\bjornada\s+de\s+trabalho\b/i, pontos: 8, motivo: "jornada de trabalho" },
+    { pattern: /\bbatidas?\b[\s\S]{0,50}?\b(entrada|sa[íi]da)\b/i, pontos: 6, motivo: "colunas batidas/entrada/saída" },
     { pattern: /\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b[\s\S]{0,40}?\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b/i, pontos: 4, motivo: "duplas entrada/saída" },
+    { pattern: /\b\d{2}\/\d{2}\/\d{4}\b[\s\S]{0,100}?\b\d{1,2}:\d{2}\b[\s\S]{0,30}?\b\d{1,2}:\d{2}\b/i, pontos: 4, motivo: "data + múltiplos horários" },
   ];
 
   const score = (sinais: Array<{ pattern: RegExp; pontos: number; motivo: string }>) => {
@@ -127,13 +137,6 @@ function autoDetectTipoExtracaoEdge(ocrText: string): EdgeAutoDetectResult {
   const [tipoMelhor, dadoMelhor] = ordered[0];
   const segundo = ordered[1]?.[1].pontos ?? 0;
 
-  if (tipoMelhor === "cartao_ponto" && dadoMelhor.pontos >= 8) {
-    return {
-      tipo: "nao_extrair",
-      confianca: "alta",
-      motivos: ["Cartão de ponto detectado — extração de cartão de ponto não é suportada nesta versão.", ...dadoMelhor.motivos],
-    };
-  }
   if (dadoMelhor.pontos < 6) {
     return { tipo: "nao_extrair", confianca: "baixa", motivos: ["Sinais insuficientes para classificação automática"] };
   }
