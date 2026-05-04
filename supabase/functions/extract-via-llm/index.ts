@@ -498,7 +498,8 @@ serve(async (req) => {
     // Hash inclui mode pra cache não confundir extract vs deep.
     const ocrHash = await sha256Hex(`${mode}::${body.ocr_text}`);
 
-    // Cache lookup
+    // Cache lookup primário: por (document_id, ocr_hash, tipo_doc, model).
+    // Hit aqui significa "este documento exato já foi extraído".
     const { data: cacheHit } = await supabaseAdmin
       .from("llm_extractions")
       .select("output_json, prompt_tokens, completion_tokens, model, criado_em")
@@ -512,12 +513,82 @@ serve(async (req) => {
       return jsonResponse({
         output: cacheHit.output_json,
         cached: true,
+        cache_source: "primary",
         model: cacheHit.model,
         usage: {
           prompt_tokens: cacheHit.prompt_tokens,
           completion_tokens: cacheHit.completion_tokens,
         },
       });
+    }
+
+    // Cache lookup SECUNDÁRIO: por (ocr_hash, tipo_doc, model) ignorando
+    // document_id. Dois documentos com OCR idêntico (mesmo PDF reupado, ou
+    // empregados duplicados em cases distintos do mesmo escritório) não
+    // pagam duas vezes pela OpenAI. Privacidade: o filtro respeita
+    // ownership via case do usuário — só consideramos hits em cases do
+    // próprio user, NÃO de outros tenants.
+    //
+    // O lookup busca a extração mais recente de QUALQUER documento do user
+    // com o mesmo ocr_hash + tipo + model. Se encontrar, COPIA para o
+    // document_id atual (cria nova linha no cache, idempotente via UNIQUE).
+    const { data: secondaryHit } = await supabaseAdmin
+      .from("llm_extractions")
+      .select(
+        "output_json, prompt_tokens, completion_tokens, model, case_id, document_id, criado_em",
+      )
+      .eq("ocr_hash", ocrHash)
+      .eq("tipo_doc", body.tipo_doc)
+      .eq("model", MODEL)
+      .neq("document_id", body.document_id)
+      .order("criado_em", { ascending: false })
+      .limit(20);
+
+    if (secondaryHit && secondaryHit.length > 0) {
+      // Filtra hits para apenas cases do user atual (defesa em profundidade
+      // — RLS já protege, mas service_role bypassa, então checamos aqui).
+      const caseIdsHit = [...new Set(secondaryHit.map((h) => h.case_id).filter(Boolean))];
+      const { data: casesDoUser } = await supabaseAdmin
+        .from("cases")
+        .select("id")
+        .in("id", caseIdsHit)
+        .eq("criado_por", user.id);
+      const idsValidos = new Set((casesDoUser ?? []).map((c) => c.id));
+      const hitValido = secondaryHit.find((h) => idsValidos.has(h.case_id));
+      if (hitValido) {
+        // Copia para o document_id atual.
+        await supabaseAdmin
+          .from("llm_extractions")
+          .upsert(
+            {
+              document_id: body.document_id,
+              case_id: doc.case_id,
+              ocr_hash: ocrHash,
+              tipo_doc: body.tipo_doc,
+              model: MODEL,
+              output_json: hitValido.output_json,
+              prompt_tokens: hitValido.prompt_tokens,
+              completion_tokens: hitValido.completion_tokens,
+            },
+            {
+              onConflict: "document_id,ocr_hash,tipo_doc,model",
+              ignoreDuplicates: true,
+            },
+          );
+        console.log(
+          `[extract-via-llm] cache hit secundário: doc ${body.document_id} reaproveitou extração de ${hitValido.document_id} (mesmo OCR hash).`,
+        );
+        return jsonResponse({
+          output: hitValido.output_json,
+          cached: true,
+          cache_source: "secondary",
+          model: hitValido.model,
+          usage: {
+            prompt_tokens: hitValido.prompt_tokens,
+            completion_tokens: hitValido.completion_tokens,
+          },
+        });
+      }
     }
 
     // Trunca OCR muito grande pra evitar custo descontrolado.
