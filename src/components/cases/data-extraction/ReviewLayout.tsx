@@ -46,6 +46,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -124,14 +134,26 @@ export function ReviewLayout({
 }: Props) {
   const lsSuffix = layoutKey ? `:${layoutKey}` : "";
 
-  // Checklist de 3 itens dirigidos — força atenção em pontos específicos
-  // antes de liberar o download. UX gate: única coisa entre revisão
-  // visual e o CSV juridicamente vinculante.
+  // Checklist de 3 itens dirigidos — único gate humano entre revisão visual
+  // e o CSV juridicamente vinculante. Apresentado em AlertDialog que abre
+  // SÓ quando o advogado clica em "Confirmar e baixar CSV", para liberar
+  // espaço vertical na tela principal de revisão.
   const [conferiuDatas, setConferiuDatas] = useState(false);
   const [conferiuValores, setConferiuValores] = useState(false);
   const [conferiuCobertura, setConferiuCobertura] = useState(false);
   const conferido = conferiuDatas && conferiuValores && conferiuCobertura;
   const [downloading, setDownloading] = useState(false);
+  const [confirmacaoOpen, setConfirmacaoOpen] = useState(false);
+
+  // Reset do checklist a cada abertura do modal de confirmação — força o
+  // advogado a re-checar conscientemente em cada tentativa de download.
+  useEffect(() => {
+    if (!confirmacaoOpen) {
+      setConferiuDatas(false);
+      setConferiuValores(false);
+      setConferiuCobertura(false);
+    }
+  }, [confirmacaoOpen]);
 
   // Preferências de layout — restauradas do localStorage.
   const [fullscreen, setFullscreen] = useState<boolean>(() =>
@@ -351,68 +373,7 @@ export function ReviewLayout({
           </ResizablePanel>
         </ResizablePanelGroup>
 
-        {/* Gate de confirmação — checklist de 3 itens dirigidos.
-            Em fullscreen, layout horizontal pra economizar altura. */}
-        <div
-          className={`border-t pt-3 ${fullscreen ? "flex items-center gap-4 flex-wrap" : "space-y-1.5"}`}
-        >
-          {!fullscreen && (
-            <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground">
-              Confirme antes de baixar:
-            </p>
-          )}
-          <label className="flex items-start gap-2 text-xs select-none cursor-pointer">
-            <Checkbox
-              checked={conferiuDatas}
-              onCheckedChange={(v) => setConferiuDatas(Boolean(v))}
-              className="mt-0.5"
-            />
-            <span>
-              <strong>Datas</strong>
-              {!fullscreen && (
-                <>
-                  {" "}conferem com o período do documento — sem datas fora da
-                  janela e sem dias faltando.
-                </>
-              )}
-            </span>
-          </label>
-          <label className="flex items-start gap-2 text-xs select-none cursor-pointer">
-            <Checkbox
-              checked={conferiuValores}
-              onCheckedChange={(v) => setConferiuValores(Boolean(v))}
-              className="mt-0.5"
-            />
-            <span>
-              <strong>Valores</strong>
-              {!fullscreen && (
-                <>
-                  {" "}(horários / rubricas / dias) batem com o OCR — soma de
-                  batidas corresponde ao Horas Trabalhadas declarado.
-                </>
-              )}
-            </span>
-          </label>
-          <label className="flex items-start gap-2 text-xs select-none cursor-pointer">
-            <Checkbox
-              checked={conferiuCobertura}
-              onCheckedChange={(v) => setConferiuCobertura(Boolean(v))}
-              className="mt-0.5"
-            />
-            <span>
-              <strong>Cobertura</strong>
-              {!fullscreen && (
-                <>
-                  {" "}completa — nenhuma linha amarela do OCR ficou sem virar
-                  uma linha aqui, e eventos relevantes (HE, banco de horas,
-                  faltas) foram preservados.
-                </>
-              )}
-            </span>
-          </label>
-        </div>
-
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 pt-2 border-t">
           <Button
             variant="outline"
             size="sm"
@@ -423,9 +384,10 @@ export function ReviewLayout({
           </Button>
           <Button
             size="sm"
-            onClick={handleConfirm}
-            disabled={!conferido || confirmDisabled || downloading}
+            onClick={() => setConfirmacaoOpen(true)}
+            disabled={confirmDisabled || downloading}
             className="gap-1.5"
+            title="Abre o gate de confirmação (3 itens dirigidos) antes do download"
           >
             {downloading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -436,6 +398,82 @@ export function ReviewLayout({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Gate de confirmação — abre só ao clicar no botão azul. Reseta os
+          checks a cada abertura para forçar revisão consciente. */}
+      <AlertDialog open={confirmacaoOpen} onOpenChange={setConfirmacaoOpen}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirme antes de baixar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Marque os 3 itens para liberar o download do CSV. Esta etapa
+              registra que você revisou os dados — o arquivo será usado em
+              cálculo trabalhista vinculante.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-3 py-2">
+            <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
+              <Checkbox
+                checked={conferiuDatas}
+                onCheckedChange={(v) => setConferiuDatas(Boolean(v))}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Datas</strong> conferem com o período do documento —
+                sem datas fora da janela e sem dias faltando.
+              </span>
+            </label>
+            <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
+              <Checkbox
+                checked={conferiuValores}
+                onCheckedChange={(v) => setConferiuValores(Boolean(v))}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Valores</strong> (horários / rubricas / dias) batem
+                com o OCR — soma de batidas corresponde ao Horas Trabalhadas
+                declarado.
+              </span>
+            </label>
+            <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
+              <Checkbox
+                checked={conferiuCobertura}
+                onCheckedChange={(v) => setConferiuCobertura(Boolean(v))}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Cobertura</strong> completa — nenhuma linha amarela
+                do OCR ficou sem virar uma linha aqui, e eventos relevantes
+                (HE, banco de horas, faltas) foram preservados.
+              </span>
+            </label>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={downloading}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                // Não fecha automaticamente — controlamos manualmente via
+                // setConfirmacaoOpen depois do download terminar.
+                e.preventDefault();
+                if (conferido && !downloading) {
+                  handleConfirm().then(() => setConfirmacaoOpen(false));
+                }
+              }}
+              disabled={!conferido || downloading}
+              className="gap-1.5"
+            >
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Baixar CSV
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
