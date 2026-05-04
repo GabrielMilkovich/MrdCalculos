@@ -22,8 +22,12 @@
  *      indentação/posicionamento, frágil em OCR).
  *
  * NOTA DE RISCO: este parser é provisório — foi escrito com base em
- * documentação de layout sem fixture real. Sempre emite warning para o
- * usuário revisar manualmente. Substituir quando houver fixture.
+ * documentação de layout sem fixture OCR real do grupo. Tem testes
+ * sintéticos cobrindo a estrutura típica (ver via-varejo-v1.test.ts) mas
+ * NÃO foi validado contra um holerite real do grupo Via Varejo. O parser
+ * sempre emite warning genérico para forçar revisão manual; substitua os
+ * testes sintéticos por fixture real quando uma estiver disponível,
+ * removendo ou suavizando o warning conforme a qualidade real medida.
  */
 
 import {
