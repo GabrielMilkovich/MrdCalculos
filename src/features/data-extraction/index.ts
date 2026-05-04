@@ -89,6 +89,15 @@ export {
 } from './quality/window';
 export type { JanelaPeriodo } from './quality/window';
 
+// Cobertura semântica entre documentos do case (gaps cruzados).
+export { analisarCobertura } from './quality/case-coverage';
+export type {
+  CaseDoc,
+  CaseCoverageReport,
+  CoverageGap,
+  Severidade,
+} from './quality/case-coverage';
+
 // Validação cruzada (soma de batidas × evento Horas Trabalhadas + outros).
 export {
   hhmmToMin,
