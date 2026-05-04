@@ -49,6 +49,7 @@ import { ReconciliationDivergenceList } from "./ReconciliationDivergenceList";
 import { useAICopilot } from "./useAICopilot";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 import { checkHorasTrabalhadas } from "@/features/data-extraction";
+import { applyHoraMask, normalizeHoraOnBlur } from "./hora-mask";
 
 interface Props {
   open: boolean;
@@ -247,6 +248,24 @@ export function CartaoPontoReviewDialog({
     setRows((prev) => prev.filter((r) => !keysParaRemover.has(r._key)));
   };
 
+  /**
+   * Scroll bidirecional: clique numa linha da tabela rola o painel OCR
+   * para a linha-origem daquela apuração e pisca por 1.5s.
+   */
+  const scrollOcrToLine = (ocrLine: number | undefined) => {
+    if (!ocrLine) return;
+    const el = document.querySelector(
+      `[data-ocr-line="${ocrLine}"]`,
+    ) as HTMLElement | null;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-violet-500", "ring-inset");
+    setTimeout(
+      () => el.classList.remove("ring-2", "ring-violet-500", "ring-inset"),
+      1500,
+    );
+  };
+
   const warnings = useMemo(() => {
     const ws = [...effectiveParsed.warnings];
     if (linhasComCorte.length > 0) {
@@ -423,12 +442,20 @@ export function CartaoPontoReviewDialog({
                 }
                 className={`text-xs transition-shadow ${cls}`}
               >
-                <TableCell className="p-1">
+                <TableCell
+                  className="p-1"
+                  onClick={() => scrollOcrToLine(r.ocr_line)}
+                  title={
+                    r.ocr_line
+                      ? `Clique para ver a linha ${r.ocr_line} no OCR`
+                      : undefined
+                  }
+                >
                   <Input
                     type="date"
                     value={r.data}
                     onChange={(e) => updateRow(r._key, { data: e.target.value })}
-                    className="h-7 text-[11px] font-mono"
+                    className={`h-7 text-[11px] font-mono ${r.ocr_line ? "cursor-pointer" : ""}`}
                   />
                 </TableCell>
                 <TableCell className="p-1">
@@ -459,7 +486,20 @@ export function CartaoPontoReviewDialog({
                         placeholder={idx === 0 ? "08:00" : ""}
                         value={r.marcacoes[idx]?.e ?? ""}
                         onChange={(e) =>
-                          updateMarcacao(r._key, idx, "e", e.target.value)
+                          updateMarcacao(
+                            r._key,
+                            idx,
+                            "e",
+                            applyHoraMask(e.target.value),
+                          )
+                        }
+                        onBlur={(e) =>
+                          updateMarcacao(
+                            r._key,
+                            idx,
+                            "e",
+                            normalizeHoraOnBlur(e.target.value),
+                          )
                         }
                         title={
                           r.marcacoes[idx]?.e_inserida
@@ -471,13 +511,26 @@ export function CartaoPontoReviewDialog({
                             ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
                             : ""
                         }`}
-                        
+
                       />
                       <Input
                         placeholder={idx === 0 ? "12:00" : ""}
                         value={r.marcacoes[idx]?.s ?? ""}
                         onChange={(e) =>
-                          updateMarcacao(r._key, idx, "s", e.target.value)
+                          updateMarcacao(
+                            r._key,
+                            idx,
+                            "s",
+                            applyHoraMask(e.target.value),
+                          )
+                        }
+                        onBlur={(e) =>
+                          updateMarcacao(
+                            r._key,
+                            idx,
+                            "s",
+                            normalizeHoraOnBlur(e.target.value),
+                          )
                         }
                         title={
                           r.marcacoes[idx]?.s_inserida
