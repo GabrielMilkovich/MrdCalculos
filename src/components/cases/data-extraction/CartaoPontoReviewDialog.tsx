@@ -311,7 +311,7 @@ export function CartaoPontoReviewDialog({
       }
       onConfirm={handleConfirm}
     >
-      <div className="p-2 flex items-center justify-between border-b sticky top-0 bg-background z-10">
+      <div className="h-10 px-2 flex items-center justify-between border-b sticky top-0 bg-background z-20 shrink-0">
         <span className="text-[11px] text-muted-foreground flex items-center gap-2">
           <span>
             Edite/adicione linhas conforme o OCR. Linhas amarelas no OCR
@@ -354,18 +354,30 @@ export function CartaoPontoReviewDialog({
         </div>
       ) : (
         <Table>
-          <TableHeader className="sticky top-[42px] bg-background z-10">
+          <TableHeader className="sticky top-[40px] bg-muted/60 z-10 border-b">
             <TableRow>
-              <TableHead className="w-[140px] text-[11px]">Data</TableHead>
-              <TableHead className="w-[130px] text-[11px]">Ocorrência</TableHead>
-              <TableHead
-                className="text-[11px] text-center"
-                colSpan={MAX_PARES * 2}
-              >
-                {MAX_PARES} pares E/S (E1 S1 … E{MAX_PARES} S{MAX_PARES})
+              <TableHead className="w-[140px] text-[11px] font-semibold py-2">
+                Data
               </TableHead>
-              <TableHead className="w-[160px] text-[11px]">Eventos</TableHead>
-              <TableHead className="w-[44px] text-[11px]"></TableHead>
+              <TableHead className="w-[130px] text-[11px] font-semibold py-2">
+                Ocorrência
+              </TableHead>
+              {/* Cabeçalhos individuais de cada par E/S — antes era um único
+                  colSpan={12} com texto centralizado, criando uma faixa
+                  visualmente vazia entre "Ocorrência" e "Eventos". */}
+              {Array.from({ length: MAX_PARES }).map((_, idx) => (
+                <TableHead
+                  key={`pair-h-${idx}`}
+                  className="text-[10px] font-medium text-center py-2 px-1"
+                  colSpan={2}
+                >
+                  Par {idx + 1}
+                </TableHead>
+              ))}
+              <TableHead className="w-[160px] text-[11px] font-semibold py-2">
+                Eventos
+              </TableHead>
+              <TableHead className="w-[44px] text-[11px] py-2"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
