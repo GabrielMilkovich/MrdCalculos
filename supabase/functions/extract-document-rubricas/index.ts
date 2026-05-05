@@ -387,6 +387,15 @@ function getHintCategoria(nome: string): "dsr" | "comissao" | "premiacao" | "ign
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // [DEPRECATED v5] — esta edge function não é mais invocada pelo pipeline
+  // novo. A extração estruturada agora vive 100% no client via
+  // `generateExportForDocument()`. Mantida no banco apenas pra evitar
+  // quebra de chamadas legadas em produção. Remover após X% dos casos do
+  // escritório terem migrado pro fluxo v5.
+  console.warn(
+    "[deprecated] extract-document-rubricas chamado. Use generateExportForDocument no client (PR 5 v5).",
+  );
+
   try {
     const body = await req.json().catch(() => ({}));
     const { document_id, tipo_extracao, origem = "manual" } = body as {

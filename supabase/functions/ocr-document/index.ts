@@ -533,23 +533,21 @@ serve(async (req) => {
             .gte("processing_started_at", sinceIso);
 
           if ((autoCount ?? 0) < AUTO_EXTRACTION_RATE_LIMIT_PER_CASE) {
-            // Marca origem='auto' antes de invocar (evita race com retry humano)
+            // Marca origem='auto' apenas. NÃO invoca mais extract-document-rubricas
+            // (deprecated v5 — a extração estruturada agora vive 100% no client
+            // via generateExportForDocument(documentId), que é chamada quando
+            // o usuário clica em "Revisar e baixar" no Review Dialog).
+            //
+            // O auto-disparo aqui só sinaliza pra UI que o doc está pronto pra
+            // extração (extracao_origem='auto' permite badge "sugerido" sem
+            // exigir clique manual no select de tipo).
             await supabase
               .from("documents")
               .update({ extracao_origem: "auto" })
               .eq("id", document_id);
-
-            // Fire-and-forget — falha aqui não bloqueia retorno do OCR
-            supabase.functions
-              .invoke("extract-document-rubricas", {
-                body: { document_id, tipo_extracao: detect.tipo, origem: "auto" },
-              })
-              .then(() => {
-                console.log(`[ocr] auto-extração disparada pra doc ${document_id} (tipo=${detect.tipo})`);
-              })
-              .catch((err: unknown) => {
-                console.warn(`[ocr] auto-extração falhou pra doc ${document_id}:`, err);
-              });
+            console.log(
+              `[ocr] doc ${document_id} pronto pra extração (tipo=${detect.tipo}, origem=auto). Cliente deve chamar generateExportForDocument quando o operador clicar em Revisar.`,
+            );
           } else {
             await supabase
               .from("documents")
