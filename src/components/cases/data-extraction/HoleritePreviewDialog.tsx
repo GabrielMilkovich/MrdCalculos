@@ -78,6 +78,7 @@ import {
   type LinhaClassificada,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { SugerirBucketIA } from "./SugerirBucketIA";
 import {
   type HoleriteParseResult,
 } from "@/features/data-extraction";
@@ -514,7 +515,12 @@ function LinhaRow({
         </Select>
       </TableCell>
       <TableCell className="p-1">
-        <OrigemBadge origem={linha.origem} hint={linha.hint} />
+        <div className="flex items-center gap-1">
+          <OrigemBadge origem={linha.origem} hint={linha.hint} />
+          {linha.origem === "fallback" && !isDesconto && (
+            <SugerirBucketIA rubricaNome={linha.rubrica.nome} />
+          )}
+        </div>
       </TableCell>
     </TableRow>
   );
