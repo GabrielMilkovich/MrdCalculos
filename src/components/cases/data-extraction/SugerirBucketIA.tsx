@@ -87,11 +87,7 @@ export function SugerirBucketIA({ rubricaNome, layout = "generico" }: Props) {
     setSalvando(true);
     try {
       const { error } = await supabase
-        // rubrica_mapping ainda não está nos types do supabase — cast pontual
-        // até a próxima geração de types. A tabela existe via migration
-        // 20260506110000_rubrica_mapping.sql.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .from("rubrica_mapping" as any)
+        .from("rubrica_mapping")
         .insert({
           rubrica_normalizada: normalizarRubrica(rubricaNome),
           rubrica_original: rubricaNome,
