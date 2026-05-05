@@ -123,39 +123,7 @@ export type {
   CheckFaltasResult,
 } from './quality/cross-validation';
 
-// Reconciliação multi-fonte (regex × IA) — co-piloto inteligente.
-export {
-  reconcileCartaoPonto,
-  reconciliacaoToParseResult,
-} from './llm/reconciliation';
-export type {
-  ReconciliacaoCartaoPonto,
-  ApuracaoReconciliada,
-  StatusReconciliacao,
-} from './llm/reconciliation';
-
-// LLM fallback (OpenAI gpt-4o-mini via edge function `extract-via-llm`).
-export { extractViaLLM } from './llm/client';
-export type { LLMExtractionResponse } from './llm/client';
-export {
-  validateAntiAlucinacao,
-  LLMExtractError,
-} from './llm/anti-alucinacao';
-export type { LLMExtractionError } from './llm/anti-alucinacao';
-export {
-  validateLLMOutput,
-  LLM_SCHEMAS,
-} from './llm/schemas';
-export type {
-  LLMTipoDoc,
-  CartaoPontoLLMOutput,
-  FeriasLLMOutput,
-  FaltasLLMOutput,
-  HoleriteLLMOutput,
-} from './llm/schemas';
-export {
-  llmToCartaoPontoResult,
-  llmToFeriasResult,
-  llmToFaltasResult,
-  llmToHoleriteResult,
-} from './llm/adapters';
+// Pipeline IA da extração foi removido em V7 — substituído pelo
+// extrator geométrico v6 + mappers determinísticos. A IA fica apenas
+// para sugerir bucket de rubrica no holerite (ver
+// `src/features/rubrica-mapping/sugerir-bucket.ts`).

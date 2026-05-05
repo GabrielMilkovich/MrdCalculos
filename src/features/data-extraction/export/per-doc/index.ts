@@ -78,7 +78,7 @@ export async function generateExportForDocument(
   const { data: doc, error } = await supabase
     .from('documents')
     .select(
-      'id, file_name, tipo_extracao, ocr_text, ocr_validated, competencia_referencia',
+      'id, file_name, tipo_extracao, ocr_text, ocr_validated, competencia_referencia, parsed, parsed_by',
     )
     .eq('id', documentId)
     .single();
@@ -92,6 +92,11 @@ export async function generateExportForDocument(
 
   const baseName = sanitizeFilename(doc.file_name ?? 'documento');
   const ocrText = doc.ocr_text;
+  // V6: quando o extrator geométrico produziu resultado, usa direto e
+  // pula o parser regex sobre OCR Mistral. Resolve o "Nenhuma apuração
+  // extraída" pra documentos cujo OCR Mistral entrega Layout B colapsado
+  // (parser v5 falha na deferência dia↔batidas).
+  const v6Parsed = (doc as { parsed?: unknown }).parsed;
 
   switch (doc.tipo_extracao) {
     case 'holerite': {
@@ -108,6 +113,20 @@ export async function generateExportForDocument(
       };
     }
     case 'cartao_ponto': {
+      // Caminho V6 — usa resultado do extrator geométrico se presente.
+      if (v6Parsed && typeof v6Parsed === 'object') {
+        const adapted = adaptarV6CartaoPonto(v6Parsed);
+        if (adapted) {
+          return {
+            ok: true,
+            kind: 'cartao-ponto-review',
+            parsed: adapted,
+            document_id: documentId,
+            ocr_text: ocrText,
+            filename: `${baseName}_jornada.csv`,
+          };
+        }
+      }
       const parsed = parseCartaoPonto(
         ocrText,
         doc.competencia_referencia ?? undefined,
@@ -195,6 +214,44 @@ function sanitizeFilename(name: string): string {
       .replace(/[^a-zA-Z0-9_-]/g, '_')
       .slice(0, 100) || 'documento'
   );
+}
+
+/**
+ * Adapta o jsonb V6 (extrator geométrico, gravado por process-document-start)
+ * para o tipo `ParseCartaoPontoResult` que os dialogs/CSV consomem.
+ *
+ * O resultado V6 já é estruturalmente equivalente — só precisamos:
+ *   - Converter `competencias` de objeto plano (jsonb) → `Map<string, number>`.
+ *   - Validar campos mínimos (apuracoes array, datas presentes).
+ *
+ * Quando inválido, retorna null e o caller cai no parser regex V5 normal.
+ */
+function adaptarV6CartaoPonto(raw: unknown): ParseCartaoPontoResult | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  if (!Array.isArray(obj.apuracoes)) return null;
+
+  const competencias = new Map<string, number>();
+  if (obj.competencias && typeof obj.competencias === 'object') {
+    for (const [k, v] of Object.entries(obj.competencias as Record<string, unknown>)) {
+      if (typeof v === 'number') competencias.set(k, v);
+    }
+  }
+
+  return {
+    apuracoes: obj.apuracoes as ParseCartaoPontoResult['apuracoes'],
+    competencias,
+    competencia_predominante:
+      typeof obj.competencia_predominante === 'string' ? obj.competencia_predominante : '',
+    data_inicial: typeof obj.data_inicial === 'string' ? obj.data_inicial : '',
+    data_final: typeof obj.data_final === 'string' ? obj.data_final : '',
+    warnings: Array.isArray(obj.warnings) ? (obj.warnings as string[]) : [],
+    unparsed_lines: Array.isArray(obj.unparsed_lines)
+      ? (obj.unparsed_lines as ParseCartaoPontoResult['unparsed_lines'])
+      : [],
+    parser_version:
+      typeof obj.parser_version === 'string' ? obj.parser_version : 'v6_geometric',
+  };
 }
 
 export {

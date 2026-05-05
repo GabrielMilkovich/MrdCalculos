@@ -225,20 +225,25 @@ function montarTabela(
  * de pdfjs-dist falha — os helpers acima são suficientes para testes
  * com input sintético.
  *
- * Versão de pdfjs fixada: `4.0.379`. Em caso de problema, cair pra
- * `2.16.105` (mais antiga, mas estável em Deno).
+ * V6.2 (deploy real): tentamos unpdf primeiro (pdfjs sem canvas via
+ * esm.sh — funciona em Deno serverless). Se falhar, devolvemos null e
+ * o pipeline cai pro V5 (Mistral OCR + parser regex).
  */
 export async function extrairGeometrico(
   bytes: Uint8Array,
 ): Promise<DocumentoTabular | null> {
-  // Import dinâmico — só é resolvido em Deno runtime.
-  // O `as any` é justificado: pdfjs-dist tipa via .d.ts gerado dinamicamente
-  // que Deno não consegue resolver via esm.sh sem hassle. Removível em v7
-  // quando pdfjs publicar tipos JSR-compatible.
+  // V6.2: unpdf é um wrapper que serve pdfjs com a dep canvas removida —
+  // único caminho que esm.sh consegue resolver em Deno runtime.
+  // Quando falhar (rede, módulo indisponível), pipeline cai pro V5.
   // deno-lint-ignore no-explicit-any
-  const pdfjs = (await import(
-    'https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs'
-  )) as any;
+  let pdfjs: any;
+  try {
+    // deno-lint-ignore no-explicit-any
+    const unpdf = (await import('https://esm.sh/unpdf@0.12.1')) as any;
+    pdfjs = await unpdf.getResolvedPDFJS();
+  } catch {
+    return null;
+  }
 
   let doc: { numPages: number; getPage: (n: number) => Promise<unknown> };
   try {
