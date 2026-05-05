@@ -41,6 +41,45 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(bin);
 }
 
+// =====================================================
+// Detector de origem do empregador (PR 4 v5)
+// =====================================================
+// Espelha src/features/data-extraction/classification/origem-empregador.ts
+// — Magazine Luiza fora de escopo nesta versão. Sinalizamos PÓS-OCR para
+// marcar o documento e mostrar mensagem ao operador. Pré-OCR (peek de
+// texto nativo PDF) seria ideal para economizar cota Mistral, mas requer
+// extração nativa de PDF que não está disponível neste edge function.
+// =====================================================
+
+const MARCADORES_MAGAZINE_LUIZA = [
+  /\bMAGAZINE\s+LUIZA\b/i,
+  /\bMAGAZ\s*LUIZA\b/i,
+  /\bMAGALU\b/i,
+  /\bLUIZALABS\b/i,
+  /\bC\.?N\.?P\.?J\.?\.?:?\s*47\.?960\.?950\//i,
+];
+const MARCADORES_VV_CB = [
+  /\bNOVA\s+CASA\s+BAHIA\s+S\/?A\b/i,
+  /\bVIA\s+VAREJO\s+S\/?A\b/i,
+  /\bC\.?G\.?C\.?\.?\s*\n?\s*10\.?757\.?237\/?\d{4}-?\d{2}\b/i,
+  /\bC\.?G\.?C\.?\.?\s*\n?\s*33\.?041\.?260\/?\d{4}-?\d{2}\b/i,
+  /\bviavarejo\b/i,
+];
+
+const MENSAGEM_BLOQUEIO_MAGALU =
+  "Este documento parece ser Magazine Luiza/Magalu. " +
+  "O sistema atual processa apenas documentos Via Varejo / Casa Bahia. " +
+  "Magazine Luiza está planejado para versão futura. Por favor, lance manualmente.";
+
+function detectarMagaluPostOcr(ocrText: string): { bloqueado: boolean; motivos: string[] } {
+  const motivosVV: string[] = [];
+  for (const re of MARCADORES_VV_CB) if (re.test(ocrText)) motivosVV.push(re.source);
+  if (motivosVV.length > 0) return { bloqueado: false, motivos: [] };
+  const motivosMagalu: string[] = [];
+  for (const re of MARCADORES_MAGAZINE_LUIZA) if (re.test(ocrText)) motivosMagalu.push(re.source);
+  return { bloqueado: motivosMagalu.length > 0, motivos: motivosMagalu };
+}
+
 function detectMimeFromName(name: string | null | undefined): string {
   if (!name) return "application/pdf";
   const lower = name.toLowerCase();
@@ -423,6 +462,32 @@ serve(async (req) => {
       //   - rate limit do caso não foi batido (30 auto-extrações/h)
       // =====================================================
       try {
+        // PR 4 v5: bloqueio pós-OCR de documentos Magazine Luiza.
+        // Antes de auto-detectar tipo, verifica se é Magalu — se for,
+        // marca tipo_extracao=nao_extrair com motivo claro e pula o
+        // auto-disparo de extração estruturada (operador trata manualmente).
+        const magaluCheck = detectarMagaluPostOcr(markdown);
+        if (magaluCheck.bloqueado) {
+          console.log(
+            `[ocr] doc ${document_id} bloqueado como Magazine Luiza — motivos: ${magaluCheck.motivos.join(", ")}`,
+          );
+          await supabase
+            .from("documents")
+            .update({
+              tipo_extracao: "nao_extrair",
+              tipo_extracao_origem: "auto",
+              tipo_extracao_confianca: "alta",
+              tipo_extracao_motivos: [
+                "magazine_luiza_fora_de_escopo",
+                MENSAGEM_BLOQUEIO_MAGALU,
+                ...magaluCheck.motivos.slice(0, 3),
+              ],
+              extracao_skipped_reason: "magazine_luiza_fora_de_escopo",
+            })
+            .eq("id", document_id);
+          throw new Error("__MAGALU_BLOQUEADO__"); // sinaliza pro catch externo só logar e pular
+        }
+
         const detect = autoDetectTipoExtracaoEdge(markdown);
 
         // Lê estado atual do doc pra honrar tipo_extracao_origem='manual'
@@ -504,8 +569,14 @@ serve(async (req) => {
             .eq("id", document_id);
         }
       } catch (autoErr) {
-        // Auto-detect/disparo NUNCA bloqueia o sucesso do OCR
-        console.warn(`[ocr] auto-detect/disparo falhou pra doc ${document_id}:`, autoErr);
+        // Auto-detect/disparo NUNCA bloqueia o sucesso do OCR.
+        // Magalu bloqueado é um caminho esperado, não erro real.
+        const msg = autoErr instanceof Error ? autoErr.message : String(autoErr);
+        if (msg === "__MAGALU_BLOQUEADO__") {
+          console.log(`[ocr] doc ${document_id}: tipo_extracao=nao_extrair (Magalu).`);
+        } else {
+          console.warn(`[ocr] auto-detect/disparo falhou pra doc ${document_id}:`, autoErr);
+        }
       }
 
       return jsonResponse({

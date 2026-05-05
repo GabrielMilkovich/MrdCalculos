@@ -24,6 +24,11 @@ export { normalizeNomeRubrica } from './classification/normalize';
 export { getDefaultHint } from './classification/hints';
 export { autoDetectTipoExtracao } from './classification/auto-detect-tipo';
 export type { AutoDetectResult } from './classification/auto-detect-tipo';
+export {
+  detectarOrigemEmpregador,
+  MENSAGEM_BLOQUEIO_MAGALU,
+} from './classification/origem-empregador';
+export type { OrigemEmpregador } from './classification/origem-empregador';
 
 // Parsers determinísticos (zero-LLM)
 export { parseCartaoPonto, PARSER_VERSION as CARTAO_PONTO_PARSER_VERSION } from './parsers/cartao-ponto';
