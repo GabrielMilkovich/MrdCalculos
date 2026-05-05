@@ -6,10 +6,15 @@
  * do stream `BT ... ET` (text objects) e dos operadores Tj/TJ, sem precisar
  * de pdfjs/unpdf/canvas — roda no Deno runtime do Supabase sem boot-error.
  *
- * Limitações conhecidas (aceitáveis no trade-off):
- *  - Não extrai texto de streams comprimidos com Flate (pega só os uncompressed)
- *  - Não mapeia texto por página (retorna texto completo concatenado)
- *  - Não decodifica encodings complexos (CMap); o texto vem como está no PDF
+ * Mudanças v6 vs v5:
+ *  - Decodifica streams Flate-compressed via DecompressionStream (95% dos
+ *    PDFs do PJe, que vêm com /Filter /FlateDecode).
+ *  - Frouxa gate de qualidade — keywords trabalhistas viram sinal informativo,
+ *    não gate. Threshold: ≥200 chars + ≥15 palavras (cobre cartões pequenos
+ *    do início/fim do contrato).
+ *  - É útil como fallback rápido pra detectar "PDF tem texto?" sem invocar
+ *    pdfjs. O extrator geométrico (`extrator-geometrico.ts`) é o caminho
+ *    principal v6 quando precisamos de coordenadas.
  *
  * Se o PDF NÃO for digital (escaneado), retorna quality="none" e o pipeline
  * cai pro OCR Mistral.
@@ -34,6 +39,86 @@ function realWordCount(s: string): number {
 }
 
 /**
+ * Concatena Uint8Array (helper sem dependência).
+ */
+function concatUint8(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((a, c) => a + c.length, 0);
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.length;
+  }
+  return out;
+}
+
+/**
+ * Inflate raw deflate (sem header zlib) via DecompressionStream do Deno.
+ * Streams PDF com /Filter /FlateDecode usam zlib (com header). PDFs raros
+ * usam raw — caímos pra `'deflate-raw'` se `'deflate'` falhar.
+ */
+async function inflate(bytes: Uint8Array): Promise<Uint8Array | null> {
+  for (const algo of ['deflate', 'deflate-raw'] as const) {
+    try {
+      // deno-lint-ignore no-explicit-any
+      const ds = (globalThis as any).DecompressionStream;
+      if (!ds) return null;
+      const stream = new Blob([bytes]).stream().pipeThrough(new ds(algo));
+      const reader = stream.getReader();
+      const out: Uint8Array[] = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) out.push(value);
+      }
+      return concatUint8(out);
+    } catch {
+      // tenta próximo algoritmo
+    }
+  }
+  return null;
+}
+
+/**
+ * Tenta descomprimir streams Flate-compressed do PDF.
+ * Retorna a string completa do PDF com os streams substituídos pelo
+ * conteúdo descomprimido (best-effort).
+ */
+async function expandirStreamsFlate(bytes: Uint8Array): Promise<string> {
+  const latin1 = new TextDecoder('latin1');
+  const pdfStr = latin1.decode(bytes);
+  // Procura `<<...>>\nstream\n...endstream` com /FlateDecode no dict.
+  // Estratégia: regex localiza pares e tenta inflate se /FlateDecode aparece
+  // nos bytes do dict imediatamente anterior.
+  const re = /(<<[^>]*?\/F(?:lateDecode|l)\b[\s\S]*?>>)\s*stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  const partes: string[] = [];
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(pdfStr)) !== null) {
+    partes.push(pdfStr.slice(lastIdx, m.index));
+    const rawStream = m[2];
+    // Reconverter pra bytes (cuidado: usar encode latin1 reversamente)
+    const streamBytes = new Uint8Array(rawStream.length);
+    for (let i = 0; i < rawStream.length; i++) {
+      streamBytes[i] = rawStream.charCodeAt(i) & 0xff;
+    }
+    const inflated = await inflate(streamBytes);
+    if (inflated) {
+      partes.push(m[1]); // mantém o dict
+      partes.push('\nstream\n');
+      partes.push(latin1.decode(inflated));
+      partes.push('\nendstream');
+    } else {
+      // Não conseguiu — mantém original.
+      partes.push(m[0]);
+    }
+    lastIdx = m.index + m[0].length;
+  }
+  partes.push(pdfStr.slice(lastIdx));
+  return partes.join('');
+}
+
+/**
  * Extrai texto do PDF via parsing regex do stream.
  * NÃO usa dependências externas — só TextDecoder builtin.
  */
@@ -41,7 +126,15 @@ export async function extractNativeText(
   bytes: Uint8Array,
 ): Promise<NativeExtractionResult> {
   try {
-    const pdfStr = new TextDecoder("latin1").decode(bytes);
+    // V6: tenta descomprimir streams Flate primeiro (cobre 95% dos PDFs do
+    // PJe). Cai pra parsing direto quando a descompressão falha — mantém
+    // compatibilidade com PDFs sem compressão.
+    let pdfStr: string;
+    try {
+      pdfStr = await expandirStreamsFlate(bytes);
+    } catch {
+      pdfStr = new TextDecoder('latin1').decode(bytes);
+    }
 
     // Detecta páginas via marcador /Type /Page (não /Pages)
     const pageMatches = pdfStr.match(/\/Type\s*\/Page[^s]/g) || [];
@@ -104,7 +197,10 @@ export async function extractNativeText(
       text.toLowerCase().includes(kw.toLowerCase())
     );
 
-    const hasGoodText = usefulChars >= 500 && words >= 30 && wordsPerChar >= 0.04;
+    // V6: gate frouxado — cartões pequenos do início/fim do contrato podem
+    // ter ≥200 chars + ≥15 palavras. Antes exigia ≥500 + ≥30, perdíamos
+    // documentos legítimos.
+    const hasGoodText = usefulChars >= 200 && words >= 15 && wordsPerChar >= 0.03;
 
     // Constrói texto final com um cabeçalho unico (sem paginas individuais)
     const finalText = text
