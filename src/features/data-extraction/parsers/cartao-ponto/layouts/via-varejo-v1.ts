@@ -542,6 +542,19 @@ export function parseCartaoPontoViaVarejo(
     );
   }
 
+  // Sentinela: se o OCR é não-trivial mas zero apurações foram extraídas,
+  // algo está muito errado — provavelmente roteamento incorreto. Registra
+  // warning explícito pra UI mostrar em vermelho ao operador, em vez de
+  // devolver silenciosamente "0 apurações detectadas em 0 competências".
+  if (final.length === 0 && ocrText.replace(/\s+/g, '').length > 200) {
+    warnings.push(
+      'Parser Via Varejo foi invocado mas extraiu 0 apurações de um OCR ' +
+        'não-vazio (>200 chars úteis). Layout do documento provavelmente não ' +
+        'é Via Varejo 2011-2016. Reprocesse forçando layout genérico ou ' +
+        'reporte como bug de roteamento.',
+    );
+  }
+
   return {
     apuracoes: final,
     competencias,
