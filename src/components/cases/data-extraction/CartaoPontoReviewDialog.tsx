@@ -44,9 +44,6 @@ import {
   type ParseCartaoPontoResult,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
-import { AICopilotBanner } from "./AICopilotBanner";
-import { ReconciliationDivergenceList } from "./ReconciliationDivergenceList";
-import { useAICopilot } from "./useAICopilot";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 import { checkHorasTrabalhadas } from "@/features/data-extraction";
 import { applyHoraMask, normalizeHoraOnBlur } from "./hora-mask";
@@ -57,7 +54,7 @@ interface Props {
   parsed: ParseCartaoPontoResult;
   ocrText: string;
   filename: string;
-  /** Opcional — habilita o botão "Tentar com IA". */
+  /** Opcional — preservado para futuras integrações (ex: telemetria). */
   documentId?: string;
 }
 
@@ -100,19 +97,10 @@ export function CartaoPontoReviewDialog({
   parsed,
   ocrText,
   filename,
-  documentId,
+  documentId: _documentId,
 }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
-  // Co-piloto IA: dispara em paralelo, reconcilia regex × IA, e devolve
-  // `effective` já com a melhor fonte aplicada por dia (cartão-ponto).
-  const copilot = useAICopilot({
-    tipo: "cartao_ponto",
-    documentId: documentId ?? null,
-    ocrText,
-    parsed,
-    enabled: !!documentId,
-  });
-  const effectiveParsed = copilot.effective;
+  const effectiveParsed = parsed;
 
   // Inicializa quando o parsed (ou override IA) mudar
   useEffect(() => {
@@ -169,12 +157,12 @@ export function CartaoPontoReviewDialog({
 
   const unparsedLines = effectiveParsed.unparsed_lines.map((u) => u.linha);
 
-  // Score de confiança da extração + datas fora da janela de competência.
-  // Usa o resultado EFETIVO (regex / IA / reconciliado já com overrides) —
-  // calculado dentro do hook do co-piloto. Garante que o badge reflete a
-  // melhor fonte aplicada, não fica preso no score regex inicial quando
-  // a IA já consolidou uma versão melhor.
-  const confidence = copilot.effectiveScore;
+  // Score de confiança da extração + datas fora da janela de competência
+  // — agora calculado direto do `parsed` determinístico (v6 + parsers v5).
+  const confidence = useMemo(
+    () => scoreCartaoPonto(effectiveParsed, ocrText),
+    [effectiveParsed, ocrText],
+  );
 
   // Mapa de discrepância de Horas Trabalhadas por data — destaca dias
   // onde a soma das batidas não bate com o evento HT do OCR.
@@ -317,51 +305,8 @@ export function CartaoPontoReviewDialog({
       warnings={warnings}
       contadores={{ extraidos: rows.length, etiqueta: "apuração" }}
       headerSlot={
-        <div className="flex flex-col gap-1.5 w-full">
-          <div className="flex items-center gap-2 flex-wrap">
-            <ConfidenceBadge
-              score={confidence}
-              iaSalvouDias={
-                copilot.modo !== "regex" &&
-                (copilot.reconciliacao?.contadores.onlyIa ?? 0) > 0
-              }
-            />
-            <AICopilotBanner
-              loading={copilot.loading}
-              loadingDeep={copilot.loadingDeep}
-              erro={copilot.erro}
-              regexScore={copilot.regexScore}
-              iaScore={copilot.iaScore}
-              reconciliacao={copilot.reconciliacao}
-              modo={copilot.modo}
-              onModoChange={copilot.setModo}
-              onRunDeep={documentId ? () => void copilot.runDeep() : undefined}
-              ocrTruncado={copilot.ocrTruncado}
-              ocrCharsOriginais={copilot.ocrCharsOriginais}
-              ocrCharsProcessados={copilot.ocrCharsProcessados}
-              onCancelar={copilot.cancelar}
-            />
-          </div>
-          {copilot.modo === "reconciliado" && copilot.reconciliacao && (
-            <ReconciliationDivergenceList
-              reconciliacao={copilot.reconciliacao}
-              overrides={copilot.overrides}
-              onChooseRegex={(d) => copilot.setOverride(d, "regex")}
-              onChooseIA={(d) => copilot.setOverride(d, "ia")}
-              onJumpTo={(d) => {
-                // Encontra a row pela data e scrolla
-                const tr = document.querySelector(
-                  `tr[data-row-data="${d}"]`,
-                ) as HTMLElement | null;
-                tr?.scrollIntoView({ block: "center", behavior: "smooth" });
-                tr?.classList.add("ring-2", "ring-violet-500");
-                setTimeout(
-                  () => tr?.classList.remove("ring-2", "ring-violet-500"),
-                  1500,
-                );
-              }}
-            />
-          )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <ConfidenceBadge score={confidence} />
         </div>
       }
       onConfirm={handleConfirm}

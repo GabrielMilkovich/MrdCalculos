@@ -20,8 +20,6 @@ import {
   type ParseFaltasResult,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
-import { AICopilotBanner } from "./AICopilotBanner";
-import { useAICopilot } from "./useAICopilot";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
 interface Props {
@@ -45,17 +43,10 @@ export function FaltasReviewDialog({
   parsed,
   ocrText,
   filename,
-  documentId,
+  documentId: _documentId,
 }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
-  const copilot = useAICopilot({
-    tipo: "registro_faltas",
-    documentId: documentId ?? null,
-    ocrText,
-    parsed,
-    enabled: !!documentId,
-  });
-  const effectiveParsed = copilot.effective;
+  const effectiveParsed = parsed;
 
   useEffect(() => {
     setRows(effectiveParsed.faltas.map((f) => ({ ...f, _key: newKey() })));
@@ -109,7 +100,10 @@ export function FaltasReviewDialog({
     triggerBlobDownload(blob, filename);
   };
 
-  const confidence = copilot.effectiveScore;
+  const confidence = useMemo(
+    () => scoreFaltas(effectiveParsed, ocrText),
+    [effectiveParsed, ocrText],
+  );
 
   // Atalhos J/K — pula entre faltas com data inválida ou intervalo invertido.
   useKeyboardNavigation({
@@ -138,21 +132,6 @@ export function FaltasReviewDialog({
       headerSlot={
         <div className="flex items-center gap-2 flex-wrap">
           <ConfidenceBadge score={confidence} />
-          <AICopilotBanner
-            loading={copilot.loading}
-            loadingDeep={copilot.loadingDeep}
-            erro={copilot.erro}
-            regexScore={copilot.regexScore}
-            iaScore={copilot.iaScore}
-            reconciliacao={copilot.reconciliacao}
-            modo={copilot.modo}
-            onModoChange={copilot.setModo}
-            onRunDeep={documentId ? () => void copilot.runDeep() : undefined}
-            ocrTruncado={copilot.ocrTruncado}
-            ocrCharsOriginais={copilot.ocrCharsOriginais}
-            ocrCharsProcessados={copilot.ocrCharsProcessados}
-            onCancelar={copilot.cancelar}
-          />
         </div>
       }
       onConfirm={handleConfirm}

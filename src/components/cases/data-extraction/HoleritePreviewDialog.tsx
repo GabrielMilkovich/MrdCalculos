@@ -78,10 +78,7 @@ import {
   type LinhaClassificada,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
-import { AICopilotBanner } from "./AICopilotBanner";
-import { useAICopilot } from "./useAICopilot";
 import {
-  classifyHolerite,
   type HoleriteParseResult,
 } from "@/features/data-extraction";
 
@@ -89,12 +86,12 @@ interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   classificacao: ClassificacaoHolerite;
-  /** HoleriteParseResult cru — necessário pro co-piloto IA reclassificar. */
+  /** HoleriteParseResult cru — preservado para futura sugestão de bucket por IA. */
   parsed?: HoleriteParseResult;
   filename: string;
-  /** Opcional — habilita o co-piloto IA. */
+  /** Opcional — preservado para futuras integrações (ex: telemetria). */
   documentId?: string;
-  /** OCR original — necessário pro co-piloto. */
+  /** OCR original — usado no scoring de confiança. */
   ocrText?: string;
 }
 
@@ -130,33 +127,12 @@ export function HoleritePreviewDialog({
   open,
   onOpenChange,
   classificacao,
-  parsed,
+  parsed: _parsed,
   filename,
-  documentId,
+  documentId: _documentId,
   ocrText,
 }: Props) {
-  // Co-piloto IA: dispara em paralelo. Quando IA termina, reclassifica
-  // o output e o user pode trocar entre regex/IA via banner.
-  const copilot = useAICopilot({
-    tipo: "holerite",
-    documentId: documentId ?? null,
-    ocrText: ocrText ?? "",
-    parsed: parsed ?? {
-      competencia: classificacao.competencia,
-      rubricas: classificacao.linhas.map((l) => l.rubrica),
-      layout_usado: classificacao.layout_usado,
-      warnings: classificacao.warnings,
-    },
-    enabled: !!documentId && !!ocrText,
-  });
-
-  // Reclassifica o resultado IA quando ele chegar.
-  const effectiveClassificacao = useMemo<ClassificacaoHolerite>(() => {
-    if (copilot.modo === "ia" && copilot.iaResult) {
-      return classifyHolerite(copilot.iaResult);
-    }
-    return classificacao;
-  }, [copilot.modo, copilot.iaResult, classificacao]);
+  const effectiveClassificacao = classificacao;
 
   const [linhas, setLinhas] = useState<LinhaClassificada[]>(
     effectiveClassificacao.linhas,
@@ -203,18 +179,19 @@ export function HoleritePreviewDialog({
 
   // Score de confiança da extração (recalcula quando linhas mudam, p.ex.
   // se o usuário corrige rubricas).
-  const confidence = useMemo(() => {
-    if (copilot.modo === "ia" && copilot.iaScore) return copilot.iaScore;
-    return scoreHolerite(
-      {
-        competencia: effectiveClassificacao.competencia,
-        rubricas: linhas.map((l) => l.rubrica),
-        layout_usado: effectiveClassificacao.layout_usado,
-        warnings: effectiveClassificacao.warnings,
-      },
-      ocrText ?? "",
-    );
-  }, [copilot.modo, copilot.iaScore, effectiveClassificacao, linhas, ocrText]);
+  const confidence = useMemo(
+    () =>
+      scoreHolerite(
+        {
+          competencia: effectiveClassificacao.competencia,
+          rubricas: linhas.map((l) => l.rubrica),
+          layout_usado: effectiveClassificacao.layout_usado,
+          warnings: effectiveClassificacao.warnings,
+        },
+        ocrText ?? "",
+      ),
+    [effectiveClassificacao, linhas, ocrText],
+  );
 
   // Ações em lote
   const setIncluirAll = (predicate: (l: LinhaClassificada) => boolean, v: boolean) => {
@@ -254,23 +231,6 @@ export function HoleritePreviewDialog({
             <DialogTitle>Conferir antes de baixar</DialogTitle>
             <div className="flex items-center gap-2 flex-wrap">
               <ConfidenceBadge score={confidence} />
-              <AICopilotBanner
-                loading={copilot.loading}
-                loadingDeep={copilot.loadingDeep}
-                erro={copilot.erro}
-                regexScore={copilot.regexScore}
-                iaScore={copilot.iaScore}
-                reconciliacao={copilot.reconciliacao}
-                modo={copilot.modo}
-                onModoChange={copilot.setModo}
-                onRunDeep={
-                  documentId && ocrText ? () => void copilot.runDeep() : undefined
-                }
-                ocrTruncado={copilot.ocrTruncado}
-                ocrCharsOriginais={copilot.ocrCharsOriginais}
-                ocrCharsProcessados={copilot.ocrCharsProcessados}
-                onCancelar={copilot.cancelar}
-              />
             </div>
           </div>
           <DialogDescription className="text-xs">
