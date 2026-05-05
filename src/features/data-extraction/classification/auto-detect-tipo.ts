@@ -5,7 +5,13 @@
  * pontos no tipo correspondente. O tipo com mais pontos vence, mas só
  * "alta confiança" se score >= 12 e diferença pra 2º lugar >= 4.
  *
- * Tipos detectáveis: holerite, recibo_ferias, registro_faltas, cartao_ponto.
+ * Tipos detectáveis: holerite, recibo_ferias, registro_faltas, cartao_ponto, ctps.
+ *
+ * **CTPS — caso especial**: documento "Carteira de Trabalho" contém
+ * tipicamente AMBOS recibo de férias E registro de faltas no mesmo OCR.
+ * Quando o documento tem sinais fortes de carteira de trabalho E pelo
+ * menos um sinal de férias OU faltas, classificamos como `ctps` em vez
+ * de obrigar o operador a escolher entre um e outro (e perder a metade).
  *
  * Auto-disparo de extração só ocorre quando confiança = 'alta' (§6 do
  * spec). 'media' espera clique humano, 'baixa' fica em pending.
@@ -123,6 +129,28 @@ const SINAIS_CARTAO_PONTO: Sinal[] = [
   },
 ];
 
+// Sinais de "Carteira de Trabalho" (CTPS) — não basta ter "CTPS" no texto;
+// vamos exigir esses sinais EM CONJUNTO com pontos de férias OU faltas para
+// classificar como ctps. Veja `detectarCtps` abaixo.
+const SINAIS_CTPS_CABECALHO: Sinal[] = [
+  {
+    pattern:
+      /\bcarteira\s+de\s+trabalho(\s+e\s+previd[êe]ncia\s+social)?\b/i,
+    pontos: 10,
+    motivo: "cabeçalho 'Carteira de Trabalho'",
+  },
+  {
+    pattern: /\bCTPS\b/i,
+    pontos: 6,
+    motivo: "sigla CTPS",
+  },
+  {
+    pattern: /\b(anota[çc][õo]es?\s+gerais|altera[çc][õo]es?\s+de\s+sal[áa]rio)\b/i,
+    pontos: 4,
+    motivo: "campos típicos de CTPS",
+  },
+];
+
 export type AutoDetectResult = {
   tipo: TipoExtracao;
   confianca: ConfiancaAuto;
@@ -162,6 +190,35 @@ export function autoDetectTipoExtracao(ocrText: string): AutoDetectResult {
     registro_faltas: scoreSinais(ocrText, SINAIS_FALTAS),
     cartao_ponto: scoreSinais(ocrText, SINAIS_CARTAO_PONTO),
   };
+
+  // CTPS — caso especial. Precisa ter sinal forte de "Carteira de Trabalho"
+  // E ALGUMA evidência de férias/faltas (mesmo fraca, ≥4 pts em qualquer
+  // dos dois). Se passa, vence os outros tipos automaticamente — porque
+  // separar o documento em "só férias" ou "só faltas" descartaria metade
+  // do conteúdo.
+  const ctpsCabecalho = scoreSinais(ocrText, SINAIS_CTPS_CABECALHO);
+  const temFeriasOuFaltas =
+    scores.recibo_ferias.pontos >= 4 || scores.registro_faltas.pontos >= 4;
+  if (ctpsCabecalho.pontos >= 6 && temFeriasOuFaltas) {
+    const motivos = [
+      ...ctpsCabecalho.motivos,
+      ...scores.recibo_ferias.motivos.slice(0, 2),
+      ...scores.registro_faltas.motivos.slice(0, 2),
+    ];
+    const pontosTotal =
+      ctpsCabecalho.pontos +
+      scores.recibo_ferias.pontos +
+      scores.registro_faltas.pontos;
+    return {
+      tipo: "ctps",
+      confianca: pontosTotal >= SCORE_FOR_HIGH_CONFIDENCE ? "alta" : "media",
+      motivos,
+      scoresPorTipo: {
+        ...toRecord(scores),
+        ctps: pontosTotal,
+      },
+    };
+  }
 
   const entries = Object.entries(scores) as Array<
     [string, { pontos: number; motivos: string[] }]

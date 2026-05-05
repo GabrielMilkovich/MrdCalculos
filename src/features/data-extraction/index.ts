@@ -64,6 +64,7 @@ export {
   buildCartaoPontoCSV,
   buildFeriasCSVBlob,
   buildFaltasCSVBlob,
+  buildCtpsZip,
 } from './export/per-doc';
 export type {
   ExportResult,

@@ -158,3 +158,55 @@ describe("autoDetectTipoExtracao — scoresPorTipo", () => {
     expect(r.scoresPorTipo.holerite).toBeGreaterThan(0);
   });
 });
+
+describe("autoDetectTipoExtracao — CTPS (Carteira de Trabalho)", () => {
+  it("CTPS com férias E faltas detectada como 'ctps'", () => {
+    const ocr = `
+      CARTEIRA DE TRABALHO E PREVIDÊNCIA SOCIAL
+      ANOTAÇÕES GERAIS
+      Período aquisitivo: 01/06/2022 a 31/05/2023
+      Recibo de Férias 30 dias
+      Faltas:
+      15/03/2024 ausência injustificada
+      22/03/2024 atestado médico
+    `;
+    const r = autoDetectTipoExtracao(ocr);
+    expect(r.tipo).toBe("ctps");
+    expect(r.motivos).toContain("cabeçalho 'Carteira de Trabalho'");
+  });
+
+  it("CTPS só com sigla CTPS (sem nome completo) + férias detecta", () => {
+    const ocr = `
+      Documento CTPS nº 12345
+      ALTERAÇÕES DE SALÁRIO
+      Período aquisitivo: 2022/2023
+      Recibo de Férias
+    `;
+    const r = autoDetectTipoExtracao(ocr);
+    expect(r.tipo).toBe("ctps");
+  });
+
+  it("Documento só com 'Carteira de Trabalho' SEM férias/faltas NÃO vira ctps", () => {
+    const ocr = `
+      CARTEIRA DE TRABALHO E PREVIDÊNCIA SOCIAL
+      Documento de identificação do trabalhador.
+      CTPS nº 12345 série 001-RJ
+    `;
+    const r = autoDetectTipoExtracao(ocr);
+    // Sem férias/faltas no doc, não classifica como ctps.
+    expect(r.tipo).not.toBe("ctps");
+  });
+
+  it("Recibo de férias avulso (sem sinal CTPS) continua sendo recibo_ferias", () => {
+    const ocr = `
+      RECIBO DE FÉRIAS
+      Empregado: João da Silva
+      Período Aquisitivo: 2022/2023
+      30 dias de férias gozadas integralmente
+      Período de gozo: 01/06/2024 a 30/06/2024
+      Abono pecuniário de 10 dias
+    `;
+    const r = autoDetectTipoExtracao(ocr);
+    expect(r.tipo).toBe("recibo_ferias");
+  });
+});

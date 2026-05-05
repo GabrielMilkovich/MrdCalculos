@@ -600,6 +600,42 @@ serve(async (req) => {
           break;
         }
 
+        case "ctps": {
+          // CTPS — Carteira de Trabalho. O MESMO OCR alimenta os 2 parsers
+          // (férias + faltas). Cada um insere na sua tabela. count = soma.
+          await admin.from("ferias_extraidas").delete().eq("document_id", document_id);
+          await admin.from("faltas_extraidas").delete().eq("document_id", document_id);
+
+          const ferias = parseFeriasEdge(doc.ocr_text);
+          const faltas = parseFaltasEdge(doc.ocr_text);
+
+          if (ferias.length > 0) {
+            const rows = ferias.map((f) => ({
+              document_id,
+              case_id: doc.case_id,
+              ...f,
+              incluir: true,
+            }));
+            const { error: insErr } = await admin
+              .from("ferias_extraidas")
+              .insert(rows);
+            if (insErr) throw new Error(`Erro insert ferias (CTPS): ${insErr.message}`);
+          }
+          if (faltas.length > 0) {
+            const rows = faltas.map((f) => ({
+              document_id,
+              case_id: doc.case_id,
+              ...f,
+            }));
+            const { error: insErr } = await admin
+              .from("faltas_extraidas")
+              .insert(rows);
+            if (insErr) throw new Error(`Erro insert faltas (CTPS): ${insErr.message}`);
+          }
+          count = ferias.length + faltas.length;
+          break;
+        }
+
         default:
           return jsonResponse({ ok: false, error: `tipo_extracao inválido: ${tipo_extracao}` }, 400);
       }

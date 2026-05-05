@@ -74,7 +74,8 @@ type EdgeAutoDetectResult = {
     | "holerite"
     | "recibo_ferias"
     | "registro_faltas"
-    | "cartao_ponto";
+    | "cartao_ponto"
+    | "ctps";
   confianca: "alta" | "media" | "baixa";
   motivos: string[];
 };
@@ -113,6 +114,14 @@ function autoDetectTipoExtracaoEdge(ocrText: string): EdgeAutoDetectResult {
     { pattern: /\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b[\s\S]{0,40}?\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b/i, pontos: 4, motivo: "duplas entrada/saída" },
     { pattern: /\b\d{2}\/\d{2}\/\d{4}\b[\s\S]{0,100}?\b\d{1,2}:\d{2}\b[\s\S]{0,30}?\b\d{1,2}:\d{2}\b/i, pontos: 4, motivo: "data + múltiplos horários" },
   ];
+  // Sinais de CTPS (Carteira de Trabalho) — quando combinados com sinais
+  // de férias OU faltas, classificamos como `ctps` em vez de obrigar o
+  // operador a escolher entre férias OU faltas (perdendo metade).
+  const SINAIS_CTPS_CABECALHO: Array<{ pattern: RegExp; pontos: number; motivo: string }> = [
+    { pattern: /\bcarteira\s+de\s+trabalho(\s+e\s+previd[êe]ncia\s+social)?\b/i, pontos: 10, motivo: "cabeçalho 'Carteira de Trabalho'" },
+    { pattern: /\bCTPS\b/i, pontos: 6, motivo: "sigla CTPS" },
+    { pattern: /\b(anota[çc][õo]es?\s+gerais|altera[çc][õo]es?\s+de\s+sal[áa]rio)\b/i, pontos: 4, motivo: "campos típicos de CTPS" },
+  ];
 
   const score = (sinais: Array<{ pattern: RegExp; pontos: number; motivo: string }>) => {
     let pontos = 0;
@@ -132,6 +141,28 @@ function autoDetectTipoExtracaoEdge(ocrText: string): EdgeAutoDetectResult {
     registro_faltas: score(SINAIS_FALTAS),
     cartao_ponto: score(SINAIS_CARTAO_PONTO),
   };
+
+  // CTPS — caso especial: documento contém férias + faltas. Detecta cabeçalho
+  // forte de CTPS + qualquer evidência de férias OU faltas.
+  const ctpsCabecalho = score(SINAIS_CTPS_CABECALHO);
+  const temFeriasOuFaltas =
+    scores.recibo_ferias.pontos >= 4 || scores.registro_faltas.pontos >= 4;
+  if (ctpsCabecalho.pontos >= 6 && temFeriasOuFaltas) {
+    const motivos = [
+      ...ctpsCabecalho.motivos,
+      ...scores.recibo_ferias.motivos.slice(0, 2),
+      ...scores.registro_faltas.motivos.slice(0, 2),
+    ];
+    const total =
+      ctpsCabecalho.pontos +
+      scores.recibo_ferias.pontos +
+      scores.registro_faltas.pontos;
+    return {
+      tipo: "ctps",
+      confianca: total >= 12 ? "alta" : "media",
+      motivos,
+    };
+  }
 
   const ordered = Object.entries(scores).sort((a, b) => b[1].pontos - a[1].pontos);
   const [tipoMelhor, dadoMelhor] = ordered[0];

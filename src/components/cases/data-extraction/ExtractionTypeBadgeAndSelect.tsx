@@ -38,6 +38,7 @@ import { HoleritePreviewDialog } from "./HoleritePreviewDialog";
 import { CartaoPontoReviewDialog } from "./CartaoPontoReviewDialog";
 import { FeriasReviewDialog } from "./FeriasReviewDialog";
 import { FaltasReviewDialog } from "./FaltasReviewDialog";
+import { CtpsReviewDialog } from "./CtpsReviewDialog";
 import {
   CARTAO_PONTO_PARSER_VERSION,
   generateExportForDocument,
@@ -98,6 +99,14 @@ export function ExtractionTypeBadgeAndSelect({
     ocrText: string;
     filename: string;
   } | null>(null);
+  const [ctpsState, setCtpsState] = useState<{
+    feriasParsed: ParseFeriasResult;
+    faltasParsed: ParseFaltasResult;
+    documentId: string;
+    ocrText: string;
+    baseFilename: string;
+    filename: string;
+  } | null>(null);
 
   const isAutoSugerido =
     doc.tipo_extracao_origem === "auto" &&
@@ -112,7 +121,9 @@ export function ExtractionTypeBadgeAndSelect({
     doc.tipo_extracao !== null;
 
   const buttonLabel =
-    doc.tipo_extracao === "holerite" ? "Revisar e baixar ZIP" : "Revisar e baixar CSV";
+    doc.tipo_extracao === "holerite" || doc.tipo_extracao === "ctps"
+      ? "Revisar e baixar ZIP"
+      : "Revisar e baixar CSV";
 
   const tooltipDisabled =
     doc.ocr_validated !== true
@@ -160,6 +171,16 @@ export function ExtractionTypeBadgeAndSelect({
             parsed: result.parsed,
             documentId: result.document_id,
             ocrText: result.ocr_text,
+            filename: result.filename,
+          });
+          break;
+        case "ctps-review":
+          setCtpsState({
+            feriasParsed: result.feriasParsed,
+            faltasParsed: result.faltasParsed,
+            documentId: result.document_id,
+            ocrText: result.ocr_text,
+            baseFilename: result.baseFilename,
             filename: result.filename,
           });
           break;
@@ -300,6 +321,18 @@ export function ExtractionTypeBadgeAndSelect({
           documentId={faltasState.documentId}
           ocrText={faltasState.ocrText}
           filename={faltasState.filename}
+        />
+      )}
+      {ctpsState && (
+        <CtpsReviewDialog
+          open={ctpsState !== null}
+          onOpenChange={(o) => !o && setCtpsState(null)}
+          feriasParsed={ctpsState.feriasParsed}
+          faltasParsed={ctpsState.faltasParsed}
+          documentId={ctpsState.documentId}
+          ocrText={ctpsState.ocrText}
+          baseFilename={ctpsState.baseFilename}
+          filename={ctpsState.filename}
         />
       )}
     </div>

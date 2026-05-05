@@ -14,7 +14,15 @@ export type TipoExtracao =
   | 'holerite'
   | 'recibo_ferias'
   | 'registro_faltas'
-  | 'cartao_ponto';
+  | 'cartao_ponto'
+  /**
+   * CTPS — Carteira de Trabalho. Documento que contém AMBOS recibo de
+   * férias e registro de faltas no mesmo OCR. Quando classificado como
+   * `ctps`, o pipeline aciona os 2 parsers (ferias + faltas) sobre o
+   * mesmo texto e o operador revisa ambos no `CtpsReviewDialog` antes
+   * de baixar 1 ZIP com os 2 CSVs.
+   */
+  | 'ctps';
 
 export type ValidationStatus = 'pending' | 'validated' | 'rejected';
 export type ExtracaoStatus = 'pending' | 'running' | 'done' | 'failed';
