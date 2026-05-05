@@ -41,6 +41,45 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(bin);
 }
 
+// =====================================================
+// Detector de origem do empregador (PR 4 v5)
+// =====================================================
+// Espelha src/features/data-extraction/classification/origem-empregador.ts
+// — Magazine Luiza fora de escopo nesta versão. Sinalizamos PÓS-OCR para
+// marcar o documento e mostrar mensagem ao operador. Pré-OCR (peek de
+// texto nativo PDF) seria ideal para economizar cota Mistral, mas requer
+// extração nativa de PDF que não está disponível neste edge function.
+// =====================================================
+
+const MARCADORES_MAGAZINE_LUIZA = [
+  /\bMAGAZINE\s+LUIZA\b/i,
+  /\bMAGAZ\s*LUIZA\b/i,
+  /\bMAGALU\b/i,
+  /\bLUIZALABS\b/i,
+  /\bC\.?N\.?P\.?J\.?\.?:?\s*47\.?960\.?950\//i,
+];
+const MARCADORES_VV_CB = [
+  /\bNOVA\s+CASA\s+BAHIA\s+S\/?A\b/i,
+  /\bVIA\s+VAREJO\s+S\/?A\b/i,
+  /\bC\.?G\.?C\.?\.?\s*\n?\s*10\.?757\.?237\/?\d{4}-?\d{2}\b/i,
+  /\bC\.?G\.?C\.?\.?\s*\n?\s*33\.?041\.?260\/?\d{4}-?\d{2}\b/i,
+  /\bviavarejo\b/i,
+];
+
+const MENSAGEM_BLOQUEIO_MAGALU =
+  "Este documento parece ser Magazine Luiza/Magalu. " +
+  "O sistema atual processa apenas documentos Via Varejo / Casa Bahia. " +
+  "Magazine Luiza está planejado para versão futura. Por favor, lance manualmente.";
+
+function detectarMagaluPostOcr(ocrText: string): { bloqueado: boolean; motivos: string[] } {
+  const motivosVV: string[] = [];
+  for (const re of MARCADORES_VV_CB) if (re.test(ocrText)) motivosVV.push(re.source);
+  if (motivosVV.length > 0) return { bloqueado: false, motivos: [] };
+  const motivosMagalu: string[] = [];
+  for (const re of MARCADORES_MAGAZINE_LUIZA) if (re.test(ocrText)) motivosMagalu.push(re.source);
+  return { bloqueado: motivosMagalu.length > 0, motivos: motivosMagalu };
+}
+
 function detectMimeFromName(name: string | null | undefined): string {
   if (!name) return "application/pdf";
   const lower = name.toLowerCase();
@@ -74,7 +113,8 @@ type EdgeAutoDetectResult = {
     | "holerite"
     | "recibo_ferias"
     | "registro_faltas"
-    | "cartao_ponto";
+    | "cartao_ponto"
+    | "ctps";
   confianca: "alta" | "media" | "baixa";
   motivos: string[];
 };
@@ -113,6 +153,14 @@ function autoDetectTipoExtracaoEdge(ocrText: string): EdgeAutoDetectResult {
     { pattern: /\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b[\s\S]{0,40}?\b(entrada)\b[\s\S]{0,40}?\b(sa[íi]da)\b/i, pontos: 4, motivo: "duplas entrada/saída" },
     { pattern: /\b\d{2}\/\d{2}\/\d{4}\b[\s\S]{0,100}?\b\d{1,2}:\d{2}\b[\s\S]{0,30}?\b\d{1,2}:\d{2}\b/i, pontos: 4, motivo: "data + múltiplos horários" },
   ];
+  // Sinais de CTPS (Carteira de Trabalho) — quando combinados com sinais
+  // de férias OU faltas, classificamos como `ctps` em vez de obrigar o
+  // operador a escolher entre férias OU faltas (perdendo metade).
+  const SINAIS_CTPS_CABECALHO: Array<{ pattern: RegExp; pontos: number; motivo: string }> = [
+    { pattern: /\bcarteira\s+de\s+trabalho(\s+e\s+previd[êe]ncia\s+social)?\b/i, pontos: 10, motivo: "cabeçalho 'Carteira de Trabalho'" },
+    { pattern: /\bCTPS\b/i, pontos: 6, motivo: "sigla CTPS" },
+    { pattern: /\b(anota[çc][õo]es?\s+gerais|altera[çc][õo]es?\s+de\s+sal[áa]rio)\b/i, pontos: 4, motivo: "campos típicos de CTPS" },
+  ];
 
   const score = (sinais: Array<{ pattern: RegExp; pontos: number; motivo: string }>) => {
     let pontos = 0;
@@ -132,6 +180,28 @@ function autoDetectTipoExtracaoEdge(ocrText: string): EdgeAutoDetectResult {
     registro_faltas: score(SINAIS_FALTAS),
     cartao_ponto: score(SINAIS_CARTAO_PONTO),
   };
+
+  // CTPS — caso especial: documento contém férias + faltas. Detecta cabeçalho
+  // forte de CTPS + qualquer evidência de férias OU faltas.
+  const ctpsCabecalho = score(SINAIS_CTPS_CABECALHO);
+  const temFeriasOuFaltas =
+    scores.recibo_ferias.pontos >= 4 || scores.registro_faltas.pontos >= 4;
+  if (ctpsCabecalho.pontos >= 6 && temFeriasOuFaltas) {
+    const motivos = [
+      ...ctpsCabecalho.motivos,
+      ...scores.recibo_ferias.motivos.slice(0, 2),
+      ...scores.registro_faltas.motivos.slice(0, 2),
+    ];
+    const total =
+      ctpsCabecalho.pontos +
+      scores.recibo_ferias.pontos +
+      scores.registro_faltas.pontos;
+    return {
+      tipo: "ctps",
+      confianca: total >= 12 ? "alta" : "media",
+      motivos,
+    };
+  }
 
   const ordered = Object.entries(scores).sort((a, b) => b[1].pontos - a[1].pontos);
   const [tipoMelhor, dadoMelhor] = ordered[0];
@@ -392,6 +462,32 @@ serve(async (req) => {
       //   - rate limit do caso não foi batido (30 auto-extrações/h)
       // =====================================================
       try {
+        // PR 4 v5: bloqueio pós-OCR de documentos Magazine Luiza.
+        // Antes de auto-detectar tipo, verifica se é Magalu — se for,
+        // marca tipo_extracao=nao_extrair com motivo claro e pula o
+        // auto-disparo de extração estruturada (operador trata manualmente).
+        const magaluCheck = detectarMagaluPostOcr(markdown);
+        if (magaluCheck.bloqueado) {
+          console.log(
+            `[ocr] doc ${document_id} bloqueado como Magazine Luiza — motivos: ${magaluCheck.motivos.join(", ")}`,
+          );
+          await supabase
+            .from("documents")
+            .update({
+              tipo_extracao: "nao_extrair",
+              tipo_extracao_origem: "auto",
+              tipo_extracao_confianca: "alta",
+              tipo_extracao_motivos: [
+                "magazine_luiza_fora_de_escopo",
+                MENSAGEM_BLOQUEIO_MAGALU,
+                ...magaluCheck.motivos.slice(0, 3),
+              ],
+              extracao_skipped_reason: "magazine_luiza_fora_de_escopo",
+            })
+            .eq("id", document_id);
+          throw new Error("__MAGALU_BLOQUEADO__"); // sinaliza pro catch externo só logar e pular
+        }
+
         const detect = autoDetectTipoExtracaoEdge(markdown);
 
         // Lê estado atual do doc pra honrar tipo_extracao_origem='manual'
@@ -437,23 +533,21 @@ serve(async (req) => {
             .gte("processing_started_at", sinceIso);
 
           if ((autoCount ?? 0) < AUTO_EXTRACTION_RATE_LIMIT_PER_CASE) {
-            // Marca origem='auto' antes de invocar (evita race com retry humano)
+            // Marca origem='auto' apenas. NÃO invoca mais extract-document-rubricas
+            // (deprecated v5 — a extração estruturada agora vive 100% no client
+            // via generateExportForDocument(documentId), que é chamada quando
+            // o usuário clica em "Revisar e baixar" no Review Dialog).
+            //
+            // O auto-disparo aqui só sinaliza pra UI que o doc está pronto pra
+            // extração (extracao_origem='auto' permite badge "sugerido" sem
+            // exigir clique manual no select de tipo).
             await supabase
               .from("documents")
               .update({ extracao_origem: "auto" })
               .eq("id", document_id);
-
-            // Fire-and-forget — falha aqui não bloqueia retorno do OCR
-            supabase.functions
-              .invoke("extract-document-rubricas", {
-                body: { document_id, tipo_extracao: detect.tipo, origem: "auto" },
-              })
-              .then(() => {
-                console.log(`[ocr] auto-extração disparada pra doc ${document_id} (tipo=${detect.tipo})`);
-              })
-              .catch((err: unknown) => {
-                console.warn(`[ocr] auto-extração falhou pra doc ${document_id}:`, err);
-              });
+            console.log(
+              `[ocr] doc ${document_id} pronto pra extração (tipo=${detect.tipo}, origem=auto). Cliente deve chamar generateExportForDocument quando o operador clicar em Revisar.`,
+            );
           } else {
             await supabase
               .from("documents")
@@ -473,8 +567,14 @@ serve(async (req) => {
             .eq("id", document_id);
         }
       } catch (autoErr) {
-        // Auto-detect/disparo NUNCA bloqueia o sucesso do OCR
-        console.warn(`[ocr] auto-detect/disparo falhou pra doc ${document_id}:`, autoErr);
+        // Auto-detect/disparo NUNCA bloqueia o sucesso do OCR.
+        // Magalu bloqueado é um caminho esperado, não erro real.
+        const msg = autoErr instanceof Error ? autoErr.message : String(autoErr);
+        if (msg === "__MAGALU_BLOQUEADO__") {
+          console.log(`[ocr] doc ${document_id}: tipo_extracao=nao_extrair (Magalu).`);
+        } else {
+          console.warn(`[ocr] auto-detect/disparo falhou pra doc ${document_id}:`, autoErr);
+        }
       }
 
       return jsonResponse({

@@ -271,6 +271,7 @@ export function FeriasReviewDialog({
             ocrTruncado={copilot.ocrTruncado}
             ocrCharsOriginais={copilot.ocrCharsOriginais}
             ocrCharsProcessados={copilot.ocrCharsProcessados}
+            onCancelar={copilot.cancelar}
           />
         </div>
       }

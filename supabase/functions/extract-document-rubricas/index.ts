@@ -387,6 +387,15 @@ function getHintCategoria(nome: string): "dsr" | "comissao" | "premiacao" | "ign
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // [DEPRECATED v5] — esta edge function não é mais invocada pelo pipeline
+  // novo. A extração estruturada agora vive 100% no client via
+  // `generateExportForDocument()`. Mantida no banco apenas pra evitar
+  // quebra de chamadas legadas em produção. Remover após X% dos casos do
+  // escritório terem migrado pro fluxo v5.
+  console.warn(
+    "[deprecated] extract-document-rubricas chamado. Use generateExportForDocument no client (PR 5 v5).",
+  );
+
   try {
     const body = await req.json().catch(() => ({}));
     const { document_id, tipo_extracao, origem = "manual" } = body as {
@@ -597,6 +606,42 @@ serve(async (req) => {
             if (aErr) throw new Error(`Erro insert apurações: ${aErr.message}`);
             count = rows.length;
           }
+          break;
+        }
+
+        case "ctps": {
+          // CTPS — Carteira de Trabalho. O MESMO OCR alimenta os 2 parsers
+          // (férias + faltas). Cada um insere na sua tabela. count = soma.
+          await admin.from("ferias_extraidas").delete().eq("document_id", document_id);
+          await admin.from("faltas_extraidas").delete().eq("document_id", document_id);
+
+          const ferias = parseFeriasEdge(doc.ocr_text);
+          const faltas = parseFaltasEdge(doc.ocr_text);
+
+          if (ferias.length > 0) {
+            const rows = ferias.map((f) => ({
+              document_id,
+              case_id: doc.case_id,
+              ...f,
+              incluir: true,
+            }));
+            const { error: insErr } = await admin
+              .from("ferias_extraidas")
+              .insert(rows);
+            if (insErr) throw new Error(`Erro insert ferias (CTPS): ${insErr.message}`);
+          }
+          if (faltas.length > 0) {
+            const rows = faltas.map((f) => ({
+              document_id,
+              case_id: doc.case_id,
+              ...f,
+            }));
+            const { error: insErr } = await admin
+              .from("faltas_extraidas")
+              .insert(rows);
+            if (insErr) throw new Error(`Erro insert faltas (CTPS): ${insErr.message}`);
+          }
+          count = ferias.length + faltas.length;
           break;
         }
 

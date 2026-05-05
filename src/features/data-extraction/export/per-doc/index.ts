@@ -20,6 +20,7 @@ import { buildFeriasCSVBlob } from './ferias-csv';
 import { buildFaltasCSVBlob } from './faltas-csv';
 import { classifyHolerite, type ClassificacaoHolerite } from './holerite-classify';
 import { buildHoleriteZip } from './holerite-zip';
+import { buildCtpsZip } from './ctps-zip';
 
 export type ExportResult =
   | {
@@ -54,6 +55,19 @@ export type ExportResult =
       parsed: ParseFaltasResult;
       document_id: string;
       ocr_text: string;
+      filename: string;
+    }
+  | {
+      ok: true;
+      kind: 'ctps-review';
+      /** Resultado do parser de férias sobre o OCR da CTPS. */
+      feriasParsed: ParseFeriasResult;
+      /** Resultado do parser de faltas sobre o MESMO OCR. */
+      faltasParsed: ParseFaltasResult;
+      document_id: string;
+      ocr_text: string;
+      /** Nome base SEM extensão — o ZIP final será baseFilename + ".zip". */
+      baseFilename: string;
       filename: string;
     }
   | { ok: false; error: string };
@@ -129,6 +143,24 @@ export async function generateExportForDocument(
         filename: `${baseName}_faltas.csv`,
       };
     }
+    case 'ctps': {
+      // CTPS — Carteira de Trabalho. O MESMO OCR alimenta os 2 parsers.
+      // Se um deles não achar nada (ex: CTPS sem férias registradas),
+      // o resultado fica vazio e só o outro CSV vai pro ZIP — o builder
+      // omite arquivos com 0 linhas e o LEIA-ME explica.
+      const feriasParsed = parseFerias(ocrText);
+      const faltasParsed = parseFaltas(ocrText);
+      return {
+        ok: true,
+        kind: 'ctps-review',
+        feriasParsed,
+        faltasParsed,
+        document_id: documentId,
+        ocr_text: ocrText,
+        baseFilename: baseName,
+        filename: `${baseName}_ctps.zip`,
+      };
+    }
     case 'nao_extrair':
     case null:
     case undefined:
@@ -171,5 +203,6 @@ export {
   buildCartaoPontoCSV,
   buildFeriasCSVBlob,
   buildFaltasCSVBlob,
+  buildCtpsZip,
 };
 export type { ClassificacaoHolerite, LinhaClassificada } from './holerite-classify';

@@ -8,7 +8,15 @@
  *   - Saiba qual fonte está aplicada
  *   - Possa forçar regex/IA/reconciliado com 1 clique
  */
-import { CheckCircle2, AlertTriangle, AlertOctagon, Loader2, Sparkles, Wand2 } from "lucide-react";
+import {
+  CheckCircle2,
+  AlertTriangle,
+  AlertOctagon,
+  Loader2,
+  Sparkles,
+  Wand2,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +44,12 @@ interface Props {
   ocrCharsOriginais?: number | null;
   /** Tamanho efetivamente processado pela IA quando houve truncamento. */
   ocrCharsProcessados?: number | null;
+  /**
+   * Cancela a chamada IA em andamento. Quando provido E `loading` for true,
+   * o spinner ganha um botão `×` que aborta o fetch e limpa o estado de
+   * loading. Sem isso, se a edge function travar, o spinner ficava eterno.
+   */
+  onCancelar?: () => void;
 }
 
 export function AICopilotBanner({
@@ -51,6 +65,7 @@ export function AICopilotBanner({
   ocrTruncado = false,
   ocrCharsOriginais = null,
   ocrCharsProcessados = null,
+  onCancelar,
 }: Props) {
   const truncadoPct =
     ocrTruncado && ocrCharsOriginais && ocrCharsProcessados
@@ -59,11 +74,23 @@ export function AICopilotBanner({
   return (
     <TooltipProvider>
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        {/* Status do co-piloto */}
+        {/* Status do co-piloto. Botão cancelar ao lado quando há
+            handler — protege contra spinner eterno se a edge travar. */}
         {loading && !iaScore && (
-          <Badge variant="outline" className="gap-1 bg-violet-50 dark:bg-violet-950/30">
+          <Badge variant="outline" className="gap-1 bg-violet-50 dark:bg-violet-950/30 pr-1">
             <Loader2 className="h-3 w-3 animate-spin" />
             <span>IA analisando em paralelo…</span>
+            {onCancelar && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-4 w-4 p-0 ml-1 hover:bg-violet-200/50"
+                onClick={onCancelar}
+                title="Cancelar análise da IA"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
           </Badge>
         )}
 
