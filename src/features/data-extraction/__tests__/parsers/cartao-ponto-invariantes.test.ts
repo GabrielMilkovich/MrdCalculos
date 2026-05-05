@@ -23,14 +23,53 @@ import { buildCartaoPontoCSV } from "../../export/per-doc/cartao-ponto-csv";
 
 const RE_HORA = /\b(\d{1,2}):(\d{2})\b/g;
 const RE_DATA_BR = /\b(\d{2})\/(\d{2})\/(\d{4})\b/g;
+// Cabeçalho Via Varejo: "Período DD.MM.YYYY A DD.MM.YYYY" (com ponto, não barra).
+const RE_PERIODO_VIA_VAREJO_GLOBAL =
+  /Per[íi]odo\s+(\d{2})\.(\d{2})\.(\d{4})\s+A\s+(\d{2})\.(\d{2})\.(\d{4})/gi;
+// Linha de dia Via Varejo: "DD DiaSemana" ou "DD D.S.R." ou "DD FERIADO".
+const RE_DIA_VIA_VAREJO_GLOBAL =
+  /\b(\d{1,2})\s+(SEG|TER|QUA|QUI|SEX|SAB|DOM|D\.?S\.?R\.?|FERIADO|FER\.?\s*DESC\.?)\b/gi;
 
 function extractDatasOCR(ocr: string): Set<string> {
   const out = new Set<string>();
   for (const m of ocr.matchAll(RE_DATA_BR)) {
-    const dd = m[1];
-    const mm = m[2];
-    const yyyy = m[3];
-    out.add(`${dd}/${mm}/${yyyy}`);
+    out.add(`${m[1]}/${m[2]}/${m[3]}`);
+  }
+  // Fixtures Via Varejo: a data efetiva é reconstruída a partir do período
+  // do cabeçalho + dia da linha (e.g., "21.05.2011 A 20.06.2011" + "02 QUI"
+  // → 02/06/2011). Adicionamos todas as combinações DIA × PERÍODO ao
+  // conjunto válido pra que a invariante I1 não dispare falsos positivos.
+  const periodos: Array<{ ini: Date; fim: Date }> = [];
+  for (const m of ocr.matchAll(RE_PERIODO_VIA_VAREJO_GLOBAL)) {
+    const ini = new Date(
+      Date.UTC(parseInt(m[3], 10), parseInt(m[2], 10) - 1, parseInt(m[1], 10)),
+    );
+    const fim = new Date(
+      Date.UTC(parseInt(m[6], 10), parseInt(m[5], 10) - 1, parseInt(m[4], 10)),
+    );
+    periodos.push({ ini, fim });
+  }
+  if (periodos.length > 0) {
+    const dias = new Set<number>();
+    for (const m of ocr.matchAll(RE_DIA_VIA_VAREJO_GLOBAL)) {
+      dias.add(parseInt(m[1], 10));
+    }
+    for (const p of periodos) {
+      for (const dia of dias) {
+        // Tenta mês inicial e final do período.
+        for (const cand of [
+          new Date(Date.UTC(p.ini.getUTCFullYear(), p.ini.getUTCMonth(), dia)),
+          new Date(Date.UTC(p.fim.getUTCFullYear(), p.fim.getUTCMonth(), dia)),
+        ]) {
+          if (cand.getUTCDate() === dia && cand >= p.ini && cand <= p.fim) {
+            const dd = String(cand.getUTCDate()).padStart(2, "0");
+            const mm = String(cand.getUTCMonth() + 1).padStart(2, "0");
+            const yyyy = String(cand.getUTCFullYear());
+            out.add(`${dd}/${mm}/${yyyy}`);
+          }
+        }
+      }
+    }
   }
   return out;
 }
