@@ -1,0 +1,252 @@
+# CARTÃO DE PONTO
+
+|  Nome
+JOSELI SILVA WANDERLEY |   |   | Matrícula
+01788485 |   | Filial
+1651 | Depto.
+0003 | Seção
+00  |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+|  Cargo
+VENDEDOR DE MOVEIS |   | Sindicato
+383 | Jornada
+7,2 | Tipo
+2 | Período
+21.05.2011 A 20.06.2011  |   |   |
+|  Razão Social
+NOVA CASA BAHIA S/A |   |   |   |   | C.G.C.
+10.757.237/0556-62  |   |   |
+|  Dia | 1. Período | 2. Período |   |   | Ocorrências | Horário  |   |
+|  02 QUI
+03 SEX
+04 SAB
+05 D.S.R.
+06 SEG
+07 TER
+08 QUA
+09 QUI
+10 SEX
+11 SAB
+12 D.S.R.
+13 SEG
+14 TER
+15 QUA
+16 QUI
+17 SEX
+18 SAB
+19 D.S.R.
+20 SEG | 10:03 14:02
+09:41 14:10
+09:56 14:38
+09:45 13:46
+09:58 13:01
+09:41 13:32
+09:56 14:07
+09:50 14:17
+09:30 14:44
+09:56 14:12
+09:40 14:11
+09:53 14:08
+09:53 14:05
+08:56 13:59
+09:49 14:03
+13:42 16:34 | 15:10 18:25
+15:14 18:09
+15:41 18:34
+14:45 18:07
+13:59 18:18
+14:35 18:16
+15:10 18:25
+15:19 18:23
+15:49 18:17
+15:15 18:37
+15:11 18:17
+15:09 18:30
+15:05 18:20
+15:02 17:27
+15:03 18:47
+17:32 22:17 |   |   |  | JOR. 07:2 ITV. 01:0 |   |
+|  Resumo do Período |   | Afastamentos do Período  |   |   |   |   |   |
+|  HORAS TRABALHADAS
+D.S.R PAGOS
+ADICIONAL NOTURNO
+BANCO DE HORAS POSITIVO |   | 190:40
+22:00
+0:19
+2:10  |   |   |   |   |   |
+
+Pje
+Assinado eletronicamente por: RICARDO LOPES GODOY - 20/04/2022 14:31:42 - 1bc0a34
+Número do processo: 0012003-73.2021.5.15.0077
+ID. 1bc0a34 - Pág. 1
+
+--- PAGE 2 ---
+
+# CARTÃO DE PONTO
+
+|  Nome
+JOSELI SILVA WANDERLEY |   |   | Matrícula
+01788485 |   | Filial
+1651 | Depto.
+0003 | Seção
+00  |
+|  Cargo
+VENDEDOR DE MOVEIS |   |   | Sindicato
+383 | Jornada
+7,2 | Tipo
+2 | Período
+21.06.2011 A 20.07.2011  |   |
+|  Razão Social
+NOVA CASA BAHIA S/A |   |   |   |   |   | C.G.C.
+10.757.237/0556-62  |   |
+|  Dia | 1. Período |   | 2. Período |   | Ocorrências | Horário  |   |
+|  21 TER | 13:45 17:02 |   | 18:10 22:05 |   |  | JOR. 07:2 ITV. 01:0  |   |
+|  22 QUA | 13:46 17:12 |   | 18:21 22:12 |   |   |   |   |
+|  23 FERIADO | 11:54 15:30 |   | 16:31 |   |   |   |   |
+|  24 SEX | 13:52 17:05 |   | 18:08 22:14 |   |   |   |   |
+|  25 SAB | 13:43 15:50 |   | 16:57 22:06 |   |   |   |   |
+|  26 D.S.R. | 11:54 15:38 |   | 16:37 20:09 |   |   |   |   |
+|  27 SEG | 09:49 14:02 |   | 15:16 18:20 |   |   |   |   |
+|  28 TER |  |   |  |   |   |   |   |
+|  29 QUA | 09:50 14:05 |   | 15:10 18:41 |   |   |   |   |
+|  30 QUI | 09:43 14:06 |   | 15:08 18:09 |   |   |   |   |
+|  01 SEX | 09:38 14:16 |   | 15:22 18:57 |   |   |   |   |
+|  02 SAB | 09:46 14:05 |   | 15:10 18:13 |   |   |   |   |
+|  03 D.S.R. |  |   |  |   |   |   |   |
+|  04 SEG | 13:37 17:03 |   | 18:14 22:05 |   |   |   |   |
+|  05 TER | 13:49 17:26 |   | 18:32 22:08 |   |   |   |   |
+|  06 QUA | 13:54 16:39 |   | 17:39 |   |   |   |   |
+|  07 QUI | 13:45 17:06 |   | 18:14 22:07 |   |   |   |   |
+|  08 SEX | 13:45 17:06 |   | 18:05 22:08 |   |   |   |   |
+|  09 FERIADO | 13:52 16:03 |   | 17:17 22:06 |   |   |   |   |
+|  10 D.S.R. | 12:07 15:10 |   | 16:22 20:22 |   |   |   |   |
+|  11 SEG | 09:42 14:35 |   | 15:31 18:10 |   |   |   |   |
+|  12 TER | 09:51 14:10 |   | 15:19 18:41 |   |   |   |   |
+|  13 QUA | 10:38 15:08 |   | 16:06 18:44 |   |   |   |   |
+|  14 QUI |  |   |  |   |   |   |   |
+|  15 SEX | 09:45 14:07 |   | 15:08 18:16 |   |   |   |   |
+|  16 SAB | 10:04 13:59 |   | 15:10 19:11 |   |   |   |   |
+|  17 D.S.R. | 11:57 14:42 |   | 15:46 |   |   |   |   |
+|  18 SEG |  |   |  |   |   |   |   |
+|  19 TER | 13:45 16:42 |   | 17:52 22:13 |   |   |   |   |
+|  20 QUA | 13:50 17:03 |   | 18:05 22:14 |   |   |   |   |
+|  Resumo do Período |   |   | Afastamentos do Período  |   |   |   |   |
+|  HORAS TRABALHADAS |   |   | 176:00  |   |   |   |   |
+|  D.S.R PAGOS |   |   | 44:00  |   |   |   |   |
+|  ADICIONAL NOTURNO |   |   | 1:44  |   |   |   |   |
+|  HORAS EXTRAS RSR |   |   | 10:36  |   |   |   |   |
+|  BANCO DE HORAS POSITIVO |   |   | 7:41  |   |   |   |   |
+
+Pje
+Assinado eletronicamente por: RICARDO LOPES GODOY - 20/04/2022 14:31:42 - 1bc0a34
+Número do processo: 0012003-73.2021.5.15.0077
+ID. 1bc0a34 - Pág. 2
+
+--- PAGE 3 ---
+
+# CARTÃO DE PONTO
+
+|  Nome
+JOSELI SILVA WANDERLEY |   |   | Matrícula
+01788485 |   | Filial
+1651 | Depto.
+0003 | Seção
+00  |
+|  Cargo
+VENDEDOR DE MOVEIS |   |   | Sindicato
+383 | Jornada
+7,2 | Tipo
+2 | Período
+21.07.2011 A 20.08.2011  |   |
+|  Razão Social
+NOVA CASA BAHIA S/A |   |   |   |   |   | C.G.C.
+10.757.237/0556-62  |   |
+|  Dia | 1. Período |   | 2. Período |   | Ocorrências | Horário  |   |
+|  21 QUI
+22 SEX
+23 SAB
+24 D.S.R.
+25 SEG
+26 TER
+27 QUA
+28 QUI
+29 SEX
+30 SAB
+31 D.S.R.
+01 SEG
+02 TER
+03 QUA
+04 QUI
+05 SEX
+06 SAB
+07 D.S.R.
+08 SEG
+09 TER
+10 QUA
+11 QUI
+12 SEX
+13 SAB
+14 D.S.R.
+15 SEG
+16 TER
+17 QUA
+18 QUI
+19 SEX
+20 SAB | 13:49 16:39
+13:30 16:51
+13:44 17:02
+13:44 16:49
+11:58 14:58
+13:54 16:56
+09:49 14:13
+13:25 16:22
+13:47 17:03
+14:01 16:08
+12:12 14:46
+13:22 17:13
+09:40 14:05
+09:52 14:13
+09:48 14:20
+10:11 14:40
+13:52 16:39
+15:56 17:55
+13:48 17:37
+13:59 16:04
+13:47 17:33
+14:18 15:55 | 17:55 22:07
+17:45 22:09
+18:12 22:17
+17:43 22:12
+16:03 20:09
+18:04 22:09
+15:27 18:32
+17:34 22:10
+17:51 22:14
+17:10 22:11
+15:51 20:18
+18:13 22:12
+16:06 18:06
+15:14 18:21
+15:17 18:40
+15:39 19:34
+18:08 22:12
+18:56 22:05
+18:46 22:14
+17:33 22:15
+18:48 22:22
+17:01 22:41 |  |  | JOR. 07:2 ITV. 01:0  |   |   |
+|  Resumo do Período |   |   | Afastamentos do Período  |   |   |   |   |
+|  HORAS TRABALHADAS
+D.S.R PAGOS
+ADICIONAL NOTURNO
+HORAS JUSTIFICADAS
+BANCO DE HORAS POSITIVO |   |   | 154:00
+29:20
+3:49
+36:40
+5:13  |   |   |   |   |
+
+Pje
+Assinado eletronicamente por: RICARDO LOPES GODOY - 20/04/2022 14:31:42 - 1bc0a34
+Número do processo: 0012003-73.2021.5.15.0077
+ID. 1bc0a34 - Pág. 3
