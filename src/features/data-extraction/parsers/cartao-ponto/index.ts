@@ -55,13 +55,17 @@ export const PARSER_VERSION = 'cartao-ponto-v5-dispatcher-2026-05-05';
  */
 export function detectarLayout(ocr: string): DetectarLayoutResult {
   const viaVarejo = detectarLayoutViaVarejo(ocr);
-  if (viaVarejo.layout === 'via_varejo_v1' && viaVarejo.confianca !== 'baixa') {
+  // Aceita Via Varejo apenas com confiança ALTA. Confiança 'media' não
+  // é suficiente — bug histórico: marcadores soltos disparavam o parser
+  // específico em documentos incompatíveis (espelhos novos do Casas Bahia,
+  // por exemplo), causando 0 apurações silenciosas.
+  if (viaVarejo.layout === 'via_varejo_v1' && viaVarejo.confianca === 'alta') {
     return viaVarejo;
   }
   return {
     layout: 'generico_v1',
     confianca: 'alta',
-    motivos: ['fallback genérico — nenhum layout específico detectado'],
+    motivos: ['fallback genérico — Via Varejo só com confiança alta'],
   };
 }
 

@@ -491,6 +491,16 @@ export function parseCartaoPontoGenerico(
     }
   }
 
+  // Sentinela: se o OCR é não-trivial mas zero apurações foram extraídas,
+  // algo está errado — layout não suportado ou OCR muito sujo. Avisa o
+  // operador explicitamente em vez de devolver silenciosamente vazio.
+  if (final.length === 0 && ocrText.replace(/\s+/g, "").length > 200) {
+    warnings.push(
+      "Parser genérico extraiu 0 apurações de um OCR não-vazio (>200 chars). " +
+        "Documento pode ter layout não suportado — verifique manualmente.",
+    );
+  }
+
   return {
     apuracoes: final,
     competencias,
