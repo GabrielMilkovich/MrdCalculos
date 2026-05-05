@@ -37,6 +37,8 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import {
   Dialog,
@@ -95,6 +97,7 @@ interface Props {
 const LS_KEY_FULLSCREEN = "review-layout:fullscreen";
 const LS_KEY_OCR_PANEL_SIZE = "review-layout:ocr-panel-size";
 const LS_KEY_HEADER_COLLAPSED = "review-layout:header-collapsed";
+const LS_KEY_OCR_HIDDEN = "review-layout:ocr-hidden";
 
 function readLs<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -162,6 +165,12 @@ export function ReviewLayout({
   const [headerCollapsed, setHeaderCollapsed] = useState<boolean>(() =>
     readLs(LS_KEY_HEADER_COLLAPSED + lsSuffix, false),
   );
+  // OCR começa OCULTO por padrão — a planilha ocupa toda a área e o
+  // operador ganha tela útil. O botão "Mostrar OCR" no header reexibe
+  // pontualmente quando ele quer comparar com a referência.
+  const [ocrHidden, setOcrHidden] = useState<boolean>(() =>
+    readLs(LS_KEY_OCR_HIDDEN + lsSuffix, true),
+  );
   const ocrPanelInitial = readLs(LS_KEY_OCR_PANEL_SIZE + lsSuffix, 50);
 
   useEffect(() => {
@@ -170,6 +179,9 @@ export function ReviewLayout({
   useEffect(() => {
     writeLs(LS_KEY_HEADER_COLLAPSED + lsSuffix, headerCollapsed);
   }, [headerCollapsed, lsSuffix]);
+  useEffect(() => {
+    writeLs(LS_KEY_OCR_HIDDEN + lsSuffix, ocrHidden);
+  }, [ocrHidden, lsSuffix]);
 
   const linhasOcr = useMemo(() => ocrText.split(/\r?\n/), [ocrText]);
   const unparsedSet = useMemo(
@@ -224,6 +236,29 @@ export function ReviewLayout({
               {title}
             </DialogTitle>
             <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px] gap-1"
+                onClick={() => setOcrHidden((v) => !v)}
+                title={
+                  ocrHidden
+                    ? "Mostrar painel do OCR (referência)"
+                    : "Ocultar painel do OCR — a planilha ocupa toda a área. Você pode reexibir a qualquer momento."
+                }
+              >
+                {ocrHidden ? (
+                  <>
+                    <PanelLeftOpen className="h-3.5 w-3.5" />
+                    Mostrar OCR
+                  </>
+                ) : (
+                  <>
+                    <PanelLeftClose className="h-3.5 w-3.5" />
+                    Ocultar OCR
+                  </>
+                )}
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -309,69 +344,85 @@ export function ReviewLayout({
           </div>
         )}
 
-        {/* Split view OCR | Tabela editável — REDIMENSIONÁVEL */}
-        <ResizablePanelGroup
-          direction="horizontal"
-          className="flex-1 min-h-0 rounded-md border"
-          onLayout={(sizes) => {
-            // Persiste o tamanho do painel OCR (primeiro). Soma sempre 100.
-            if (sizes && sizes.length >= 1) {
-              writeLs(LS_KEY_OCR_PANEL_SIZE + lsSuffix, Math.round(sizes[0]));
-            }
-          }}
-        >
-          {/* OCR */}
-          <ResizablePanel
-            defaultSize={ocrPanelInitial}
-            minSize={20}
-            className="flex flex-col min-h-0"
-          >
+        {/* Área principal: OCR + Tabela.
+            Quando `ocrHidden`, a tabela ocupa 100% — modo "ganhar tela".
+            Quando visível, painéis redimensionáveis mantêm controle do operador.
+            Em ambos os casos, o painel da tabela é IDENTICAL para evitar
+            re-render destrutivo dos inputs ao alternar visibilidade. */}
+        {ocrHidden ? (
+          <div className="flex-1 min-h-0 rounded-md border flex flex-col">
             <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide bg-muted/30 border-b flex items-center justify-between">
-              <span>Texto do OCR (referência)</span>
+              <span>Dados extraídos (editáveis)</span>
               <span className="text-muted-foreground font-normal normal-case text-[10px]">
-                {linhasOcr.length} linhas · clique numa linha da tabela para
-                navegar aqui
+                OCR oculto · clique em "Mostrar OCR" no topo para reexibir
               </span>
             </div>
-            <ScrollArea className="flex-1 min-h-0">
-              <pre
-                className="text-sm font-mono leading-6 p-3 whitespace-pre-wrap"
-                data-ocr-pre
-              >
-                {linhasOcr.map((linha, idx) => {
-                  const linhaNum = idx + 1;
-                  const isUnparsed = unparsedSet.has(linhaNum);
-                  const isOutOfWindow = outOfWindowSet.has(linhaNum);
-                  const cls = isOutOfWindow
-                    ? "bg-rose-100 dark:bg-rose-900/40 px-1 rounded"
-                    : isUnparsed
-                      ? "bg-amber-100 dark:bg-amber-900/40 px-1 rounded"
-                      : "";
-                  return (
-                    <div
-                      key={linhaNum}
-                      className={`transition-colors ${cls}`}
-                      data-ocr-line={linhaNum}
-                    >
-                      <span className="text-muted-foreground select-none mr-2">
-                        {String(linhaNum).padStart(4, " ")}
-                      </span>
-                      {linha || " "}
-                    </div>
-                  );
-                })}
-              </pre>
-            </ScrollArea>
-          </ResizablePanel>
-          <ResizableHandle withHandle />
-          {/* Tabela editável (children) */}
-          <ResizablePanel minSize={30} className="flex flex-col min-h-0">
-            <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide bg-muted/30 border-b">
-              Dados extraídos (editáveis)
-            </div>
             <div className="flex-1 min-h-0 overflow-auto">{children}</div>
-          </ResizablePanel>
-        </ResizablePanelGroup>
+          </div>
+        ) : (
+          <ResizablePanelGroup
+            direction="horizontal"
+            className="flex-1 min-h-0 rounded-md border"
+            onLayout={(sizes) => {
+              // Persiste o tamanho do painel OCR (primeiro). Soma sempre 100.
+              if (sizes && sizes.length >= 1) {
+                writeLs(LS_KEY_OCR_PANEL_SIZE + lsSuffix, Math.round(sizes[0]));
+              }
+            }}
+          >
+            {/* OCR */}
+            <ResizablePanel
+              defaultSize={ocrPanelInitial}
+              minSize={20}
+              className="flex flex-col min-h-0"
+            >
+              <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide bg-muted/30 border-b flex items-center justify-between">
+                <span>Texto do OCR (referência)</span>
+                <span className="text-muted-foreground font-normal normal-case text-[10px]">
+                  {linhasOcr.length} linhas · clique numa linha da tabela para
+                  navegar aqui
+                </span>
+              </div>
+              <ScrollArea className="flex-1 min-h-0">
+                <pre
+                  className="text-sm font-mono leading-6 p-3 whitespace-pre-wrap"
+                  data-ocr-pre
+                >
+                  {linhasOcr.map((linha, idx) => {
+                    const linhaNum = idx + 1;
+                    const isUnparsed = unparsedSet.has(linhaNum);
+                    const isOutOfWindow = outOfWindowSet.has(linhaNum);
+                    const cls = isOutOfWindow
+                      ? "bg-rose-100 dark:bg-rose-900/40 px-1 rounded"
+                      : isUnparsed
+                        ? "bg-amber-100 dark:bg-amber-900/40 px-1 rounded"
+                        : "";
+                    return (
+                      <div
+                        key={linhaNum}
+                        className={`transition-colors ${cls}`}
+                        data-ocr-line={linhaNum}
+                      >
+                        <span className="text-muted-foreground select-none mr-2">
+                          {String(linhaNum).padStart(4, " ")}
+                        </span>
+                        {linha || " "}
+                      </div>
+                    );
+                  })}
+                </pre>
+              </ScrollArea>
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            {/* Tabela editável (children) */}
+            <ResizablePanel minSize={30} className="flex flex-col min-h-0">
+              <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide bg-muted/30 border-b">
+                Dados extraídos (editáveis)
+              </div>
+              <div className="flex-1 min-h-0 overflow-auto">{children}</div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        )}
 
         <DialogFooter className="gap-2 pt-2 border-t">
           <Button
