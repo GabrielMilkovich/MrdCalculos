@@ -78,6 +78,7 @@ import { logger } from "@/lib/logger";
 interface Document {
   id: string;
   tipo: string;
+  mime_type?: string;
   file_name?: string;
   arquivo_url: string | null;
   storage_path?: string;
@@ -88,6 +89,8 @@ interface Document {
   ocr_confidence?: number;
   error_message?: string;
   retry_count?: number;
+  parsed_by?: string | null;
+  ocr_provider?: string | null;
   metadata?: {
     processing_progress?: number;
     processing_message?: string;
@@ -373,6 +376,33 @@ export function DocumentsManager({
     } catch (err) {
       logger.error("Processing error", err);
       toast.error("Erro no processamento: " + (err as Error).message);
+    } finally {
+      setProcessingDocId(null);
+    }
+  }, [onDocumentsChange]);
+
+  // Reprocessa um PDF com o pipeline V6 (extrator geométrico + mappers).
+  // Necessário para documentos enviados antes do deploy V6 — eles têm
+  // parsed=null e o parser regex sobre OCR Mistral falha em layouts complexos
+  // (ex: cartão Via Varejo Layout B colapsado → "Nenhuma apuração extraída").
+  const reprocessV6 = useCallback(async (documentId: string) => {
+    setProcessingDocId(documentId);
+    toast.info("Reprocessando com extrator geométrico V6...");
+    try {
+      const { data, error } = await supabase.functions.invoke("reprocess-v6", {
+        body: { document_id: documentId },
+      });
+      if (error) throw error;
+      const r = data?.resultados?.[0];
+      if (r?.sucesso) {
+        toast.success(`V6 OK — mapper ${r.mapper} (${r.razao}).`);
+      } else {
+        toast.warning(`V6 não aplicou: ${r?.razao ?? "motivo desconhecido"}. Pipeline V5 continua válido.`);
+      }
+      onDocumentsChange();
+    } catch (err) {
+      logger.error("Reprocess V6 error", err);
+      toast.error("Erro no reprocessamento V6: " + (err as Error).message);
     } finally {
       setProcessingDocId(null);
     }
@@ -1012,6 +1042,30 @@ export function DocumentsManager({
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>Ver documento</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {/* V6: reprocessar com extrator geométrico — só quando
+                              o doc é PDF e ainda não foi processado por V6. */}
+                          {doc.mime_type === "application/pdf" && !doc.parsed_by && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-violet-600 dark:text-violet-300"
+                                  onClick={() => reprocessV6(doc.id)}
+                                  disabled={processingDocId === doc.id}
+                                >
+                                  {processingDocId === doc.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Reprocessar com V6 (extrator geométrico)
+                              </TooltipContent>
                             </Tooltip>
                           )}
 
