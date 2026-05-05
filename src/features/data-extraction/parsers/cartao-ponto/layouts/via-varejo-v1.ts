@@ -66,22 +66,49 @@ const MARCADOR_PERIODO_GLOBAL =
 export function detectarLayoutViaVarejo(ocrText: string): DetectarLayoutResult {
   const motivos: string[] = [];
   let acertos = 0;
+
   for (const re of MARCADORES_VIA_VAREJO) {
     if (re.test(ocrText)) {
       acertos++;
       motivos.push(re.source);
     }
   }
-  if (MARCADOR_PERIODO_VIA_VAREJO.test(ocrText)) {
+
+  // O formato de período "Período DD.MM.YYYY A DD.MM.YYYY" (com pontos
+  // separadores e "A" maiúsculo) é o sinal MAIS DISTINTIVO do layout
+  // 2011-2016. Sem ele, o documento NÃO é Via Varejo antigo, mesmo que
+  // mencione "VIA VAREJO" ou tenha CGC 33.041.260 em algum lugar.
+  // Ex: espelho de ponto Casas Bahia novo usa "Período DD/MM/YYYY a DD/MM/YYYY".
+  const temFormatoPeriodoAntigo = MARCADOR_PERIODO_VIA_VAREJO.test(ocrText);
+  if (temFormatoPeriodoAntigo) {
     acertos += 2;
     motivos.push('formato Período DD.MM.YYYY A DD.MM.YYYY');
   }
-  if (acertos >= 3) return { layout: 'via_varejo_v1', confianca: 'alta', motivos };
-  if (acertos >= 1) return { layout: 'via_varejo_v1', confianca: 'media', motivos };
+
+  // Decisão MAIS ESTRITA: o formato de período antigo é OBRIGATÓRIO para
+  // classificar como via_varejo_v1. Sem ele, o documento pode ter qualquer
+  // razão social ou CGC — ainda assim NÃO é o layout 2011-2016.
+  // Citações soltas a "VIA VAREJO" em footers fiscais NÃO devem disparar
+  // o parser específico (era o bug do caso ROSICLEIA / Casas Bahia 2021+).
+  if (!temFormatoPeriodoAntigo) {
+    return {
+      layout: 'generico_v1',
+      confianca: 'alta',
+      motivos: [
+        'sem formato "Período DD.MM.YYYY A DD.MM.YYYY" — não é layout Via Varejo 2011-2016',
+        ...motivos.map((m) => `(ignorado) ${m}`),
+      ],
+    };
+  }
+
+  if (acertos >= 4) return { layout: 'via_varejo_v1', confianca: 'alta', motivos };
+  if (acertos >= 2) return { layout: 'via_varejo_v1', confianca: 'media', motivos };
+  // Caso teórico (formato de período antigo casa mas zero outros marcadores) —
+  // ainda assim, manda pro genérico por segurança.
   return {
     layout: 'generico_v1',
     confianca: 'alta',
-    motivos: ['nenhum marcador Via Varejo'],
+    motivos: ['formato de período antigo isolado, sem outros sinais Via Varejo'],
   };
 }
 
