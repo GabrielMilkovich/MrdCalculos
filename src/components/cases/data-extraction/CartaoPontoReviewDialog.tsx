@@ -35,6 +35,7 @@ import {
 import { ReviewLayout } from "./ReviewLayout";
 import {
   buildCartaoPontoCSVWithReport,
+  logCsvExport,
   scoreCartaoPonto,
   triggerBlobDownload,
   type ApuracaoDiaria,
@@ -323,6 +324,13 @@ export function CartaoPontoReviewDialog({
     setDownloading(true);
     try {
       triggerBlobDownload(reportPreview.blob, filename);
+      void logCsvExport({
+        builder: "cartao_ponto",
+        report: reportPreview.report,
+        documentId: documentId ?? null,
+        baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
+        parserOrigem: effectiveParsed.parser_version,
+      });
       setReportPreview(null);
     } finally {
       setDownloading(false);

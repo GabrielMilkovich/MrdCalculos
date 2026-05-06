@@ -95,6 +95,10 @@ export type {
 // Document API mínimo (apenas o dropdown de tipo)
 export { setTipoExtracao } from './api/document-tipo';
 
+// Telemetria de fidelidade
+export { logCsvExport } from './telemetry/log-csv-export';
+export type { BuilderTelemetria, LogCsvExportInput } from './telemetry/log-csv-export';
+
 // Quality scoring (0-100 + reasons)
 export {
   scoreCartaoPonto,

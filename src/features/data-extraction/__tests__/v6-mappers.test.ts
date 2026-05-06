@@ -267,7 +267,8 @@ describe("Mappers stub — interface + comportamento de fallback", () => {
 
   it("mapear retorna null em todos os stubs (fallback pro v5)", () => {
     const doc = docTabularSintetico("qualquer texto");
-    expect(mapperHoleriteViaVarejo.mapear(doc)).toBeNull();
+    // holerite_via_varejo NÃO é mais stub — só retorna null sem competência
+    // ou sem tabela. Testado abaixo. Os outros 4 são stubs legítimos.
     expect(mapperHoleriteGenerico.mapear(doc)).toBeNull();
     expect(mapperReciboFerias.mapear(doc)).toBeNull();
     expect(mapperRegistroFaltas.mapear(doc)).toBeNull();
@@ -354,5 +355,131 @@ describe("Dispatcher — escolher mapper por score", () => {
     const r = escolherMapper(doc);
     expect(r).not.toBeNull();
     expect(r!.mapper.slug).toBe("cartao_generico_v1");
+  });
+});
+
+// =====================================================
+// Mapper Holerite Via Varejo — usa doc.tabelas geométricas
+// =====================================================
+
+import type { TabelaDetectada } from "../../../../supabase/functions/_shared/documento-tabular";
+
+function docHoleriteSintetico(
+  textoCompleto: string,
+  tabela: TabelaDetectada,
+): DocumentoTabular {
+  return {
+    numeroPaginas: 1,
+    paginas: [
+      { numero: 1, textos: [], tabelas: [tabela], textoPlano: textoCompleto },
+    ],
+    textoCompleto,
+    extractor: "synthetic_for_test",
+    qualidade: { score: 0.9, razao: "fixture holerite sintética" },
+  };
+}
+
+function celula(texto: string, coluna: number) {
+  return { texto, coluna, fragmentos: [] };
+}
+
+describe("mapperHoleriteViaVarejo — extração via tabela geométrica", () => {
+  const tabelaSimples: TabelaDetectada = {
+    bbox: { x0: 0, y0: 0, x1: 600, y1: 200 },
+    headers: ["Cód", "Descrição", "Ref", "Vencimentos", "Descontos"],
+    linhas: [
+      [
+        celula("0101", 0),
+        celula("Salário Base", 1),
+        celula("220,00", 2),
+        celula("3.500,00", 3),
+        celula("", 4),
+      ],
+      [
+        celula("0501", 0),
+        celula("DSR (Comissão)", 1),
+        celula("", 2),
+        celula("272,64", 3),
+        celula("", 4),
+      ],
+      [
+        celula("9901", 0),
+        celula("INSS", 1),
+        celula("", 2),
+        celula("", 3),
+        celula("385,00", 4),
+      ],
+    ],
+  };
+
+  it("extrai 3 rubricas com competência válida", () => {
+    const doc = docHoleriteSintetico(
+      `VIA VAREJO S/A\nHOLERITE Mês/Ano: 06/2024\nVENCIMENTOS DESCONTOS\n`,
+      tabelaSimples,
+    );
+    const r = mapperHoleriteViaVarejo.mapear(doc);
+    expect(r).not.toBeNull();
+    expect(r!.competencia).toBe("06/2024");
+    expect(r!.rubricas).toHaveLength(3);
+    const salario = r!.rubricas.find((x) => x.nome === "Salário Base");
+    expect(salario?.valor_vencimento).toBe(3500);
+    const inss = r!.rubricas.find((x) => x.nome === "INSS");
+    expect(inss?.valor_desconto).toBe(385);
+  });
+
+  it("retorna null sem competência válida no texto", () => {
+    const doc = docHoleriteSintetico(
+      "VIA VAREJO S/A HOLERITE sem mes ano",
+      tabelaSimples,
+    );
+    expect(mapperHoleriteViaVarejo.mapear(doc)).toBeNull();
+  });
+
+  it("retorna null quando não há tabela com headers compatíveis", () => {
+    const tabelaSemRubrica: TabelaDetectada = {
+      bbox: { x0: 0, y0: 0, x1: 100, y1: 50 },
+      headers: ["Endereço", "Cidade", "UF"],
+      linhas: [[celula("Rua X", 0), celula("São Paulo", 1), celula("SP", 2)]],
+    };
+    const doc = docHoleriteSintetico(
+      "VIA VAREJO HOLERITE 06/2024",
+      tabelaSemRubrica,
+    );
+    expect(mapperHoleriteViaVarejo.mapear(doc)).toBeNull();
+  });
+
+  it("ignora linha sem nome (linha de subtotal/separador)", () => {
+    const tabela: TabelaDetectada = {
+      bbox: { x0: 0, y0: 0, x1: 600, y1: 200 },
+      headers: ["Cód", "Descrição", "Vencimentos", "Descontos"],
+      linhas: [
+        [
+          celula("0101", 0),
+          celula("Salário", 1),
+          celula("3.000,00", 2),
+          celula("", 3),
+        ],
+        // Linha de totalizador — sem nome real
+        [celula("", 0), celula("", 1), celula("3.000,00", 2), celula("", 3)],
+      ],
+    };
+    const doc = docHoleriteSintetico("VIA VAREJO 06/2024", tabela);
+    const r = mapperHoleriteViaVarejo.mapear(doc);
+    expect(r!.rubricas).toHaveLength(1);
+  });
+
+  it("parseValorBR aceita 'R$ 1.234,56' e similar", () => {
+    const tabela: TabelaDetectada = {
+      bbox: { x0: 0, y0: 0, x1: 600, y1: 100 },
+      headers: ["Descrição", "Vencimentos"],
+      linhas: [
+        [celula("Comissão", 0), celula("R$ 1.234,56", 1)],
+        [celula("Prêmio", 0), celula("250", 1)],
+      ],
+    };
+    const doc = docHoleriteSintetico("VIA VAREJO 06/2024", tabela);
+    const r = mapperHoleriteViaVarejo.mapear(doc);
+    expect(r!.rubricas[0].valor_vencimento).toBe(1234.56);
+    expect(r!.rubricas[1].valor_vencimento).toBe(250);
   });
 });

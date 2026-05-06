@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ReviewLayout } from "./ReviewLayout";
 import {
   buildFaltasCSVBlobWithReport,
+  logCsvExport,
   scoreFaltas,
   triggerBlobDownload,
   type BuildReport,
@@ -113,6 +114,13 @@ export function FaltasReviewDialog({
     setDownloading(true);
     try {
       triggerBlobDownload(reportPreview.blob, filename);
+      void logCsvExport({
+        builder: "faltas",
+        report: reportPreview.report,
+        documentId: _documentId ?? null,
+        baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
+        parserOrigem: "regex_v5_faltas",
+      });
       setReportPreview(null);
     } finally {
       setDownloading(false);
