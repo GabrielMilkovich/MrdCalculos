@@ -1445,6 +1445,69 @@ export type Database = {
           },
         ]
       }
+      csv_export_telemetry: {
+        Row: {
+          baixado_com_perdas: boolean
+          builder: string
+          case_id: string | null
+          criado_em: string
+          criado_por: string | null
+          document_id: string | null
+          id: string
+          linhas_ajustadas: number
+          linhas_geradas: number
+          linhas_rejeitadas: number
+          parser_origem: string | null
+          report: Json
+          warnings: number
+        }
+        Insert: {
+          baixado_com_perdas?: boolean
+          builder: string
+          case_id?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          document_id?: string | null
+          id?: string
+          linhas_ajustadas?: number
+          linhas_geradas?: number
+          linhas_rejeitadas?: number
+          parser_origem?: string | null
+          report: Json
+          warnings?: number
+        }
+        Update: {
+          baixado_com_perdas?: boolean
+          builder?: string
+          case_id?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          document_id?: string | null
+          id?: string
+          linhas_ajustadas?: number
+          linhas_geradas?: number
+          linhas_rejeitadas?: number
+          parser_origem?: string | null
+          report?: Json
+          warnings?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "csv_export_telemetry_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "csv_export_telemetry_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_chunks: {
         Row: {
           case_id: string | null

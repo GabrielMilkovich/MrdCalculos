@@ -20,6 +20,7 @@ import {
 import { ReviewLayout } from "./ReviewLayout";
 import {
   buildFeriasCSVBlobWithReport,
+  logCsvExport,
   scoreFerias,
   triggerBlobDownload,
   type BuildReport,
@@ -252,6 +253,13 @@ export function FeriasReviewDialog({
     setDownloading(true);
     try {
       triggerBlobDownload(reportPreview.blob, filename);
+      void logCsvExport({
+        builder: "ferias",
+        report: reportPreview.report,
+        documentId: _documentId ?? null,
+        baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
+        parserOrigem: "regex_v5_ferias",
+      });
       setReportPreview(null);
     } finally {
       setDownloading(false);

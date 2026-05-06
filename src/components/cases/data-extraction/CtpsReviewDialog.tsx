@@ -41,8 +41,9 @@ import { FeriasReviewDialog } from "./FeriasReviewDialog";
 import { FaltasReviewDialog } from "./FaltasReviewDialog";
 import {
   buildCtpsZipWithReport,
-  type BuildReport,
+  logCsvExport,
   triggerBlobDownload,
+  type BuildReport,
   type ParseFaltasResult,
   type ParseFeriasResult,
 } from "@/features/data-extraction";
@@ -109,6 +110,13 @@ export function CtpsReviewDialog({
     setDownloading(true);
     try {
       triggerBlobDownload(reportPreview.blob, filename);
+      void logCsvExport({
+        builder: "ctps",
+        report: reportPreview.report,
+        documentId: documentId ?? null,
+        baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
+        parserOrigem: "regex_v5_ctps",
+      });
       setReportPreview(null);
       onOpenChange(false);
     } finally {

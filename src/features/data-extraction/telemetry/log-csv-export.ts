@@ -1,0 +1,66 @@
+/**
+ * Telemetria de fidelidade extração→CSV.
+ *
+ * Cada `Confirmar e baixar` no dialog → 1 linha em `csv_export_telemetry`.
+ * Permite calcular KPI "% de downloads sem rejeição" e diagnosticar
+ * regressões em mappers/parsers.
+ *
+ * Filosofia: nunca bloqueia o download. Falha de log é silenciosa
+ * (toast de aviso só em modo dev).
+ */
+import { supabase } from '@/integrations/supabase/client';
+import type { BuildReport } from '../export/validation';
+
+export type BuilderTelemetria =
+  | 'cartao_ponto'
+  | 'holerite'
+  | 'ferias'
+  | 'faltas'
+  | 'ctps';
+
+export interface LogCsvExportInput {
+  builder: BuilderTelemetria;
+  report: BuildReport;
+  documentId?: string | null;
+  caseId?: string | null;
+  /** True quando operador autorizou download apesar de linhasRejeitadas. */
+  baixadoComPerdas: boolean;
+  /**
+   * Slug do parser/mapper que originou os dados. Ex: 'cartao_via_varejo_v1',
+   * 'cartao_generico_v1', 'regex_v5_via_varejo', 'regex_v5_holerite'.
+   */
+  parserOrigem?: string | null;
+}
+
+/**
+ * Registra um download de CSV. Nunca lança — falha de log é apenas
+ * logada no console (não bloqueia download). O dialog SEMPRE chama
+ * isto APÓS `triggerBlobDownload`.
+ */
+export async function logCsvExport(input: LogCsvExportInput): Promise<void> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      // Sem usuário autenticado, não loga (RLS bloqueia mesmo).
+      return;
+    }
+    const { error } = await supabase.from('csv_export_telemetry').insert({
+      builder: input.builder,
+      case_id: input.caseId ?? null,
+      document_id: input.documentId ?? null,
+      linhas_geradas: input.report.linhasGeradas,
+      linhas_rejeitadas: input.report.linhasRejeitadas.length,
+      linhas_ajustadas: input.report.linhasAjustadas.length,
+      warnings: input.report.warnings.length,
+      baixado_com_perdas: input.baixadoComPerdas,
+      report: input.report as unknown as Record<string, unknown>,
+      parser_origem: input.parserOrigem ?? null,
+      criado_por: user.id,
+    });
+    if (error) {
+      console.warn('[telemetria] insert csv_export_telemetry falhou:', error);
+    }
+  } catch (err) {
+    console.warn('[telemetria] logCsvExport throw:', err);
+  }
+}

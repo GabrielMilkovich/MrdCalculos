@@ -71,6 +71,7 @@ import {
 } from "@/components/ui/table";
 import {
   buildHoleriteZipWithReport,
+  logCsvExport,
   scoreHolerite,
   triggerBlobDownload,
   type BuildReport,
@@ -226,6 +227,13 @@ export function HoleritePreviewDialog({
     setDownloading(true);
     try {
       triggerBlobDownload(reportPreview.blob, filename);
+      void logCsvExport({
+        builder: "holerite",
+        report: reportPreview.report,
+        documentId: _documentId ?? null,
+        baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
+        parserOrigem: `regex_v5_holerite|${effectiveClassificacao.layout_usado}`,
+      });
       setReportPreview(null);
       onOpenChange(false);
     } finally {
