@@ -12,8 +12,15 @@
  */
 
 import JSZip from 'jszip';
-import { buildFeriasCSV } from '../csv-ferias';
-import { buildFaltasCSV } from '../csv-faltas';
+import {
+  buildFeriasCSV,
+  buildFeriasCSVWithReport,
+} from '../csv-ferias';
+import {
+  buildFaltasCSV,
+  buildFaltasCSVWithReport,
+} from '../csv-faltas';
+import { emptyReport, type BuildReport } from '../validation';
 import type { ParseFeriasResult } from '../../parsers/ferias';
 import type { ParseFaltasResult } from '../../parsers/faltas';
 
@@ -24,10 +31,39 @@ export interface CtpsExportInput {
 }
 
 export async function buildCtpsZip(input: CtpsExportInput): Promise<Blob> {
+  return (await buildCtpsZipWithReport(input)).blob;
+}
+
+/**
+ * Versão que devolve o BuildReport unificado dos 2 sub-CSVs (férias +
+ * faltas). Cada item do report vem prefixado com [Férias] ou [Faltas]
+ * pra o operador identificar no painel de auditoria.
+ */
+export async function buildCtpsZipWithReport(
+  input: CtpsExportInput,
+): Promise<{ blob: Blob; report: BuildReport }> {
   const zip = new JSZip();
+  const aggregate = emptyReport();
+  const merge = (sub: BuildReport, prefixo: 'Férias' | 'Faltas'): void => {
+    aggregate.linhasGeradas += sub.linhasGeradas;
+    for (const r of sub.linhasRejeitadas) {
+      aggregate.linhasRejeitadas.push({
+        idx: r.idx,
+        motivo: `[${prefixo}] ${r.motivo}`,
+        conteudo: r.conteudo,
+      });
+    }
+    for (const a of sub.linhasAjustadas) {
+      aggregate.linhasAjustadas.push({
+        idx: a.idx,
+        ajuste: `[${prefixo}] ${a.ajuste}`,
+      });
+    }
+    for (const w of sub.warnings) aggregate.warnings.push(`[${prefixo}] ${w}`);
+  };
 
   if (input.ferias.ferias.length > 0) {
-    const csv = buildFeriasCSV(
+    const { csv, report } = buildFeriasCSVWithReport(
       input.ferias.ferias.map((f) => ({
         relativa: f.relativa,
         prazo: f.prazo,
@@ -41,10 +77,11 @@ export async function buildCtpsZip(input: CtpsExportInput): Promise<Blob> {
       })),
     );
     zip.file(`${input.baseFilename}_ferias.csv`, csv);
+    merge(report, 'Férias');
   }
 
   if (input.faltas.faltas.length > 0) {
-    const csv = buildFaltasCSV(
+    const { csv, report } = buildFaltasCSVWithReport(
       input.faltas.faltas.map((f) => ({
         data_inicio: f.data_inicio,
         data_fim: f.data_fim,
@@ -54,11 +91,19 @@ export async function buildCtpsZip(input: CtpsExportInput): Promise<Blob> {
       })),
     );
     zip.file(`${input.baseFilename}_faltas.csv`, csv);
+    merge(report, 'Faltas');
   }
 
   zip.file('LEIA-ME.txt', buildReadme(input));
 
-  return zip.generateAsync({ type: 'blob' });
+  if (input.ferias.ferias.length === 0 && input.faltas.faltas.length === 0) {
+    aggregate.warnings.push(
+      'Nenhum dado extraído (nem férias, nem faltas) — ZIP terá apenas o LEIA-ME.',
+    );
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  return { blob, report: aggregate };
 }
 
 function buildReadme(input: CtpsExportInput): string {

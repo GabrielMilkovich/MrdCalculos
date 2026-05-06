@@ -36,10 +36,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import { FeriasReviewDialog } from "./FeriasReviewDialog";
 import { FaltasReviewDialog } from "./FaltasReviewDialog";
 import {
-  buildCtpsZip,
+  buildCtpsZipWithReport,
+  type BuildReport,
   triggerBlobDownload,
   type ParseFaltasResult,
   type ParseFeriasResult,
@@ -82,16 +84,32 @@ export function CtpsReviewDialog({
     }
   }, [confirmacaoOpen]);
 
+  const [reportPreview, setReportPreview] = useState<{
+    blob: Blob;
+    report: BuildReport;
+  } | null>(null);
+
   const handleDownload = async () => {
     setDownloading(true);
     try {
-      const blob = await buildCtpsZip({
+      const { blob, report } = await buildCtpsZipWithReport({
         ferias: feriasParsed,
         faltas: faltasParsed,
         baseFilename,
       });
-      triggerBlobDownload(blob, filename);
+      setReportPreview({ blob, report });
       setConfirmacaoOpen(false);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleDownloadConfirmed = async () => {
+    if (!reportPreview) return;
+    setDownloading(true);
+    try {
+      triggerBlobDownload(reportPreview.blob, filename);
+      setReportPreview(null);
       onOpenChange(false);
     } finally {
       setDownloading(false);
@@ -280,6 +298,16 @@ export function CtpsReviewDialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <CsvBuildReportPanel
+        open={!!reportPreview}
+        onOpenChange={(o) => {
+          if (!o && !downloading) setReportPreview(null);
+        }}
+        nomeRecurso="CTPS (férias + faltas)"
+        report={reportPreview?.report ?? { linhasGeradas: 0, linhasRejeitadas: [], linhasAjustadas: [], warnings: [] }}
+        onConfirm={handleDownloadConfirmed}
+        loading={downloading}
+      />
     </>
   );
 }

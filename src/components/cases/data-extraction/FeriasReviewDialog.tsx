@@ -19,15 +19,17 @@ import {
 } from "@/components/ui/select";
 import { ReviewLayout } from "./ReviewLayout";
 import {
-  buildFeriasCSVBlob,
+  buildFeriasCSVBlobWithReport,
   scoreFerias,
   triggerBlobDownload,
+  type BuildReport,
   type FeriasParseada,
   type GozoPeriodo,
   type ParseFeriasResult,
   type SituacaoFerias,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
 interface Props {
@@ -217,6 +219,12 @@ export function FeriasReviewDialog({
 
   const unparsedLines = effectiveParsed.unparsed_lines.map((u) => u.linha);
 
+  const [reportPreview, setReportPreview] = useState<{
+    blob: Blob;
+    report: BuildReport;
+  } | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
   const handleConfirm = async () => {
     const ferias: FeriasParseada[] = sorted
       .filter((r) => !rowHasErrors(errosPorLinha.get(r._key) ?? {}))
@@ -231,12 +239,23 @@ export function FeriasReviewDialog({
         gozo2: r.gozo2,
         gozo3: r.gozo3,
       }));
-    const blob = buildFeriasCSVBlob({
+    const { blob, report } = buildFeriasCSVBlobWithReport({
       ferias,
       warnings: [],
       unparsed_lines: [],
     });
-    triggerBlobDownload(blob, filename);
+    setReportPreview({ blob, report });
+  };
+
+  const handleDownloadConfirmed = async () => {
+    if (!reportPreview) return;
+    setDownloading(true);
+    try {
+      triggerBlobDownload(reportPreview.blob, filename);
+      setReportPreview(null);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -294,6 +313,16 @@ export function FeriasReviewDialog({
           ))}
         </div>
       )}
+      <CsvBuildReportPanel
+        open={!!reportPreview}
+        onOpenChange={(o) => {
+          if (!o && !downloading) setReportPreview(null);
+        }}
+        nomeRecurso="recibo de férias"
+        report={reportPreview?.report ?? { linhasGeradas: 0, linhasRejeitadas: [], linhasAjustadas: [], warnings: [] }}
+        onConfirm={handleDownloadConfirmed}
+        loading={downloading}
+      />
     </ReviewLayout>
   );
 }

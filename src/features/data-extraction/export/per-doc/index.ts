@@ -257,9 +257,13 @@ function adaptarV6CartaoPonto(raw: unknown): ParseCartaoPontoResult | null {
 export {
   classifyHolerite,
   buildHoleriteZip,
+  buildHoleriteZipWithReport,
   buildCartaoPontoCSV,
   buildFeriasCSVBlob,
+  buildFeriasCSVBlobWithReport,
   buildFaltasCSVBlob,
+  buildFaltasCSVBlobWithReport,
   buildCtpsZip,
+  buildCtpsZipWithReport,
 };
 export type { ClassificacaoHolerite, LinhaClassificada } from './holerite-classify';

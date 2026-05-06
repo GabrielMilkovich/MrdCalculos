@@ -54,11 +54,22 @@ export type {
 // CSV builders (texto)
 export { sanitizeText } from './export/sanitize';
 export { formatNumeroBR, formatBoolBR, formatDataBR } from './export/format-br';
-export { buildHistoricoSalarialCSV } from './export/csv-historico';
-export { buildFeriasCSV } from './export/csv-ferias';
+export {
+  buildHistoricoSalarialCSV,
+  buildHistoricoSalarialCSVWithReport,
+} from './export/csv-historico';
+export {
+  buildFeriasCSV,
+  buildFeriasCSVWithReport,
+} from './export/csv-ferias';
 export type { FeriasCsvLinha } from './export/csv-ferias';
-export { buildFaltasCSV } from './export/csv-faltas';
+export {
+  buildFaltasCSV,
+  buildFaltasCSVWithReport,
+} from './export/csv-faltas';
 export type { FaltaCsvLinha } from './export/csv-faltas';
+export { buildCartaoPontoCSVWithReport } from './export/per-doc/cartao-ponto-csv';
+export type { BuildReport } from './export/validation';
 
 // Per-doc export (entry-point principal da v4)
 export {
@@ -66,10 +77,14 @@ export {
   triggerBlobDownload,
   classifyHolerite,
   buildHoleriteZip,
+  buildHoleriteZipWithReport,
   buildCartaoPontoCSV,
   buildFeriasCSVBlob,
+  buildFeriasCSVBlobWithReport,
   buildFaltasCSVBlob,
+  buildFaltasCSVBlobWithReport,
   buildCtpsZip,
+  buildCtpsZipWithReport,
 } from './export/per-doc';
 export type {
   ExportResult,
