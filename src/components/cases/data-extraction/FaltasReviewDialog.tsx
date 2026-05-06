@@ -13,13 +13,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ReviewLayout } from "./ReviewLayout";
 import {
-  buildFaltasCSVBlob,
+  buildFaltasCSVBlobWithReport,
   scoreFaltas,
   triggerBlobDownload,
+  type BuildReport,
   type FaltaParseada,
   type ParseFaltasResult,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
 interface Props {
@@ -78,6 +80,12 @@ export function FaltasReviewDialog({
 
   const unparsedLines = effectiveParsed.unparsed_lines.map((u) => u.linha);
 
+  const [reportPreview, setReportPreview] = useState<{
+    blob: Blob;
+    report: BuildReport;
+  } | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
   const handleConfirm = async () => {
     const faltas: FaltaParseada[] = sorted
       .filter(
@@ -92,12 +100,23 @@ export function FaltasReviewDialog({
         reiniciar_periodo_aquisitivo: r.reiniciar_periodo_aquisitivo,
         justificativa: r.justificativa,
       }));
-    const blob = buildFaltasCSVBlob({
+    const { blob, report } = buildFaltasCSVBlobWithReport({
       faltas,
       warnings: [],
       unparsed_lines: [],
     });
-    triggerBlobDownload(blob, filename);
+    setReportPreview({ blob, report });
+  };
+
+  const handleDownloadConfirmed = async () => {
+    if (!reportPreview) return;
+    setDownloading(true);
+    try {
+      triggerBlobDownload(reportPreview.blob, filename);
+      setReportPreview(null);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const confidence = useMemo(
@@ -166,6 +185,16 @@ export function FaltasReviewDialog({
           ))}
         </div>
       )}
+      <CsvBuildReportPanel
+        open={!!reportPreview}
+        onOpenChange={(o) => {
+          if (!o && !downloading) setReportPreview(null);
+        }}
+        nomeRecurso="registro de faltas"
+        report={reportPreview?.report ?? { linhasGeradas: 0, linhasRejeitadas: [], linhasAjustadas: [], warnings: [] }}
+        onConfirm={handleDownloadConfirmed}
+        loading={downloading}
+      />
     </ReviewLayout>
   );
 }

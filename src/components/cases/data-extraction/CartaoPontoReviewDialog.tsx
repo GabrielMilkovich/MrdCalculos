@@ -34,16 +34,18 @@ import {
 } from "@/components/ui/table";
 import { ReviewLayout } from "./ReviewLayout";
 import {
-  buildCartaoPontoCSV,
+  buildCartaoPontoCSVWithReport,
   scoreCartaoPonto,
   triggerBlobDownload,
   type ApuracaoDiaria,
+  type BuildReport,
   type EventoDiario,
   type Marcacao,
   type OcorrenciaApuracao,
   type ParseCartaoPontoResult,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 import { checkHorasTrabalhadas } from "@/features/data-extraction";
 import { applyHoraMask, normalizeHoraOnBlur } from "./hora-mask";
@@ -264,12 +266,18 @@ export function CartaoPontoReviewDialog({
     return ws;
   }, [effectiveParsed.warnings, linhasComCorte]);
 
+  const [reportPreview, setReportPreview] = useState<{
+    blob: Blob;
+    report: BuildReport;
+  } | null>(null);
+  const [downloading, setDownloading] = useState(false);
+
+  // Constrói o CSV em memória + abre o painel de auditoria. O download
+  // só acontece quando o operador confirma (ou autoriza explicitamente
+  // baixar mesmo com perdas).
   const handleConfirm = async () => {
-    // Limpa marcações vazias antes de gerar CSV. Preserva batidas
-    // independentemente da ocorrência (feriado trabalhado, atestado parcial,
-    // etc. precisam das batidas no CSV).
     const apuracoes: ApuracaoDiaria[] = sorted
-      .filter((r) => r.data) // descarta linhas sem data
+      .filter((r) => r.data)
       .map((r) => ({
         data: r.data,
         dia_semana: r.dia_semana ?? null,
@@ -278,10 +286,21 @@ export function CartaoPontoReviewDialog({
         eventos: r.eventos ?? [],
         observacao: r.observacao,
       }));
-    const blob = buildCartaoPontoCSV({
+    // Pré-aviso bloqueante: dia com mais de 6 pares preenchidos. PJe-Calc
+    // limita a 6 pares E/S por dia. O builder trunca silenciosamente —
+    // injetamos como linha REJEITADA pra operador ver explicitamente.
+    const reportExtras: BuildReport["linhasRejeitadas"] = [];
+    sorted.forEach((r, i) => {
+      const pares = paresPreenchidos(r.marcacoes);
+      if (pares > MAX_PARES) {
+        reportExtras.push({
+          idx: i,
+          motivo: `Dia ${r.data}: ${pares} pares preenchidos — PJe-Calc só aceita ${MAX_PARES}, ${pares - MAX_PARES} par(es) NÃO entrarão no CSV.`,
+        });
+      }
+    });
+    const { blob, report } = buildCartaoPontoCSVWithReport({
       apuracoes,
-      // Preserva competências da fonte ativa (regex/IA/reconciliada)
-      // — útil pra futuras validações de "CSV mistura competências".
       competencias: effectiveParsed.competencias,
       competencia_predominante: effectiveParsed.competencia_predominante,
       data_inicial: apuracoes[0]?.data ?? "",
@@ -290,7 +309,24 @@ export function CartaoPontoReviewDialog({
       unparsed_lines: [],
       parser_version: effectiveParsed.parser_version,
     });
-    triggerBlobDownload(blob, filename);
+    setReportPreview({
+      blob,
+      report: {
+        ...report,
+        linhasRejeitadas: [...reportExtras, ...report.linhasRejeitadas],
+      },
+    });
+  };
+
+  const handleDownloadConfirmed = async () => {
+    if (!reportPreview) return;
+    setDownloading(true);
+    try {
+      triggerBlobDownload(reportPreview.blob, filename);
+      setReportPreview(null);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -524,6 +560,16 @@ export function CartaoPontoReviewDialog({
           </TableBody>
         </Table>
       )}
+      <CsvBuildReportPanel
+        open={!!reportPreview}
+        onOpenChange={(o) => {
+          if (!o && !downloading) setReportPreview(null);
+        }}
+        nomeRecurso="jornada (cartão de ponto)"
+        report={reportPreview?.report ?? { linhasGeradas: 0, linhasRejeitadas: [], linhasAjustadas: [], warnings: [] }}
+        onConfirm={handleDownloadConfirmed}
+        loading={downloading}
+      />
     </ReviewLayout>
   );
 }

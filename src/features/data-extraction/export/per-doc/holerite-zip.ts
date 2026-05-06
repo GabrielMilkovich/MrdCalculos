@@ -18,9 +18,14 @@
 import JSZip from 'jszip';
 import Decimal from 'decimal.js';
 import type { CategoriaSlug, IncidenciaFlags } from '../../types';
-import { buildHistoricoSalarialCSV } from '../csv-historico';
+import {
+  buildHistoricoSalarialCSV,
+  buildHistoricoSalarialCSVWithReport,
+} from '../csv-historico';
 import { formatNumeroBR } from '../format-br';
 import { sanitizeText } from '../sanitize';
+import type { BuildReport } from '../validation';
+import { emptyReport } from '../validation';
 import type { ClassificacaoHolerite, LinhaClassificada } from './holerite-classify';
 import { aggregateByCategoria } from './holerite-classify';
 
@@ -79,16 +84,74 @@ function indenizatoria(): IncidenciaFlags {
 export async function buildHoleriteZip(
   classificacao: ClassificacaoHolerite,
 ): Promise<Blob> {
+  return (await buildHoleriteZipWithReport(classificacao)).blob;
+}
+
+/**
+ * Agrega o ZIP final + um BuildReport unificado que lista TUDO que sai
+ * (linhas geradas) e TUDO que NÃO sai (rubricas com categoria null mas
+ * valor positivo, rubricas desmarcadas pelo operador, descontos puros).
+ *
+ * O report alimenta o `CsvBuildReportPanel` antes do download — operador
+ * vê explicitamente qualquer perda de dado entre a tela e o ZIP final.
+ */
+export async function buildHoleriteZipWithReport(
+  classificacao: ClassificacaoHolerite,
+): Promise<{ blob: Blob; report: BuildReport }> {
+  const report = emptyReport();
   const buckets = aggregateByCategoria(classificacao.linhas);
 
+  // Detecta perda silenciosa: rubrica com valor positivo SEM categoria
+  // atribuída (ou desmarcada). Cada caso vira linha rejeitada explícita.
+  classificacao.linhas.forEach((l, i) => {
+    if (l.origem === 'desconto') {
+      // Descontos são by design — não rejeição, registra como ajuste.
+      return;
+    }
+    if (l.origem === 'ignorar_hint') {
+      report.linhasAjustadas.push({
+        idx: i,
+        ajuste: `Rubrica "${l.rubrica.nome}" ignorada por hint (não-remuneratória).`,
+      });
+      return;
+    }
+    if (l.valorParaCsv <= 0) return;
+    if (l.categoria === null) {
+      report.linhasRejeitadas.push({
+        idx: i,
+        motivo: `Rubrica "${l.rubrica.nome}" (R$ ${formatNumeroBR(new Decimal(l.valorParaCsv))}) sem categoria — NÃO entrará em nenhum CSV do ZIP.`,
+      });
+      return;
+    }
+    if (!l.incluir) {
+      report.linhasAjustadas.push({
+        idx: i,
+        ajuste: `Rubrica "${l.rubrica.nome}" (R$ ${formatNumeroBR(new Decimal(l.valorParaCsv))}) desmarcada pelo operador — não entra no CSV.`,
+      });
+    }
+  });
+
+  // Conta linhas geradas = total de competências por bucket.
   const zip = new JSZip();
   for (const [slug, soma] of buckets) {
     const meta = CATEGORIAS_NOMES[slug];
-    const csv = buildHistoricoSalarialCSV(
+    const { csv, report: subReport } = buildHistoricoSalarialCSVWithReport(
       [{ competencia: classificacao.competencia, valor: soma }],
       meta.default_flags,
     );
     zip.file(`historico_salarial_${slug}.csv`, csv);
+    report.linhasGeradas += subReport.linhasGeradas;
+    // Propaga warnings dos subgrupos com prefixo identificando o bucket.
+    for (const w of subReport.warnings) {
+      report.warnings.push(`[${meta.nome_pjecalc}] ${w}`);
+    }
+    for (const r of subReport.linhasRejeitadas) {
+      report.linhasRejeitadas.push({
+        idx: r.idx,
+        motivo: `[${meta.nome_pjecalc}] ${r.motivo}`,
+        conteudo: r.conteudo,
+      });
+    }
   }
 
   // CSV de auditoria — TODAS as rubricas com classificação atribuída.
@@ -97,7 +160,15 @@ export async function buildHoleriteZip(
   zip.file('auditoria_completa.csv', buildAuditoriaCSV(classificacao));
 
   zip.file('LEIA-ME.txt', buildReadme(classificacao, buckets));
-  return zip.generateAsync({ type: 'blob' });
+
+  if (buckets.size === 0) {
+    report.warnings.push(
+      'Nenhum CSV de histórico salarial gerado — todas as rubricas foram excluídas ou estão sem categoria.',
+    );
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  return { blob, report };
 }
 
 /**

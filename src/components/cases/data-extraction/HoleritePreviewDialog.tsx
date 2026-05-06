@@ -70,14 +70,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  buildHoleriteZip,
+  buildHoleriteZipWithReport,
   scoreHolerite,
   triggerBlobDownload,
+  type BuildReport,
   type CategoriaSlug,
   type ClassificacaoHolerite,
   type LinhaClassificada,
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
+import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import { SugerirBucketIA } from "./SugerirBucketIA";
 import {
   type HoleriteParseResult,
@@ -201,11 +203,30 @@ export function HoleritePreviewDialog({
     );
   };
 
+  const [reportPreview, setReportPreview] = useState<{
+    blob: Blob;
+    report: BuildReport;
+  } | null>(null);
+
   const handleConfirmar = async () => {
     setDownloading(true);
     try {
-      const blob = await buildHoleriteZip({ ...classificacao, linhas });
-      triggerBlobDownload(blob, filename);
+      const { blob, report } = await buildHoleriteZipWithReport({
+        ...classificacao,
+        linhas,
+      });
+      setReportPreview({ blob, report });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleDownloadConfirmed = async () => {
+    if (!reportPreview) return;
+    setDownloading(true);
+    try {
+      triggerBlobDownload(reportPreview.blob, filename);
+      setReportPreview(null);
       onOpenChange(false);
     } finally {
       setDownloading(false);
@@ -427,6 +448,16 @@ export function HoleritePreviewDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <CsvBuildReportPanel
+        open={!!reportPreview}
+        onOpenChange={(o) => {
+          if (!o && !downloading) setReportPreview(null);
+        }}
+        nomeRecurso={`holerite ${effectiveClassificacao.competencia}`}
+        report={reportPreview?.report ?? { linhasGeradas: 0, linhasRejeitadas: [], linhasAjustadas: [], warnings: [] }}
+        onConfirm={handleDownloadConfirmed}
+        loading={downloading}
+      />
     </Dialog>
   );
 }
