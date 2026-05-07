@@ -483,3 +483,114 @@ describe("mapperHoleriteViaVarejo — extração via tabela geométrica", () => 
     expect(r!.rubricas[1].valor_vencimento).toBe(250);
   });
 });
+
+// =====================================================
+// FIX V6.2 — calibração com texto REAL produzido pelo unpdf em produção
+// =====================================================
+
+/** Sample real do extrator V6 (capturado via metadata.v6_text_preview em prod
+ *  no doc 967fe5a7 — Contracheques ate 06.2021.pdf, ROSICLEIA). */
+const TEXTO_REAL_PRODUCAO_HOLERITE_VV = `Demonstrativo de Pagamento
+ESTABELECIMENTO C.N.P.J FOL
+VIA VAREJO S/A - VENDA NOVA 4 - MG 33.041.260/0501-88 1
+ESTAB MATRÍCULA NOME FUNÇÃO DEP FILH
+486 3508218 Rosicleia Pereira Chaves VENDED INTERN 00 02
+C.R. BCO AG CONTA SALÁRIO REFERÊNCIA
+0003-000 33 1658 71007345-9 0,00/COM JUN/2021
+DATA DE PAGAMENTO:02/07/2021
+CONTA QTDE.v1 VENCIMENTOS DESCONTOS
+0501 DSR(Comissão) | | 189,27 |
+0591 1/3 Adic Const Fer | | 584,88 |
+0620 Comissões | | 356,21 |
+2751 Media Férias | | 1.754,65 |
+3155 Dif Comissão Mes Ant (SemMin) | | 37,86 |
+3259 INT.PREMIO NO DSR | | 51,85 |
+3300 PREMIO MENSAL | | 176,28 |
+3391 COM. GARANTIA | | 41,54 |
+3392 COM.SERV TECNICOS | | 4,26 |
+3393 COM.SEGUROS | | 146,43 |
+3453 COMISSAO FRETE | | 0,80 |
+4590 Adiantamento em Folha(Emp) | | 101,65 |
+7680 COMISSÕES PRODUTOS ONLINE | | 361,74 |
+7681 COMISSÕES SERVIÇOS ONLINE | | 35,35 |
+8383 Restituição Provis. Férias | | 399,48 |
+1101 Empréstimo lei 10820/03 - Santander (11/36) | | | 251,18
+3640 PRESTACAO DE CARNE | | | 224,17
+3743 ADIANTAMENTO | | | 79,74
+4520 Cartão Alimentação | | | 24,00
+5560 INSS | | | 151,43
+5580 INSS de Ferias | | | 144,71
+7621 IR Férias | | | 50,37
+8384 PROVISIONAMENTO FÉRIAS | | | 399,48
+9953 Líquido Férias | | | 1.744,97
+---- -----BASE/OUTROS----- ---- | ----- | ---------- | ----------
+5501 Base IR | | | 1.250,16
+5561 Base INSS | | | 1.401,59
+5581 Base INSS Ferias | | | 1.754,65
+7521 Base IR Ferias | | | 2.194,82
+8000 Salario Contribuicao | | | 3.156,24
+VENCIMENTOS DESCONTOS LÍQUIDO
+T O T A I S
+Processado pela ADP
+Assinado eletronicamente por: SERGIO CARNEIRO ROSI - Juntado em: 21/08/2024 21:20:01 - 19afabc`;
+
+describe("mapperHoleriteViaVarejo — Fix V6.2 (calibração com texto real)", () => {
+  it("Detector aceita 'Demonstrativo de Pagamento' (Fix 1)", () => {
+    const doc = docTabularSintetico(TEXTO_REAL_PRODUCAO_HOLERITE_VV);
+    const det = mapperHoleriteViaVarejo.detectar(doc);
+    expect(det.aplica).toBe(true);
+    expect(det.score).toBeGreaterThan(0);
+  });
+
+  it("Detector também aceita 'Recibo de Salário' e 'Comprovante de Pagamento'", () => {
+    const a = mapperHoleriteViaVarejo.detectar(
+      docTabularSintetico("RECIBO DE SALÁRIO\nVIA VAREJO\nMês/Ano: 06/2024"),
+    );
+    const b = mapperHoleriteViaVarejo.detectar(
+      docTabularSintetico("Comprovante de Pagamento\nNOVA CASA BAHIA\n06/2024"),
+    );
+    expect(a.aplica).toBe(true);
+    expect(b.aplica).toBe(true);
+  });
+
+  it("Mapear extrai rubricas via fallback linha-por-linha (sem doc.tabelas)", () => {
+    // Doc SEM tabelas no extrator (clusterização não detectou) — fallback ativa.
+    const doc = docTabularSintetico(TEXTO_REAL_PRODUCAO_HOLERITE_VV);
+    const r = mapperHoleriteViaVarejo.mapear(doc);
+    expect(r).not.toBeNull();
+    expect(r!.competencia).toMatch(/^\d{2}\/\d{4}$/);
+    expect(r!.rubricas.length).toBeGreaterThanOrEqual(20);
+    // Comissões deve estar como vencimento.
+    const comissoes = r!.rubricas.find((x) => x.codigo === "0620");
+    expect(comissoes?.valor_vencimento).toBe(356.21);
+    expect(comissoes?.valor_desconto).toBeNull();
+    // INSS deve estar como desconto.
+    const inss = r!.rubricas.find((x) => x.codigo === "5560");
+    expect(inss?.valor_desconto).toBe(151.43);
+    expect(inss?.valor_vencimento).toBeNull();
+  });
+
+  it("Fallback NÃO captura linhas após 'BASE/OUTROS' (bases não são rubricas)", () => {
+    const doc = docTabularSintetico(TEXTO_REAL_PRODUCAO_HOLERITE_VV);
+    const r = mapperHoleriteViaVarejo.mapear(doc);
+    // 'Base IR' (5501), 'Base INSS' (5561) etc estão APÓS o separador
+    // BASE/OUTROS — não devem aparecer como rubrica.
+    const baseIR = r!.rubricas.find((x) => x.codigo === "5501");
+    expect(baseIR).toBeUndefined();
+    const salarioContrib = r!.rubricas.find((x) => x.codigo === "8000");
+    expect(salarioContrib).toBeUndefined();
+  });
+
+  it("Fallback dedup rubricas duplicadas entre páginas/competências", () => {
+    // Texto com 2 páginas idênticas — não deve duplicar.
+    const dobrado =
+      TEXTO_REAL_PRODUCAO_HOLERITE_VV +
+      "\n--- PÁGINA SEPARADOR ---\n" +
+      TEXTO_REAL_PRODUCAO_HOLERITE_VV;
+    const doc = docTabularSintetico(dobrado);
+    const r = mapperHoleriteViaVarejo.mapear(doc);
+    const codigosComissoes = r!.rubricas.filter((x) => x.codigo === "0620");
+    // Pode aparecer 2x se valor diferir, mas com mesmo valor → dedup.
+    expect(codigosComissoes.length).toBe(1);
+  });
+});
