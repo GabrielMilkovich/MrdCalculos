@@ -322,6 +322,22 @@ serve(async (req) => {
     const limit: number = typeof body.limit === "number"
       ? Math.min(body.limit, 50)
       : 1;
+    // F3.4 — admin mode permite backfill de TODOS docs sem `parsed` no banco
+    // (cross-user). Quando body.admin_mode=true, valida via has_role(admin).
+    const adminMode = body.admin_mode === true;
+
+    if (adminMode) {
+      const { data: isAdmin, error: roleError } = await supabase.rpc(
+        "has_role",
+        { _user_id: user.id, _role: "admin" },
+      );
+      if (roleError || !isAdmin) {
+        return jsonResponse(
+          { error: "admin_mode exige role 'admin' em user_roles" },
+          403,
+        );
+      }
+    }
 
     let docs;
     if (documentId) {
@@ -331,16 +347,28 @@ serve(async (req) => {
         .eq("id", documentId);
       if (error) return jsonResponse({ error: error.message }, 500);
       docs = data ?? [];
-      const owned = docs.filter((d: { cases: { criado_por: string } }) =>
-        d.cases.criado_por === user.id
-      );
-      if (owned.length === 0) {
-        return jsonResponse(
-          { error: "Document not found ou sem permissão" },
-          404,
+      if (!adminMode) {
+        const owned = docs.filter((d: { cases: { criado_por: string } }) =>
+          d.cases.criado_por === user.id
         );
+        if (owned.length === 0) {
+          return jsonResponse(
+            { error: "Document not found ou sem permissão" },
+            404,
+          );
+        }
+        docs = owned;
       }
-      docs = owned;
+    } else if (adminMode) {
+      // Backfill cross-user: ignora filtro por criado_por.
+      const { data, error } = await supabase
+        .from("documents")
+        .select("id, storage_path, mime_type, metadata, cases!inner(criado_por)")
+        .is("parsed", null)
+        .eq("mime_type", "application/pdf")
+        .limit(limit);
+      if (error) return jsonResponse({ error: error.message }, 500);
+      docs = data ?? [];
     } else {
       const { data, error } = await supabase
         .from("documents")
