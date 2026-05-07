@@ -1,0 +1,38 @@
+{
+  "joseli-via-varejo-2011-2016": {
+    "totalApuracoes": 64,
+    "apuracoesComBatidas": 64,
+    "apuracoesAusencias": 2,
+    "datasUnicas": 64,
+    "totalPares": 128,
+    "warnings": 2,
+    "unparsed": 0
+  },
+  "roque-via-varejo-63paginas": {
+    "totalApuracoes": 62,
+    "apuracoesComBatidas": 38,
+    "apuracoesAusencias": 1,
+    "datasUnicas": 62,
+    "totalPares": 147,
+    "warnings": 10,
+    "unparsed": 15
+  },
+  "rosicleia": {
+    "totalApuracoes": 182,
+    "apuracoesComBatidas": 125,
+    "apuracoesAusencias": 30,
+    "datasUnicas": 182,
+    "totalPares": 246,
+    "warnings": 0,
+    "unparsed": 0
+  },
+  "timestamps-aprovacao": {
+    "totalApuracoes": 2,
+    "apuracoesComBatidas": 2,
+    "apuracoesAusencias": 0,
+    "datasUnicas": 2,
+    "totalPares": 4,
+    "warnings": 0,
+    "unparsed": 0
+  }
+}
