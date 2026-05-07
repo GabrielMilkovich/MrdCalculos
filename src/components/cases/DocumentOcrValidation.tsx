@@ -266,6 +266,28 @@ export function DocumentOcrValidation({
       if (error) throw error;
 
       toast.success("OCR confirmado.");
+
+      // PR-5 (RAG cego): dispara chunk-and-embed pra popular document_chunks.
+      // Antes: só UPDATE ocr_validated=true; ninguém invocava a edge function;
+      // tabela ficava com 0 rows e features RAG (extract-facts-rag,
+      // semantic-search) retornavam vazio. Falha aqui é silenciosa pra não
+      // bloquear o operador — botão admin de backfill cobre o re-tente.
+      void supabase.functions
+        .invoke("chunk-and-embed", {
+          body: {
+            document_id: selected.id,
+            extracted_text: dirty ? editedText : selected.ocr_text,
+          },
+        })
+        .then(({ error: chunkErr }) => {
+          if (chunkErr) {
+            logger.warn("chunk-and-embed após confirmOcr falhou", chunkErr);
+          }
+        })
+        .catch((e) => {
+          logger.warn("chunk-and-embed throw após confirmOcr", e);
+        });
+
       setDirty(false);
       await loadDocs();
       onValidated?.();
