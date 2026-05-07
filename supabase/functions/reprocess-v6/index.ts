@@ -100,11 +100,59 @@ function metadataV6Falha(r: ProcessamentoResult): Record<string, unknown> {
   };
 }
 
+/**
+ * F3.3 — Dispara chunk-and-embed após sucesso V6 pra popular doc_chunks
+ * (RAG semantic search). Antes desta correção, "Reprocessar V6" gravava
+ * `parsed/ocr_text` mas RAG ficava cego — 0 chunks em produção apesar de
+ * 35+ docs com texto extraído.
+ *
+ * Falha silenciosa: erro de chunk-and-embed loga mas NÃO bloqueia o
+ * retorno do reprocess (parsed já foi gravado, vale o esforço parcial).
+ */
+async function disparaChunkAndEmbed(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  documentId: string,
+  textoCompleto: string,
+  authHeader: string,
+): Promise<{ ok: boolean; chunks_created?: number; error?: string }> {
+  if (!textoCompleto || textoCompleto.length < 20) {
+    return { ok: false, error: "texto curto (< 20 chars)" };
+  }
+  try {
+    const { data, error } = await supabase.functions.invoke("chunk-and-embed", {
+      body: { document_id: documentId, extracted_text: textoCompleto },
+      headers: { Authorization: authHeader },
+    });
+    if (error) {
+      console.warn(
+        `[reprocess-v6] chunk-and-embed para ${documentId} falhou:`,
+        error,
+      );
+      return { ok: false, error: error.message ?? String(error) };
+    }
+    return {
+      ok: true,
+      chunks_created: data?.chunks_created ?? 0,
+    };
+  } catch (err) {
+    console.warn(
+      `[reprocess-v6] chunk-and-embed throw para ${documentId}:`,
+      err,
+    );
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 async function processarDoc(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   // deno-lint-ignore no-explicit-any
   doc: any,
+  authHeader: string,
 ): Promise<ProcessamentoResult> {
   if (!doc.storage_path) {
     return { id: doc.id, sucesso: false, outcome: "exception", razao: "sem storage_path" };
@@ -199,6 +247,16 @@ async function processarDoc(
       },
     })
     .eq("id", doc.id);
+
+  // F3.3 — fix RAG cego: dispara chunk-and-embed pra popular doc_chunks
+  // (antes essa função só gravava parsed/ocr_text e RAG ficava sem dados).
+  const chunkResult = await disparaChunkAndEmbed(
+    supabase,
+    doc.id,
+    docTab.textoCompleto,
+    authHeader,
+  );
+
   return {
     id: doc.id,
     sucesso: true,
@@ -206,7 +264,10 @@ async function processarDoc(
     mapper: dispatch.mapper.slug,
     score: dispatch.score,
     pageCount: docTab.numeroPaginas,
-    razao: `score ${dispatch.score.toFixed(2)}`,
+    razao: `score ${dispatch.score.toFixed(2)}` +
+      (chunkResult.ok
+        ? ` · ${chunkResult.chunks_created ?? "?"} chunks RAG`
+        : ` · chunk-and-embed falhou (${chunkResult.error ?? "?"}) — re-rodar`),
   };
 }
 
@@ -220,8 +281,9 @@ async function processarDocComLog(
   supabase: any,
   // deno-lint-ignore no-explicit-any
   doc: any,
+  authHeader: string,
 ): Promise<ProcessamentoResult> {
-  const r = await processarDoc(supabase, doc);
+  const r = await processarDoc(supabase, doc, authHeader);
   if (!r.sucesso) {
     // Persiste outcome estruturado + sample do texto pra calibração.
     await supabase
@@ -294,7 +356,7 @@ serve(async (req) => {
     const resultados: ProcessamentoResult[] = [];
     for (const doc of docs) {
       try {
-        resultados.push(await processarDocComLog(supabase, doc));
+        resultados.push(await processarDocComLog(supabase, doc, authHeader));
       } catch (err) {
         const r: ProcessamentoResult = {
           id: doc.id,

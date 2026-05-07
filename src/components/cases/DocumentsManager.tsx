@@ -74,6 +74,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { logger } from "@/lib/logger";
+import { OcrProviderBadge } from "./data-extraction/OcrProviderBadge";
 
 interface Document {
   id: string;
@@ -984,14 +985,22 @@ export function DocumentsManager({
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`${status.bgColor} ${status.color} border-0`}>
-                          {isProcessing ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                          ) : (
-                            <StatusIcon className={`h-3 w-3 mr-1 ${status.icon === Loader2 ? 'animate-spin' : ''}`} />
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge variant="outline" className={`${status.bgColor} ${status.color} border-0`}>
+                            {isProcessing ? (
+                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            ) : (
+                              <StatusIcon className={`h-3 w-3 mr-1 ${status.icon === Loader2 ? 'animate-spin' : ''}`} />
+                            )}
+                            {isProcessing ? "Processando..." : status.label}
+                          </Badge>
+                          {doc.ocr_provider && (
+                            <OcrProviderBadge
+                              ocrProvider={doc.ocr_provider}
+                              compact
+                            />
                           )}
-                          {isProcessing ? "Processando..." : status.label}
-                        </Badge>
+                        </div>
                         {doc.metadata?.processing_message && (
                           <p className="text-xs text-muted-foreground mt-1 truncate max-w-[200px]" title={doc.metadata.processing_message}>
                             {doc.metadata.processing_message}
