@@ -16,6 +16,7 @@ import { parseCartaoPonto, type ParseCartaoPontoResult } from '../../parsers/car
 import { parseFerias, type ParseFeriasResult } from '../../parsers/ferias';
 import { parseFaltas, type ParseFaltasResult } from '../../parsers/faltas';
 import { buildCartaoPontoCSV } from './cartao-ponto-csv';
+import { buildCartaoPontoZip, buildCartaoPontoZipWithReport } from './cartao-ponto-zip';
 import { buildFeriasCSVBlob, buildFeriasCSVBlobWithReport } from './ferias-csv';
 import { buildFaltasCSVBlob, buildFaltasCSVBlobWithReport } from './faltas-csv';
 import { classifyHolerite, type ClassificacaoHolerite } from './holerite-classify';
@@ -123,7 +124,7 @@ export async function generateExportForDocument(
             parsed: adapted,
             document_id: documentId,
             ocr_text: ocrText,
-            filename: `${baseName}_jornada.csv`,
+            filename: `${baseName}_jornada.zip`,
           };
         }
       }
@@ -137,7 +138,7 @@ export async function generateExportForDocument(
         parsed,
         document_id: documentId,
         ocr_text: ocrText,
-        filename: `${baseName}_jornada.csv`,
+        filename: `${baseName}_jornada.zip`,
       };
     }
     case 'recibo_ferias': {
@@ -259,6 +260,8 @@ export {
   buildHoleriteZip,
   buildHoleriteZipWithReport,
   buildCartaoPontoCSV,
+  buildCartaoPontoZip,
+  buildCartaoPontoZipWithReport,
   buildFeriasCSVBlob,
   buildFeriasCSVBlobWithReport,
   buildFaltasCSVBlob,

@@ -62,45 +62,49 @@ export async function buildCtpsZipWithReport(
     for (const w of sub.warnings) aggregate.warnings.push(`[${prefixo}] ${w}`);
   };
 
-  if (input.ferias.ferias.length > 0) {
-    const { csv, report } = buildFeriasCSVWithReport(
-      input.ferias.ferias.map((f) => ({
-        relativa: f.relativa,
-        prazo: f.prazo,
-        situacao: f.situacao,
-        dobra_geral: f.dobra_geral,
-        abono: f.abono,
-        dias_abono: f.dias_abono,
-        gozo1: f.gozo1,
-        gozo2: f.gozo2,
-        gozo3: f.gozo3,
-      })),
+  // Sempre gera AMBOS os CSVs, mesmo quando o parser correspondente volta
+  // vazio. Header-only deixa explícito "parser tentou e não achou nada"
+  // em vez de omitir o arquivo do ZIP (silêncio que o operador interpreta
+  // como bug). Paridade > silêncio.
+  const { csv: feriasCsv, report: feriasReport } = buildFeriasCSVWithReport(
+    input.ferias.ferias.map((f) => ({
+      relativa: f.relativa,
+      prazo: f.prazo,
+      situacao: f.situacao,
+      dobra_geral: f.dobra_geral,
+      abono: f.abono,
+      dias_abono: f.dias_abono,
+      gozo1: f.gozo1,
+      gozo2: f.gozo2,
+      gozo3: f.gozo3,
+    })),
+  );
+  zip.file(`${input.baseFilename}_ferias.csv`, feriasCsv);
+  merge(feriasReport, 'Férias');
+  if (input.ferias.ferias.length === 0) {
+    aggregate.warnings.push(
+      '[Férias] Nenhum período detectado no OCR — CSV gerado apenas com cabeçalho (header-only).',
     );
-    zip.file(`${input.baseFilename}_ferias.csv`, csv);
-    merge(report, 'Férias');
   }
 
-  if (input.faltas.faltas.length > 0) {
-    const { csv, report } = buildFaltasCSVWithReport(
-      input.faltas.faltas.map((f) => ({
-        data_inicio: f.data_inicio,
-        data_fim: f.data_fim,
-        justificada: f.justificada,
-        reiniciar_periodo_aquisitivo: f.reiniciar_periodo_aquisitivo,
-        justificativa: f.justificativa,
-      })),
+  const { csv: faltasCsv, report: faltasReport } = buildFaltasCSVWithReport(
+    input.faltas.faltas.map((f) => ({
+      data_inicio: f.data_inicio,
+      data_fim: f.data_fim,
+      justificada: f.justificada,
+      reiniciar_periodo_aquisitivo: f.reiniciar_periodo_aquisitivo,
+      justificativa: f.justificativa,
+    })),
+  );
+  zip.file(`${input.baseFilename}_faltas.csv`, faltasCsv);
+  merge(faltasReport, 'Faltas');
+  if (input.faltas.faltas.length === 0) {
+    aggregate.warnings.push(
+      '[Faltas] Nenhum registro detectado no OCR — CSV gerado apenas com cabeçalho (header-only).',
     );
-    zip.file(`${input.baseFilename}_faltas.csv`, csv);
-    merge(report, 'Faltas');
   }
 
   zip.file('LEIA-ME.txt', buildReadme(input));
-
-  if (input.ferias.ferias.length === 0 && input.faltas.faltas.length === 0) {
-    aggregate.warnings.push(
-      'Nenhum dado extraído (nem férias, nem faltas) — ZIP terá apenas o LEIA-ME.',
-    );
-  }
 
   const blob = await zip.generateAsync({ type: 'blob' });
   return { blob, report: aggregate };

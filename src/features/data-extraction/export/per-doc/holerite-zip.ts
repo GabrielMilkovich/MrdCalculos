@@ -101,8 +101,11 @@ export async function buildHoleriteZipWithReport(
   const report = emptyReport();
   const buckets = aggregateByCategoria(classificacao.linhas);
 
-  // Detecta perda silenciosa: rubrica com valor positivo SEM categoria
-  // atribuída (ou desmarcada). Cada caso vira linha rejeitada explícita.
+  // Soma das rubricas sem categoria atribuída — vão pra um CSV separado
+  // pra que NENHUMA rubrica com valor positivo seja perdida do ZIP.
+  let somaNaoClassificadas = new Decimal(0);
+  const itensNaoClassificadas: Array<{ nome: string; valor: number }> = [];
+
   classificacao.linhas.forEach((l, i) => {
     if (l.origem === 'desconto') {
       // Descontos são by design — não rejeição, registra como ajuste.
@@ -117,10 +120,25 @@ export async function buildHoleriteZipWithReport(
     }
     if (l.valorParaCsv <= 0) return;
     if (l.categoria === null) {
-      report.linhasRejeitadas.push({
-        idx: i,
-        motivo: `Rubrica "${l.rubrica.nome}" (R$ ${formatNumeroBR(new Decimal(l.valorParaCsv))}) sem categoria — NÃO entrará em nenhum CSV do ZIP.`,
-      });
+      // Em vez de rejeitar (silenciar do ZIP), agrega num bucket especial
+      // "nao_classificadas". Operador decide depois em qual Histórico
+      // Salarial mover. Paridade preservada — nada some.
+      if (l.incluir) {
+        somaNaoClassificadas = somaNaoClassificadas.plus(l.valorParaCsv);
+        itensNaoClassificadas.push({
+          nome: l.rubrica.nome,
+          valor: l.valorParaCsv,
+        });
+        report.linhasAjustadas.push({
+          idx: i,
+          ajuste: `Rubrica "${l.rubrica.nome}" (R$ ${formatNumeroBR(new Decimal(l.valorParaCsv))}) sem categoria — incluída em "historico_salarial_nao_classificadas.csv" para revisão manual.`,
+        });
+      } else {
+        report.linhasAjustadas.push({
+          idx: i,
+          ajuste: `Rubrica "${l.rubrica.nome}" (R$ ${formatNumeroBR(new Decimal(l.valorParaCsv))}) sem categoria e desmarcada pelo operador — não entra no CSV.`,
+        });
+      }
       return;
     }
     if (!l.incluir) {
@@ -154,12 +172,36 @@ export async function buildHoleriteZipWithReport(
     }
   }
 
+  // CSV especial das rubricas sem categoria — preserva paridade. Operador
+  // importa como Histórico Salarial novo no PJe-Calc OU revisa o que pertence
+  // a quais buckets antes de importar.
+  if (somaNaoClassificadas.gt(0)) {
+    const { csv, report: subReport } = buildHistoricoSalarialCSVWithReport(
+      [{ competencia: classificacao.competencia, valor: somaNaoClassificadas }],
+      bothInOn(),
+    );
+    zip.file('historico_salarial_nao_classificadas.csv', csv);
+    report.linhasGeradas += subReport.linhasGeradas;
+    for (const w of subReport.warnings) {
+      report.warnings.push(`[Não classificadas] ${w}`);
+    }
+    report.warnings.push(
+      `${itensNaoClassificadas.length} rubrica(s) sem categoria atribuída — somadas em "historico_salarial_nao_classificadas.csv" (R$ ${formatNumeroBR(somaNaoClassificadas)}). Revise manualmente antes de importar no PJe-Calc.`,
+    );
+  }
+
   // CSV de auditoria — TODAS as rubricas com classificação atribuída.
   // Não importa para o PJe-Calc; serve para o operador (ou cliente) revisar
   // depois "o que entrou em cada bucket" e "o que foi descartado".
   zip.file('auditoria_completa.csv', buildAuditoriaCSV(classificacao));
 
-  zip.file('LEIA-ME.txt', buildReadme(classificacao, buckets));
+  zip.file(
+    'LEIA-ME.txt',
+    buildReadme(classificacao, buckets, {
+      somaNaoClassificadas,
+      itensNaoClassificadas,
+    }),
+  );
 
   if (buckets.size === 0) {
     report.warnings.push(
@@ -219,6 +261,10 @@ function formatLinhaAuditoria(l: LinhaClassificada): string {
 function buildReadme(
   classificacao: ClassificacaoHolerite,
   buckets: Map<CategoriaSlug, Decimal>,
+  extras: {
+    somaNaoClassificadas: Decimal;
+    itensNaoClassificadas: Array<{ nome: string; valor: number }>;
+  },
 ): string {
   const lines: string[] = [];
   lines.push(`HOLERITE — competência ${classificacao.competencia}`);
@@ -273,7 +319,7 @@ function buildReadme(
   lines.push('  5) Clique em "Importar CSV" e selecione o arquivo correspondente.');
   lines.push('');
 
-  if (buckets.size === 0) {
+  if (buckets.size === 0 && extras.somaNaoClassificadas.eq(0)) {
     lines.push('Nenhum CSV gerado — todas as rubricas foram excluídas no preview.');
   } else {
     lines.push('ARQUIVOS NESTE ZIP');
@@ -291,6 +337,26 @@ function buildReadme(
         lines.push(
           `    Flags sugeridas:             FGTS=${f.incide_fgts ? 'S' : 'N'}, INSS=${f.incide_inss ? 'S' : 'N'} (recolhidos = N)`,
         );
+      }
+    }
+    if (extras.somaNaoClassificadas.gt(0)) {
+      lines.push('');
+      lines.push('* historico_salarial_nao_classificadas.csv');
+      lines.push('    Histórico Salarial a criar:  Não Classificadas (revisar)');
+      lines.push(
+        `    Soma da competência:         R$ ${formatNumeroBR(extras.somaNaoClassificadas)}`,
+      );
+      lines.push(
+        '    Flags sugeridas:             FGTS=S, INSS=S (recolhidos = N) — REVISAR',
+      );
+      lines.push('    Itens (revisar manualmente):');
+      for (const item of extras.itensNaoClassificadas.slice(0, 30)) {
+        lines.push(
+          `      - ${item.nome}: R$ ${formatNumeroBR(new Decimal(item.valor))}`,
+        );
+      }
+      if (extras.itensNaoClassificadas.length > 30) {
+        lines.push(`      … (+${extras.itensNaoClassificadas.length - 30} omitidos — ver auditoria_completa.csv)`);
       }
     }
   }

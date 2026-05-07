@@ -405,7 +405,7 @@ describe("buildFeriasCSV — inteligência", () => {
     expect(r.report.warnings.some((w) => /diverge/i.test(w))).toBe(true);
   });
 
-  it("DESCARTA gozo com data inválida", () => {
+  it("PRESERVA parte válida quando uma das datas do gozo é inválida (paridade > silêncio)", () => {
     const r = buildFeriasCSVWithReport([
       {
         relativa: "2022/2023",
@@ -419,10 +419,39 @@ describe("buildFeriasCSV — inteligência", () => {
         gozo3: null,
       },
     ]);
-    // Linha vai gerada, mas gozo1 vira 3 strings vazias.
+    // Linha gerada; INI inválido vira vazio mas FIM e DOBRA preservados.
     expect(r.report.linhasGeradas).toBe(1);
-    // Trailing 9 ; (gozos vazios) — relativa;prazo;situacao;dobra;abono;dias;3x3 colunas vazias.
-    expect(r.csv).toMatch(/2022\/2023;30;G;N;N;0;;;;;;;;;/);
+    expect(r.csv).toMatch(/2022\/2023;30;G;N;N;0;;10\/06\/2024;N;;;;;;/);
+    // Warning explícito sobre a célula inválida.
+    expect(
+      r.report.warnings.some((w) =>
+        /G1: data INÍCIO inválida/i.test(w),
+      ),
+    ).toBe(true);
+  });
+
+  it("ZERA ambas datas + warning quando AS DUAS são inválidas no mesmo gozo", () => {
+    const r = buildFeriasCSVWithReport([
+      {
+        relativa: "2022/2023",
+        prazo: 30,
+        situacao: "G",
+        dobra_geral: false,
+        abono: false,
+        dias_abono: 0,
+        gozo1: { inicio: "32/13/2024", fim: "99/99/9999", dobra: true },
+        gozo2: null,
+        gozo3: null,
+      },
+    ]);
+    expect(r.report.linhasGeradas).toBe(1);
+    // INI vazio, FIM vazio, DOBRA preservada (S).
+    expect(r.csv).toMatch(/2022\/2023;30;G;N;N;0;;;S;;;;;;/);
+    expect(
+      r.report.warnings.some((w) =>
+        /G1: ambas as datas inválidas/i.test(w),
+      ),
+    ).toBe(true);
   });
 });
 

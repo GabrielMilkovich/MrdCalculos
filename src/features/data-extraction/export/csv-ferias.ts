@@ -61,13 +61,33 @@ export type FeriasCsvLinha = {
   gozo3: GozoPeriodo | null;
 };
 
-/** Gozo nulo OU com data inválida → 3 strings vazias. */
-function gozoCols(g: GozoPeriodo | null): [string, string, string] {
+/**
+ * Gera as 3 células (INI; FIM; DOBRA) de um gozo.
+ *
+ * Política de paridade: se uma das datas for inválida, exporta a parte
+ * VÁLIDA + reporta o problema. Antes (v3) descartava o gozo inteiro,
+ * silenciando dado correto. Agora preserva o que dá pra preservar e a UI
+ * mostra warning explícito apontando qual célula precisa correção manual.
+ */
+function gozoCols(
+  g: GozoPeriodo | null,
+  rotuloGozo: string,
+  reportInvalido: (motivo: string) => void,
+): [string, string, string] {
   if (!g) return ['', '', ''];
-  // Validação dura: se uma das datas é inválida, descarta o gozo inteiro.
-  // Resultado fica vazio — operador deve corrigir manualmente no PJe-Calc.
-  if (!isDataBRValida(g.inicio) || !isDataBRValida(g.fim)) {
-    return ['', '', ''];
+  const iniValido = isDataBRValida(g.inicio);
+  const fimValido = isDataBRValida(g.fim);
+  if (!iniValido && !fimValido) {
+    reportInvalido(`${rotuloGozo}: ambas as datas inválidas ("${g.inicio}" / "${g.fim}") — célula vazia.`);
+    return ['', '', formatBoolBR(g.dobra)];
+  }
+  if (!iniValido) {
+    reportInvalido(`${rotuloGozo}: data INÍCIO inválida ("${g.inicio}"); FIM "${g.fim}" preservado.`);
+    return ['', g.fim, formatBoolBR(g.dobra)];
+  }
+  if (!fimValido) {
+    reportInvalido(`${rotuloGozo}: data FIM inválida ("${g.fim}"); INÍCIO "${g.inicio}" preservado.`);
+    return [g.inicio, '', formatBoolBR(g.dobra)];
   }
   return [g.inicio, g.fim, formatBoolBR(g.dobra)];
 }
@@ -153,8 +173,12 @@ export function buildFeriasCSVWithReport(
     }
   }
 
-  // 6. Constrói linhas.
+  // 6. Constrói linhas. Datas inválidas em gozo emitem warning preservando
+  //    a parte válida — paridade > silêncio.
   const rows = dedupadas.map((f) => {
+    const reportar = (motivo: string) => {
+      report.warnings.push(`${f.relativa} ${motivo}`);
+    };
     return [
       sanitizeText(f.relativa, 50),
       String(f.prazo),
@@ -162,9 +186,9 @@ export function buildFeriasCSVWithReport(
       formatBoolBR(f.dobra_geral),
       formatBoolBR(f.abono),
       String(f.dias_abono),
-      ...gozoCols(f.gozo1),
-      ...gozoCols(f.gozo2),
-      ...gozoCols(f.gozo3),
+      ...gozoCols(f.gozo1, 'G1', reportar),
+      ...gozoCols(f.gozo2, 'G2', reportar),
+      ...gozoCols(f.gozo3, 'G3', reportar),
     ].join(';');
   });
 
