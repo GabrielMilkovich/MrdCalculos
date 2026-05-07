@@ -47,6 +47,11 @@ import {
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
+import {
+  VerifyExtractionAIButton,
+  type AIInteractionResult,
+  type AISuggestion,
+} from "./VerifyExtractionAIButton";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 import { checkHorasTrabalhadas } from "@/features/data-extraction";
 import { applyHoraMask, normalizeHoraOnBlur } from "./hora-mask";
@@ -274,6 +279,50 @@ export function CartaoPontoReviewDialog({
   const [downloading, setDownloading] = useState(false);
   // F0.4 — propaga checkbox override do ReviewLayout até logCsvExport.
   const [bloqueioBurladoFlag, setBloqueioBurladoFlag] = useState(false);
+  // PR-2 — telemetria IA propagada do VerifyExtractionAIButton até logCsvExport.
+  const [aiTelemetry, setAiTelemetry] = useState<AIInteractionResult | null>(
+    null,
+  );
+
+  /**
+   * Aplica sugestões aceitas pelo operador. Suporta os campos mais comuns
+   * que a IA tipicamente sugere para cartão de ponto:
+   *   - apuracao[N].marcacoes[K].e   → muda entrada do par K do dia N
+   *   - apuracao[N].marcacoes[K].s   → muda saída do par K do dia N
+   *   - apuracao[N].ocorrencia       → muda ocorrência do dia N
+   *   - apuracao[N].dia_semana       → muda dia_semana do dia N
+   * Campos não-suportados são ignorados silenciosamente (raros na prática).
+   */
+  function handleAISuggestions(suggestions: AISuggestion[]): void {
+    setRows((prev) => {
+      const next = [...prev];
+      for (const s of suggestions) {
+        const mMarc = s.field.match(/^apuracao\[(\d+)\]\.marcacoes\[(\d+)\]\.([es])$/);
+        if (mMarc) {
+          const i = parseInt(mMarc[1], 10);
+          const k = parseInt(mMarc[2], 10);
+          const lado = mMarc[3] as "e" | "s";
+          if (!next[i] || !next[i].marcacoes[k]) continue;
+          if (typeof s.suggested !== "string") continue;
+          const par = { ...next[i].marcacoes[k], [lado]: s.suggested };
+          const marcacoes = [...next[i].marcacoes];
+          marcacoes[k] = par;
+          next[i] = { ...next[i], marcacoes };
+          continue;
+        }
+        const mField = s.field.match(/^apuracao\[(\d+)\]\.(ocorrencia|dia_semana)$/);
+        if (mField) {
+          const i = parseInt(mField[1], 10);
+          const campo = mField[2] as "ocorrencia" | "dia_semana";
+          if (!next[i]) continue;
+          if (s.suggested === null || typeof s.suggested === "string") {
+            next[i] = { ...next[i], [campo]: s.suggested } as typeof next[i];
+          }
+        }
+      }
+      return next;
+    });
+  }
 
   // Constrói o CSV em memória + abre o painel de auditoria. O download
   // só acontece quando o operador confirma (ou autoriza explicitamente
@@ -334,6 +383,10 @@ export function CartaoPontoReviewDialog({
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
         bloqueioBurlado: bloqueioBurladoFlag,
         parserOrigem: effectiveParsed.parser_version,
+        aiInvoked: aiTelemetry?.aiInvoked ?? false,
+        aiChangedFields: aiTelemetry?.aiChangedFields ?? [],
+        aiConfidence: aiTelemetry?.aiConfidence ?? undefined,
+        aiSkippedReason: aiTelemetry?.aiSkippedReason ?? undefined,
       });
       setReportPreview(null);
       setBloqueioBurladoFlag(false);
@@ -356,6 +409,28 @@ export function CartaoPontoReviewDialog({
       headerSlot={
         <div className="flex items-center gap-2 flex-wrap">
           <ConfidenceBadge score={confidence} />
+          <VerifyExtractionAIButton
+            score={confidence.score}
+            builder="cartao_ponto"
+            documentId={documentId ?? null}
+            parsed={{
+              apuracoes: sorted.map((r) => ({
+                data: r.data,
+                dia_semana: r.dia_semana ?? null,
+                ocorrencia: r.ocorrencia,
+                marcacoes: r.marcacoes,
+                eventos: r.eventos ?? [],
+                observacao: r.observacao,
+              })),
+              competencia_predominante: effectiveParsed.competencia_predominante,
+              data_inicial: effectiveParsed.data_inicial,
+              data_final: effectiveParsed.data_final,
+              parser_version: effectiveParsed.parser_version,
+            }}
+            ocrText={ocrText ?? ""}
+            onApplySuggestions={handleAISuggestions}
+            onTelemetry={setAiTelemetry}
+          />
         </div>
       }
       onConfirm={handleConfirm}
