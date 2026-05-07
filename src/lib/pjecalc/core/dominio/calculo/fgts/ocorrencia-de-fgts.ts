@@ -33,8 +33,8 @@ import {
   AliquotaDoFgtsEnum,
   TipoDeBaseDoFgtsEnum,
   TipoDeDepositadoDoFgtsEnum,
-  type TipoDeCorrecaoDoFgtsEnum,
 } from '../../../constantes/enums';
+import type { TipoDeCorrecaoDoFgtsEnum } from './operacao-de-fgts';
 import { calcularAliquotaDoFgts } from '../../../constantes/aliquota-do-fgts-operadores';
 import { aplicarCorrecaoMonetaria, aplicarTaxa } from '../../../base/comum/utils';
 import { HelperDate } from '../../../base/comum/helper-date';
