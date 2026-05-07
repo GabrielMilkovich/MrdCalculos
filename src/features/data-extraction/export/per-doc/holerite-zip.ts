@@ -101,6 +101,24 @@ export async function buildHoleriteZipWithReport(
   const report = emptyReport();
   const buckets = aggregateByCategoria(classificacao.linhas);
 
+  // Paridade declarativa: campos do parsed que NÃO chegam aos CSVs oficiais
+  // do PJe-Calc (vão só pro auditoria_completa.csv). Registrar é honesto —
+  // operador vê na UI e sabe que precisa abrir o auditoria pra essas infos.
+  report.camposNaoExportados!.push(
+    {
+      campo: 'rubrica.codigo',
+      motivo: 'Histórico Salarial PJe-Calc não tem coluna Codigo — disponível em auditoria_completa.csv.',
+    },
+    {
+      campo: 'rubrica.nome',
+      motivo: 'Histórico Salarial PJe-Calc agrega por categoria (sem nome individual) — auditoria_completa.csv preserva nome de cada rubrica.',
+    },
+    {
+      campo: 'rubrica.quantidade',
+      motivo: 'Histórico Salarial PJe-Calc não tem coluna Quantidade — disponível em auditoria_completa.csv.',
+    },
+  );
+
   // Soma das rubricas sem categoria atribuída — vão pra um CSV separado
   // pra que NENHUMA rubrica com valor positivo seja perdida do ZIP.
   let somaNaoClassificadas = new Decimal(0);

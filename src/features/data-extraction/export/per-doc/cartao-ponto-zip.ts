@@ -71,6 +71,33 @@ export async function buildCartaoPontoZipWithReport(
   // 5. Linhas geradas no report unificado = oficial (= completo, mesma base).
   report.linhasGeradas = oficial.report.linhasGeradas;
 
+  // 6. Paridade declarativa: campos do parsed que vão SÓ pro completo
+  //    (não pro oficial PJe-Calc). Operador vê na UI e sabe onde achar.
+  report.camposNaoExportados!.push(
+    {
+      campo: 'apuracao.dia_semana',
+      motivo: 'CSV oficial PJe-Calc só tem 13 colunas (Data + 6 pares E/S) — dia_semana fica em cartao_ponto_completo.csv.',
+    },
+    {
+      campo: 'apuracao.ocorrencia',
+      motivo: 'CSV oficial PJe-Calc não tem coluna Ocorrencia — disponível em cartao_ponto_completo.csv.',
+    },
+    {
+      campo: 'apuracao.eventos',
+      motivo: 'CSV oficial PJe-Calc não exporta eventos (HT, HE, banco de horas) — disponíveis em cartao_ponto_completo.csv.',
+    },
+    {
+      campo: 'apuracao.observacao',
+      motivo: 'CSV oficial PJe-Calc não tem coluna Observacao — disponível em cartao_ponto_completo.csv.',
+    },
+  );
+  if (completo.maxPares > PARES_MAX_OFICIAL) {
+    report.camposNaoExportados!.push({
+      campo: `apuracao.marcacoes[${PARES_MAX_OFICIAL}…${completo.maxPares - 1}]`,
+      motivo: `Pares ${PARES_MAX_OFICIAL + 1}–${completo.maxPares} excedem o limite PJe-Calc (6) — preservados em cartao_ponto_completo.csv.`,
+    });
+  }
+
   const blob = await zip.generateAsync({ type: 'blob' });
   return { blob, report };
 }
