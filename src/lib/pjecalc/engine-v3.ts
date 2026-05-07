@@ -63,7 +63,7 @@ import {
 import {
   arredondarValorMonetario,
 } from './core/base/comum/utils';
-import { totalizar } from './core/dominio/pagamento/pagamento';
+import { totalizar } from './core/dominio/pagamento/pagamento-totalizador';
 import {
   PrimeiraFaixaPrevidenciaria,
   SegundaFaixaPrevidenciaria,
