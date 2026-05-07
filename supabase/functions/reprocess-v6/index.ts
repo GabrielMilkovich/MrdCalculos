@@ -19,6 +19,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extrairGeometrico } from "../_shared/extrator-geometrico.ts";
 import { escolherMapper } from "../_shared/mappers/dispatcher.ts";
+import { sanitizePII } from "../_shared/sanitize-pii.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -128,7 +129,8 @@ async function processarDoc(
     };
   }
   // Captura sample do textoCompleto pra qualquer outcome pós-extração.
-  const textPreview = docTab.textoCompleto.slice(0, 4000);
+  // LGPD: sanitiza PII antes de gravar em metadata jsonb.
+  const textPreview = sanitizePII(docTab.textoCompleto.slice(0, 4000));
   const textFullLength = docTab.textoCompleto.length;
   if (docTab.qualidade.score < 0.7) {
     return {

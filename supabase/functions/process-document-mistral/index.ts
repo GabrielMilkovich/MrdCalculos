@@ -31,6 +31,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { extrairGeometrico } from "../_shared/extrator-geometrico.ts";
 import { escolherMapper } from "../_shared/mappers/dispatcher.ts";
+import { sanitizePII } from "../_shared/sanitize-pii.ts";
 
 // Possíveis transições do caminho V6. Vira `metadata.v6_outcome`. Cada
 // valor deve ser INDIVÍDUAL (não combinado) — query `WHERE v6_outcome = X`
@@ -115,7 +116,9 @@ async function tentarV6(
       };
     }
     // Sample do textoCompleto pra qualquer outcome pós-extração — debugging.
-    const textPreview = docTab.textoCompleto.slice(0, 4000);
+    // LGPD: sanitiza PII (CPF/CNPJ/PIS/email/telefone) antes de gravar em
+    // metadata jsonb. Layout/valores/datas preservados pra calibração.
+    const textPreview = sanitizePII(docTab.textoCompleto.slice(0, 4000));
     const textFullLength = docTab.textoCompleto.length;
     if (docTab.qualidade.score < 0.7) {
       return {
