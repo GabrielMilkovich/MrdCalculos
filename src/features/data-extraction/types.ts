@@ -9,19 +9,27 @@
 
 export type CaseMode = 'calculation' | 'data_extraction';
 
+/**
+ * Tipos de extração suportados.
+ *
+ * F1.3: `recibo_ferias` e `registro_faltas` foram unificados em `ctps`.
+ * Hoje o tipo `ctps` cobre 3 casos:
+ *   - Recibo de férias avulso
+ *   - Registro de faltas avulso
+ *   - CTPS / espelho que contém ambos
+ *
+ * Quando classificado como `ctps`, o pipeline aciona os 2 parsers
+ * (ferias + faltas) sobre o mesmo OCR. Quando um deles fica vazio, o
+ * CSV correspondente sai header-only no ZIP — operador audita.
+ *
+ * Migration `20260510000000_f13_unificar_ferias_faltas_em_ctps.sql`
+ * já migrou docs antigos e a CHECK constraint só aceita os 4 tipos
+ * abaixo.
+ */
 export type TipoExtracao =
   | 'nao_extrair'
   | 'holerite'
-  | 'recibo_ferias'
-  | 'registro_faltas'
   | 'cartao_ponto'
-  /**
-   * CTPS — Carteira de Trabalho. Documento que contém AMBOS recibo de
-   * férias e registro de faltas no mesmo OCR. Quando classificado como
-   * `ctps`, o pipeline aciona os 2 parsers (ferias + faltas) sobre o
-   * mesmo texto e o operador revisa ambos no `CtpsReviewDialog` antes
-   * de baixar 1 ZIP com os 2 CSVs.
-   */
   | 'ctps';
 
 export type ValidationStatus = 'pending' | 'validated' | 'rejected';
