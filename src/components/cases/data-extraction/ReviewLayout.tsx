@@ -28,6 +28,7 @@
  * porque o gate humano é a garantia de cobertura 100% do conteúdo OCR.
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   ChevronDown,
@@ -201,8 +202,17 @@ export function ReviewLayout({
   const handleConfirm = async () => {
     setDownloading(true);
     try {
+      // NÃO fechamos o dialog aqui — onConfirm tipicamente abre o painel
+      // CsvBuildReportPanel (que vive DENTRO deste dialog). Fechar aqui
+      // desmonta o painel antes do operador conseguir clicar "Baixar".
+      // Quem fecha é o handleDownloadConfirmed do caller, depois que o
+      // triggerBlobDownload de fato disparou o arquivo.
       await onConfirm({ bloqueioBurlado: false });
-      onOpenChange(false);
+    } catch (err) {
+      // Erro silencioso era pior que o bug — surfaca no console e via toast.
+      console.error("[ReviewLayout] onConfirm falhou:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Falha ao gerar CSV: ${msg.slice(0, 200)}`);
     } finally {
       setDownloading(false);
     }

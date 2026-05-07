@@ -324,6 +324,7 @@ export function FeriasReviewDialog({
       });
       setReportPreview(null);
       setBloqueioBurladoFlag(false);
+      onOpenChange(false);
     } finally {
       setDownloading(false);
     }

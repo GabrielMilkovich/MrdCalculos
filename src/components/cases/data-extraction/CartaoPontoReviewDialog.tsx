@@ -390,6 +390,7 @@ export function CartaoPontoReviewDialog({
       });
       setReportPreview(null);
       setBloqueioBurladoFlag(false);
+      onOpenChange(false);
     } finally {
       setDownloading(false);
     }
