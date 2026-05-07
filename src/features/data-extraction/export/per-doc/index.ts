@@ -99,7 +99,13 @@ export async function generateExportForDocument(
   // (parser v5 falha na deferência dia↔batidas).
   const v6Parsed = (doc as { parsed?: unknown }).parsed;
 
-  switch (doc.tipo_extracao) {
+  // F1.3 (PR-4): switch usa string crua porque a tabela `documents` pode
+  // ainda retornar tipos legados ('recibo_ferias', 'registro_faltas') em
+  // caches/réplicas que não refletiram a migration. Tratamos como fallback
+  // pra `ctps` (1 sprint) — depois disso o constraint do banco já recusa
+  // os legados e podemos remover.
+  const tipoRaw = doc.tipo_extracao as string | null | undefined;
+  switch (tipoRaw) {
     case 'holerite': {
       const parsed = parseHolerite(ocrText);
       const preview = classifyHolerite(parsed);
@@ -141,28 +147,10 @@ export async function generateExportForDocument(
         filename: `${baseName}_jornada.zip`,
       };
     }
-    case 'recibo_ferias': {
-      const parsed = parseFerias(ocrText);
-      return {
-        ok: true,
-        kind: 'ferias-review',
-        parsed,
-        document_id: documentId,
-        ocr_text: ocrText,
-        filename: `${baseName}_ferias.csv`,
-      };
-    }
-    case 'registro_faltas': {
-      const parsed = parseFaltas(ocrText);
-      return {
-        ok: true,
-        kind: 'faltas-review',
-        parsed,
-        document_id: documentId,
-        ocr_text: ocrText,
-        filename: `${baseName}_faltas.csv`,
-      };
-    }
+    // PR-4 F1.3: cases legados delegam pra 'ctps'. Mantidos por 1 sprint
+    // pra cobrir caches/réplicas com dados antigos. Fall-through.
+    case 'recibo_ferias':
+    case 'registro_faltas':
     case 'ctps': {
       // CTPS — Carteira de Trabalho. O MESMO OCR alimenta os 2 parsers.
       // Se um deles não achar nada (ex: CTPS sem férias registradas),

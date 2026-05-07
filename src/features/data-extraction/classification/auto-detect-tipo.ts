@@ -5,13 +5,15 @@
  * pontos no tipo correspondente. O tipo com mais pontos vence, mas só
  * "alta confiança" se score >= 12 e diferença pra 2º lugar >= 4.
  *
- * Tipos detectáveis: holerite, recibo_ferias, registro_faltas, cartao_ponto, ctps.
+ * Tipos detectáveis: holerite, cartao_ponto, ctps.
  *
- * **CTPS — caso especial**: documento "Carteira de Trabalho" contém
- * tipicamente AMBOS recibo de férias E registro de faltas no mesmo OCR.
- * Quando o documento tem sinais fortes de carteira de trabalho E pelo
- * menos um sinal de férias OU faltas, classificamos como `ctps` em vez
- * de obrigar o operador a escolher entre um e outro (e perder a metade).
+ * **F1.3 — `ctps` cobre 3 casos**: recibo de férias avulso, registro de
+ * faltas avulso, e CTPS/espelho que contém ambos. Os SINAIS_FERIAS e
+ * SINAIS_FALTAS contribuem TODOS para o score `ctps`, junto com
+ * SINAIS_CTPS_CABECALHO (cabeçalho "Carteira de Trabalho"). Eliminamos
+ * a separação anterior em `recibo_ferias` / `registro_faltas` porque o
+ * pipeline a jusante (mappers V6 + buildCtpsZip) já dispara os 2
+ * parsers no mesmo OCR e gera 1 CSV por tipo (header-only quando vazio).
  *
  * Auto-disparo de extração só ocorre quando confiança = 'alta' (§6 do
  * spec). 'media' espera clique humano, 'baixa' fica em pending.
@@ -184,41 +186,35 @@ export function autoDetectTipoExtracao(ocrText: string): AutoDetectResult {
     };
   }
 
+  // F1.3 — CTPS unifica férias + faltas + cabeçalho carteira. Os 3
+  // grupos de sinais somam para o mesmo score `ctps`. Antes tínhamos
+  // 3 tipos separados (recibo_ferias / registro_faltas / ctps); agora
+  // é 1 só, cobrindo recibo avulso, registro avulso, ou carteira.
+  //
+  // Guarda: ctps só vira candidato quando há sinal REAL de férias OU
+  // faltas (>= 4 pts somados). Cabeçalho "Carteira de Trabalho" sozinho
+  // (sem dado de férias/faltas) é apenas doc de identificação e não tem
+  // nada pra extrair — não classificamos como ctps.
+  const sinaisFerias = scoreSinais(ocrText, SINAIS_FERIAS);
+  const sinaisFaltas = scoreSinais(ocrText, SINAIS_FALTAS);
+  const sinaisCtpsCabecalho = scoreSinais(ocrText, SINAIS_CTPS_CABECALHO);
+  const ctpsTemDado = sinaisFerias.pontos + sinaisFaltas.pontos >= 4;
+  const ctpsPontos = ctpsTemDado
+    ? sinaisFerias.pontos + sinaisFaltas.pontos + sinaisCtpsCabecalho.pontos
+    : 0;
+  const ctpsMotivos = ctpsTemDado
+    ? [
+        ...sinaisCtpsCabecalho.motivos,
+        ...sinaisFerias.motivos,
+        ...sinaisFaltas.motivos,
+      ]
+    : [];
+
   const scores = {
     holerite: scoreSinais(ocrText, SINAIS_HOLERITE),
-    recibo_ferias: scoreSinais(ocrText, SINAIS_FERIAS),
-    registro_faltas: scoreSinais(ocrText, SINAIS_FALTAS),
+    ctps: { pontos: ctpsPontos, motivos: ctpsMotivos },
     cartao_ponto: scoreSinais(ocrText, SINAIS_CARTAO_PONTO),
   };
-
-  // CTPS — caso especial. Precisa ter sinal forte de "Carteira de Trabalho"
-  // E ALGUMA evidência de férias/faltas (mesmo fraca, ≥4 pts em qualquer
-  // dos dois). Se passa, vence os outros tipos automaticamente — porque
-  // separar o documento em "só férias" ou "só faltas" descartaria metade
-  // do conteúdo.
-  const ctpsCabecalho = scoreSinais(ocrText, SINAIS_CTPS_CABECALHO);
-  const temFeriasOuFaltas =
-    scores.recibo_ferias.pontos >= 4 || scores.registro_faltas.pontos >= 4;
-  if (ctpsCabecalho.pontos >= 6 && temFeriasOuFaltas) {
-    const motivos = [
-      ...ctpsCabecalho.motivos,
-      ...scores.recibo_ferias.motivos.slice(0, 2),
-      ...scores.registro_faltas.motivos.slice(0, 2),
-    ];
-    const pontosTotal =
-      ctpsCabecalho.pontos +
-      scores.recibo_ferias.pontos +
-      scores.registro_faltas.pontos;
-    return {
-      tipo: "ctps",
-      confianca: pontosTotal >= SCORE_FOR_HIGH_CONFIDENCE ? "alta" : "media",
-      motivos,
-      scoresPorTipo: {
-        ...toRecord(scores),
-        ctps: pontosTotal,
-      },
-    };
-  }
 
   const entries = Object.entries(scores) as Array<
     [string, { pontos: number; motivos: string[] }]
