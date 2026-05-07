@@ -33,6 +33,14 @@ export interface LogCsvExportInput {
    * que captura existência de rejeições mas não a decisão consciente.
    */
   bloqueioBurlado?: boolean;
+  /** F2 — operador clicou "Verificar com IA" no review dialog (score 50-85). */
+  aiInvoked?: boolean;
+  /** F2 — campos modificados pela IA E aceitos pelo operador. */
+  aiChangedFields?: string[];
+  /** F2 — score 0..100 retornado pela IA na resposta structured. */
+  aiConfidence?: number;
+  /** F2 — quando operador clicou "Pular análise", razão capturada. */
+  aiSkippedReason?: string;
   /**
    * Slug do parser/mapper que originou os dados. Ex: 'cartao_via_varejo_v1',
    * 'cartao_generico_v1', 'regex_v5_via_varejo', 'regex_v5_holerite'.
@@ -62,6 +70,10 @@ export async function logCsvExport(input: LogCsvExportInput): Promise<void> {
       warnings: input.report.warnings.length,
       baixado_com_perdas: input.baixadoComPerdas,
       bloqueio_burlado: input.bloqueioBurlado ?? false,
+      ai_invoked: input.aiInvoked ?? false,
+      ai_changed_fields: input.aiChangedFields ?? null,
+      ai_confidence: input.aiConfidence ?? null,
+      ai_skipped_reason: input.aiSkippedReason ?? null,
       report: input.report as unknown as Record<string, unknown>,
       parser_origem: input.parserOrigem ?? null,
       criado_por: user.id,

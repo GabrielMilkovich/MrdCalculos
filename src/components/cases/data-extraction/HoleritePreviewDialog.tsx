@@ -93,6 +93,11 @@ import { ConfidenceBadge } from "./ConfidenceBadge";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import { SugerirBucketIA } from "./SugerirBucketIA";
 import {
+  VerifyExtractionAIButton,
+  type AIInteractionResult,
+  type AISuggestion,
+} from "./VerifyExtractionAIButton";
+import {
   type HoleriteParseResult,
 } from "@/features/data-extraction";
 
@@ -219,6 +224,44 @@ export function HoleritePreviewDialog({
     report: BuildReport;
   } | null>(null);
 
+  // F2 — telemetria IA propagada do VerifyExtractionAIButton até logCsvExport.
+  const [aiTelemetry, setAiTelemetry] = useState<AIInteractionResult | null>(
+    null,
+  );
+  function handleAISuggestions(suggestions: AISuggestion[]) {
+    // Aplica sugestões por field path. Hoje suportamos:
+    //   "competencia"           → muda effectiveClassificacao.competencia (read-only aqui)
+    //   "rubrica[N].nome"       → muda nome da rubrica N
+    //   "rubrica[N].valor_*"    → muda valor da rubrica N
+    // Como o estado real é controlado por `linhas` (LinhaClassificada[]),
+    // mapeamos rubricas via índice. Sugestões pra `competencia` exigem
+    // re-extração e são ignoradas com toast (raras na prática).
+    setLinhas((prev) => {
+      const next = [...prev];
+      for (const s of suggestions) {
+        const m = s.field.match(/^rubrica\[(\d+)\]\.(\w+)$/);
+        if (!m) continue;
+        const idx = parseInt(m[1], 10);
+        const campo = m[2];
+        if (!next[idx]) continue;
+        const linha = { ...next[idx] };
+        const rubrica = { ...linha.rubrica };
+        if (campo === "nome" && typeof s.suggested === "string") {
+          rubrica.nome = s.suggested;
+        } else if (
+          (campo === "valor_vencimento" || campo === "valor_desconto" ||
+            campo === "quantidade") &&
+          (typeof s.suggested === "number" || s.suggested === null)
+        ) {
+          rubrica[campo] = s.suggested as number | null;
+        }
+        linha.rubrica = rubrica;
+        next[idx] = linha;
+      }
+      return next;
+    });
+  }
+
   // F0.4 — checklist gate uniforme com os outros 4 dialogs.
   const [confirmacaoOpen, setConfirmacaoOpen] = useState(false);
   const [conferiuRubricas, setConferiuRubricas] = useState(false);
@@ -276,6 +319,10 @@ export function HoleritePreviewDialog({
         documentId: _documentId ?? null,
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
         bloqueioBurlado: exigeOverride && conferiuDivergencias,
+        aiInvoked: aiTelemetry?.aiInvoked ?? false,
+        aiChangedFields: aiTelemetry?.aiChangedFields,
+        aiConfidence: aiTelemetry?.aiConfidence ?? undefined,
+        aiSkippedReason: aiTelemetry?.aiSkippedReason ?? undefined,
         parserOrigem: `regex_v5_holerite|${effectiveClassificacao.layout_usado}`,
       });
       setReportPreview(null);
@@ -305,6 +352,19 @@ export function HoleritePreviewDialog({
             <DialogTitle>Conferir antes de baixar</DialogTitle>
             <div className="flex items-center gap-2 flex-wrap">
               <ConfidenceBadge score={confidence} />
+              <VerifyExtractionAIButton
+                score={confidence.score}
+                builder="holerite"
+                documentId={_documentId ?? null}
+                parsed={{
+                  competencia: effectiveClassificacao.competencia,
+                  layout_usado: effectiveClassificacao.layout_usado,
+                  rubricas: linhas.map((l) => l.rubrica),
+                }}
+                ocrText={ocrText ?? ""}
+                onApplySuggestions={handleAISuggestions}
+                onTelemetry={setAiTelemetry}
+              />
             </div>
           </div>
           <DialogDescription className="text-xs">

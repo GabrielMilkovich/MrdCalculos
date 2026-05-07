@@ -1447,6 +1447,10 @@ export type Database = {
       }
       csv_export_telemetry: {
         Row: {
+          ai_changed_fields: string[] | null
+          ai_confidence: number | null
+          ai_invoked: boolean
+          ai_skipped_reason: string | null
           baixado_com_perdas: boolean
           bloqueio_burlado: boolean
           builder: string
@@ -1463,6 +1467,10 @@ export type Database = {
           warnings: number
         }
         Insert: {
+          ai_changed_fields?: string[] | null
+          ai_confidence?: number | null
+          ai_invoked?: boolean
+          ai_skipped_reason?: string | null
           baixado_com_perdas?: boolean
           bloqueio_burlado?: boolean
           builder: string
@@ -1479,6 +1487,10 @@ export type Database = {
           warnings?: number
         }
         Update: {
+          ai_changed_fields?: string[] | null
+          ai_confidence?: number | null
+          ai_invoked?: boolean
+          ai_skipped_reason?: string | null
           baixado_com_perdas?: boolean
           bloqueio_burlado?: boolean
           builder?: string
