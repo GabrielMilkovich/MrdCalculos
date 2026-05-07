@@ -29,7 +29,7 @@
  */
 import { checkFaltas } from '../quality/cross-validation';
 import { formatBoolBR, formatDataBR } from './format-br';
-import { sanitizeText } from './sanitize';
+import { sanitizeTextWithMeta } from './sanitize';
 import {
   dataBRtoIso,
   dedupBy,
@@ -53,6 +53,19 @@ export type FaltaCsvLinha = {
 
 function q(s: string): string {
   return `"${s}"`;
+}
+
+function sameFaltaLinha(
+  a: FaltaCsvLinha & { justificativa_normalizada: string },
+  b: FaltaCsvLinha & { justificativa_normalizada: string },
+): boolean {
+  return (
+    a.data_inicio === b.data_inicio &&
+    a.data_fim === b.data_fim &&
+    a.justificada === b.justificada &&
+    a.reiniciar_periodo_aquisitivo === b.reiniciar_periodo_aquisitivo &&
+    a.justificativa_normalizada === b.justificativa_normalizada
+  );
 }
 
 export function buildFaltasCSV(linhas: FaltaCsvLinha[]): string {
@@ -91,25 +104,65 @@ export function buildFaltasCSVWithReport(
     validas.push(f);
   });
 
-  // 2. Sanitização da justificativa antes do dedup (justificativas com
-  //    apenas espaços diferentes devem dedupar como iguais).
-  const sanitized = validas.map((f) => ({
-    ...f,
-    justificativa_normalizada: sanitizeText(f.justificativa, MAX_JUSTIFICATIVA),
-  }));
+  // 2. Sanitização da justificativa antes do dedup. Quando texto é truncado
+  //    ou perde caracteres (`;`, `"`, `\n`), registra warning preservando o
+  //    original em `report.warnings` pra paridade auditável.
+  const sanitized = validas.map((f, i) => {
+    const meta = sanitizeTextWithMeta(f.justificativa, MAX_JUSTIFICATIVA);
+    if (meta.truncado) {
+      report.warnings.push(
+        `Linha ${i + 1} (${f.data_inicio}): justificativa truncada em ${MAX_JUSTIFICATIVA} chars. Original: "${meta.original.slice(0, 300)}${meta.original.length > 300 ? '…' : ''}".`,
+      );
+    } else if (meta.caracteresRemovidos && meta.original.trim().length > 0) {
+      report.warnings.push(
+        `Linha ${i + 1} (${f.data_inicio}): justificativa teve caracteres ;/"/quebra-linha trocados por espaço. Original: "${meta.original.slice(0, 200)}".`,
+      );
+    }
+    return {
+      ...f,
+      justificativa_normalizada: meta.texto,
+    };
+  });
 
-  // 3. Dedup por (inicio, fim, justificativa). Sem merge: a primeira
-  //    ocorrência prevalece (alinhado com semântica de registro de faltas).
-  const { resultado: dedupadas, removidasIdx } = dedupBy(
-    sanitized,
-    (f) => `${f.data_inicio}|${f.data_fim}|${f.justificativa_normalizada}`,
-  );
-  if (removidasIdx.length > 0) {
+  // 3. Dedup só quando linhas são ESTRUTURALMENTE IDÊNTICAS (todos os
+  //    campos batem, incluindo justificada e reiniciar_periodo_aquisitivo).
+  //    Quando 2 linhas têm mesma data + justificativa mas bools diferentes,
+  //    são fatos distintos — preserva ambas e emite warning ao operador.
+  const dedupadas: typeof sanitized = [];
+  let dedupSilenciosa = 0;
+  for (const f of sanitized) {
+    const igualAUm = dedupadas.find((g) => sameFaltaLinha(g, f));
+    if (igualAUm) {
+      dedupSilenciosa++;
+      continue;
+    }
+    // Detecta linhas com mesma chave (inicio, fim, justificativa) mas bools
+    // diferentes — provável conflito entre OCR de páginas diferentes.
+    const conflitanteIdx = dedupadas.findIndex(
+      (g) =>
+        g.data_inicio === f.data_inicio &&
+        g.data_fim === f.data_fim &&
+        g.justificativa_normalizada === f.justificativa_normalizada,
+    );
+    if (conflitanteIdx >= 0) {
+      const g = dedupadas[conflitanteIdx];
+      report.warnings.push(
+        `${f.data_inicio}…${f.data_fim}: 2 registros conflitantes — ` +
+          `(justificada: ${g.justificada}/${f.justificada}, ` +
+          `reiniciar_per_aq: ${g.reiniciar_periodo_aquisitivo}/${f.reiniciar_periodo_aquisitivo}). ` +
+          `Ambos preservados — revise e remova manualmente o errado no PJe-Calc.`,
+      );
+    }
+    dedupadas.push(f);
+  }
+  if (dedupSilenciosa > 0) {
     report.linhasAjustadas.push({
       idx: -1,
-      ajuste: `Dedup: ${removidasIdx.length} falta(s) com mesma data+justificativa removida(s).`,
+      ajuste: `Dedup: ${dedupSilenciosa} falta(s) com TODOS os campos idênticos removida(s) (sem perda).`,
     });
   }
+  // Mantém compat com `dedupBy` no escopo (não usado diretamente daqui em diante).
+  void dedupBy;
 
   // 4. Ordena cronologicamente.
   dedupadas.sort((a, b) => {

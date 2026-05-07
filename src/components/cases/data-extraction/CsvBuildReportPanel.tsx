@@ -59,7 +59,10 @@ export function CsvBuildReportPanel({
   const temRejeicoes = report.linhasRejeitadas.length > 0;
   const temAjustes = report.linhasAjustadas.length > 0;
   const temWarnings = report.warnings.length > 0;
-  const limpo = !temRejeicoes && !temAjustes && !temWarnings;
+  const camposNaoExportados = report.camposNaoExportados ?? [];
+  const temCamposNaoExportados = camposNaoExportados.length > 0;
+  const limpo =
+    !temRejeicoes && !temAjustes && !temWarnings && !temCamposNaoExportados;
 
   const podeBaixar = !temRejeicoes || confirmadoExtra;
 
@@ -121,6 +124,12 @@ export function CsvBuildReportPanel({
                 {report.warnings.length} aviso(s)
               </Badge>
             )}
+            {temCamposNaoExportados && (
+              <Badge variant="outline" className="bg-sky-50 text-sky-900 border-sky-300 dark:bg-sky-950/40 dark:text-sky-200">
+                <Info className="h-3 w-3 mr-1" />
+                {camposNaoExportados.length} campo(s) só na auditoria
+              </Badge>
+            )}
           </div>
 
           {/* Rejeições */}
@@ -151,6 +160,17 @@ export function CsvBuildReportPanel({
               titulo="Avisos não-bloqueantes"
               tom="amber"
               items={report.warnings}
+            />
+          )}
+
+          {/* Paridade — campos extraídos que não chegam ao CSV importável */}
+          {temCamposNaoExportados && (
+            <SectionList
+              titulo="Paridade — campos só em CSVs de auditoria"
+              tom="sky"
+              items={camposNaoExportados.map(
+                (c) => `${c.campo}: ${c.motivo}`,
+              )}
             />
           )}
 
@@ -204,7 +224,7 @@ function SectionList({
   items,
 }: {
   titulo: string;
-  tom: "rose" | "amber";
+  tom: "rose" | "amber" | "sky";
   items: string[];
 }) {
   const tones = {
@@ -212,6 +232,8 @@ function SectionList({
       "border-rose-300 bg-rose-50/50 text-rose-900 dark:bg-rose-950/20 dark:text-rose-200",
     amber:
       "border-amber-300 bg-amber-50/50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200",
+    sky:
+      "border-sky-300 bg-sky-50/50 text-sky-900 dark:bg-sky-950/20 dark:text-sky-200",
   };
   return (
     <div className={`rounded border p-2 ${tones[tom]}`}>

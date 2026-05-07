@@ -69,6 +69,7 @@ export {
 } from './export/csv-faltas';
 export type { FaltaCsvLinha } from './export/csv-faltas';
 export { buildCartaoPontoCSVWithReport } from './export/per-doc/cartao-ponto-csv';
+export { buildCartaoPontoCSVCompletoWithReport } from './export/per-doc/cartao-ponto-csv-completo';
 export type { BuildReport } from './export/validation';
 
 // Per-doc export (entry-point principal da v4)
@@ -79,6 +80,8 @@ export {
   buildHoleriteZip,
   buildHoleriteZipWithReport,
   buildCartaoPontoCSV,
+  buildCartaoPontoZip,
+  buildCartaoPontoZipWithReport,
   buildFeriasCSVBlob,
   buildFeriasCSVBlobWithReport,
   buildFaltasCSVBlob,

@@ -28,6 +28,16 @@ export interface BuildReport {
   linhasAjustadas: Array<{ idx: number; ajuste: string }>;
   /** Avisos não-bloqueantes (cross-validation, suspeitas semânticas). */
   warnings: string[];
+  /**
+   * Campos do `parsed` que foram EXTRAÍDOS pelo parser mas NÃO chegaram a
+   * nenhuma coluna do CSV final (oficial OU completo). Cada item descreve
+   * paridade extração ↔ CSV: o operador vê o que "ficou pra trás".
+   *
+   * Ex.: PJe-Calc não tem coluna pra `quantidade` em Histórico Salarial
+   * — então a quantidade da rubrica fica em `auditoria_completa.csv` mas
+   * não no CSV importável. Esse fato vira um item aqui pra deixar claro.
+   */
+  camposNaoExportados?: Array<{ campo: string; motivo: string }>;
 }
 
 export function emptyReport(): BuildReport {
@@ -36,6 +46,7 @@ export function emptyReport(): BuildReport {
     linhasRejeitadas: [],
     linhasAjustadas: [],
     warnings: [],
+    camposNaoExportados: [],
   };
 }
 

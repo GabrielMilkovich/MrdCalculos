@@ -75,6 +75,7 @@ export async function logCsvExport(input: LogCsvExportInput): Promise<void> {
       ai_confidence: input.aiConfidence ?? null,
       ai_skipped_reason: input.aiSkippedReason ?? null,
       report: input.report as unknown as Record<string, unknown>,
+      campos_nao_exportados: input.report.camposNaoExportados ?? [],
       parser_origem: input.parserOrigem ?? null,
       criado_por: user.id,
     });

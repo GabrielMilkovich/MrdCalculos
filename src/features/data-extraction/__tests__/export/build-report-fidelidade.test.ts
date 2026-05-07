@@ -63,7 +63,10 @@ function linhaHolerite(
 }
 
 describe("buildHoleriteZipWithReport — fidelidade", () => {
-  it("rubrica com valor positivo SEM categoria vira linhaRejeitada", async () => {
+  it("rubrica com valor positivo SEM categoria + incluir=false vira linhaAjustada (paridade preservada)", async () => {
+    // Política A.4: rubrica sem categoria não é mais REJEITADA do ZIP. Quando
+    // o operador desmarca, vira ajuste explícito. Quando incluída, vai pra
+    // CSV especial nao_classificadas (testado abaixo).
     const cl: ClassificacaoHolerite = {
       competencia: "06/2024",
       layout_usado: "test",
@@ -79,11 +82,43 @@ describe("buildHoleriteZipWithReport — fidelidade", () => {
       ],
     };
     const { report } = await buildHoleriteZipWithReport(cl);
-    expect(report.linhasRejeitadas.length).toBe(1);
-    expect(report.linhasRejeitadas[0].motivo).toContain(
-      "GRATIFICACAO ESPECIAL",
+    expect(report.linhasRejeitadas.length).toBe(0);
+    const ajuste = report.linhasAjustadas.find((a) =>
+      a.ajuste.includes("GRATIFICACAO ESPECIAL"),
     );
-    expect(report.linhasRejeitadas[0].motivo).toContain("sem categoria");
+    expect(ajuste).toBeDefined();
+    expect(ajuste!.ajuste).toMatch(/sem categoria/i);
+    expect(ajuste!.ajuste).toMatch(/desmarcada/i);
+  });
+
+  it("rubrica com valor positivo SEM categoria + incluir=true vai pra CSV nao_classificadas", async () => {
+    const cl: ClassificacaoHolerite = {
+      competencia: "06/2024",
+      layout_usado: "test",
+      warnings: [],
+      linhas: [
+        linhaHolerite({
+          nome: "BONUS MISTERIOSO",
+          valor: 400,
+          categoria: null,
+          origem: "fallback",
+          incluir: true,
+        }),
+      ],
+    };
+    const { report } = await buildHoleriteZipWithReport(cl);
+    // Não rejeita — soma vai pro CSV nao_classificadas (1 linha gerada).
+    expect(report.linhasRejeitadas.length).toBe(0);
+    expect(report.linhasGeradas).toBeGreaterThanOrEqual(1);
+    const ajuste = report.linhasAjustadas.find((a) =>
+      a.ajuste.includes("BONUS MISTERIOSO"),
+    );
+    expect(ajuste).toBeDefined();
+    expect(ajuste!.ajuste).toMatch(/nao_classificadas/i);
+    // Warning informativo aparece pra UI mostrar.
+    expect(
+      report.warnings.some((w) => /sem categoria atribu/i.test(w)),
+    ).toBe(true);
   });
 
   it("rubrica desmarcada pelo operador vira linhaAjustada", async () => {
@@ -308,7 +343,7 @@ describe("buildCartaoPontoCSVWithReport — fidelidade", () => {
 // ============================================================
 
 describe("buildFeriasCSVBlobWithReport — fidelidade", () => {
-  it("prazo > 60 capped em 60 vira linhaAjustada", () => {
+  it("prazo > 60 vira warning (não capa, paridade preservada)", () => {
     const parsed: ParseFeriasResult = {
       ferias: [
         {
@@ -328,7 +363,9 @@ describe("buildFeriasCSVBlobWithReport — fidelidade", () => {
     };
     const { report } = buildFeriasCSVBlobWithReport(parsed);
     expect(
-      report.linhasAjustadas.some((a) => a.ajuste.includes("prazo > 60")),
+      report.warnings.some((w) =>
+        /prazo 100 excede limite PJe-Calc/i.test(w),
+      ),
     ).toBe(true);
   });
 

@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/table";
 import { ReviewLayout } from "./ReviewLayout";
 import {
-  buildCartaoPontoCSVWithReport,
+  buildCartaoPontoZipWithReport,
   logCsvExport,
   scoreCartaoPonto,
   triggerBlobDownload,
@@ -303,7 +303,7 @@ export function CartaoPontoReviewDialog({
         });
       }
     });
-    const { blob, report } = buildCartaoPontoCSVWithReport({
+    const { blob, report } = await buildCartaoPontoZipWithReport({
       apuracoes,
       competencias: effectiveParsed.competencias,
       competencia_predominante: effectiveParsed.competencia_predominante,
