@@ -225,50 +225,8 @@ const RE_OCORRENCIA_PURA =
 // "TRATIOS:" (cabeçalho de período), "Cooperência:"/"Cooperativa:" →
 // "Competência:", "Estou de pleno acordo" (rodapé de assinatura),
 // "Funkeia"/"Fonteis"/"Fickeis" (variantes de "Ficaríamos" no fecho).
-//
-// Dividimos em dois regex porque `\b` no fim não casa quando o padrão
-// termina em `:` (como "Competência:"): `\b` exige transição word/não-word
-// e `:` é não-word, então o boundary precisa ser implicito (pelo `:` em si).
-const RE_METADADO_PALAVRA =
-  /\b(?:ADMISS[ÃA]O|ADMIR(?:O|ADO|ED[OA])|DEMISS[ÃA]O|EMISS[ÃA]O|MATR[ÍI]CULA|PIS|CTPS|CARGO|DEPARTAMENTO|CRACH[AÁ]|CIACH[AÁ]|COACH[AÁ]|CRANK?H[ÃA]|JUNTAD[OA]\s+EM|ASSINAD[OA]\s+ELETRONICAMENTE|N[ÚU]MERO\s+(?:do\s+)?PROCESSO|N[ÚU]MERO\s+(?:do\s+)?DOCUMENTO|VALIDAD[EO]|RAZ[ÃA]O\s+SOCIAL|CNPJ|CEP|ENDERE[ÇC]O|LOCALIZA[ÇC][ÃA]O|APROVAD[OA]|HOMOLOGAD[OA]|REGISTRAD[OA]\s+ELETRONICAMENTE|VALIDAD[OA]\s+(?:PELO|POR|EM)|CONFIRMAD[OA]\s+(?:PELO|POR|EM)|CONFERID[OA]\s+(?:PELO|POR|EM)|Estou\s+de\s+pleno\s+acordo|Funkeia|Fonteis|Fick[oeé]veis|Fickeis|Ficheis|PER[ÍI]ODO\s*:)\b/i;
-const RE_METADADO_PREFIXO_DOIS_PONTOS =
-  /\b(?:EMPREGADO|ENGENHEIRO|EMPGNEGADO|FUN[ÇC][ÃA]O|TRATIN?O|TRATADO|TRATIOS|COOPER[ÊE]NCIA|COOPERATIVA|COMPET[ÊE]NCIA|ADMISS[ÃA]O|ADMIR(?:O|ADO|ED[OA])|MATR[ÍI]CULA|PIS|FIS|CTPS|CRACH[AÁ]|CIACH[AÁ]|COACH[AÁ]|C\.?\s*R\.?|C\.?\s*B\.?)\s*:/i;
-const RE_METADADO_LINHA = {
-  test(s: string): boolean {
-    return (
-      RE_METADADO_PALAVRA.test(s) ||
-      RE_METADADO_PREFIXO_DOIS_PONTOS.test(s) ||
-      // Range com data + a + data (forma frequente em rodapés de Movimentos).
-      /Per[íi]odo\s+\d{1,2}\/\d{1,2}\/\d{4}\s+[Aa]\s+\d{1,2}\/\d{1,2}\/\d{4}/i.test(
-        s,
-      )
-    );
-  },
-};
-
-/**
- * Marcador de início de bloco de Movimentos/Eventos/Demonstrativo/Resumo.
- * Tudo entre esse marcador e a próxima nova página (ou EOF) contém
- * totalizadores (HE 75%, banco crédito, intervalo, adicional sábado,
- * salário banco, atestado, etc.) — são CÓDIGOS DE EVENTO, NÃO batidas.
- *
- * Sem esse guard, valores como "Adicional Sábado 25% 17:49" eram
- * interpretados como "17:49" → batida fantasma na linha do dia anterior
- * ou solta como apuração de uma data que vazou do header do bloco.
- *
- * Variantes do OCR sujo: "Movimentos:", "Monumentos:", "Necimentos:",
- * "Mecimentos:", "Marimentos:", "Documento:", "Demonstrar:".
- */
-const RE_INICIO_BLOCO_EVENTOS =
-  /^\s*(?:movimentos|monumentos|necimentos|mecimentos|marimentos|documentos?|demonstrar|demonstrativo|eventos?|resumo\s+do\s+per[íi]odo|nortemitos|retrimento)\s*:/i;
-
-/**
- * Marcador de NOVA PÁGINA / novo cartão. Reseta o flag de "dentro de
- * bloco de movimentos". Inclui cabeçalhos comuns de cartão de ponto:
- * "PERÍODO:", "TRATINO:", "Empregado:", "Cartão Ponto Página", "Data Dia".
- */
-const RE_INICIO_NOVA_PAGINA =
-  /\b(?:per[íi]odo\s*:|tratin?o\s*:|tratado\s*:|tratios\s*:|empregado\s*:|engenheiro\s*:|cart[ãa]o\s+ponto\s+p[áa]gina|data\s+dia\s+hor[áa]rio|cnpj)\b/i;
+const RE_METADADO_LINHA =
+  /\b(ADMISS[ÃA]O|ADMIR(?:O|ADO|ED[OA])|DEMISS[ÃA]O|EMISS[ÃA]O|MATR[ÍI]CULA|PIS|CARGO|DEPARTAMENTO|CRACH[AÁ]\b|CIACH[AÁ]\b|COACH[AÁ]\b|CRANK?H[ÃA]\b|EMPREGADO\s*:|ENGENHEIRO\s*:|EMPGNEGADO\s*:|FUN[ÇC][ÃA]O\s*:|JUNTAD[OA]\s+EM|ASSINAD[OA]\s+ELETRONICAMENTE|N[ÚU]MERO\s+(?:do\s+)?PROCESSO|N[ÚU]MERO\s+(?:do\s+)?DOCUMENTO|VALIDAD[EO]|RAZ[ÃA]O\s+SOCIAL|CNPJ|CEP|ENDERE[ÇC]O|LOCALIZA[ÇC][ÃA]O|TRATIN?O\s*:|TRATADO\s*:|TRATIOS\s*:|COOPER[ÊE]NCIA\s*:|COOPERATIVA\s*:|COMPET[ÊE]NCIA\s*:|Per[íi]odo\s+\d{2}\/\d{2}\/\d{4}\s+a\s+\d{2}\/\d{2}\/\d{4}|APROVAD[OA]\b|HOMOLOGAD[OA]\b|REGISTRAD[OA]\s+ELETRONICAMENTE|VALIDAD[OA]\s+(?:PELO|POR|EM)|CONFIRMAD[OA]\s+(?:PELO|POR|EM)|CONFERID[OA]\s+(?:PELO|POR|EM)|Estou\s+de\s+pleno\s+acordo|Funkeia|Fonteis|Fick[oeé]veis|Fickeis|Ficheis)\b/i;
 
 /**
  * Linha de LEGENDA DE ESCALAS no topo do cartão Via Varejo / similar:
@@ -328,18 +286,6 @@ export function parseCartaoPontoGenerico(
     /Hor[áa]rio\s+Registrado/i.test(ocrText) &&
     /Hor[áa]rio\s+(?:de\s+)?Trabalho|Hor[áa]rio\s+Previsto/i.test(ocrText);
 
-  // Detector de PERÍODOS declarados pelo documento. Cartões corporativos
-  // sempre declaram o range em algum header — "PERÍODO: DD/MM/YYYY A
-  // DD/MM/YYYY", "Período DD.MM.YYYY A DD.MM.YYYY", "TRATINO: DD/MM/YYYY
-  // A DD/MM/YYYY", "Competência: MES/ANO". Datas FORA de TODOS os ranges
-  // detectados são quase sempre vazamento de cabeçalho (admissão, data
-  // de emissão, validade, juntada) ou rodapé (assinatura, homologação).
-  //
-  // Quando há ao menos 1 range declarado, apurações fora são descartadas.
-  // Quando NÃO há range declarado, comportamento atual preservado.
-  const rangesDocumento = extrairRangesDeclarados(ocrText);
-  const temRangeDeclarado = rangesDocumento.length > 0;
-
   // Pré-processamento: mescla linhas-continuação que o OCR quebra quando
   // a célula da tabela tem muito conteúdo. Padrão típico (Casas Bahia):
   //   | 13/09/2021 - Seg | 08:30* | 12:00* | 13:05* | ... |
@@ -352,22 +298,6 @@ export function parseCartaoPontoGenerico(
   const unparsed: Array<{ linha: number; conteudo: string }> = [];
   const competencias = new Map<string, number>();
 
-  // Janela de "blocos contaminados": índices de linha onde encontramos
-  // headers de metadado (Admissão, Crachá, PIS, CTPS, etc.). Quando uma
-  // linha posterior em até 2 linhas começa com uma data, consideramos
-  // que ela é continuação da CÉLULA do header (markdown-table partido)
-  // e descartamos como apuração. Cobre o caso V4 reportado em produção:
-  //   |  Admiro:                |
-  //   |  24/11/2003  | 91 08:00 | ← OCR quebrou a célula em 2 linhas
-  let ultimoMetadadoLinha = -10;
-
-  // Janela de "bloco de eventos/movimentos": após "Movimentos:",
-  // "Demonstrar:", "Eventos:", "Resumo do Período" tudo até a próxima
-  // página/cabeçalho é totalizador (HE 75%, banco crédito, intervalo,
-  // adicional sábado, etc.) — NÃO são batidas. Linhas com horários ali
-  // dentro NÃO podem virar apuração.
-  let dentroDeBlocoMovimentos = false;
-
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
     const linhaBruta = raw.replace(/\|/g, " ").trim();
@@ -377,21 +307,7 @@ export function parseCartaoPontoGenerico(
     // apuração diária — é dicionário de códigos de turno → horários
     // previstos. Sem esse filtro, o parser inflava jornada inexistente
     // a partir desse cabeçalho.
-    if (RE_LEGENDA_ESCALAS.test(linhaBruta)) {
-      // Legenda de escalas marca início do cabeçalho — qualquer data
-      // próxima é vazamento de header.
-      ultimoMetadadoLinha = i;
-      continue;
-    }
-    // Detecta entrada de bloco de Movimentos/Eventos/Demonstrar/Resumo.
-    // Linhas dentro NÃO geram apuração mesmo que tenham data + horários.
-    // Saída do bloco: encontrar nova linha que começa com data (DD/MM)
-    // E não é continuação de totalizador. Implementado abaixo.
-    if (RE_INICIO_BLOCO_EVENTOS.test(linhaBruta)) {
-      dentroDeBlocoMovimentos = true;
-      ultimoMetadadoLinha = i;
-      continue;
-    }
+    if (RE_LEGENDA_ESCALAS.test(linhaBruta)) continue;
     // Remove tags "X:XX - Inserido/Desconsiderado" antes de qualquer split
     // (Inserido/Desconsiderado NÃO são divisores de batidas/eventos).
     const { inseridas, desconsideradas, texto: linhaSemPipes } =
@@ -464,43 +380,7 @@ export function parseCartaoPontoGenerico(
       RE_METADADO_LINHA.test(linhaSemPipes) ||
       RE_TIMESTAMP_APROVACAO.test(linhaSemPipes)
     ) {
-      ultimoMetadadoLinha = i;
       continue;
-    }
-
-    // GUARD V2: célula de tabela quebrada em duas linhas.
-    // Quando o OCR Mistral renderiza uma tabela markdown, ele pode
-    // separar header e dados em linhas diferentes:
-    //   linha N    → "|  Admiro:                |"
-    //   linha N+1  → "|  24/11/2003  | 91 08:00 |"
-    // O filtro RE_METADADO_LINHA é POR LINHA, então N+1 escapa.
-    //
-    // Heurística: só descartamos quando a linha NÃO parece apuração
-    // diária. Apuração real sempre tem `DD/MM/YYYY <DIA_SEMANA_3LETRAS>`
-    // ou um código de escala (3 dígitos) + horários. Linhas órfãs vindas
-    // de continuação de header/footer NÃO têm dia-da-semana.
-    const linhaAposMetadadoProximo = i - ultimoMetadadoLinha <= 2;
-    const pareceApuracaoDiaria =
-      RE_DIA_SEMANA.test(linhaSemPipes) ||
-      /\b\d{1,2}:\d{2}\s+\d{1,2}:\d{2}\s+\d{1,2}:\d{2}\s+\d{1,2}:\d{2}\b/.test(
-        linhaSemPipes,
-      );
-    if (linhaAposMetadadoProximo && !pareceApuracaoDiaria) {
-      continue;
-    }
-
-    // GUARD V3: bloco de Movimentos/Eventos/Demonstrar/Resumo do Período.
-    // Esses blocos têm horários (HE 75%, banco crédito, intervalo, etc.)
-    // que NÃO são batidas. Linhas dentro são descartadas mesmo se tiverem
-    // data válida. Saída do bloco: nova página detectada (header de
-    // PERÍODO/Competência/empresa).
-    if (dentroDeBlocoMovimentos) {
-      // Reset quando aparece nova página/cabeçalho.
-      if (RE_INICIO_NOVA_PAGINA.test(linhaSemPipes)) {
-        dentroDeBlocoMovimentos = false;
-      } else {
-        continue;
-      }
     }
 
     const [, dd, mm, yyyy] = dateMatch;
@@ -510,23 +390,6 @@ export function parseCartaoPontoGenerico(
       );
       continue;
     }
-
-    // GUARD V4: data fora dos ranges declarados pelo documento.
-    // Cartões corporativos sempre declaram um header "PERÍODO: X A Y"
-    // ou "Competência: MES/ANO". Datas fora de TODOS os ranges são
-    // vazamento de cabeçalho/rodapé (admissão, emissão, validade,
-    // assinatura). Quando o documento NÃO declara range, comportamento
-    // atual preservado.
-    if (temRangeDeclarado) {
-      const dataIso = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
-      if (!estaEmAlgumRange(dataIso, rangesDocumento)) {
-        warnings.push(
-          `Linha ${i + 1}: data ${dd}/${mm}/${yyyy} fora do(s) período(s) declarado(s) pelo documento — descartada como vazamento de cabeçalho/rodapé.`,
-        );
-        continue;
-      }
-    }
-
     const data = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
     const competencia = `${mm.padStart(2, "0")}/${yyyy}`;
     competencias.set(competencia, (competencias.get(competencia) ?? 0) + 1);
@@ -583,25 +446,13 @@ export function parseCartaoPontoGenerico(
     // Eventos estruturados.
     const eventos = extrairEventos(parteEventos);
 
-    // GUARD V5: validação cronológica das batidas.
-    // Marcações reais sempre seguem E1 < S1 < E2 < S2 < E3 < S3...
-    // Quando a sequência tem inversão (ex.: S2=15:30 < E2=15:37), isso
-    // indica OCR sujo — provavelmente concatenou batidas reais com horas
-    // de escala/eventos, ou OCR-izou um dígito errado. Marcamos a
-    // observação para o operador revisar manualmente; NÃO descartamos a
-    // apuração pra preservar o que veio do OCR (decisão é humana).
-    const inversao = detectarInversaoCronologica(marcacoes);
-    const observacaoAuto = inversao
-      ? `REVISAR_OCR: cronologia das batidas inválida (${inversao}).`
-      : null;
-
     apuracoes.push({
       data,
       dia_semana: diaSemana,
       ocorrencia,
       marcacoes,
       eventos,
-      observacao: observacaoAuto,
+      observacao: null,
       ocr_line: i + 1, // 1-based — UI usa pra scroll bidirecional
     });
   }
@@ -872,131 +723,6 @@ function extrairEventos(parte: string): EventoDiario[] {
     }
   }
   return eventos;
-}
-
-/**
- * Extrai todos os ranges de datas declarados no documento. Procura:
- *   - "PERÍODO: DD/MM/YYYY A DD/MM/YYYY"
- *   - "Período DD.MM.YYYY A DD.MM.YYYY" (Via Varejo antigo)
- *   - "TRATINO: DD/MM/YYYY A DD/MM/YYYY" (variante OCR sujo)
- *   - "Período de DD/MM/YYYY a DD/MM/YYYY"
- *   - "Competência: MES/AAAA" → range = mês inteiro
- *
- * Retorna array de ranges em ISO. Datas inválidas no OCR (ex.: 14/30/2016)
- * são silenciosamente ignoradas — o range só conta se ambos os endpoints
- * são datas válidas.
- *
- * Quando não acha nenhum, retorna [] e o parser cai em modo permissivo
- * (comportamento atual preservado para layouts não-corporativos).
- */
-function extrairRangesDeclarados(texto: string): Array<{ ini: string; fim: string }> {
-  const ranges: Array<{ ini: string; fim: string }> = [];
-
-  // Range explícito: DD/MM/YYYY A DD/MM/YYYY ou DD.MM.YYYY A DD.MM.YYYY
-  const RE_RANGE_EXPLICITO =
-    /(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})\s+[Aa]\s+(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/g;
-  for (const m of texto.matchAll(RE_RANGE_EXPLICITO)) {
-    if (
-      isValidDate(m[3], m[2], m[1]) &&
-      isValidDate(m[6], m[5], m[4])
-    ) {
-      const ini = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
-      const fim = `${m[6]}-${m[5].padStart(2, "0")}-${m[4].padStart(2, "0")}`;
-      if (ini <= fim) ranges.push({ ini, fim });
-    }
-  }
-
-  // Competência mensal: "Competência: 03/2016" → range do mês inteiro.
-  // Útil em cartões que NÃO declaram período explícito mas declaram a
-  // competência mensal.
-  const RE_COMPETENCIA =
-    /Compet[êe]ncia\s*:?\s*(\d{1,2})[\/.](\d{4})\b/gi;
-  for (const m of texto.matchAll(RE_COMPETENCIA)) {
-    const mm = m[1].padStart(2, "0");
-    const yyyy = m[2];
-    const mNum = parseInt(mm, 10);
-    if (mNum < 1 || mNum > 12) continue;
-    const ultimoDia = new Date(parseInt(yyyy, 10), mNum, 0).getDate();
-    ranges.push({
-      ini: `${yyyy}-${mm}-01`,
-      fim: `${yyyy}-${mm}-${String(ultimoDia).padStart(2, "0")}`,
-    });
-  }
-
-  return ranges;
-}
-
-/**
- * Verifica se uma data ISO está dentro de pelo menos um dos ranges
- * declarados. Os ranges incluem ±1 dia de tolerância para cobrir
- * cartões cujo "período" começa no dia 16 do mês anterior (ex.:
- * Via Varejo: período 16/02 a 15/03 = competência março).
- */
-function estaEmAlgumRange(
-  dataIso: string,
-  ranges: Array<{ ini: string; fim: string }>,
-): boolean {
-  for (const r of ranges) {
-    // Tolerância de ±1 dia em cada borda para acomodar cartões com
-    // viradas de período não-canônicas (16-15, 21-20 etc.).
-    const iniTol = somarDias(r.ini, -1);
-    const fimTol = somarDias(r.fim, 1);
-    if (dataIso >= iniTol && dataIso <= fimTol) return true;
-  }
-  return false;
-}
-
-function somarDias(iso: string, dias: number): string {
-  const [y, m, d] = iso.split("-").map((s) => parseInt(s, 10));
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + dias);
-  const yy = dt.getUTCFullYear();
-  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(dt.getUTCDate()).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
-}
-
-/**
- * Verifica se as marcações de um dia estão em ordem cronológica:
- * E1 < S1 < E2 < S2 < E3 < S3 ... Retorna a primeira inversão como
- * string descritiva (ex.: "S2=15:30 < E2=15:37") ou `null` se a
- * sequência é válida.
- *
- * Aceita pares parciais (só E ou só S) — ignora vazios na comparação.
- * Não trata virada de meia-noite explicitamente: jornadas que cruzam
- * 00:00 (turno noturno) caem como "inversão" e são marcadas como
- * REVISAR_OCR. Operador desmarca manualmente quando for legítimo.
- */
-function detectarInversaoCronologica(marcacoes: Marcacao[]): string | null {
-  const seq: Array<{ tipo: "E" | "S"; idx: number; valor: string; min: number }> = [];
-  for (let i = 0; i < marcacoes.length; i++) {
-    const m = marcacoes[i];
-    if (m.e) {
-      const v = horaToMin(m.e);
-      if (v !== null) seq.push({ tipo: "E", idx: i + 1, valor: m.e, min: v });
-    }
-    if (m.s) {
-      const v = horaToMin(m.s);
-      if (v !== null) seq.push({ tipo: "S", idx: i + 1, valor: m.s, min: v });
-    }
-  }
-  for (let i = 1; i < seq.length; i++) {
-    const ant = seq[i - 1];
-    const cur = seq[i];
-    if (cur.min < ant.min) {
-      return `${cur.tipo}${cur.idx}=${cur.valor} < ${ant.tipo}${ant.idx}=${ant.valor}`;
-    }
-  }
-  return null;
-}
-
-function horaToMin(s: string): number | null {
-  const m = s.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return null;
-  const h = parseInt(m[1], 10);
-  const mn = parseInt(m[2], 10);
-  if (h < 0 || h > 23 || mn < 0 || mn > 59) return null;
-  return h * 60 + mn;
 }
 
 function isValidDate(yyyy: string, mm: string, dd: string): boolean {
