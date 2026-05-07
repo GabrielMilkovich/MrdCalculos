@@ -30,3 +30,42 @@ export function sanitizeText(
     .slice(0, maxLen);
   return csvSafeCell(limpo);
 }
+
+/**
+ * Versão que devolve metadados sobre o que foi alterado pela sanitização.
+ * Útil para builders que querem registrar warnings de paridade quando
+ * o texto original foi truncado ou teve caracteres trocados.
+ *
+ * `truncado` é true quando `maxLen` cortou o texto.
+ * `caracteresRemovidos` é true quando `;`, `\n`, `\r`, `"` ou caracteres
+ * de controle foram trocados por espaço (perda informacional sutil).
+ */
+export function sanitizeTextWithMeta(
+  s: string | null | undefined,
+  maxLen: number,
+): {
+  texto: string;
+  truncado: boolean;
+  caracteresRemovidos: boolean;
+  original: string;
+} {
+  if (!s) {
+    return {
+      texto: "",
+      truncado: false,
+      caracteresRemovidos: false,
+      original: s ?? "",
+    };
+  }
+  const original = s;
+  const semCtrl = stripControlChars(s);
+  const semInjecao = semCtrl.replace(/[;\n\r"]/g, " ");
+  const trimado = semInjecao.trim();
+  const cortado = trimado.slice(0, maxLen);
+  return {
+    texto: csvSafeCell(cortado),
+    truncado: trimado.length > maxLen,
+    caracteresRemovidos: semInjecao !== semCtrl || semCtrl !== s,
+    original,
+  };
+}

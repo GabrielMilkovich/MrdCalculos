@@ -254,6 +254,10 @@ function formatLinhaAuditoria(l: LinhaClassificada): string {
   const r = l.rubrica;
   const v = (n: number | null): string =>
     n === null ? '' : formatNumeroBR(new Decimal(n));
+  // Quantidade pode trazer fração de hora (0,925) ou taxa (1,375) com 3-4
+  // casas — auditoria preserva precisão (4 casas) em vez de capar em 2.
+  const qtd = (n: number | null): string =>
+    n === null ? '' : formatNumeroBR(new Decimal(n), 4).replace(/,?0+$/, (m) => (m.startsWith(',') ? '' : m));
   const cat =
     l.categoria === null
       ? l.origem === 'desconto'
@@ -268,7 +272,7 @@ function formatLinhaAuditoria(l: LinhaClassificada): string {
     sanitizeText(r.nome, 80),
     v(r.valor_vencimento),
     v(r.valor_desconto),
-    v(r.quantidade),
+    qtd(r.quantidade),
     cat,
     formatNumeroBR(new Decimal(l.valorParaCsv)),
     l.origem,

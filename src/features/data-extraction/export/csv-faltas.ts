@@ -29,7 +29,7 @@
  */
 import { checkFaltas } from '../quality/cross-validation';
 import { formatBoolBR, formatDataBR } from './format-br';
-import { sanitizeText } from './sanitize';
+import { sanitizeTextWithMeta } from './sanitize';
 import {
   dataBRtoIso,
   dedupBy,
@@ -104,12 +104,25 @@ export function buildFaltasCSVWithReport(
     validas.push(f);
   });
 
-  // 2. Sanitização da justificativa antes do dedup (justificativas com
-  //    apenas espaços diferentes devem dedupar como iguais).
-  const sanitized = validas.map((f) => ({
-    ...f,
-    justificativa_normalizada: sanitizeText(f.justificativa, MAX_JUSTIFICATIVA),
-  }));
+  // 2. Sanitização da justificativa antes do dedup. Quando texto é truncado
+  //    ou perde caracteres (`;`, `"`, `\n`), registra warning preservando o
+  //    original em `report.warnings` pra paridade auditável.
+  const sanitized = validas.map((f, i) => {
+    const meta = sanitizeTextWithMeta(f.justificativa, MAX_JUSTIFICATIVA);
+    if (meta.truncado) {
+      report.warnings.push(
+        `Linha ${i + 1} (${f.data_inicio}): justificativa truncada em ${MAX_JUSTIFICATIVA} chars. Original: "${meta.original.slice(0, 300)}${meta.original.length > 300 ? '…' : ''}".`,
+      );
+    } else if (meta.caracteresRemovidos && meta.original.trim().length > 0) {
+      report.warnings.push(
+        `Linha ${i + 1} (${f.data_inicio}): justificativa teve caracteres ;/"/quebra-linha trocados por espaço. Original: "${meta.original.slice(0, 200)}".`,
+      );
+    }
+    return {
+      ...f,
+      justificativa_normalizada: meta.texto,
+    };
+  });
 
   // 3. Dedup só quando linhas são ESTRUTURALMENTE IDÊNTICAS (todos os
   //    campos batem, incluindo justificada e reiniciar_periodo_aquisitivo).
