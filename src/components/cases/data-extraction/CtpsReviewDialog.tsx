@@ -12,7 +12,7 @@
  *
  * Confirmação: 1 download = 1 ZIP com 2 CSVs (ferias + faltas) + LEIA-ME.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Calendar, ClipboardX, Download, FileText, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -40,8 +40,15 @@ import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import { FeriasReviewDialog } from "./FeriasReviewDialog";
 import { FaltasReviewDialog } from "./FaltasReviewDialog";
 import {
+  VerifyExtractionAIButton,
+  type AIInteractionResult,
+} from "./VerifyExtractionAIButton";
+import { toast } from "sonner";
+import {
   buildCtpsZipWithReport,
   logCsvExport,
+  scoreFaltas,
+  scoreFerias,
   triggerBlobDownload,
   type BuildReport,
   type ParseFaltasResult,
@@ -101,6 +108,25 @@ export function CtpsReviewDialog({
     report: BuildReport;
   } | null>(null);
 
+  // PR-2 — telemetria IA. Cada aba tem seu próprio botão (builder=ferias
+  // ou builder=faltas) e a telemetria final agregada vai pra logCsvExport
+  // como builder=ctps. Sugestões IA não persistem no parsed das tabs (o
+  // dialog principal é read-only); operador deve usar o sub-dialog
+  // "Editar" pra aplicar manualmente. Telemetria continua sendo registrada.
+  const [aiTelemetryFerias, setAiTelemetryFerias] =
+    useState<AIInteractionResult | null>(null);
+  const [aiTelemetryFaltas, setAiTelemetryFaltas] =
+    useState<AIInteractionResult | null>(null);
+
+  const confidenceFerias = useMemo(
+    () => scoreFerias(feriasParsed, ocrText),
+    [feriasParsed, ocrText],
+  );
+  const confidenceFaltas = useMemo(
+    () => scoreFaltas(faltasParsed, ocrText),
+    [faltasParsed, ocrText],
+  );
+
   const handleDownload = async () => {
     setDownloading(true);
     try {
@@ -121,6 +147,34 @@ export function CtpsReviewDialog({
     setDownloading(true);
     try {
       triggerBlobDownload(reportPreview.blob, filename);
+      // Telemetria IA agregada: invoked se qualquer aba foi clicada;
+      // confidence média entre as duas (quando disponível); changed_fields
+      // concatenados com prefixo. Mantém `builder=ctps` no log porque é o
+      // download CTPS, mesmo que cada chamada IA por aba use builder próprio.
+      const aiInvoked =
+        (aiTelemetryFerias?.aiInvoked ?? false) ||
+        (aiTelemetryFaltas?.aiInvoked ?? false);
+      const confidences = [
+        aiTelemetryFerias?.aiConfidence,
+        aiTelemetryFaltas?.aiConfidence,
+      ].filter((c): c is number => typeof c === "number");
+      const aiConfidence =
+        confidences.length > 0
+          ? confidences.reduce((a, b) => a + b, 0) / confidences.length
+          : undefined;
+      const aiChangedFields = [
+        ...(aiTelemetryFerias?.aiChangedFields ?? []).map((f) => `ferias:${f}`),
+        ...(aiTelemetryFaltas?.aiChangedFields ?? []).map((f) => `faltas:${f}`),
+      ];
+      const skipReasons = [
+        aiTelemetryFerias?.aiSkippedReason
+          ? `ferias: ${aiTelemetryFerias.aiSkippedReason}`
+          : null,
+        aiTelemetryFaltas?.aiSkippedReason
+          ? `faltas: ${aiTelemetryFaltas.aiSkippedReason}`
+          : null,
+      ].filter((s): s is string => s !== null);
+
       void logCsvExport({
         builder: "ctps",
         report: reportPreview.report,
@@ -128,6 +182,10 @@ export function CtpsReviewDialog({
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
         bloqueioBurlado: exigeOverride && conferiuDivergencias,
         parserOrigem: "regex_v5_ctps",
+        aiInvoked,
+        aiChangedFields,
+        aiConfidence,
+        aiSkippedReason: skipReasons.length > 0 ? skipReasons.join(" | ") : undefined,
       });
       setReportPreview(null);
       onOpenChange(false);
@@ -175,6 +233,24 @@ export function CtpsReviewDialog({
             </TabsList>
 
             <TabsContent value="ferias" className="flex-1 min-h-0 mt-3 space-y-2">
+              <div className="flex items-center justify-end">
+                <VerifyExtractionAIButton
+                  score={confidenceFerias.score}
+                  builder="ferias"
+                  documentId={documentId ?? null}
+                  parsed={{
+                    ferias: feriasParsed.ferias,
+                    warnings: feriasParsed.warnings,
+                  }}
+                  ocrText={ocrText ?? ""}
+                  onApplySuggestions={() => {
+                    toast.info(
+                      "Sugestões de IA recebidas. Abra 'Editar' nesta aba para aplicar manualmente — o dialog CTPS é só leitura.",
+                    );
+                  }}
+                  onTelemetry={setAiTelemetryFerias}
+                />
+              </div>
               <SecaoResumo
                 titulo="Férias parseadas neste documento"
                 qtd={feriasParsed.ferias.length}
@@ -192,6 +268,24 @@ export function CtpsReviewDialog({
             </TabsContent>
 
             <TabsContent value="faltas" className="flex-1 min-h-0 mt-3 space-y-2">
+              <div className="flex items-center justify-end">
+                <VerifyExtractionAIButton
+                  score={confidenceFaltas.score}
+                  builder="faltas"
+                  documentId={documentId ?? null}
+                  parsed={{
+                    faltas: faltasParsed.faltas,
+                    warnings: faltasParsed.warnings,
+                  }}
+                  ocrText={ocrText ?? ""}
+                  onApplySuggestions={() => {
+                    toast.info(
+                      "Sugestões de IA recebidas. Abra 'Editar' nesta aba para aplicar manualmente — o dialog CTPS é só leitura.",
+                    );
+                  }}
+                  onTelemetry={setAiTelemetryFaltas}
+                />
+              </div>
               <SecaoResumo
                 titulo="Faltas parseadas neste documento"
                 qtd={faltasParsed.faltas.length}

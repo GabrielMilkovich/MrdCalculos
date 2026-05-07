@@ -31,6 +31,11 @@ import {
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
+import {
+  VerifyExtractionAIButton,
+  type AIInteractionResult,
+  type AISuggestion,
+} from "./VerifyExtractionAIButton";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
 interface Props {
@@ -227,6 +232,55 @@ export function FeriasReviewDialog({
   const [downloading, setDownloading] = useState(false);
   // F0.4 — propaga checkbox override do ReviewLayout até logCsvExport.
   const [bloqueioBurladoFlag, setBloqueioBurladoFlag] = useState(false);
+  // PR-2 — telemetria IA propagada do VerifyExtractionAIButton até logCsvExport.
+  const [aiTelemetry, setAiTelemetry] = useState<AIInteractionResult | null>(
+    null,
+  );
+
+  /**
+   * Aplica sugestões da IA. Suporta:
+   *   - ferias[N].relativa
+   *   - ferias[N].prazo
+   *   - ferias[N].dias_abono
+   *   - ferias[N].gozo{1,2,3}.{inicio,fim}
+   * Outros campos são ignorados (raros).
+   */
+  function handleAISuggestions(suggestions: AISuggestion[]): void {
+    setRows((prev) => {
+      const next = [...prev];
+      for (const s of suggestions) {
+        const mGozo = s.field.match(/^ferias\[(\d+)\]\.(gozo[123])\.(inicio|fim)$/);
+        if (mGozo) {
+          const i = parseInt(mGozo[1], 10);
+          const gKey = mGozo[2] as "gozo1" | "gozo2" | "gozo3";
+          const lado = mGozo[3] as "inicio" | "fim";
+          if (!next[i]) continue;
+          if (typeof s.suggested !== "string") continue;
+          const gAtual = next[i][gKey] ?? { inicio: "", fim: "", dobra: false };
+          next[i] = {
+            ...next[i],
+            [gKey]: { ...gAtual, [lado]: s.suggested },
+          };
+          continue;
+        }
+        const mField = s.field.match(/^ferias\[(\d+)\]\.(relativa|prazo|dias_abono)$/);
+        if (mField) {
+          const i = parseInt(mField[1], 10);
+          const campo = mField[2] as "relativa" | "prazo" | "dias_abono";
+          if (!next[i]) continue;
+          if (campo === "relativa" && typeof s.suggested === "string") {
+            next[i] = { ...next[i], relativa: s.suggested };
+          } else if (
+            (campo === "prazo" || campo === "dias_abono") &&
+            typeof s.suggested === "number"
+          ) {
+            next[i] = { ...next[i], [campo]: s.suggested };
+          }
+        }
+      }
+      return next;
+    });
+  }
 
   const handleConfirm = async (opts?: { bloqueioBurlado: boolean }) => {
     setBloqueioBurladoFlag(opts?.bloqueioBurlado ?? false);
@@ -263,6 +317,10 @@ export function FeriasReviewDialog({
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
         bloqueioBurlado: bloqueioBurladoFlag,
         parserOrigem: "regex_v5_ferias",
+        aiInvoked: aiTelemetry?.aiInvoked ?? false,
+        aiChangedFields: aiTelemetry?.aiChangedFields ?? [],
+        aiConfidence: aiTelemetry?.aiConfidence ?? undefined,
+        aiSkippedReason: aiTelemetry?.aiSkippedReason ?? undefined,
       });
       setReportPreview(null);
       setBloqueioBurladoFlag(false);
@@ -284,6 +342,28 @@ export function FeriasReviewDialog({
       headerSlot={
         <div className="flex items-center gap-2 flex-wrap">
           <ConfidenceBadge score={confidence} />
+          <VerifyExtractionAIButton
+            score={confidence.score}
+            builder="ferias"
+            documentId={_documentId ?? null}
+            parsed={{
+              ferias: sorted.map((r) => ({
+                relativa: r.relativa,
+                prazo: r.prazo,
+                situacao: r.situacao,
+                dobra_geral: r.dobra_geral,
+                abono: r.abono,
+                dias_abono: r.dias_abono,
+                gozo1: r.gozo1,
+                gozo2: r.gozo2,
+                gozo3: r.gozo3,
+              })),
+              warnings: effectiveParsed.warnings,
+            }}
+            ocrText={ocrText ?? ""}
+            onApplySuggestions={handleAISuggestions}
+            onTelemetry={setAiTelemetry}
+          />
         </div>
       }
       onConfirm={handleConfirm}

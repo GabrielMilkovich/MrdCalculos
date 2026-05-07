@@ -23,6 +23,11 @@ import {
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
+import {
+  VerifyExtractionAIButton,
+  type AIInteractionResult,
+  type AISuggestion,
+} from "./VerifyExtractionAIButton";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 
 interface Props {
@@ -88,6 +93,37 @@ export function FaltasReviewDialog({
   const [downloading, setDownloading] = useState(false);
   // F0.4 — propaga checkbox override do ReviewLayout até logCsvExport.
   const [bloqueioBurladoFlag, setBloqueioBurladoFlag] = useState(false);
+  // PR-2 — telemetria IA propagada do VerifyExtractionAIButton até logCsvExport.
+  const [aiTelemetry, setAiTelemetry] = useState<AIInteractionResult | null>(
+    null,
+  );
+
+  /**
+   * Aplica sugestões da IA. Suporta:
+   *   - faltas[N].data_inicio / data_fim (string ISO)
+   *   - faltas[N].justificativa (string)
+   * Outros campos ignorados.
+   */
+  function handleAISuggestions(suggestions: AISuggestion[]): void {
+    setRows((prev) => {
+      const next = [...prev];
+      for (const s of suggestions) {
+        const m = s.field.match(/^faltas\[(\d+)\]\.(data_inicio|data_fim|justificativa)$/);
+        if (!m) continue;
+        const i = parseInt(m[1], 10);
+        const campo = m[2] as "data_inicio" | "data_fim" | "justificativa";
+        if (!next[i]) continue;
+        if (campo === "justificativa") {
+          if (s.suggested === null || typeof s.suggested === "string") {
+            next[i] = { ...next[i], justificativa: s.suggested };
+          }
+        } else if (typeof s.suggested === "string") {
+          next[i] = { ...next[i], [campo]: s.suggested };
+        }
+      }
+      return next;
+    });
+  }
 
   const handleConfirm = async (opts?: { bloqueioBurlado: boolean }) => {
     setBloqueioBurladoFlag(opts?.bloqueioBurlado ?? false);
@@ -124,6 +160,10 @@ export function FaltasReviewDialog({
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
         bloqueioBurlado: bloqueioBurladoFlag,
         parserOrigem: "regex_v5_faltas",
+        aiInvoked: aiTelemetry?.aiInvoked ?? false,
+        aiChangedFields: aiTelemetry?.aiChangedFields ?? [],
+        aiConfidence: aiTelemetry?.aiConfidence ?? undefined,
+        aiSkippedReason: aiTelemetry?.aiSkippedReason ?? undefined,
       });
       setReportPreview(null);
       setBloqueioBurladoFlag(false);
@@ -164,6 +204,24 @@ export function FaltasReviewDialog({
       headerSlot={
         <div className="flex items-center gap-2 flex-wrap">
           <ConfidenceBadge score={confidence} />
+          <VerifyExtractionAIButton
+            score={confidence.score}
+            builder="faltas"
+            documentId={_documentId ?? null}
+            parsed={{
+              faltas: sorted.map((r) => ({
+                data_inicio: r.data_inicio,
+                data_fim: r.data_fim,
+                justificada: r.justificada,
+                reiniciar_periodo_aquisitivo: r.reiniciar_periodo_aquisitivo,
+                justificativa: r.justificativa,
+              })),
+              warnings: effectiveParsed.warnings,
+            }}
+            ocrText={ocrText ?? ""}
+            onApplySuggestions={handleAISuggestions}
+            onTelemetry={setAiTelemetry}
+          />
         </div>
       }
       onConfirm={handleConfirm}
