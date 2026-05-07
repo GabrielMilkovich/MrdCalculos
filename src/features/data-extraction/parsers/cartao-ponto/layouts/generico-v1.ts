@@ -218,31 +218,8 @@ const RE_OCORRENCIA_PURA =
 // Os timestamps de aprovação/assinatura/homologação são particularmente
 // nocivos: o parser detectaria a data + hora e CRIARIA uma batida fantasma
 // ("inventaria jornada onde não houve trabalho"). Filtramos antes do split.
-//
-// V6: cobre variantes do OCR sujo (Mistral) em cartões Via Varejo —
-// "Admiro:", "Admirado:", "Crachá:" → "Cracha:"/"Coachá:"/"Ciacha:",
-// "Empregado:" → "Engenheiro:"/"Empgnegado:", "TRATINO:"/"TRATADO:"/
-// "TRATIOS:" (cabeçalho de período), "Cooperência:"/"Cooperativa:" →
-// "Competência:", "Estou de pleno acordo" (rodapé de assinatura),
-// "Funkeia"/"Fonteis"/"Fickeis" (variantes de "Ficaríamos" no fecho).
 const RE_METADADO_LINHA =
-  /\b(ADMISS[ÃA]O|ADMIR(?:O|ADO|ED[OA])|DEMISS[ÃA]O|EMISS[ÃA]O|MATR[ÍI]CULA|PIS|CARGO|DEPARTAMENTO|CRACH[AÁ]\b|CIACH[AÁ]\b|COACH[AÁ]\b|CRANK?H[ÃA]\b|EMPREGADO\s*:|ENGENHEIRO\s*:|EMPGNEGADO\s*:|FUN[ÇC][ÃA]O\s*:|JUNTAD[OA]\s+EM|ASSINAD[OA]\s+ELETRONICAMENTE|N[ÚU]MERO\s+(?:do\s+)?PROCESSO|N[ÚU]MERO\s+(?:do\s+)?DOCUMENTO|VALIDAD[EO]|RAZ[ÃA]O\s+SOCIAL|CNPJ|CEP|ENDERE[ÇC]O|LOCALIZA[ÇC][ÃA]O|TRATIN?O\s*:|TRATADO\s*:|TRATIOS\s*:|COOPER[ÊE]NCIA\s*:|COOPERATIVA\s*:|COMPET[ÊE]NCIA\s*:|Per[íi]odo\s+\d{2}\/\d{2}\/\d{4}\s+a\s+\d{2}\/\d{2}\/\d{4}|APROVAD[OA]\b|HOMOLOGAD[OA]\b|REGISTRAD[OA]\s+ELETRONICAMENTE|VALIDAD[OA]\s+(?:PELO|POR|EM)|CONFIRMAD[OA]\s+(?:PELO|POR|EM)|CONFERID[OA]\s+(?:PELO|POR|EM)|Estou\s+de\s+pleno\s+acordo|Funkeia|Fonteis|Fick[oeé]veis|Fickeis|Ficheis)\b/i;
-
-/**
- * Linha de LEGENDA DE ESCALAS no topo do cartão Via Varejo / similar:
- *   "Horários: 91 08:00 11:00 12:00 14:25 162 09:00 12:00 13:00 17:25 ..."
- *   "Rotação: 91 08:00 11:00 12:00 14:25 ..."
- *
- * É uma tabela de códigos de turno → horários previstos. NÃO é apuração
- * diária. Sem esse filtro, o parser pegava cada bloco "162 09:00 12:00..."
- * como pseudo-batida e a inflava em jornada inexistente.
- *
- * O regex casa quando a linha começa (após whitespace) com "Horários:"
- * ou "Rotação:" seguido de qualquer dígito. Variantes do OCR Mistral
- * incluem "Horario:" (sem acento), "Rorações:" (sujo).
- */
-const RE_LEGENDA_ESCALAS =
-  /^\s*(?:hor[áa]rio?s?|rota[çc][ãa]o|rora[çc][õo]es)\s*:\s*\d/i;
+  /\b(ADMISS[ÃA]O|DEMISS[ÃA]O|EMISS[ÃA]O|MATR[ÍI]CULA|PIS|CARGO|DEPARTAMENTO|JUNTAD[OA]\s+EM|ASSINAD[OA]\s+ELETRONICAMENTE|N[ÚU]MERO\s+(?:do\s+)?PROCESSO|N[ÚU]MERO\s+(?:do\s+)?DOCUMENTO|VALIDAD[EO]|RAZ[ÃA]O\s+SOCIAL|CNPJ|CEP|ENDERE[ÇC]O|LOCALIZA[ÇC][ÃA]O|Per[íi]odo\s+\d{2}\/\d{2}\/\d{4}\s+a\s+\d{2}\/\d{2}\/\d{4}|APROVAD[OA]\b|HOMOLOGAD[OA]\b|REGISTRAD[OA]\s+ELETRONICAMENTE|VALIDAD[OA]\s+(?:PELO|POR|EM)|CONFIRMAD[OA]\s+(?:PELO|POR|EM)|CONFERID[OA]\s+(?:PELO|POR|EM))\b/i;
 
 /**
  * Padrão "no dia DD/MM/YYYY às HH:MM" / "em DD/MM/YYYY às HH:MM" — sinal
@@ -274,18 +251,6 @@ export function parseCartaoPontoGenerico(
     };
   }
 
-  // Detector global: documento tem layout "Horário Registrado | Horário
-  // de Trabalho" (cartões Via Varejo/Casa Bahia/SAP/similares onde cada
-  // linha de dia traz 8 horas — 4 batidas reais + 4 horas previstas/escala).
-  // Quando ativo, o splitDeBatidas pega só os 4 primeiros pares por dia;
-  // os demais são descartados como escala (NÃO são jornada real).
-  //
-  // Detecção é POR DOCUMENTO inteiro, não por linha — assim funciona
-  // mesmo quando o OCR perde o cabeçalho da tabela em algumas páginas.
-  const TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO =
-    /Hor[áa]rio\s+Registrado/i.test(ocrText) &&
-    /Hor[áa]rio\s+(?:de\s+)?Trabalho|Hor[áa]rio\s+Previsto/i.test(ocrText);
-
   // Pré-processamento: mescla linhas-continuação que o OCR quebra quando
   // a célula da tabela tem muito conteúdo. Padrão típico (Casas Bahia):
   //   | 13/09/2021 - Seg | 08:30* | 12:00* | 13:05* | ... |
@@ -302,12 +267,6 @@ export function parseCartaoPontoGenerico(
     const raw = lines[i];
     const linhaBruta = raw.replace(/\|/g, " ").trim();
     if (linhaBruta.length === 0) continue;
-    // Pré-filtro: linha de LEGENDA DE ESCALAS no topo do cartão
-    // ("Horários: 91 08:00 11:00..."). Tem várias datas/horas mas NÃO é
-    // apuração diária — é dicionário de códigos de turno → horários
-    // previstos. Sem esse filtro, o parser inflava jornada inexistente
-    // a partir desse cabeçalho.
-    if (RE_LEGENDA_ESCALAS.test(linhaBruta)) continue;
     // Remove tags "X:XX - Inserido/Desconsiderado" antes de qualquer split
     // (Inserido/Desconsiderado NÃO são divisores de batidas/eventos).
     const { inseridas, desconsideradas, texto: linhaSemPipes } =
@@ -408,15 +367,7 @@ export function parseCartaoPontoGenerico(
     const semData = parteBatidas
       .replace(RE_DATA_BR, " ")
       .replace(RE_DIA_SEMANA, " ");
-    // Quando o documento tem layout coluna-dupla "Horário Registrado |
-    // Horário de Trabalho", limitamos a 4 horas (1° grupo = batidas reais);
-    // o resto da linha são horários previstos/escala que NÃO são jornada.
-    const marcacoes = capturarMarcacoes(
-      semData,
-      inseridas,
-      desconsideradas,
-      TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO ? 4 : undefined,
-    );
+    const marcacoes = capturarMarcacoes(semData, inseridas, desconsideradas);
 
     // Detecta ocorrência baseada na LINHA INTEIRA (não só parteEventos):
     // se a linha cita uma ausência conhecida e não tem batidas, classificar.
@@ -657,13 +608,9 @@ function capturarMarcacoes(
   s: string,
   inseridasExternas: Set<string> = new Set(),
   desconsideradasExternas: Set<string> = new Set(),
-  limiteHoras?: number,
 ): Marcacao[] {
   type H = { valor: string; inserida: boolean; desconsiderada: boolean };
   const horarios: H[] = [];
-  // Default: 12 horas = 6 pares (limite PJe-Calc).
-  // Layout coluna-dupla (Via Varejo etc.): 4 horas = 2 pares (1° grupo).
-  const HORAS_MAX = typeof limiteHoras === "number" ? limiteHoras : 12;
   for (const m of s.matchAll(RE_HORA_OPCIONAL_ASTERISCO)) {
     const h = parseInt(m[1], 10);
     const min = parseInt(m[2], 10);
@@ -678,7 +625,7 @@ function capturarMarcacoes(
       inserida: m[3] === "*" || inseridasExternas.has(valor),
       desconsiderada: false,
     });
-    if (horarios.length >= HORAS_MAX) break;
+    if (horarios.length >= 12) break; // Limite: 6 pares
   }
   // Completa com horários da lista "X:XX - Inserido" que NÃO aparecem na
   // forma compacta. Acontece quando o OCR omite o token compacto da última
