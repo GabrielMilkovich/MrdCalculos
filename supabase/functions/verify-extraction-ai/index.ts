@@ -58,7 +58,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 const TIMEOUT_MS = 30_000;
 const SCORE_MIN = 50;
 const SCORE_MAX = 85;
-const MODEL = "gpt-4o-mini";
+const MODEL = "gpt-5";
 
 type Builder = "holerite" | "cartao_ponto" | "ferias" | "faltas" | "ctps";
 const BUILDERS_VALIDOS: Builder[] = [
@@ -180,20 +180,22 @@ async function chamarOpenAI(
   parsedJson: unknown,
   builder: Builder,
 ): Promise<{ raw: IAResponseParsed; durationMs: number; status: number }> {
-  // OCR pode ser longo; limitamos a 12k caracteres pra caber no contexto
-  // do gpt-4o-mini sem custo absurdo. Operador foi avisado pelo score que
-  // a extração já é parcial — IA aqui só revisa, não substitui.
+  // OCR pode ser longo; limitamos a 12k caracteres pra controlar custo
+  // (gpt-5 tem 400k de contexto, mas custo escala com tokens). Operador
+  // foi avisado pelo score que a extração já é parcial — IA aqui só
+  // revisa, não substitui.
   const ocrTrimmed = ocrText.length > 12000
     ? ocrText.slice(0, 12000) + "\n[...OCR truncado pra economia de tokens...]"
     : ocrText;
 
   // `parsed` em cartão de ponto com 700+ apurações cheias (marcações,
-  // eventos, observações) chegava facilmente a 200k+ tokens — estourava
-  // o limite de 128k do gpt-4o-mini. Estratégia em camadas:
+  // eventos, observações) chegava facilmente a 200k+ tokens. gpt-5 tem
+  // 400k de contexto — cabe — mas o custo por chamada disparava. Mantemos
+  // a estratégia em 2 camadas pra economia:
   //   1. JSON.stringify SEM indent (corta ~50% do volume só pelo whitespace).
   //   2. Truncamento defensivo em 60k chars (~15k tokens). Junto com OCR
-  //      12k chars, system prompt ~1.5k e schema ~0.5k, ficamos confortáveis
-  //      em 30-40k tokens — bem dentro de 128k.
+  //      12k chars, system prompt ~1.5k e schema ~0.5k, ficamos em
+  //      30-40k tokens — quantidade saudável de input pra reasoning.
   // Documento muito grande perde fidelidade no que sobrou de fora; é trade-off
   // explícito documentado pra IA, que vê a marca e sabe que parsed foi cortado.
   const PARSED_MAX_CHARS = 60000;
@@ -227,10 +229,10 @@ Verifique e sugira ajustes pontuais. Lembre-se: TODO valor sugerido DEVE estar L
       },
       body: JSON.stringify({
         model: MODEL,
-        temperature: 0,
-        // PR-3 (P4 self-consistency): seed fixo torna a saída determinística
-        // entre chamadas com mesmo input — útil pra reproduzir bugs e pra
-        // os testes humanos baterem com o que a IA disse antes.
+        // gpt-5 ignora temperature e top_p (usa reasoning interno).
+        // reasoning_effort=low é rápido e suficiente pra revisão cirúrgica
+        // (operador já fez triagem). seed mantido pra determinismo (P4).
+        reasoning_effort: "low",
         seed: 42,
         response_format: {
           type: "json_schema",
