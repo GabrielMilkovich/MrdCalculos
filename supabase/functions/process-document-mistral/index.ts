@@ -55,6 +55,11 @@ interface V6Tentativa {
   textoCompleto?: string;
   pageCount?: number;
   qualidadeRazao?: string;
+  // Sample do textoCompleto pra debugging quando V6 EXTRAIU mas mapper não
+  // casou. Permite calibrar detectores com base em texto REAL produzido pelo
+  // unpdf, não fixture sintética.
+  textPreview?: string;
+  textFullLength?: number;
 }
 
 async function baixarBytes(url: string): Promise<Uint8Array | null> {
@@ -109,11 +114,17 @@ async function tentarV6(
         errorMessage: "extrairGeometrico devolveu null (PDF sem texto nativo ou unpdf falhou)",
       };
     }
+    // Sample do textoCompleto pra qualquer outcome pós-extração — debugging.
+    const textPreview = docTab.textoCompleto.slice(0, 4000);
+    const textFullLength = docTab.textoCompleto.length;
     if (docTab.qualidade.score < 0.7) {
       return {
         outcome: "score_below_threshold",
         score: docTab.qualidade.score,
         errorMessage: docTab.qualidade.razao,
+        textPreview,
+        textFullLength,
+        pageCount: docTab.numeroPaginas,
       };
     }
     const dispatch = escolherMapper(docTab);
@@ -123,6 +134,8 @@ async function tentarV6(
         score: docTab.qualidade.score,
         qualidadeRazao: docTab.qualidade.razao,
         pageCount: docTab.numeroPaginas,
+        textPreview,
+        textFullLength,
       };
     }
     const resultado = dispatch.mapper.mapear(docTab);
@@ -132,6 +145,8 @@ async function tentarV6(
         mapper: dispatch.mapper.slug,
         score: dispatch.score,
         pageCount: docTab.numeroPaginas,
+        textPreview,
+        textFullLength,
       };
     }
     return {
@@ -164,6 +179,10 @@ function metadataV6(t: V6Tentativa): Record<string, unknown> {
     v6_page_count: t.pageCount ?? null,
     v6_quality_reason: t.qualidadeRazao ?? null,
     v6_error_message: t.errorMessage ?? null,
+    // Sample do texto extraído quando mapper falha — alimenta calibração
+    // com texto REAL do unpdf em produção (não fixture sintética).
+    v6_text_preview: t.textPreview ?? null,
+    v6_text_full_length: t.textFullLength ?? null,
   };
 }
 
