@@ -8,7 +8,7 @@
  * Invoca edge function `verify-extraction-ai` que tem contrato anti-alucinação:
  *   - Substring literal: todo valor sugerido deve estar no OCR original.
  *   - Structured output strict (json_schema).
- *   - Timeout 15s.
+ *   - Timeout 30s.
  *
  * Operador vê sugestões em popover, marca quais aceitar individualmente,
  * e "Aplica selecionadas" OU clica "Pular análise" (capturando razão).
@@ -150,7 +150,27 @@ export function VerifyExtractionAIButton({
           },
         },
       );
-      if (fnError) throw new Error(fnError.message);
+      if (fnError) {
+        // supabase-js v2: em non-2xx, fnError.context é o Response cru.
+        // Sem isso, perdemos o body { error: "timeout_30s" } e o usuário vê
+        // só "Edge Function returned a non-2xx status code".
+        const ctx = (fnError as { context?: Response }).context;
+        let bodyMsg = "";
+        if (ctx && typeof ctx.text === "function") {
+          const bodyText = await ctx.text().catch(() => "");
+          if (bodyText) {
+            let parsedErr: string | null = null;
+            try {
+              const j = JSON.parse(bodyText) as { error?: unknown };
+              if (typeof j?.error === "string") parsedErr = j.error;
+            } catch {
+              // body não é JSON — usa cru truncado
+            }
+            bodyMsg = parsedErr ?? bodyText.slice(0, 500);
+          }
+        }
+        throw new Error(bodyMsg || fnError.message);
+      }
       const r = data as AIVerifyResponse | { error: string };
       if ("error" in r) throw new Error(r.error);
       setResponse(r);
@@ -170,7 +190,7 @@ export function VerifyExtractionAIButton({
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       // Timeout vem como 504 → erro de rede do supabase.
-      if (msg.includes("timeout_15s") || msg.includes("AbortError")) {
+      if (/timeout_\d+s/.test(msg) || msg.includes("AbortError")) {
         setError("timeout");
       } else {
         setError(msg);
@@ -286,7 +306,7 @@ export function VerifyExtractionAIButton({
               className="w-full gap-1.5"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Iniciar análise (15s timeout)
+              Iniciar análise (30s timeout)
             </Button>
           </div>
         )}
@@ -294,7 +314,7 @@ export function VerifyExtractionAIButton({
         {loading && (
           <div className="p-6 flex flex-col items-center gap-2 text-sm">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Consultando IA (até 15s)…</span>
+            <span>Consultando IA (até 30s)…</span>
             <span className="text-[11px] text-muted-foreground">
               Modelo: gpt-4o-mini · structured output strict
             </span>
@@ -305,7 +325,7 @@ export function VerifyExtractionAIButton({
           <div className="p-4 text-sm space-y-2">
             <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
               <Clock className="h-3.5 w-3.5" />
-              <strong>Timeout 15s</strong>
+              <strong>Timeout 30s</strong>
             </div>
             <p className="text-[12px] text-muted-foreground">
               OpenAI demorou demais. Tente novamente ou prossiga sem IA.
