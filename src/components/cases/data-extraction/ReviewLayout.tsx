@@ -84,8 +84,21 @@ interface Props {
   /** Slot opcional para a badge de confiança no header. */
   headerSlot?: ReactNode;
   children: ReactNode;
-  onConfirm: () => Promise<void> | void;
+  /**
+   * Callback de confirmação. F0.4: recebe `bloqueioBurlado=true` quando o
+   * operador marcou o checkbox override "Confirmo que revisei manualmente
+   * cada divergência acima" — possível apenas se `divergenciasCount > 0`.
+   * Caller deve propagar pra `logCsvExport({ bloqueioBurlado })`.
+   */
+  onConfirm: (opts?: { bloqueioBurlado: boolean }) => Promise<void> | void;
   confirmDisabled?: boolean;
+  /**
+   * F0.4 — quantidade de divergências detectadas (linhas rejeitadas + warnings
+   * críticos do parser/builder). Quando > 0, exige 4º checkbox override
+   * "Confirmo que revisei manualmente cada divergência acima" e setamos
+   * `bloqueioBurlado=true` no callback.
+   */
+  divergenciasCount?: number;
   /**
    * Identificador estável (ex: filename + tipo) para persistir preferências
    * de layout (split, fullscreen) por documento. Quando ausente, persiste
@@ -133,6 +146,7 @@ export function ReviewLayout({
   children,
   onConfirm,
   confirmDisabled,
+  divergenciasCount,
   layoutKey,
 }: Props) {
   const lsSuffix = layoutKey ? `:${layoutKey}` : "";
@@ -144,7 +158,14 @@ export function ReviewLayout({
   const [conferiuDatas, setConferiuDatas] = useState(false);
   const [conferiuValores, setConferiuValores] = useState(false);
   const [conferiuCobertura, setConferiuCobertura] = useState(false);
-  const conferido = conferiuDatas && conferiuValores && conferiuCobertura;
+  // F0.4 — checkbox override exigido quando há divergências sinalizadas.
+  const [conferiuDivergencias, setConferiuDivergencias] = useState(false);
+  const exigeOverride = (divergenciasCount ?? 0) > 0;
+  const conferido =
+    conferiuDatas &&
+    conferiuValores &&
+    conferiuCobertura &&
+    (!exigeOverride || conferiuDivergencias);
   const [downloading, setDownloading] = useState(false);
   const [confirmacaoOpen, setConfirmacaoOpen] = useState(false);
 
@@ -155,6 +176,7 @@ export function ReviewLayout({
       setConferiuDatas(false);
       setConferiuValores(false);
       setConferiuCobertura(false);
+      setConferiuDivergencias(false);
     }
   }, [confirmacaoOpen]);
 
@@ -213,7 +235,9 @@ export function ReviewLayout({
   const handleConfirm = async () => {
     setDownloading(true);
     try {
-      await onConfirm();
+      await onConfirm({
+        bloqueioBurlado: exigeOverride && conferiuDivergencias,
+      });
       onOpenChange(false);
     } finally {
       setDownloading(false);
@@ -499,6 +523,24 @@ export function ReviewLayout({
                 (HE, banco de horas, faltas) foram preservados.
               </span>
             </label>
+            {exigeOverride && (
+              <label className="flex items-start gap-3 text-sm select-none cursor-pointer border-t pt-3 border-amber-200 dark:border-amber-800">
+                <Checkbox
+                  checked={conferiuDivergencias}
+                  onCheckedChange={(v) => setConferiuDivergencias(Boolean(v))}
+                  className="mt-0.5"
+                />
+                <span>
+                  <strong className="text-amber-900 dark:text-amber-100">
+                    Confirmo que revisei manualmente cada divergência acima
+                  </strong>{" "}
+                  ({divergenciasCount} sinalizada
+                  {divergenciasCount === 1 ? "" : "s"} pelo parser). O download
+                  será registrado como <em>bloqueio burlado</em> na telemetria
+                  para audit trail jurídico.
+                </span>
+              </label>
+            )}
           </div>
 
           <AlertDialogFooter>

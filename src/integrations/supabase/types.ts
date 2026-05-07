@@ -1448,6 +1448,7 @@ export type Database = {
       csv_export_telemetry: {
         Row: {
           baixado_com_perdas: boolean
+          bloqueio_burlado: boolean
           builder: string
           case_id: string | null
           criado_em: string
@@ -1463,6 +1464,7 @@ export type Database = {
         }
         Insert: {
           baixado_com_perdas?: boolean
+          bloqueio_burlado?: boolean
           builder: string
           case_id?: string | null
           criado_em?: string
@@ -1478,6 +1480,7 @@ export type Database = {
         }
         Update: {
           baixado_com_perdas?: boolean
+          bloqueio_burlado?: boolean
           builder?: string
           case_id?: string | null
           criado_em?: string

@@ -272,11 +272,14 @@ export function CartaoPontoReviewDialog({
     report: BuildReport;
   } | null>(null);
   const [downloading, setDownloading] = useState(false);
+  // F0.4 — propaga checkbox override do ReviewLayout até logCsvExport.
+  const [bloqueioBurladoFlag, setBloqueioBurladoFlag] = useState(false);
 
   // Constrói o CSV em memória + abre o painel de auditoria. O download
   // só acontece quando o operador confirma (ou autoriza explicitamente
   // baixar mesmo com perdas).
-  const handleConfirm = async () => {
+  const handleConfirm = async (opts?: { bloqueioBurlado: boolean }) => {
+    setBloqueioBurladoFlag(opts?.bloqueioBurlado ?? false);
     const apuracoes: ApuracaoDiaria[] = sorted
       .filter((r) => r.data)
       .map((r) => ({
@@ -329,9 +332,11 @@ export function CartaoPontoReviewDialog({
         report: reportPreview.report,
         documentId: documentId ?? null,
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
+        bloqueioBurlado: bloqueioBurladoFlag,
         parserOrigem: effectiveParsed.parser_version,
       });
       setReportPreview(null);
+      setBloqueioBurladoFlag(false);
     } finally {
       setDownloading(false);
     }
@@ -354,6 +359,9 @@ export function CartaoPontoReviewDialog({
         </div>
       }
       onConfirm={handleConfirm}
+      divergenciasCount={
+        unparsedLines.length + outOfWindowLines.length + warnings.length
+      }
     >
       <div className="h-10 px-2 flex items-center justify-between border-b sticky top-0 bg-background z-20 shrink-0">
         <span className="text-[11px] text-muted-foreground flex items-center gap-2">

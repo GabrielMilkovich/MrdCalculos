@@ -225,8 +225,11 @@ export function FeriasReviewDialog({
     report: BuildReport;
   } | null>(null);
   const [downloading, setDownloading] = useState(false);
+  // F0.4 — propaga checkbox override do ReviewLayout até logCsvExport.
+  const [bloqueioBurladoFlag, setBloqueioBurladoFlag] = useState(false);
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (opts?: { bloqueioBurlado: boolean }) => {
+    setBloqueioBurladoFlag(opts?.bloqueioBurlado ?? false);
     const ferias: FeriasParseada[] = sorted
       .filter((r) => !rowHasErrors(errosPorLinha.get(r._key) ?? {}))
       .map((r) => ({
@@ -258,9 +261,11 @@ export function FeriasReviewDialog({
         report: reportPreview.report,
         documentId: _documentId ?? null,
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
+        bloqueioBurlado: bloqueioBurladoFlag,
         parserOrigem: "regex_v5_ferias",
       });
       setReportPreview(null);
+      setBloqueioBurladoFlag(false);
     } finally {
       setDownloading(false);
     }
@@ -283,6 +288,9 @@ export function FeriasReviewDialog({
       }
       onConfirm={handleConfirm}
       confirmDisabled={totalErros > 0}
+      divergenciasCount={
+        unparsedLines.length + (effectiveParsed.warnings?.length ?? 0)
+      }
     >
       <div className="p-2 flex items-center justify-between border-b sticky top-0 bg-background z-10">
         <span className="text-[11px] text-muted-foreground">

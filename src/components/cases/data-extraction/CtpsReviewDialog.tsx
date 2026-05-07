@@ -76,12 +76,23 @@ export function CtpsReviewDialog({
   const [downloading, setDownloading] = useState(false);
   const [conferiu1, setConferiu1] = useState(false);
   const [conferiu2, setConferiu2] = useState(false);
-  const conferido = conferiu1 && conferiu2;
+  // F0.4 — checkbox override exigido quando há divergências sinalizadas
+  // por qualquer dos parsers (férias ou faltas).
+  const [conferiuDivergencias, setConferiuDivergencias] = useState(false);
+  const divergenciasCount =
+    (feriasParsed.warnings?.length ?? 0) +
+    (feriasParsed.unparsed_lines?.length ?? 0) +
+    (faltasParsed.warnings?.length ?? 0) +
+    (faltasParsed.unparsed_lines?.length ?? 0);
+  const exigeOverride = divergenciasCount > 0;
+  const conferido =
+    conferiu1 && conferiu2 && (!exigeOverride || conferiuDivergencias);
 
   useEffect(() => {
     if (!confirmacaoOpen) {
       setConferiu1(false);
       setConferiu2(false);
+      setConferiuDivergencias(false);
     }
   }, [confirmacaoOpen]);
 
@@ -115,6 +126,7 @@ export function CtpsReviewDialog({
         report: reportPreview.report,
         documentId: documentId ?? null,
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
+        bloqueioBurlado: exigeOverride && conferiuDivergencias,
         parserOrigem: "regex_v5_ctps",
       });
       setReportPreview(null);
@@ -284,6 +296,24 @@ export function CtpsReviewDialog({
                 e justificativas conferem com as anotações na CTPS.
               </span>
             </label>
+            {exigeOverride && (
+              <label className="flex items-start gap-3 text-sm select-none cursor-pointer border-t pt-3 border-amber-200 dark:border-amber-800">
+                <Checkbox
+                  checked={conferiuDivergencias}
+                  onCheckedChange={(v) => setConferiuDivergencias(Boolean(v))}
+                  className="mt-0.5"
+                />
+                <span>
+                  <strong className="text-amber-900 dark:text-amber-100">
+                    Confirmo que revisei manualmente cada divergência acima
+                  </strong>{" "}
+                  ({divergenciasCount} sinalizada
+                  {divergenciasCount === 1 ? "" : "s"} pelos parsers). O download
+                  será registrado como <em>bloqueio burlado</em> na telemetria
+                  para audit trail jurídico.
+                </span>
+              </label>
+            )}
           </div>
 
           <AlertDialogFooter>

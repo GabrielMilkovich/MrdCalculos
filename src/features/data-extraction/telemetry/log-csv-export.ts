@@ -26,6 +26,14 @@ export interface LogCsvExportInput {
   /** True quando operador autorizou download apesar de linhasRejeitadas. */
   baixadoComPerdas: boolean;
   /**
+   * F0.4 — true quando operador marcou checkbox override "Confirmo que revisei
+   * manualmente cada divergência acima" para baixar CSV apesar de
+   * divergências sinalizadas (linhas rejeitadas / score baixo / warnings
+   * críticos). Audit trail jurídico — diferente de `baixadoComPerdas`
+   * que captura existência de rejeições mas não a decisão consciente.
+   */
+  bloqueioBurlado?: boolean;
+  /**
    * Slug do parser/mapper que originou os dados. Ex: 'cartao_via_varejo_v1',
    * 'cartao_generico_v1', 'regex_v5_via_varejo', 'regex_v5_holerite'.
    */
@@ -53,6 +61,7 @@ export async function logCsvExport(input: LogCsvExportInput): Promise<void> {
       linhas_ajustadas: input.report.linhasAjustadas.length,
       warnings: input.report.warnings.length,
       baixado_com_perdas: input.baixadoComPerdas,
+      bloqueio_burlado: input.bloqueioBurlado ?? false,
       report: input.report as unknown as Record<string, unknown>,
       parser_origem: input.parserOrigem ?? null,
       criado_por: user.id,

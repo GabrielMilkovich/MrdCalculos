@@ -42,6 +42,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -209,6 +219,39 @@ export function HoleritePreviewDialog({
     report: BuildReport;
   } | null>(null);
 
+  // F0.4 — checklist gate uniforme com os outros 4 dialogs.
+  const [confirmacaoOpen, setConfirmacaoOpen] = useState(false);
+  const [conferiuRubricas, setConferiuRubricas] = useState(false);
+  const [conferiuValores, setConferiuValores] = useState(false);
+  const [conferiuCobertura, setConferiuCobertura] = useState(false);
+  const [conferiuDivergencias, setConferiuDivergencias] = useState(false);
+
+  // Reset do checklist a cada abertura — força revisão consciente.
+  useEffect(() => {
+    if (!confirmacaoOpen) {
+      setConferiuRubricas(false);
+      setConferiuValores(false);
+      setConferiuCobertura(false);
+      setConferiuDivergencias(false);
+    }
+  }, [confirmacaoOpen]);
+
+  // Divergências sinalizadas pelo parser/classifier:
+  //   - warnings do parser (cross-validation, bases excluídas, dedup);
+  //   - rubricas com origem "fallback" (sem hint óbvio, classificadas
+  //     como Salário Fixo por default — operador deve revisar).
+  const linhasFallbackIncluidas = linhas.filter(
+    (l) => l.incluir && l.origem === "fallback",
+  ).length;
+  const divergenciasCount =
+    classificacao.warnings.length + linhasFallbackIncluidas;
+  const exigeOverride = divergenciasCount > 0;
+  const conferido =
+    conferiuRubricas &&
+    conferiuValores &&
+    conferiuCobertura &&
+    (!exigeOverride || conferiuDivergencias);
+
   const handleConfirmar = async () => {
     setDownloading(true);
     try {
@@ -232,6 +275,7 @@ export function HoleritePreviewDialog({
         report: reportPreview.report,
         documentId: _documentId ?? null,
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
+        bloqueioBurlado: exigeOverride && conferiuDivergencias,
         parserOrigem: `regex_v5_holerite|${effectiveClassificacao.layout_usado}`,
       });
       setReportPreview(null);
@@ -436,7 +480,7 @@ export function HoleritePreviewDialog({
           </Button>
           <Button
             size="sm"
-            onClick={handleConfirmar}
+            onClick={() => setConfirmacaoOpen(true)}
             disabled={
               downloading || totalCategorias === 0 || competenciaInvalida
             }
@@ -444,7 +488,7 @@ export function HoleritePreviewDialog({
             title={
               competenciaInvalida
                 ? `Competência "${effectiveClassificacao.competencia || "vazia"}" inválida. Corrija antes de baixar — o cálculo trabalhista não pode alocar rubricas sem mês de referência válido.`
-                : undefined
+                : "Abre o gate de confirmação (3 itens dirigidos) antes do download"
             }
           >
             {downloading ? (
@@ -456,6 +500,103 @@ export function HoleritePreviewDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* F0.4 — Gate de confirmação humano. Reseta os checks a cada
+          abertura para forçar revisão consciente. Se há divergências,
+          exige checkbox override "bloqueio burlado". */}
+      <AlertDialog open={confirmacaoOpen} onOpenChange={setConfirmacaoOpen}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirme antes de baixar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Marque os {exigeOverride ? "4" : "3"} itens para liberar o
+              download do ZIP. Esta etapa registra que você revisou os dados —
+              o arquivo será usado em cálculo trabalhista vinculante.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-3 py-2">
+            <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
+              <Checkbox
+                checked={conferiuRubricas}
+                onCheckedChange={(v) => setConferiuRubricas(Boolean(v))}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Rubricas categorizadas</strong> — cada linha incluída
+                tem categoria correta (Salário Fixo / Comissões / DSR /
+                Premiações / Mínimo Garantido / Sal-família).
+              </span>
+            </label>
+            <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
+              <Checkbox
+                checked={conferiuValores}
+                onCheckedChange={(v) => setConferiuValores(Boolean(v))}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Valores</strong> conferem com o OCR — sem rubricas de
+                base de cálculo (Base IR/INSS/FGTS) classificadas como
+                remuneração e sem duplicações de histórico.
+              </span>
+            </label>
+            <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
+              <Checkbox
+                checked={conferiuCobertura}
+                onCheckedChange={(v) => setConferiuCobertura(Boolean(v))}
+                className="mt-0.5"
+              />
+              <span>
+                <strong>Cobertura</strong> e competência <strong>{effectiveClassificacao.competencia}</strong>{" "}
+                conferem — todas as rubricas remuneratórias do holerite estão
+                aqui e nada relevante foi marcado para ignorar.
+              </span>
+            </label>
+            {exigeOverride && (
+              <label className="flex items-start gap-3 text-sm select-none cursor-pointer border-t pt-3 border-amber-200 dark:border-amber-800">
+                <Checkbox
+                  checked={conferiuDivergencias}
+                  onCheckedChange={(v) => setConferiuDivergencias(Boolean(v))}
+                  className="mt-0.5"
+                />
+                <span>
+                  <strong className="text-amber-900 dark:text-amber-100">
+                    Confirmo que revisei manualmente cada divergência acima
+                  </strong>{" "}
+                  ({divergenciasCount} sinalizada
+                  {divergenciasCount === 1 ? "" : "s"} pelo parser
+                  {linhasFallbackIncluidas > 0 ? "/classifier" : ""}). O
+                  download será registrado como <em>bloqueio burlado</em> na
+                  telemetria para audit trail jurídico.
+                </span>
+              </label>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={downloading}>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (conferido && !downloading) {
+                  setConfirmacaoOpen(false);
+                  void handleConfirmar();
+                }
+              }}
+              disabled={!conferido || downloading}
+              className="gap-1.5"
+            >
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Avançar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <CsvBuildReportPanel
         open={!!reportPreview}
         onOpenChange={(o) => {
