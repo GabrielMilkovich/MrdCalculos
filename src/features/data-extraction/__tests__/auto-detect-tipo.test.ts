@@ -35,8 +35,10 @@ describe("autoDetectTipoExtracao — holerite", () => {
   });
 });
 
-describe("autoDetectTipoExtracao — recibo de férias", () => {
-  it("recibo de férias com período aquisitivo + gozo", () => {
+// F1.3: recibo_ferias e registro_faltas foram unificados em ctps.
+// Tudo que era detectado como um dos 2 agora vira ctps.
+describe("autoDetectTipoExtracao — recibo de férias (unificado em ctps)", () => {
+  it("recibo de férias com período aquisitivo + gozo → ctps", () => {
     const text = `
       AVISO DE FÉRIAS
       Empregado: João da Silva
@@ -45,23 +47,23 @@ describe("autoDetectTipoExtracao — recibo de férias", () => {
       Abono pecuniário: 10 dias
     `;
     const r = autoDetectTipoExtracao(text);
-    expect(r.tipo).toBe("recibo_ferias");
+    expect(r.tipo).toBe("ctps");
     expect(r.confianca).toMatch(/alta|media/);
   });
 
-  it("recibo com terço constitucional", () => {
+  it("recibo com terço constitucional → ctps", () => {
     const text = `
       RECIBO DE FÉRIAS
       Período Aquisitivo 2023/2024
       1/3 constitucional sobre férias
     `;
     const r = autoDetectTipoExtracao(text);
-    expect(r.tipo).toBe("recibo_ferias");
+    expect(r.tipo).toBe("ctps");
   });
 });
 
-describe("autoDetectTipoExtracao — registro de faltas", () => {
-  it("folha de faltas com atestado", () => {
+describe("autoDetectTipoExtracao — registro de faltas (unificado em ctps)", () => {
+  it("folha de faltas com atestado → ctps", () => {
     const text = `
       FOLHA DE FALTAS DO MÊS
       João da Silva
@@ -70,18 +72,18 @@ describe("autoDetectTipoExtracao — registro de faltas", () => {
       CID: M54
     `;
     const r = autoDetectTipoExtracao(text);
-    expect(r.tipo).toBe("registro_faltas");
+    expect(r.tipo).toBe("ctps");
     expect(r.confianca).toMatch(/alta|media/);
   });
 
-  it("controle de frequência com ausências", () => {
+  it("controle de frequência com ausências → ctps", () => {
     const text = `
       CONTROLE DE FREQUÊNCIA
       Ausência injustificada em 15/03/2024
       Atestado médico em 22/03/2024
     `;
     const r = autoDetectTipoExtracao(text);
-    expect(r.tipo).toBe("registro_faltas");
+    expect(r.tipo).toBe("ctps");
   });
 });
 
@@ -152,8 +154,7 @@ describe("autoDetectTipoExtracao — scoresPorTipo", () => {
       "RECIBO DE PAGAMENTO de salário do mês de março — empregado João da Silva",
     );
     expect(r.scoresPorTipo).toHaveProperty("holerite");
-    expect(r.scoresPorTipo).toHaveProperty("recibo_ferias");
-    expect(r.scoresPorTipo).toHaveProperty("registro_faltas");
+    expect(r.scoresPorTipo).toHaveProperty("ctps");
     expect(r.scoresPorTipo).toHaveProperty("cartao_ponto");
     expect(r.scoresPorTipo.holerite).toBeGreaterThan(0);
   });
@@ -197,7 +198,7 @@ describe("autoDetectTipoExtracao — CTPS (Carteira de Trabalho)", () => {
     expect(r.tipo).not.toBe("ctps");
   });
 
-  it("Recibo de férias avulso (sem sinal CTPS) continua sendo recibo_ferias", () => {
+  it("Recibo de férias avulso (sem cabeçalho CTPS) também vira ctps após F1.3", () => {
     const ocr = `
       RECIBO DE FÉRIAS
       Empregado: João da Silva
@@ -207,6 +208,6 @@ describe("autoDetectTipoExtracao — CTPS (Carteira de Trabalho)", () => {
       Abono pecuniário de 10 dias
     `;
     const r = autoDetectTipoExtracao(ocr);
-    expect(r.tipo).toBe("recibo_ferias");
+    expect(r.tipo).toBe("ctps");
   });
 });
