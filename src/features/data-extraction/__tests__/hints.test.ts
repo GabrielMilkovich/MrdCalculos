@@ -213,6 +213,89 @@ describe('getDefaultHint — verbas rescisórias e 13º (não entram no históri
   });
 });
 
+describe('getDefaultHint — F0.3: bases de cálculo (defesa-em-profundidade)', () => {
+  it('"Base IR" sugere ignorar', () => {
+    expect(getDefaultHint('Base IR')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('"Base IRRF" sugere ignorar', () => {
+    expect(getDefaultHint('Base IRRF')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('"Base INSS" sugere ignorar', () => {
+    expect(getDefaultHint('Base INSS')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('"Base FGTS" sugere ignorar', () => {
+    expect(getDefaultHint('Base FGTS')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('"Base FGTS Rescisão" sugere ignorar', () => {
+    expect(getDefaultHint('Base FGTS Rescisão')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('"Base de Cálculo IR" sugere ignorar', () => {
+    expect(getDefaultHint('Base de Cálculo IR')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('"Salário Base" NÃO confunde com base (cai em null/fallback)', () => {
+    expect(getDefaultHint('Salário Base')).toBeNull();
+  });
+});
+
+describe('getDefaultHint — F0.3: IR Retido (variante não-IRRF)', () => {
+  it('"IR Retido na Fonte" sugere ignorar', () => {
+    expect(getDefaultHint('IR Retido na Fonte')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('"IR Retido" sugere ignorar', () => {
+    expect(getDefaultHint('IR Retido')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('"Imposto de Renda Retido" sugere ignorar', () => {
+    expect(getDefaultHint('Imposto de Renda Retido')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('"Contribuição Previdenciária" sugere ignorar', () => {
+    expect(getDefaultHint('Contribuição Previdenciária')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+});
+
+describe('getDefaultHint — F0.3: totalizadores (defesa-em-profundidade)', () => {
+  it('"Total Bruto" sugere ignorar', () => {
+    expect(getDefaultHint('Total Bruto')).toMatchObject({ tipo: 'sugerir_ignorar' });
+  });
+  it('"Total Vencimentos" sugere ignorar', () => {
+    expect(getDefaultHint('Total Vencimentos')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('"Total Descontos" sugere ignorar', () => {
+    expect(getDefaultHint('Total Descontos')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('"Salário Líquido" sugere ignorar', () => {
+    expect(getDefaultHint('Salário Líquido')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('"Líquido a Receber" sugere ignorar', () => {
+    expect(getDefaultHint('Líquido a Receber')).toMatchObject({
+      tipo: 'sugerir_ignorar',
+    });
+  });
+  it('"Total de Comissões" NÃO é totalizador (rubrica agregada)', () => {
+    // "total de comissoes" depois de normalizar — começa com "total de", não com
+    // os sufixos da regex (bruto/venc/proventos/etc). Cai em comissão.
+    expect(getDefaultHint('Total de Comissões')).toMatchObject({
+      tipo: 'sugerir_categoria',
+      slug: 'comissao',
+    });
+  });
+});
+
 describe('getDefaultHint — null', () => {
   it('rubrica desconhecida não retorna nada', () => {
     expect(getDefaultHint('XYZ123')).toBeNull();

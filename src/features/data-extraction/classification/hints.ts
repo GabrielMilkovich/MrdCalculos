@@ -30,6 +30,20 @@ const HINTS_DSR: Array<{ pattern: RegExp; motivo: string }> = [
 ];
 
 const HINTS_IGNORAR: Array<{ pattern: RegExp; motivo: string }> = [
+  // Bases de cálculo (defesa-em-profundidade — parser genérico já filtra,
+  // mas se OCR vazar "Base IR / Base INSS / Base FGTS" pra UI, classifier
+  // ignora. Bases NÃO são remuneração; somá-las duplica o cálculo.
+  {
+    pattern: /^base\s+(de\s+)?(calculo\s+)?(ir|irrf|inss|fgts(\s+rescis\w*)?)\b/i,
+    motivo: 'Base de cálculo (IR/INSS/FGTS) — totalizador, não é rubrica.',
+  },
+  // Totalizadores (Total Bruto, Salário Líquido, Líquido a Receber). Se
+  // vazarem do OCR como rubrica, defesa explícita aqui.
+  {
+    pattern:
+      /^(total\s+(bruto|venc\w*|proventos|descont\w*|liquido|geral)|valor\s+liquido|liquido\s+a\s+receber|salario\s+liquido|salario\s+bruto)\b/i,
+    motivo: 'Totalizador — não é rubrica individual.',
+  },
   // Horas extras (incluindo combinações com COMISS, DSR etc — precisa vir
   // antes de COMISSAO/PREMIACAO. Aceita "HORA EXT", "HORAS EXTRA", "H.EXTRA",
   // "HR EXT" etc.)
@@ -38,9 +52,12 @@ const HINTS_IGNORAR: Array<{ pattern: RegExp; motivo: string }> = [
     motivo:
       'Horas extras não entram no histórico salarial — usadas como dedução em fase posterior do cálculo.',
   },
-  // Descontos previdenciários e fiscais
+  // Descontos previdenciários e fiscais.
+  // Inclui "IR Retido na Fonte" / "IR Retido" — variante comum em alguns
+  // holerites (ADP, RH-Cloud) que não usa "IRRF".
   {
-    pattern: /\b(inss|irrf|irpf|imposto\s+de\s+renda)\b/i,
+    pattern:
+      /\b(inss|irrf|irpf|ir\s+retido|imposto\s+de\s+renda|contrib\w*\s+previd\w*)\b/i,
     motivo: 'Desconto previdenciário/fiscal — não entra no histórico salarial.',
   },
   // Vale transporte
