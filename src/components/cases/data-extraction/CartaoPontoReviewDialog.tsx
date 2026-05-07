@@ -379,7 +379,7 @@ export function CartaoPontoReviewDialog({
       void logCsvExport({
         builder: "cartao_ponto",
         report: reportPreview.report,
-        documentId: documentId ?? null,
+        documentId: _documentId ?? null,
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
         bloqueioBurlado: bloqueioBurladoFlag,
         parserOrigem: effectiveParsed.parser_version,
@@ -412,7 +412,7 @@ export function CartaoPontoReviewDialog({
           <VerifyExtractionAIButton
             score={confidence.score}
             builder="cartao_ponto"
-            documentId={documentId ?? null}
+            documentId={_documentId ?? null}
             parsed={{
               apuracoes: sorted.map((r) => ({
                 data: r.data,
