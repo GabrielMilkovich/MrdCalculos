@@ -48,18 +48,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -151,34 +140,11 @@ export function ReviewLayout({
 }: Props) {
   const lsSuffix = layoutKey ? `:${layoutKey}` : "";
 
-  // Checklist de 3 itens dirigidos — único gate humano entre revisão visual
-  // e o CSV juridicamente vinculante. Apresentado em AlertDialog que abre
-  // SÓ quando o advogado clica em "Confirmar e baixar CSV", para liberar
-  // espaço vertical na tela principal de revisão.
-  const [conferiuDatas, setConferiuDatas] = useState(false);
-  const [conferiuValores, setConferiuValores] = useState(false);
-  const [conferiuCobertura, setConferiuCobertura] = useState(false);
-  // F0.4 — checkbox override exigido quando há divergências sinalizadas.
-  const [conferiuDivergencias, setConferiuDivergencias] = useState(false);
-  const exigeOverride = (divergenciasCount ?? 0) > 0;
-  const conferido =
-    conferiuDatas &&
-    conferiuValores &&
-    conferiuCobertura &&
-    (!exigeOverride || conferiuDivergencias);
+  // Gate de confirmação removido: divergências e perdas continuam visíveis
+  // no `CsvBuildReportPanel` que cada dialog mostra após o build, e a
+  // telemetria (csv_export_telemetry) registra rejeições/warnings/campos
+  // não exportados em todo download. Sem checklist forçado.
   const [downloading, setDownloading] = useState(false);
-  const [confirmacaoOpen, setConfirmacaoOpen] = useState(false);
-
-  // Reset do checklist a cada abertura do modal de confirmação — força o
-  // advogado a re-checar conscientemente em cada tentativa de download.
-  useEffect(() => {
-    if (!confirmacaoOpen) {
-      setConferiuDatas(false);
-      setConferiuValores(false);
-      setConferiuCobertura(false);
-      setConferiuDivergencias(false);
-    }
-  }, [confirmacaoOpen]);
 
   // Preferências de layout — restauradas do localStorage.
   const [fullscreen, setFullscreen] = useState<boolean>(() =>
@@ -235,9 +201,7 @@ export function ReviewLayout({
   const handleConfirm = async () => {
     setDownloading(true);
     try {
-      await onConfirm({
-        bloqueioBurlado: exigeOverride && conferiuDivergencias,
-      });
+      await onConfirm({ bloqueioBurlado: false });
       onOpenChange(false);
     } finally {
       setDownloading(false);
@@ -459,114 +423,22 @@ export function ReviewLayout({
           </Button>
           <Button
             size="sm"
-            onClick={() => setConfirmacaoOpen(true)}
+            onClick={() => {
+              if (!downloading) handleConfirm();
+            }}
             disabled={confirmDisabled || downloading}
             className="gap-1.5"
-            title="Abre o gate de confirmação (3 itens dirigidos) antes do download"
+            title="Baixar CSV — divergências e perdas, se houver, ficam visíveis no painel de relatório do build."
           >
             {downloading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Download className="h-3.5 w-3.5" />
             )}
-            Confirmar e baixar CSV
+            Baixar CSV
           </Button>
         </DialogFooter>
       </DialogContent>
-
-      {/* Gate de confirmação — abre só ao clicar no botão azul. Reseta os
-          checks a cada abertura para forçar revisão consciente. */}
-      <AlertDialog open={confirmacaoOpen} onOpenChange={setConfirmacaoOpen}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirme antes de baixar</AlertDialogTitle>
-            <AlertDialogDescription>
-              Marque os 3 itens para liberar o download do CSV. Esta etapa
-              registra que você revisou os dados — o arquivo será usado em
-              cálculo trabalhista vinculante.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <div className="space-y-3 py-2">
-            <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
-              <Checkbox
-                checked={conferiuDatas}
-                onCheckedChange={(v) => setConferiuDatas(Boolean(v))}
-                className="mt-0.5"
-              />
-              <span>
-                <strong>Datas</strong> conferem com o período do documento —
-                sem datas fora da janela e sem dias faltando.
-              </span>
-            </label>
-            <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
-              <Checkbox
-                checked={conferiuValores}
-                onCheckedChange={(v) => setConferiuValores(Boolean(v))}
-                className="mt-0.5"
-              />
-              <span>
-                <strong>Valores</strong> (horários / rubricas / dias) batem
-                com o OCR — soma de batidas corresponde ao Horas Trabalhadas
-                declarado.
-              </span>
-            </label>
-            <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
-              <Checkbox
-                checked={conferiuCobertura}
-                onCheckedChange={(v) => setConferiuCobertura(Boolean(v))}
-                className="mt-0.5"
-              />
-              <span>
-                <strong>Cobertura</strong> completa — nenhuma linha amarela
-                do OCR ficou sem virar uma linha aqui, e eventos relevantes
-                (HE, banco de horas, faltas) foram preservados.
-              </span>
-            </label>
-            {exigeOverride && (
-              <label className="flex items-start gap-3 text-sm select-none cursor-pointer border-t pt-3 border-amber-200 dark:border-amber-800">
-                <Checkbox
-                  checked={conferiuDivergencias}
-                  onCheckedChange={(v) => setConferiuDivergencias(Boolean(v))}
-                  className="mt-0.5"
-                />
-                <span>
-                  <strong className="text-amber-900 dark:text-amber-100">
-                    Confirmo que revisei manualmente cada divergência acima
-                  </strong>{" "}
-                  ({divergenciasCount} sinalizada
-                  {divergenciasCount === 1 ? "" : "s"} pelo parser). O download
-                  será registrado como <em>bloqueio burlado</em> na telemetria
-                  para audit trail jurídico.
-                </span>
-              </label>
-            )}
-          </div>
-
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={downloading}>Voltar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                // Não fecha automaticamente — controlamos manualmente via
-                // setConfirmacaoOpen depois do download terminar.
-                e.preventDefault();
-                if (conferido && !downloading) {
-                  handleConfirm().then(() => setConfirmacaoOpen(false));
-                }
-              }}
-              disabled={!conferido || downloading}
-              className="gap-1.5"
-            >
-              {downloading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Download className="h-3.5 w-3.5" />
-              )}
-              Baixar CSV
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Dialog>
   );
 }
