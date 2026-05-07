@@ -63,11 +63,40 @@ function serializarParaParsed(resultado: any): Record<string, unknown> {
   return out;
 }
 
+type V6Outcome =
+  | "success"
+  | "not_pdf"
+  | "pdf_download_failed"
+  | "pdf_extraction_failed"
+  | "score_below_threshold"
+  | "no_mapper_matched"
+  | "mapper_returned_null"
+  | "exception";
+
 interface ProcessamentoResult {
   id: string;
   sucesso: boolean;
+  outcome?: V6Outcome;
   mapper?: string;
   razao?: string;
+  /** Sample primeiros 4KB do textoCompleto extraído — alimenta calibração. */
+  textPreview?: string;
+  textFullLength?: number;
+  score?: number;
+  pageCount?: number;
+}
+
+function metadataV6Falha(r: ProcessamentoResult): Record<string, unknown> {
+  return {
+    v6_attempted_at: new Date().toISOString(),
+    v6_outcome: r.outcome ?? "exception",
+    v6_mapper_tried: r.mapper ?? null,
+    v6_score: r.score ?? null,
+    v6_page_count: r.pageCount ?? null,
+    v6_error_message: r.razao ?? null,
+    v6_text_preview: r.textPreview ?? null,
+    v6_text_full_length: r.textFullLength ?? null,
+  };
 }
 
 async function processarDoc(
@@ -77,34 +106,67 @@ async function processarDoc(
   doc: any,
 ): Promise<ProcessamentoResult> {
   if (!doc.storage_path) {
-    return { id: doc.id, sucesso: false, razao: "sem storage_path" };
+    return { id: doc.id, sucesso: false, outcome: "exception", razao: "sem storage_path" };
   }
   const { data: signedUrlData } = await supabase.storage
     .from("juriscalculo-documents")
     .createSignedUrl(doc.storage_path, 3600);
   if (!signedUrlData?.signedUrl) {
-    return { id: doc.id, sucesso: false, razao: "sem signed url" };
+    return { id: doc.id, sucesso: false, outcome: "pdf_download_failed", razao: "sem signed url" };
   }
   const bytes = await baixarBytes(signedUrlData.signedUrl);
-  if (!bytes) return { id: doc.id, sucesso: false, razao: "falha download" };
+  if (!bytes) {
+    return { id: doc.id, sucesso: false, outcome: "pdf_download_failed", razao: "falha download" };
+  }
   const docTab = await extrairGeometrico(bytes);
-  if (!docTab || docTab.qualidade.score < 0.7) {
+  if (!docTab) {
     return {
       id: doc.id,
       sucesso: false,
-      razao: `extrator score ${docTab?.qualidade.score ?? "null"}`,
+      outcome: "pdf_extraction_failed",
+      razao: "extrairGeometrico retornou null (PDF sem texto nativo ou unpdf falhou)",
+    };
+  }
+  // Captura sample do textoCompleto pra qualquer outcome pós-extração.
+  const textPreview = docTab.textoCompleto.slice(0, 4000);
+  const textFullLength = docTab.textoCompleto.length;
+  if (docTab.qualidade.score < 0.7) {
+    return {
+      id: doc.id,
+      sucesso: false,
+      outcome: "score_below_threshold",
+      razao: `score ${docTab.qualidade.score.toFixed(2)} — ${docTab.qualidade.razao}`,
+      score: docTab.qualidade.score,
+      pageCount: docTab.numeroPaginas,
+      textPreview,
+      textFullLength,
     };
   }
   const dispatch = escolherMapper(docTab);
   if (!dispatch) {
-    return { id: doc.id, sucesso: false, razao: "nenhum mapper aplica" };
+    return {
+      id: doc.id,
+      sucesso: false,
+      outcome: "no_mapper_matched",
+      razao: "nenhum mapper aplica",
+      score: docTab.qualidade.score,
+      pageCount: docTab.numeroPaginas,
+      textPreview,
+      textFullLength,
+    };
   }
   const resultado = dispatch.mapper.mapear(docTab);
   if (!resultado) {
     return {
       id: doc.id,
       sucesso: false,
+      outcome: "mapper_returned_null",
+      mapper: dispatch.mapper.slug,
       razao: `mapper ${dispatch.mapper.slug} retornou null`,
+      score: dispatch.score,
+      pageCount: docTab.numeroPaginas,
+      textPreview,
+      textFullLength,
     };
   }
   const parsedJson = serializarParaParsed(resultado);
@@ -121,11 +183,14 @@ async function processarDoc(
       updated_at: new Date().toISOString(),
       metadata: {
         ...(doc.metadata ?? {}),
+        v6_attempted_at: new Date().toISOString(),
+        v6_outcome: "success",
         v6_extractor: "pdfjs_geometric",
         v6_quality_score: docTab.qualidade.score,
         v6_quality_reason: docTab.qualidade.razao,
         v6_page_count: docTab.numeroPaginas,
         v6_mapper: dispatch.mapper.slug,
+        v6_mapper_tried: dispatch.mapper.slug,
         v6_mapper_score: dispatch.score,
         v6_mapper_motivos: dispatch.motivos,
         v6_reprocessed_at: new Date().toISOString(),
@@ -135,9 +200,36 @@ async function processarDoc(
   return {
     id: doc.id,
     sucesso: true,
+    outcome: "success",
     mapper: dispatch.mapper.slug,
+    score: dispatch.score,
+    pageCount: docTab.numeroPaginas,
     razao: `score ${dispatch.score.toFixed(2)}`,
   };
+}
+
+/**
+ * Wrapper que persiste metadata.v6_* em qualquer outcome (R3 retroportada).
+ * Antes, `reprocess-v6` só gravava metadata em sucesso — falhas ficavam
+ * sem evidência no banco e o auditor tinha que confiar no toast da UI.
+ */
+async function processarDocComLog(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  doc: any,
+): Promise<ProcessamentoResult> {
+  const r = await processarDoc(supabase, doc);
+  if (!r.sucesso) {
+    // Persiste outcome estruturado + sample do texto pra calibração.
+    await supabase
+      .from("documents")
+      .update({
+        metadata: { ...(doc.metadata ?? {}), ...metadataV6Falha(r) },
+      })
+      .eq("id", doc.id);
+  }
+  return r;
 }
 
 serve(async (req) => {
@@ -200,13 +292,23 @@ serve(async (req) => {
     const resultados: ProcessamentoResult[] = [];
     for (const doc of docs) {
       try {
-        resultados.push(await processarDoc(supabase, doc));
+        resultados.push(await processarDocComLog(supabase, doc));
       } catch (err) {
-        resultados.push({
+        const r: ProcessamentoResult = {
           id: doc.id,
           sucesso: false,
+          outcome: "exception",
           razao: `erro: ${err instanceof Error ? err.message : String(err)}`,
-        });
+        };
+        try {
+          await supabase
+            .from("documents")
+            .update({ metadata: { ...(doc.metadata ?? {}), ...metadataV6Falha(r) } })
+            .eq("id", doc.id);
+        } catch {
+          // Falha de update do log não quebra o lote.
+        }
+        resultados.push(r);
       }
     }
     const sucessos = resultados.filter((r) => r.sucesso).length;
