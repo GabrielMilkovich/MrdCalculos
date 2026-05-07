@@ -293,7 +293,7 @@ describe("buildFeriasCSV — inteligência", () => {
     expect(r.report.linhasRejeitadas[0].motivo).toMatch(/relativa inválida/i);
   });
 
-  it("ZERA dias_abono quando abono=false", () => {
+  it("PRESERVA dias_abono mesmo com abono=false (paridade > silêncio) e emite warning", () => {
     const r = buildFeriasCSVWithReport([
       {
         relativa: "2022/2023",
@@ -301,17 +301,22 @@ describe("buildFeriasCSV — inteligência", () => {
         situacao: "G",
         dobra_geral: false,
         abono: false,
-        dias_abono: 10, // inconsistente
+        dias_abono: 10, // inconsistente — preserva valor + warning
         gozo1: null,
         gozo2: null,
         gozo3: null,
       },
     ]);
-    expect(r.csv).toContain(";N;0;"); // abono=N, dias_abono=0
-    expect(r.report.linhasAjustadas[0].ajuste).toMatch(/dias_abono>0 → zerado/);
+    // Valor preservado: ;N;10; (não zerado).
+    expect(r.csv).toContain(";N;10;");
+    expect(
+      r.report.warnings.some((w) =>
+        /ABONO=N mas dias_abono=10/i.test(w),
+      ),
+    ).toBe(true);
   });
 
-  it("CAPA prazo > 60 (limite PJe-Calc)", () => {
+  it("PRESERVA prazo > 60 (não capa silenciosamente) e emite warning", () => {
     const r = buildFeriasCSVWithReport([
       {
         relativa: "2022/2023",
@@ -325,8 +330,12 @@ describe("buildFeriasCSV — inteligência", () => {
         gozo3: null,
       },
     ]);
-    expect(r.csv).toMatch(/2022\/2023;60;/);
-    expect(r.report.linhasAjustadas[0].ajuste).toMatch(/prazo > 60/);
+    expect(r.csv).toMatch(/2022\/2023;90;/);
+    expect(
+      r.report.warnings.some((w) =>
+        /prazo 90 excede limite PJe-Calc/i.test(w),
+      ),
+    ).toBe(true);
   });
 
   it("ORDENA por relativa cronológica", () => {

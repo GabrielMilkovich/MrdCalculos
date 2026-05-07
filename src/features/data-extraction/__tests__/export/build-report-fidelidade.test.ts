@@ -343,7 +343,7 @@ describe("buildCartaoPontoCSVWithReport — fidelidade", () => {
 // ============================================================
 
 describe("buildFeriasCSVBlobWithReport — fidelidade", () => {
-  it("prazo > 60 capped em 60 vira linhaAjustada", () => {
+  it("prazo > 60 vira warning (não capa, paridade preservada)", () => {
     const parsed: ParseFeriasResult = {
       ferias: [
         {
@@ -363,7 +363,9 @@ describe("buildFeriasCSVBlobWithReport — fidelidade", () => {
     };
     const { report } = buildFeriasCSVBlobWithReport(parsed);
     expect(
-      report.linhasAjustadas.some((a) => a.ajuste.includes("prazo > 60")),
+      report.warnings.some((w) =>
+        /prazo 100 excede limite PJe-Calc/i.test(w),
+      ),
     ).toBe(true);
   });
 
