@@ -212,6 +212,10 @@ Verifique e sugira ajustes pontuais. Lembre-se: TODO valor sugerido DEVE estar L
       body: JSON.stringify({
         model: MODEL,
         temperature: 0,
+        // PR-3 (P4 self-consistency): seed fixo torna a saída determinística
+        // entre chamadas com mesmo input — útil pra reproduzir bugs e pra
+        // os testes humanos baterem com o que a IA disse antes.
+        seed: 42,
         response_format: {
           type: "json_schema",
           json_schema: RESPONSE_SCHEMA,
