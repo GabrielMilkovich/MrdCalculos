@@ -16,11 +16,11 @@ import { parseCartaoPonto, type ParseCartaoPontoResult } from '../../parsers/car
 import { parseFerias, type ParseFeriasResult } from '../../parsers/ferias';
 import { parseFaltas, type ParseFaltasResult } from '../../parsers/faltas';
 import { buildCartaoPontoCSV } from './cartao-ponto-csv';
-import { buildFeriasCSVBlob } from './ferias-csv';
-import { buildFaltasCSVBlob } from './faltas-csv';
+import { buildFeriasCSVBlob, buildFeriasCSVBlobWithReport } from './ferias-csv';
+import { buildFaltasCSVBlob, buildFaltasCSVBlobWithReport } from './faltas-csv';
 import { classifyHolerite, type ClassificacaoHolerite } from './holerite-classify';
-import { buildHoleriteZip } from './holerite-zip';
-import { buildCtpsZip } from './ctps-zip';
+import { buildHoleriteZip, buildHoleriteZipWithReport } from './holerite-zip';
+import { buildCtpsZip, buildCtpsZipWithReport } from './ctps-zip';
 
 export type ExportResult =
   | {
