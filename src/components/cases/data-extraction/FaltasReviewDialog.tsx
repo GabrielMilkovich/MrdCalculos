@@ -167,6 +167,7 @@ export function FaltasReviewDialog({
       });
       setReportPreview(null);
       setBloqueioBurladoFlag(false);
+      onOpenChange(false);
     } finally {
       setDownloading(false);
     }
