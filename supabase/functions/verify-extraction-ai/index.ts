@@ -17,7 +17,7 @@
 //      400 antes mesmo do fetch retornar.
 //   3. **Score 0..100**: a IA explicita seu próprio nível de confiança.
 //      O operador vê o score na UI e decide aplicar.
-//   4. **Timeout 15s** via AbortController. Operador pode pular a análise
+//   4. **Timeout 30s** via AbortController. Operador pode pular a análise
 //      se demorar.
 //
 // Body:
@@ -55,7 +55,7 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 30_000;
 const SCORE_MIN = 50;
 const SCORE_MAX = 85;
 const MODEL = "gpt-4o-mini";
@@ -366,9 +366,9 @@ serve(async (req) => {
     if (isAbort) {
       return jsonResponse(
         {
-          error: "timeout_15s",
+          error: "timeout_30s",
           message:
-            "OpenAI demorou mais de 15s. Operador pode tentar novamente OU pular a análise.",
+            "OpenAI demorou mais de 30s. Operador pode tentar novamente OU pular a análise.",
         },
         504,
       );
