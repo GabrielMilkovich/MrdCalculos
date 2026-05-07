@@ -20,6 +20,7 @@ import PjeCalcPage from "./pages/PjeCalcPage";
 import NovoCalculo from "./pages/NovoCalculo";
 import PJCAnalyzer from "./pages/admin/PJCAnalyzer";
 import AdminErrors from "./pages/admin/Erros";
+import TelemetriaCSV from "./pages/admin/TelemetriaCSV";
 import Configuracoes from "./pages/Configuracoes";
 import Busca from "./pages/Busca";
 import Documentos from "./pages/Documentos";
@@ -99,6 +100,7 @@ const App = () => (
             <Route path="/regras" element={<ProtectedRoute><RegrasTabelas /></ProtectedRoute>} />
             <Route path="/admin/pjc-analyzer" element={<AdminRoute><PJCAnalyzer /></AdminRoute>} />
             <Route path="/admin/erros" element={<AdminRoute><AdminErrors /></AdminRoute>} />
+            <Route path="/admin/telemetria-csv" element={<AdminRoute><TelemetriaCSV /></AdminRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
