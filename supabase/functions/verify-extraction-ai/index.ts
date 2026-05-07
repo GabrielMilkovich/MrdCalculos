@@ -187,14 +187,30 @@ async function chamarOpenAI(
     ? ocrText.slice(0, 12000) + "\n[...OCR truncado pra economia de tokens...]"
     : ocrText;
 
+  // `parsed` em cartão de ponto com 700+ apurações cheias (marcações,
+  // eventos, observações) chegava facilmente a 200k+ tokens — estourava
+  // o limite de 128k do gpt-4o-mini. Estratégia em camadas:
+  //   1. JSON.stringify SEM indent (corta ~50% do volume só pelo whitespace).
+  //   2. Truncamento defensivo em 60k chars (~15k tokens). Junto com OCR
+  //      12k chars, system prompt ~1.5k e schema ~0.5k, ficamos confortáveis
+  //      em 30-40k tokens — bem dentro de 128k.
+  // Documento muito grande perde fidelidade no que sobrou de fora; é trade-off
+  // explícito documentado pra IA, que vê a marca e sabe que parsed foi cortado.
+  const PARSED_MAX_CHARS = 60000;
+  let parsedString = JSON.stringify(parsedJson);
+  if (parsedString.length > PARSED_MAX_CHARS) {
+    parsedString = parsedString.slice(0, PARSED_MAX_CHARS) +
+      "\n[...parsed JSON truncado pra economia de tokens — documento muito grande...]";
+  }
+
   const userPrompt =
     `Documento tipo: ${builder}
 
 OCR ORIGINAL (pode estar truncado a 12k chars):
 ${ocrTrimmed}
 
-ESTRUTURA EXTRAÍDA pelo parser determinístico (parsed JSON):
-${JSON.stringify(parsedJson, null, 2)}
+ESTRUTURA EXTRAÍDA pelo parser determinístico (parsed JSON, pode estar truncada):
+${parsedString}
 
 Verifique e sugira ajustes pontuais. Lembre-se: TODO valor sugerido DEVE estar LITERALMENTE no OCR acima. Não invente. Responda apenas no schema.`;
 
