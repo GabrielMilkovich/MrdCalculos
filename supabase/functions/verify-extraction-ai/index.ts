@@ -17,7 +17,7 @@
 //      400 antes mesmo do fetch retornar.
 //   3. **Score 0..100**: a IA explicita seu próprio nível de confiança.
 //      O operador vê o score na UI e decide aplicar.
-//   4. **Timeout 60s** via AbortController. Operador pode pular a análise
+//   4. **Timeout 120s** via AbortController. Operador pode pular a análise
 //      se demorar.
 //
 // Body:
@@ -55,13 +55,15 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-const TIMEOUT_MS = 60_000;
+const TIMEOUT_MS = 120_000;
 const SCORE_MIN = 50;
 const SCORE_MAX = 85;
-// gpt-4o-mini: rápido (~5-15s típico), suporta json_schema e seed pra
-// determinismo. Trocado de gpt-5 (que com reasoning interno passava de
-// 30s e dava timeout em documentos grandes como cartão de 63 páginas).
-const MODEL = "gpt-4o-mini";
+// gpt-5: melhor qualidade de revisão (anti-alucinação reasoning interno).
+// Combo pra responder dentro do timeout em documentos grandes:
+//   1. reasoning_effort: "minimal" (corta tempo de raciocínio interno)
+//   2. timeout 120s (gpt-5 com reasoning + JSON schema strict pode levar 60-90s)
+//   3. inputs cortados agressivamente (OCR 6k, parsed 30k) — ver chamarOpenAI
+const MODEL = "gpt-5";
 
 type Builder = "holerite" | "cartao_ponto" | "ferias" | "faltas" | "ctps";
 const BUILDERS_VALIDOS: Builder[] = [
@@ -183,25 +185,19 @@ async function chamarOpenAI(
   parsedJson: unknown,
   builder: Builder,
 ): Promise<{ raw: IAResponseParsed; durationMs: number; status: number }> {
-  // OCR pode ser longo; limitamos a 12k caracteres pra controlar custo
-  // (gpt-5 tem 400k de contexto, mas custo escala com tokens). Operador
-  // foi avisado pelo score que a extração já é parcial — IA aqui só
-  // revisa, não substitui.
-  const ocrTrimmed = ocrText.length > 12000
-    ? ocrText.slice(0, 12000) + "\n[...OCR truncado pra economia de tokens...]"
+  // OCR pode ser longo; cortado agressivamente pra acelerar reasoning
+  // do gpt-5 (input grande = reasoning lento = timeout). 6k chars cobre
+  // ~2 páginas — IA verifica AMOSTRA, não substitui parser determinístico.
+  const ocrTrimmed = ocrText.length > 6000
+    ? ocrText.slice(0, 6000) + "\n[...OCR truncado pra acelerar reasoning...]"
     : ocrText;
 
-  // `parsed` em cartão de ponto com 700+ apurações cheias (marcações,
-  // eventos, observações) chegava facilmente a 200k+ tokens. gpt-5 tem
-  // 400k de contexto — cabe — mas o custo por chamada disparava. Mantemos
-  // a estratégia em 2 camadas pra economia:
-  //   1. JSON.stringify SEM indent (corta ~50% do volume só pelo whitespace).
-  //   2. Truncamento defensivo em 60k chars (~15k tokens). Junto com OCR
-  //      12k chars, system prompt ~1.5k e schema ~0.5k, ficamos em
-  //      30-40k tokens — quantidade saudável de input pra reasoning.
-  // Documento muito grande perde fidelidade no que sobrou de fora; é trade-off
-  // explícito documentado pra IA, que vê a marca e sabe que parsed foi cortado.
-  const PARSED_MAX_CHARS = 60000;
+  // `parsed` em cartão de ponto com 700+ apurações chegava a 200k+
+  // tokens. gpt-5 tem 400k contexto, MAS reasoning interno demora muito
+  // sobre input grande. Cortar pra 30k chars (~7.5k tokens) acelera
+  // reasoning de >90s pra ~30-50s. Documento muito grande perde
+  // fidelidade no resto; trade-off explícito sinalizado pra IA via marca.
+  const PARSED_MAX_CHARS = 30000;
   let parsedString = JSON.stringify(parsedJson);
   if (parsedString.length > PARSED_MAX_CHARS) {
     parsedString = parsedString.slice(0, PARSED_MAX_CHARS) +
@@ -211,7 +207,7 @@ async function chamarOpenAI(
   const userPrompt =
     `Documento tipo: ${builder}
 
-OCR ORIGINAL (pode estar truncado a 12k chars):
+OCR ORIGINAL (pode estar truncado a 6k chars):
 ${ocrTrimmed}
 
 ESTRUTURA EXTRAÍDA pelo parser determinístico (parsed JSON, pode estar truncada):
@@ -232,9 +228,11 @@ Verifique e sugira ajustes pontuais. Lembre-se: TODO valor sugerido DEVE estar L
       },
       body: JSON.stringify({
         model: MODEL,
-        // gpt-4o-mini suporta temperature, top_p e seed para determinismo.
-        // temperature=0 + seed=42 = saída quase 100% reprodutível.
-        temperature: 0,
+        // gpt-5: ignora temperature/top_p (reasoning interno).
+        // reasoning_effort=minimal é o mais rápido — suficiente pra
+        // revisão cirúrgica (operador já fez triagem). seed=42 mantém
+        // determinismo entre chamadas idênticas (P4 self-consistency).
+        reasoning_effort: "minimal",
         seed: 42,
         response_format: {
           type: "json_schema",
@@ -390,9 +388,9 @@ serve(async (req) => {
     if (isAbort) {
       return jsonResponse(
         {
-          error: "timeout_60s",
+          error: "timeout_120s",
           message:
-            "OpenAI demorou mais de 60s. Operador pode tentar novamente OU pular a análise.",
+            "OpenAI demorou mais de 120s. Operador pode tentar novamente OU pular a análise.",
         },
         504,
       );

@@ -8,7 +8,7 @@
  * Invoca edge function `verify-extraction-ai` que tem contrato anti-alucinação:
  *   - Substring literal: todo valor sugerido deve estar no OCR original.
  *   - Structured output strict (json_schema).
- *   - Timeout 60s.
+ *   - Timeout 120s.
  *
  * Operador vê sugestões em popover, marca quais aceitar individualmente,
  * e "Aplica selecionadas" OU clica "Pular análise" (capturando razão).
@@ -306,7 +306,7 @@ export function VerifyExtractionAIButton({
               className="w-full gap-1.5"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Iniciar análise (60s timeout)
+              Iniciar análise (120s timeout)
             </Button>
           </div>
         )}
@@ -314,7 +314,7 @@ export function VerifyExtractionAIButton({
         {loading && (
           <div className="p-6 flex flex-col items-center gap-2 text-sm">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Consultando IA (até 60s)…</span>
+            <span>Consultando IA (até 120s)…</span>
             <span className="text-[11px] text-muted-foreground">
               Modelo: gpt-4o-mini · structured output strict
             </span>
@@ -325,7 +325,7 @@ export function VerifyExtractionAIButton({
           <div className="p-4 text-sm space-y-2">
             <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
               <Clock className="h-3.5 w-3.5" />
-              <strong>Timeout 60s</strong>
+              <strong>Timeout 120s</strong>
             </div>
             <p className="text-[12px] text-muted-foreground">
               OpenAI demorou demais. Tente novamente ou prossiga sem IA.
