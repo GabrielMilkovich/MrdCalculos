@@ -231,6 +231,100 @@ const RE_TIMESTAMP_APROVACAO =
   /\b(?:no\s+dia|em)\s+\d{1,2}\/\d{1,2}\/\d{4}\s+(?:[àa]s|as)\s+\d{1,2}:\d{2}\b/i;
 
 // =====================================================
+// FASE 1 — Detecção de zonas suspeitas (filosofia MARCAR-NÃO-DESCARTAR)
+// =====================================================
+//
+// Cada uma das regex abaixo identifica uma ZONA do OCR onde a linha
+// pode parecer apuração mas tem alta chance de ser lixo (header com
+// data de admissão, totalizadores de evento, legenda de escalas, etc.).
+//
+// IMPORTANTE: a estratégia NÃO é descartar essas linhas — é EXTRAIR e
+// MARCAR `observacao = "REVISAR_OCR: <motivo>"`. O CSV vai sair com
+// a flag, a UI mostra em destaque, advogado decide. Essa decisão é
+// crítica: o PR #61 anterior tentou descartar e gerou 97% de regressão
+// silenciosa em produção (de 1085 → 30 apurações no cartão ROQUE).
+
+/**
+ * LEGENDA DE ESCALAS no topo do cartão ("Horários: 91 08:00 11:00...").
+ * É um dicionário de códigos de turno → horários previstos. Linhas
+ * casando esse padrão são MARCADAS, não descartadas.
+ */
+const RE_LEGENDA_ESCALAS =
+  /^\s*(?:hor[áa]rio?s?|rota[çc][ãa]o|rora[çc][õo]es)\s*:\s*\d+\s+\d{1,2}:\d{2}/i;
+
+/**
+ * Marcador de início de bloco de TOTALIZADORES (Movimentos, Demonstrar,
+ * Eventos, Resumo do Período, etc.) ao final de uma página de cartão.
+ * Conteúdo do bloco: códigos de evento (HE 75%, banco crédito, intervalo).
+ *
+ * Variantes do OCR sujo Mistral: "Movimentos:", "Monumentos:", "Necimentos:",
+ * "Mecimentos:", "Marimentos:", "Documentos:", "Demonstrar:", "Eventos:",
+ * "Resumo do Período", "Nortemitos", "Retrimento".
+ */
+const RE_INICIO_BLOCO_TOTALIZADORES =
+  /^\s*(?:movimentos?|monumentos?|necimentos?|mecimentos?|marimentos?|documentos?|demonstrar|demonstrativo|eventos?|resumo\s+do\s+per[íi]odo|nortemitos?|retrimento)\s*:/i;
+
+/**
+ * Marcador de NOVA PÁGINA / novo cartão. Reseta o flag de "dentro de
+ * bloco de totalizadores". Cobre headers comuns: "PERÍODO:", "TRATINO:",
+ * "Empregado:", "Cartão Ponto Página", "Data Dia Horário".
+ */
+const RE_INICIO_NOVA_PAGINA =
+  /\b(?:per[íi]odo\s*:|tratin?o\s*:|tratado\s*:|tratios\s*:|empregado\s*:|engenheiro\s*:|cart[ãa]o\s+ponto\s+p[áa]gina|data\s+dia\s+hor[áa]rio|cnpj)\b/i;
+
+/**
+ * Variantes EXTRA de palavras do OCR sujo Mistral em cartões corporativos
+ * brasileiros que aparecem ANTES da data. Usadas pra DETECTAR (e marcar)
+ * que a linha provavelmente é cabeçalho/admissão.
+ *
+ * Termos terminando em `:` exigem regex SEM \b final (porque `:` é
+ * non-word e \b casa transição word/non-word).
+ */
+const RE_HEADER_PREFIXO =
+  /\b(?:ADMISS[ÃA]O|ADMIR(?:O|ADO|ED[OA])|CRACH[AÁ]|CIACH[AÁ]|COACH[AÁ]|CRANK?H[ÃA]|CRUCIA|CRAN[ÇC]A|EMPREGADO|ENGENHEIRO|EMPGNEGADO|FUN[ÇC][ÃA]O|TRATIN?O|TRATADO|TRATIOS|COOPER[ÊE]NCIA|COOPERATIVA|COMPET[ÊE]NCIA|MATR[ÍI]CULA|CTPS|FIS|PIS|C\.?\s*R\.?|C\.?\s*B\.?|C\.?\s*G\.?\s*C\.?)\s*:/i;
+
+/**
+ * Detecta inversão cronológica nas batidas (E1 < S1 < E2 < S2 ...).
+ * Retorna a 1ª inversão como string descritiva ou `null` se OK.
+ *
+ * Usada pra MARCAR (não descartar). Turnos noturnos legítimos cruzando
+ * 00:00 caem como "inversão" e ficam REVISAR_OCR — operador desmarca
+ * manualmente quando for jornada noturna verdadeira.
+ */
+function detectarInversaoCronologica(marcacoes: Marcacao[]): string | null {
+  const seq: Array<{ tipo: "E" | "S"; idx: number; valor: string; min: number }> =
+    [];
+  for (let i = 0; i < marcacoes.length; i++) {
+    const m = marcacoes[i];
+    if (m.e) {
+      const v = horaToMin(m.e);
+      if (v !== null) seq.push({ tipo: "E", idx: i + 1, valor: m.e, min: v });
+    }
+    if (m.s) {
+      const v = horaToMin(m.s);
+      if (v !== null) seq.push({ tipo: "S", idx: i + 1, valor: m.s, min: v });
+    }
+  }
+  for (let i = 1; i < seq.length; i++) {
+    const ant = seq[i - 1];
+    const cur = seq[i];
+    if (cur.min < ant.min) {
+      return `${cur.tipo}${cur.idx}=${cur.valor} antes de ${ant.tipo}${ant.idx}=${ant.valor}`;
+    }
+  }
+  return null;
+}
+
+function horaToMin(s: string): number | null {
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mn = parseInt(m[2], 10);
+  if (h < 0 || h > 23 || mn < 0 || mn > 59) return null;
+  return h * 60 + mn;
+}
+
+// =====================================================
 // Parser
 // =====================================================
 
@@ -251,6 +345,24 @@ export function parseCartaoPontoGenerico(
     };
   }
 
+  // FASE 1 — detector de COLUNA DUPLA "Horário Registrado | Horário de
+  // Trabalho" (cartões Via Varejo / Casas Bahia / SAP / similares).
+  // Cada linha de dia traz 8 horas: 4 batidas reais + 4 horas previstas
+  // da escala. Sem esse detector, parser pega as 8 e a 5ª (09:00) fica
+  // ANTES da 4ª (19:08) — cronologia falsa-inválida.
+  //
+  // Quando ATIVO: limita capturarMarcacoes a 4 horas/linha (1° grupo =
+  // batidas reais). Quando INATIVO: comportamento atual (até 12 horas =
+  // 6 pares, limite PJe-Calc).
+  //
+  // Detecção é POR DOCUMENTO inteiro. Funciona mesmo quando o OCR perde
+  // o cabeçalho da tabela em algumas páginas — a flag fica ativa pra
+  // o documento todo (decisão conservadora: melhor cortar de mais que
+  // de menos, com flag REVISAR_OCR cobrindo edge cases).
+  const TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO =
+    /Hor[áa]rio\s+Registrado/i.test(ocrText) &&
+    /Hor[áa]rio\s+(?:de\s+)?Trabalho|Hor[áa]rio\s+Previsto/i.test(ocrText);
+
   // Pré-processamento: mescla linhas-continuação que o OCR quebra quando
   // a célula da tabela tem muito conteúdo. Padrão típico (Casas Bahia):
   //   | 13/09/2021 - Seg | 08:30* | 12:00* | 13:05* | ... |
@@ -263,10 +375,42 @@ export function parseCartaoPontoGenerico(
   const unparsed: Array<{ linha: number; conteudo: string }> = [];
   const competencias = new Map<string, number>();
 
+  // FASE 1 — flag DEFENSIVA: estamos dentro de bloco de totalizadores
+  // (Movimentos, Demonstrar, Eventos)? Linhas dentro são MARCADAS como
+  // suspeitas mas ainda extraídas, pra advogado revisar.
+  let dentroDeBlocoTotalizadores = false;
+  // Linhas anteriores recentes que casaram como cabeçalho/admissão.
+  // Quando uma linha posterior (até 2 linhas) tem só data + horários
+  // sem dia-da-semana, é provável continuação de célula partida.
+  let linhaUltimoHeader = -10;
+
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
     const linhaBruta = raw.replace(/\|/g, " ").trim();
     if (linhaBruta.length === 0) continue;
+
+    // Atualiza flags de zona suspeita ANTES do filtro de metadado.
+    // Linhas dentro de totalizadores serão MARCADAS (não descartadas);
+    // a própria linha "Movimentos:" é PULADA porque é só header de
+    // seção (e tem `(Período de DD/MM/YYYY a DD/MM/YYYY)` que poderia
+    // virar apuração-fantasma se processada).
+    if (RE_INICIO_BLOCO_TOTALIZADORES.test(linhaBruta)) {
+      dentroDeBlocoTotalizadores = true;
+      linhaUltimoHeader = i;
+      continue;
+    }
+    if (RE_INICIO_NOVA_PAGINA.test(linhaBruta)) {
+      // Reset: nova página = saímos do bloco de totalizadores.
+      dentroDeBlocoTotalizadores = false;
+      linhaUltimoHeader = i;
+      // NÃO faz continue: a linha de "PERÍODO:" pode coexistir com
+      // metadado já filtrado pelo bloco de RE_METADADO_LINHA abaixo.
+    } else if (
+      RE_HEADER_PREFIXO.test(linhaBruta) ||
+      RE_LEGENDA_ESCALAS.test(linhaBruta)
+    ) {
+      linhaUltimoHeader = i;
+    }
     // Remove tags "X:XX - Inserido/Desconsiderado" antes de qualquer split
     // (Inserido/Desconsiderado NÃO são divisores de batidas/eventos).
     const { inseridas, desconsideradas, texto: linhaSemPipes } =
@@ -367,7 +511,15 @@ export function parseCartaoPontoGenerico(
     const semData = parteBatidas
       .replace(RE_DATA_BR, " ")
       .replace(RE_DIA_SEMANA, " ");
-    const marcacoes = capturarMarcacoes(semData, inseridas, desconsideradas);
+    // Quando documento tem coluna dupla "Horário Registrado | Horário
+    // de Trabalho", limita a 4 horas (1° grupo = batidas reais; o 2°
+    // grupo é a escala prevista e NÃO deve virar batida).
+    const marcacoes = capturarMarcacoes(
+      semData,
+      inseridas,
+      desconsideradas,
+      TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO ? 4 : undefined,
+    );
 
     // Detecta ocorrência baseada na LINHA INTEIRA (não só parteEventos):
     // se a linha cita uma ausência conhecida e não tem batidas, classificar.
@@ -397,13 +549,65 @@ export function parseCartaoPontoGenerico(
     // Eventos estruturados.
     const eventos = extrairEventos(parteEventos);
 
+    // FASE 1 — Acumula motivos para REVISAR_OCR. Filosofia DEFENSIVA:
+    // não descartamos a apuração; sinalizamos pra revisão humana. Cada
+    // motivo aqui = uma classe de ambiguidade detectada. Advogado
+    // decide na UI se mantém ou descarta cada apuração marcada.
+    const motivosRevisao: string[] = [];
+
+    // Motivo 1: linha CASOU como cabeçalho/admissão/legenda.
+    // Ex: "Admiro: 24/11/2003 ... 91 08:00 11:00 12:00 14:25"
+    if (
+      RE_HEADER_PREFIXO.test(linhaSemPipes) ||
+      RE_LEGENDA_ESCALAS.test(linhaBruta)
+    ) {
+      motivosRevisao.push("linha parece cabeçalho/admissão/legenda de escalas");
+    }
+
+    // Motivo 2: linha está LOGO APÓS um cabeçalho (até 2 linhas).
+    // Cobre célula markdown partida onde "Admiro:" fica numa linha e
+    // a data + horários na seguinte. NÃO descartamos — só flaggamos.
+    // Exceção: se a linha tem dia-da-semana padrão (TER/QUA/SEG/...),
+    // é jornada legítima com header próximo (não é continuação).
+    const temDiaSemanaPadrao = RE_DIA_SEMANA.test(linhaSemPipes);
+    if (
+      i - linhaUltimoHeader > 0 &&
+      i - linhaUltimoHeader <= 2 &&
+      !temDiaSemanaPadrao
+    ) {
+      motivosRevisao.push(
+        `linha imediatamente após cabeçalho (linha ${linhaUltimoHeader + 1}), sem dia-da-semana — possível continuação de célula partida`,
+      );
+    }
+
+    // Motivo 3: linha está dentro de bloco de totalizadores.
+    // Ex: depois de "Movimentos:", linhas com "3990 Adicional 17:49"
+    // — o parser ainda extrai a apuração, mas marca pra revisão.
+    if (dentroDeBlocoTotalizadores) {
+      motivosRevisao.push(
+        "linha dentro de bloco de totalizadores (Movimentos/Eventos/Demonstrar)",
+      );
+    }
+
+    // Motivo 4: cronologia das batidas inválida (E1<S1<E2<S2 quebrou).
+    // Pode ser jornada noturna legítima (cruza 00:00) ou OCR sujo.
+    const inversao = detectarInversaoCronologica(marcacoes);
+    if (inversao) {
+      motivosRevisao.push(`cronologia inválida: ${inversao}`);
+    }
+
+    const observacaoFinal =
+      motivosRevisao.length > 0
+        ? `REVISAR_OCR: ${motivosRevisao.join("; ")}`
+        : null;
+
     apuracoes.push({
       data,
       dia_semana: diaSemana,
       ocorrencia,
       marcacoes,
       eventos,
-      observacao: null,
+      observacao: observacaoFinal,
       ocr_line: i + 1, // 1-based — UI usa pra scroll bidirecional
     });
   }
@@ -608,9 +812,13 @@ function capturarMarcacoes(
   s: string,
   inseridasExternas: Set<string> = new Set(),
   desconsideradasExternas: Set<string> = new Set(),
+  limiteHoras?: number,
 ): Marcacao[] {
   type H = { valor: string; inserida: boolean; desconsiderada: boolean };
   const horarios: H[] = [];
+  // Default: 12 horas = 6 pares (limite PJe-Calc).
+  // Layout coluna-dupla (Via Varejo / Casas Bahia): 4 horas (1° grupo).
+  const HORAS_MAX = typeof limiteHoras === "number" ? limiteHoras : 12;
   for (const m of s.matchAll(RE_HORA_OPCIONAL_ASTERISCO)) {
     const h = parseInt(m[1], 10);
     const min = parseInt(m[2], 10);
@@ -625,7 +833,7 @@ function capturarMarcacoes(
       inserida: m[3] === "*" || inseridasExternas.has(valor),
       desconsiderada: false,
     });
-    if (horarios.length >= 12) break; // Limite: 6 pares
+    if (horarios.length >= HORAS_MAX) break;
   }
   // Completa com horários da lista "X:XX - Inserido" que NÃO aparecem na
   // forma compacta. Acontece quando o OCR omite o token compacto da última
