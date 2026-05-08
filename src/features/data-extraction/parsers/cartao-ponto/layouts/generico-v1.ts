@@ -95,10 +95,37 @@ export type ApuracaoDiaria = {
   ocr_line?: number;
 };
 
+/**
+ * FASE 2 — Validação cruzada por período: cada cartão declara um
+ * totalizador "Horas Normais XX:XX" no rodapé de cada página. Se a
+ * soma das batidas extraídas dentro do range divergir >30 minutos do
+ * declarado, é sinal forte que o OCR perdeu/duplicou batidas. Cada
+ * período divergente vira flag REVISAR_OCR_TOTAL nas apurações
+ * correspondentes (não descarta nada — só sinaliza).
+ */
+export type ConsistenciaPeriodo = {
+  /** Range do período (extraído do "Movimentos: (Período de X a Y)"). */
+  range: { ini: string; fim: string };
+  /** Totalizador "Horas Normais X:XX" declarado pelo cartão. */
+  declarado_min: number;
+  declarado_str: string;
+  /** Soma das batidas (jornada efetiva) calculada no range. */
+  somado_min: number;
+  somado_str: string;
+  /** Diferença absoluta em minutos (declarado − somado). */
+  diff_min: number;
+  /** Status: ok (≤30min) | divergente (>30min). */
+  status: "ok" | "divergente";
+  /** Datas (yyyy-mm-dd) cujas apurações foram marcadas REVISAR_OCR_TOTAL. */
+  datas_marcadas: string[];
+};
+
 export type ParseCartaoPontoResult = {
   apuracoes: ApuracaoDiaria[];
   /** Mapa competência → quantidade de apurações naquele mês. */
   competencias: Map<string, number>;
+  /** FASE 2 — Validação cruzada por período. */
+  consistencia: ConsistenciaPeriodo[];
   /**
    * Competência com mais dias — APENAS INFORMATIVO (ex: para mostrar no
    * subtítulo do dialog "predominantemente 06/2024").
@@ -336,6 +363,7 @@ export function parseCartaoPontoGenerico(
     return {
       apuracoes: [],
       competencias: new Map(),
+      consistencia: [],
       competencia_predominante: "",
       data_inicial: "",
       data_final: "",
@@ -705,9 +733,26 @@ export function parseCartaoPontoGenerico(
     );
   }
 
+  // FASE 2 — Validação cruzada com totalizadores declarados pelo cartão.
+  // Cada bloco "Movimentos: (Período de X a Y)" + "9000 Horas Normais 183:20"
+  // declara que aquele período tem N horas trabalhadas. Soma a jornada
+  // efetiva das batidas extraídas e compara. Se diverge >30 min, MARCA
+  // todas as apurações do range com flag REVISAR_OCR_TOTAL.
+  //
+  // Filosofia: mesma da Fase 1. Não descarta nada. Sinaliza pra advogado.
+  const consistencia = validarConsistenciaPorPeriodo(ocrText, final);
+  for (const c of consistencia) {
+    if (c.status === "divergente") {
+      warnings.push(
+        `Período ${c.range.ini} a ${c.range.fim}: declarado ${c.declarado_str} vs. somado ${c.somado_str} (diff ${formatMinutosToHHMM(c.diff_min)}). ${c.datas_marcadas.length} apuração(ões) marcada(s) REVISAR_OCR_TOTAL.`,
+      );
+    }
+  }
+
   return {
     apuracoes: final,
     competencias,
+    consistencia,
     competencia_predominante: predominante,
     data_inicial: final[0]?.data ?? "",
     data_final: final[final.length - 1]?.data ?? "",
@@ -878,6 +923,127 @@ function extrairEventos(parte: string): EventoDiario[] {
     }
   }
   return eventos;
+}
+
+/**
+ * FASE 2 — Validação cruzada por período declarado.
+ *
+ * Cada página do cartão declara um totalizador "Horas Normais X:XX"
+ * (ou "Horas Trabalhadas") em um bloco "Movimentos: (Período de DD/MM a DD/MM)".
+ * Se a soma das batidas extraídas dentro daquele range divergir >30
+ * minutos do declarado, é sinal de OCR sujo (perdeu/duplicou batidas).
+ *
+ * Marca apurações desse range com REVISAR_OCR_TOTAL e devolve metadata
+ * pra UI mostrar pro advogado. Tolerância de 30min cobre arredondamentos
+ * de intrajornada e DSR sem disparar falso positivo.
+ *
+ * Estratégia GLOBAL: usa apenas keywords padrão de cartões corporativos
+ * brasileiros. Se documento não tem totalizador declarado, retorna []
+ * (sem flag — comportamento permissivo).
+ */
+function validarConsistenciaPorPeriodo(
+  ocrText: string,
+  apuracoes: ApuracaoDiaria[],
+): ConsistenciaPeriodo[] {
+  const TOLERANCIA_MIN = 30;
+  const resultado: ConsistenciaPeriodo[] = [];
+
+  // Detecta blocos "Movimentos: (Período de DD/MM/YYYY a DD/MM/YYYY)
+  // ... 9000 Horas Normais X:XX". O padrão real do OCR sujo:
+  //   Movimentos: (Período de 16/02/2016 a 15/03/2016)
+  //   3990 Adicional Sabado 25% 17:43 ...
+  //   9000 Horas Normais 183:20 ...
+  //   Estou de pleno acordo
+  //
+  // Captura range + totalizador num só match (lazy entre eles).
+  const RE_BLOCO =
+    /(?:movimentos?|monumentos?|necimentos?|mecimentos?|marimentos?|documentos?|demonstrar)\s*:?\s*\(?\s*Per[íi]odo\s+de\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+a\s+(\d{1,2}\/\d{1,2}\/\d{4})\)?[\s\S]{0,1500}?(?:9000\s+)?Horas?\s+(?:Normais|Mochado|Morbais|Morais|Horário|Trabalhadas?)\s+(\d{1,3}:\d{2})/gi;
+
+  const blocos = [...ocrText.matchAll(RE_BLOCO)];
+  for (const m of blocos) {
+    const iniBR = m[1];
+    const fimBR = m[2];
+    const declStr = m[3];
+
+    const ini = brToIso(iniBR);
+    const fim = brToIso(fimBR);
+    if (!ini || !fim) continue;
+
+    const declMin = hhmmToMin(declStr);
+    if (declMin === null) continue;
+
+    // Soma jornada efetiva das apurações no range. Considera apenas
+    // pares E/S completos (entrada + saída). Apurações com flag
+    // REVISAR_OCR já são sabidamente suspeitas — incluímos no somatório
+    // mesmo assim, porque o totalizador do cartão também as conta.
+    let somadoMin = 0;
+    const datasNoRange: string[] = [];
+    for (const a of apuracoes) {
+      if (a.data < ini || a.data > fim) continue;
+      datasNoRange.push(a.data);
+      for (const par of a.marcacoes) {
+        const e = par.e ? hhmmToMin(par.e) : null;
+        const s = par.s ? hhmmToMin(par.s) : null;
+        if (e !== null && s !== null && s > e) {
+          somadoMin += s - e;
+        }
+      }
+    }
+
+    const diff = Math.abs(declMin - somadoMin);
+    const status: "ok" | "divergente" =
+      diff > TOLERANCIA_MIN ? "divergente" : "ok";
+
+    // Marca apurações do range com REVISAR_OCR_TOTAL quando diverge.
+    const datasMarcadas: string[] = [];
+    if (status === "divergente") {
+      for (const a of apuracoes) {
+        if (a.data < ini || a.data > fim) continue;
+        const motivoExtra = `total do período ${iniBR} a ${fimBR} divergente: declarado ${declStr} vs somado ${formatMinutosToHHMM(somadoMin)}`;
+        a.observacao = a.observacao
+          ? `${a.observacao}; ${motivoExtra}`
+          : `REVISAR_OCR_TOTAL: ${motivoExtra}`;
+        datasMarcadas.push(a.data);
+      }
+    }
+
+    resultado.push({
+      range: { ini, fim },
+      declarado_min: declMin,
+      declarado_str: declStr,
+      somado_min: somadoMin,
+      somado_str: formatMinutosToHHMM(somadoMin),
+      diff_min: diff,
+      status,
+      datas_marcadas: datasMarcadas,
+    });
+  }
+
+  return resultado;
+}
+
+function brToIso(brDate: string): string | null {
+  const m = brDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  if (!isValidDate(m[3], m[2], m[1])) return null;
+  return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+}
+
+function hhmmToMin(hhmm: string): number | null {
+  const m = hhmm.match(/^(\d{1,3}):(\d{2})$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const mn = parseInt(m[2], 10);
+  if (mn < 0 || mn > 59) return null;
+  return h * 60 + mn;
+}
+
+function formatMinutosToHHMM(min: number): string {
+  const sinal = min < 0 ? "-" : "";
+  const abs = Math.abs(min);
+  const h = Math.floor(abs / 60);
+  const mn = abs % 60;
+  return `${sinal}${h}:${String(mn).padStart(2, "0")}`;
 }
 
 function isValidDate(yyyy: string, mm: string, dd: string): boolean {

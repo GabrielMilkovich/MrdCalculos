@@ -558,6 +558,7 @@ export function parseCartaoPontoViaVarejo(
   return {
     apuracoes: final,
     competencias,
+    consistencia: [], // FASE 2 — via-varejo-v1 não usa validação cruzada por enquanto
     competencia_predominante: predominante,
     data_inicial: final[0]?.data ?? '',
     data_final: final[final.length - 1]?.data ?? '',
