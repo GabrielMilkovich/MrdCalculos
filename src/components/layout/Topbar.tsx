@@ -120,15 +120,6 @@ export function Topbar({ breadcrumbs = [], title }: TopbarProps) {
             </kbd>
           </Button>
 
-          <Button
-            size="sm"
-            className="gap-1.5 h-8 text-xs"
-            onClick={() => navigate("/casos")}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Novo Caso</span>
-          </Button>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 rounded-full p-0">
