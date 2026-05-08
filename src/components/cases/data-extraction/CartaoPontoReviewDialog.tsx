@@ -272,6 +272,22 @@ export function CartaoPontoReviewDialog({
     return ws;
   }, [effectiveParsed.warnings, linhasComCorte]);
 
+  // FASE 3 — Apurações com REVISAR_OCR (Fase 1) ou REVISAR_OCR_TOTAL (Fase 2).
+  // Quando há flags, recomendamos VERIFICAR COM IA antes de exportar.
+  const apuracoesParaRevisar = useMemo(
+    () => rows.filter((r) => r.observacao?.startsWith("REVISAR_OCR")),
+    [rows],
+  );
+  const periodosDivergentes = useMemo(
+    () =>
+      (effectiveParsed.consistencia ?? []).filter(
+        (c) => c.status === "divergente",
+      ),
+    [effectiveParsed.consistencia],
+  );
+  const recomendarVerificacaoIA =
+    apuracoesParaRevisar.length > 0 || periodosDivergentes.length > 0;
+
   const [reportPreview, setReportPreview] = useState<{
     blob: Blob;
     report: BuildReport;
@@ -356,6 +372,7 @@ export function CartaoPontoReviewDialog({
       apuracoes,
       competencias: effectiveParsed.competencias,
       competencia_predominante: effectiveParsed.competencia_predominante,
+      consistencia: effectiveParsed.consistencia ?? [],
       data_inicial: apuracoes[0]?.data ?? "",
       data_final: apuracoes[apuracoes.length - 1]?.data ?? "",
       warnings: [],
@@ -452,6 +469,23 @@ export function CartaoPontoReviewDialog({
               (excedente truncado)
             </span>
           )}
+          {/* FASE 3 — banner REVISAR_OCR / consistência divergente */}
+          {recomendarVerificacaoIA && (
+            <span
+              className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300 font-semibold"
+              title={`Apurações para revisão: ${apuracoesParaRevisar.length}. Períodos divergentes: ${periodosDivergentes.length}. Recomenda-se clicar em "Verificar com IA" no header antes de exportar.`}
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {apuracoesParaRevisar.length > 0 &&
+                `${apuracoesParaRevisar.length} apuração(ões) para revisão`}
+              {apuracoesParaRevisar.length > 0 &&
+                periodosDivergentes.length > 0 &&
+                " · "}
+              {periodosDivergentes.length > 0 &&
+                `${periodosDivergentes.length} período(s) divergente(s)`}
+              {" · verifique com IA antes de exportar"}
+            </span>
+          )}
         </span>
         <div className="flex items-center gap-1">
           {rowsForaDaJanela.length > 0 && (
@@ -512,19 +546,26 @@ export function CartaoPontoReviewDialog({
             {sorted.map((r) => {
               const htDisc = htDiscPorData.get(r.data) ?? false;
               const corteExc = paresPreenchidos(r.marcacoes) > MAX_PARES;
-              const cls = htDisc
-                ? "bg-rose-50 dark:bg-rose-950/15"
-                : corteExc
-                  ? "bg-amber-50 dark:bg-amber-950/10"
-                  : "";
+              // FASE 3 — destaque rose intenso pra apurações REVISAR_OCR
+              // (têm prioridade sobre htDisc/corte; são as mais críticas).
+              const precisaRevisar = r.observacao?.startsWith("REVISAR_OCR") ?? false;
+              const cls = precisaRevisar
+                ? "bg-rose-100 dark:bg-rose-950/30 border-l-4 border-l-rose-500"
+                : htDisc
+                  ? "bg-rose-50 dark:bg-rose-950/15"
+                  : corteExc
+                    ? "bg-amber-50 dark:bg-amber-950/10"
+                    : "";
               return (
               <TableRow
                 key={r._key}
                 data-row-data={r.data}
                 title={
-                  htDisc
-                    ? "Soma de batidas não bate com Horas Trabalhadas do OCR — revise"
-                    : undefined
+                  precisaRevisar
+                    ? `REVISÃO RECOMENDADA — ${r.observacao}`
+                    : htDisc
+                      ? "Soma de batidas não bate com Horas Trabalhadas do OCR — revise"
+                      : undefined
                 }
                 className={`text-[13px] transition-shadow ${cls}`}
               >
@@ -661,6 +702,8 @@ export function CartaoPontoReviewDialog({
         report={reportPreview?.report ?? { linhasGeradas: 0, linhasRejeitadas: [], linhasAjustadas: [], warnings: [] }}
         onConfirm={handleDownloadConfirmed}
         loading={downloading}
+        apuracoesRevisar={apuracoesParaRevisar.length}
+        periodosDivergentes={periodosDivergentes.length}
       />
     </ReviewLayout>
   );

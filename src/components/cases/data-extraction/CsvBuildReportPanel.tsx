@@ -44,6 +44,16 @@ interface Props {
   onConfirm: () => void | Promise<void>;
   /** True enquanto onConfirm está rodando. Bloqueia clique duplo. */
   loading?: boolean;
+  /**
+   * FASE 4 — quando há apurações com flag REVISAR_OCR não resolvidas
+   * (admissão vazada, eventos como batidas, cronologia inválida, total
+   * divergente), exige checkbox extra antes de liberar download. Texto
+   * do checkbox é responsabilidade do caller (ex: "Confirmo que revisei
+   * as N apurações marcadas REVISAR_OCR").
+   */
+  apuracoesRevisar?: number;
+  /** Períodos com totalizador divergente da soma das batidas (Fase 2). */
+  periodosDivergentes?: number;
 }
 
 export function CsvBuildReportPanel({
@@ -53,18 +63,29 @@ export function CsvBuildReportPanel({
   report,
   onConfirm,
   loading,
+  apuracoesRevisar = 0,
+  periodosDivergentes = 0,
 }: Props) {
   const [confirmadoExtra, setConfirmadoExtra] = useState(false);
+  // FASE 4 — gate independente para apurações REVISAR_OCR.
+  const [confirmadoRevisar, setConfirmadoRevisar] = useState(false);
 
   const temRejeicoes = report.linhasRejeitadas.length > 0;
   const temAjustes = report.linhasAjustadas.length > 0;
   const temWarnings = report.warnings.length > 0;
   const camposNaoExportados = report.camposNaoExportados ?? [];
   const temCamposNaoExportados = camposNaoExportados.length > 0;
+  const temRevisar = apuracoesRevisar > 0 || periodosDivergentes > 0;
   const limpo =
-    !temRejeicoes && !temAjustes && !temWarnings && !temCamposNaoExportados;
+    !temRejeicoes &&
+    !temAjustes &&
+    !temWarnings &&
+    !temCamposNaoExportados &&
+    !temRevisar;
 
-  const podeBaixar = !temRejeicoes || confirmadoExtra;
+  const podeBaixar =
+    (!temRejeicoes || confirmadoExtra) &&
+    (!temRevisar || confirmadoRevisar);
 
   const handleConfirm = async () => {
     await onConfirm();
@@ -188,6 +209,43 @@ export function CsvBuildReportPanel({
                 />
                 <span>
                   Estou ciente de que {report.linhasRejeitadas.length} linha(s) não entrarão no CSV. Quero baixar assim mesmo.
+                </span>
+              </label>
+            </div>
+          )}
+          {temRevisar && (
+            <div className="rounded border border-rose-400 bg-rose-100 dark:bg-rose-950/40 p-2 text-[11px] text-rose-900 dark:text-rose-200">
+              <p className="font-medium mb-1 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Atenção — apurações marcadas REVISAR_OCR não foram resolvidas
+              </p>
+              <p className="mb-2">
+                {apuracoesRevisar > 0 && (
+                  <>
+                    {apuracoesRevisar} apuração(ões) com flag de revisão (admissão
+                    vazada, eventos como batidas, cronologia inválida).
+                    {periodosDivergentes > 0 && " "}
+                  </>
+                )}
+                {periodosDivergentes > 0 && (
+                  <>
+                    {periodosDivergentes} período(s) com totalizador divergente da
+                    soma das batidas.
+                  </>
+                )}{" "}
+                Recomenda-se revisar manualmente cada uma ou clicar em{" "}
+                <strong>"Verificar com IA"</strong> antes de exportar.
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={confirmadoRevisar}
+                  onChange={(e) => setConfirmadoRevisar(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                <span>
+                  Confirmo que revisei manualmente cada apuração marcada
+                  REVISAR_OCR ou conferi com a IA. Quero exportar mesmo assim.
                 </span>
               </label>
             </div>
