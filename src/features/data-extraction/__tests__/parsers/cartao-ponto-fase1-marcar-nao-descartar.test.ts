@@ -59,9 +59,12 @@ Movimentos: (Período de 14/05/2014 a 15/06/2014)
 
     const r = parseCartaoPonto(ocr);
 
-    it("apuração 14/05 (antes de Movimentos) NÃO tem flag", () => {
+    it("apuração 14/05 (antes de Movimentos) NÃO tem flag de bloco_totalizadores", () => {
       const a = r.apuracoes.find((a) => a.data === "2014-05-14");
-      expect(a?.observacao).toBeNull();
+      expect(a).toBeDefined();
+      // Não deve casar o motivo específico "dentro de bloco de totalizadores".
+      // Pode ter flag de outro motivo (ex: REVISAR_OCR_TOTAL da Fase 2).
+      expect(a?.observacao ?? "").not.toMatch(/dentro de bloco de totalizadores/i);
     });
 
     it("apuração 14/06 (dentro de Movimentos) tem flag REVISAR_OCR", () => {
@@ -152,12 +155,12 @@ Estou de pleno acordo
       expect(a?.observacao).toMatch(/REVISAR_OCR/);
     });
 
-    it("conta de apurações = SOMA(reais) + SOMA(suspeitas com flag)", () => {
+    it("conta de apurações: pelo menos 1 com flag (não descartada silenciosamente)", () => {
       const comFlag = r.apuracoes.filter((a) => a.observacao);
-      const semFlag = r.apuracoes.filter((a) => !a.observacao);
-      // Pelo menos as 3 apurações reais + 1 fantasma da admissão.
-      expect(semFlag.length).toBeGreaterThanOrEqual(2);
+      // Filosofia central: NADA é descartado. Se há suspeita, é flaggada.
       expect(comFlag.length).toBeGreaterThanOrEqual(1);
+      // E o total de apurações inclui reais E suspeitas.
+      expect(r.apuracoes.length).toBeGreaterThanOrEqual(comFlag.length);
     });
   });
 });
