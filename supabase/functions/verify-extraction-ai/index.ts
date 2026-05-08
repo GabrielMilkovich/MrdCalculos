@@ -17,7 +17,7 @@
 //      400 antes mesmo do fetch retornar.
 //   3. **Score 0..100**: a IA explicita seu próprio nível de confiança.
 //      O operador vê o score na UI e decide aplicar.
-//   4. **Timeout 30s** via AbortController. Operador pode pular a análise
+//   4. **Timeout 60s** via AbortController. Operador pode pular a análise
 //      se demorar.
 //
 // Body:
@@ -55,10 +55,13 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-const TIMEOUT_MS = 30_000;
+const TIMEOUT_MS = 60_000;
 const SCORE_MIN = 50;
 const SCORE_MAX = 85;
-const MODEL = "gpt-5";
+// gpt-4o-mini: rápido (~5-15s típico), suporta json_schema e seed pra
+// determinismo. Trocado de gpt-5 (que com reasoning interno passava de
+// 30s e dava timeout em documentos grandes como cartão de 63 páginas).
+const MODEL = "gpt-4o-mini";
 
 type Builder = "holerite" | "cartao_ponto" | "ferias" | "faltas" | "ctps";
 const BUILDERS_VALIDOS: Builder[] = [
@@ -229,10 +232,9 @@ Verifique e sugira ajustes pontuais. Lembre-se: TODO valor sugerido DEVE estar L
       },
       body: JSON.stringify({
         model: MODEL,
-        // gpt-5 ignora temperature e top_p (usa reasoning interno).
-        // reasoning_effort=low é rápido e suficiente pra revisão cirúrgica
-        // (operador já fez triagem). seed mantido pra determinismo (P4).
-        reasoning_effort: "low",
+        // gpt-4o-mini suporta temperature, top_p e seed para determinismo.
+        // temperature=0 + seed=42 = saída quase 100% reprodutível.
+        temperature: 0,
         seed: 42,
         response_format: {
           type: "json_schema",
@@ -388,9 +390,9 @@ serve(async (req) => {
     if (isAbort) {
       return jsonResponse(
         {
-          error: "timeout_30s",
+          error: "timeout_60s",
           message:
-            "OpenAI demorou mais de 30s. Operador pode tentar novamente OU pular a análise.",
+            "OpenAI demorou mais de 60s. Operador pode tentar novamente OU pular a análise.",
         },
         504,
       );
