@@ -30,7 +30,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  AlertTriangle,
   ChevronDown,
   ChevronUp,
   Download,
@@ -301,32 +300,11 @@ export function ReviewLayout({
           )}
         </DialogHeader>
 
-        {/* Avisos */}
-        {!headerCollapsed &&
-          ((warnings && warnings.length > 0) || unparsedSet.size > 0) && (
-            <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-xs space-y-1">
-              <div className="flex items-center gap-1.5 font-medium text-amber-900 dark:text-amber-100">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Atenção — revise antes de baixar
-              </div>
-              {unparsedSet.size > 0 && (
-                <div className="text-amber-800 dark:text-amber-200">
-                  · {unparsedSet.size} linha(s) do OCR com possível dado mas não
-                  casaram com nenhum item — destacadas em amarelo abaixo.
-                </div>
-              )}
-              {(warnings ?? []).slice(0, 5).map((w, i) => (
-                <div key={i} className="text-amber-800 dark:text-amber-200">
-                  · {w}
-                </div>
-              ))}
-              {(warnings?.length ?? 0) > 5 && (
-                <div className="text-[10px] text-amber-700">
-                  ...e mais {(warnings?.length ?? 0) - 5} aviso(s).
-                </div>
-              )}
-            </div>
-          )}
+        {/* Banner "Atenção — revise antes de baixar" REMOVIDO por feedback
+            do user: era visualmente intrusivo e duplicava info que já fica
+            visível na tabela (linhas REVISAR_OCR em rose, contagem no
+            header colapsável). Warnings continuam acessíveis via tooltip
+            das linhas marcadas. */}
 
         {!headerCollapsed && contadores && (
           <div className="flex items-center gap-2 text-xs">

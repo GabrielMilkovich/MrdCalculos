@@ -13,7 +13,8 @@
  *   - Avisa quando há mais de 6 pares preenchidos (excedente truncado).
  */
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +46,6 @@ import {
   type OcorrenciaApuracao,
   type ParseCartaoPontoResult,
 } from "@/features/data-extraction";
-import { ConfidenceBadge } from "./ConfidenceBadge";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import {
   VerifyExtractionAIButton,
@@ -109,6 +109,44 @@ export function CartaoPontoReviewDialog({
 }: Props) {
   const [rows, setRows] = useState<Row[]>([]);
   const effectiveParsed = parsed;
+
+  // Signed URL do PDF original — pra botão "Abrir PDF em outra aba".
+  // Tenta nos 2 buckets conhecidos (juriscalculo-documents e case-documents).
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open || !_documentId) {
+      setPdfUrl(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      const { data: doc } = await supabase
+        .from("documents")
+        .select("storage_path")
+        .eq("id", _documentId)
+        .single();
+      const path = doc?.storage_path;
+      if (!path) return;
+      for (const bucket of [
+        "juriscalculo-documents",
+        "case-documents",
+      ]) {
+        const { data } = await supabase.storage
+          .from(bucket)
+          .createSignedUrl(path, 7200);
+        if (!cancelado && data?.signedUrl) {
+          setPdfUrl(data.signedUrl);
+          return;
+        }
+      }
+    })().catch(() => {
+      // Falha de rede: usuário ainda pode revisar OCR; só perde o link
+      // direto pro PDF. Não bloquear o dialog.
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [open, _documentId]);
 
   // Inicializa quando o parsed (ou override IA) mudar
   useEffect(() => {
@@ -457,7 +495,18 @@ export function CartaoPontoReviewDialog({
       contadores={{ extraidos: rows.length, etiqueta: "apuração" }}
       headerSlot={
         <div className="flex items-center gap-2 flex-wrap">
-          <ConfidenceBadge score={confidence} />
+          {pdfUrl && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => window.open(pdfUrl, "_blank", "noopener,noreferrer")}
+              title="Abre o PDF original em uma nova aba do navegador"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Abrir PDF
+            </Button>
+          )}
           <VerifyExtractionAIButton
             score={confidence.score}
             builder="cartao_ponto"
