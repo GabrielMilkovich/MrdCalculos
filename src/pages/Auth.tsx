@@ -58,7 +58,7 @@ function Auth() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
@@ -66,12 +66,39 @@ function Auth() {
         emailRedirectTo: window.location.origin,
       },
     });
-    setLoading(false);
     if (error) {
+      setLoading(false);
       toast.error(error.message);
-    } else {
-      toast.success("Verifique seu email para confirmar a conta");
+      return;
     }
+    // Se a confirmação de email está desabilitada no projeto Supabase
+    // (Auth → Email → "Confirm email" OFF), o signUp já retorna session
+    // e o onAuthStateChange redireciona. Quando a sessão NÃO vem (ainda
+    // requer confirmação), tentamos login automático com as mesmas
+    // credenciais — funciona se o admin desligou a confirmação.
+    if (data?.session) {
+      setLoading(false);
+      toast.success("Conta criada! Redirecionando…");
+      navigate("/");
+      return;
+    }
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    setLoading(false);
+    if (signInErr) {
+      // Confirmação de email ainda está ativa no projeto. Conta foi
+      // criada, mas usuário precisa esperar email. Avisamos e damos
+      // botão pra reenviar se quiser.
+      toast.error(
+        "Conta criada, mas o projeto exige confirmação por email. " +
+          "Peça ao admin desabilitar 'Confirm email' em Auth → Email no Supabase.",
+      );
+      return;
+    }
+    toast.success("Conta criada! Redirecionando…");
+    navigate("/");
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
