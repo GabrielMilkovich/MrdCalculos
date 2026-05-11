@@ -93,11 +93,20 @@ REGRAS RÍGIDAS — NÃO QUEBRE NENHUMA:
 
 5. **Não classifique rubricas.** Categorização (Salário Fixo / Comissões / etc.) é responsabilidade do operador.
 
-6. **Confidence HONESTO (CRÍTICO).** Sua confiança reflete sua certeza REAL:
-   - **80-100**: você viu os valores no OCR e tem certeza de cada sugestão.
-   - **50-79**: viu parte do contexto mas tem dúvida em alguns pontos.
-   - **30-49**: pouco contexto, muito chute. Prefira não sugerir.
-   - **0-29**: cego ou OCR ilegível. NÃO SUGIRA NADA — retorne suggestions=[].
+6. **Confidence é INTEIRO PORCENTAGEM 0–100, NÃO PROBABILIDADE 0–1.**
+
+   Escala: 0 (zero por cento, sem confiança), 50 (cinquenta por cento), 100 (cem por cento, certeza absoluta).
+
+   ❌ ERRADO: ai_confidence=0.91 (isso é interpretado como 0,91% — quase zero)
+   ❌ ERRADO: ai_confidence=0.85 (isso é 0,85%, NÃO 85%)
+   ✅ CERTO: ai_confidence=91 (significa 91%)
+   ✅ CERTO: ai_confidence=85 (significa 85%)
+
+   Faixas de uso correto:
+   - **80–100** (inteiro): você viu os valores no OCR e tem certeza.
+   - **50–79** (inteiro): viu parte do contexto, dúvida em pontos.
+   - **30–49** (inteiro): pouco contexto, muito chute. Prefira não sugerir.
+   - **0–29** (inteiro): cego ou OCR ilegível. NÃO SUGIRA NADA.
 
    Operador NÃO PODE APLICAR sugestões com confidence<30. Aplicar sem evidência destrói a paridade do cálculo trabalhista. Se está chutando, retorne array vazio com confidence baixo e explique no summary.
 
@@ -147,10 +156,16 @@ const RESPONSE_SCHEMA = {
           },
         },
       },
+      // ai_confidence: INTEIRO de 0 a 100 (porcentagem).
+      // NÃO aceitar decimais entre 0 e 1 — caso clássico de IA confundir
+      // probabilidade (0..1) com porcentagem (0..100). Force integer e
+      // ainda fazemos normalização defensiva no servidor abaixo.
       ai_confidence: {
-        type: "number",
+        type: "integer",
         minimum: 0,
         maximum: 100,
+        description:
+          "Confiança da IA na revisão, como PORCENTAGEM inteira de 0 a 100. NUNCA use decimal entre 0 e 1 — 0.91 não é '91%', é praticamente zero. Use 91 inteiro pra '91%'.",
       },
       summary: { type: "string" },
     },
@@ -505,16 +520,38 @@ serve(async (req) => {
       }
     }
 
+    // NORMALIZAÇÃO DEFENSIVA da confiança:
+    // 1. IA às vezes manda decimal 0..1 (probabilidade) achando que era
+    //    a escala — caso real reportado: "0.91" significava 91% mas
+    //    ficava como "0,91/100" na UI = praticamente zero.
+    // 2. IA às vezes manda > 100 (delírio confidence).
+    // 3. IA às vezes manda string ("91") em vez de número.
+    // 4. IA às vezes manda null/undefined.
+    let aiConfRaw = typeof raw.ai_confidence === "number"
+      ? raw.ai_confidence
+      : typeof raw.ai_confidence === "string"
+        ? parseFloat(raw.ai_confidence)
+        : 0;
+    if (!Number.isFinite(aiConfRaw)) aiConfRaw = 0;
+    // Se IA mandou decimal entre 0 e 1 (incl. limites estritos), multiplica
+    // por 100 pra normalizar pra escala 0..100. Threshold: <= 1.0 com
+    // decimais sugere probabilidade.
+    if (aiConfRaw > 0 && aiConfRaw <= 1 && !Number.isInteger(aiConfRaw)) {
+      aiConfRaw = aiConfRaw * 100;
+    }
+    // Clamp final 0..100 + integer.
+    aiConfRaw = Math.round(Math.max(0, Math.min(100, aiConfRaw)));
+
     // Penaliza confidence se houve descartes — sinal de IA chutando.
     const confidenceFinal = discarded.length > 0
-      ? Math.max(0, raw.ai_confidence - discarded.length * 10)
-      : raw.ai_confidence;
+      ? Math.max(0, aiConfRaw - discarded.length * 10)
+      : aiConfRaw;
 
     return jsonResponse({
       suggestions: suggestionsAceitas,
       discarded_hallucinations: discarded,
       ai_confidence: confidenceFinal,
-      ai_confidence_raw: raw.ai_confidence,
+      ai_confidence_raw: raw.ai_confidence, // valor cru da IA (pode ser 0.91 — pra debug)
       summary: raw.summary,
       model: MODEL,
       duration_ms: durationMs,
