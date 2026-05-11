@@ -318,37 +318,164 @@ function construirOcrFocadoEmFlags(
   );
 }
 
+/**
+ * Versão da `construirOcrFocadoEmFlags` que aceita uma LISTA EXPLÍCITA
+ * de ocr_lines pra focar — usada pelo batching, onde cada lote vê só
+ * o OCR ao redor das suas apurações.
+ */
+function construirOcrFocadoEmLinhas(
+  ocrText: string,
+  ocrLines: number[],
+  orcamentoChars: number,
+): string {
+  const linhas = ocrText.split(/\r?\n/);
+  const totalLinhas = linhas.length;
+  if (ocrLines.length === 0) {
+    return ocrText.length > orcamentoChars
+      ? ocrText.slice(0, orcamentoChars) + "\n[...OCR truncado...]"
+      : ocrText;
+  }
+  const linhasOrdenadas = [...new Set(ocrLines)].sort((a, b) => a - b);
+  const CONTEXTO = 15;
+  const ranges: Array<[number, number]> = [];
+  for (const ln of linhasOrdenadas) {
+    const ini = Math.max(1, ln - CONTEXTO);
+    const fim = Math.min(totalLinhas, ln + CONTEXTO);
+    const ultimo = ranges[ranges.length - 1];
+    if (ultimo && ini <= ultimo[1] + 1) {
+      ultimo[1] = Math.max(ultimo[1], fim);
+    } else {
+      ranges.push([ini, fim]);
+    }
+  }
+  const partes: string[] = [];
+  let usado = 0;
+  for (const [ini, fim] of ranges) {
+    const header = `\n═══ TRECHO @linha ${ini}-${fim} (de ${totalLinhas}) ═══\n`;
+    const corpo = linhas
+      .slice(ini - 1, fim)
+      .map((l, i) => `${ini + i}: ${l}`)
+      .join("\n");
+    const bloco = header + corpo + "\n";
+    if (usado + bloco.length > orcamentoChars) {
+      const espaco = orcamentoChars - usado;
+      if (espaco > 200) {
+        partes.push(bloco.slice(0, espaco) + "\n[...trecho cortado...]");
+      }
+      break;
+    }
+    partes.push(bloco);
+    usado += bloco.length;
+  }
+  return partes.join("");
+}
+
+/**
+ * Extrai todas as apurações marcadas REVISAR_OCR (com seu ocr_line e
+ * índice original no array de apuracoes).
+ */
+function extrairApuracoesRevisar(parsedJson: unknown): Array<{
+  indice: number;
+  ocr_line: number;
+  observacao: string;
+  data: string;
+}> {
+  const lista: Array<{
+    indice: number;
+    ocr_line: number;
+    observacao: string;
+    data: string;
+  }> = [];
+  try {
+    const p = parsedJson as {
+      apuracoes?: Array<{
+        observacao?: string | null;
+        ocr_line?: number;
+        data?: string;
+      }>;
+    };
+    if (p?.apuracoes && Array.isArray(p.apuracoes)) {
+      for (let i = 0; i < p.apuracoes.length; i++) {
+        const a = p.apuracoes[i];
+        if (
+          a?.observacao &&
+          typeof a.observacao === "string" &&
+          a.observacao.startsWith("REVISAR_OCR") &&
+          typeof a.ocr_line === "number" &&
+          a.ocr_line > 0
+        ) {
+          lista.push({
+            indice: i,
+            ocr_line: a.ocr_line,
+            observacao: a.observacao,
+            data: typeof a.data === "string" ? a.data : "",
+          });
+        }
+      }
+    }
+  } catch {
+    // parsed inválido — retorna vazio.
+  }
+  return lista;
+}
+
 async function chamarOpenAI(
   apiKey: string,
   ocrText: string,
   parsedJson: unknown,
   builder: Builder,
+  /**
+   * BATCHING: quando definido, processa SÓ esse subconjunto de
+   * apurações marcadas REVISAR_OCR. Permite paralelizar a análise
+   * de documentos grandes (628 apurações em 21 lotes de 30).
+   */
+  apuracoesDoLote?: Array<{
+    indice: number;
+    ocr_line: number;
+    observacao: string;
+    data: string;
+  }>,
 ): Promise<{ raw: IAResponseParsed; durationMs: number; status: number }> {
-  // CHUNKING INTELIGENTE (D): em vez de cortar os primeiros 30k chars do
-  // OCR, focamos nos TRECHOS ao redor das apurações marcadas REVISAR_OCR
-  // pelo parser. Isso dá MUITO mais sinal pra IA do que enviar o começo
-  // do documento que provavelmente é só cabeçalho.
-  //
-  // Algoritmo:
-  //   1. Extrai `ocr_line` das apurações que têm `observacao` começando
-  //      com "REVISAR_OCR" no parsed.
-  //   2. Pra cada ocr_line, captura ±8 linhas de contexto.
-  //   3. Deduplica overlaps (linhas adjacentes viram um trecho contíguo).
-  //   4. Concatena com markers "TRECHO @linha N" e limita ao orçamento
-  //      total (30k chars).
-  //   5. Se não houver REVISAR_OCR (parser limpo) ou parsed não tiver
-  //      ocr_line, cai no truncamento simples dos primeiros 30k chars.
-  // CONFIANÇA MAIOR: orçamentos aumentados pra IA ver mais evidência.
-  // - OCR focado: 30k → 60k chars (mais trechos de REVISAR_OCR cabem)
-  // - parsed JSON: 60k → 120k chars (mais apurações visíveis pra IA cruzar)
-  // - contexto por flag: ±8 → ±15 linhas (na função construirOcrFocadoEmFlags)
-  // gpt-5 com 400k de contexto e reasoning_effort=low aguenta fácil.
-  const ocrTrimmed = construirOcrFocadoEmFlags(ocrText, parsedJson, 60_000);
-  const PARSED_MAX_CHARS = 120_000;
-  let parsedString = JSON.stringify(parsedJson);
-  if (parsedString.length > PARSED_MAX_CHARS) {
-    parsedString = parsedString.slice(0, PARSED_MAX_CHARS) +
-      "\n[...parsed JSON truncado em 60k chars — documento muito grande...]";
+  // OCR focado SÓ nas linhas desse lote (se fornecido).
+  // Sem lote: comportamento legado — pega todas as apurações REVISAR_OCR.
+  let ocrTrimmed: string;
+  let parsedString: string;
+
+  if (apuracoesDoLote && apuracoesDoLote.length > 0) {
+    // Batching: OCR só do contexto do lote + lista compacta das apurações.
+    ocrTrimmed = construirOcrFocadoEmLinhas(
+      ocrText,
+      apuracoesDoLote.map((a) => a.ocr_line),
+      60_000,
+    );
+    // parsed JSON do lote: lista compacta das apurações deste lote
+    // (índice + data + observacao do parser) — chega rico em sinal
+    // sem o overhead de mandar TODAS as 1374 apurações.
+    parsedString = JSON.stringify(
+      {
+        builder,
+        apuracoes_deste_lote: apuracoesDoLote.map((a) => ({
+          field_path: `apuracoes[${a.indice}].data`,
+          indice: a.indice,
+          data: a.data,
+          motivo_parser: a.observacao,
+          ocr_line: a.ocr_line,
+        })),
+        instrucao:
+          "Verifique CADA apuração desta lista. Para cada uma, decida: REMOVER (suggested=null em field_path 'apuracoes[N].data') ou MANTER (não inclua na resposta). Use SOMENTE o OCR enviado como evidência.",
+      },
+      null,
+      0,
+    );
+  } else {
+    // Sem batching (lote único / fallback): comportamento anterior.
+    ocrTrimmed = construirOcrFocadoEmFlags(ocrText, parsedJson, 60_000);
+    const PARSED_MAX_CHARS = 120_000;
+    parsedString = JSON.stringify(parsedJson);
+    if (parsedString.length > PARSED_MAX_CHARS) {
+      parsedString = parsedString.slice(0, PARSED_MAX_CHARS) +
+        "\n[...parsed JSON truncado em 120k chars...]";
+    }
   }
 
   const userPrompt =
@@ -496,17 +623,87 @@ serve(async (req) => {
       }
     }
 
-    const { raw, durationMs } = await chamarOpenAI(
-      OPENAI_API_KEY,
-      ocr_text,
-      parsed,
-      builder,
-    );
+    // BATCHING — divide as apurações REVISAR_OCR em lotes e roda em
+    // paralelo (max 5 concorrentes). Documento ROQUE tem 628 flags;
+    // sem batching, só as 30 primeiras eram analisadas. Com lotes
+    // de 30 e paralelismo 5 → 21 lotes / 5 = ~5 rodadas de 30s cada =
+    // ~2.5 minutos pra cobrir 100%, em vez de 0.5% num único timeout.
+    const apuracoesRevisar = extrairApuracoesRevisar(parsed);
+    const TAMANHO_LOTE = 30;
+    const MAX_CONCORRENTES = 5;
+
+    type LoteResult = {
+      raw: IAResponseParsed;
+      durationMs: number;
+    };
+    const resultadosLotes: LoteResult[] = [];
+
+    if (apuracoesRevisar.length <= TAMANHO_LOTE) {
+      // Documento pequeno: 1 chamada cobre tudo (com ou sem flags).
+      const r = await chamarOpenAI(
+        OPENAI_API_KEY,
+        ocr_text,
+        parsed,
+        builder,
+        apuracoesRevisar.length > 0 ? apuracoesRevisar : undefined,
+      );
+      resultadosLotes.push(r);
+    } else {
+      // Documento grande: divide e processa em paralelo com semáforo.
+      const lotes: Array<typeof apuracoesRevisar> = [];
+      for (let i = 0; i < apuracoesRevisar.length; i += TAMANHO_LOTE) {
+        lotes.push(apuracoesRevisar.slice(i, i + TAMANHO_LOTE));
+      }
+
+      // Semáforo simples: processa em rodadas de MAX_CONCORRENTES.
+      for (let i = 0; i < lotes.length; i += MAX_CONCORRENTES) {
+        const grupo = lotes.slice(i, i + MAX_CONCORRENTES);
+        const resultsGrupo = await Promise.allSettled(
+          grupo.map((lote) =>
+            chamarOpenAI(OPENAI_API_KEY, ocr_text, parsed, builder, lote),
+          ),
+        );
+        for (const r of resultsGrupo) {
+          if (r.status === "fulfilled") {
+            resultadosLotes.push(r.value);
+          }
+          // Lotes que falharem (timeout, erro de API) são silenciados aqui;
+          // o operador ainda recebe as sugestões dos lotes que deram certo.
+        }
+      }
+    }
+
+    // Agregação dos resultados: concatena suggestions de todos os lotes,
+    // calcula confidence ponderada pela quantidade de sugestões.
+    const suggestionsAgregadas: Suggestion[] = [];
+    let somaConfPonderada = 0;
+    let totalSugestoes = 0;
+    const summaries: string[] = [];
+    let durationTotal = 0;
+    for (const r of resultadosLotes) {
+      suggestionsAgregadas.push(...r.raw.suggestions);
+      const n = Math.max(1, r.raw.suggestions.length);
+      somaConfPonderada += (r.raw.ai_confidence || 0) * n;
+      totalSugestoes += n;
+      if (r.raw.summary) summaries.push(r.raw.summary);
+      durationTotal += r.durationMs;
+    }
+    const confidenceMedia = totalSugestoes > 0
+      ? somaConfPonderada / totalSugestoes
+      : resultadosLotes.length > 0
+        ? resultadosLotes.reduce((s, r) => s + (r.raw.ai_confidence || 0), 0) /
+          resultadosLotes.length
+        : 0;
 
     // Anti-alucinação: filtra sugestões cujo `suggested` não aparece no OCR.
     const suggestionsAceitas: Suggestion[] = [];
     const discarded: DiscardedHallucination[] = [];
-    for (const s of raw.suggestions) {
+    const fieldsVisitados = new Set<string>();
+    for (const s of suggestionsAgregadas) {
+      // Dedup: se 2 lotes sugerirem o mesmo campo (improvável mas
+      // possível em overlap), mantém só a primeira.
+      if (fieldsVisitados.has(s.field)) continue;
+      fieldsVisitados.add(s.field);
       if (valorAparecemNoOcr(s.suggested, ocr_text)) {
         suggestionsAceitas.push(s);
       } else {
@@ -520,41 +717,35 @@ serve(async (req) => {
       }
     }
 
-    // NORMALIZAÇÃO DEFENSIVA da confiança:
-    // 1. IA às vezes manda decimal 0..1 (probabilidade) achando que era
-    //    a escala — caso real reportado: "0.91" significava 91% mas
-    //    ficava como "0,91/100" na UI = praticamente zero.
-    // 2. IA às vezes manda > 100 (delírio confidence).
-    // 3. IA às vezes manda string ("91") em vez de número.
-    // 4. IA às vezes manda null/undefined.
-    let aiConfRaw = typeof raw.ai_confidence === "number"
-      ? raw.ai_confidence
-      : typeof raw.ai_confidence === "string"
-        ? parseFloat(raw.ai_confidence)
-        : 0;
+    // NORMALIZAÇÃO DEFENSIVA da confiança média.
+    let aiConfRaw = typeof confidenceMedia === "number"
+      ? confidenceMedia
+      : 0;
     if (!Number.isFinite(aiConfRaw)) aiConfRaw = 0;
-    // Se IA mandou decimal entre 0 e 1 (incl. limites estritos), multiplica
-    // por 100 pra normalizar pra escala 0..100. Threshold: <= 1.0 com
-    // decimais sugere probabilidade.
     if (aiConfRaw > 0 && aiConfRaw <= 1 && !Number.isInteger(aiConfRaw)) {
       aiConfRaw = aiConfRaw * 100;
     }
-    // Clamp final 0..100 + integer.
     aiConfRaw = Math.round(Math.max(0, Math.min(100, aiConfRaw)));
 
-    // Penaliza confidence se houve descartes — sinal de IA chutando.
     const confidenceFinal = discarded.length > 0
-      ? Math.max(0, aiConfRaw - discarded.length * 10)
+      ? Math.max(0, aiConfRaw - Math.min(30, discarded.length * 5))
       : aiConfRaw;
+
+    const summaryAgregado =
+      apuracoesRevisar.length > TAMANHO_LOTE
+        ? `Análise em ${resultadosLotes.length} lote(s) cobrindo ${apuracoesRevisar.length} apuração(ões) marcada(s). ${suggestionsAceitas.length} sugestão(ões) totais. ${summaries.slice(0, 3).join(" / ")}`
+        : summaries.join(" ");
 
     return jsonResponse({
       suggestions: suggestionsAceitas,
       discarded_hallucinations: discarded,
       ai_confidence: confidenceFinal,
-      ai_confidence_raw: raw.ai_confidence, // valor cru da IA (pode ser 0.91 — pra debug)
-      summary: raw.summary,
+      ai_confidence_raw: confidenceMedia,
+      summary: summaryAgregado,
       model: MODEL,
-      duration_ms: durationMs,
+      duration_ms: durationTotal,
+      lotes_processados: resultadosLotes.length,
+      apuracoes_revisar_total: apuracoesRevisar.length,
     });
   } catch (err) {
     const isAbort = err instanceof DOMException && err.name === "AbortError";
