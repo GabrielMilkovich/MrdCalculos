@@ -8,7 +8,7 @@
  * Invoca edge function `verify-extraction-ai` que tem contrato anti-alucinação:
  *   - Substring literal: todo valor sugerido deve estar no OCR original.
  *   - Structured output strict (json_schema).
- *   - Timeout 180s.
+ *   - Análise por lotes paralelos.
  *
  * Operador vê sugestões em popover, marca quais aceitar individualmente,
  * e "Aplica selecionadas" OU clica "Pular análise" (capturando razão).
@@ -63,6 +63,10 @@ export interface AIVerifyResponse {
   summary: string;
   model: string;
   duration_ms: number;
+  /** BATCHING — quantos lotes de IA foram processados. */
+  lotes_processados?: number;
+  /** Total de apurações REVISAR_OCR no documento (TODAS, não só do lote). */
+  apuracoes_revisar_total?: number;
 }
 
 /**
@@ -333,7 +337,7 @@ export function VerifyExtractionAIButton({
               className="w-full gap-1.5"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Iniciar análise (180s timeout)
+              Iniciar análise (até 5min timeout)
             </Button>
           </div>
         )}
@@ -341,7 +345,7 @@ export function VerifyExtractionAIButton({
         {loading && (
           <div className="p-6 flex flex-col items-center gap-2 text-sm">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Consultando IA (até 180s)…</span>
+            <span>Consultando IA (até 5min)…</span>
             <span className="text-[11px] text-muted-foreground">
               Modelo: gpt-4o-mini · structured output strict
             </span>
@@ -352,7 +356,7 @@ export function VerifyExtractionAIButton({
           <div className="p-4 text-sm space-y-2">
             <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
               <Clock className="h-3.5 w-3.5" />
-              <strong>Timeout 180s</strong>
+              <strong>Análise por lotes paralelos</strong>
             </div>
             <p className="text-[12px] text-muted-foreground">
               OpenAI demorou demais. Tente novamente ou prossiga sem IA.
@@ -385,6 +389,38 @@ export function VerifyExtractionAIButton({
 
         {response && response.suggestions.length > 0 && !skipping && (
           <>
+            {/* BATCHING — cobertura total: quantas apurações suspeitas
+                a IA processou no documento inteiro. */}
+            {typeof response.apuracoes_revisar_total === "number" &&
+              response.apuracoes_revisar_total > 0 && (
+                <div className="px-3 py-1.5 border-b bg-blue-50 dark:bg-blue-950/30 text-[11px] text-blue-900 dark:text-blue-200 flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1">
+                    <Check className="h-3 w-3" />
+                    <strong>
+                      {response.apuracoes_revisar_total} apuração(ões)
+                    </strong>{" "}
+                    suspeita(s) analisada(s) em{" "}
+                    <strong>{response.lotes_processados ?? 1} lote(s)</strong>
+                    .
+                  </span>
+                  <span className="opacity-70">
+                    {response.suggestions.length} sugestão(ões) geradas
+                  </span>
+                </div>
+              )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mx-3 mt-2 self-start h-7 text-[11px]"
+              onClick={() => {
+                const todas: Record<number, boolean> = {};
+                response.suggestions.forEach((_, idx) => (todas[idx] = true));
+                setAccepted(todas);
+              }}
+            >
+              <Check className="h-3 w-3 mr-1" />
+              Marcar todas
+            </Button>
             <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="p-3 space-y-2">
                 <p className="text-[12px] text-muted-foreground italic">
