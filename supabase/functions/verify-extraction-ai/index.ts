@@ -17,7 +17,7 @@
 //      400 antes mesmo do fetch retornar.
 //   3. **Score 0..100**: a IA explicita seu próprio nível de confiança.
 //      O operador vê o score na UI e decide aplicar.
-//   4. **Timeout 120s** via AbortController. Operador pode pular a análise
+//   4. **Timeout 180s** via AbortController. Operador pode pular a análise
 //      se demorar.
 //
 // Body:
@@ -55,14 +55,16 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-const TIMEOUT_MS = 120_000;
+const TIMEOUT_MS = 180_000;
 const SCORE_MIN = 50;
 const SCORE_MAX = 85;
 // gpt-5: melhor qualidade de revisão (anti-alucinação reasoning interno).
-// Combo pra responder dentro do timeout em documentos grandes:
-//   1. reasoning_effort: "minimal" (corta tempo de raciocínio interno)
-//   2. timeout 120s (gpt-5 com reasoning + JSON schema strict pode levar 60-90s)
-//   3. inputs cortados agressivamente (OCR 6k, parsed 30k) — ver chamarOpenAI
+// Combo pra CONFIANÇA ALTA com inputs grandes:
+//   1. reasoning_effort: "low" (raciocínio real, ainda rápido; "minimal"
+//      respondia sem pensar e retornava conf<70 mesmo com evidência clara)
+//   2. timeout 180s (margem pra reasoning sobre OCR 60k + parsed 120k)
+//   3. chunking inteligente: OCR enviado pra IA é o trecho ao redor das
+//      apurações REVISAR_OCR (±15 linhas) — não os primeiros chars
 const MODEL = "gpt-5";
 
 type Builder = "holerite" | "cartao_ponto" | "ferias" | "faltas" | "ctps";
@@ -251,7 +253,7 @@ function construirOcrFocadoEmFlags(
   const linhasOrdenadas = [...new Set(ocrLines)].sort((a, b) => a - b);
 
   // Funde ranges sobrepostos. Cada range = [iniLinha, fimLinha].
-  const CONTEXTO = 8;
+  const CONTEXTO = 15;
   const ranges: Array<[number, number]> = [];
   for (const ln of linhasOrdenadas) {
     const ini = Math.max(1, ln - CONTEXTO);
@@ -321,12 +323,13 @@ async function chamarOpenAI(
   //      total (30k chars).
   //   5. Se não houver REVISAR_OCR (parser limpo) ou parsed não tiver
   //      ocr_line, cai no truncamento simples dos primeiros 30k chars.
-  const ocrTrimmed = construirOcrFocadoEmFlags(ocrText, parsedJson, 30_000);
-
-  // parsed JSON: aumentado de 30k → 60k chars (~15k tokens). gpt-5 tem
-  // 400k de contexto e reasoning_effort=minimal aguenta — sobra orçamento
-  // pra ver mais apurações por vez.
-  const PARSED_MAX_CHARS = 60_000;
+  // CONFIANÇA MAIOR: orçamentos aumentados pra IA ver mais evidência.
+  // - OCR focado: 30k → 60k chars (mais trechos de REVISAR_OCR cabem)
+  // - parsed JSON: 60k → 120k chars (mais apurações visíveis pra IA cruzar)
+  // - contexto por flag: ±8 → ±15 linhas (na função construirOcrFocadoEmFlags)
+  // gpt-5 com 400k de contexto e reasoning_effort=low aguenta fácil.
+  const ocrTrimmed = construirOcrFocadoEmFlags(ocrText, parsedJson, 60_000);
+  const PARSED_MAX_CHARS = 120_000;
   let parsedString = JSON.stringify(parsedJson);
   if (parsedString.length > PARSED_MAX_CHARS) {
     parsedString = parsedString.slice(0, PARSED_MAX_CHARS) +
@@ -362,10 +365,10 @@ INSTRUÇÕES:
       body: JSON.stringify({
         model: MODEL,
         // gpt-5: ignora temperature/top_p (reasoning interno).
-        // reasoning_effort=minimal é o mais rápido — suficiente pra
-        // revisão cirúrgica (operador já fez triagem). seed=42 mantém
-        // determinismo entre chamadas idênticas (P4 self-consistency).
-        reasoning_effort: "minimal",
+        // reasoning_effort=low: raciocínio real (não chuta como minimal),
+        // ainda rápido. Aumenta MUITO a confiança das sugestões em troca
+        // de 20-40s a mais. seed=42 mantém determinismo (P4).
+        reasoning_effort: "low",
         seed: 42,
         response_format: {
           type: "json_schema",
@@ -521,9 +524,9 @@ serve(async (req) => {
     if (isAbort) {
       return jsonResponse(
         {
-          error: "timeout_120s",
+          error: "timeout_180s",
           message:
-            "OpenAI demorou mais de 120s. Operador pode tentar novamente OU pular a análise.",
+            "OpenAI demorou mais de 180s. Operador pode tentar novamente OU pular a análise.",
         },
         504,
       );
