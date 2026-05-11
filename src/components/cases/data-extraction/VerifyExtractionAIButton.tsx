@@ -67,6 +67,10 @@ export interface AIVerifyResponse {
   lotes_processados?: number;
   /** Total de apurações REVISAR_OCR no documento (TODAS, não só do lote). */
   apuracoes_revisar_total?: number;
+  /** Quantas das apurações REVISAR_OCR foram REALMENTE analisadas. */
+  apuracoes_analisadas?: number;
+  /** True se o batching parou antes de cobrir tudo (budget de tempo). */
+  analise_parcial?: boolean;
 }
 
 /**
@@ -337,7 +341,7 @@ export function VerifyExtractionAIButton({
               className="w-full gap-1.5"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Iniciar análise (até 5min timeout)
+              Iniciar análise (análise por lotes)
             </Button>
           </div>
         )}
@@ -345,7 +349,7 @@ export function VerifyExtractionAIButton({
         {loading && (
           <div className="p-6 flex flex-col items-center gap-2 text-sm">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Consultando IA (até 5min)…</span>
+            <span>Consultando IA (lotes paralelos)…</span>
             <span className="text-[11px] text-muted-foreground">
               Modelo: gpt-4o-mini · structured output strict
             </span>
@@ -356,10 +360,12 @@ export function VerifyExtractionAIButton({
           <div className="p-4 text-sm space-y-2">
             <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
               <Clock className="h-3.5 w-3.5" />
-              <strong>Análise por lotes paralelos</strong>
+              <strong>Tempo esgotado (150s do Supabase)</strong>
             </div>
             <p className="text-[12px] text-muted-foreground">
-              OpenAI demorou demais. Tente novamente ou prossiga sem IA.
+              Documento muito grande pra um único ciclo de IA. Tente novamente —
+              cada nova rodada cobre lotes diferentes (max 10 paralelos). Ou
+              revise manualmente os dias marcados em vermelho.
             </p>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={chamarIA}>
@@ -389,25 +395,50 @@ export function VerifyExtractionAIButton({
 
         {response && response.suggestions.length > 0 && !skipping && (
           <>
-            {/* BATCHING — cobertura total: quantas apurações suspeitas
-                a IA processou no documento inteiro. */}
+            {/* BATCHING — cobertura: quantas apurações suspeitas a IA
+                viu vs total. Quando parcial (budget Supabase 150s
+                estourou antes de cobrir tudo), banner é amber e mostra
+                "X de Y analisadas". */}
             {typeof response.apuracoes_revisar_total === "number" &&
               response.apuracoes_revisar_total > 0 && (
-                <div className="px-3 py-1.5 border-b bg-blue-50 dark:bg-blue-950/30 text-[11px] text-blue-900 dark:text-blue-200 flex items-center justify-between gap-2">
+                <div
+                  className={
+                    response.analise_parcial
+                      ? "px-3 py-1.5 border-b bg-amber-50 dark:bg-amber-950/30 text-[11px] text-amber-900 dark:text-amber-200 flex items-center justify-between gap-2"
+                      : "px-3 py-1.5 border-b bg-blue-50 dark:bg-blue-950/30 text-[11px] text-blue-900 dark:text-blue-200 flex items-center justify-between gap-2"
+                  }
+                >
                   <span className="flex items-center gap-1">
-                    <Check className="h-3 w-3" />
+                    {response.analise_parcial ? (
+                      <AlertTriangle className="h-3 w-3" />
+                    ) : (
+                      <Check className="h-3 w-3" />
+                    )}
                     <strong>
-                      {response.apuracoes_revisar_total} apuração(ões)
+                      {response.apuracoes_analisadas ??
+                        response.apuracoes_revisar_total}
+                      {response.analise_parcial
+                        ? ` de ${response.apuracoes_revisar_total}`
+                        : ""}{" "}
+                      apuração(ões)
                     </strong>{" "}
-                    suspeita(s) analisada(s) em{" "}
+                    {response.analise_parcial ? "analisadas" : "analisada(s)"} em{" "}
                     <strong>{response.lotes_processados ?? 1} lote(s)</strong>
                     .
                   </span>
                   <span className="opacity-70">
-                    {response.suggestions.length} sugestão(ões) geradas
+                    {response.suggestions.length} sugestão(ões)
                   </span>
                 </div>
               )}
+            {response.analise_parcial && (
+              <div className="px-3 py-1.5 border-b bg-amber-100 dark:bg-amber-950/50 text-[10px] text-amber-900 dark:text-amber-100">
+                Análise PARCIAL — o documento é muito grande pra um único
+                ciclo de IA (limite 150s do Supabase). Clique "Verificar com
+                IA" de novo pra cobrir os lotes restantes, ou revise
+                manualmente os dias não cobertos pela IA.
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"

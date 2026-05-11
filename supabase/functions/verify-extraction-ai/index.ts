@@ -55,16 +55,20 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-const TIMEOUT_MS = 180_000;
+// Timeout por LOTE (não global). Supabase Edge Functions tem hard limit
+// de 150s — não dá pra esperar 180s de uma chamada só. Cada lote tem
+// 40s; se passar, abortamos e perdemos só esse lote (Promise.allSettled
+// engole o erro, demais continuam).
+const TIMEOUT_MS = 40_000;
+// Budget global pra TODO o batching: 130s (margem de 20s do hard
+// limit 150s pra serialização/headers/CORS). Se nos aproximamos do
+// budget, paramos de disparar novos lotes e retornamos parcial.
+const BUDGET_GLOBAL_MS = 130_000;
 const SCORE_MIN = 50;
 const SCORE_MAX = 85;
-// gpt-5: melhor qualidade de revisão (anti-alucinação reasoning interno).
-// Combo pra CONFIANÇA ALTA com inputs grandes:
-//   1. reasoning_effort: "low" (raciocínio real, ainda rápido; "minimal"
-//      respondia sem pensar e retornava conf<70 mesmo com evidência clara)
-//   2. timeout 180s (margem pra reasoning sobre OCR 60k + parsed 120k)
-//   3. chunking inteligente: OCR enviado pra IA é o trecho ao redor das
-//      apurações REVISAR_OCR (±15 linhas) — não os primeiros chars
+// gpt-5 com reasoning_effort="minimal" — pensamento curto, ~6-12s por
+// chamada. Suficiente pra revisão cirúrgica (operador já fez triagem
+// determinística). low/medium estourava o budget global.
 const MODEL = "gpt-5";
 
 type Builder = "holerite" | "cartao_ponto" | "ferias" | "faltas" | "ctps";
@@ -443,10 +447,12 @@ async function chamarOpenAI(
 
   if (apuracoesDoLote && apuracoesDoLote.length > 0) {
     // Batching: OCR só do contexto do lote + lista compacta das apurações.
+    // Orçamento reduzido pra 25k por lote — caber em ~6-10s de reasoning
+    // minimal e ainda dar contexto suficiente pra 50 apurações.
     ocrTrimmed = construirOcrFocadoEmLinhas(
       ocrText,
       apuracoesDoLote.map((a) => a.ocr_line),
-      60_000,
+      25_000,
     );
     // parsed JSON do lote: lista compacta das apurações deste lote
     // (índice + data + observacao do parser) — chega rico em sinal
@@ -507,10 +513,10 @@ INSTRUÇÕES:
       body: JSON.stringify({
         model: MODEL,
         // gpt-5: ignora temperature/top_p (reasoning interno).
-        // reasoning_effort=low: raciocínio real (não chuta como minimal),
-        // ainda rápido. Aumenta MUITO a confiança das sugestões em troca
-        // de 20-40s a mais. seed=42 mantém determinismo (P4).
-        reasoning_effort: "low",
+        // reasoning_effort="minimal" — pensamento curto pra caber no
+        // budget do Supabase Edge (150s hard). low/medium estourava
+        // em batching paralelo (Promise.all com 5+ lotes simultâneos).
+        reasoning_effort: "minimal",
         seed: 42,
         response_format: {
           type: "json_schema",
@@ -624,13 +630,18 @@ serve(async (req) => {
     }
 
     // BATCHING — divide as apurações REVISAR_OCR em lotes e roda em
-    // paralelo (max 5 concorrentes). Documento ROQUE tem 628 flags;
-    // sem batching, só as 30 primeiras eram analisadas. Com lotes
-    // de 30 e paralelismo 5 → 21 lotes / 5 = ~5 rodadas de 30s cada =
-    // ~2.5 minutos pra cobrir 100%, em vez de 0.5% num único timeout.
+    // paralelo. Calibrado pra caber no hard limit de 150s do Supabase
+    // Edge Function:
+    //   - Lotes de 50 apurações (em vez de 30) → menos chamadas totais
+    //   - 10 concorrentes (em vez de 5) → menos rodadas sequenciais
+    //   - Budget global 130s — para de disparar novos lotes quando
+    //     aproxima do limite e retorna o que coletou (parcial >> nada)
+    //   - Documento ROQUE (628 flags): 13 lotes / 10 concorrentes =
+    //     2 rodadas × ~15s/rodada (minimal reasoning) = ~30s ✓
+    const t0Global = Date.now();
     const apuracoesRevisar = extrairApuracoesRevisar(parsed);
-    const TAMANHO_LOTE = 30;
-    const MAX_CONCORRENTES = 5;
+    const TAMANHO_LOTE = 50;
+    const MAX_CONCORRENTES = 10;
 
     type LoteResult = {
       raw: IAResponseParsed;
@@ -656,7 +667,12 @@ serve(async (req) => {
       }
 
       // Semáforo simples: processa em rodadas de MAX_CONCORRENTES.
+      // Para de disparar novas rodadas se chegou perto do budget global —
+      // operador prefere parcial (X de Y lotes) a um erro total.
       for (let i = 0; i < lotes.length; i += MAX_CONCORRENTES) {
+        const elapsed = Date.now() - t0Global;
+        // Reserva ~25s pra próxima rodada terminar + serialização.
+        if (elapsed > BUDGET_GLOBAL_MS - 25_000) break;
         const grupo = lotes.slice(i, i + MAX_CONCORRENTES);
         const resultsGrupo = await Promise.allSettled(
           grupo.map((lote) =>
@@ -667,8 +683,8 @@ serve(async (req) => {
           if (r.status === "fulfilled") {
             resultadosLotes.push(r.value);
           }
-          // Lotes que falharem (timeout, erro de API) são silenciados aqui;
-          // o operador ainda recebe as sugestões dos lotes que deram certo.
+          // Lotes que falharem (timeout/erro de API) são silenciados aqui;
+          // o operador ainda recebe as sugestões dos lotes OK.
         }
       }
     }
@@ -746,6 +762,15 @@ serve(async (req) => {
       duration_ms: durationTotal,
       lotes_processados: resultadosLotes.length,
       apuracoes_revisar_total: apuracoesRevisar.length,
+      // Cobertura informativa: quantas apurações de fato foram vistas
+      // pela IA (lotes_processados × TAMANHO_LOTE, sem ultrapassar
+      // total). Cliente usa pra mostrar "X de Y analisadas".
+      apuracoes_analisadas: Math.min(
+        resultadosLotes.length * TAMANHO_LOTE,
+        apuracoesRevisar.length,
+      ),
+      analise_parcial: resultadosLotes.length * TAMANHO_LOTE <
+        apuracoesRevisar.length,
     });
   } catch (err) {
     const isAbort = err instanceof DOMException && err.name === "AbortError";
