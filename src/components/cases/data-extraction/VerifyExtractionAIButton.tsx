@@ -103,6 +103,12 @@ interface Props {
 
 const SCORE_MIN = 50;
 const SCORE_MAX = 85;
+// B — Confidence mínima para PERMITIR aplicar sugestões. Abaixo disso,
+// a IA está chutando: aplicar contamina a paridade (caso real reportado
+// em produção: gpt-5 com input truncado em 6k retornou conf=0/100 e
+// sugestões parciais misturadas com alucinação). Botão "Aplicar" fica
+// disabled e UI mostra alerta amber.
+const CONFIDENCE_MIN_APLICAR = 30;
 
 export function VerifyExtractionAIButton({
   score,
@@ -209,6 +215,13 @@ export function VerifyExtractionAIButton({
 
   function aplicarSelecionadas() {
     if (!response) return;
+    // B — bloqueia aplicação quando IA reconheceu baixa confiança.
+    if (response.ai_confidence < CONFIDENCE_MIN_APLICAR) {
+      toast.error(
+        `IA com confiança ${response.ai_confidence}/100 (< ${CONFIDENCE_MIN_APLICAR}). Aplicar é arriscado. Revise manualmente ou rode a IA novamente após corrigir o OCR.`,
+      );
+      return;
+    }
     const sugestoesAceitas = response.suggestions.filter(
       (_, i) => accepted[i],
     );
@@ -394,14 +407,25 @@ export function VerifyExtractionAIButton({
                                 : String(s.current)}
                             </div>
                           </div>
-                          <div className="text-emerald-700 dark:text-emerald-300">
+                          <div
+                            className={
+                              s.suggested === null
+                                ? "text-rose-700 dark:text-rose-300"
+                                : "text-emerald-700 dark:text-emerald-300"
+                            }
+                          >
                             <span className="text-[10px] uppercase opacity-60">
                               Sugerido
                             </span>
                             <div className="font-mono">
-                              {s.suggested === null
-                                ? <em>vazio</em>
-                                : String(s.suggested)}
+                              {s.suggested === null ? (
+                                <span className="inline-flex items-center gap-1 font-semibold">
+                                  <X className="h-3 w-3" />
+                                  REMOVER LINHA
+                                </span>
+                              ) : (
+                                String(s.suggested)
+                              )}
                             </div>
                           </div>
                         </div>
@@ -431,6 +455,19 @@ export function VerifyExtractionAIButton({
                 )}
               </div>
             </ScrollArea>
+            {response.ai_confidence < CONFIDENCE_MIN_APLICAR && (
+              <div className="border-t bg-amber-50 dark:bg-amber-950/30 p-2 text-[11px] text-amber-900 dark:text-amber-200 flex items-start gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>
+                  <strong>
+                    Confiança {response.ai_confidence}/100 (mínima {CONFIDENCE_MIN_APLICAR}).
+                  </strong>{" "}
+                  IA reconheceu que tem pouca evidência. Aplicar é arriscado para
+                  a paridade do cálculo. Revise manualmente ou tente IA novamente
+                  após melhorar o OCR.
+                </span>
+              </div>
+            )}
             <div className="border-t p-2 flex justify-between gap-2">
               <Button
                 size="sm"
@@ -442,8 +479,16 @@ export function VerifyExtractionAIButton({
               <Button
                 size="sm"
                 onClick={aplicarSelecionadas}
-                disabled={totalSelecionadas === 0}
+                disabled={
+                  totalSelecionadas === 0 ||
+                  response.ai_confidence < CONFIDENCE_MIN_APLICAR
+                }
                 className="gap-1.5"
+                title={
+                  response.ai_confidence < CONFIDENCE_MIN_APLICAR
+                    ? `IA com confiança ${response.ai_confidence}/100 — abaixo do mínimo ${CONFIDENCE_MIN_APLICAR}`
+                    : undefined
+                }
               >
                 <Check className="h-3.5 w-3.5" />
                 Aplicar {totalSelecionadas > 0 ? `(${totalSelecionadas})` : ""}

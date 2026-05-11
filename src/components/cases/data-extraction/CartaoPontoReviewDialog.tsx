@@ -379,10 +379,34 @@ export function CartaoPontoReviewDialog({
    * Campos não-suportados são ignorados silenciosamente (raros na prática).
    */
   function handleAISuggestions(suggestions: AISuggestion[]): void {
+    // Ordena: REMOÇÕES primeiro (e por índice DESC) pra não invalidar
+    // os índices das outras sugestões. Atualizações depois (índices
+    // estáveis enquanto não há remoção).
+    const remocoes: number[] = [];
+    const atualizacoes: AISuggestion[] = [];
+    for (const s of suggestions) {
+      const matchRemove =
+        s.suggested === null &&
+        /^apuracoes?\[(\d+)\]\.data$/.test(s.field);
+      if (matchRemove) {
+        const idx = parseInt(s.field.match(/\[(\d+)\]/)![1], 10);
+        remocoes.push(idx);
+      } else {
+        atualizacoes.push(s);
+      }
+    }
+    // Índices DESC pra splice não invalidar os anteriores.
+    const remocoesDesc = [...new Set(remocoes)].sort((a, b) => b - a);
+
     setRows((prev) => {
       const next = [...prev];
-      for (const s of suggestions) {
-        const mMarc = s.field.match(/^apuracao\[(\d+)\]\.marcacoes\[(\d+)\]\.([es])$/);
+
+      // 1. Aceita ambos padrões "apuracao[N]" (legado) e "apuracoes[N]"
+      //    (padrão atual, alinhado com schema do JSON da IA).
+      for (const s of atualizacoes) {
+        const mMarc = s.field.match(
+          /^apuraco?es?\[(\d+)\]\.marcacoes\[(\d+)\]\.([es])$/,
+        );
         if (mMarc) {
           const i = parseInt(mMarc[1], 10);
           const k = parseInt(mMarc[2], 10);
@@ -395,14 +419,27 @@ export function CartaoPontoReviewDialog({
           next[i] = { ...next[i], marcacoes };
           continue;
         }
-        const mField = s.field.match(/^apuracao\[(\d+)\]\.(ocorrencia|dia_semana)$/);
+        const mField = s.field.match(
+          /^apuraco?es?\[(\d+)\]\.(ocorrencia|dia_semana|data)$/,
+        );
         if (mField) {
           const i = parseInt(mField[1], 10);
-          const campo = mField[2] as "ocorrencia" | "dia_semana";
+          const campo = mField[2] as "ocorrencia" | "dia_semana" | "data";
           if (!next[i]) continue;
+          if (campo === "data" && s.suggested === null) {
+            // Caso teórico (já capturado em `remocoes`); skip.
+            continue;
+          }
           if (s.suggested === null || typeof s.suggested === "string") {
             next[i] = { ...next[i], [campo]: s.suggested } as typeof next[i];
           }
+        }
+      }
+
+      // 2. Remove apurações marcadas REMOVER (índice DESC).
+      for (const idx of remocoesDesc) {
+        if (idx >= 0 && idx < next.length) {
+          next.splice(idx, 1);
         }
       }
       return next;
