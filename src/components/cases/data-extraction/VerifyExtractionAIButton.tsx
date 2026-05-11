@@ -29,7 +29,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Popover,
   PopoverContent,
@@ -183,7 +182,7 @@ export function VerifyExtractionAIButton({
       // Se IA não tem nada a sugerir, fecha popover automaticamente com toast.
       if (r.suggestions.length === 0) {
         toast.success(
-          `IA verificou e não tem sugestões (confiança ${r.ai_confidence}/100). Estrutura parece consistente.`,
+          `IA verificou e não tem sugestões (confiança ${Math.round(r.ai_confidence)}/100). Estrutura parece consistente.`,
         );
         // Telemetria: invocada, sem mudanças.
         onTelemetry?.({
@@ -218,7 +217,7 @@ export function VerifyExtractionAIButton({
     // B — bloqueia aplicação quando IA reconheceu baixa confiança.
     if (response.ai_confidence < CONFIDENCE_MIN_APLICAR) {
       toast.error(
-        `IA com confiança ${response.ai_confidence}/100 (< ${CONFIDENCE_MIN_APLICAR}). Aplicar é arriscado. Revise manualmente ou rode a IA novamente após corrigir o OCR.`,
+        `IA com confiança ${Math.round(response.ai_confidence)}/100 (< ${CONFIDENCE_MIN_APLICAR}). Aplicar é arriscado. Revise manualmente ou rode a IA novamente após corrigir o OCR.`,
       );
       return;
     }
@@ -295,7 +294,11 @@ export function VerifyExtractionAIButton({
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="w-[480px] max-h-[85vh] p-0 flex flex-col overflow-hidden"
+        // h-[min(85vh,...)] força altura definida pra o flex-1 interno
+        // ganhar espaço — sem isso o ScrollArea/overflow vira 0 de altura
+        // e a lista de sugestões fica sem scroll. max-h sozinho não
+        // funciona em flexbox quando o conteúdo é menor que o teto.
+        className="w-[480px] h-[min(85vh,720px)] p-0 flex flex-col overflow-hidden"
       >
         <div className="px-3 py-2 border-b flex items-center justify-between gap-2">
           <span className="text-sm font-medium flex items-center gap-1.5">
@@ -304,7 +307,7 @@ export function VerifyExtractionAIButton({
           </span>
           {response && (
             <Badge variant="outline" className="text-[10px]">
-              IA conf. {response.ai_confidence}/100
+              IA conf. {Math.round(response.ai_confidence)}/100
               {response.discarded_hallucinations.length > 0 && (
                 <span className="ml-1 text-rose-600 dark:text-rose-400">
                   ({response.discarded_hallucinations.length} descartadas)
@@ -382,7 +385,7 @@ export function VerifyExtractionAIButton({
 
         {response && response.suggestions.length > 0 && !skipping && (
           <>
-            <ScrollArea className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="p-3 space-y-2">
                 <p className="text-[12px] text-muted-foreground italic">
                   {response.summary}
@@ -465,13 +468,13 @@ export function VerifyExtractionAIButton({
                   </div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
             {response.ai_confidence < CONFIDENCE_MIN_APLICAR && (
               <div className="border-t bg-amber-50 dark:bg-amber-950/30 p-2 text-[11px] text-amber-900 dark:text-amber-200 flex items-start gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                 <span>
                   <strong>
-                    Confiança {response.ai_confidence}/100 (mínima {CONFIDENCE_MIN_APLICAR}).
+                    Confiança {Math.round(response.ai_confidence)}/100 (mínima {CONFIDENCE_MIN_APLICAR}).
                   </strong>{" "}
                   IA reconheceu que tem pouca evidência. Aplicar é arriscado para
                   a paridade do cálculo. Revise manualmente ou tente IA novamente
@@ -497,7 +500,7 @@ export function VerifyExtractionAIButton({
                 className="gap-1.5"
                 title={
                   response.ai_confidence < CONFIDENCE_MIN_APLICAR
-                    ? `IA com confiança ${response.ai_confidence}/100 — abaixo do mínimo ${CONFIDENCE_MIN_APLICAR}`
+                    ? `IA com confiança ${Math.round(response.ai_confidence)}/100 — abaixo do mínimo ${CONFIDENCE_MIN_APLICAR}`
                     : undefined
                 }
               >
