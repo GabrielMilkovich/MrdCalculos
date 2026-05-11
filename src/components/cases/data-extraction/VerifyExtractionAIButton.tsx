@@ -8,7 +8,7 @@
  * Invoca edge function `verify-extraction-ai` que tem contrato anti-alucinação:
  *   - Substring literal: todo valor sugerido deve estar no OCR original.
  *   - Structured output strict (json_schema).
- *   - Timeout 120s.
+ *   - Timeout 180s.
  *
  * Operador vê sugestões em popover, marca quais aceitar individualmente,
  * e "Aplica selecionadas" OU clica "Pular análise" (capturando razão).
@@ -236,8 +236,19 @@ export function VerifyExtractionAIButton({
       aiConfidence: response.ai_confidence,
       aiSkippedReason: null,
     });
+    // Conta remoções vs atualizações pra feedback claro: o operador vê
+    // exatamente quantas linhas foram TIRADAS da tabela e quantos campos
+    // foram ATUALIZADOS. Tudo isso já está refletido no estado React e,
+    // consequentemente, no CSV quando ele clicar "Baixar CSV".
+    const remocoes = sugestoesAceitas.filter(
+      (s) => s.suggested === null && /\.data$/.test(s.field),
+    ).length;
+    const atualizacoes = sugestoesAceitas.length - remocoes;
+    const partes: string[] = [];
+    if (atualizacoes > 0) partes.push(`${atualizacoes} atualização(ões)`);
+    if (remocoes > 0) partes.push(`${remocoes} remoção(ões)`);
     toast.success(
-      `${sugestoesAceitas.length} sugestão(ões) aplicada(s). Revise antes de baixar o CSV.`,
+      `${partes.join(" + ")} aplicada(s) na tabela. Já refletidas no CSV ao baixar.`,
     );
     setOpen(false);
   }
@@ -284,7 +295,7 @@ export function VerifyExtractionAIButton({
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="w-[480px] max-h-[80vh] overflow-hidden p-0 flex flex-col"
+        className="w-[480px] max-h-[85vh] p-0 flex flex-col overflow-hidden"
       >
         <div className="px-3 py-2 border-b flex items-center justify-between gap-2">
           <span className="text-sm font-medium flex items-center gap-1.5">
@@ -319,7 +330,7 @@ export function VerifyExtractionAIButton({
               className="w-full gap-1.5"
             >
               <Sparkles className="h-3.5 w-3.5" />
-              Iniciar análise (120s timeout)
+              Iniciar análise (180s timeout)
             </Button>
           </div>
         )}
@@ -327,7 +338,7 @@ export function VerifyExtractionAIButton({
         {loading && (
           <div className="p-6 flex flex-col items-center gap-2 text-sm">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Consultando IA (até 120s)…</span>
+            <span>Consultando IA (até 180s)…</span>
             <span className="text-[11px] text-muted-foreground">
               Modelo: gpt-4o-mini · structured output strict
             </span>
@@ -338,7 +349,7 @@ export function VerifyExtractionAIButton({
           <div className="p-4 text-sm space-y-2">
             <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
               <Clock className="h-3.5 w-3.5" />
-              <strong>Timeout 120s</strong>
+              <strong>Timeout 180s</strong>
             </div>
             <p className="text-[12px] text-muted-foreground">
               OpenAI demorou demais. Tente novamente ou prossiga sem IA.
@@ -371,7 +382,7 @@ export function VerifyExtractionAIButton({
 
         {response && response.suggestions.length > 0 && !skipping && (
           <>
-            <ScrollArea className="flex-1 max-h-[50vh]">
+            <ScrollArea className="flex-1 min-h-0">
               <div className="p-3 space-y-2">
                 <p className="text-[12px] text-muted-foreground italic">
                   {response.summary}
