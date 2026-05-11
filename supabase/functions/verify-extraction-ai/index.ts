@@ -77,21 +77,31 @@ const BUILDERS_VALIDOS: Builder[] = [
 const SYSTEM_PROMPT =
   `Você é assistente de revisão de extração de documentos trabalhistas brasileiros (holerites, cartões de ponto, recibos de férias, registros de faltas, CTPS). Seu trabalho é VERIFICAR se a estrutura extraída por um parser determinístico bate com o texto OCR original e SUGERIR ajustes pontuais.
 
+O OCR vem em TRECHOS — geralmente focados em linhas que o parser marcou REVISAR_OCR. Concentre sua análise nesses trechos; cada trecho é prefixado por "═══ TRECHO @linha X-Y ═══" e cada linha tem o número original prefixado ("N: ...").
+
 REGRAS RÍGIDAS — NÃO QUEBRE NENHUMA:
 
-1. **NUNCA invente valores.** Todo valor sugerido (número, data, texto) DEVE estar LITERALMENTE no OCR. Se você não consegue ver o valor exato no OCR, NÃO o sugira. Se a estrutura está faltando algo mas você não acha no OCR, deixe como está e mencione em "reason".
+1. **NUNCA invente valores.** Todo valor sugerido (número, data, texto) DEVE estar LITERALMENTE no OCR. Se você não consegue ver o valor exato no OCR, NÃO o sugira.
 
-2. **Sugestões cirúrgicas.** Não reescreva a estrutura inteira. Sugira só os campos onde tem CERTEZA que houve erro de parsing — campo errado, valor cortado, dia trocado.
+2. **Remoção de apuração-fantasma.** Pra REMOVER uma apuração inteira (ex: vazamento de cabeçalho/admissão como "24/11/2003" virando dia trabalhado), use field="apuracoes[N].data" e suggested=null. NÃO use string "vazio" ou "remover" — use o valor null literal. O reason DEVE explicar por que é cabeçalho/admissão/totalizador e não jornada.
 
-3. **Formato BR.** Valores monetários: vírgula decimal e ponto milhar (ex: "1.234,56"). Datas: DD/MM/AAAA. Competência: MM/AAAA.
+3. **Sugestões cirúrgicas.** Não reescreva a estrutura inteira. Só campos onde tem CERTEZA — campo errado, valor cortado, dia trocado. NÃO sugira mudar dia_semana sem ver explicitamente o dia no OCR.
 
-4. **Não classifique rubricas.** Categorização (Salário Fixo / Comissões / etc.) é responsabilidade do operador — você só verifica DADOS, não SEMÂNTICA.
+4. **Formato BR.** Valores monetários: vírgula decimal e ponto milhar (ex: "1.234,56"). Datas: DD/MM/AAAA. Competência: MM/AAAA.
 
-5. **Confidence honesto.** Se você está certo de quase tudo, score alto (80-100). Se há ambiguidade ou o OCR está borrado, score baixo (20-50). Se você não tem nada útil pra sugerir, retorne suggestions=[] com confidence baseado em quão bem a extração existente bate com o OCR.
+5. **Não classifique rubricas.** Categorização (Salário Fixo / Comissões / etc.) é responsabilidade do operador.
 
-6. **Anti-alucinação self-check.** Antes de incluir uma sugestão, pergunte-se: "Eu consigo APONTAR para esse valor exato no OCR?" Se não, descarte.
+6. **Confidence HONESTO (CRÍTICO).** Sua confiança reflete sua certeza REAL:
+   - **80-100**: você viu os valores no OCR e tem certeza de cada sugestão.
+   - **50-79**: viu parte do contexto mas tem dúvida em alguns pontos.
+   - **30-49**: pouco contexto, muito chute. Prefira não sugerir.
+   - **0-29**: cego ou OCR ilegível. NÃO SUGIRA NADA — retorne suggestions=[].
 
-Responda APENAS no schema JSON definido. Nada mais.`;
+   Operador NÃO PODE APLICAR sugestões com confidence<30. Aplicar sem evidência destrói a paridade do cálculo trabalhista. Se está chutando, retorne array vazio com confidence baixo e explique no summary.
+
+7. **Anti-alucinação self-check.** Antes de incluir cada sugestão, pergunte: "Eu consigo APONTAR para esse valor (ou para a evidência da remoção) no OCR enviado?" Se não, descarte.
+
+Responda APENAS no schema JSON definido.`;
 
 interface Suggestion {
   field: string;
@@ -179,41 +189,164 @@ interface IAResponseParsed {
   summary: string;
 }
 
+/**
+ * CHUNKING INTELIGENTE (D): constrói o trecho do OCR que vai pra IA
+ * focando nas linhas próximas às apurações marcadas REVISAR_OCR pelo
+ * parser determinístico.
+ *
+ * Estratégia:
+ *   - Pra cada apuração com `observacao` começando "REVISAR_OCR" e
+ *     `ocr_line` definido, captura ±8 linhas de contexto.
+ *   - Deduplica/funde trechos adjacentes (linhas próximas viram um
+ *     bloco contíguo, não duplicado).
+ *   - Limita ao orçamento total (default 30k chars) — se estourar,
+ *     prioriza os primeiros trechos (apurações ordenadas por data).
+ *   - Cada trecho ganha marker "═══ TRECHO @linha N ═══" pra IA saber
+ *     que pulou OCR entre eles.
+ *
+ * Fallback: se nada está marcado REVISAR_OCR ou se parsed não tem
+ * ocr_line algum, retorna os primeiros 30k chars do OCR (comportamento
+ * de truncamento simples).
+ */
+function construirOcrFocadoEmFlags(
+  ocrText: string,
+  parsedJson: unknown,
+  orcamentoChars: number,
+): string {
+  const linhas = ocrText.split(/\r?\n/);
+  const totalLinhas = linhas.length;
+
+  // Extrai ocr_line das apurações marcadas REVISAR_OCR.
+  const ocrLines: number[] = [];
+  try {
+    const p = parsedJson as {
+      apuracoes?: Array<{ observacao?: string | null; ocr_line?: number }>;
+    };
+    if (p?.apuracoes && Array.isArray(p.apuracoes)) {
+      for (const a of p.apuracoes) {
+        if (
+          a?.observacao &&
+          typeof a.observacao === "string" &&
+          a.observacao.startsWith("REVISAR_OCR") &&
+          typeof a.ocr_line === "number" &&
+          a.ocr_line > 0
+        ) {
+          ocrLines.push(a.ocr_line);
+        }
+      }
+    }
+  } catch {
+    // parsed fora do shape esperado — cai no fallback.
+  }
+
+  if (ocrLines.length === 0) {
+    // Sem flags: truncamento simples dos primeiros chars.
+    return ocrText.length > orcamentoChars
+      ? ocrText.slice(0, orcamentoChars) +
+        "\n[...OCR truncado nos primeiros chars; sem flags REVISAR_OCR pra focar...]"
+      : ocrText;
+  }
+
+  // Ordena e deduplica.
+  const linhasOrdenadas = [...new Set(ocrLines)].sort((a, b) => a - b);
+
+  // Funde ranges sobrepostos. Cada range = [iniLinha, fimLinha].
+  const CONTEXTO = 8;
+  const ranges: Array<[number, number]> = [];
+  for (const ln of linhasOrdenadas) {
+    const ini = Math.max(1, ln - CONTEXTO);
+    const fim = Math.min(totalLinhas, ln + CONTEXTO);
+    const ultimo = ranges[ranges.length - 1];
+    if (ultimo && ini <= ultimo[1] + 1) {
+      // Mescla com range anterior.
+      ultimo[1] = Math.max(ultimo[1], fim);
+    } else {
+      ranges.push([ini, fim]);
+    }
+  }
+
+  // Constrói o texto consolidado respeitando o orçamento.
+  const partes: string[] = [];
+  let usado = 0;
+  let trechosIncluidos = 0;
+  for (const [ini, fim] of ranges) {
+    const header = `\n═══ TRECHO @linha ${ini}-${fim} (de ${totalLinhas}) ═══\n`;
+    const corpo = linhas
+      .slice(ini - 1, fim)
+      .map((l, i) => `${ini + i}: ${l}`)
+      .join("\n");
+    const bloco = header + corpo + "\n";
+    if (usado + bloco.length > orcamentoChars) {
+      // Tenta incluir só os primeiros chars do bloco que cabem.
+      const espaco = orcamentoChars - usado;
+      if (espaco > 200) {
+        partes.push(bloco.slice(0, espaco) + "\n[...trecho cortado...]");
+        trechosIncluidos++;
+      }
+      break;
+    }
+    partes.push(bloco);
+    usado += bloco.length;
+    trechosIncluidos++;
+  }
+
+  const sufixo =
+    trechosIncluidos < ranges.length
+      ? `\n[${ranges.length - trechosIncluidos} trecho(s) adicional(is) não enviados por limite de orçamento.]`
+      : "";
+  return (
+    `(IA recebendo OCR focado nos ${linhasOrdenadas.length} dia(s) marcado(s) REVISAR_OCR — ${trechosIncluidos}/${ranges.length} trechos enviados)\n` +
+    partes.join("") +
+    sufixo
+  );
+}
+
 async function chamarOpenAI(
   apiKey: string,
   ocrText: string,
   parsedJson: unknown,
   builder: Builder,
 ): Promise<{ raw: IAResponseParsed; durationMs: number; status: number }> {
-  // OCR pode ser longo; cortado agressivamente pra acelerar reasoning
-  // do gpt-5 (input grande = reasoning lento = timeout). 6k chars cobre
-  // ~2 páginas — IA verifica AMOSTRA, não substitui parser determinístico.
-  const ocrTrimmed = ocrText.length > 6000
-    ? ocrText.slice(0, 6000) + "\n[...OCR truncado pra acelerar reasoning...]"
-    : ocrText;
+  // CHUNKING INTELIGENTE (D): em vez de cortar os primeiros 30k chars do
+  // OCR, focamos nos TRECHOS ao redor das apurações marcadas REVISAR_OCR
+  // pelo parser. Isso dá MUITO mais sinal pra IA do que enviar o começo
+  // do documento que provavelmente é só cabeçalho.
+  //
+  // Algoritmo:
+  //   1. Extrai `ocr_line` das apurações que têm `observacao` começando
+  //      com "REVISAR_OCR" no parsed.
+  //   2. Pra cada ocr_line, captura ±8 linhas de contexto.
+  //   3. Deduplica overlaps (linhas adjacentes viram um trecho contíguo).
+  //   4. Concatena com markers "TRECHO @linha N" e limita ao orçamento
+  //      total (30k chars).
+  //   5. Se não houver REVISAR_OCR (parser limpo) ou parsed não tiver
+  //      ocr_line, cai no truncamento simples dos primeiros 30k chars.
+  const ocrTrimmed = construirOcrFocadoEmFlags(ocrText, parsedJson, 30_000);
 
-  // `parsed` em cartão de ponto com 700+ apurações chegava a 200k+
-  // tokens. gpt-5 tem 400k contexto, MAS reasoning interno demora muito
-  // sobre input grande. Cortar pra 30k chars (~7.5k tokens) acelera
-  // reasoning de >90s pra ~30-50s. Documento muito grande perde
-  // fidelidade no resto; trade-off explícito sinalizado pra IA via marca.
-  const PARSED_MAX_CHARS = 30000;
+  // parsed JSON: aumentado de 30k → 60k chars (~15k tokens). gpt-5 tem
+  // 400k de contexto e reasoning_effort=minimal aguenta — sobra orçamento
+  // pra ver mais apurações por vez.
+  const PARSED_MAX_CHARS = 60_000;
   let parsedString = JSON.stringify(parsedJson);
   if (parsedString.length > PARSED_MAX_CHARS) {
     parsedString = parsedString.slice(0, PARSED_MAX_CHARS) +
-      "\n[...parsed JSON truncado pra economia de tokens — documento muito grande...]";
+      "\n[...parsed JSON truncado em 60k chars — documento muito grande...]";
   }
 
   const userPrompt =
     `Documento tipo: ${builder}
 
-OCR ORIGINAL (pode estar truncado a 6k chars):
+OCR ORIGINAL (focado em trechos próximos às linhas marcadas REVISAR_OCR pelo parser; pode estar truncado em 30k chars):
 ${ocrTrimmed}
 
-ESTRUTURA EXTRAÍDA pelo parser determinístico (parsed JSON, pode estar truncada):
+ESTRUTURA EXTRAÍDA pelo parser determinístico (parsed JSON, pode estar truncada em 60k chars):
 ${parsedString}
 
-Verifique e sugira ajustes pontuais. Lembre-se: TODO valor sugerido DEVE estar LITERALMENTE no OCR acima. Não invente. Responda apenas no schema.`;
+INSTRUÇÕES:
+1. Verifique e sugira ajustes APENAS para campos onde tem CERTEZA, com base no OCR acima.
+2. Pra REMOVER uma apuração inteira (ex: vazamento de cabeçalho/admissão), retorne field="apuracoes[N].data" com suggested=null e reason explicando.
+3. Todo valor sugerido (que não seja null) DEVE estar LITERALMENTE no OCR.
+4. Se você está chutando por falta de evidência, use ai_confidence baixo (<30) e prefira NÃO sugerir.`;
 
   const ctrl = new AbortController();
   const t0 = Date.now();
