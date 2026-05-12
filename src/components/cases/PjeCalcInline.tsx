@@ -406,8 +406,13 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
       case 'historico': return <ModuloHistoricoSalarial caseId={caseId} />;
       case 'faltas': return <ModuloFaltas caseId={caseId} />;
       case 'ferias': return <ModuloFerias caseId={caseId} />;
-      case 'cartao_ponto': return <ModuloCartaoPonto caseId={caseId} dataAdmissao={formParams.data_admissao} dataDemissao={formParams.data_demissao} />;
-      case 'cartao_ponto_diario': return <ModuloCartaoPontoDiario caseId={caseId} />;
+      // Cartão de Ponto: usa o módulo Diário (6 pares E/S estilo PJE-Calc).
+      // O módulo legacy `ModuloCartaoPonto` (competência-based) fica como
+      // alias de retrocompatibilidade em `cartao_ponto_competencia` para
+      // os poucos fluxos que ainda dependiam dele.
+      case 'cartao_ponto': return <ModuloCartaoPontoDiario caseId={caseId} dataAdmissao={formParams.data_admissao} dataDemissao={formParams.data_demissao} />;
+      case 'cartao_ponto_competencia': return <ModuloCartaoPonto caseId={caseId} dataAdmissao={formParams.data_admissao} dataDemissao={formParams.data_demissao} />;
+      case 'cartao_ponto_diario': return <ModuloCartaoPontoDiario caseId={caseId} dataAdmissao={formParams.data_admissao} dataDemissao={formParams.data_demissao} />;
       case 'excecoes_carga': return <ModuloExcecoesCarga caseId={caseId} />;
       case 'excecoes_sabado': return <ModuloExcecoesSabado caseId={caseId} />;
 
