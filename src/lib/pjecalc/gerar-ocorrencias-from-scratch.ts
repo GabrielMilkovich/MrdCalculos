@@ -33,6 +33,9 @@ import type {
   PjeFalta,
 } from "./engine-types";
 import { detectarVerbaModuleId } from "./detectar-verba-module";
+import { gerarViaModulo } from "./gerar-via-modulo";
+// Auto-register dos 35 verba-modules (efeito colateral do import).
+import "./verba-modules";
 
 const HALF_EVEN_2 = (n: number): number => {
   // Banker's rounding a 2 casas (fórmula oficial PJe-Calc).
@@ -692,14 +695,33 @@ export function preencherOcorrenciasFromScratch(
     if (v.valor !== "calculado") continue;
     if (v.ocorrencias_precomputadas?.length) continue;
     if (v.tipo === "reflexa") continue;
-    const ocs = gerarOcorrenciasFromScratch(
-      v,
-      historicos,
-      cartao,
-      parametros,
-      ferias,
-      faltas,
-    );
+
+    let ocs: OcorrenciaPrecomputada[] = [];
+
+    // Sessão 4b: opt-in para usar o verba-module jurídico (Súmula 340,
+    // Art. 73 §1°, faixas específicas etc) em vez do gerador genérico.
+    // Tenta o módulo primeiro; se ele não cobrir, cai no genérico.
+    if (v.usar_modulo_juridico) {
+      const moduleId = detectarVerbaModuleId(v);
+      if (moduleId) {
+        ocs = gerarViaModulo(v, moduleId, {
+          historicos, cartao, faltas, ferias, parametros,
+        });
+      }
+    }
+
+    // Fallback: gerador genérico (preserva paridade dos casos existentes)
+    if (ocs.length === 0) {
+      ocs = gerarOcorrenciasFromScratch(
+        v,
+        historicos,
+        cartao,
+        parametros,
+        ferias,
+        faltas,
+      );
+    }
+
     if (ocs.length > 0) {
       v.ocorrencias_precomputadas = ocs;
     } else {
