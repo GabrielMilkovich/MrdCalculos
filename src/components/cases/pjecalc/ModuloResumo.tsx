@@ -835,18 +835,19 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
               Engine retorna 0 para essas verbas — o usuário precisa saber
               ANTES de assinar uma peça processual com valor zerado. */}
           {res.resumo.verbas_sem_ocorrencias && res.resumo.verbas_sem_ocorrencias.length > 0 && (
-            <Card className="border-destructive bg-destructive/10">
+            <Card className="border-amber-500 bg-amber-50/70 dark:bg-amber-950/30">
               <CardContent className="p-4 flex items-start gap-3">
-                <FileBarChart className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <FileBarChart className="h-5 w-5 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5" />
                 <div className="space-y-1.5">
-                  <div className="font-semibold text-destructive text-sm">
-                    Cálculo incompleto: {res.resumo.verbas_sem_ocorrencias.length} verba(s) retornaram zero
+                  <div className="font-semibold text-amber-900 dark:text-amber-100 text-sm">
+                    {res.resumo.verbas_sem_ocorrencias.length} verba(s) não foram calculadas automaticamente
                   </div>
                   <div className="text-xs text-foreground/90">
-                    O motor de cálculo V3 atual exige que as ocorrências de cada verba
-                    sejam <strong>pré-computadas</strong> (vindas de um XML do PJe-Calc
-                    Cidadão importado). Verbas cadastradas manualmente sem essa fonte
-                    têm seu cálculo retornando 0 silenciosamente.
+                    O motor calcula automaticamente as verbas mais comuns (HE, 13º, Aviso,
+                    Multa FGTS, DSR). Alguns tipos específicos ainda exigem cadastro manual
+                    das ocorrências OU importação de XML PJC — geralmente verbas em modo
+                    <strong> período aquisitivo</strong> (férias com gozo parcial)
+                    ou <strong>reflexos com médias móveis</strong>.
                   </div>
                   <div className="text-xs">
                     <strong>Verbas afetadas:</strong>{" "}
@@ -855,9 +856,9 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Solução: importe o XML do PJe-Calc Cidadão na aba "Importar PJC"
-                    para gerar as ocorrências, ou trate este cálculo como
-                    pré-rascunho — não use o valor liquidado abaixo em peça final.
+                    Solução: ajuste a verba para modo &quot;mensal&quot; ou
+                    &quot;desligamento&quot; com quantidade informada/cartão, ou
+                    importe XML PJC para essa verba específica.
                   </div>
                 </div>
               </CardContent>

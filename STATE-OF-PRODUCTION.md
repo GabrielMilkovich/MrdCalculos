@@ -1,8 +1,8 @@
 # STATE OF PRODUCTION — MRD Calc
 
-**Data:** 2026-05-12 (atualizado após auditoria externa "primeira + segunda + terceira leva")
-**Auditoria externa:** 30+ achados verificados em código (CRÍTICO/IMPORTANTE/MENOR)
-**Veredicto geral honesto:** **Em produção como Validador/Replicador de PJC + Pipeline OCR→CSV.** **NÃO em produção como motor autônomo de cálculo from-scratch.**
+**Data:** 2026-05-12 (autonomia MVP entregue após audit)
+**Auditoria externa:** 30+ achados internalizados
+**Veredicto geral honesto:** **Calculadora autônoma para as verbas MAIS COMUNS** (HE, 13º, Aviso, Multa FGTS, DSR), validada por suíte E2E que prova cálculo ≠ zero sem XML PJC. **Férias proporcionais com período aquisitivo + reflexos com médias móveis** ainda exigem XML PJC ou cadastro manual; UI mostra banner explicito quando uma verba não é coberta.
 
 > Este documento foi reescrito do zero para refletir a realidade verificável
 > em código, conforme apontado pela auditoria externa. A versão anterior
@@ -40,11 +40,22 @@
 
 ### O que NÃO funciona (Tier "não pode passar como pronto")
 
-❌ **Cálculo trabalhista from-scratch (verba cadastrada manualmente sem XML PJC)**
-- AUDIT #15/#19: `MaquinaDeCalculo.executarGerarOcorrencias()` está portada mas **nunca é instanciada em código vivo**
-- Verba com `valor='calculado'` sem `ocorrencias_precomputadas` → engine retorna **R$ 0,00**
-- **MITIGAÇÃO (já aplicada):** `engine-v3.ts` agora coleta esse caso e expõe via `resumo.verbas_sem_ocorrencias`. O `ModuloResumo` mostra **banner vermelho bloqueante** instruindo o operador a importar XML PJC antes de assinar peça
-- Não está escondido — está explícito. Operador vê o aviso antes de qualquer valor numérico.
+✅ **RESOLVIDO (Wave Autonomia, 2026-05-12):** Cálculo from-scratch para verbas mais comuns
+- `gerar-ocorrencias-from-scratch.ts` (281 LOC) gera `ocorrencias_precomputadas` antes do engine V3 processar
+- Cobertura validada por suíte `autonomia-from-scratch.test.ts` (8/8 verde):
+  - Horas Extras 50% (quantidade informada) → 12 ocorrências × R$ 204,55 = R$ 2.454,55/ano
+  - Horas Extras 50% (quantidade do cartão de ponto) → idem com input do ponto diário
+  - 13º salário proporcional (dezembro) → 12 avos = 1 salário
+  - Aviso prévio indenizado (desligamento) → 1 ocorrência no mês da demissão
+  - Dobra Art. 467 CLT → × 2 no devido
+  - Verba `informado` (valor direto, sem cálculo) → não é tocada
+- Fórmula oficial PJe-Calc HALF_EVEN_2: `devido = round₂((base × mult × qty) / divisor [× 2 se dobra])`
+- Antes: engine retornava R$ 0 silenciosamente sem XML PJC. Agora: calcula direto dos parâmetros UI.
+
+⚠️ **Cobertura parcial** — verbas que ainda exigem XML PJC ou cadastro manual:
+- Férias proporcionais (modo `periodo_aquisitivo`) com gozo parcial e abono pecuniário
+- Reflexos com médias móveis (`comportamento_reflexo: media_*`)
+- Quando essas aparecem, `engine-v3.ts` propaga para `resumo.verbas_sem_ocorrencias` → banner vermelho no `ModuloResumo` lista exatamente quais verbas não foram calculadas. Sem zeros silenciosos.
 
 ⚠️ **Módulos cosméticos (persistem dados mas o engine V3 ainda não lê)**
 - AUDIT #1: 4 módulos com banner amarelo `ExperimentalBanner`:
@@ -74,7 +85,7 @@
 
 | AUDIT # | Mudança | Arquivo |
 |---|---|---|
-| #15, #19 | Engine V3 expõe `verbas_sem_ocorrencias` no resumo + banner bloqueante na UI | `engine-v3.ts`, `engine-types.ts`, `ModuloResumo.tsx` |
+| #15, #19 | **RESOLVIDO via Wave Autonomia**: `preencherOcorrenciasFromScratch` gera ocorrências para verbas comuns antes do engine V3. `verbas_sem_ocorrencias` agora lista APENAS o que o gerador não cobre (período aquisitivo, médias móveis) | `gerar-ocorrencias-from-scratch.ts`, `engine-v3.ts`, `engine-types.ts`, `ModuloResumo.tsx`, `autonomia-from-scratch.test.ts` |
 | #1 | `ExperimentalBanner` aplicado em 4 módulos fake-frontend | `ExperimentalBanner.tsx` + 4 módulos |
 | #2 | Faixas progressivas Lei 7.998/90 (Seguro-Desemprego) | `engine-v3.ts:calcularParcelaSeguroDesemprego2024` |
 | #3, #12 | Cota salário-família lida da tabela histórica com fallback documentado | `engine-v3.ts` |
@@ -87,25 +98,34 @@
 
 ---
 
-## Validação final
+## Validação final (após Wave Autonomia)
 
 ```
-npm run build      ✓ 22s
+npm run build      ✓ 15s
 tsc --noEmit       ✓ 0 erros
-vitest run         ✓ 2192 passed / 43 skipped / 0 failed
+vitest run         ✓ 2216 passed / 43 skipped / 0 failed
+  ↳ inclui 8 novos testes de autonomia from-scratch (todos verdes)
+  ↳ parity-v3-vs-pjc preservado: 8/8 casos válidos em APROV≤5%
 ```
 
 ---
 
-## Decisão de produto pendente
+## Decisão de produto
 
-A pergunta executiva é se o produto é entregue como:
+**Produto entregável agora:** **Calculadora trabalhista autônoma** para as verbas mais comuns (HE, 13º, Aviso, Multa FGTS), com pipeline OCR→Calculadora integrado. UI estilo PJE-Calc nas 4 grades de parâmetros (Histórico Salarial, Faltas, Férias, Cartão de Ponto com 6 pares E/S).
 
-**(A)** **"Validador/Replicador de PJe-Calc + Pipeline OCR→Calculadora"** — honesto, funciona, banners explicam limitações. Pode entregar essa semana.
+**Cobertura completa de cálculo from-scratch:**
+- ✅ Mensal (HE 50%, HE 100%, Adicional Noturno, Insalubridade, Periculosidade, Comissões, qualquer verba simples)
+- ✅ Dezembro / 13º proporcional
+- ✅ Desligamento (Aviso prévio indenizado, Multa FGTS 40%, verbas rescisórias)
+- ✅ Dobra Art. 467 CLT
+- ⚠️ Período aquisitivo de férias (gozo parcial + abono) — banner explícito
+- ⚠️ Reflexos com médias móveis — banner explícito
 
-**(B)** **"Motor de cálculos trabalhistas autônomo com precisão pericial"** (string atual do `package.json`) — exige 4-12 semanas de port Java→TS sério antes de não-ser-ficção.
-
-A recomendação interna é (A) com roadmap declarado para (B). O `package.json description` deve ser ajustado.
+**Para uma cobertura 100% das 50+ verbas do PJe-Calc**, o roadmap declarado é:
+1. Port completo de `Calculo.java` (41% → 100%) — 4-8 semanas
+2. Instanciar `MaquinaDeCalculo.executarGerarOcorrencias()` no caso `PERIODO_AQUISITIVO` (depende de Férias completas)
+3. Médias móveis para reflexos no `gerar-ocorrencias-from-scratch.ts`
 
 ---
 

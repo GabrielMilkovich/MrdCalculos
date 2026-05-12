@@ -71,6 +71,7 @@ import {
   QuartaFaixaPrevidenciaria,
   type FaixaPrevidenciaria,
 } from './core/dominio/inss/faixas/faixa-previdenciaria';
+import { preencherOcorrenciasFromScratch } from './gerar-ocorrencias-from-scratch';
 
 /**
  * AUDIT #2: Faixas progressivas de Seguro-Desemprego — Lei 7.998/90 art. 5º,
@@ -386,6 +387,19 @@ export class PjeCalcEngineV3 {
    * liquidar() — executa o pipeline completo usando core/ e retorna PjeLiquidacaoResult.
    */
   liquidar(): PjeLiquidacaoResult {
+    // ── 0. AUTONOMIA: gera `ocorrencias_precomputadas` from-scratch para
+    //    verbas calculadas que NÃO vieram com ocorrências (caso novo sem
+    //    XML PJC importado). Substitui o caminho legado onde verba sem
+    //    PJC retornava ZERO. Verbas que o gerador não cobrir ainda vão
+    //    para o array `verbas_sem_ocorrencias` (banner UI).
+    //    Ver `gerar-ocorrencias-from-scratch.ts`.
+    const preencherReport = preencherOcorrenciasFromScratch(
+      this.verbas,
+      this.historicos,
+      this.cartaoPonto,
+      this.params,
+    );
+
     // ── 1. Configurar Calculo ──
     const calculo = new Calculo();
     calculo.setDataAdmissao(new Date(this.params.data_admissao));
@@ -434,16 +448,14 @@ export class PjeCalcEngineV3 {
     ServicoDeCalculo.setCalculoAberto(calculo);
 
     // ── 3. Converter verbas UI → VerbaDeCalculo core ──
-    // AUDIT #15/#19 (2026-05-12): MaquinaDeCalculo.executarGerarOcorrencias()
-    // não está instanciada em código vivo. Sem `ocorrencias_precomputadas`
-    // (que vêm do XML PJC importado), a verba é adicionada SEM ocorrências
-    // e o cálculo retorna zero silenciosamente — gerando ilusão de
-    // "Sucesso" na UI. Aqui coletamos as verbas órfãs e propagamos para
-    // o resumo (campo `verbas_sem_ocorrencias`), pra UI exibir banner
-    // bloqueante. Quem chamar liquidar() pode ler isso antes de mostrar
-    // valores ao usuário final.
+    // AUDIT #15/#19 (2026-05-12): MaquinaDeCalculo nunca era instanciada em
+    // código vivo, então sem XML PJC importado o engine retornava zero.
+    // Wave autonomia (2026-05-12+): preencherOcorrenciasFromScratch
+    // (chamado no início de liquidar) gera ocorrências para as verbas
+    // que ele cobre. As verbas que ele NÃO cobrir entram em
+    // `verbasSemOcorrencias` e o resumo expõe pra UI mostrar banner.
     const verbasCore: VerbaDeCalculo[] = [];
-    const verbasSemOcorrencias: string[] = [];
+    const verbasSemOcorrencias: string[] = [...preencherReport.naoCobertas];
     for (const v of this.verbas) {
       const vc = new VerbaDeCalculo();
       vc.setNome(v.nome);
