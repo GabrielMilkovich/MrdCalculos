@@ -1000,15 +1000,21 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   if (fgtsEl) {
     const multa_pct_raw = getTextContent(fgtsEl, 'percentualMulta') || getTextContent(fgtsEl, 'multaPercentual');
     const comporRaw = getTextContent(fgtsEl, 'comporPrincipal');
+    // Sessão 7d (2026-05-12): extrai flag <multa>true|false</multa> do
+    // PJC para que o engine não aplique multa 40% quando o PJC oficial
+    // marcou "sem multa" (caso de FGTS já depositado, acordo, etc).
+    const multaFlagRaw = getTextContent(fgtsEl, 'multa');
+    const multaApurar = multaFlagRaw === '' || multaFlagRaw === 'true';
     fgts_config = {
       apurar: getTextContent(fgtsEl, 'apurar') !== 'false',
+      multa_apurar: multaApurar,
       multa_percentual: parseNum(multa_pct_raw) || 40,
       multa_base: getTextContent(fgtsEl, 'baseMulta') || getTextContent(fgtsEl, 'multaBase') || 'devido',
       lc110_10: getTextContent(fgtsEl, 'lc110_10') === 'true' || getTextContent(fgtsEl, 'contribuicaoSocial10') === 'true',
       lc110_05: getTextContent(fgtsEl, 'lc110_05') === 'true' || getTextContent(fgtsEl, 'contribuicaoSocial05') === 'true',
       destino: getTextContent(fgtsEl, 'destino') || getTextContent(fgtsEl, 'destinoFGTS') || 'pagar_reclamante',
       compor_principal: comporRaw === 'SIM' || comporRaw === 'true',
-    };
+    } as PJCAnalysis['fgts_config'];
   }
   // If resultado shows FGTS deposit > 0 but no config element, create default
   if (!fgts_config && resultado.fgts_deposito > 0) {
