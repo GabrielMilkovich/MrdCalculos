@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { isTerminal } from "@/lib/document-status";
 import { toast } from "sonner";
+import { autoFillFromOcr } from "@/features/auto-fill/auto-fill-from-ocr";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -204,7 +205,30 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
         },
       });
       if (invokeErr) throw await unwrapFunctionsError(invokeErr);
-      toast.success("Validação enviada. A extração estruturada está rodando em background.");
+
+      // AUTO-FILL determinístico para cartao_ponto / ferias / faltas / holerite.
+      // extract-and-fill cuida só do que precisa de LLM (rubricas).
+      // Erro aqui é mostrado em toast, NÃO bloqueia o operador.
+      try {
+        const report = await autoFillFromOcr(documentId);
+        if (report.ok) {
+          const totalInserted = report.inserted.reduce((s, r) => s + r.count, 0);
+          if (totalInserted > 0) {
+            toast.success(
+              `Parâmetros do cálculo atualizados (${totalInserted} registro${totalInserted === 1 ? "" : "s"}).`,
+            );
+          }
+        } else {
+          const msg = report.warnings[report.warnings.length - 1] ?? "erro desconhecido";
+          toast.error(`Auto-preenchimento falhou: ${msg}`);
+        }
+      } catch (autoFillErr) {
+        toast.error(
+          "Auto-preenchimento falhou: " + ((autoFillErr as Error).message ?? "erro inesperado"),
+        );
+      }
+
+      toast.success("Validação enviada.");
       onValidated?.();
       onOpenChange(false);
     } catch (err) {
