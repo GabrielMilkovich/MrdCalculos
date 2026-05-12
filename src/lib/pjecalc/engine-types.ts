@@ -254,6 +254,12 @@ export interface PjeVerba {
   
   ordem: number;
   reflexas?: PjeVerba[];
+
+  /** Sessão 4b: opt-in para usar o verba-module jurídico específico
+   *  (Súmula 340 TST, Art. 73 §1° CLT, etc.) em vez do gerador
+   *  genérico from-scratch. Default false preserva paridade dos casos
+   *  existentes (engine V3 + ocorrências precomputadas). */
+  usar_modulo_juridico?: boolean;
   
   /** Pre-computed occurrences from PJC ground truth. When present, engine uses these 
    *  directly instead of computing from historicos/cartão. Enables PJC round-trip parity. */

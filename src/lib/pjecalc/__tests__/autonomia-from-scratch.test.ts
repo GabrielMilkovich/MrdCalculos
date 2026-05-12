@@ -222,6 +222,75 @@ describe("Autonomia from-scratch — Engine V3 sem XML PJC", () => {
   });
 });
 
+describe("Sessão 4b — Verba-modules ativados via opt-in", () => {
+  it("HE 50% com usar_modulo_juridico=true ainda calcula valor != 0", () => {
+    const verba = makeVerba({
+      nome: "Horas Extras 50%",
+      periodo_inicio: "2024-01-01",
+      periodo_fim: "2024-12-31",
+      tipo_quantidade: "informada",
+      quantidade_informada: 10,
+      divisor_informado: 220,
+      multiplicador: 1.5,
+      usar_modulo_juridico: true,
+    });
+    const r = createEngine({
+      params: { data_admissao: "2024-01-01", data_demissao: "2024-12-31" },
+      historicos: [makeHistorico({ valor_informado: 3000 })],
+      verbas: [verba],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    }).liquidar();
+    expect(r.resumo.principal_bruto).toBeGreaterThan(0);
+    expect(r.resumo.verbas_sem_ocorrencias ?? []).not.toContain("Horas Extras 50%");
+  });
+
+  it("Verba sem usar_modulo_juridico continua usando genérico (paridade preservada)", () => {
+    // Mesma verba sem o flag — caminho legado (genérico)
+    const verba = makeVerba({
+      nome: "Horas Extras 50%",
+      periodo_inicio: "2024-01-01",
+      periodo_fim: "2024-12-31",
+      tipo_quantidade: "informada",
+      quantidade_informada: 10,
+      divisor_informado: 220,
+      multiplicador: 1.5,
+      // usar_modulo_juridico: undefined → não ativa módulo
+    });
+    const r = createEngine({
+      params: { data_admissao: "2024-01-01", data_demissao: "2024-12-31" },
+      historicos: [makeHistorico({ valor_informado: 3000 })],
+      verbas: [verba],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    }).liquidar();
+    expect(r.resumo.principal_bruto).toBeGreaterThan(2400);
+    expect(r.resumo.principal_bruto).toBeLessThan(2510);
+  });
+
+  it("Nome desconhecido com usar_modulo_juridico=true cai no genérico", () => {
+    const verba = makeVerba({
+      nome: "Verba Totalmente Customizada Sem Modulo",
+      periodo_inicio: "2024-01-01",
+      periodo_fim: "2024-12-31",
+      tipo_quantidade: "informada",
+      quantidade_informada: 5,
+      divisor_informado: 100,
+      multiplicador: 1,
+      usar_modulo_juridico: true,
+    });
+    const r = createEngine({
+      params: { data_admissao: "2024-01-01", data_demissao: "2024-12-31" },
+      historicos: [makeHistorico({ valor_informado: 2000 })],
+      verbas: [verba],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    }).liquidar();
+    // Genérico aplica: 2000 × 1 × 5 / 100 = 100 por mês × 12 = 1200
+    expect(r.resumo.principal_bruto).toBeGreaterThan(0);
+  });
+});
+
 describe("Sessão 3 — Pagamentos históricos extras deduzidos do resumo", () => {
   const verbaPadrao = () =>
     makeVerba({
