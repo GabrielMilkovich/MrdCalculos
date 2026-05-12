@@ -294,6 +294,53 @@ export interface PjeOcorrencia {
   diferenca: number;
 }
 
+/**
+ * Pagamento histórico extra-holerite (depósito judicial, acordo parcial,
+ * pagamento direto fora da folha). Diferente dos valores `pago` por
+ * competência das ocorrências (que vêm do holerite), estes pagamentos
+ * são quitações pontuais que precisam ser deduzidas do total devido.
+ *
+ * Porte de: pjecalc-fonte/.../dominio/pagamento/Pagamento.java
+ *
+ * Cada flag `apurar_*` indica que aquele bucket está sendo quitado;
+ * quando true, `valor_parcela_*` é o valor da parcela paga.
+ */
+export interface PjePagamento {
+  id: string;
+  /** Data efetiva do pagamento (para correção monetária na dedução). */
+  data_pagamento: string; // yyyy-mm-dd
+  /** Valor total do pagamento (informativo; soma dos valores_parcela_*). */
+  valor_pagamento: number;
+  /** Bucket: principal/líquido reclamante. */
+  apurar_valor_principal?: boolean;
+  valor_parcela_principal?: number;
+  /** Bucket: FGTS depositado. */
+  apurar_valor_fgts?: boolean;
+  valor_parcela_fgts?: number;
+  /** Bucket: multas devidas ao reclamante. */
+  apurar_valor_multas_reclamante?: boolean;
+  valor_parcela_multas_reclamante?: number;
+  /** Bucket: contribuição social descontada. */
+  apurar_desconto_cs?: boolean;
+  desconto_cs?: number;
+  /** Bucket: IRRF do reclamante. */
+  apurar_imposto_reclamante?: boolean;
+  imposto_reclamante?: number;
+  /** Bucket: previdência privada. */
+  apurar_previdencia_privada?: boolean;
+  previdencia_privada?: number;
+  /** Bucket: pensão alimentícia. */
+  apurar_pensao_alimenticia?: boolean;
+  pensao_alimenticia?: number;
+  /** Bucket: custas judiciais. */
+  apurar_custas?: boolean;
+  custas_judiciais?: number;
+  /** Aplicar correção monetária da data_pagamento até data_liquidacao. */
+  atualizar?: boolean;
+  /** Observação livre. */
+  observacao?: string;
+}
+
 export interface PjeCartaoPonto {
   competencia: string;
   dias_uteis: number;
@@ -1069,6 +1116,22 @@ export interface PjeResumo {
    *  retorna 0 para essas verbas silenciosamente. UI deve mostrar banner
    *  bloqueante se este array não estiver vazio. */
   verbas_sem_ocorrencias?: string[];
+  /** Sessão 3: pagamentos históricos extras (PjePagamento[]) deduzidos
+   *  do total devido. Cada bucket é deduzido do bucket equivalente do
+   *  resumo (principal_corrigido, fgts_total, etc.). Valores podem ser
+   *  atualizados monetariamente da data_pagamento à data_liquidacao
+   *  quando `atualizar=true`. */
+  pagamentos_deduzidos?: {
+    principal: number;
+    fgts: number;
+    multas_reclamante: number;
+    cs: number;
+    ir: number;
+    previdencia_privada: number;
+    pensao: number;
+    custas: number;
+    total: number;
+  };
   /** Metadata for transparency */
   meta?: {
     arredondamento: string;

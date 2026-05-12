@@ -25,6 +25,7 @@ import type {
   PjeExcecaoCargaHoraria, PjeExcecaoSabado, PjeFeriadoDB,
   PjeSeguroDesempregoDB, PjeSalarioFamiliaDB, PjeSalarioMinimoRow,
   PjeValidationResult, PjeValidationItem,
+  PjePagamento,
 } from './engine-types';
 
 // Core imports
@@ -111,6 +112,7 @@ export class PjeCalcEngineV3 {
   private ferias: PjeFerias[];
   private verbas: PjeVerba[];
   private cartaoPonto: PjeCartaoPonto[];
+  private pagamentos: PjePagamento[];
   private correcaoConfig: PjeCorrecaoConfig;
   private csConfig: PjeCSConfig;
   private irConfig: PjeIRConfig;
@@ -192,6 +194,10 @@ export class PjeCalcEngineV3 {
     /** Sprint 4.2-C1: aba Atualização. Defaults TODOS false preservam o
      *  comportamento atual (`total_atualizado` = `total_reclamada`). */
     atualizacaoConfig: PjeAtualizacaoConfig = {},
+    /** Sessão 3 (2026-05-12): pagamentos históricos extras (depósito
+     *  judicial, acordo parcial, pagamento fora da folha). Cada um é
+     *  deduzido do bucket correspondente do resumo. Opcional p/ retrocompat. */
+    pagamentos: PjePagamento[] = [],
   ) {
     this.params = params;
     this.historicos = historicos;
@@ -199,6 +205,7 @@ export class PjeCalcEngineV3 {
     this.ferias = ferias;
     this.verbas = verbas;
     this.cartaoPonto = cartaoPonto;
+    this.pagamentos = pagamentos;
     this.correcaoConfig = correcaoConfig;
     // cs_pagos_aplicar (PJe-Calc Avançado) força cs_sobre_salarios_pagos=true
     // no csConfig quando o usuário marca a opção na aba Avançado.
@@ -1235,6 +1242,16 @@ export class PjeCalcEngineV3 {
     ).toFixed(2);
     resumo.total_atualizado = totalAtualizado;
 
+    // Sessão 3 (2026-05-12): aplica dedução de pagamentos históricos
+    // extras (PjePagamento[]) sobre os buckets do resumo. Cada bucket
+    // (principal, fgts, multas, cs, ir, prev, pensão, custas) é deduzido
+    // do bucket correspondente, com floor em 0 (não cria saldo negativo
+    // a menos que zerar_valor_negativo=false).
+    if (this.pagamentos.length > 0) {
+      const ded = this.aplicarPagamentos(resumo);
+      resumo.pagamentos_deduzidos = ded;
+    }
+
     return {
       data_liquidacao: this.correcaoConfig.data_liquidacao,
       verbas: verbaResults,
@@ -2005,6 +2022,82 @@ export class PjeCalcEngineV3 {
       cursor.setMonth(cursor.getMonth() + 1);
     }
     return total.toNumber();
+  }
+
+  /**
+   * Sessão 3 (2026-05-12) — aplica dedução de PjePagamento[] sobre o resumo.
+   * Cada bucket do pagamento que tem `apurar_*=true` é deduzido do bucket
+   * equivalente do resumo. Quando `atualizar=true`, o valor é multiplicado
+   * pelo fator de correção entre `data_pagamento` e `data_liquidacao`
+   * (aproximação via SELIC acumulado da `indicesDB`).
+   *
+   * Mutates `resumo` in-place ajustando os campos numéricos (principal,
+   * fgts, ir, etc.) e retorna o relatório de deduzidos por bucket.
+   *
+   * Floor em 0 sempre — não cria saldo negativo a menos que o operador
+   * tenha configurado zerar_valor_negativo=false (não tocamos isso aqui).
+   */
+  private aplicarPagamentos(resumo: PjeResumo): {
+    principal: number; fgts: number; multas_reclamante: number;
+    cs: number; ir: number; previdencia_privada: number;
+    pensao: number; custas: number; total: number;
+  } {
+    let principal = 0, fgts = 0, multas = 0, cs = 0, ir = 0;
+    let prev = 0, pensao = 0, custas = 0;
+
+    const dataLiqStr = this.correcaoConfig.data_liquidacao;
+    const dataLiq = dataLiqStr ? new Date(dataLiqStr + 'T00:00:00') : new Date();
+
+    /** Fator de correção SELIC entre data_pagamento e data_liquidacao. */
+    const fatorCorrecao = (dataPagamento: string): number => {
+      if (!dataPagamento) return 1;
+      const dp = new Date(dataPagamento + 'T00:00:00');
+      if (dp >= dataLiq) return 1;
+      const compP = dp.toISOString().slice(0, 7);
+      const compL = dataLiq.toISOString().slice(0, 7);
+      const acumPag = this.findIndice('SELIC', compP)?.acumulado ?? 100;
+      const acumLiq = this.findIndice('SELIC', compL)?.acumulado ?? 100;
+      if (acumPag <= 0) return 1;
+      return acumLiq / acumPag;
+    };
+
+    for (const p of this.pagamentos) {
+      const fator = p.atualizar ? fatorCorrecao(p.data_pagamento) : 1;
+      const dedu = (v: number | undefined): number => v ? +(v * fator).toFixed(2) : 0;
+
+      if (p.apurar_valor_principal) principal += dedu(p.valor_parcela_principal);
+      if (p.apurar_valor_fgts) fgts += dedu(p.valor_parcela_fgts);
+      if (p.apurar_valor_multas_reclamante) multas += dedu(p.valor_parcela_multas_reclamante);
+      if (p.apurar_desconto_cs) cs += dedu(p.desconto_cs);
+      if (p.apurar_imposto_reclamante) ir += dedu(p.imposto_reclamante);
+      if (p.apurar_previdencia_privada) prev += dedu(p.previdencia_privada);
+      if (p.apurar_pensao_alimenticia) pensao += dedu(p.pensao_alimenticia);
+      if (p.apurar_custas) custas += dedu(p.custas_judiciais);
+    }
+
+    // Aplica no resumo (floor em 0)
+    resumo.principal_corrigido = Math.max(0, +(resumo.principal_corrigido - principal).toFixed(2));
+    resumo.liquido_reclamante = Math.max(0, +(resumo.liquido_reclamante - principal).toFixed(2));
+    resumo.fgts_total = Math.max(0, +(resumo.fgts_total - fgts).toFixed(2));
+    resumo.ir_retido = Math.max(0, +(resumo.ir_retido - ir).toFixed(2));
+    resumo.cs_segurado = Math.max(0, +(resumo.cs_segurado - cs).toFixed(2));
+    resumo.previdencia_privada = Math.max(0, +(resumo.previdencia_privada - prev).toFixed(2));
+    resumo.pensao_total = Math.max(0, +(resumo.pensao_total - pensao).toFixed(2));
+    resumo.custas = Math.max(0, +(resumo.custas - custas).toFixed(2));
+    resumo.total_reclamada = Math.max(0,
+      +(resumo.principal_corrigido + resumo.juros_mora + resumo.fgts_total).toFixed(2),
+    );
+
+    const total = +(principal + fgts + multas + cs + ir + prev + pensao + custas).toFixed(2);
+    return { principal, fgts, multas_reclamante: multas, cs, ir,
+             previdencia_privada: prev, pensao, custas, total };
+  }
+
+  /** Helper: encontra entrada da tabela de índices por nome+competência. */
+  private findIndice(indice: string, competencia: string) {
+    return this.indicesDB.find(
+      (r) => r.indice === indice && (r.competencia || '').slice(0, 7) === competencia,
+    );
   }
 
   // ── Mappers ──
