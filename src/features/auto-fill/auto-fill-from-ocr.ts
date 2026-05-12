@@ -78,15 +78,25 @@ function diaSemana(dataISO: string): string | null {
  * órfãos e o usuário vê parâmetros aparecendo na UI mas o cálculo dá zero.
  */
 export async function ensureCalculoAtivo(caseId: string): Promise<string> {
-  const { data: existente } = await supabase
+  // 1) Prefere cálculo ativo (status normal de trabalho)
+  const { data: ativos } = await supabase
     .from("pjecalc_calculos")
-    .select("id, ativo")
+    .select("id")
+    .eq("case_id", caseId)
+    .eq("ativo", true)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (ativos && ativos.length > 0) return (ativos[0] as { id: string }).id;
+
+  // 2) Fallback: qualquer cálculo existente do caso (mais recente)
+  const { data: qualquer } = await supabase
+    .from("pjecalc_calculos")
+    .select("id")
     .eq("case_id", caseId)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (existente?.id) return existente.id as string;
+    .limit(1);
+  if (qualquer && qualquer.length > 0)
+    return (qualquer[0] as { id: string }).id;
 
   const { data: userResp } = await supabase.auth.getUser();
   const userId = userResp.user?.id;

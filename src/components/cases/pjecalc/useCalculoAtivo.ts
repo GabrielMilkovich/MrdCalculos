@@ -26,16 +26,27 @@ export function useCalculoAtivo(caseId: string | undefined | null) {
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<string> => {
       if (!caseId) throw new Error("caseId ausente");
-      // Read-only quando já existe (não cria por engano em telas só de leitura).
-      const { data: existente } = await supabase
+      // Prefere o cálculo marcado como ativo; se não houver, pega o mais
+      // recente; só cria se REALMENTE não houver nenhum (auto-fill via
+      // OCR usa o mesmo helper).
+      const { data: ativos } = await supabase
+        .from("pjecalc_calculos")
+        .select("id, ativo, created_at")
+        .eq("case_id", caseId)
+        .eq("ativo", true)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (ativos && ativos.length > 0) return (ativos[0] as { id: string }).id;
+
+      const { data: qualquer } = await supabase
         .from("pjecalc_calculos")
         .select("id")
         .eq("case_id", caseId)
         .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (existente?.id) return existente.id as string;
-      // Não existia — cria. Compartilha a mesma lógica do auto-fill.
+        .limit(1);
+      if (qualquer && qualquer.length > 0)
+        return (qualquer[0] as { id: string }).id;
+
       return ensureCalculoAtivo(caseId);
     },
   });

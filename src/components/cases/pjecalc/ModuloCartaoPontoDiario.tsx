@@ -65,6 +65,8 @@ const OCORRENCIAS = [
   { value: "LICENCA_MEDICA", label: "LIC. MÉDICA" },
   { value: "DSR", label: "DSR" },
   { value: "COMPENSADO", label: "COMPENSADO" },
+  { value: "TREINAMENTO", label: "TREINAMENTO" },
+  { value: "AFASTAMENTO", label: "AFASTAMENTO" },
 ];
 
 interface PontoDia {
