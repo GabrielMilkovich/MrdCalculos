@@ -73,8 +73,31 @@ function fmt(n: number): string {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function readPjc(file: string): string {
-  return fs.readFileSync(path.join(CORPUS_DIR, file), 'latin1');
+/**
+ * Lê um arquivo .PJC do corpus. Suporta dois formatos:
+ *   - XML puro em ISO-8859-1 (formato antigo do PJe-Calc)
+ *   - ZIP contendo .PJC ou .xml (formato novo, ~6 dos 14 fixtures atuais)
+ *
+ * Sessão 6 do roadmap: antes esta função só lia 'latin1' bruto,
+ * fazendo o analyzePJC quebrar nos PJCs em ZIP (~43% do corpus).
+ * Agora detecta a assinatura ZIP (PK\x03\x04) e desempacota antes.
+ */
+async function readPjc(file: string): Promise<string> {
+  const buffer = fs.readFileSync(path.join(CORPUS_DIR, file));
+  const bytes = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
+    // Lazy import — só importa quando necessário (PJCs ZIP).
+    const { default: JSZip } = await import('jszip');
+    const zip = await JSZip.loadAsync(bytes);
+    const nomes = Object.keys(zip.files);
+    const alvo =
+      nomes.find((n) => n.toLowerCase().endsWith('.pjc')) ??
+      nomes.find((n) => n.toLowerCase().endsWith('.xml')) ??
+      nomes[0];
+    if (!alvo) throw new Error(`ZIP sem .pjc/.xml: ${file}`);
+    return await zip.files[alvo].async('string');
+  }
+  return buffer.toString('latin1');
 }
 
 interface Resultado {
@@ -86,16 +109,23 @@ interface Resultado {
   erro?: string;
 }
 
-function rodarCaso(file: string): Resultado {
+async function rodarCaso(file: string): Promise<Resultado> {
   const result: Resultado = {
     file, calculo: file.match(/CALCULO_(\d+)/)?.[1] || '?',
     pjc_liquido: 0, mrd_liquido: 0, delta_pct: 0,
   };
   try {
-    const xml = readPjc(file);
+    const xml = await readPjc(file);
     const analysis = analyzePJC(xml);
     result.pjc_liquido = analysis.resultado.liquido_exequente;
-    if (result.pjc_liquido <= 0) { result.erro = 'PJC sem valor líquido'; return result; }
+    if (result.pjc_liquido <= 0) {
+      // PJC com valor líquido zero (ex: cálculo só de FGTS sem principal,
+      // ou caso de saldo zerado). Não é erro de parser/conversão — é dado
+      // sem paridade significativa pra comparar. Marca como SKIP (não conta
+      // como erro nem como sucesso no agregado).
+      result.erro = 'SKIP_PJC_LIQUIDO_ZERO';
+      return result;
+    }
 
     const inputs = convertPjcToEngineInputs(analysis, `v3-${file}`);
     inputs.params.modo_calculo = 'independent';
@@ -143,8 +173,8 @@ describe('Paridade V3 — Engine Core vs PJC reais', () => {
   const resultados: Resultado[] = [];
 
   for (const arq of arquivos) {
-    it(`V3 ${arq.replace(/^PROCESSO_/, '').slice(0, 50)}...`, () => {
-      const r = rodarCaso(arq);
+    it(`V3 ${arq.replace(/^PROCESSO_/, '').slice(0, 50)}...`, async () => {
+      const r = await rodarCaso(arq);
       resultados.push(r);
       if (!r.erro && r.pjc_liquido > 0) {
         expect(Math.abs(r.delta_pct)).toBeLessThan(500);
@@ -161,18 +191,21 @@ describe('Paridade V3 — Engine Core vs PJC reais', () => {
     console.log('  #  | Cálculo | PJe-Calc (R$)      | MRD V3 (R$)        | Delta %   | Status');
     console.log('  ───|─────────|─────────────────────|─────────────────────|───────────|────────');
 
-    let ap10 = 0, ap5 = 0, ap1 = 0, erros = 0;
+    let ap10 = 0, ap5 = 0, ap1 = 0, erros = 0, skips = 0;
     let totalPjc = 0, totalMrd = 0;
     const deltas: number[] = [];
 
     for (let i = 0; i < resultados.length; i++) {
       const r = resultados[i];
-      const status = r.erro ? 'ERRO'
+      const isSkip = r.erro === 'SKIP_PJC_LIQUIDO_ZERO';
+      const status = isSkip ? 'SKIP'
+        : r.erro ? 'ERRO'
         : Math.abs(r.delta_pct) <= 1 ? 'GOLDEN'
         : Math.abs(r.delta_pct) <= 5 ? 'APROV5%'
         : Math.abs(r.delta_pct) <= 10 ? 'APROV10%'
         : 'REPROV';
-      if (r.erro) erros++;
+      if (isSkip) skips++;
+      else if (r.erro) erros++;
       else {
         if (Math.abs(r.delta_pct) <= 1) ap1++;
         if (Math.abs(r.delta_pct) <= 5) ap5++;
@@ -187,7 +220,7 @@ describe('Paridade V3 — Engine Core vs PJC reais', () => {
       console.log(`  ${String(i + 1).padStart(2)} | ${r.calculo.padEnd(7)} | ${pjc} | ${mrd} | ${delta} | ${status}`);
     }
 
-    const validos = resultados.length - erros;
+    const validos = resultados.length - erros - skips;
     const mediaAbs = deltas.length > 0 ? deltas.reduce((s, d) => s + Math.abs(d), 0) / deltas.length : 0;
     const deltaGlobal = totalPjc > 0 ? ((totalMrd - totalPjc) / totalPjc) * 100 : 0;
 
@@ -195,6 +228,7 @@ describe('Paridade V3 — Engine Core vs PJC reais', () => {
     console.log(`  APROV ≤1%:  ${ap1}/${validos}  |  APROV ≤5%:  ${ap5}/${validos}  |  APROV ≤10%:  ${ap10}/${validos}`);
     console.log(`  Delta médio abs: ${mediaAbs.toFixed(2)}%  |  Delta global: ${deltaGlobal >= 0 ? '+' : ''}${deltaGlobal.toFixed(2)}%`);
     console.log(`  PJe-Calc total: R$ ${fmt(totalPjc)}  |  MRD V3 total: R$ ${fmt(totalMrd)}`);
+    console.log(`  Erros: ${erros}  |  Skips (PJC liq=0): ${skips}  |  Válidos: ${validos}/${resultados.length}`);
     console.log('═══════════════════════════════════════════════════════════════════════════');
     expect(resultados.length).toBeGreaterThan(0);
 
@@ -213,16 +247,14 @@ describe('Paridade V3 — Engine Core vs PJC reais', () => {
         `Apenas ${ap5}/${validos} casos (${(taxaAprov5 * 100).toFixed(0)}%) em APROV≤5%. ` +
         `Limiar mínimo de paridade: 50%. Engine V3 fora de paridade com o corpus.`,
       ).toBeGreaterThanOrEqual(0.5);
-      // Taxa de erro mais frouxa porque os erros vêm do parser PJC
-      // (pjc-analyzer / pjc-to-engine), não do engine de cálculo em si.
-      // Threshold 50%: protege contra regressão grande do parser sem
-      // fazer um caso novo de fixture broken quebrar o CI imediatamente.
-      // Quando o parser PJC for endurecido, baixar este número.
+      // Após Sessão 6 (PJCs em ZIP desempacotados): erros reais devem
+      // ser raros. Skips (PJC com líquido=0) são esperados (FGTS-only,
+      // saldo-zerado etc) e contam separadamente.
       expect(
         taxaErro,
         `${erros}/${resultados.length} casos com erro de execução (${(taxaErro * 100).toFixed(0)}%). ` +
-        `Limiar máximo aceitável: 50% (limitação do parser PJC, não do engine).`,
-      ).toBeLessThan(0.5);
+        `Limiar máximo aceitável: 15% (parser PJC + conversor).`,
+      ).toBeLessThan(0.15);
     }
   });
 });
