@@ -1122,6 +1122,22 @@ export interface PjeResumo {
    *  retorna 0 para essas verbas silenciosamente. UI deve mostrar banner
    *  bloqueante se este array não estiver vazio. */
   verbas_sem_ocorrencias?: string[];
+  /** Sessão 5: ApuracaoDeJuros agregadas por competência. Cada item
+   *  corresponde a uma competência com valor_corrigido somado e juros
+   *  aplicado. Usado pela UI/relatório para mostrar memória de cálculo
+   *  detalhada (correspondente ao TBAPURACAOJUROSCALCULO do PJe-Calc).
+   *  Vazio quando engine não conseguiu agregar (modo legado). */
+  apuracoes_juros?: Array<{
+    competencia: string;
+    valor_corrigido: number;
+    juros: number;
+    valor_verba_para_cs: number;
+    valor_verba_para_cs_13: number;
+    valor_corrigido_irpf_13: number;
+    valor_corrigido_irpf_ferias: number;
+    valor_corrigido_irpf_demais: number;
+    ocorrencias_agregadas: number;
+  }>;
   /** Sessão 3: pagamentos históricos extras (PjePagamento[]) deduzidos
    *  do total devido. Cada bucket é deduzido do bucket equivalente do
    *  resumo (principal_corrigido, fgts_total, etc.). Valores podem ser

@@ -222,6 +222,97 @@ describe("Autonomia from-scratch — Engine V3 sem XML PJC", () => {
   });
 });
 
+describe("Sessão 5 — ApuracaoDeJuros agregada por competência", () => {
+  it("Engine V3 popula resumo.apuracoes_juros com 1+ competência", () => {
+    const verba = makeVerba({
+      nome: "Horas Extras 50%",
+      periodo_inicio: "2024-01-01",
+      periodo_fim: "2024-12-31",
+      tipo_quantidade: "informada",
+      quantidade_informada: 10,
+    });
+    const r = createEngine({
+      params: { data_admissao: "2024-01-01", data_demissao: "2024-12-31" },
+      historicos: [makeHistorico({ valor_informado: 3000 })],
+      verbas: [verba],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    }).liquidar();
+
+    expect(r.resumo.apuracoes_juros).toBeDefined();
+    expect(r.resumo.apuracoes_juros!.length).toBeGreaterThan(0);
+    // Cada apuração tem competência ISO yyyy-mm
+    for (const ap of r.resumo.apuracoes_juros!) {
+      expect(ap.competencia).toMatch(/^\d{4}-\d{2}$/);
+      expect(ap.valor_corrigido).toBeGreaterThanOrEqual(0);
+      expect(ap.ocorrencias_agregadas).toBeGreaterThan(0);
+    }
+  });
+
+  it("Soma valor_corrigido das apurações é >= soma das ocorrências", () => {
+    const r = createEngine({
+      params: { data_admissao: "2024-01-01", data_demissao: "2024-12-31" },
+      historicos: [makeHistorico({ valor_informado: 3000 })],
+      verbas: [
+        makeVerba({
+          nome: "Horas Extras 50%",
+          periodo_inicio: "2024-01-01",
+          periodo_fim: "2024-12-31",
+          tipo_quantidade: "informada",
+          quantidade_informada: 10,
+        }),
+      ],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    }).liquidar();
+
+    const somaApuracoes = (r.resumo.apuracoes_juros ?? []).reduce(
+      (s, a) => s + a.valor_corrigido,
+      0,
+    );
+    const somaOcorrencias = r.verbas[0].ocorrencias.reduce(
+      (s, o) => s + (o.valor_corrigido ?? 0),
+      0,
+    );
+    expect(somaApuracoes).toBeCloseTo(somaOcorrencias, 1);
+  });
+
+  it("Verba de 13º vs Horas Extras: separa bases para IRPF corretamente", () => {
+    const r = createEngine({
+      params: { data_admissao: "2024-01-01", data_demissao: "2024-12-31" },
+      historicos: [makeHistorico({ valor_informado: 3000 })],
+      verbas: [
+        makeVerba({
+          id: "v-he",
+          nome: "Horas Extras 50%",
+          periodo_inicio: "2024-01-01",
+          periodo_fim: "2024-12-31",
+          tipo_quantidade: "informada",
+          quantidade_informada: 10,
+        }),
+        makeVerba({
+          id: "v-13",
+          nome: "13º Salário Proporcional",
+          caracteristica: "13_salario",
+          ocorrencia_pagamento: "dezembro",
+          periodo_inicio: "2024-01-01",
+          periodo_fim: "2024-12-31",
+          tipo_quantidade: "avos",
+          quantidade_informada: 12,
+        }),
+      ],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    }).liquidar();
+
+    const dezembro = r.resumo.apuracoes_juros?.find((a) => a.competencia === "2024-12");
+    expect(dezembro, "deve existir apuração de dezembro").toBeDefined();
+    // Dezembro deve ter componente de 13º
+    expect(dezembro!.valor_verba_para_cs_13).toBeGreaterThan(0);
+    expect(dezembro!.valor_corrigido_irpf_13).toBeGreaterThan(0);
+  });
+});
+
 describe("Sessão 4b — Verba-modules ativados via opt-in", () => {
   it("HE 50% com usar_modulo_juridico=true ainda calcula valor != 0", () => {
     const verba = makeVerba({
