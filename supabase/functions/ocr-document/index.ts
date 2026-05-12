@@ -409,13 +409,38 @@ serve(async (req) => {
 
       const durationMs = Date.now() - t0;
 
+      // AUDIT #4/#24: Mistral OCR não retorna confidence — antes fixávamos
+      // 1.0, deixando a UI mostrar "100%" sempre. Agora derivamos um score
+      // heurístico real a partir do texto extraído. Sinais:
+      //   - taxa de caracteres alfanuméricos vs lixo (controle, símbolos)
+      //   - presença de placeholders típicos de OCR ruim
+      //   - razão de chars úteis por página
+      // Score 0..1, com 0.7 como limiar "ok" (alinhado ao extrator V6).
+      const totalChars = markdown.length;
+      const alnumChars = (markdown.match(/[a-zA-Z0-9À-ÿ]/g) || []).length;
+      const numericChars = (markdown.match(/[0-9]/g) || []).length;
+      const placeholderCount =
+        (markdown.match(/\[\?\?\?\]|\[ilegível\]|\?{3,}|�+/gi) || []).length;
+      const pageCountSafe = Math.max(1, result.pages.length);
+      const charsPerPage = totalChars / pageCountSafe;
+      const alnumRatio = totalChars > 0 ? alnumChars / totalChars : 0;
+      // Penaliza placeholders (0.03 por ocorrência, cap em 0.4) e premia
+      // densidade de caracteres alfanuméricos. Mantém score conservador
+      // (0.4..0.95) para nunca dar 1.0 sem ter como verificar.
+      let ocrScore = 0.4 + alnumRatio * 0.5;
+      // Bônus por densidade plausível (>1500 chars/página para holerite/CTPS).
+      if (charsPerPage >= 500) ocrScore += 0.05;
+      if (numericChars > 50) ocrScore += 0.05; // doc com tabela tem números
+      ocrScore -= Math.min(0.4, placeholderCount * 0.03);
+      ocrScore = Math.max(0.2, Math.min(0.95, ocrScore));
+
       await supabase
         .from("documents")
         .update({
           status: "ocr_done",
           ...(shouldAutoSetTipo ? { tipo: docType } : {}),
           page_count: result.pages.length,
-          ocr_confidence: 1.0, // Mistral não retorna confidence; assumimos alto
+          ocr_confidence: +ocrScore.toFixed(2),
           ocr_chunks_total: 1,
           ocr_chunks_done: 1,
           ocr_chunks_failed: 0,

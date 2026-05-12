@@ -286,14 +286,34 @@ export async function extrairGeometrico(
 
   if (usefulChars < 200) return null;
 
+  // AUDIT #23: score deixa de ser binário (0.7 / 0.95) e passa a refletir
+  // a qualidade real do texto extraído. Sinais usados:
+  //   - chars úteis por página (densidade — PDF nativo costuma ter >1500/pág)
+  //   - taxa de caracteres alfanuméricos (vs lixo / símbolos de controle)
+  //   - presença de placeholders de OCR ruim (raros aqui mas possíveis)
+  // Resultado: 0.2..0.95, com 0.7 mantido como limiar "aceitável" pelo
+  // pipeline downstream (process-document-mistral).
+  const alnum = (textoCompleto.match(/[a-zA-Z0-9À-ÿ]/g) || []).length;
+  const totalChars = textoCompleto.length;
+  const alnumRatio = totalChars > 0 ? alnum / totalChars : 0;
+  const charsPerPage = usefulChars / Math.max(1, doc.numPages);
+  const placeholderCount =
+    (textoCompleto.match(/\[\?\?\?\]|\[ilegível\]|\?{3,}|�+/gi) || []).length;
+
+  let score = 0.4 + alnumRatio * 0.5;
+  if (charsPerPage >= 500) score += 0.05;
+  if (charsPerPage >= 1500) score += 0.05;
+  score -= Math.min(0.4, placeholderCount * 0.03);
+  score = Math.max(0.2, Math.min(0.95, score));
+
   return {
     numeroPaginas: doc.numPages,
     paginas,
     textoCompleto,
     extractor: 'pdfjs_geometric',
     qualidade: {
-      score: usefulChars >= 500 ? 0.95 : 0.7,
-      razao: `${usefulChars} chars úteis em ${doc.numPages} páginas`,
+      score: +score.toFixed(2),
+      razao: `${usefulChars} chars úteis em ${doc.numPages} páginas (alnum=${(alnumRatio * 100).toFixed(0)}%, placeholders=${placeholderCount})`,
     },
   };
 }

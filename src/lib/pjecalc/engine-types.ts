@@ -1064,6 +1064,11 @@ export interface PjeResumo {
   abono_pecuniario: number;
   liquido_reclamante: number;
   total_reclamada: number;
+  /** AUDIT #15/#19: verbas com `valor='calculado'` mas SEM `ocorrencias_precomputadas`
+   *  (XML PJC importado). Engine V3 hoje NÃO gera ocorrências from-scratch —
+   *  retorna 0 para essas verbas silenciosamente. UI deve mostrar banner
+   *  bloqueante se este array não estiver vazio. */
+  verbas_sem_ocorrencias?: string[];
   /** Metadata for transparency */
   meta?: {
     arredondamento: string;
