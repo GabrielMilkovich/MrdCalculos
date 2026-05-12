@@ -11,6 +11,7 @@ import {
 import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { PjeCalcGrid, type PjeCalcGridColumn } from "./PjeCalcGrid";
+import { useCalculoAtivo } from "./useCalculoAtivo";
 
 interface Props {
   caseId: string;
@@ -51,13 +52,15 @@ const SITUACOES = [
 
 export function ModuloFerias({ caseId }: Props) {
   const qc = useQueryClient();
+  const { data: calculoId } = useCalculoAtivo(caseId);
 
   const { data: ferias = [], isLoading } = useQuery({
-    queryKey: ["pjecalc_ferias", caseId],
+    queryKey: ["pjecalc_ferias", caseId, calculoId],
+    enabled: !!calculoId,
     queryFn: async () => {
       const { data, error } = await fromUntyped("pjecalc_ferias")
         .select("*")
-        .eq("case_id", caseId)
+        .eq("calculo_id", calculoId!)
         .order("periodo_aquisitivo_inicio");
       if (error) throw error;
       return (data || []) as unknown as FeriasRow[];
@@ -65,14 +68,19 @@ export function ModuloFerias({ caseId }: Props) {
   });
 
   const invalidate = () =>
-    qc.invalidateQueries({ queryKey: ["pjecalc_ferias", caseId] });
+    qc.invalidateQueries({ queryKey: ["pjecalc_ferias"] });
 
   const addFerias = async () => {
+    if (!calculoId) {
+      toast.error("Cálculo não disponível ainda — aguarde.");
+      return;
+    }
     const today = new Date().toISOString().slice(0, 10);
     const nextYear = new Date();
     nextYear.setFullYear(nextYear.getFullYear() + 1);
     const { error } = await fromUntyped("pjecalc_ferias").insert({
       case_id: caseId,
+      calculo_id: calculoId,
       periodo_aquisitivo_inicio: today,
       periodo_aquisitivo_fim: nextYear.toISOString().slice(0, 10),
       periodo_concessivo_inicio: nextYear.toISOString().slice(0, 10),

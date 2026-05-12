@@ -13,6 +13,7 @@
  *      em batch antes de navegar).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -130,6 +131,7 @@ export function DocumentOcrValidation({
   canAdvance,
   advanceBlockedReason,
 }: Props) {
+  const queryClient = useQueryClient();
   const [docs, setDocs] = useState<DocRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -269,13 +271,27 @@ export function DocumentOcrValidation({
       toast.success("OCR confirmado.");
 
       // AUTO-FILL: dispara parsers determinísticos e popula direto as
-      // tabelas pjecalc_* dos 4 módulos da calculadora (cartao_ponto,
-      // ferias, faltas, holerite). Substitui o ramo LLM do extract-and-fill
-      // para esses tipos. Falhar aqui NÃO bloqueia o operador — o módulo
-      // mostra os dados quando existirem e permite edição manual.
+      // tabelas pjecalc_* dos 4 módulos da calculadora. Mostra toast de
+      // erro EXPLÍCITO se falhar — operador precisa saber que o cálculo
+      // não foi preenchido (vs. acreditar que está pronto e zerar a HE).
       void autoFillFromOcr(selected.id)
         .then((report) => {
+          // Invalida queries dos 4 módulos da calculadora para que a UI
+          // reflita imediatamente os dados recém-inseridos.
+          queryClient.invalidateQueries({ queryKey: ["pjecalc_ponto_diario"] });
+          queryClient.invalidateQueries({
+            queryKey: ["pjecalc_apuracao_diaria"],
+          });
+          queryClient.invalidateQueries({ queryKey: ["pjecalc_faltas"] });
+          queryClient.invalidateQueries({ queryKey: ["pjecalc_ferias"] });
+          queryClient.invalidateQueries({ queryKey: ["pjecalc_historico"] });
+          queryClient.invalidateQueries({
+            queryKey: ["pjecalc_historico_ocorrencias"],
+          });
+
           if (!report.ok) {
+            const msg = report.warnings[report.warnings.length - 1] ?? "erro desconhecido";
+            toast.error(`Auto-preenchimento falhou: ${msg}`);
             logger.warn("autoFillFromOcr falhou", report);
             return;
           }
@@ -292,6 +308,9 @@ export function DocumentOcrValidation({
           }
         })
         .catch((e) => {
+          toast.error(
+            "Auto-preenchimento falhou: " + ((e as Error).message ?? "erro inesperado"),
+          );
           logger.warn("autoFillFromOcr throw", e);
         });
 

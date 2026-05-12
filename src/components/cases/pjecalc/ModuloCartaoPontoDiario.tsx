@@ -30,6 +30,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { PjeCalcGrid, type PjeCalcGridColumn } from "./PjeCalcGrid";
+import { useCalculoAtivo } from "./useCalculoAtivo";
 
 /** Limite oficial PJE-Calc: 6 pares E/S por dia. */
 const MAX_PARES = 6;
@@ -109,6 +110,7 @@ export function ModuloCartaoPontoDiario({
   cargaHoraria = 220,
 }: Props) {
   const qc = useQueryClient();
+  const { data: calculoId } = useCalculoAtivo(caseId);
   const [mesAtual, setMesAtual] = useState(() => {
     if (dataDemissao) return dataDemissao.slice(0, 7);
     return new Date().toISOString().slice(0, 7);
@@ -126,14 +128,15 @@ export function ModuloCartaoPontoDiario({
   const [ano, mes] = mesAtual.split("-").map(Number);
 
   const { data: registros = [], isLoading } = useQuery({
-    queryKey: ["pjecalc_ponto_diario", caseId, mesAtual],
+    queryKey: ["pjecalc_ponto_diario", calculoId, mesAtual],
+    enabled: !!calculoId,
     queryFn: async () => {
       const inicioMes = `${mesAtual}-01`;
       const diasNoMes = new Date(ano, mes, 0).getDate();
       const fimMes = `${mesAtual}-${String(diasNoMes).padStart(2, "0")}`;
       const { data, error } = await fromUntyped("pjecalc_ponto_diario")
         .select("*")
-        .eq("case_id", caseId)
+        .eq("calculo_id", calculoId!)
         .gte("data", inicioMes)
         .lte("data", fimMes)
         .order("data");
@@ -144,11 +147,12 @@ export function ModuloCartaoPontoDiario({
 
   // Alerta de amostra OCR truncada (limite legado de 60 dias).
   const { data: ocrSampleInfo } = useQuery({
-    queryKey: ["cartao_ponto_ocr_sample", caseId],
+    queryKey: ["cartao_ponto_ocr_sample", calculoId],
+    enabled: !!calculoId,
     queryFn: async () => {
       const { count } = await fromUntyped("pjecalc_apuracao_diaria")
         .select("*", { count: "exact", head: true })
-        .eq("case_id", caseId)
+        .eq("calculo_id", calculoId!)
         .eq("origem", "OCR");
       const ocrCount = count || 0;
       return {
@@ -160,9 +164,7 @@ export function ModuloCartaoPontoDiario({
   });
 
   const invalidate = () =>
-    qc.invalidateQueries({
-      queryKey: ["pjecalc_ponto_diario", caseId, mesAtual],
-    });
+    qc.invalidateQueries({ queryKey: ["pjecalc_ponto_diario"] });
 
   const resumoMes = useMemo(() => {
     let ht = 0;
@@ -181,6 +183,10 @@ export function ModuloCartaoPontoDiario({
       toast.error("Preencha a data de admissão antes.");
       return;
     }
+    if (!calculoId) {
+      toast.error("Cálculo não disponível ainda — aguarde.");
+      return;
+    }
     setGenerating(true);
     try {
       const diasNoMes = new Date(ano, mes, 0).getDate();
@@ -189,9 +195,10 @@ export function ModuloCartaoPontoDiario({
 
       const inicioMes = `${mesAtual}-01`;
       const fimMes = `${mesAtual}-${String(diasNoMes).padStart(2, "0")}`;
+      // Não toca em linhas OCR — apenas regera os "moldes" informados.
       await fromUntyped("pjecalc_apuracao_diaria")
         .delete()
-        .eq("case_id", caseId)
+        .eq("calculo_id", calculoId)
         .gte("data", inicioMes)
         .lte("data", fimMes)
         .neq("origem", "OCR");
@@ -207,6 +214,7 @@ export function ModuloCartaoPontoDiario({
         ).padStart(2, "0")}`;
         rows.push({
           case_id: caseId,
+          calculo_id: calculoId,
           data: dataStr,
           dia_semana: DIAS_SEMANA[dow],
           ocorrencia: dow === 0 ? "FOLGA" : "NORMAL",
@@ -215,7 +223,7 @@ export function ModuloCartaoPontoDiario({
       }
       if (rows.length > 0) {
         const { error } = await fromUntyped("pjecalc_apuracao_diaria")
-          .upsert(rows, { onConflict: "case_id,data" });
+          .upsert(rows, { onConflict: "calculo_id,data" });
         if (error) throw error;
       }
       invalidate();
@@ -281,34 +289,36 @@ export function ModuloCartaoPontoDiario({
   );
 
   const addDia = async () => {
-    const inicioMes = `${mesAtual}-01`;
+    if (!calculoId) {
+      toast.error("Cálculo não disponível ainda — aguarde.");
+      return;
+    }
     const existentes = new Set(registros.map((r) => r.data));
     const diasNoMes = new Date(ano, mes, 0).getDate();
     let dia = 1;
     while (
       dia <= diasNoMes &&
-      existentes.has(
-        `${mesAtual}-${String(dia).padStart(2, "0")}`,
-      )
+      existentes.has(`${mesAtual}-${String(dia).padStart(2, "0")}`)
     ) {
       dia += 1;
     }
-    const data =
-      dia <= diasNoMes
-        ? `${mesAtual}-${String(dia).padStart(2, "0")}`
-        : inicioMes;
+    if (dia > diasNoMes) {
+      toast.info("Todos os dias do mês já existem.");
+      return;
+    }
+    const data = `${mesAtual}-${String(dia).padStart(2, "0")}`;
     const dow = new Date(data + "T12:00:00").getDay();
-    const { error } = await fromUntyped("pjecalc_apuracao_diaria")
-      .upsert(
-        {
-          case_id: caseId,
-          data,
-          dia_semana: DIAS_SEMANA[dow],
-          ocorrencia: "NORMAL",
-          origem: "INFORMADA",
-        },
-        { onConflict: "case_id,data" },
-      );
+    const { error } = await fromUntyped("pjecalc_apuracao_diaria").upsert(
+      {
+        case_id: caseId,
+        calculo_id: calculoId,
+        data,
+        dia_semana: DIAS_SEMANA[dow],
+        ocorrencia: "NORMAL",
+        origem: "INFORMADA",
+      },
+      { onConflict: "calculo_id,data" },
+    );
     if (error) {
       toast.error("Erro: " + error.message);
       return;

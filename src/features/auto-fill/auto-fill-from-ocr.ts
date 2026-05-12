@@ -1,6 +1,6 @@
 /**
  * autoFillFromOcr — dispara os parsers determinísticos sobre o texto OCR
- * já validado e grava DIRETO nas tabelas da calculadora (pjecalc_*).
+ * já validado e grava DIRETO nas tabelas reais que o motor de cálculo lê.
  *
  * Substitui o ramo LLM do `extract-and-fill` para cartao_ponto / ferias /
  * faltas — esses três têm parsers determinísticos confiáveis (>1500 testes)
@@ -8,28 +8,37 @@
  * (sugestão de bucket de rubrica é tarefa cognitiva real).
  *
  * Chamado automaticamente quando o operador clica "Confirmar OCR" na aba
- * Validação. Falhar aqui NÃO impede a confirmação do OCR — o erro é
- * reportado mas o operador pode editar manualmente no módulo da calculadora.
+ * Validação. Falhar aqui devolve `ok=false` + warnings explícitos — o
+ * caller (DocumentOcrValidation) mostra toast ao usuário; nada de
+ * falha silenciosa.
  *
- * Garantias:
- *   - Idempotente: deleta linhas com origem='OCR' do mesmo documento
- *     antes de inserir, para reprocessar OCR re-rodar sem duplicar.
- *   - Respeita RLS (usa o cliente autenticado do operador).
- *   - Retorna report com counts por tipo para feedback toast.
+ * INVARIANTES CRÍTICAS (já tropecei em todas, registrando):
+ *   - O motor filtra por `calculo_id`. Inserts SEM `calculo_id` ficam
+ *     órfãos. Sempre buscar/criar via `ensureCalculoAtivo(caseId)`.
+ *   - `pjecalc_apuracao_diaria` tem UNIQUE (calculo_id, data), NÃO
+ *     (case_id, data). `onConflict` precisa bater nessa combinação.
+ *   - `pjecalc_historico_salarial` e `pjecalc_historico_ocorrencias`
+ *     são VIEWS. Inserts vão na tabela base: `pjecalc_hist_salarial`
+ *     (rubricas) + `pjecalc_hist_salarial_mes` (ocorrências mensais).
+ *   - `pjecalc_hist_salarial_mes.competencia` é DATE (não TEXT yyyy-mm).
+ *   - Idempotente: deleta por (calculo_id, documento_id) antes de inserir,
+ *     para reprocessar OCR sem duplicar.
  */
 import { supabase } from "@/integrations/supabase/client";
 import { fromUntyped } from "@/lib/supabase-untyped";
 import { logger } from "@/lib/logger";
-import {
-  parseCartaoPonto,
-  parseFerias,
-  parseFaltas,
-  parseHolerite,
-  type ApuracaoDiaria,
-  type FaltaParseada,
-  type FeriasParseada,
-  type SituacaoFerias,
+import { parseCartaoPonto } from "@/features/data-extraction/parsers/cartao-ponto";
+import { parseFerias } from "@/features/data-extraction/parsers/ferias";
+import { parseFaltas } from "@/features/data-extraction/parsers/faltas";
+import { parseHolerite } from "@/features/data-extraction/parsers/holerite";
+import type {
+  ApuracaoDiaria,
+} from "@/features/data-extraction/parsers/cartao-ponto/layouts/generico-v1";
+import type {
+  FaltaParseada,
+  FeriasParseada,
 } from "@/features/data-extraction";
+import type { SituacaoFerias } from "@/features/data-extraction";
 
 export type AutoFillReport = {
   documentId: string;
@@ -39,7 +48,6 @@ export type AutoFillReport = {
   ok: boolean;
 };
 
-/** Mapeia a situação do parser de férias para a string usada na tabela. */
 const SITUACAO_MAP: Record<SituacaoFerias, string> = {
   G: "gozadas",
   GP: "gozadas_parcialmente",
@@ -64,15 +72,58 @@ function diaSemana(dataISO: string): string | null {
   return DIAS_SEMANA_PT[d.getDay()] ?? null;
 }
 
-/** Converte uma ApuracaoDiaria do parser em uma linha de pjecalc_apuracao_diaria. */
+/**
+ * Busca o cálculo ativo do caso; cria um vazio se não existir. O motor de
+ * cálculo lê todas as tabelas por `calculo_id`. Sem isso, dados ficam
+ * órfãos e o usuário vê parâmetros aparecendo na UI mas o cálculo dá zero.
+ */
+export async function ensureCalculoAtivo(caseId: string): Promise<string> {
+  const { data: existente } = await supabase
+    .from("pjecalc_calculos")
+    .select("id, ativo")
+    .eq("case_id", caseId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existente?.id) return existente.id as string;
+
+  const { data: userResp } = await supabase.auth.getUser();
+  const userId = userResp.user?.id;
+  if (!userId) {
+    throw new Error("Usuário não autenticado — não foi possível criar cálculo.");
+  }
+
+  const { data: novo, error } = await supabase
+    .from("pjecalc_calculos")
+    .insert({
+      case_id: caseId,
+      user_id: userId,
+      ativo: true,
+      status: "rascunho",
+      titulo: "Cálculo (preenchido via OCR)",
+    })
+    .select("id")
+    .single();
+
+  if (error || !novo) {
+    throw new Error(
+      `Não foi possível criar pjecalc_calculos: ${error?.message ?? "sem detalhes"}`,
+    );
+  }
+  return (novo as { id: string }).id;
+}
+
 function apuracaoToRow(
   ap: ApuracaoDiaria,
   caseId: string,
+  calculoId: string,
   documentId: string,
 ): Record<string, unknown> {
   const m = ap.marcacoes;
   return {
     case_id: caseId,
+    calculo_id: calculoId,
     data: ap.data,
     dia_semana: ap.dia_semana ?? diaSemana(ap.data),
     ocorrencia: ap.ocorrencia,
@@ -97,6 +148,7 @@ function apuracaoToRow(
 function feriasToRow(
   f: FeriasParseada,
   caseId: string,
+  calculoId: string,
   documentId: string,
 ): Record<string, unknown> {
   const [aniIni, aniFim] = f.relativa.split("/").map((y) => parseInt(y, 10));
@@ -109,6 +161,7 @@ function feriasToRow(
 
   return {
     case_id: caseId,
+    calculo_id: calculoId,
     periodo_aquisitivo_inicio,
     periodo_aquisitivo_fim,
     periodo_concessivo_inicio: f.gozo1?.inicio ?? null,
@@ -135,10 +188,12 @@ function feriasToRow(
 function faltaToRow(
   f: FaltaParseada,
   caseId: string,
+  calculoId: string,
   documentId: string,
 ): Record<string, unknown> {
   return {
     case_id: caseId,
+    calculo_id: calculoId,
     data_inicial: f.data_inicio,
     data_final: f.data_fim,
     justificada: f.justificada,
@@ -150,6 +205,7 @@ function faltaToRow(
 
 async function fillCartaoPonto(
   caseId: string,
+  calculoId: string,
   documentId: string,
   ocrText: string,
 ): Promise<{ count: number; warnings: string[] }> {
@@ -163,18 +219,25 @@ async function fillCartaoPonto(
     };
   }
 
+  // Idempotência: remove linhas anteriores desse documento (mesmo calculo).
+  // Não toca em linhas INFORMADA/FIXADA pelo operador.
   await fromUntyped("pjecalc_apuracao_diaria")
     .delete()
-    .eq("case_id", caseId)
+    .eq("calculo_id", calculoId)
     .eq("documento_id", documentId)
     .eq("origem", "OCR");
 
-  const rows = parsed.apuracoes.map((a) => apuracaoToRow(a, caseId, documentId));
+  const rows = parsed.apuracoes.map((a) =>
+    apuracaoToRow(a, caseId, calculoId, documentId),
+  );
 
   for (let i = 0; i < rows.length; i += 200) {
     const batch = rows.slice(i, i + 200);
-    const { error } = await fromUntyped("pjecalc_apuracao_diaria")
-      .upsert(batch, { onConflict: "case_id,data" });
+    // UNIQUE real do schema é (calculo_id, data).
+    const { error } = await fromUntyped("pjecalc_apuracao_diaria").upsert(
+      batch,
+      { onConflict: "calculo_id,data" },
+    );
     if (error) throw error;
   }
 
@@ -183,6 +246,7 @@ async function fillCartaoPonto(
 
 async function fillFerias(
   caseId: string,
+  calculoId: string,
   documentId: string,
   ocrText: string,
 ): Promise<{ count: number; warnings: string[] }> {
@@ -193,10 +257,12 @@ async function fillFerias(
 
   await fromUntyped("pjecalc_ferias")
     .delete()
-    .eq("case_id", caseId)
+    .eq("calculo_id", calculoId)
     .eq("documento_id", documentId);
 
-  const rows = parsed.ferias.map((f) => feriasToRow(f, caseId, documentId));
+  const rows = parsed.ferias.map((f) =>
+    feriasToRow(f, caseId, calculoId, documentId),
+  );
   const { error } = await fromUntyped("pjecalc_ferias").insert(rows);
   if (error) throw error;
   return { count: rows.length, warnings: parsed.warnings };
@@ -204,6 +270,7 @@ async function fillFerias(
 
 async function fillFaltas(
   caseId: string,
+  calculoId: string,
   documentId: string,
   ocrText: string,
 ): Promise<{ count: number; warnings: string[] }> {
@@ -214,10 +281,12 @@ async function fillFaltas(
 
   await fromUntyped("pjecalc_faltas")
     .delete()
-    .eq("case_id", caseId)
+    .eq("calculo_id", calculoId)
     .eq("documento_id", documentId);
 
-  const rows = parsed.faltas.map((f) => faltaToRow(f, caseId, documentId));
+  const rows = parsed.faltas.map((f) =>
+    faltaToRow(f, caseId, calculoId, documentId),
+  );
   const { error } = await fromUntyped("pjecalc_faltas").insert(rows);
   if (error) throw error;
   return { count: rows.length, warnings: parsed.warnings };
@@ -225,6 +294,7 @@ async function fillFaltas(
 
 async function fillHistoricoSalarial(
   caseId: string,
+  calculoId: string,
   documentId: string,
   ocrText: string,
 ): Promise<{ count: number; warnings: string[] }> {
@@ -233,19 +303,27 @@ async function fillHistoricoSalarial(
     return { count: 0, warnings: parsed.warnings };
   }
 
-  // competencia "MM/yyyy" -> "yyyy-MM"
+  // competencia "MM/yyyy" -> primeiro dia "yyyy-MM-01" (coluna DATE)
   const [mm, yyyy] = parsed.competencia.split("/");
-  const competencia = `${yyyy}-${mm}`;
+  const competencia = `${yyyy}-${mm}-01`;
 
-  // Buscar histórico existente do caso (insere se não houver rubrica com mesmo nome)
-  const { data: historicos } = await fromUntyped("pjecalc_historico_salarial")
+  // Rubricas-mãe: VIVE em pjecalc_hist_salarial (não na view).
+  const { data: rubricas } = await fromUntyped("pjecalc_hist_salarial")
     .select("id, nome")
-    .eq("case_id", caseId);
+    .eq("calculo_id", calculoId);
 
   const histPorNome = new Map<string, string>();
-  for (const h of (historicos as { id: string; nome: string }[] | null) ?? []) {
+  for (const h of (rubricas as { id: string; nome: string }[] | null) ?? []) {
     histPorNome.set(h.nome.toUpperCase().trim(), h.id);
   }
+
+  // Remove ocorrências anteriores do mesmo documento + competência
+  // (idempotente — reprocessar OCR não duplica).
+  await fromUntyped("pjecalc_hist_salarial_mes")
+    .delete()
+    .eq("calculo_id", calculoId)
+    .eq("documento_id", documentId)
+    .eq("competencia", competencia);
 
   let inserted = 0;
   for (const r of parsed.rubricas) {
@@ -253,11 +331,13 @@ async function fillHistoricoSalarial(
     if (!valor) continue;
     const nomeNorm = r.nome.toUpperCase().trim();
     let histId = histPorNome.get(nomeNorm);
+
     if (!histId) {
       const { data: novoHist, error } = await fromUntyped(
-        "pjecalc_historico_salarial",
+        "pjecalc_hist_salarial",
       )
         .insert({
+          calculo_id: calculoId,
           case_id: caseId,
           nome: r.nome,
           tipo_variacao: "VARIAVEL",
@@ -272,25 +352,17 @@ async function fillHistoricoSalarial(
       histPorNome.set(nomeNorm, histId);
     }
 
-    // Substitui ocorrência da mesma competência+documento (idempotente)
-    await fromUntyped("pjecalc_historico_ocorrencias")
-      .delete()
-      .eq("case_id", caseId)
-      .eq("historico_id", histId)
-      .eq("competencia", competencia)
-      .eq("documento_id", documentId);
-
-    const { error: errOcc } = await fromUntyped("pjecalc_historico_ocorrencias")
+    const { error: errMes } = await fromUntyped("pjecalc_hist_salarial_mes")
       .insert({
+        calculo_id: calculoId,
         case_id: caseId,
-        historico_id: histId,
+        hist_salarial_id: histId,
         competencia,
         valor,
-        tipo: r.valor_vencimento ? "vencimento" : "desconto",
         origem: "OCR",
         documento_id: documentId,
       });
-    if (errOcc) throw errOcc;
+    if (errMes) throw errMes;
     inserted += 1;
   }
 
@@ -299,8 +371,8 @@ async function fillHistoricoSalarial(
 
 /**
  * Função principal — recebe document_id, lê tipo_extracao + ocr_text,
- * dispara o adapter correspondente. Devolve relatório consumível pelo
- * caller (toast/sonner).
+ * garante calculo_id e dispara o adapter correspondente. Devolve
+ * relatório consumível pelo caller (toast/sonner).
  */
 export async function autoFillFromOcr(
   documentId: string,
@@ -341,31 +413,35 @@ export async function autoFillFromOcr(
   const warnings: string[] = [];
 
   try {
+    const calculoId = await ensureCalculoAtivo(case_id);
+
     switch (tipo_extracao) {
       case "cartao_ponto": {
-        const r = await fillCartaoPonto(case_id, documentId, ocr_text);
+        const r = await fillCartaoPonto(case_id, calculoId, documentId, ocr_text);
         inserted.push({ tabela: "pjecalc_apuracao_diaria", count: r.count });
         warnings.push(...r.warnings);
         break;
       }
       case "ferias": {
-        const r = await fillFerias(case_id, documentId, ocr_text);
+        const r = await fillFerias(case_id, calculoId, documentId, ocr_text);
         inserted.push({ tabela: "pjecalc_ferias", count: r.count });
         warnings.push(...r.warnings);
         break;
       }
       case "faltas": {
-        const r = await fillFaltas(case_id, documentId, ocr_text);
+        const r = await fillFaltas(case_id, calculoId, documentId, ocr_text);
         inserted.push({ tabela: "pjecalc_faltas", count: r.count });
         warnings.push(...r.warnings);
         break;
       }
       case "holerite": {
-        const r = await fillHistoricoSalarial(case_id, documentId, ocr_text);
-        inserted.push({
-          tabela: "pjecalc_historico_ocorrencias",
-          count: r.count,
-        });
+        const r = await fillHistoricoSalarial(
+          case_id,
+          calculoId,
+          documentId,
+          ocr_text,
+        );
+        inserted.push({ tabela: "pjecalc_hist_salarial_mes", count: r.count });
         warnings.push(...r.warnings);
         break;
       }

@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { PjeCalcGrid, type PjeCalcGridColumn } from "./PjeCalcGrid";
+import { useCalculoAtivo } from "./useCalculoAtivo";
 
 interface Props {
   caseId: string;
@@ -24,13 +25,15 @@ interface FaltaRow {
 export function ModuloFaltas({ caseId }: Props) {
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const { data: calculoId } = useCalculoAtivo(caseId);
 
   const { data: faltas = [], isLoading } = useQuery({
-    queryKey: ["pjecalc_faltas", caseId],
+    queryKey: ["pjecalc_faltas", caseId, calculoId],
+    enabled: !!calculoId,
     queryFn: async () => {
       const { data, error } = await fromUntyped("pjecalc_faltas")
         .select("*")
-        .eq("case_id", caseId)
+        .eq("calculo_id", calculoId!)
         .order("data_inicial");
       if (error) throw error;
       return (data || []) as unknown as FaltaRow[];
@@ -38,14 +41,19 @@ export function ModuloFaltas({ caseId }: Props) {
   });
 
   const invalidate = () =>
-    qc.invalidateQueries({ queryKey: ["pjecalc_faltas", caseId] });
+    qc.invalidateQueries({ queryKey: ["pjecalc_faltas"] });
 
   const addFalta = async () => {
+    if (!calculoId) {
+      toast.error("Cálculo não disponível ainda — aguarde.");
+      return;
+    }
     setSaving(true);
     try {
       const today = new Date().toISOString().slice(0, 10);
       const { error } = await fromUntyped("pjecalc_faltas").insert({
         case_id: caseId,
+        calculo_id: calculoId,
         data_inicial: today,
         data_final: today,
         justificada: false,

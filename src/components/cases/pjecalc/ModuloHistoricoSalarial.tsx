@@ -13,29 +13,34 @@ import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { PjeCalcGrid, type PjeCalcGridColumn } from "./PjeCalcGrid";
 import { ImportadorFichaFinanceira } from "./ImportadorFichaFinanceira";
+import { useCalculoAtivo } from "./useCalculoAtivo";
 
 interface Props {
   caseId: string;
 }
 
-interface HistoricoRow {
+// Tabela base (não view): pjecalc_hist_salarial
+interface HistoricoBase {
   id: string;
-  case_id: string;
+  calculo_id: string | null;
+  case_id: string | null;
   nome: string;
-  tipo_valor: string; // FIXA | VARIAVEL | INFORMADA  (visto da view)
-  valor_informado: number | null;
-  incidencia_fgts: boolean | null;
-  incidencia_cs: boolean | null; // mapeado para incide_inss na tabela base
+  tipo_variacao: string | null;
+  incide_inss: boolean | null;
+  incide_fgts: boolean | null;
+  incide_ir: boolean | null;
+  valor_fixo: number | null;
   observacoes: string | null;
 }
 
-interface OcorrenciaRow {
+// Tabela base (não view): pjecalc_hist_salarial_mes
+interface OcorrenciaBase {
   id: string;
-  historico_id: string;
-  case_id: string;
-  competencia: string; // "yyyy-MM-dd" ou "yyyy-MM"
+  calculo_id: string | null;
+  case_id: string | null;
+  hist_salarial_id: string | null;
+  competencia: string; // DATE yyyy-mm-dd
   valor: number;
-  tipo: string;
   origem: string | null;
   documento_id: string | null;
 }
@@ -43,15 +48,15 @@ interface OcorrenciaRow {
 interface GridRow {
   ocorrenciaId: string;
   historicoId: string;
-  competencia: string; // yyyy-MM
+  competencia: string; // "yyyy-MM" (para input type=month)
   nomeRubrica: string;
   tipoVariacao: string;
   valor: number;
-  tipoLancamento: string;
   origem: string | null;
   documento_id: string | null;
   incide_inss: boolean;
   incide_fgts: boolean;
+  incide_ir: boolean;
 }
 
 const TIPOS_VARIACAO = [
@@ -60,81 +65,76 @@ const TIPOS_VARIACAO = [
   { value: "INFORMADA", label: "Informada" },
 ];
 
-const TIPOS_LANCAMENTO = [
-  { value: "vencimento", label: "Vencimento" },
-  { value: "desconto", label: "Desconto" },
-  { value: "informado", label: "Informado" },
-];
-
 export function ModuloHistoricoSalarial({ caseId }: Props) {
   const qc = useQueryClient();
+  const { data: calculoId } = useCalculoAtivo(caseId);
 
   const { data: historicos = [], isLoading: loadingH } = useQuery({
-    queryKey: ["pjecalc_historico", caseId],
+    queryKey: ["pjecalc_historico", calculoId],
+    enabled: !!calculoId,
     queryFn: async () => {
-      const { data, error } = await fromUntyped("pjecalc_historico_salarial")
+      const { data, error } = await fromUntyped("pjecalc_hist_salarial")
         .select("*")
-        .eq("case_id", caseId)
+        .eq("calculo_id", calculoId!)
         .order("nome");
       if (error) throw error;
-      return (data || []) as unknown as HistoricoRow[];
+      return (data || []) as unknown as HistoricoBase[];
     },
   });
 
   const { data: ocorrencias = [], isLoading: loadingO } = useQuery({
-    queryKey: ["pjecalc_historico_ocorrencias", caseId],
+    queryKey: ["pjecalc_historico_ocorrencias", calculoId],
+    enabled: !!calculoId,
     queryFn: async () => {
-      const { data, error } = await fromUntyped("pjecalc_historico_ocorrencias")
+      const { data, error } = await fromUntyped("pjecalc_hist_salarial_mes")
         .select("*")
-        .eq("case_id", caseId)
+        .eq("calculo_id", calculoId!)
         .order("competencia");
       if (error) throw error;
-      return (data || []) as unknown as OcorrenciaRow[];
+      return (data || []) as unknown as OcorrenciaBase[];
     },
   });
 
   const histById = useMemo(() => {
-    const m = new Map<string, HistoricoRow>();
+    const m = new Map<string, HistoricoBase>();
     for (const h of historicos) m.set(h.id, h);
     return m;
   }, [historicos]);
 
   const rows: GridRow[] = useMemo(() => {
     return ocorrencias.map((o) => {
-      const h = histById.get(o.historico_id);
+      const h = o.hist_salarial_id ? histById.get(o.hist_salarial_id) : undefined;
       return {
         ocorrenciaId: o.id,
-        historicoId: o.historico_id,
-        competencia: o.competencia.slice(0, 7),
+        historicoId: o.hist_salarial_id ?? "",
+        competencia: (o.competencia ?? "").slice(0, 7),
         nomeRubrica: h?.nome ?? "—",
-        tipoVariacao: h?.tipo_valor ?? "VARIAVEL",
+        tipoVariacao: h?.tipo_variacao ?? "VARIAVEL",
         valor: Number(o.valor) || 0,
-        tipoLancamento: o.tipo || "informado",
         origem: o.origem,
         documento_id: o.documento_id,
-        incide_inss: !!h?.incidencia_cs,
-        incide_fgts: !!h?.incidencia_fgts,
+        incide_inss: !!h?.incide_inss,
+        incide_fgts: !!h?.incide_fgts,
+        incide_ir: h?.incide_ir !== false,
       };
     });
   }, [ocorrencias, histById]);
 
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ["pjecalc_historico", caseId] });
-    qc.invalidateQueries({
-      queryKey: ["pjecalc_historico_ocorrencias", caseId],
-    });
+    qc.invalidateQueries({ queryKey: ["pjecalc_historico"] });
+    qc.invalidateQueries({ queryKey: ["pjecalc_historico_ocorrencias"] });
   };
 
-  /**
-   * Garante a existência da rubrica "mãe" pelo nome; cria se não houver.
-   */
+  /** Garante a existência da rubrica-mãe pelo nome; cria se não houver. */
   const ensureHistorico = async (nome: string): Promise<string> => {
+    if (!calculoId) throw new Error("Cálculo não disponível.");
     const nomeNorm = nome.toUpperCase().trim() || "BASE";
     for (const h of historicos) {
       if (h.nome.toUpperCase().trim() === nomeNorm) return h.id;
     }
-    const { data, error } = await fromUntyped("pjecalc_historico_salarial")
+    const { data, error } = await fromUntyped("pjecalc_hist_salarial")
       .insert({
+        calculo_id: calculoId,
         case_id: caseId,
         nome: nome || "Base",
         tipo_variacao: "VARIAVEL",
@@ -148,8 +148,11 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
     return (data as { id: string }).id;
   };
 
-  const updateOcorrencia = async (id: string, patch: Partial<OcorrenciaRow>) => {
-    const { error } = await fromUntyped("pjecalc_historico_ocorrencias")
+  const updateOcorrencia = async (
+    id: string,
+    patch: Partial<OcorrenciaBase>,
+  ) => {
+    const { error } = await fromUntyped("pjecalc_hist_salarial_mes")
       .update(patch)
       .eq("id", id);
     if (error) {
@@ -161,12 +164,7 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
 
   const updateHistorico = async (
     histId: string,
-    patch: {
-      nome?: string;
-      tipo_variacao?: string;
-      incide_inss?: boolean;
-      incide_fgts?: boolean;
-    },
+    patch: Partial<HistoricoBase>,
   ) => {
     const { error } = await fromUntyped("pjecalc_hist_salarial")
       .update(patch)
@@ -179,21 +177,24 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
   };
 
   const addOcorrencia = async () => {
+    if (!calculoId) {
+      toast.error("Cálculo não disponível ainda — aguarde.");
+      return;
+    }
     try {
       const histId = await ensureHistorico("Salário Base");
       const today = new Date();
       const competencia = `${today.getFullYear()}-${String(
         today.getMonth() + 1,
       ).padStart(2, "0")}-01`;
-      const { error } = await fromUntyped("pjecalc_historico_ocorrencias")
-        .insert({
-          case_id: caseId,
-          historico_id: histId,
-          competencia,
-          valor: 0,
-          tipo: "vencimento",
-          origem: "INFORMADA",
-        });
+      const { error } = await fromUntyped("pjecalc_hist_salarial_mes").insert({
+        calculo_id: calculoId,
+        case_id: caseId,
+        hist_salarial_id: histId,
+        competencia,
+        valor: 0,
+        origem: "INFORMADA",
+      });
       if (error) throw error;
       invalidate();
     } catch (e) {
@@ -202,7 +203,7 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
   };
 
   const removeOcorrencia = async (r: GridRow) => {
-    const { error } = await fromUntyped("pjecalc_historico_ocorrencias")
+    const { error } = await fromUntyped("pjecalc_hist_salarial_mes")
       .delete()
       .eq("id", r.ocorrenciaId);
     if (error) {
@@ -240,7 +241,7 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
           className="h-7 text-[11px] px-1.5"
           onBlur={(e) => {
             const v = e.target.value.trim();
-            if (v && v !== r.nomeRubrica) {
+            if (v && v !== r.nomeRubrica && r.historicoId) {
               updateHistorico(r.historicoId, { nome: v });
             }
           }}
@@ -255,7 +256,7 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
         <Select
           value={r.tipoVariacao}
           onValueChange={(v) =>
-            updateHistorico(r.historicoId, { tipo_variacao: v })
+            r.historicoId && updateHistorico(r.historicoId, { tipo_variacao: v })
           }
         >
           <SelectTrigger className="h-7 text-[11px] px-1.5">
@@ -292,30 +293,6 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
       ),
     },
     {
-      key: "tipoLancamento",
-      header: "Lançam.",
-      width: "w-28",
-      cell: (r) => (
-        <Select
-          value={r.tipoLancamento}
-          onValueChange={(v) =>
-            updateOcorrencia(r.ocorrenciaId, { tipo: v })
-          }
-        >
-          <SelectTrigger className="h-7 text-[11px] px-1.5">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {TIPOS_LANCAMENTO.map((t) => (
-              <SelectItem key={t.value} value={t.value} className="text-[11px]">
-                {t.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ),
-    },
-    {
       key: "incide_inss",
       header: "INSS",
       align: "center",
@@ -325,6 +302,7 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
           <Checkbox
             checked={r.incide_inss}
             onCheckedChange={(v) =>
+              r.historicoId &&
               updateHistorico(r.historicoId, { incide_inss: !!v })
             }
           />
@@ -341,7 +319,25 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
           <Checkbox
             checked={r.incide_fgts}
             onCheckedChange={(v) =>
+              r.historicoId &&
               updateHistorico(r.historicoId, { incide_fgts: !!v })
+            }
+          />
+        </div>
+      ),
+    },
+    {
+      key: "incide_ir",
+      header: "IR",
+      align: "center",
+      width: "w-14",
+      cell: (r) => (
+        <div className="flex justify-center">
+          <Checkbox
+            checked={r.incide_ir}
+            onCheckedChange={(v) =>
+              r.historicoId &&
+              updateHistorico(r.historicoId, { incide_ir: !!v })
             }
           />
         </div>
