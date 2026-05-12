@@ -32,6 +32,7 @@ import type {
   PjeFerias,
   PjeFalta,
 } from "./engine-types";
+import { detectarVerbaModuleId } from "./detectar-verba-module";
 
 const HALF_EVEN_2 = (n: number): number => {
   // Banker's rounding a 2 casas (fórmula oficial PJe-Calc).
@@ -177,6 +178,31 @@ function diasTrabalhadosEm(
 }
 
 export type OcorrenciaPrecomputada = NonNullable<PjeVerba["ocorrencias_precomputadas"]>[number];
+
+/**
+ * Sessão 4 do roadmap: para cada PjeVerba, detecta qual verba-module
+ * jurídico (Súmula 340 TST, Art. 73 §1° CLT, etc.) seria aplicável.
+ * Retorna map id_verba → { moduleId, jaCalculado, valor }. Usado pela
+ * UI de auditoria. NÃO altera o cálculo numérico (apenas reporta).
+ */
+export function relatorioVerbaModules(verbas: PjeVerba[]): Array<{
+  verba_id: string;
+  verba_nome: string;
+  module_id: string | null;
+  cobertura: "modulo_juridico" | "generico" | "nao_coberto";
+}> {
+  return verbas.map((v) => {
+    const moduleId = detectarVerbaModuleId(v);
+    const cobertura: "modulo_juridico" | "generico" | "nao_coberto" =
+      moduleId ? "modulo_juridico" : v.valor === "calculado" ? "generico" : "nao_coberto";
+    return {
+      verba_id: v.id,
+      verba_nome: v.nome,
+      module_id: moduleId,
+      cobertura,
+    };
+  });
+}
 
 /**
  * Verifica se uma data foi reiniciada por uma falta com `reiniciar_periodo_aquisitivo`.
