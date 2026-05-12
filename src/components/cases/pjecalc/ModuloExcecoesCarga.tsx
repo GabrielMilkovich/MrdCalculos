@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { ExperimentalBanner } from "./ExperimentalBanner";
 
 // =====================================================
 // MÓDULO EXCEÇÕES DE CARGA HORÁRIA — ExcecaoDaCargaHoraria.java
@@ -114,6 +115,10 @@ export function ModuloExcecoesCarga({ caseId }: Props) {
 
   return (
     <div className="space-y-4">
+      <ExperimentalBanner
+        detalhe="Os dados desta tela são persistidos no banco mas o motor de cálculo V3 ainda NÃO os lê. Carga horária diferenciada (ex: bancário 6h) não é aplicada automaticamente ao cálculo de horas extras."
+        workaround="Workaround: defina o divisor manualmente na aba Contrato (ex: 180 para bancário) até esta integração ser concluída."
+      />
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Exceções de Carga Horária</h2>
         <Button onClick={openNew} size="sm">

@@ -17,7 +17,19 @@ import { PjeCalcEngineV3 } from '../engine-v3';
 import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, SELIC_MENSAL, TR_ACUMULADO } from '../indices-fallback';
 import type { PjeIndiceRow, PjeINSSFaixaRow } from '../engine-types';
 
-const CORPUS_DIR = path.resolve(__dirname, '../../../../Arquivos PJC');
+// AUDIT #20 (2026-05-12): antes apontava para `../../../../Arquivos PJC`
+// que não está versionado — quando ausente, o teste passava trivialmente
+// com `expect(true).toBe(true)` (linha 117). O "94% paridade" no
+// STATE-OF-PRODUCTION era teatro num corpus inexistente para qualquer
+// máquina que não a do dev original.
+//
+// Agora aponta primeiro para `public/reports/` (14 PJCs versionados no
+// repo), com fallback para `../../../../Arquivos PJC` caso o dev tenha
+// um corpus maior local. Se NEM um nem outro existirem, o teste FALHA
+// EXPLICITAMENTE (em vez de passar trivialmente).
+const CORPUS_VERSIONED = path.resolve(__dirname, '../../../../public/reports');
+const CORPUS_LOCAL = path.resolve(__dirname, '../../../../Arquivos PJC');
+const CORPUS_DIR = fs.existsSync(CORPUS_VERSIONED) ? CORPUS_VERSIONED : CORPUS_LOCAL;
 
 function buildIndicesDB(): PjeIndiceRow[] {
   const rows: PjeIndiceRow[] = [];
@@ -108,13 +120,23 @@ function rodarCaso(file: string): Resultado {
   return result;
 }
 
-describe('Paridade V3 — Engine Core vs 18 PJC reais', () => {
+describe('Paridade V3 — Engine Core vs PJC reais', () => {
   const arquivos = fs.existsSync(CORPUS_DIR)
-    ? fs.readdirSync(CORPUS_DIR).filter(f => f.toUpperCase().endsWith('.PJC')).sort()
+    ? fs.readdirSync(CORPUS_DIR).filter(f => f.toLowerCase().endsWith('.pjc')).sort()
     : [];
 
   if (arquivos.length === 0) {
-    it('corpus PJC ausente', () => { expect(true).toBe(true); });
+    // AUDIT #20: era `expect(true).toBe(true)` — passava silenciosamente
+    // sem corpus. Agora falha loud: o teste de paridade É a confirmação
+    // do "94%" no STATE-OF-PRODUCTION; sem corpus, não há confirmação.
+    it('corpus PJC AUSENTE — teste de paridade não pode rodar', () => {
+      throw new Error(
+        `Corpus PJC não encontrado em ${CORPUS_VERSIONED} nem em ${CORPUS_LOCAL}. ` +
+        `O teste de paridade depende de PJCs reais para validar o engine V3 — ` +
+        `sem ele, o número "94% paridade" no STATE-OF-PRODUCTION é teatro. ` +
+        `Copie ao menos 1 .pjc para public/reports/.`,
+      );
+    });
     return;
   }
 
@@ -175,5 +197,32 @@ describe('Paridade V3 — Engine Core vs 18 PJC reais', () => {
     console.log(`  PJe-Calc total: R$ ${fmt(totalPjc)}  |  MRD V3 total: R$ ${fmt(totalMrd)}`);
     console.log('═══════════════════════════════════════════════════════════════════════════');
     expect(resultados.length).toBeGreaterThan(0);
+
+    // AUDIT #20: além do "não-explosão" (<500%) por caso, agregado honesto:
+    // de todos os casos que rodaram, exigir que pelo menos 50% estejam em
+    // APROV≤5%. Isso protege contra regressão silenciosa onde TODOS os
+    // casos passam pelo gate `<500` individualmente mas o sistema todo
+    // está fora de paridade. Para falhar:
+    //   - >50% dos casos válidos precisariam estar acima de 5% de delta
+    //   - OU mais de 30% dos casos teriam erro de execução
+    if (validos > 0) {
+      const taxaAprov5 = ap5 / validos;
+      const taxaErro = erros / resultados.length;
+      expect(
+        taxaAprov5,
+        `Apenas ${ap5}/${validos} casos (${(taxaAprov5 * 100).toFixed(0)}%) em APROV≤5%. ` +
+        `Limiar mínimo de paridade: 50%. Engine V3 fora de paridade com o corpus.`,
+      ).toBeGreaterThanOrEqual(0.5);
+      // Taxa de erro mais frouxa porque os erros vêm do parser PJC
+      // (pjc-analyzer / pjc-to-engine), não do engine de cálculo em si.
+      // Threshold 50%: protege contra regressão grande do parser sem
+      // fazer um caso novo de fixture broken quebrar o CI imediatamente.
+      // Quando o parser PJC for endurecido, baixar este número.
+      expect(
+        taxaErro,
+        `${erros}/${resultados.length} casos com erro de execução (${(taxaErro * 100).toFixed(0)}%). ` +
+        `Limiar máximo aceitável: 50% (limitação do parser PJC, não do engine).`,
+      ).toBeLessThan(0.5);
+    }
   });
 });

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Save, Loader2 } from "lucide-react";
+import { ExperimentalBanner } from "./ExperimentalBanner";
 import * as svc from "@/lib/pjecalc/service";
 
 interface Props { caseId: string; }
@@ -84,6 +85,10 @@ export function ModuloSeguroDesemprego({ caseId }: Props) {
 
   return (
     <div className="space-y-4">
+      <ExperimentalBanner
+        detalhe="O cálculo atual usa apenas (parcelas × valor_parcela). As faixas progressivas oficiais da Lei 7.998/90 (R$ 1.412,00 / R$ 2.355,53 com alíquotas 0.8 / 0.5) NÃO são aplicadas automaticamente."
+        workaround="Workaround: informe manualmente o valor total já calculado em 'Valor informado' para casos em que a faixa importa."
+      />
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Seguro-Desemprego</h2>
         <Button onClick={save} disabled={saving} size="sm">

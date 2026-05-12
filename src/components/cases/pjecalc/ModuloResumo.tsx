@@ -830,6 +830,40 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         </CardContent></Card>
       ) : (
         <>
+          {/* AUDIT #15/#19: Banner BLOQUEANTE quando o engine V3 detecta
+              verbas com tipo "calculado" mas sem ocorrências precomputadas.
+              Engine retorna 0 para essas verbas — o usuário precisa saber
+              ANTES de assinar uma peça processual com valor zerado. */}
+          {res.resumo.verbas_sem_ocorrencias && res.resumo.verbas_sem_ocorrencias.length > 0 && (
+            <Card className="border-destructive bg-destructive/10">
+              <CardContent className="p-4 flex items-start gap-3">
+                <FileBarChart className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div className="space-y-1.5">
+                  <div className="font-semibold text-destructive text-sm">
+                    Cálculo incompleto: {res.resumo.verbas_sem_ocorrencias.length} verba(s) retornaram zero
+                  </div>
+                  <div className="text-xs text-foreground/90">
+                    O motor de cálculo V3 atual exige que as ocorrências de cada verba
+                    sejam <strong>pré-computadas</strong> (vindas de um XML do PJe-Calc
+                    Cidadão importado). Verbas cadastradas manualmente sem essa fonte
+                    têm seu cálculo retornando 0 silenciosamente.
+                  </div>
+                  <div className="text-xs">
+                    <strong>Verbas afetadas:</strong>{" "}
+                    <span className="font-mono">
+                      {res.resumo.verbas_sem_ocorrencias.join(", ")}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Solução: importe o XML do PJe-Calc Cidadão na aba "Importar PJC"
+                    para gerar as ocorrências, ou trate este cálculo como
+                    pré-rascunho — não use o valor liquidado abaixo em peça final.
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[

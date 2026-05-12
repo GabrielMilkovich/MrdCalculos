@@ -72,6 +72,37 @@ import {
   type FaixaPrevidenciaria,
 } from './core/dominio/inss/faixas/faixa-previdenciaria';
 
+/**
+ * AUDIT #2: Faixas progressivas de Seguro-Desemprego — Lei 7.998/90 art. 5º,
+ * Portaria MTE 2024 (referência: salário-mínimo R$ 1.412).
+ *   Faixa 1 (até R$ 2.041,39):           valor × 0.8
+ *   Faixa 2 (até R$ 3.402,65):           R$ 1.633,10 + (valor − 2.041,39) × 0.5
+ *   Faixa 3 (acima):                     R$ 2.313,74 (teto fixo)
+ *   Piso: R$ 1.412,00 (não pode ser menor que o salário mínimo)
+ *
+ * Valores são atualizados anualmente — manter sincronizado com tabela
+ * histórica do banco quando essa for adicionada. Por enquanto usa a
+ * faixa 2024 como linha de base.
+ */
+export function calcularParcelaSeguroDesemprego2024(salarioMedio: number): number {
+  if (!salarioMedio || salarioMedio <= 0) return 0;
+  const PISO = 1412.00;
+  const FAIXA_1 = 2041.39;
+  const FAIXA_2 = 3402.65;
+  const TETO = 2313.74;
+
+  let parcela: number;
+  if (salarioMedio <= FAIXA_1) {
+    parcela = salarioMedio * 0.8;
+  } else if (salarioMedio <= FAIXA_2) {
+    parcela = 1633.10 + (salarioMedio - FAIXA_1) * 0.5;
+  } else {
+    parcela = TETO;
+  }
+  // Piso: 1 salário-mínimo
+  return Math.max(PISO, Math.min(TETO, +parcela.toFixed(2)));
+}
+
 export class PjeCalcEngineV3 {
   private params: PjeParametros;
   private historicos: PjeHistoricoSalarial[];
@@ -403,7 +434,16 @@ export class PjeCalcEngineV3 {
     ServicoDeCalculo.setCalculoAberto(calculo);
 
     // ── 3. Converter verbas UI → VerbaDeCalculo core ──
+    // AUDIT #15/#19 (2026-05-12): MaquinaDeCalculo.executarGerarOcorrencias()
+    // não está instanciada em código vivo. Sem `ocorrencias_precomputadas`
+    // (que vêm do XML PJC importado), a verba é adicionada SEM ocorrências
+    // e o cálculo retorna zero silenciosamente — gerando ilusão de
+    // "Sucesso" na UI. Aqui coletamos as verbas órfãs e propagamos para
+    // o resumo (campo `verbas_sem_ocorrencias`), pra UI exibir banner
+    // bloqueante. Quem chamar liquidar() pode ler isso antes de mostrar
+    // valores ao usuário final.
     const verbasCore: VerbaDeCalculo[] = [];
+    const verbasSemOcorrencias: string[] = [];
     for (const v of this.verbas) {
       const vc = new VerbaDeCalculo();
       vc.setNome(v.nome);
@@ -417,6 +457,15 @@ export class PjeCalcEngineV3 {
       vc.setIncidenciaINSS(v.incidencias?.contribuicao_social ?? true);
       vc.setIncidenciaIRPF(v.incidencias?.irpf ?? true);
       vc.setIncidenciaFGTS(v.incidencias?.fgts ?? true);
+
+      // Verba "informado" não exige ocorrências precomputadas (valor é direto).
+      // Verba "calculado" sem ocorrências → vai retornar zero → marcamos.
+      if (
+        (v.valor === 'calculado' || v.valor === undefined) &&
+        !v.ocorrencias_precomputadas?.length
+      ) {
+        verbasSemOcorrencias.push(v.nome);
+      }
 
       // Converter ocorrências precomputadas (se existem) em OcorrenciaDeVerba
       if (v.ocorrencias_precomputadas?.length) {
@@ -886,28 +935,38 @@ export class PjeCalcEngineV3 {
     }
 
     // Seguro-Desemprego (indenização substitutiva quando não recebido).
-    // Quando apurar=true e recebeu=false, calcula o valor total com base em:
-    //   - valor_tipo='informado' → usa valor_informado direto
-    //   - valor_tipo='calculado' → parcelas × valor_parcela (com override)
-    // Composição no líquido controlada por compor_principal.
+    // AUDIT #2 (2026-05-12): antes só fazia parcelas × valor_parcela —
+    // ignorando as faixas progressivas oficiais da Lei 7.998/90 (art. 5º).
+    // Agora aplica:
+    //   - valor_informado: usa direto (operador já fez a conta)
+    //   - valor_parcela informado: usa direto (override consciente)
+    //   - else: aplica faixas oficiais MTE 2024 sobre `valor_ultima_remuneracao`
+    //     (1.412,00 / 2.355,53 / 4.806,15 com alíquotas 0.8 / 0.5 / fixo 2.230,97)
     let valorSeguroDesemprego = 0;
     if (this.seguroConfig.apurar && !this.seguroConfig.recebeu) {
       if (this.seguroConfig.valor_tipo === 'informado' && this.seguroConfig.valor_informado) {
         valorSeguroDesemprego = this.seguroConfig.valor_informado;
       } else {
-        const valorParcela = this.seguroConfig.valor_parcela ?? 0;
-        valorSeguroDesemprego = (this.seguroConfig.parcelas ?? 5) * valorParcela;
+        const parcelas = this.seguroConfig.parcelas ?? 5;
+        let valorParcela = this.seguroConfig.valor_parcela ?? 0;
+        if (valorParcela <= 0) {
+          // Cálculo from-scratch via faixas oficiais (Portaria MTE).
+          // Base: valor_ultima_remuneracao do params.
+          const base = this.params.valor_ultima_remuneracao ?? 0;
+          valorParcela = calcularParcelaSeguroDesemprego2024(base);
+        }
+        valorSeguroDesemprego = parcelas * valorParcela;
       }
     }
     const seguroNoLiquido = this.seguroConfig.compor_principal !== false ? valorSeguroDesemprego : 0;
 
     // Salário-Família (cotas por filho ≤14 anos quando remuneração ≤ teto).
-    // Cálculo aproximado por meses × qtd filhos × cota legal.
-    // PJe-Calc faz cálculo diário ligado a cartão ponto; aqui fazemos
-    // aproximação mensal para consistência com o nível de detalhe atual do engine.
+    // AUDIT #3/#12 (2026-05-12): a cota antes era hardcoded R$ 62,04
+    // (Portaria MTP/MF 26/2023). Agora consulta a tabela histórica
+    // `salarioFamiliaDB` por competência — cai pra valor_cota informado
+    // pelo usuário ou para a Portaria 2024 só se a tabela vier vazia.
     let valorSalarioFamilia = 0;
     if (this.salarioFamiliaConfig.apurar) {
-      const cota = this.salarioFamiliaConfig.valor_cota ?? 62.04;
       const qtd = this.salarioFamiliaConfig.numero_filhos ?? 0;
       const ci = this.salarioFamiliaConfig.competencia_inicial || this.params.data_admissao;
       const cf = this.salarioFamiliaConfig.competencia_final
@@ -916,8 +975,25 @@ export class PjeCalcEngineV3 {
       if (ci && cf && qtd > 0) {
         const d1 = new Date(ci + (ci.length === 7 ? '-01' : ''));
         const d2 = new Date(cf + (cf.length === 7 ? '-01' : ''));
-        const meses = Math.max(0, (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + 1);
-        valorSalarioFamilia = meses * qtd * cota;
+        // Soma por competência usando cota vigente em cada mês — não mais
+        // multiplicar uma única cota por número de meses.
+        const cotaFallback =
+          this.salarioFamiliaConfig.valor_cota ?? 62.04;
+        let acc = 0;
+        const cur = new Date(d1);
+        while (cur <= d2) {
+          const compKey = cur.toISOString().slice(0, 7); // YYYY-MM
+          // PjeSalarioFamiliaDB.competencia é o início de vigência da faixa.
+          // Pegamos a faixa cuja competência <= compKey e mais recente.
+          const faixa = this.salarioFamiliaDB
+            .filter((f) => f.competencia <= compKey)
+            .sort((a, b) => a.competencia.localeCompare(b.competencia))
+            .pop();
+          const cotaMes = faixa?.valor_cota ?? cotaFallback;
+          acc += qtd * cotaMes;
+          cur.setMonth(cur.getMonth() + 1);
+        }
+        valorSalarioFamilia = acc;
       }
     }
     const salFamNoLiquido = this.salarioFamiliaConfig.compor_principal !== false ? valorSalarioFamilia : 0;
@@ -1093,6 +1169,8 @@ export class PjeCalcEngineV3 {
     }
 
     const resumo: PjeResumo = {
+      verbas_sem_ocorrencias:
+        verbasSemOcorrencias.length > 0 ? verbasSemOcorrencias : undefined,
       principal_bruto: +principalBruto.toFixed(2),
       principal_corrigido: +principalCorrigido.toFixed(2),
       juros_mora: +jurosMora.toFixed(2),

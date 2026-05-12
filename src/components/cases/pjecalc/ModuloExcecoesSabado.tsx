@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { ExperimentalBanner } from "./ExperimentalBanner";
 
 // =====================================================
 // MÓDULO EXCEÇÕES DE SÁBADO — ExcecaoDoSabado.java
@@ -112,6 +113,10 @@ export function ModuloExcecoesSabado({ caseId }: Props) {
 
   return (
     <div className="space-y-4">
+      <ExperimentalBanner
+        detalhe="Os dados desta tela são persistidos no banco mas o motor de cálculo V3 ainda NÃO os lê. Sábado não-útil (bancário, comerciário) não é aplicado automaticamente."
+        workaround="Workaround: ajuste o divisor da carga horária manualmente para refletir a jornada efetiva (ex: 220 → 180)."
+      />
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Exceções de Sábado</h2>
         <Button onClick={openNew} size="sm">
