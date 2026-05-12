@@ -73,6 +73,7 @@ import {
   type FaixaPrevidenciaria,
 } from './core/dominio/inss/faixas/faixa-previdenciaria';
 import { preencherOcorrenciasFromScratch } from './gerar-ocorrencias-from-scratch';
+import { gerarApuracoesDeJuros, fatorSelicAcumulado } from './gerar-apuracoes-juros';
 
 /**
  * AUDIT #2: Faixas progressivas de Seguro-Desemprego — Lei 7.998/90 art. 5º,
@@ -1241,6 +1242,29 @@ export class PjeCalcEngineV3 {
       + (at.aplicar_custas ? resumo.custas : 0)
     ).toFixed(2);
     resumo.total_atualizado = totalAtualizado;
+
+    // Sessão 5 (2026-05-12): gera ApuracaoDeJuros agregadas por
+    // competência (porte de Calculo.calcularJuros Java 1519). Cada
+    // competência soma valor_corrigido de TODAS as verbas que vencem
+    // naquele mês e aplica taxa SELIC acumulada até data_liquidacao.
+    // Exposta em `resumo.apuracoes_juros` para relatório/auditoria —
+    // não altera `juros_mora` (que continua sendo soma das ocorrências).
+    try {
+      const apuracoes = gerarApuracoesDeJuros(
+        verbaResults,
+        (comp) =>
+          fatorSelicAcumulado(
+            comp,
+            this.correcaoConfig.data_liquidacao,
+            this.indicesDB,
+          ),
+      );
+      if (apuracoes.length > 0) {
+        resumo.apuracoes_juros = apuracoes;
+      }
+    } catch {
+      // Falha silenciosa — relatório de juros é informativo, não bloqueia liquidação.
+    }
 
     // Sessão 3 (2026-05-12): aplica dedução de pagamentos históricos
     // extras (PjePagamento[]) sobre os buckets do resumo. Cada bucket
