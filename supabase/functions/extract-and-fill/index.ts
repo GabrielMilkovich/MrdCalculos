@@ -1596,58 +1596,19 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       fills.push(`verbas (${vencimentos.length})`);
     }
 
-    // 5. FÉRIAS
-    if (extracted.ferias?.length > 0) {
-      for (const f of extracted.ferias) {
-        await safeOp(`ferias_${f.periodo_aquisitivo_inicio}`, () =>
-          supabase.from("pjecalc_ferias").insert({
-            case_id: caseId,
-            periodo_aquisitivo_inicio: f.periodo_aquisitivo_inicio,
-            periodo_aquisitivo_fim: f.periodo_aquisitivo_fim,
-            gozo_inicio: f.gozo_inicio || null,
-            gozo_fim: f.gozo_fim || null,
-            dias: f.dias || 30,
-            abono: f.abono_pecuniario || false,
-            dias_abono: f.dias_abono || 0,
-            situacao: f.situacao || "GOZADAS",
-          })
-        );
-      }
-      fills.push(`ferias (${extracted.ferias.length})`);
-    }
+    // 5. FÉRIAS  — REMOVIDO (2026-05-12)
+    // Substituído pelo parser determinístico `parseFerias` chamado em
+    // `src/features/auto-fill/auto-fill-from-ocr.ts` no instante em que
+    // o operador confirma o OCR. Parsers determinísticos são mais
+    // precisos que LLM para esse caso (variabilidade controlada,
+    // batido por 1500+ testes).
 
-    // 6. CARTÃO DE PONTO
-    if (extracted.cartao_ponto?.registros?.length > 0) {
-      const registros = extracted.cartao_ponto.registros;
-      for (let i = 0; i < registros.length; i += 50) {
-        const batch = registros.slice(i, i + 50).map((r: any) => {
-          const horasNormais = parseFloat(r.horas_normais) || 0;
-          const horasExtras = parseFloat(r.horas_extras) || 0;
-          const horasNoturnas = parseFloat(r.horas_noturnas) || 0;
-          const isFalta = !r.entrada1 && /falta|ausencia|ausência/i.test(r.observacao || "");
-          return {
-            calculo_id: calculoId,
-            data: r.data,
-            frequencia_str: [r.entrada1, r.saida1, r.entrada2, r.saida2, r.entrada3, r.saida3].filter(Boolean).join(" | ") || null,
-            horas_trabalhadas: horasNormais,
-            horas_extras_diaria: horasExtras,
-            horas_noturnas: horasNoturnas,
-            minutos_trabalhados: Math.round(horasNormais * 60),
-            minutos_extra_diaria: Math.round(horasExtras * 60),
-            minutos_noturno: Math.round(horasNoturnas * 60),
-            is_falta: isFalta,
-            is_dsr: /dsr|domingo|repouso/i.test(r.observacao || ""),
-            is_feriado: /feriado/i.test(r.observacao || ""),
-            origem: "OCR",
-          };
-        });
-
-        await supabase.from("pjecalc_apuracao_diaria").insert(batch).then(({ error }: any) => {
-          if (error) console.error("[FILL] cartao_ponto batch:", error.message);
-        });
-      }
-      fills.push(`cartao_ponto (${registros.length} dias)`);
-    }
+    // 6. CARTÃO DE PONTO — REMOVIDO (2026-05-12)
+    // Substituído pelo parser determinístico `parseCartaoPonto` (6 pares
+    // E/S estruturados) chamado em `auto-fill-from-ocr.ts`. O LLM perdia
+    // fidelidade ao concatenar batidas em `frequencia_str`; agora as
+    // colunas entrada_1..6/saida_1..6 são populadas direto e o trigger
+    // `pjecalc_apuracao_diaria_recompute` recalcula minutos.
 
     // 7. TRCT
     if (extracted.trct) {
@@ -1818,25 +1779,11 @@ async function autoFill(supabase: any, caseId: string, extracted: any) {
       }
     }
 
-    // 10. FALTAS
-    if (extracted.cartao_ponto?.registros?.length > 0) {
-      const faltas = extracted.cartao_ponto.registros.filter(
-        (r: any) => r.observacao && /falta|ausencia|ausência/i.test(r.observacao) && !r.entrada1
-      );
-      for (const falta of faltas) {
-        await supabase.from("pjecalc_faltas").insert({
-          case_id: caseId,
-          data_inicial: falta.data,
-          data_final: falta.data,
-          tipo_falta: "FALTA",
-          justificada: /atestado|justificad/i.test(falta.observacao || ""),
-          motivo: falta.observacao,
-        }).then(({ error }: any) => {
-          if (error) console.error(`[FILL] falta ${falta.data}:`, error.message);
-        });
-      }
-      if (faltas.length > 0) fills.push(`faltas (${faltas.length})`);
-    }
+    // 10. FALTAS — REMOVIDO (2026-05-12)
+    // Substituído pelo parser determinístico `parseFaltas` em
+    // `auto-fill-from-ocr.ts`. Detecção via heurística no LLM gerava
+    // muitos falsos positivos (ex.: a palavra "falta" no contexto de
+    // "não falta" virava uma linha de falta).
 
     // 11. FACTS
     const allFacts: Array<{chave: string; valor: string; tipo: string}> = [];

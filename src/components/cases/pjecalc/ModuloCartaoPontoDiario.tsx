@@ -3,18 +3,38 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase } from "@/integrations/supabase/client";
 import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2, Calculator, Calendar, ChevronLeft, ChevronRight, Copy, Clock, AlertTriangle } from "lucide-react";
+import {
+  Loader2,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  AlertTriangle,
+} from "lucide-react";
+import { PjeCalcGrid, type PjeCalcGridColumn } from "./PjeCalcGrid";
 
-// Limite de amostragem aplicado pelo extract-and-fill (cartao de ponto).
-// Refs: supabase/functions/extract-and-fill/index.ts:1058 (prompt) e :1393 (loop).
+/** Limite oficial PJE-Calc: 6 pares E/S por dia. */
+const MAX_PARES = 6;
+
+/** Limite de amostragem aplicado pelo extract-and-fill legado (mantido para alerta). */
 const OCR_CARTAO_PONTO_SAMPLE_LIMIT = 60;
 
 interface Props {
@@ -24,27 +44,70 @@ interface Props {
   cargaHoraria?: number;
 }
 
-const DIAS_SEMANA = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const DIAS_SEMANA = [
+  "Domingo",
+  "Segunda",
+  "Terça",
+  "Quarta",
+  "Quinta",
+  "Sexta",
+  "Sábado",
+];
 
-function calcHorasEntre(h1: string, h2: string): number {
-  if (!h1 || !h2) return 0;
-  const [h1h, h1m] = h1.split(':').map(Number);
-  const [h2h, h2m] = h2.split(':').map(Number);
-  const min1 = h1h * 60 + h1m;
-  let min2 = h2h * 60 + h2m;
-  if (min2 < min1) min2 += 1440; // meia-noite
-  return (min2 - min1) / 60;
+const OCORRENCIAS = [
+  { value: "NORMAL", label: "NORMAL" },
+  { value: "FALTA", label: "FALTA" },
+  { value: "FERIADO", label: "FERIADO" },
+  { value: "FOLGA", label: "FOLGA" },
+  { value: "FERIAS", label: "FÉRIAS" },
+  { value: "ATESTADO", label: "ATESTADO" },
+  { value: "LICENCA_MEDICA", label: "LIC. MÉDICA" },
+  { value: "DSR", label: "DSR" },
+  { value: "COMPENSADO", label: "COMPENSADO" },
+];
+
+interface PontoDia {
+  id: string;
+  case_id: string;
+  data: string;
+  dia_semana: string | null;
+  ocorrencia: string;
+  entrada_1: string | null;
+  saida_1: string | null;
+  entrada_2: string | null;
+  saida_2: string | null;
+  entrada_3: string | null;
+  saida_3: string | null;
+  entrada_4: string | null;
+  saida_4: string | null;
+  entrada_5: string | null;
+  saida_5: string | null;
+  entrada_6: string | null;
+  saida_6: string | null;
+  horas_trabalhadas: number | null;
+  origem: string | null;
+  documento_id: string | null;
 }
 
-function calcHorasTrabalhadas(r: any): number {
-  let total = 0;
-  total += calcHorasEntre(r.entrada_1, r.saida_1);
-  total += calcHorasEntre(r.entrada_2, r.saida_2);
-  total += calcHorasEntre(r.entrada_3, r.saida_3);
-  return Math.round(total * 100) / 100;
+const HORA_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
+function normalizeHora(value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  if (HORA_RE.test(v)) return v.length === 4 ? `0${v}` : v;
+  // Tenta "0800" → "08:00"
+  const digits = v.replace(/\D/g, "");
+  if (digits.length === 4) return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+  if (digits.length === 3) return `0${digits.slice(0, 1)}:${digits.slice(1)}`;
+  return null;
 }
 
-export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, cargaHoraria = 220 }: Props) {
+export function ModuloCartaoPontoDiario({
+  caseId,
+  dataAdmissao,
+  dataDemissao,
+  cargaHoraria = 220,
+}: Props) {
   const qc = useQueryClient();
   const [mesAtual, setMesAtual] = useState(() => {
     if (dataDemissao) return dataDemissao.slice(0, 7);
@@ -53,81 +116,85 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
   const [generating, setGenerating] = useState(false);
   const [showFixar, setShowFixar] = useState(false);
   const [jornadaFixa, setJornadaFixa] = useState({
-    entrada_1: '08:00', saida_1: '12:00',
-    entrada_2: '13:00', saida_2: '17:00',
+    entrada_1: "08:00",
+    saida_1: "12:00",
+    entrada_2: "13:00",
+    saida_2: "17:00",
     sabado: false,
   });
 
-  const [ano, mes] = mesAtual.split('-').map(Number);
+  const [ano, mes] = mesAtual.split("-").map(Number);
 
   const { data: registros = [], isLoading } = useQuery({
     queryKey: ["pjecalc_ponto_diario", caseId, mesAtual],
     queryFn: async () => {
       const inicioMes = `${mesAtual}-01`;
       const diasNoMes = new Date(ano, mes, 0).getDate();
-      const fimMes = `${mesAtual}-${String(diasNoMes).padStart(2, '0')}`;
-      const { data } = await fromUntyped("pjecalc_ponto_diario")
+      const fimMes = `${mesAtual}-${String(diasNoMes).padStart(2, "0")}`;
+      const { data, error } = await fromUntyped("pjecalc_ponto_diario")
         .select("*")
         .eq("case_id", caseId)
         .gte("data", inicioMes)
         .lte("data", fimMes)
         .order("data");
-      return (data ?? []) as unknown as Record<string, unknown>[];
+      if (error) throw error;
+      return (data ?? []) as unknown as PontoDia[];
     },
   });
 
-  // Detecta truncamento OCR: extract-and-fill capa o cartao de ponto em 60 dias
-  // como amostra (vide prompt em extract-and-fill/index.ts:1058). Se a apuracao
-  // diaria do caso tem >= 60 registros com origem='OCR', alertamos que HE
-  // pode estar subestimada por falta de amostra completa.
+  // Alerta de amostra OCR truncada (limite legado de 60 dias).
   const { data: ocrSampleInfo } = useQuery({
     queryKey: ["cartao_ponto_ocr_sample", caseId],
     queryFn: async () => {
-      const { count, error } = await fromUntyped("pjecalc_apuracao_diaria")
+      const { count } = await fromUntyped("pjecalc_apuracao_diaria")
         .select("*", { count: "exact", head: true })
-        .eq("origem", "OCR")
-        // calculo_id e o link real, mas nao temos aqui — filtra por presenca
-        // de qualquer linha OCR (pjecalc_apuracao_diaria nao tem case_id direto).
-        // Como aproximacao usamos calculo_id via subquery por case.
-        .in(
-          "calculo_id",
-          (await supabase.from("pjecalc_calculos").select("id").eq("case_id", caseId)).data?.map((r: { id: string }) => r.id) || ["__none__"],
-        );
-      if (error) return { ocrCount: 0, truncated: false };
+        .eq("case_id", caseId)
+        .eq("origem", "OCR");
       const ocrCount = count || 0;
-      return { ocrCount, truncated: ocrCount >= OCR_CARTAO_PONTO_SAMPLE_LIMIT };
+      return {
+        ocrCount,
+        truncated: ocrCount >= OCR_CARTAO_PONTO_SAMPLE_LIMIT,
+      };
     },
     staleTime: 60_000,
   });
 
-  // Resumo do mês
+  const invalidate = () =>
+    qc.invalidateQueries({
+      queryKey: ["pjecalc_ponto_diario", caseId, mesAtual],
+    });
+
   const resumoMes = useMemo(() => {
-    let ht = 0, hed = 0, hes = 0, hedsr = 0, hn = 0, is = 0;
-    for (const r of registros) {
-      const row = r as Record<string, number | undefined>;
-      ht += row.horas_trabalhadas || 0;
-      hed += row.horas_extras_diarias || 0;
-      hes += row.horas_extras_semanais || 0;
-      hedsr += row.horas_extras_dsr || 0;
-      hn += row.horas_noturnas || 0;
-      is += row.intervalo_suprimido || 0;
-    }
-    return { ht: ht.toFixed(2), hed: hed.toFixed(2), hes: hes.toFixed(2), hedsr: hedsr.toFixed(2), hn: hn.toFixed(2), is: is.toFixed(2) };
+    let ht = 0;
+    for (const r of registros) ht += Number(r.horas_trabalhadas) || 0;
+    return {
+      ht: ht.toFixed(2),
+      dias: registros.length,
+      diasTrab: registros.filter((r) => Number(r.horas_trabalhadas) > 0).length,
+      faltas: registros.filter((r) => r.ocorrencia === "FALTA").length,
+      feriados: registros.filter((r) => r.ocorrencia === "FERIADO").length,
+    };
   }, [registros]);
 
   const gerarDiasMes = async () => {
-    if (!dataAdmissao) { toast.error("Preencha a data de admissão."); return; }
+    if (!dataAdmissao) {
+      toast.error("Preencha a data de admissão antes.");
+      return;
+    }
     setGenerating(true);
     try {
       const diasNoMes = new Date(ano, mes, 0).getDate();
-      const admDate = new Date(dataAdmissao);
-      const demDate = dataDemissao ? new Date(dataDemissao) : null;
-      
-      // Deletar dias existentes do mês
+      const admDate = new Date(dataAdmissao + "T00:00:00");
+      const demDate = dataDemissao ? new Date(dataDemissao + "T00:00:00") : null;
+
       const inicioMes = `${mesAtual}-01`;
-      const fimMes = `${mesAtual}-${String(diasNoMes).padStart(2, '0')}`;
-      await fromUntyped("pjecalc_ponto_diario").delete()
-        .eq("case_id", caseId).gte("data", inicioMes).lte("data", fimMes);
+      const fimMes = `${mesAtual}-${String(diasNoMes).padStart(2, "0")}`;
+      await fromUntyped("pjecalc_apuracao_diaria")
+        .delete()
+        .eq("case_id", caseId)
+        .gte("data", inicioMes)
+        .lte("data", fimMes)
+        .neq("origem", "OCR");
 
       const rows: Record<string, unknown>[] = [];
       for (let d = 1; d <= diasNoMes; d++) {
@@ -135,209 +202,299 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
         if (date < admDate) continue;
         if (demDate && date > demDate) continue;
         const dow = date.getDay();
-        const dataStr = `${ano}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const dataStr = `${ano}-${String(mes).padStart(2, "0")}-${String(
+          d,
+        ).padStart(2, "0")}`;
         rows.push({
           case_id: caseId,
           data: dataStr,
           dia_semana: DIAS_SEMANA[dow],
-          tipo: dow === 0 ? 'folga' : 'normal',
-          origem: 'INFORMADA',
-          horas_trabalhadas: 0,
+          ocorrencia: dow === 0 ? "FOLGA" : "NORMAL",
+          origem: "INFORMADA",
         });
       }
-      if (rows.length > 0) await fromUntyped("pjecalc_ponto_diario").insert(rows);
-      qc.invalidateQueries({ queryKey: ["pjecalc_ponto_diario", caseId, mesAtual] });
+      if (rows.length > 0) {
+        const { error } = await fromUntyped("pjecalc_apuracao_diaria")
+          .upsert(rows, { onConflict: "case_id,data" });
+        if (error) throw error;
+      }
+      invalidate();
       toast.success(`${rows.length} dias gerados para ${mesAtual}`);
-    } catch (e) { toast.error((e as Error).message); }
-    finally { setGenerating(false); }
-  };
-
-  const gerarTodosPeriodo = async () => {
-    if (!dataAdmissao || !dataDemissao) { toast.error("Preencha admissão e demissão."); return; }
-    setGenerating(true);
-    try {
-      await fromUntyped("pjecalc_ponto_diario").delete().eq("case_id", caseId);
-      const admDate = new Date(dataAdmissao);
-      const demDate = new Date(dataDemissao);
-      const rows: Record<string, unknown>[] = [];
-      const cur = new Date(admDate);
-      while (cur <= demDate) {
-        const dow = cur.getDay();
-        const dataStr = cur.toISOString().slice(0, 10);
-        rows.push({
-          case_id: caseId,
-          data: dataStr,
-          dia_semana: DIAS_SEMANA[dow],
-          tipo: dow === 0 ? 'folga' : 'normal',
-          origem: 'INFORMADA',
-          horas_trabalhadas: 0,
-        });
-        cur.setDate(cur.getDate() + 1);
-      }
-      // Insert em lotes de 500
-      for (let i = 0; i < rows.length; i += 500) {
-        await fromUntyped("pjecalc_ponto_diario").insert(rows.slice(i, i + 500));
-      }
-      qc.invalidateQueries({ queryKey: ["pjecalc_ponto_diario", caseId, mesAtual] });
-      toast.success(`${rows.length} dias gerados para todo o período`);
-    } catch (e) { toast.error((e as Error).message); }
-    finally { setGenerating(false); }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const fixarJornada = async () => {
     setGenerating(true);
     try {
-      // Aplicar jornada fixa em todos os dias normais do mês
       for (const r of registros) {
-        if (r.tipo === 'folga' || r.tipo === 'feriado' || r.tipo === 'ferias') continue;
-        const dow = new Date(r.data).getDay();
+        if (r.ocorrencia !== "NORMAL") continue;
+        const dow = new Date(r.data + "T12:00:00").getDay();
         if (dow === 0) continue;
         if (dow === 6 && !jornadaFixa.sabado) continue;
-        
-        const ht = calcHorasEntre(jornadaFixa.entrada_1, jornadaFixa.saida_1) +
-                    calcHorasEntre(jornadaFixa.entrada_2, jornadaFixa.saida_2);
-        const jornadadiaria = cargaHoraria / (jornadaFixa.sabado ? 26 : 22);
-        const he = Math.max(0, ht - jornadadiaria);
-        
-        await fromUntyped("pjecalc_ponto_diario").update({
-          entrada_1: jornadaFixa.entrada_1,
-          saida_1: jornadaFixa.saida_1,
-          entrada_2: jornadaFixa.entrada_2,
-          saida_2: jornadaFixa.saida_2,
-          horas_trabalhadas: Math.round(ht * 100) / 100,
-          horas_extras_diarias: Math.round(he * 100) / 100,
-          frequencia: `${jornadaFixa.entrada_1}-${jornadaFixa.saida_1} / ${jornadaFixa.entrada_2}-${jornadaFixa.saida_2}`,
-          origem: 'FIXADA',
-        }).eq("id", r.id);
+
+        const { error } = await fromUntyped("pjecalc_apuracao_diaria")
+          .update({
+            entrada_1: jornadaFixa.entrada_1,
+            saida_1: jornadaFixa.saida_1,
+            entrada_2: jornadaFixa.entrada_2,
+            saida_2: jornadaFixa.saida_2,
+            entrada_3: null,
+            saida_3: null,
+            entrada_4: null,
+            saida_4: null,
+            entrada_5: null,
+            saida_5: null,
+            entrada_6: null,
+            saida_6: null,
+            origem: "FIXADA",
+          })
+          .eq("id", r.id);
+        if (error) throw error;
       }
-      qc.invalidateQueries({ queryKey: ["pjecalc_ponto_diario", caseId, mesAtual] });
-      toast.success("Jornada fixada aplicada");
+      invalidate();
+      toast.success("Jornada fixada aplicada no mês.");
       setShowFixar(false);
-    } catch (e) { toast.error((e as Error).message); }
-    finally { setGenerating(false); }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setGenerating(false);
+    }
   };
 
-  const updateField = useCallback(async (id: string, field: string, value: string | number) => {
-    const row = registros.find(r => r.id === id);
-    if (!row) return;
-    
-    const updated = { ...row, [field]: value };
-    
-    // Recalcular horas se alterou horários
-    if (['entrada_1', 'saida_1', 'entrada_2', 'saida_2', 'entrada_3', 'saida_3'].includes(field)) {
-      updated[field] = value;
-      const ht = calcHorasTrabalhadas(updated);
-      const freq = [
-        updated.entrada_1 && updated.saida_1 ? `${updated.entrada_1}-${updated.saida_1}` : '',
-        updated.entrada_2 && updated.saida_2 ? `${updated.entrada_2}-${updated.saida_2}` : '',
-        updated.entrada_3 && updated.saida_3 ? `${updated.entrada_3}-${updated.saida_3}` : '',
-      ].filter(Boolean).join(' / ');
-      
-      await fromUntyped("pjecalc_ponto_diario").update({
-        [field]: value,
-        horas_trabalhadas: ht,
-        frequencia: freq,
-        origem: 'INFORMADA',
-      }).eq("id", id);
-    } else {
-      await fromUntyped("pjecalc_ponto_diario").update({
-        [field]: value,
-        origem: 'INFORMADA',
-      }).eq("id", id);
+  const updateField = useCallback(
+    async (id: string, field: keyof PontoDia, value: string | null) => {
+      const { error } = await fromUntyped("pjecalc_apuracao_diaria")
+        .update({ [field]: value, origem: "INFORMADA" })
+        .eq("id", id);
+      if (error) {
+        toast.error("Erro ao salvar: " + error.message);
+        return;
+      }
+      invalidate();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [caseId, mesAtual],
+  );
+
+  const addDia = async () => {
+    const inicioMes = `${mesAtual}-01`;
+    const existentes = new Set(registros.map((r) => r.data));
+    const diasNoMes = new Date(ano, mes, 0).getDate();
+    let dia = 1;
+    while (
+      dia <= diasNoMes &&
+      existentes.has(
+        `${mesAtual}-${String(dia).padStart(2, "0")}`,
+      )
+    ) {
+      dia += 1;
     }
-    qc.invalidateQueries({ queryKey: ["pjecalc_ponto_diario", caseId, mesAtual] });
-  }, [registros, caseId, mesAtual, qc]);
+    const data =
+      dia <= diasNoMes
+        ? `${mesAtual}-${String(dia).padStart(2, "0")}`
+        : inicioMes;
+    const dow = new Date(data + "T12:00:00").getDay();
+    const { error } = await fromUntyped("pjecalc_apuracao_diaria")
+      .upsert(
+        {
+          case_id: caseId,
+          data,
+          dia_semana: DIAS_SEMANA[dow],
+          ocorrencia: "NORMAL",
+          origem: "INFORMADA",
+        },
+        { onConflict: "case_id,data" },
+      );
+    if (error) {
+      toast.error("Erro: " + error.message);
+      return;
+    }
+    invalidate();
+  };
+
+  const removeDia = async (r: PontoDia) => {
+    const { error } = await fromUntyped("pjecalc_apuracao_diaria")
+      .delete()
+      .eq("id", r.id);
+    if (error) {
+      toast.error("Erro ao remover");
+      return;
+    }
+    invalidate();
+  };
 
   const navMes = (dir: number) => {
     const d = new Date(ano, mes - 1 + dir, 1);
-    setMesAtual(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    setMesAtual(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+    );
   };
 
-  const mesesLabel = new Date(ano, mes - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const mesesLabel = new Date(ano, mes - 1).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
 
-  // Sincronizar com tabela de totais por competência (pjecalc_cartao_ponto)
-  const sincronizarTotais = async () => {
-    try {
-      // Buscar todos os meses com dados
-      const res = await fromUntyped("pjecalc_ponto_diario")
-        .select("*").eq("case_id", caseId).order("data");
-      type PontoRow = Record<string, unknown> & { data: string; tipo?: string; horas_trabalhadas?: number };
-      const todos = ((res as unknown as { data: PontoRow[] | null }).data ?? []);
-      if (todos.length === 0) return;
-
-      // Agrupar por competência
-      const porComp: Record<string, PontoRow[]> = {};
-      for (const r of todos) {
-        const comp = r.data.slice(0, 7);
-        if (!porComp[comp]) porComp[comp] = [];
-        porComp[comp].push(r);
-      }
-
-      // Deletar totais existentes e inserir novos
-      await fromUntyped("pjecalc_cartao_ponto").delete().eq("case_id", caseId);
-      type CartaoPontoRow = Record<string, unknown>;
-      const rows: CartaoPontoRow[] = [];
-      for (const [comp, dias] of Object.entries(porComp)) {
-        const diasUteis = dias.filter(d => d.tipo === 'normal' && new Date(d.data).getDay() !== 0).length;
-        const diasTrabalhados = dias.filter(d => (d.horas_trabalhadas || 0) > 0).length;
-        rows.push({
-          case_id: caseId,
-          competencia: comp,
-          dias_uteis: diasUteis,
-          dias_trabalhados: diasTrabalhados,
-          horas_extras_50: dias.reduce((s: number, d: any) => s + (d.horas_extras_diarias || 0), 0),
-          horas_extras_100: dias.reduce((s: number, d: any) => s + (d.horas_extras_semanais || 0), 0),
-          horas_noturnas: dias.reduce((s: number, d: any) => s + (d.horas_noturnas || 0), 0),
-          intervalo_suprimido: dias.reduce((s: number, d: any) => s + (d.intervalo_suprimido || 0), 0),
-          dsr_horas: dias.reduce((s: number, d: any) => s + (d.horas_extras_dsr || 0), 0),
-        });
-      }
-      if (rows.length > 0) {
-        for (let i = 0; i < rows.length; i += 500) {
-          await fromUntyped("pjecalc_cartao_ponto").insert(rows.slice(i, i + 500));
+  /** Renderiza um input HH:MM enxuto para um campo entrada_X/saida_X. */
+  const horaInput = (r: PontoDia, field: keyof PontoDia) => (
+    <Input
+      type="text"
+      inputMode="numeric"
+      maxLength={5}
+      placeholder="--:--"
+      defaultValue={(r[field] as string | null) ?? ""}
+      className="h-7 text-[11px] font-mono text-center px-1 w-[58px]"
+      onBlur={(e) => {
+        const v = e.target.value.trim();
+        const normalized = v === "" ? null : normalizeHora(v);
+        if (v !== "" && !normalized) {
+          toast.error(`Hora inválida: "${v}"`);
+          e.target.value = (r[field] as string | null) ?? "";
+          return;
         }
-      }
-      toast.success(`${rows.length} competências sincronizadas com o motor de cálculo`);
-    } catch (e) { toast.error((e as Error).message); }
-  };
+        if (normalized !== (r[field] as string | null)) {
+          updateField(r.id, field, normalized);
+        }
+      }}
+    />
+  );
+
+  const columns: PjeCalcGridColumn<PontoDia>[] = [
+    {
+      key: "data",
+      header: "Data",
+      width: "w-32",
+      cell: (r) => (
+        <Input
+          type="date"
+          defaultValue={r.data}
+          className="h-7 text-[11px] font-mono px-1"
+          onBlur={(e) =>
+            e.target.value !== r.data &&
+            updateField(r.id, "data", e.target.value)
+          }
+        />
+      ),
+    },
+    {
+      key: "ocorrencia",
+      header: "Tipo",
+      width: "w-28",
+      cell: (r) => (
+        <Select
+          value={r.ocorrencia ?? "NORMAL"}
+          onValueChange={(v) => updateField(r.id, "ocorrencia", v)}
+        >
+          <SelectTrigger className="h-7 text-[11px] px-1.5">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {OCORRENCIAS.map((o) => (
+              <SelectItem key={o.value} value={o.value} className="text-[11px]">
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ),
+    },
+    // 6 pares de E/S — coluna composta (renderiza 2 inputs lado a lado)
+    ...Array.from({ length: MAX_PARES }, (_, i) => {
+      const idx = i + 1;
+      const eField = `entrada_${idx}` as keyof PontoDia;
+      const sField = `saida_${idx}` as keyof PontoDia;
+      return {
+        key: `par_${idx}`,
+        header: `Par ${idx}`,
+        align: "center" as const,
+        pairColumn: true,
+        cell: (r: PontoDia) => (
+          <div className="flex gap-0.5 justify-center">
+            {horaInput(r, eField)}
+            {horaInput(r, sField)}
+          </div>
+        ),
+      };
+    }),
+    {
+      key: "horas",
+      header: "Hs Trab.",
+      align: "center",
+      width: "w-14",
+      cell: (r) => (
+        <span className="font-mono text-[10px] text-muted-foreground">
+          {Number(r.horas_trabalhadas ?? 0).toFixed(2)}
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-lg font-semibold">Cartão de Ponto — Ocorrências Diárias</h2>
-          <p className="text-xs text-muted-foreground">Lançamento de horários por dia (como no PJe-Calc)</p>
+    <div className="space-y-3">
+      {/* Header com navegação de mês + ações */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => navMes(-1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="font-semibold text-sm capitalize min-w-[140px] text-center">
+            {mesesLabel}
+          </span>
+          <Button variant="outline" size="sm" onClick={() => navMes(1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
-        <div className="flex gap-1 flex-wrap">
-          <Button size="sm" variant="outline" onClick={gerarDiasMes} disabled={generating}>
-            {generating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Calendar className="h-3 w-3 mr-1" />}
+        <div className="flex gap-1.5 flex-wrap">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={gerarDiasMes}
+            disabled={generating}
+            className="h-8"
+          >
+            {generating ? (
+              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+            ) : (
+              <Calendar className="h-3 w-3 mr-1" />
+            )}
             Gerar Mês
           </Button>
-          <Button size="sm" variant="outline" onClick={gerarTodosPeriodo} disabled={generating}>
-            <Calendar className="h-3 w-3 mr-1" /> Gerar Todo Período
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setShowFixar(true)}>
-            <Clock className="h-3 w-3 mr-1" /> Fixar Jornada
-          </Button>
-          <Button size="sm" variant="default" onClick={sincronizarTotais}>
-            <Calculator className="h-3 w-3 mr-1" /> Sincronizar Totais
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowFixar(true)}
+            className="h-8"
+          >
+            <Clock className="h-3 w-3 mr-1" />
+            Fixar Jornada
           </Button>
         </div>
       </div>
 
-      {/* Navegação por mês */}
-      <div className="flex items-center justify-between bg-muted/30 rounded-lg p-2">
-        <Button variant="ghost" size="sm" onClick={() => navMes(-1)}>
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <span className="font-semibold text-sm capitalize">{mesesLabel}</span>
-        <Button variant="ghost" size="sm" onClick={() => navMes(1)}>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+      {/* Resumo */}
+      <div className="grid grid-cols-5 gap-2">
+        {[
+          { label: "Dias", val: resumoMes.dias },
+          { label: "Trabalhados", val: resumoMes.diasTrab },
+          { label: "Hs Trab.", val: resumoMes.ht },
+          { label: "Faltas", val: resumoMes.faltas },
+          { label: "Feriados", val: resumoMes.feriados },
+        ].map((item) => (
+          <Card key={item.label}>
+            <CardContent className="p-2 text-center">
+              <div className="text-[9px] text-muted-foreground uppercase">
+                {item.label}
+              </div>
+              <div className="font-mono font-bold text-xs">{item.val}</div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Warning de amostra OCR truncada */}
       {ocrSampleInfo?.truncated && (
         <Card className="border-amber-400 bg-amber-50/60 dark:bg-amber-950/20">
           <CardContent className="p-3 flex items-start gap-2 text-xs">
@@ -347,121 +504,43 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
                 Amostra de {OCR_CARTAO_PONTO_SAMPLE_LIMIT} dias detectada
               </div>
               <div className="text-amber-700 dark:text-amber-300/80">
-                A extração via OCR limitou-se aos primeiros {OCR_CARTAO_PONTO_SAMPLE_LIMIT} registros diários. Horas Extras
-                podem estar subestimadas. Verifique e complete os meses faltantes manualmente
-                ou via importação de CSV antes da liquidação.
+                A extração via OCR pode ter limitado os primeiros registros.
+                Verifique e complete os meses faltantes antes da liquidação.
               </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Resumo do mês */}
-      <div className="grid grid-cols-6 gap-2">
-        {[
-          { label: 'Hs Trab.', val: resumoMes.ht },
-          { label: 'HE Diárias', val: resumoMes.hed },
-          { label: 'HE Semanais', val: resumoMes.hes },
-          { label: 'HE DSR', val: resumoMes.hedsr },
-          { label: 'H. Noturnas', val: resumoMes.hn },
-          { label: 'Int. Supr.', val: resumoMes.is },
-        ].map(item => (
-          <Card key={item.label}>
-            <CardContent className="p-2 text-center">
-              <div className="text-[9px] text-muted-foreground uppercase">{item.label}</div>
-              <div className="font-mono font-bold text-xs">{item.val}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Grade diária */}
-      {isLoading ? (
-        <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
-      ) : registros.length === 0 ? (
-        <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
-          Clique em "Gerar Mês" para criar os dias do mês selecionado.
-        </CardContent></Card>
-      ) : (
-        <div className="overflow-x-auto border rounded-lg">
-          <table className="w-full text-[10px] border-collapse">
-            <thead>
-              <tr className="bg-muted/60 border-b">
-                <th className="p-1.5 text-left font-semibold w-20">Data</th>
-                <th className="p-1.5 text-left font-semibold w-16">Dia</th>
-                <th className="p-1.5 text-center font-semibold" colSpan={2}>Turno 1</th>
-                <th className="p-1.5 text-center font-semibold" colSpan={2}>Turno 2</th>
-                <th className="p-1.5 text-center font-semibold w-12">Hs Trab</th>
-                <th className="p-1.5 text-center font-semibold w-12">HE Diária</th>
-                <th className="p-1.5 text-center font-semibold w-12">HE Sem.</th>
-                <th className="p-1.5 text-center font-semibold w-12">HE DSR</th>
-                <th className="p-1.5 text-center font-semibold w-12">H.Not.</th>
-                <th className="p-1.5 text-center font-semibold w-12">Int.Sup.</th>
-                <th className="p-1.5 text-center font-semibold w-16">Tipo</th>
-              </tr>
-              <tr className="bg-muted/30 border-b text-[9px]">
-                <th></th><th></th>
-                <th className="p-1 text-center">Entrada</th>
-                <th className="p-1 text-center">Saída</th>
-                <th className="p-1 text-center">Entrada</th>
-                <th className="p-1 text-center">Saída</th>
-                <th colSpan={7}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {registros.map((r: any) => {
-                const dow = new Date(r.data).getDay();
-                const isDomingo = dow === 0;
-                const isSabado = dow === 6;
-                const isFolga = r.tipo === 'folga' || r.tipo === 'feriado';
-                const rowBg = isDomingo ? 'bg-red-50 dark:bg-red-950/20' :
-                              isSabado ? 'bg-blue-50 dark:bg-blue-950/20' :
-                              isFolga ? 'bg-yellow-50 dark:bg-yellow-950/20' :
-                              r.origem === 'FIXADA' ? 'bg-green-50 dark:bg-green-950/10' : '';
-                
-                return (
-                  <tr key={r.id} className={`border-b border-border/30 hover:bg-muted/20 ${rowBg}`}>
-                    <td className="p-1 font-mono text-[10px]">{new Date(r.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
-                    <td className="p-1 text-[10px]">{r.dia_semana?.slice(0, 3) || DIAS_SEMANA[dow]?.slice(0, 3)}</td>
-                    {/* Horários */}
-                    {['entrada_1', 'saida_1', 'entrada_2', 'saida_2'].map(field => (
-                      <td key={field} className="p-0.5">
-                        <Input type="time" defaultValue={r[field] || ''}
-                          className="h-6 text-[10px] w-[72px] text-center px-1"
-                          onBlur={e => updateField(r.id, field, e.target.value)}
-                        />
-                      </td>
-                    ))}
-                    {/* Totais */}
-                    <td className="p-1 text-center font-mono">{(r.horas_trabalhadas || 0).toFixed(2)}</td>
-                    {['horas_extras_diarias', 'horas_extras_semanais', 'horas_extras_dsr', 'horas_noturnas', 'intervalo_suprimido'].map(field => (
-                      <td key={field} className="p-0.5">
-                        <Input type="number" step="0.01" defaultValue={r[field] || 0}
-                          className="h-6 text-[10px] w-14 text-center mx-auto px-1"
-                          onBlur={e => updateField(r.id, field, parseFloat(e.target.value) || 0)}
-                        />
-                      </td>
-                    ))}
-                    <td className="p-0.5">
-                      <Select defaultValue={r.tipo || 'normal'} onValueChange={v => updateField(r.id, 'tipo', v)}>
-                        <SelectTrigger className="h-6 text-[9px] w-16 px-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="normal">Normal</SelectItem>
-                          <SelectItem value="falta">Falta</SelectItem>
-                          <SelectItem value="folga">Folga</SelectItem>
-                          <SelectItem value="feriado">Feriado</SelectItem>
-                          <SelectItem value="atestado">Atestado</SelectItem>
-                          <SelectItem value="ferias">Férias</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <PjeCalcGrid<PontoDia>
+        title="Cartão de Ponto"
+        subtitle={`Apurações diárias — layout PJE-Calc, 6 pares E/S por dia. Carga horária: ${cargaHoraria}h.`}
+        rows={registros}
+        rowKey={(r) => r.id}
+        columns={columns}
+        onAdd={addDia}
+        onDelete={removeDia}
+        addLabel="Adicionar Dia"
+        loading={isLoading}
+        emptyMessage="Nenhum dia no mês. Clique em &quot;Gerar Mês&quot; ou os dias virão automaticamente após validar um cartão de ponto via OCR."
+        rowClassName={(r) => {
+          const dow = new Date(r.data + "T12:00:00").getDay();
+          if (r.ocorrencia === "FALTA")
+            return "bg-rose-50/70 dark:bg-rose-950/15";
+          if (r.ocorrencia === "FERIADO")
+            return "bg-orange-50/70 dark:bg-orange-950/15";
+          if (r.ocorrencia === "FERIAS")
+            return "bg-sky-50/70 dark:bg-sky-950/15";
+          if (r.ocorrencia === "FOLGA" || dow === 0)
+            return "bg-yellow-50/40 dark:bg-yellow-950/10";
+          if (r.origem === "OCR")
+            return "bg-blue-50/60 dark:bg-blue-950/15 border-l-2 border-l-blue-400";
+          if (r.origem === "FIXADA")
+            return "bg-emerald-50/50 dark:bg-emerald-950/10";
+          if (dow === 6) return "bg-slate-50/50 dark:bg-slate-900/20";
+          return undefined;
+        }}
+      />
 
       {/* Dialog Fixar Jornada */}
       <Dialog open={showFixar} onOpenChange={setShowFixar}>
@@ -470,21 +549,69 @@ export function ModuloCartaoPontoDiario({ caseId, dataAdmissao, dataDemissao, ca
             <DialogTitle>Fixar Jornada no Mês</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground mb-3">
-            Quando o juiz fixa a jornada, os horários são aplicados uniformemente a todos os dias úteis do mês.
+            Aplica os horários informados uniformemente a todos os dias úteis
+            do mês visualizado.
           </p>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label className="text-xs">Entrada 1</Label><Input type="time" value={jornadaFixa.entrada_1} onChange={e => setJornadaFixa(p => ({ ...p, entrada_1: e.target.value }))} className="mt-1 h-8" /></div>
-            <div><Label className="text-xs">Saída 1</Label><Input type="time" value={jornadaFixa.saida_1} onChange={e => setJornadaFixa(p => ({ ...p, saida_1: e.target.value }))} className="mt-1 h-8" /></div>
-            <div><Label className="text-xs">Entrada 2 (Intervalo)</Label><Input type="time" value={jornadaFixa.entrada_2} onChange={e => setJornadaFixa(p => ({ ...p, entrada_2: e.target.value }))} className="mt-1 h-8" /></div>
-            <div><Label className="text-xs">Saída 2</Label><Input type="time" value={jornadaFixa.saida_2} onChange={e => setJornadaFixa(p => ({ ...p, saida_2: e.target.value }))} className="mt-1 h-8" /></div>
+            <div>
+              <Label className="text-xs">Entrada 1</Label>
+              <Input
+                type="time"
+                value={jornadaFixa.entrada_1}
+                onChange={(e) =>
+                  setJornadaFixa((p) => ({ ...p, entrada_1: e.target.value }))
+                }
+                className="mt-1 h-8"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Saída 1</Label>
+              <Input
+                type="time"
+                value={jornadaFixa.saida_1}
+                onChange={(e) =>
+                  setJornadaFixa((p) => ({ ...p, saida_1: e.target.value }))
+                }
+                className="mt-1 h-8"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Entrada 2 (volta intervalo)</Label>
+              <Input
+                type="time"
+                value={jornadaFixa.entrada_2}
+                onChange={(e) =>
+                  setJornadaFixa((p) => ({ ...p, entrada_2: e.target.value }))
+                }
+                className="mt-1 h-8"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Saída 2</Label>
+              <Input
+                type="time"
+                value={jornadaFixa.saida_2}
+                onChange={(e) =>
+                  setJornadaFixa((p) => ({ ...p, saida_2: e.target.value }))
+                }
+                className="mt-1 h-8"
+              />
+            </div>
           </div>
           <div className="flex items-center gap-2 mt-2">
-            <Checkbox checked={jornadaFixa.sabado} onCheckedChange={v => setJornadaFixa(p => ({ ...p, sabado: !!v }))} />
+            <Checkbox
+              checked={jornadaFixa.sabado}
+              onCheckedChange={(v) =>
+                setJornadaFixa((p) => ({ ...p, sabado: !!v }))
+              }
+            />
             <Label className="text-xs">Incluir sábados</Label>
           </div>
           <DialogFooter>
             <Button onClick={fixarJornada} disabled={generating}>
-              {generating ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              {generating ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : null}
               Aplicar no Mês
             </Button>
           </DialogFooter>

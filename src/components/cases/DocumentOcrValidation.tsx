@@ -39,6 +39,7 @@ import {
 } from "@/components/cases/data-extraction/ExtractionTypeBadgeAndSelect";
 import { setTipoExtracao, type TipoExtracao } from "@/features/data-extraction";
 import { DocumentPreview } from "@/components/cases/shared/DocumentPreview";
+import { autoFillFromOcr } from "@/features/auto-fill/auto-fill-from-ocr";
 
 interface DocRow {
   id: string;
@@ -266,6 +267,33 @@ export function DocumentOcrValidation({
       if (error) throw error;
 
       toast.success("OCR confirmado.");
+
+      // AUTO-FILL: dispara parsers determinísticos e popula direto as
+      // tabelas pjecalc_* dos 4 módulos da calculadora (cartao_ponto,
+      // ferias, faltas, holerite). Substitui o ramo LLM do extract-and-fill
+      // para esses tipos. Falhar aqui NÃO bloqueia o operador — o módulo
+      // mostra os dados quando existirem e permite edição manual.
+      void autoFillFromOcr(selected.id)
+        .then((report) => {
+          if (!report.ok) {
+            logger.warn("autoFillFromOcr falhou", report);
+            return;
+          }
+          const totalInserted = report.inserted.reduce(
+            (s, r) => s + r.count,
+            0,
+          );
+          if (totalInserted > 0) {
+            toast.success(
+              `Parâmetros do cálculo atualizados (${totalInserted} registro${
+                totalInserted === 1 ? "" : "s"
+              }).`,
+            );
+          }
+        })
+        .catch((e) => {
+          logger.warn("autoFillFromOcr throw", e);
+        });
 
       // PR-5 (RAG cego): dispara chunk-and-embed pra popular document_chunks.
       // Antes: só UPDATE ocr_validated=true; ninguém invocava a edge function;

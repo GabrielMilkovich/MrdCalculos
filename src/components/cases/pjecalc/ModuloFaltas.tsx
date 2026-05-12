@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase } from "@/integrations/supabase/client";
 import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { PjeCalcGrid, type PjeCalcGridColumn } from "./PjeCalcGrid";
 
-interface Props { caseId: string; }
+interface Props {
+  caseId: string;
+}
 
 interface FaltaRow {
   id: string;
@@ -27,7 +25,7 @@ export function ModuloFaltas({ caseId }: Props) {
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
 
-  const { data: faltas = [] } = useQuery({
+  const { data: faltas = [], isLoading } = useQuery({
     queryKey: ["pjecalc_faltas", caseId],
     queryFn: async () => {
       const { data, error } = await fromUntyped("pjecalc_faltas")
@@ -39,7 +37,8 @@ export function ModuloFaltas({ caseId }: Props) {
     },
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["pjecalc_faltas", caseId] });
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: ["pjecalc_faltas", caseId] });
 
   const addFalta = async () => {
     setSaving(true);
@@ -51,11 +50,10 @@ export function ModuloFaltas({ caseId }: Props) {
         data_final: today,
         justificada: false,
         reiniciar_ferias: false,
-        motivo: '',
+        motivo: "",
       });
       if (error) throw error;
       invalidate();
-      toast.success("Falta adicionada");
     } catch (e) {
       toast.error("Erro: " + (e as Error).message);
     } finally {
@@ -64,7 +62,9 @@ export function ModuloFaltas({ caseId }: Props) {
   };
 
   const updateField = async (id: string, patch: Partial<FaltaRow>) => {
-    const { error } = await fromUntyped("pjecalc_faltas").update(patch).eq("id", id);
+    const { error } = await fromUntyped("pjecalc_faltas")
+      .update(patch)
+      .eq("id", id);
     if (error) {
       toast.error("Erro ao salvar");
       return;
@@ -72,106 +72,119 @@ export function ModuloFaltas({ caseId }: Props) {
     invalidate();
   };
 
-  const removeFalta = async (id: string) => {
-    const { error } = await fromUntyped("pjecalc_faltas").delete().eq("id", id);
-    if (error) { toast.error("Erro ao remover"); return; }
+  const removeFalta = async (row: FaltaRow) => {
+    const { error } = await fromUntyped("pjecalc_faltas")
+      .delete()
+      .eq("id", row.id);
+    if (error) {
+      toast.error("Erro ao remover");
+      return;
+    }
     invalidate();
   };
 
+  const columns: PjeCalcGridColumn<FaltaRow>[] = [
+    {
+      key: "data_inicial",
+      header: "Data Inicial",
+      width: "w-32",
+      cell: (r) => (
+        <Input
+          type="date"
+          defaultValue={r.data_inicial}
+          className="h-7 text-[11px] font-mono px-1"
+          onBlur={(e) =>
+            e.target.value !== r.data_inicial &&
+            updateField(r.id, { data_inicial: e.target.value })
+          }
+        />
+      ),
+    },
+    {
+      key: "data_final",
+      header: "Data Final",
+      width: "w-32",
+      cell: (r) => (
+        <Input
+          type="date"
+          defaultValue={r.data_final}
+          className="h-7 text-[11px] font-mono px-1"
+          onBlur={(e) =>
+            e.target.value !== r.data_final &&
+            updateField(r.id, { data_final: e.target.value })
+          }
+        />
+      ),
+    },
+    {
+      key: "justificada",
+      header: "Justificada",
+      align: "center",
+      width: "w-20",
+      cell: (r) => (
+        <div className="flex justify-center">
+          <Checkbox
+            checked={!!r.justificada}
+            onCheckedChange={(v) =>
+              updateField(r.id, { justificada: !!v })
+            }
+          />
+        </div>
+      ),
+    },
+    {
+      key: "reiniciar_ferias",
+      header: "Reinicia Férias",
+      align: "center",
+      width: "w-24",
+      cell: (r) => (
+        <div
+          className="flex justify-center"
+          title="Art. 130-A CLT: faltas que reiniciam o período aquisitivo a partir da data de retorno."
+        >
+          <Checkbox
+            checked={!!r.reiniciar_ferias}
+            onCheckedChange={(v) =>
+              updateField(r.id, { reiniciar_ferias: !!v })
+            }
+          />
+        </div>
+      ),
+    },
+    {
+      key: "motivo",
+      header: "Motivo / Justificativa",
+      cell: (r) => (
+        <Input
+          defaultValue={r.motivo ?? ""}
+          placeholder="Ex: Atestado médico"
+          className="h-7 text-[11px] px-1.5"
+          onBlur={(e) =>
+            (e.target.value || null) !== r.motivo &&
+            updateField(r.id, { motivo: e.target.value || null })
+          }
+        />
+      ),
+    },
+  ];
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Faltas</h2>
-          <p className="text-xs text-muted-foreground">Registros de faltas do empregado (justificadas ou não). Faltas não justificadas reduzem o prazo de férias (Art. 130 CLT).</p>
-        </div>
-        <Button size="sm" onClick={addFalta} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
-          Nova Falta
-        </Button>
-      </div>
-
-      <p className="text-[10px] text-emerald-800 bg-emerald-50 dark:bg-emerald-950/20 p-2 rounded border border-emerald-200 dark:border-emerald-900"><strong>✓ Reiniciar Férias implementado (v3.6).</strong> Quando marcado, a falta reinicia o período aquisitivo de férias a partir da data de retorno (data final + 1 dia), conforme Art. 130-A CLT (DL 2.318/87). Faltas anteriores ao retorno deixam de contar para a redutora do Art. 130.</p>
-
-      {faltas.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center text-sm text-muted-foreground">
-            Nenhuma falta registrada.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {faltas.map((f) => (
-            <Card key={f.id}>
-              <CardContent className="p-3 space-y-2">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
-                  <div>
-                    <Label className="text-[10px]">Data Inicial *</Label>
-                    <Input
-                      type="date"
-                      defaultValue={f.data_inicial}
-                      className="h-8 text-xs"
-                      onBlur={(e) => updateField(f.id, { data_inicial: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">Data Final *</Label>
-                    <Input
-                      type="date"
-                      defaultValue={f.data_final}
-                      className="h-8 text-xs"
-                      onBlur={(e) => updateField(f.id, { data_final: e.target.value })}
-                    />
-                  </div>
-                  <label className="flex items-center gap-2 text-xs pb-1">
-                    <Checkbox
-                      defaultChecked={f.justificada}
-                      onCheckedChange={(v) => updateField(f.id, { justificada: !!v })}
-                    />
-                    Justificada
-                  </label>
-                  <label className="flex items-center gap-2 text-xs pb-1" title="Art. 130-A CLT: a partir da data de retorno (data_final + 1 dia), o período aquisitivo de férias reinicia. Faltas anteriores não contam para a redução do Art. 130.">
-                    <Checkbox
-                      defaultChecked={f.reiniciar_ferias ?? false}
-                      onCheckedChange={(v) => updateField(f.id, { reiniciar_ferias: !!v })}
-                    />
-                    Reiniciar Férias
-                  </label>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 ml-auto"
-                    onClick={() => removeFalta(f.id)}
-                    aria-label="Remover falta"
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-[10px]">Motivo</Label>
-                    <Input
-                      defaultValue={f.motivo ?? ''}
-                      placeholder="Ex: Atestado médico / Licença"
-                      className="h-8 text-xs"
-                      onBlur={(e) => updateField(f.id, { motivo: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[10px]">Documento ID (opcional)</Label>
-                    <Input
-                      defaultValue={f.documento_id ?? ''}
-                      placeholder="UUID do documento anexado"
-                      className="h-8 text-xs font-mono"
-                      onBlur={(e) => updateField(f.id, { documento_id: e.target.value || null })}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
+    <PjeCalcGrid<FaltaRow>
+      title="Faltas"
+      subtitle="Registros de faltas do empregado. Não justificadas reduzem o prazo de férias (Art. 130 CLT)."
+      rows={faltas}
+      rowKey={(r) => r.id}
+      columns={columns}
+      onAdd={addFalta}
+      onDelete={removeFalta}
+      addLabel={saving ? "Adicionando..." : "Nova Falta"}
+      loading={isLoading}
+      emptyMessage="Nenhuma falta registrada. As faltas extraídas dos documentos via OCR aparecem aqui automaticamente após confirmar a validação."
+      rowClassName={(r) =>
+        r.documento_id
+          ? "bg-blue-50/60 dark:bg-blue-950/15 border-l-2 border-l-blue-400"
+          : undefined
+      }
+    />
   );
 }
