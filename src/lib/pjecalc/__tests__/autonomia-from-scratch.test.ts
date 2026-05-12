@@ -222,6 +222,107 @@ describe("Autonomia from-scratch — Engine V3 sem XML PJC", () => {
   });
 });
 
+describe("Sessão 3 — Pagamentos históricos extras deduzidos do resumo", () => {
+  const verbaPadrao = () =>
+    makeVerba({
+      nome: "Horas Extras 50%",
+      ocorrencia_pagamento: "mensal",
+      periodo_inicio: "2024-01-01",
+      periodo_fim: "2024-12-31",
+      tipo_quantidade: "informada",
+      quantidade_informada: 10,
+    });
+
+  it("Pagamento de R$ 1000 no principal deduz de principal_corrigido e liquido_reclamante", () => {
+    const opts = {
+      params: { data_admissao: "2024-01-01", data_demissao: "2024-12-31" },
+      historicos: [makeHistorico({ valor_informado: 3000 })],
+      verbas: [verbaPadrao()],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    };
+    const refSem = createEngine(opts).liquidar();
+    const liquidoOriginal = refSem.resumo.liquido_reclamante;
+    expect(liquidoOriginal).toBeGreaterThan(0);
+
+    const refCom = createEngine({
+      ...opts,
+      pagamentos: [
+        {
+          id: "pag-1",
+          data_pagamento: "2025-01-15",
+          valor_pagamento: 1000,
+          apurar_valor_principal: true,
+          valor_parcela_principal: 1000,
+        },
+      ],
+    }).liquidar();
+
+    expect(refCom.resumo.liquido_reclamante).toBeCloseTo(liquidoOriginal - 1000, 0);
+    expect(refCom.resumo.pagamentos_deduzidos?.principal).toBeCloseTo(1000, 0);
+    expect(refCom.resumo.pagamentos_deduzidos?.total).toBeCloseTo(1000, 0);
+  });
+
+  it("Pagamento não cria saldo negativo (floor em 0)", () => {
+    const r = createEngine({
+      params: { data_admissao: "2024-01-01", data_demissao: "2024-12-31" },
+      historicos: [makeHistorico({ valor_informado: 100 })],
+      verbas: [
+        makeVerba({
+          tipo_quantidade: "informada",
+          quantidade_informada: 1,
+        }),
+      ],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+      pagamentos: [
+        {
+          id: "pag-grande",
+          data_pagamento: "2025-01-15",
+          valor_pagamento: 999999,
+          apurar_valor_principal: true,
+          valor_parcela_principal: 999999,
+        },
+      ],
+    }).liquidar();
+    expect(r.resumo.principal_corrigido).toBe(0);
+    expect(r.resumo.liquido_reclamante).toBe(0);
+  });
+
+  it("Pagamento de FGTS deduz só do FGTS, não afeta principal", () => {
+    const opts = {
+      params: { data_admissao: "2024-01-01", data_demissao: "2024-12-31" },
+      historicos: [makeHistorico({ valor_informado: 3000 })],
+      verbas: [verbaPadrao()],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    };
+    const refSem = createEngine(opts).liquidar();
+    const refCom = createEngine({
+      ...opts,
+      pagamentos: [
+        {
+          id: "pag-fgts",
+          data_pagamento: "2025-01-15",
+          valor_pagamento: 200,
+          apurar_valor_fgts: true,
+          valor_parcela_fgts: 200,
+        },
+      ],
+    }).liquidar();
+
+    // Principal não muda
+    expect(refCom.resumo.principal_corrigido).toBeCloseTo(
+      refSem.resumo.principal_corrigido,
+      1,
+    );
+    // FGTS reduz (ou zera se < 200)
+    expect(refCom.resumo.fgts_total).toBeLessThan(refSem.resumo.fgts_total + 0.01);
+    expect(refCom.resumo.pagamentos_deduzidos?.fgts).toBeCloseTo(200, 0);
+    expect(refCom.resumo.pagamentos_deduzidos?.principal).toBe(0);
+  });
+});
+
 describe("Sessão 2 — Férias (PERIODO_AQUISITIVO) e Reflexos com médias", () => {
   it("Férias INDENIZADAS gera ocorrência no demissão (não é mais zero silencioso)", () => {
     const verba = makeVerba({

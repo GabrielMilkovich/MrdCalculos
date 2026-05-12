@@ -271,6 +271,8 @@ export function createEngine(opts: {
   indicesDB?: PjeIndiceRow[];
   faixasINSSDB?: PjeINSSFaixaRow[];
   faixasIRDB?: PjeIRFaixaRow[];
+  /** Sessão 3: pagamentos históricos extras. */
+  pagamentos?: import('../engine-types').PjePagamento[];
 } = {}): PjeCalcEngineV3 {
   return new PjeCalcEngineV3(
     makeParams(opts.params),
@@ -289,5 +291,9 @@ export function createEngine(opts: {
     opts.indicesDB || [],
     opts.faixasINSSDB || [],
     opts.faixasIRDB || [],
+    [], [], undefined, undefined, undefined,
+    [], [], [], [],
+    undefined, undefined,
+    opts.pagamentos || [],
   );
 }
