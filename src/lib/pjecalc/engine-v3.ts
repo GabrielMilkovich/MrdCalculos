@@ -1451,7 +1451,27 @@ export class PjeCalcEngineV3 {
     // F0-ORACLE-COMPARE-BUGS.md:57-68 (estimativa +5-8pp ao final).
     const override = this.fgtsConfig.fgts_override_total;
     if (typeof override === 'number' && override >= 0) {
-      return { depositos: [], total_depositos: 0, multa_valor: 0, lc110_10: 0, lc110_05: 0, saldo_deduzido: 0, total_fgts: +override.toFixed(2) };
+      // Sessão 7d (2026-05-12): quando o override vem do PJC, ele representa
+      // os DEPÓSITOS principais (Σ baseVerba × aliquota × indiceAcumulado).
+      // Antes a função ZERAVA multa 40% + LC 110 — perdendo R$ 13-18k por
+      // caso no líquido_reclamante (joseli, leandro, roque, izabela...).
+      // Agora aplica multa e LC sobre o override quando flags ativos.
+      const multaPerc = (this.fgtsConfig.multa_percentual ?? 40) / 100;
+      const multaValor = this.fgtsConfig.multa_apurar
+        ? +(override * multaPerc).toFixed(2)
+        : 0;
+      const lc110_10 = this.fgtsConfig.lc110_10 ? +(override * 0.10).toFixed(2) : 0;
+      const lc110_05 = this.fgtsConfig.lc110_05 ? +(override * 0.05).toFixed(2) : 0;
+      const totalFgts = +(override + multaValor + lc110_10 + lc110_05).toFixed(2);
+      return {
+        depositos: [],
+        total_depositos: +override.toFixed(2),
+        multa_valor: multaValor,
+        lc110_10,
+        lc110_05,
+        saldo_deduzido: 0,
+        total_fgts: totalFgts,
+      };
     }
     // Caso contrário, calcula se houver verba com incidência FGTS + diferença positiva.
     const temIncidenciaFgts = this.verbas.some((v, i) => {

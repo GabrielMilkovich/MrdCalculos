@@ -731,13 +731,17 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
   return {
     apurar: fgtsConf?.apurar ?? (fgtsDeposito > 0),
     destino: destMap[fgtsConf?.destino || ''] || 'pagar_reclamante',
+    // Sessão 7d: respeita flag <multa>false</multa> do PJC quando presente.
+    // Antes era sempre true, gerando over-estimação em casos como antonio,
+    // islan, vanderlei (FGTS já depositado, sem multa).
     // PJC <Fgts><comporPrincipal>SIM|NAO</comporPrincipal> — decide se o FGTS
     // compõe o liquido_exequente. Default false por compatibilidade, mas quando
     // o PJC diz SIM, o engine deve incluir FGTS no líquido do reclamante.
     compor_principal: fgtsConf?.compor_principal ?? false,
     // Alíquota: 8% padrão, 2% quando PJC indicar aprendiz.
     aliquota: (fgtsConf as unknown as { aliquota?: 8 | 2 })?.aliquota ?? 8,
-    multa_apurar: true,
+    multa_apurar:
+      (fgtsConf as unknown as { multa_apurar?: boolean })?.multa_apurar ?? true,
     multa_tipo: 'calculada',
     multa_percentual: fgtsConf?.multa_percentual ?? 40,
     multa_base: (fgtsConf?.multa_base as PjeFGTSConfig['multa_base']) || 'devido',
