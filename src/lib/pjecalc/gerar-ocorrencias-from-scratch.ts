@@ -29,6 +29,8 @@ import type {
   PjeHistoricoSalarial,
   PjeCartaoPonto,
   PjeParametros,
+  PjeFerias,
+  PjeFalta,
 } from "./engine-types";
 
 const HALF_EVEN_2 = (n: number): number => {
@@ -177,6 +179,228 @@ function diasTrabalhadosEm(
 export type OcorrenciaPrecomputada = NonNullable<PjeVerba["ocorrencias_precomputadas"]>[number];
 
 /**
+ * Verifica se uma data foi reiniciada por uma falta com `reiniciar_periodo_aquisitivo`.
+ * Porte simplificado de Calculo.encontrarFaltasQueReiniciamFerias(Java).
+ */
+function aplicarReinicioFerias(
+  dataInicial: Date,
+  faltas: PjeFalta[],
+): Date {
+  // Falta com flag reinicia o período a partir da data de retorno (data_final + 1).
+  let cursor = new Date(dataInicial);
+  let mudou = true;
+  while (mudou) {
+    mudou = false;
+    for (const f of faltas) {
+      if (!f.reinicia) continue;
+      const fim = new Date(f.data_final + "T00:00:00");
+      if (fim >= cursor) {
+        const retorno = new Date(fim);
+        retorno.setDate(retorno.getDate() + 1);
+        if (retorno > cursor) {
+          cursor = retorno;
+          mudou = true;
+        }
+      }
+    }
+  }
+  return cursor;
+}
+
+/**
+ * Gera ocorrências para verba em modo PERIODO_AQUISITIVO (férias).
+ *
+ * Porte simplificado do bloco PERIODO_AQUISITIVO de MaquinaDeCalculo.java:118-309.
+ * Cobre:
+ *   - GOZADAS: 1 ocorrência por gozo (até 3), com dobra individual quando marcada
+ *   - GOZADAS_PARCIALMENTE: gozos + ocorrência adicional no demissão (saldo)
+ *   - INDENIZADAS: 1 ocorrência no demissão (com dobra geral se marcada)
+ *   - NAO_GOZADAS / VENCIDAS_NAO_GOZADAS: 1 ocorrência no demissão
+ *   - PERDIDAS: 0 ocorrências
+ *   - Abono pecuniário: marca ferias_com_abono na ocorrência (Art. 143 CLT)
+ *   - Reinicio por falta: aplica `reinicia_ferias` flag da PjeFalta
+ *   - Prescrição quinquenal: se data_prescricao posterior a periodo concessivo, ignora
+ *   - Período aquisitivo fracionário: gera ocorrência se demissão antes de completar
+ *     12 meses do último aquisitivo (mín 15 dias = 1 avo).
+ *
+ * NÃO COBRE (deixa de fora intencionalmente — corner cases raros):
+ *   - Aviso prévio projetado modificando dataDemissaoProjetada (Java 130-132)
+ *   - Dividir período de gozo em duas ocorrências quando atravessa periodoConcessivo
+ *     (Java 153 dividirNaData) — caso muito incomum, gera 1 ocorrência única
+ */
+function gerarOcorrenciasPeriodoAquisitivo(
+  verba: PjeVerba,
+  historicos: PjeHistoricoSalarial[],
+  parametros: PjeParametros,
+  ferias: PjeFerias[],
+  faltas: PjeFalta[],
+): OcorrenciaPrecomputada[] {
+  const out: OcorrenciaPrecomputada[] = [];
+  const dataDemissao = parametros.data_demissao
+    ? new Date(parametros.data_demissao + "T00:00:00")
+    : null;
+  const periodoInicial = new Date(verba.periodo_inicio + "T00:00:00");
+  const periodoFinal = new Date(verba.periodo_fim + "T00:00:00");
+  const dataPrescricao = parametros.data_prescricao_quinquenal
+    ? new Date(parametros.data_prescricao_quinquenal + "T00:00:00")
+    : null;
+
+  const baseNa = (data: Date): number => {
+    const c = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}`;
+    return baseSalarialEm(c, verba, historicos);
+  };
+
+  const divisor = verba.divisor_informado ?? 30; // férias: divisor=30 (1/30 avo)
+  const multBase = verba.multiplicador ?? 1;
+
+  function pushOcorrencia(
+    competenciaDate: Date,
+    quantidade: number,
+    dobra: boolean,
+    feriasComAbono: boolean,
+    feriasIndenizadas: boolean,
+  ): void {
+    const base = baseNa(competenciaDate);
+    if (base <= 0 || quantidade <= 0) return;
+    let devido = (base * multBase * quantidade) / divisor;
+    if (dobra) devido = devido * 2;
+    devido = HALF_EVEN_2(devido);
+    const competencia = `${competenciaDate.getFullYear()}-${String(
+      competenciaDate.getMonth() + 1,
+    ).padStart(2, "0")}`;
+    out.push({
+      competencia,
+      base,
+      divisor,
+      multiplicador: multBase,
+      quantidade,
+      dobra,
+      devido,
+      pago: 0,
+      ferias_indenizadas: feriasIndenizadas,
+      ferias_com_abono: feriasComAbono,
+    });
+  }
+
+  const periodosAquisitivosTratados = new Set<string>();
+
+  for (const f of ferias) {
+    if (f.situacao === "perdidas") continue;
+
+    // Prescrição: se data_prescricao está APÓS o fim do concessivo, ignora.
+    const fimConcessivo = new Date(f.periodo_concessivo_fim + "T00:00:00");
+    if (
+      parametros.prescricao_quinquenal &&
+      dataPrescricao &&
+      dataPrescricao > fimConcessivo
+    ) {
+      continue;
+    }
+
+    periodosAquisitivosTratados.add(f.periodo_aquisitivo_inicio);
+
+    // INDENIZADAS / VENCIDAS_NAO_GOZADAS: 1 ocorrência no demissão
+    if (
+      f.situacao === "indenizadas" ||
+      (f.situacao as string) === "vencidas_nao_gozadas"
+    ) {
+      if (!dataDemissao || dataDemissao > periodoFinal) continue;
+      pushOcorrencia(
+        dataDemissao,
+        f.prazo_dias,
+        !!f.dobra,
+        !!f.abono,
+        true, // ferias_indenizadas
+      );
+      continue;
+    }
+
+    // GOZADAS / GOZADAS_PARCIALMENTE: 1 ocorrência por gozo
+    let diasGozados = 0;
+    type Gozo = { inicio?: string; fim?: string; dobra?: boolean };
+    const gozos: Gozo[] = [
+      // Compatível com tipos atuais que têm campos gozo_*_inicio diretos
+      // OU array periodos_gozo[].
+      ...(f.periodos_gozo ?? []),
+      // Compat fallback: testa propriedades em `f` que podem existir
+      // em variações do tipo (gozo_1_inicio etc.). Não falha se ausente.
+      ...(["1", "2", "3"]
+        .map((n) => {
+          const fr = f as unknown as Record<string, unknown>;
+          const inicio = fr[`gozo_${n}_inicio`] as string | undefined;
+          const fim = fr[`gozo_${n}_fim`] as string | undefined;
+          const dobra = fr[`gozo_${n}_dobra`] as boolean | undefined;
+          if (inicio && fim) return { inicio, fim, dobra: !!dobra };
+          return null;
+        })
+        .filter(Boolean) as Gozo[]),
+    ];
+
+    for (const g of gozos) {
+      if (!g.inicio || !g.fim) continue;
+      const iniGozo = new Date(g.inicio + "T00:00:00");
+      const fimGozo = new Date(g.fim + "T00:00:00");
+      if (iniGozo < periodoInicial || iniGozo > periodoFinal) continue;
+      const diasNo = Math.round(
+        (fimGozo.getTime() - iniGozo.getTime()) / 86400000,
+      ) + 1;
+      pushOcorrencia(iniGozo, diasNo, !!g.dobra, !!f.abono, false);
+      diasGozados += diasNo;
+    }
+
+    if (f.abono) diasGozados += f.abono_dias ?? f.prazo_dias / 3;
+
+    // GOZADAS_PARCIALMENTE: complementa com saldo na demissão (se aplicável)
+    if (
+      f.situacao === "gozadas_parcialmente" &&
+      dataDemissao &&
+      dataDemissao <= periodoFinal
+    ) {
+      const saldo = f.prazo_dias - diasGozados;
+      if (saldo > 0) {
+        pushOcorrencia(dataDemissao, saldo, !!f.dobra, !!f.abono, true);
+      }
+    }
+  }
+
+  // Período aquisitivo FRACIONÁRIO — quando demissão pega o trabalhador
+  // antes de completar 12 meses do último aquisitivo. Gera ocorrência
+  // proporcional ao período trabalhado, com 30/12 avos por mês.
+  if (dataDemissao && dataDemissao <= periodoFinal) {
+    let dataInicialFrac: Date;
+    const ultimosFerias = [...ferias].sort((a, b) =>
+      a.periodo_aquisitivo_fim.localeCompare(b.periodo_aquisitivo_fim),
+    );
+    const ultimo = ultimosFerias[ultimosFerias.length - 1];
+    if (ultimo) {
+      const fimAquis = new Date(ultimo.periodo_aquisitivo_fim + "T00:00:00");
+      dataInicialFrac = new Date(fimAquis);
+      dataInicialFrac.setDate(dataInicialFrac.getDate() + 1);
+    } else {
+      dataInicialFrac = new Date(parametros.data_admissao + "T00:00:00");
+    }
+    dataInicialFrac = aplicarReinicioFerias(dataInicialFrac, faltas);
+
+    const dias =
+      Math.round((dataDemissao.getTime() - dataInicialFrac.getTime()) / 86400000) + 1;
+    if (dias >= 15) {
+      // 1 avo de 30/12 por mês fracionado (regra clássica do PJe-Calc)
+      const meses = Math.max(1, Math.floor(dias / 30));
+      const proporcional = (30 / 12) * meses;
+      pushOcorrencia(
+        dataDemissao,
+        proporcional,
+        !!verba.dobrar_valor_devido,
+        false,
+        true,
+      );
+    }
+  }
+
+  return out;
+}
+
+/**
  * Gera as ocorrências da verba "do zero" baseado em modo de pagamento.
  * Devolve array vazio se a verba não puder ser gerada (cobertura faltando)
  * — caller é responsável por marcar no resumo.
@@ -186,6 +410,8 @@ export function gerarOcorrenciasFromScratch(
   historicos: PjeHistoricoSalarial[],
   cartao: PjeCartaoPonto[],
   parametros: PjeParametros,
+  ferias: PjeFerias[] = [],
+  faltas: PjeFalta[] = [],
 ): OcorrenciaPrecomputada[] {
   if (verba.valor !== "calculado") return [];
 
@@ -195,11 +421,19 @@ export function gerarOcorrenciasFromScratch(
 
   const oc = verba.ocorrencia_pagamento ?? "mensal";
 
-  // Modo `periodo_aquisitivo` exige port completo do PJe-Calc com
-  // tracking de período aquisitivo de férias, gozos, abono pecuniário,
-  // prescrição quinquenal — não coberto nesta wave. Devolve [] para
-  // que o resumo marque a verba como sem ocorrências (banner UI).
-  if (oc === "periodo_aquisitivo") return [];
+  // Modo PERIODO_AQUISITIVO: férias (gozadas/indenizadas/parcial/perdidas)
+  // Quando o caller fornece `ferias`, usa o gerador especializado.
+  // Sem férias declaradas, devolve [] e a verba é marcada como sem ocorrências.
+  if (oc === "periodo_aquisitivo") {
+    if (ferias.length === 0 && !parametros.data_demissao) return [];
+    return gerarOcorrenciasPeriodoAquisitivo(
+      verba,
+      historicos,
+      parametros,
+      ferias,
+      faltas,
+    );
+  }
 
   const competencias = competenciasNoIntervalo(comp(pi), comp(pf));
 
@@ -291,29 +525,198 @@ export function gerarOcorrenciasFromScratch(
 }
 
 /**
- * Aplica o gerador para TODAS as verbas de uma lista, preenchendo
- * `ocorrencias_precomputadas` quando ausente. Não toca em verbas que
- * já vieram com ocorrências (do XML PJC).
+ * Calcula a média de uma verba principal, usada para reflexos.
+ * Implementa 4 modos suportados pela UI:
+ *   - `valor_mensal`: a verba reflexa replica o valor mensal da principal
+ *   - `media_valor_absoluto`: média aritmética dos `devido` da principal
+ *   - `media_valor_corrigido`: idem mas com correção monetária (TODO: índice mensal)
+ *   - `media_quantidade`: média da `quantidade` (multiplicada pela base do reflexo)
+ *   - `media_pela_quantidade`: media ponderada pela quantidade
  *
- * Retorna a lista de nomes de verbas que NÃO conseguimos gerar
- * (cobertura faltando) — caller propaga para o resumo.
+ * Resultado: lista de OcorrenciaPrecomputada na competência do reflexo.
+ * Para 13º proporcional sobre HE, por exemplo, o reflexo aplica a média
+ * das HEs no mês de dezembro.
+ */
+function gerarReflexoComMedia(
+  verbaReflexa: PjeVerba,
+  verbaPrincipal: PjeVerba,
+  parametros: PjeParametros,
+): OcorrenciaPrecomputada[] {
+  const ocPrincipal = verbaPrincipal.ocorrencias_precomputadas ?? [];
+  if (ocPrincipal.length === 0) return [];
+
+  const modo = verbaReflexa.comportamento_reflexo ?? "valor_mensal";
+  const periodoAgrup = verbaReflexa.periodo_media_reflexo ?? "ano_civil";
+  const ocPgto = verbaReflexa.ocorrencia_pagamento ?? "dezembro";
+
+  // Agrupa ocorrências da principal por chave de agrupamento
+  function chaveAgrupamento(comp: string): string {
+    if (periodoAgrup === "ano_civil") return comp.slice(0, 4);
+    if (periodoAgrup === "global") return "GLOBAL";
+    return comp.slice(0, 7); // mensal
+  }
+
+  const grupos = new Map<string, typeof ocPrincipal>();
+  for (const o of ocPrincipal) {
+    const k = chaveAgrupamento(o.competencia);
+    const arr = grupos.get(k) ?? [];
+    arr.push(o);
+    grupos.set(k, arr);
+  }
+
+  const out: OcorrenciaPrecomputada[] = [];
+
+  for (const [chave, ocs] of grupos) {
+    if (ocs.length === 0) continue;
+
+    let valor = 0;
+    let qty = 1;
+    if (modo === "valor_mensal") {
+      // Replica o valor mensal da principal
+      for (const o of ocs) {
+        valor += o.devido;
+      }
+    } else if (modo === "media_valor_absoluto") {
+      const soma = ocs.reduce((s, o) => s + o.devido, 0);
+      valor = soma / ocs.length;
+    } else if (modo === "media_valor_corrigido") {
+      // Aproximação: mesma média (a correção monetária é aplicada depois
+      // pelo ParametrosDeAtualizacao no engine).
+      const soma = ocs.reduce((s, o) => s + o.devido, 0);
+      valor = soma / ocs.length;
+    } else if (modo === "media_quantidade") {
+      const somaQ = ocs.reduce((s, o) => s + o.quantidade, 0);
+      qty = somaQ / ocs.length;
+      // base × multiplicador / divisor sobre a média de quantidade
+      const base =
+        ocs.reduce((s, o) => s + o.base, 0) / ocs.length;
+      const div = ocs[0].divisor ?? 1;
+      const mult = verbaReflexa.multiplicador ?? 1;
+      valor = (base * mult * qty) / div;
+    } else if (modo === "media_pela_quantidade") {
+      // Média ponderada pela quantidade
+      const totalQty = ocs.reduce((s, o) => s + o.quantidade, 0);
+      const somaPond = ocs.reduce((s, o) => s + o.devido * o.quantidade, 0);
+      valor = totalQty > 0 ? somaPond / totalQty : 0;
+    }
+
+    // Aplica multiplicador do reflexo (ex.: 1/12 para 13º, 1/3 para férias)
+    if (verbaReflexa.multiplicador && modo !== "media_quantidade") {
+      valor = valor * verbaReflexa.multiplicador;
+    }
+    if (verbaReflexa.divisor_informado && modo !== "media_quantidade") {
+      valor = valor / verbaReflexa.divisor_informado;
+    }
+
+    const valorRound = HALF_EVEN_2(valor);
+    if (valorRound === 0) continue;
+
+    // Competência do reflexo
+    let competencia: string;
+    if (ocPgto === "dezembro") {
+      competencia = `${chave.slice(0, 4)}-12`;
+    } else if (ocPgto === "desligamento") {
+      competencia = parametros.data_demissao
+        ? parametros.data_demissao.slice(0, 7)
+        : chave.slice(0, 7);
+    } else {
+      competencia = chave.length === 7 ? chave : `${chave.slice(0, 4)}-12`;
+    }
+
+    // Importante: o engine V3 RECALCULA `devido` a partir de base/mult/qty/div
+    // (calcularDevidoFromScratch). Para preservar o valor que computamos,
+    // setamos base=valorRound e divisor=mult=qty=1, de forma que
+    // base*mult*qty/divisor = valorRound.
+    out.push({
+      competencia,
+      base: valorRound,
+      divisor: 1,
+      multiplicador: 1,
+      quantidade: 1,
+      dobra: false,
+      devido: valorRound,
+      pago: 0,
+    });
+  }
+
+  return out;
+}
+
+/**
+ * Aplica o gerador para TODAS as verbas de uma lista, preenchendo
+ * `ocorrencias_precomputadas` quando ausente. Duas passadas:
+ *   1) Verbas não-reflexas (principais)
+ *   2) Verbas reflexas — usam média/valor da principal recém-calculada
+ *
+ * Não toca em verbas que já vieram com ocorrências (do XML PJC).
+ * Retorna lista de nomes de verbas NÃO geradas (banner UI).
  */
 export function preencherOcorrenciasFromScratch(
   verbas: PjeVerba[],
   historicos: PjeHistoricoSalarial[],
   cartao: PjeCartaoPonto[],
   parametros: PjeParametros,
+  ferias: PjeFerias[] = [],
+  faltas: PjeFalta[] = [],
 ): { naoCobertas: string[] } {
   const naoCobertas: string[] = [];
+
+  // PASSADA 1: verbas principais (não-reflexas)
   for (const v of verbas) {
     if (v.valor !== "calculado") continue;
     if (v.ocorrencias_precomputadas?.length) continue;
-    const ocs = gerarOcorrenciasFromScratch(v, historicos, cartao, parametros);
+    if (v.tipo === "reflexa") continue;
+    const ocs = gerarOcorrenciasFromScratch(
+      v,
+      historicos,
+      cartao,
+      parametros,
+      ferias,
+      faltas,
+    );
     if (ocs.length > 0) {
       v.ocorrencias_precomputadas = ocs;
     } else {
       naoCobertas.push(v.nome);
     }
   }
+
+  // Indexador por id para reflexos
+  const verbaPorId = new Map<string, PjeVerba>();
+  for (const v of verbas) verbaPorId.set(v.id, v);
+
+  // PASSADA 2: reflexas — usam a principal já populada
+  for (const v of verbas) {
+    if (v.valor !== "calculado") continue;
+    if (v.ocorrencias_precomputadas?.length) continue;
+    if (v.tipo !== "reflexa") continue;
+    const principal = v.verba_principal_id
+      ? verbaPorId.get(v.verba_principal_id)
+      : undefined;
+    if (!principal || !principal.ocorrencias_precomputadas?.length) {
+      // Sem principal calculada → cai no fluxo padrão
+      const ocs = gerarOcorrenciasFromScratch(
+        v,
+        historicos,
+        cartao,
+        parametros,
+        ferias,
+        faltas,
+      );
+      if (ocs.length > 0) {
+        v.ocorrencias_precomputadas = ocs;
+      } else {
+        naoCobertas.push(v.nome);
+      }
+      continue;
+    }
+    const ocs = gerarReflexoComMedia(v, principal, parametros);
+    if (ocs.length > 0) {
+      v.ocorrencias_precomputadas = ocs;
+    } else {
+      naoCobertas.push(v.nome);
+    }
+  }
+
   return { naoCobertas };
 }
