@@ -176,7 +176,7 @@ describe("Autonomia from-scratch — Engine V3 sem XML PJC", () => {
     expect(r.verbas[0].total_devido).toBeLessThan(3100);
   });
 
-  it("Verba não-coberta (período_aquisitivo) entra em verbas_sem_ocorrencias", () => {
+  it("Verba periodo_aquisitivo SEM dados de férias E sem demissão entra em verbas_sem_ocorrencias", () => {
     const verba = makeVerba({
       nome: "Férias Vencidas Indenizadas",
       caracteristica: "ferias",
@@ -187,15 +187,15 @@ describe("Autonomia from-scratch — Engine V3 sem XML PJC", () => {
     const hist = makeHistorico({ valor_informado: 3000 });
 
     const engine = createEngine({
+      // Sem data_demissao e sem ferias[] → gerador devolve []
+      params: makeParams({ data_demissao: undefined }),
       historicos: [hist],
       verbas: [verba],
+      ferias: [],
       indicesDB: INDICES_2024,
       faixasINSSDB: FAIXAS_INSS_2024,
     });
     const r = engine.liquidar();
-
-    // Caso intencionalmente não coberto — gerador retorna [] e a verba
-    // é marcada para banner. NÃO deve passar despercebido.
     expect(r.resumo.verbas_sem_ocorrencias ?? []).toContain(
       "Férias Vencidas Indenizadas",
     );
@@ -219,6 +219,148 @@ describe("Autonomia from-scratch — Engine V3 sem XML PJC", () => {
     expect(r.resumo.verbas_sem_ocorrencias ?? []).not.toContain(
       "Indenização Adicional",
     );
+  });
+});
+
+describe("Sessão 2 — Férias (PERIODO_AQUISITIVO) e Reflexos com médias", () => {
+  it("Férias INDENIZADAS gera ocorrência no demissão (não é mais zero silencioso)", () => {
+    const verba = makeVerba({
+      nome: "Férias Indenizadas",
+      caracteristica: "ferias",
+      ocorrencia_pagamento: "periodo_aquisitivo",
+      periodo_inicio: "2020-01-01",
+      periodo_fim: "2024-12-31",
+      divisor_informado: 30,
+      multiplicador: 1,
+      tipo_quantidade: "informada",
+      quantidade_informada: 30,
+    });
+    const hist = makeHistorico({ valor_informado: 3000 });
+    const engine = createEngine({
+      params: makeParams({
+        data_admissao: "2020-01-01",
+        data_demissao: "2024-12-31",
+      }),
+      historicos: [hist],
+      verbas: [verba],
+      ferias: [
+        {
+          id: "fer-1",
+          relativas: "2023/2024",
+          periodo_aquisitivo_inicio: "2023-01-01",
+          periodo_aquisitivo_fim: "2023-12-31",
+          periodo_concessivo_inicio: "2024-01-01",
+          periodo_concessivo_fim: "2024-12-31",
+          prazo_dias: 30,
+          situacao: "indenizadas",
+          dobra: false,
+          abono: false,
+        },
+      ],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    });
+    const r = engine.liquidar();
+    // 30 dias × R$ 3000 / 30 = R$ 3000
+    expect(r.verbas[0].ocorrencias.length).toBeGreaterThanOrEqual(1);
+    expect(r.verbas[0].total_devido).toBeGreaterThan(0);
+    expect(r.resumo.verbas_sem_ocorrencias ?? []).not.toContain(
+      "Férias Indenizadas",
+    );
+  });
+
+  it("Férias GOZADAS gera 1 ocorrência por gozo", () => {
+    const verba = makeVerba({
+      nome: "Férias Gozadas",
+      caracteristica: "ferias",
+      ocorrencia_pagamento: "periodo_aquisitivo",
+      periodo_inicio: "2023-01-01",
+      periodo_fim: "2024-12-31",
+      divisor_informado: 30,
+      multiplicador: 1,
+      tipo_quantidade: "informada",
+      quantidade_informada: 30,
+    });
+    const hist = makeHistorico({ valor_informado: 3000 });
+    const engine = createEngine({
+      params: makeParams({
+        data_admissao: "2020-01-01",
+        data_demissao: "2024-12-31",
+      }),
+      historicos: [hist],
+      verbas: [verba],
+      ferias: [
+        {
+          id: "fer-2",
+          relativas: "2023/2024",
+          periodo_aquisitivo_inicio: "2023-01-01",
+          periodo_aquisitivo_fim: "2023-12-31",
+          periodo_concessivo_inicio: "2024-01-01",
+          periodo_concessivo_fim: "2024-12-31",
+          prazo_dias: 30,
+          situacao: "gozadas",
+          dobra: false,
+          abono: false,
+          periodos_gozo: [{ inicio: "2024-06-01", fim: "2024-06-30", dias: 30 }],
+        },
+      ],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    });
+    const r = engine.liquidar();
+    expect(r.verbas[0].ocorrencias.length).toBeGreaterThanOrEqual(1);
+    expect(r.verbas[0].total_devido).toBeGreaterThan(0);
+  });
+
+  it("Reflexo de 13º sobre HE com media_valor_absoluto", () => {
+    const principal = makeVerba({
+      id: "principal-he",
+      nome: "Horas Extras 50%",
+      tipo: "principal",
+      periodo_inicio: "2024-01-01",
+      periodo_fim: "2024-12-31",
+      tipo_quantidade: "informada",
+      quantidade_informada: 10,
+      divisor_informado: 220,
+      multiplicador: 1.5,
+    });
+    const reflexa = makeVerba({
+      id: "ref-13",
+      nome: "Reflexo HE → 13º",
+      tipo: "reflexa",
+      verba_principal_id: "principal-he",
+      ocorrencia_pagamento: "dezembro",
+      periodo_inicio: "2024-01-01",
+      periodo_fim: "2024-12-31",
+      comportamento_reflexo: "media_valor_absoluto",
+      periodo_media_reflexo: "ano_civil",
+      multiplicador: 1, // o reflexo já é a média
+      divisor_informado: 1,
+      tipo_quantidade: "informada",
+      quantidade_informada: 1,
+    });
+    const hist = makeHistorico({ valor_informado: 3000 });
+    const engine = createEngine({
+      params: makeParams({
+        data_admissao: "2024-01-01",
+        data_demissao: "2024-12-31",
+      }),
+      historicos: [hist],
+      verbas: [principal, reflexa],
+      indicesDB: INDICES_2024,
+      faixasINSSDB: FAIXAS_INSS_2024,
+    });
+    const r = engine.liquidar();
+    // Principal HE: 12 × R$ 204,55 ≈ R$ 2454,55
+    const principalResult = r.verbas.find((v) => v.nome === "Horas Extras 50%");
+    expect(principalResult!.total_devido).toBeGreaterThan(2400);
+
+    // Reflexo: média = R$ 204,55 em dezembro
+    const reflexoResult = r.verbas.find((v) => v.nome === "Reflexo HE → 13º");
+    expect(reflexoResult).toBeDefined();
+    expect(reflexoResult!.ocorrencias.length).toBeGreaterThanOrEqual(1);
+    expect(reflexoResult!.total_devido).toBeGreaterThan(150);
+    expect(reflexoResult!.total_devido).toBeLessThan(250);
   });
 });
 

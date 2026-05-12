@@ -398,6 +398,8 @@ export class PjeCalcEngineV3 {
       this.historicos,
       this.cartaoPonto,
       this.params,
+      this.ferias,
+      this.faltas,
     );
 
     // ── 1. Configurar Calculo ──
