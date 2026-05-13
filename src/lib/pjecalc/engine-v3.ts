@@ -1451,14 +1451,18 @@ export class PjeCalcEngineV3 {
     // F0-ORACLE-COMPARE-BUGS.md:57-68 (estimativa +5-8pp ao final).
     const override = this.fgtsConfig.fgts_override_total;
     if (typeof override === 'number' && override >= 0) {
-      // Sessão 7d (2026-05-12): quando o override vem do PJC, ele representa
-      // os DEPÓSITOS principais (Σ baseVerba × aliquota × indiceAcumulado).
-      // Antes a função ZERAVA multa 40% + LC 110 — perdendo R$ 13-18k por
-      // caso no líquido_reclamante (joseli, leandro, roque, izabela...).
-      // Agora aplica multa e LC sobre o override quando flags ativos.
+      // Sessão 7d (2026-05-12): aplica multa+LC sobre override.
+      // Sessão 7e: usa `multa_override_total` quando presente (calculado
+      // com indiceMulta e taxaJurosParaDataDemissao do PJC). Fallback:
+      // override × multa_percentual quando não vier do PJC.
+      const multaOverride = (this.fgtsConfig as unknown as {
+        multa_override_total?: number;
+      }).multa_override_total;
       const multaPerc = (this.fgtsConfig.multa_percentual ?? 40) / 100;
       const multaValor = this.fgtsConfig.multa_apurar
-        ? +(override * multaPerc).toFixed(2)
+        ? (typeof multaOverride === 'number' && multaOverride > 0
+            ? +multaOverride.toFixed(2)
+            : +(override * multaPerc).toFixed(2))
         : 0;
       const lc110_10 = this.fgtsConfig.lc110_10 ? +(override * 0.10).toFixed(2) : 0;
       const lc110_05 = this.fgtsConfig.lc110_05 ? +(override * 0.05).toFixed(2) : 0;

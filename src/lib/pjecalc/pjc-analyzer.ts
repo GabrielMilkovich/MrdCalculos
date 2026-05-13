@@ -1021,6 +1021,33 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     fgts_config = { apurar: true, multa_percentual: 40, multa_base: 'devido', lc110_10: false, lc110_05: false, destino: 'pagar_reclamante' };
   }
 
+  // Sessão 7e (2026-05-12): extrai fatores de correção ESPECÍFICOS da multa
+  // do PJC <Fgts>. Esses fatores são DIFERENTES do indiceAcumulado da
+  // OcorrenciaDeFgts: aplicam-se à base da multa rescisória (40% × base
+  // até a data da demissão, corrigido por indiceMulta e juros até liq).
+  // Antes o engine usava multa = override × 0.4 (sem corrigir) — gerava
+  // gap em tiago, vanderlei.
+  if (fgts_config && fgtsEl) {
+    const indiceMultaRaw = getTextContent(fgtsEl, 'indiceMulta');
+    const taxaMultaRaw = getTextContent(fgtsEl, 'taxaDeJurosParaDataDemissao');
+    const indiceMulta =
+      indiceMultaRaw && indiceMultaRaw !== 'null'
+        ? parseNum(indiceMultaRaw)
+        : null;
+    const taxaJurosMulta =
+      taxaMultaRaw && taxaMultaRaw !== 'null'
+        ? parseNum(taxaMultaRaw)
+        : null;
+    (fgts_config as PJCAnalysis['fgts_config'] & {
+      indice_multa?: number;
+      taxa_juros_multa?: number;
+    }).indice_multa = indiceMulta ?? undefined;
+    (fgts_config as PJCAnalysis['fgts_config'] & {
+      indice_multa?: number;
+      taxa_juros_multa?: number;
+    }).taxa_juros_multa = taxaJurosMulta ?? undefined;
+  }
+
   // Sprint 4 fix (2026-04-26): extrair <OcorrenciaDeFgts> top-level (não as
   // ocorrenciaOriginal aninhadas que vêm com valores null). Esses dados são
   // o ground-truth Java para o cálculo de FGTS por competência.
