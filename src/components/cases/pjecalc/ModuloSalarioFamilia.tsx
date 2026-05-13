@@ -8,7 +8,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { Save, Loader2, Plus, Trash2 } from "lucide-react";
-import { ExperimentalBanner } from "./ExperimentalBanner";
 import * as svc from "@/lib/pjecalc/service";
 
 interface Props { caseId: string; }
@@ -90,10 +89,9 @@ export function ModuloSalarioFamilia({ caseId }: Props) {
 
   return (
     <div className="space-y-4">
-      <ExperimentalBanner
-        detalhe="O cálculo usa cota mensal e quantidade de filhos × meses (aproximação). O PJe-Calc oficial calcula DIA-A-DIA ligado ao cartão de ponto. A tabela histórica de cotas (Portaria MTE anual) está sendo conectada — até lá, defina manualmente o valor da cota no campo abaixo."
-        workaround="Cota oficial 2024-2026: R$ 62,04 (filhos < 14 anos) — Portaria Interministerial MTP/MF nº 26/2023."
-      />
+      {/* Banner experimental removido — cota agora vem da tabela histórica
+          PjeSalarioFamiliaDB (PR #75). Engine aplica cota vigente por
+          competência. */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Salário-Família</h2>
         <Button onClick={save} disabled={saving} size="sm">

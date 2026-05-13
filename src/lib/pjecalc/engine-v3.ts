@@ -76,19 +76,68 @@ import { preencherOcorrenciasFromScratch } from './gerar-ocorrencias-from-scratc
 import { gerarApuracoesDeJuros, fatorSelicAcumulado } from './gerar-apuracoes-juros';
 
 /**
- * AUDIT #2: Faixas progressivas de Seguro-Desemprego — Lei 7.998/90 art. 5º,
- * Portaria MTE 2024 (referência: salário-mínimo R$ 1.412).
- *   Faixa 1 (até R$ 2.041,39):           valor × 0.8
- *   Faixa 2 (até R$ 3.402,65):           R$ 1.633,10 + (valor − 2.041,39) × 0.5
- *   Faixa 3 (acima):                     R$ 2.313,74 (teto fixo)
- *   Piso: R$ 1.412,00 (não pode ser menor que o salário mínimo)
+ * AUDIT #2/#31: Faixas progressivas de Seguro-Desemprego — Lei 7.998/90 art. 5º.
  *
- * Valores são atualizados anualmente — manter sincronizado com tabela
- * histórica do banco quando essa for adicionada. Por enquanto usa a
- * faixa 2024 como linha de base.
+ * Quando a tabela histórica do banco (PjeSeguroDesempregoDB) é fornecida,
+ * usa ela direto: cada faixa tem valor_inicial, valor_final, percentual e
+ * valor_soma; pega a faixa cuja competência <= data fornecida.
+ *
+ * Quando a tabela vier vazia, cai para os valores 2024 (Portaria MTE).
+ * Função era literalmente `calcularParcelaSeguroDesemprego2024` —
+ * renomeada para `calcularParcelaSeguroDesemprego` aceitando data e
+ * tabela histórica. O alias antigo permanece como retrocompat.
+ *
+ * Faixas 2024 (fallback):
+ *   Faixa 1 (até R$ 2.041,39):  valor × 0.8
+ *   Faixa 2 (até R$ 3.402,65):  R$ 1.633,10 + (valor − 2.041,39) × 0.5
+ *   Faixa 3 (acima):            R$ 2.313,74 (teto fixo)
+ *   Piso: R$ 1.412,00 (1 salário mínimo)
  */
-export function calcularParcelaSeguroDesemprego2024(salarioMedio: number): number {
+export function calcularParcelaSeguroDesemprego(
+  salarioMedio: number,
+  dataReferencia?: string,
+  tabela?: { competencia: string; faixa: number; valor_inicial: number; valor_final: number; percentual: number; valor_soma: number; valor_piso: number; valor_teto: number }[],
+): number {
   if (!salarioMedio || salarioMedio <= 0) return 0;
+
+  // Caminho 1: tabela histórica fornecida → escolhe faixa da competência
+  if (tabela && tabela.length > 0 && dataReferencia) {
+    const compRef = dataReferencia.slice(0, 7); // yyyy-mm
+    // Pega a competência mais recente <= compRef
+    const candidatas = tabela
+      .filter((row) => (row.competencia ?? "").slice(0, 7) <= compRef)
+      .sort((a, b) => b.competencia.localeCompare(a.competencia));
+    if (candidatas.length > 0) {
+      // Agrupa por competência (1 ou mais faixas por competência)
+      const competenciaAtiva = candidatas[0].competencia.slice(0, 7);
+      const faixas = tabela
+        .filter((row) => row.competencia.slice(0, 7) === competenciaAtiva)
+        .sort((a, b) => a.faixa - b.faixa);
+
+      // Encontra faixa aplicável
+      const piso = faixas[0]?.valor_piso ?? 0;
+      const teto = faixas[faixas.length - 1]?.valor_teto ?? Infinity;
+      let parcela = 0;
+      for (const f of faixas) {
+        if (salarioMedio >= f.valor_inicial && salarioMedio < f.valor_final) {
+          parcela =
+            (f.valor_soma ?? 0) + (salarioMedio - f.valor_inicial) * (f.percentual ?? 0);
+          break;
+        }
+        if (salarioMedio >= f.valor_final) {
+          // Faixa anterior — guarda valor da fórmula como fallback
+          parcela =
+            (f.valor_soma ?? 0) + (f.valor_final - f.valor_inicial) * (f.percentual ?? 0);
+        }
+      }
+      if (parcela <= 0 && faixas.length > 0) {
+        parcela = teto;
+      }
+      return Math.max(piso, Math.min(teto, +parcela.toFixed(2)));
+    }
+  }
+
+  // Caminho 2: fallback Portaria MTE 2024
   const PISO = 1412.00;
   const FAIXA_1 = 2041.39;
   const FAIXA_2 = 3402.65;
@@ -105,6 +154,14 @@ export function calcularParcelaSeguroDesemprego2024(salarioMedio: number): numbe
   // Piso: 1 salário-mínimo
   return Math.max(PISO, Math.min(TETO, +parcela.toFixed(2)));
 }
+
+/**
+ * Alias retrocompat — chamadas antigas a `calcularParcelaSeguroDesemprego2024(salario)`
+ * continuam funcionando, mas passam a usar a versão genérica com fallback 2024
+ * quando não há tabela.
+ */
+export const calcularParcelaSeguroDesemprego2024 = (salarioMedio: number): number =>
+  calcularParcelaSeguroDesemprego(salarioMedio);
 
 export class PjeCalcEngineV3 {
   private params: PjeParametros;
@@ -975,7 +1032,18 @@ export class PjeCalcEngineV3 {
           // Cálculo from-scratch via faixas oficiais (Portaria MTE).
           // Base: valor_ultima_remuneracao do params.
           const base = this.params.valor_ultima_remuneracao ?? 0;
-          valorParcela = calcularParcelaSeguroDesemprego2024(base);
+          // AUDIT #2/#31: usa tabela histórica do banco quando fornecida
+          // (PjeSeguroDesempregoDB[]). Fallback Portaria MTE 2024 quando
+          // tabela vazia. Data de referência: demissão ou ajuizamento.
+          const dataRef =
+            this.params.data_demissao ??
+            this.params.data_ajuizamento ??
+            this.correcaoConfig.data_liquidacao;
+          valorParcela = calcularParcelaSeguroDesemprego(
+            base,
+            dataRef,
+            this.seguroDesempregoDB,
+          );
         }
         valorSeguroDesemprego = parcelas * valorParcela;
       }

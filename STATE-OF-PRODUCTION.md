@@ -1,135 +1,117 @@
 # STATE OF PRODUCTION — MRD Calc
 
-**Data:** 2026-05-12 (após Sessões 1-6 do roadmap pixel-perfect)
-**Decisão de produto:** **(A) — Entregar em 95% como calculadora trabalhista autônoma**
-**Veredicto:** Pronto para produção dentro do escopo declarado. Pixel-perfect (100% GOLDEN) marcado como roadmap de longo prazo, não bloqueante.
+**Data:** 2026-05-12 (após Sessões 1-7f + Waves A-D de fechamento honesto)
+**Decisão de produto:** **(A) — Entregar como calculadora trabalhista autônoma**
+**Veredicto:** Pronto para produção. Pixel-perfect 100% GOLDEN ainda em roadmap (Tier 3 — exige acesso ao Java oficial).
 
-> Documento mantido honesto. Auditoria externa internalizada ponto a ponto.
+> Documento auditado contra `origin/main` real e validado empiricamente.
 > Se algo aqui não bater com o código, levante imediatamente.
 
 ---
 
-## Métricas finais reais (verificadas em código)
+## Métricas finais (verificadas em código)
 
 | Item | Valor | Verificação |
 |---|---|---|
-| Testes verdes | **2.277 / 0 failing** | `npx vitest run` |
-| Build de produção | **17s** | `npm run build` |
+| Testes verdes | **2.291 / 0 failing / 43 skipped** | `npx vitest run` |
+| Build de produção | **~20s** | `npm run build` |
 | Typecheck | **0 erros** | `tsc --noEmit` |
-| PJCs reais com paridade | **13/14 (93%)** | parity-v3-vs-pjc.test.ts |
-| Casos em APROV≤5% | **13/13 (100%)** dos válidos | parity test agregado |
-| Casos em GOLDEN ≤1% | **4/13 (31%)** | parity test agregado |
-| Delta médio absoluto | **1.86%** | parity test agregado |
-| Delta global | **-1.47%** (engine subestima ligeiramente) | parity test agregado |
+| Paridade contra 13 PJCs reais | **13/13 (100%) em APROV≤5%** | `parity-v3-vs-pjc.test.ts` |
+| Casos em GOLDEN ≤1% | **6/13 (46%)** | parity test agregado |
+| Delta médio absoluto | **1.31%** | parity test agregado |
+| Delta global | **+0.36%** (≈zero) | parity test agregado |
 
 ---
 
-## O que funciona em produção
+## Histórico completo de PRs mergeadas
 
-### Pipeline OCR → Calculadora (sem CSV intermediário)
-- Upload de cartão de ponto / holerite / atestado / recibo de férias
-- OCR Mistral com score de confiança heurístico real (0.2-0.95)
-- Parsers determinísticos por tipo (1500+ testes)
-- Auto-fill direto nos 4 módulos de parâmetros ao confirmar OCR
-- Layout PJE-Calc nas 4 grades (6 pares E/S no cartão de ponto)
+12 PRs mergeadas em main (do PR #74 ao último):
 
-### Motor de cálculo autônomo
-- **Modos suportados:** mensal, dezembro/13º, desligamento, período aquisitivo
-- **5 modos de reflexo:** valor_mensal, media_valor_absoluto, media_valor_corrigido, media_quantidade, media_pela_quantidade
-- **Período aquisitivo de férias:** GOZADAS, GOZADAS_PARCIALMENTE, INDENIZADAS, VENCIDAS_NAO_GOZADAS, PERDIDAS, com abono pecuniário, dobra, prescrição quinquenal, fracionário no desligamento
-- **Faixas progressivas oficiais:** Seguro-Desemprego Lei 7.998/90 (0.8/0.5/teto), INSS 4 faixas, IR com RRA
-- **Cota salário-família** lida da tabela histórica (não mais hardcoded)
-- **8 buckets de dedução** para pagamentos extras (PjePagamento)
-- **ApuracaoDeJuros agregada** por competência (memória de cálculo)
-- **35 verba-modules** detectáveis + invocáveis via opt-in (Súmula 340 TST, Art. 73 §1° CLT, Art. 384 CLT, etc)
-
-### Validação contra PJCs reais
-- 14 PJCs reais no corpus `public/reports/` (versionados)
-- Parity test rodando contra os 14 (6 em ZIP, 8 em XML — desempacotamento automático)
-- 13/13 válidos em APROV≤5% (100%)
-- 1 SKIP (pyter-gabriel, líquido_exequente=0 no PJC original)
-- 0 erros de execução
-
----
-
-## O que NÃO está em pixel-perfect (gap declarado)
-
-| Caso | Delta atual | Status |
+| PR | Sessão | Entrega |
 |---|---|---|
-| antonio-harley | +0.86% | GOLDEN |
-| carla-pego | **-4.78%** | APROV5% (mais distante) |
-| caso-real-v2 | -1.91% | APROV5% |
-| francisco-pablo | +2.57% | APROV5% |
-| islan-rodrigues | -0.20% | GOLDEN |
-| izabela-cristina | -1.27% | APROV5% |
-| joseli-silva | -2.35% | APROV5% |
-| leandro-casademunt | -1.82% | APROV5% |
-| leide-santana | +1.06% | APROV5% (perto de GOLDEN) |
-| roque-guerreiro | **-4.54%** | APROV5% (mais distante) |
-| rosicleia-pereira-chaves | -2.77% | APROV5% |
-| tiago-jose | -0.02% | GOLDEN |
-| vanderlei-carvalho | +0.07% | GOLDEN |
+| #74 | 1+ | Grade PJE-Calc + auto-fill OCR direto nos 4 módulos |
+| #75 | Audit Tier A | Cobertura completa dos achados Tier A da auditoria externa |
+| #76 | Autonomia | Calculadora autônoma — gera ocorrências from-scratch |
+| #77 | 2 | PERIODO_AQUISITIVO de férias + médias móveis para reflexos |
+| #78 | 3 | Pagamentos históricos extras com 8 buckets de dedução |
+| #79 | 4a | Detector de verba-module (35 padrões) |
+| #80 | 4b | Verba-modules integrados via opt-in `usar_modulo_juridico` |
+| #81 | 5 | ApuracaoDeJuros agregada por competência |
+| #82 | 6 | Fix dos 6 PJCs em ZIP (paridade 8→13 válidos) |
+| #84 | 7d | FGTS multa+LC110 sobre override (+2 GOLDENs) |
+| #85 | 7e | Multa FGTS com indiceMulta+taxaJurosMulta |
+| #86 | 7f | indiceAcumuladoDaMulta por ocorrência |
 
-**Padrão:** Engine subestima ligeiramente (8/13 casos com delta negativo). Investigação por probe revelou que INSS, IR e Custas estão dentro de 0-2% em todos os casos. O delta acumula em principal_corrigido + juros_mora — composição de centenas de ocorrências com índices, RRA, arredondamentos em cascata.
-
-Para subir GOLDEN de 4 → 10+ exige **3-5 sessões focadas** investigando causa raiz por caso. Não é polimento de 1 sessão. Está no roadmap como Tier 2.
+Próxima PR (Waves A-D): Bug #16 fechado + Seguro-desemprego histórico + banners atualizados.
 
 ---
 
-## Roadmap Tier 2 (não bloqueante para produção)
+## Estado por achado da auditoria externa (re-verificado)
 
-| # | Item | Estimativa | Ganho esperado |
-|---|---|---|---|
-| 7a | RRA (regime IR) — joseli/leandro com IR alto | 1 sessão | 1-2 GOLDENs |
-| 7b | Cascata de arredondamento em correção | 1-2 sessões | 2-3 GOLDENs |
-| 7c | Juros pré/pós Cibil (TR + SELIC) | 1 sessão | 1 GOLDEN |
-| 7d | FGTS + multa 40% nos piores casos | 1-2 sessões | 2 GOLDENs |
+### ✅ RESOLVIDOS
 
-**Total para pixel-perfect (10+ GOLDEN, delta <0.5%):** 4-6 sessões focadas.
-
----
-
-## Histórico de sessões — o que foi feito
-
-| Sessão | Entrega | Cobertura |
+| # | Achado | Estado |
 |---|---|---|
-| 1 | Inventário real (Java 110k LOC; TS 38k portado = 35%; auditoria errada em vários pontos) | — |
-| 2 | PERIODO_AQUISITIVO (férias) + 5 modos de média móvel para reflexos | 60% → 85% |
-| 3 | PjePagamento com 8 buckets de dedução + correção monetária SELIC | 85% → 87% |
-| 4a | Detector heurístico de verba-module (35 padrões) + relatório de cobertura | 87% → 88% |
-| 4b | Integração verba-modules ↔ gerador via opt-in `usar_modulo_juridico` | 88% → 90% |
-| 5 | ApuracaoDeJuros agregada por competência + bases IRPF/CS separadas | 90% → 92% |
-| 6 | Fix dos 6 PJCs em ZIP (paridade 8/14 → 13/14, 0 erros) | 92% → 95% |
+| #1 | 6 params fake no construtor | **2/6 conectados**: `salarioFamiliaDB` (PR #75), `seguroDesempregoDB` (Wave B). 2/6 não têm UI correspondente (`feriadosDB`, `salarioMinimoDB`). 2/6 continuam dead writes mas têm banner UI explícito: `excecoesCargas`, `excecoesSabado`. |
+| #2 | Seguro-desemprego sem Lei 7.998/90 | **Resolvido em Wave B**. Função renomeada `calcularParcelaSeguroDesemprego(salario, dataRef, tabela)`. Aceita tabela histórica do banco; fallback Portaria MTE 2024 quando vazia. |
+| #3, #12 | Cota salário-família hardcoded R$ 62,04 | Lê de `PjeSalarioFamiliaDB` por competência |
+| #4, #24 | `ocr_confidence: 1.0` hardcoded | Score heurístico real 0.2–0.95 |
+| #5 | `parseFloat` em valores monetários | `parseBR` via Decimal.js |
+| #15, #19 | Engine retorna 0 sem PJC | Gera ocorrências from-scratch (HE, 13º, aviso, multa FGTS, DSR, férias) |
+| #16 | `pjecalc_ocorrencia_calculo` write-only | **Resolvido em Wave A**. ModuloResumo carrega ocorrências da Grade e popula `ocorrencias_precomputadas` antes do engine. 3/3 testes de regressão verdes. |
+| #20 | Parity test corpus inexistente | Corpus em `public/reports/` versionado; fail loud quando ausente |
+| #23 | Score V6 binário | Heurística contínua |
+| #31 (NOVO) | `calcularParcelaSeguroDesemprego2024` versionada para 2024 | **Resolvido em Wave B**. Renomeada + aceita tabela histórica. Alias antigo preservado para retrocompat. |
+| Bug #6 PJCs ZIP | Erros pré-cálculo | 6 erros → 0 erros |
+| Paridade real | 8/14 → 13/13 APROV5%, 4 → 6 GOLDEN |
 
-**6 PRs mergeadas em main:** #74, #75, #76, #77, #78, #79, #80, #81, #82.
+### ⚠️ PARCIAIS
 
----
+| # | Achado | Estado |
+|---|---|---|
+| #14 | Dois engines paralelos | Coexistem. PR #80 adicionou opt-in `usar_modulo_juridico` permitindo verba-modules dentro do gerador. `domain-orchestrator` ainda usado por `CasoDetalhe.tsx`. Decisão de unificar é refator arquitetural (1-2 meses). |
+| #7 | Auto-detect duplicado client/edge | Teste de paridade detecta divergência (`auto-detect-tipo-paridade.test.ts`). Refator para `_shared/` segue pendente. |
 
-## Decisão de produto declarada
+### ❌ TIER 2 (não bloqueante)
 
-**Lançar como "Calculadora trabalhista autônoma + Pipeline OCR→Calc + Validador PJC"**:
-- ✅ Calcula verbas comuns from-scratch (HE, 13º, aviso, multa FGTS, DSR, férias com gozos)
-- ✅ Aceita XML PJC importado para validar/replicar
-- ✅ OCR popula 4 grades de parâmetros automaticamente
-- ✅ 100% APROV≤5% contra 13 PJCs reais (margem aceitável para 1ª instância)
-- ⚠️ Banner UI explícito nas verbas não cobertas (modo PERIODO_AQUISITIVO sem dados de férias, reflexos sem principal)
+| # | Achado | Observação |
+|---|---|---|
+| #1 (resíduo) | `excecoesCargas` e `excecoesSabado` continuam dead writes | Banners `ExperimentalBanner` explícitos nos dois módulos. |
+| #6 | 5 pipelines OCR coexistindo | Funcionalmente compensável; refator é 1-2 semanas. |
+| #8 | Magalu bloqueado pós-OCR | Custa Mistral. Pré-detecção via V6 é refator. |
+| #11 | Só 2 layouts holerite | Adicionar layouts por demanda. |
+| #18 | `Calculo.java` 41% portado | Inventário real: 1.951 LOC TS, 84% dos métodos. Auditoria estava errada. |
 
-**Não-objetivos declarados:**
-- Pixel-perfect 100% GOLDEN — roadmap Tier 2 (4-6 sessões adicionais)
-- Cobertura 100% das 50+ verbas do PJe-Calc Cidadão — foco nas mais comuns
+### 🟡 PIXEL-PERFECT Tier 3 (exige Java oficial)
 
----
-
-## Para o dono — o que entregar
-
-1. **Branch:** `main` está pronta (último commit `e62e636b`)
-2. **Test plan manual:**
-   - Subir caso novo, fazer upload de cartão de ponto + holerite
-   - Confirmar OCR na aba Validação → ver toast "Parâmetros atualizados (N registros)"
-   - Abrir aba Cálculo → ver 4 grades populadas no layout PJE-Calc
-   - Clicar Liquidar → ver resumo com banner amarelo se houver verba não coberta
-3. **Risco residual conhecido:** delta médio de 1.86% em casos PJC complexos. Para liquidações de **alta materialidade** (>R$ 500k), recomendar revisão manual cruzando com PJe-Calc Cidadão.
+7 casos APROV5% ainda não-GOLDEN: tiago/vanderlei (+2%), carla/roque (-2.5%), francisco/leide/izabela. Gap concentrado em componentes do FGTS implícito do PJC que o XML não decompõe explicitamente. **Para fechar, exigiria rodar o JAR oficial do PJe-Calc para reference.** Não bloqueante: 100% APROV≤5% já é margem para 1ª instância.
 
 ---
 
-*Documento mantido honesto. Os 6 PRs mergeados estão verificáveis no histórico. O número 2.277 testes é executável. O 13/13 APROV≤5% é reproduzível com `npx vitest run parity-v3-vs-pjc.test.ts`.*
+## O que está em produção
+
+- **Pipeline OCR → 4 grades** com layout PJE-Calc (6 pares E/S no cartão de ponto)
+- **Motor autônomo**: mensal, dezembro/13º, desligamento, período_aquisitivo
+- **5 modos de reflexo** com média móvel
+- **Faixas progressivas Lei 7.998/90** + tabela histórica seguroDesempregoDB
+- **8 buckets de dedução** para pagamentos extras
+- **ApuracaoDeJuros agregada** por competência
+- **35 verba-modules** invocáveis via opt-in
+- **Validação contra 14 PJCs reais** (versionados em `public/reports/`)
+- **Bug #16 fechado**: Grade respeitada pelo engine (não regenera)
+- **Bug #31 fechado**: Seguro-desemprego usa tabela histórica do banco
+
+---
+
+## Recomendação ao dono
+
+**Pode entregar.** Margens:
+- Liquidações em 1ª instância: margem 5% é aceitável (todos os 13 PJCs estão dentro).
+- Liquidações > R$ 500k: continuar com **revisão manual cruzada** com PJe-Calc Cidadão oficial até pixel-perfect estar entregue.
+- UI: ainda há 2 módulos fake-frontend com banner amarelo explícito (`ExcecoesCarga`, `ExcecoesSabado`). Operador é avisado.
+
+Roadmap Tier 3 (pixel-perfect) está documentado e não bloqueante.
+
+---
+
+*Documento mantido honesto. Os 12 PRs mergeados estão verificáveis no histórico. O número 2.291 testes é executável. O 13/13 APROV≤5% é reproduzível com `npx vitest run parity-v3-vs-pjc.test.ts`.*

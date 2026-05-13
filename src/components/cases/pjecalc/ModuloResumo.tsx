@@ -216,12 +216,60 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         sobreaviso: r.sobreaviso || 0,
       }));
 
-      const verbas = verbasData.map((v) => ({
-        ...(v as unknown as PjeVerba),
-        base_calculo: {
-          historicos: (v as Record<string, any>).base_calculo?.historicos || [],
-          verbas: (v as Record<string, any>).base_calculo?.verbas || [],
-          tabelas: (v as Record<string, any>).base_calculo?.tabelas || ['ultima_remuneracao'],
+      // AUDIT bug #16: Fechar o ciclo Grade ↔ Engine. Antes a Grade salvava
+      // edições manuais em pjecalc_ocorrencia_calculo MAS o engine nunca
+      // carregava de lá — preencherOcorrenciasFromScratch sobrescrevia
+      // tudo. Operador via "salvei" mas próxima liquidação ignorava.
+      // Agora: carrega ocorrências da Grade ANTES de instanciar o engine
+      // e popula ocorrencias_precomputadas. Engine V3 já tem guard que
+      // pula preencherOcorrenciasFromScratch quando há precomputadas
+      // (gerar-ocorrencias-from-scratch.ts:696).
+      const { data: ocsGradeRaw } = await fromUntyped("pjecalc_ocorrencia_calculo")
+        .select("*")
+        .eq("case_id", caseId)
+        .eq("ativa", true);
+      const ocsGrade = (ocsGradeRaw as Record<string, unknown>[]) || [];
+      const ocsPorVerba = new Map<string, Array<{
+        competencia: string;
+        base: number;
+        divisor: number;
+        multiplicador: number;
+        quantidade: number;
+        dobra: boolean;
+        devido: number;
+        pago: number;
+      }>>();
+      for (const oc of ocsGrade) {
+        const verbaId = (oc.verba_base_id ?? oc.reflexo_id) as string | null;
+        if (!verbaId) continue;
+        const compRaw = oc.competencia as string | null;
+        const competencia = compRaw ? compRaw.slice(0, 7) : "";
+        if (!competencia) continue;
+        const arr = ocsPorVerba.get(verbaId) ?? [];
+        arr.push({
+          competencia,
+          base: Number(oc.base_valor) || 0,
+          divisor: Number(oc.divisor) || 1,
+          multiplicador: Number(oc.multiplicador) || 1,
+          quantidade: Number(oc.quantidade) || 0,
+          dobra: !!Number(oc.dobra),
+          devido: Number(oc.devido) || 0,
+          pago: Number(oc.pago) || 0,
+        });
+        ocsPorVerba.set(verbaId, arr);
+      }
+
+      const verbas = verbasData.map((v) => {
+        const ocs = ocsPorVerba.get((v as { id: string }).id);
+        return {
+          ...(v as unknown as PjeVerba),
+          // Bug #16: se a Grade tem ocorrências, use-as. Engine NÃO regenera.
+          ocorrencias_precomputadas:
+            ocs && ocs.length > 0 ? ocs : undefined,
+          base_calculo: {
+            historicos: (v as Record<string, any>).base_calculo?.historicos || [],
+            verbas: (v as Record<string, any>).base_calculo?.verbas || [],
+            tabelas: (v as Record<string, any>).base_calculo?.tabelas || ['ultima_remuneracao'],
           proporcionalizar: (v as Record<string, any>).base_calculo?.proporcionalizar ?? false,
           integralizar: (v as Record<string, any>).base_calculo?.integralizar ?? false,
         },
@@ -240,7 +288,8 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         divisor_informado: v.divisor_informado || 30,
         multiplicador: v.multiplicador || 1,
         quantidade_informada: (v as Record<string, any>).quantidade_informada || 1,
-      }));
+        };
+      });
 
       // Cast config objects to engine types (DB schema → engine interface bridge)
       const d = (obj: Record<string, unknown>, key: string, fallback: unknown = undefined) => obj[key] ?? fallback;
