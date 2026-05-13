@@ -82,6 +82,10 @@ import type { PjecalcFaltaRow, PjecalcFeriasRow, PjecalcVerbaRow } from "@/lib/p
 // =====================================================
 
 const MODULOS = [
+  // Cada `experimental: true` significa: o módulo PERSISTE dados mas o
+  // motor de cálculo V3 NÃO consome. Auditado empiricamente em 2026-05-12.
+  // Para detalhes ver STATE-OF-PRODUCTION.md (seção "Fake frontends").
+  // UI marca esses com badge "Experimental" e fundo amarelo no menu.
   { id: 'dados_processo', label: 'Dados do Processo', icon: Briefcase, desc: 'Identificação processual' },
   { id: 'seletor_trt', label: 'Seletor TRT', icon: MapPin, desc: 'Configuração regional' },
   { id: 'parametros', label: 'Parâmetros', icon: Calendar, desc: 'Dados do cálculo' },
@@ -91,13 +95,13 @@ const MODULOS = [
   { id: 'cartao_ponto', label: 'Cartão de Ponto', icon: Clock, desc: 'Jornada mensal' },
   { id: 'ajuste_sentenca', label: 'Ajustes Sentença', icon: Scale, desc: 'Motor de ajuste de jornada' },
   { id: 'verbas', label: 'Verbas', icon: FileText, desc: 'Parcelas do cálculo' },
-  { id: 'periculosidade', label: 'Periculosidade', icon: AlertTriangle, desc: 'Adicional 30%' },
-  { id: 'danos_morais', label: 'Danos Morais', icon: Scale, desc: 'Indenização Art. 223-G' },
-  { id: 'equiparacao', label: 'Equiparação Salarial', icon: GitCompareArrows, desc: 'Art. 461 CLT' },
-  { id: 'estabilidade', label: 'Estabilidade', icon: Shield, desc: 'Provisória / Gestante / CIPA' },
+  { id: 'periculosidade', label: 'Periculosidade', icon: AlertTriangle, desc: 'Adicional 30%', experimental: true },
+  { id: 'danos_morais', label: 'Danos Morais', icon: Scale, desc: 'Indenização Art. 223-G', experimental: true },
+  { id: 'equiparacao', label: 'Equiparação Salarial', icon: GitCompareArrows, desc: 'Art. 461 CLT', experimental: true },
+  { id: 'estabilidade', label: 'Estabilidade', icon: Shield, desc: 'Provisória / Gestante / CIPA', experimental: true },
   { id: 'fgts', label: 'FGTS', icon: Building2, desc: 'Depósitos e multa' },
   { id: 'cs', label: 'Contrib. Social', icon: Receipt, desc: 'Segurado e empregador' },
-  { id: 'terceiros', label: 'Terceiros', icon: Building2, desc: 'Sistema S / FPAS' },
+  { id: 'terceiros', label: 'Terceiros', icon: Building2, desc: 'Sistema S / FPAS', experimental: true },
   { id: 'guias', label: 'Guias Recolhimento', icon: Receipt, desc: 'GPS e DARF' },
   { id: 'ir', label: 'Imposto de Renda', icon: Percent, desc: 'IRRF / RRA' },
   { id: 'correcao', label: 'Correção/Juros', icon: TrendingUp, desc: 'Atualização monetária' },
@@ -105,10 +109,10 @@ const MODULOS = [
   { id: 'salario_familia', label: 'Salário-Família', icon: Users, desc: 'Cotas por dependente' },
   { id: 'multas', label: 'Multas CLT', icon: AlertTriangle, desc: 'Art. 467 e 477' },
   { id: 'pensao', label: 'Pensão Alimentícia', icon: Scale, desc: 'Desconto judicial' },
-  { id: 'prev_privada', label: 'Prev. Privada', icon: Shield, desc: 'Complementar' },
-  { id: 'vale_transporte', label: 'Vale Transporte', icon: Bus, desc: 'Linhas e desconto' },
+  { id: 'prev_privada', label: 'Prev. Privada', icon: Shield, desc: 'Complementar', experimental: true },
+  { id: 'vale_transporte', label: 'Vale Transporte', icon: Bus, desc: 'Linhas e desconto', experimental: true },
   { id: 'advogados', label: 'Advogados', icon: Users, desc: 'OAB e representação' },
-  { id: 'excecoes_juros', label: 'Exceções Juros', icon: Scale, desc: 'Períodos com regime diferente' },
+  { id: 'excecoes_juros', label: 'Exceções Juros', icon: Scale, desc: 'Períodos com regime diferente', experimental: true },
   { id: 'honorarios', label: 'Honorários', icon: Scale, desc: 'Sucumbenciais e contratuais' },
   { id: 'custas', label: 'Custas', icon: Receipt, desc: 'Custas processuais' },
   { id: 'atualizacao', label: 'Atualização', icon: TrendingUp, desc: 'Atualização pós-pagamento' },
@@ -912,7 +916,7 @@ export default function PjeCalcPage() {
           </div>
           <ScrollArea className="h-[calc(100vh-200px)]">
             <div className="space-y-0.5 pr-3">
-              {MODULOS.map((mod, idx) => {
+              {MODULOS.filter(m => !(m as { experimental?: boolean }).experimental).map((mod, idx) => {
                 const isActive = activeModule === mod.id;
                 const status = calc.completude[mod.id] as ModuleStatus | undefined;
                 const statusCfg = status ? STATUS_CONFIG[status] : STATUS_CONFIG.nao_iniciado;
@@ -920,7 +924,7 @@ export default function PjeCalcPage() {
 
                 return (
                   <div key={mod.id}>
-                    {idx === 29 && <Separator className="my-3" />}
+                    {mod.id === 'atualizacao' && <Separator className="my-3" />}
                     <button
                       onClick={() => setActiveModule(mod.id)}
                       className={cn(

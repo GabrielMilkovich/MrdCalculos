@@ -100,8 +100,8 @@ import { logger } from "@/lib/logger";
         { id: 'ferias', label: 'Férias', icon: Calendar },
         { id: 'cartao_ponto', label: 'Cartão de Ponto', icon: Clock },
         { id: 'cartao_ponto_diario', label: 'Apuração Diária', icon: Activity },
-        { id: 'excecoes_carga', label: 'Exceções Carga Horária', icon: AlertCircle },
-        { id: 'excecoes_sabado', label: 'Exceções Sábado', icon: AlertCircle },
+        { id: 'excecoes_carga', label: 'Exceções Carga Horária', icon: AlertCircle, experimental: true },
+        { id: 'excecoes_sabado', label: 'Exceções Sábado', icon: AlertCircle, experimental: true },
       ],
     },
     {
@@ -112,7 +112,7 @@ import { logger } from "@/lib/logger";
         { id: 'verbas_cadastro', label: 'Cadastro de Verbas', icon: FileText },
         { id: 'ocorrencias', label: 'Ocorrências', icon: ScrollText },
         { id: 'pagamentos', label: 'Pagamentos', icon: Banknote },
-        { id: 'vale_transporte', label: 'Vale Transporte', icon: Receipt },
+        { id: 'vale_transporte', label: 'Vale Transporte', icon: Receipt, experimental: true },
       ],
     },
     {
@@ -131,7 +131,7 @@ import { logger } from "@/lib/logger";
       icon: HeartHandshake,
       modulos: [
         { id: 'pensao', label: 'Pensão Alimentícia', icon: Users },
-        { id: 'prev_privada', label: 'Previdência Privada', icon: Briefcase },
+        { id: 'prev_privada', label: 'Previdência Privada', icon: Briefcase, experimental: true },
         { id: 'salario_familia', label: 'Salário Família', icon: Users },
         { id: 'seguro_desemprego', label: 'Seguro Desemprego', icon: Shield },
       ],
@@ -153,7 +153,7 @@ import { logger } from "@/lib/logger";
       modulos: [
         { id: 'correcao', label: 'Correção / Juros', icon: TrendingUp },
         { id: 'atualizacao', label: 'Tabela de Juros', icon: BookOpen },
-        { id: 'excecoes_juros', label: 'Exceções de Juros', icon: AlertCircle },
+        { id: 'excecoes_juros', label: 'Exceções de Juros', icon: AlertCircle, experimental: true },
       ],
     },
     {
@@ -165,11 +165,11 @@ import { logger } from "@/lib/logger";
         { id: 'ajuste_sentenca', label: 'Ajuste Sentença', icon: Gavel },
         { id: 'guias_recolhimento', label: 'Guias de Recolhimento', icon: FileText },
         { id: 'esocial', label: 'e-Social', icon: FileText },
-        { id: 'danos_morais', label: 'Danos Morais', icon: Sparkles },
-        { id: 'equiparacao', label: 'Equiparação Salarial', icon: Scale },
-        { id: 'estabilidade', label: 'Estabilidade', icon: Shield },
-        { id: 'periculosidade', label: 'Periculosidade', icon: AlertCircle },
-        { id: 'terceiros', label: 'Terceiros', icon: Building2 },
+        { id: 'danos_morais', label: 'Danos Morais', icon: Sparkles, experimental: true },
+        { id: 'equiparacao', label: 'Equiparação Salarial', icon: Scale, experimental: true },
+        { id: 'estabilidade', label: 'Estabilidade', icon: Shield, experimental: true },
+        { id: 'periculosidade', label: 'Periculosidade', icon: AlertCircle, experimental: true },
+        { id: 'terceiros', label: 'Terceiros', icon: Building2, experimental: true },
       ],
     },
   ];
@@ -928,7 +928,9 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
               {SECOES.map(sec => {
                 const SecIcon = sec.icon;
                 const expanded = expandedSections.has(sec.id);
-                const total = sec.modulos.length;
+                const visibleModulos = sec.modulos.filter(m => !(m as { experimental?: boolean }).experimental);
+                const total = visibleModulos.length;
+                if (total === 0) return null;
                 return (
                   <div key={sec.id} className="mb-1">
                     <button
@@ -950,7 +952,7 @@ export function PjeCalcInline({ caseId }: PjeCalcInlineProps) {
                     </button>
                     {expanded && (
                       <ul className="mt-0.5 ml-1 border-l border-border">
-                        {sec.modulos.map(m => {
+                        {visibleModulos.map(m => {
                           const Icon = m.icon;
                           const active = activeModule === m.id;
                           const status = completude[m.id] || 'nao_iniciado';
