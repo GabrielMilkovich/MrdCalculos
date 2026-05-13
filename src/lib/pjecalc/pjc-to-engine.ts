@@ -709,14 +709,40 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
   // usa cálculo próprio.
   const ocsXml = (a.resultado as unknown as { fgts_ocorrencias_xml?: Array<{ baseVerba: number; baseHistorico: number; aliquota: number; indiceAcumulado: number; taxaDeJuros: number }> }).fgts_ocorrencias_xml;
   let fgtsOverride: number | undefined;
+  let multaOverride: number | undefined;
   if (ocsXml && ocsXml.length > 0) {
-    fgtsOverride = ocsXml.reduce((sum, oc) => {
+    let sumDeposito = 0;
+    let sumBaseSemCorrecao = 0;
+    for (const oc of ocsXml) {
       const base = (oc.baseVerba || 0) + (oc.baseHistorico || 0);
-      if (base <= 0) return sum;
+      if (base <= 0) continue;
       const dev = base * (oc.aliquota || 0.08);
-      return sum + dev * (oc.indiceAcumulado || 1) * (1 + (oc.taxaDeJuros || 0) / 100);
-    }, 0);
-    if (fgtsOverride <= 0) fgtsOverride = undefined;
+      sumDeposito += dev * (oc.indiceAcumulado || 1) * (1 + (oc.taxaDeJuros || 0) / 100);
+      // Base da MULTA: depósito sem correção (corrigido pela multa abaixo).
+      sumBaseSemCorrecao += dev;
+    }
+    if (sumDeposito > 0) fgtsOverride = sumDeposito;
+
+    // Sessão 7e: multa rescisória do PJC = base × 40% × indiceMulta × (1 + taxa/100)
+    // Usa fatores do <Fgts> (indiceMulta e taxaDeJurosParaDataDemissao)
+    // que são DIFERENTES dos índices de cada OcorrenciaDeFgts.
+    const fgtsExtra = fgtsConf as unknown as {
+      indice_multa?: number;
+      taxa_juros_multa?: number;
+    };
+    const indiceMulta = fgtsExtra?.indice_multa;
+    const taxaJurosMulta = fgtsExtra?.taxa_juros_multa;
+    const multaApurar = fgtsConf?.multa_apurar !== false;
+    if (
+      multaApurar &&
+      sumBaseSemCorrecao > 0 &&
+      indiceMulta &&
+      indiceMulta > 0
+    ) {
+      const pct = (fgtsConf?.multa_percentual ?? 40) / 100;
+      multaOverride =
+        sumBaseSemCorrecao * pct * indiceMulta * (1 + (taxaJurosMulta ?? 0) / 100);
+    }
   }
   
   // Destination mapping from PJC XML
@@ -754,7 +780,11 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
     excluir_aviso_multa: (fgtsConf as unknown as { excluir_aviso_multa?: boolean })?.excluir_aviso_multa ?? false,
     perdas_monetarias: (fgtsConf as unknown as { perdas_monetarias?: boolean })?.perdas_monetarias ?? false,
     fgts_override_total: fgtsOverride,
-  };
+    // Sessão 7e: multa rescisória já calculada com fatores específicos
+    // do PJC. Quando setado, o engine usa esse valor em vez de
+    // override × percentual.
+    multa_override_total: multaOverride,
+  } as PjeFGTSConfig & { multa_override_total?: number };
 }
 
 // Keep old name as alias for backward compat
