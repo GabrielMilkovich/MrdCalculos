@@ -1053,7 +1053,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
   // o ground-truth Java para o cálculo de FGTS por competência.
   // Java grava: baseVerba, baseHistorico, aliquotaDoFgtsEnum, indiceAcumulado,
   // taxaDeJuros — suficiente para reconstruir o FGTS exato.
-  const fgts_ocorrencias_xml: Array<{ baseVerba: number; baseHistorico: number; aliquota: number; indiceAcumulado: number; taxaDeJuros: number; competencia: number }> = [];
+  const fgts_ocorrencias_xml: Array<{ baseVerba: number; baseHistorico: number; aliquota: number; indiceAcumulado: number; indiceAcumuladoDaMulta: number; taxaDeJuros: number; competencia: number }> = [];
   const ocsRe = /<OcorrenciaDeFgts>(.*?)<\/OcorrenciaDeFgts>/g;
   const seenIds = new Set<string>();
   let mOcs;
@@ -1078,6 +1078,10 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
       baseHistorico: baseH,
       aliquota,
       indiceAcumulado: num(/<indiceAcumulado>([^<]+)<\/indiceAcumulado>/),
+      // Sessão 7f: cada ocorrência tem ÍNDICE PRÓPRIO da multa, diferente do
+      // indiceAcumulado do depósito principal. Antes a multa era calculada
+      // com indiceMulta global do <Fgts> root — agora por ocorrência.
+      indiceAcumuladoDaMulta: num(/<indiceAcumuladoDaMulta>([^<]+)<\/indiceAcumuladoDaMulta>/),
       taxaDeJuros: num(/<taxaDeJuros>([^<]+)<\/taxaDeJuros>/),
       competencia: num(/<ocorrencia>(\d+)<\/ocorrencia>/),
     });

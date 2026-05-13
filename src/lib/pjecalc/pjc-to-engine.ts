@@ -707,41 +707,35 @@ function buildFGTSConfigFromPJC(a: PJCAnalysis): PjeFGTSConfig {
   // Validado em antonio: bate +1,10% (vs fórmula simplificada engine).
   // Para casos novos sem PJC, fgts_override_total fica undefined e engine
   // usa cálculo próprio.
-  const ocsXml = (a.resultado as unknown as { fgts_ocorrencias_xml?: Array<{ baseVerba: number; baseHistorico: number; aliquota: number; indiceAcumulado: number; taxaDeJuros: number }> }).fgts_ocorrencias_xml;
+  const ocsXml = (a.resultado as unknown as { fgts_ocorrencias_xml?: Array<{ baseVerba: number; baseHistorico: number; aliquota: number; indiceAcumulado: number; indiceAcumuladoDaMulta?: number; taxaDeJuros: number }> }).fgts_ocorrencias_xml;
   let fgtsOverride: number | undefined;
   let multaOverride: number | undefined;
   if (ocsXml && ocsXml.length > 0) {
     let sumDeposito = 0;
-    let sumBaseSemCorrecao = 0;
+    let sumMultaCorrigidaPorOcorrencia = 0; // base × aliq × indiceAcumuladoDaMulta (por oc)
     for (const oc of ocsXml) {
       const base = (oc.baseVerba || 0) + (oc.baseHistorico || 0);
       if (base <= 0) continue;
       const dev = base * (oc.aliquota || 0.08);
       sumDeposito += dev * (oc.indiceAcumulado || 1) * (1 + (oc.taxaDeJuros || 0) / 100);
-      // Base da MULTA: depósito sem correção (corrigido pela multa abaixo).
-      sumBaseSemCorrecao += dev;
+      // Sessão 7f: cada ocorrência tem `indiceAcumuladoDaMulta` próprio
+      // (diferente do indiceAcumulado do depósito). Multiplica o dev pela
+      // sua taxa de correção da multa antes de agregar.
+      sumMultaCorrigidaPorOcorrencia += dev * (oc.indiceAcumuladoDaMulta || 1);
     }
     if (sumDeposito > 0) fgtsOverride = sumDeposito;
 
-    // Sessão 7e: multa rescisória do PJC = base × 40% × indiceMulta × (1 + taxa/100)
-    // Usa fatores do <Fgts> (indiceMulta e taxaDeJurosParaDataDemissao)
-    // que são DIFERENTES dos índices de cada OcorrenciaDeFgts.
+    // Multa rescisória: base × aliquota × 0.4 × indiceAcumuladoDaMulta(i) × (1 + taxaJurosDemissao/100)
+    // taxaJurosParaDataDemissao é GLOBAL do <Fgts>; indiceAcumuladoDaMulta é POR ocorrência.
     const fgtsExtra = fgtsConf as unknown as {
-      indice_multa?: number;
       taxa_juros_multa?: number;
     };
-    const indiceMulta = fgtsExtra?.indice_multa;
     const taxaJurosMulta = fgtsExtra?.taxa_juros_multa;
     const multaApurar = fgtsConf?.multa_apurar !== false;
-    if (
-      multaApurar &&
-      sumBaseSemCorrecao > 0 &&
-      indiceMulta &&
-      indiceMulta > 0
-    ) {
+    if (multaApurar && sumMultaCorrigidaPorOcorrencia > 0) {
       const pct = (fgtsConf?.multa_percentual ?? 40) / 100;
       multaOverride =
-        sumBaseSemCorrecao * pct * indiceMulta * (1 + (taxaJurosMulta ?? 0) / 100);
+        sumMultaCorrigidaPorOcorrencia * pct * (1 + (taxaJurosMulta ?? 0) / 100);
     }
   }
   
