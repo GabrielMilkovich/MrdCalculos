@@ -40,25 +40,22 @@ export interface ConfidenceScore {
   level: ConfianceLevel;
   /** Razões em linguagem humana, da maior penalidade pra menor. */
   reasons: string[];
-  /** True quando o pipeline detectou inconsistência grave que torna o
-   *  download inseguro. Não pode ser sobrescrito por checkbox humano. */
+  /**
+   * FASE 1.4 + F0.5 — true quando o pipeline detectou inconsistência grave
+   * que recomenda revisão manual antes do download. NÃO trava o botão
+   * (decisão de produto: operador SEMPRE decide). Dialogs renderizam banner
+   * vermelho explicativo. Razões típicas:
+   *   - holerite: parser soma > 20% acima/abaixo do bruto/líquido declarado
+   *   - holerite: 0 rubricas extraídas
+   *   - cartão-ponto: 0 apurações em OCR não-vazio ou marcação impossível
+   */
   bloqueador: boolean;
-  /** Motivo legível do bloqueio (mostrado em banner). null se não bloqueado. */
-  bloqueador_motivo: string | null;
+  /** Motivo legível do bloqueio (mostrado no banner). null/undefined se não bloqueado. */
+  bloqueador_motivo?: string | null;
   /** Janelas de competência detectadas no OCR (cartão-ponto). */
   janelas?: JanelaPeriodo[];
   /** Datas fora de qualquer janela detectada (cartão-ponto). */
   datasForaJanela?: string[];
-  /**
-   * FASE 1.4 — quando `true`, a extração tem inconsistência grave o suficiente
-   * para BLOQUEAR download (não só sinalizar). Dialogs renderizam banner
-   * vermelho e desabilitam botão de download independente dos checkboxes
-   * humanos. Razões típicas:
-   *   - holerite: parser soma > 20% acima do bruto declarado no OCR
-   *   - holerite: 0 rubricas extraídas
-   *   - cartão-ponto: 0 apurações em OCR não-vazio
-   */
-  bloqueador?: boolean;
 }
 
 /**
@@ -140,7 +137,6 @@ export function scoreCartaoPonto(
         "Nenhuma apuração extraída — OCR pode estar corrompido.",
       janelas,
       datasForaJanela: [],
-      bloqueador: true,
     };
   }
 
@@ -603,7 +599,7 @@ function detectarBloqueadorHolerite(
     Math.abs(check.diffBruto) / check.totalBrutoOcr > 0.20
   ) {
     const pct = ((Math.abs(check.diffBruto) / check.totalBrutoOcr) * 100).toFixed(0);
-    return `parser produziu soma ${pct}% acima/abaixo do bruto declarado no OCR`;
+    return `Soma das rubricas difere ${pct}% do Total Bruto declarado no OCR (R$ ${check.totalBrutoOcr.toFixed(2)})`;
   }
   if (
     check.liquidoOcr !== null &&
@@ -611,7 +607,7 @@ function detectarBloqueadorHolerite(
     Math.abs(check.diffLiquido) / check.liquidoOcr > 0.20
   ) {
     const pct = ((Math.abs(check.diffLiquido) / check.liquidoOcr) * 100).toFixed(0);
-    return `parser produziu líquido ${pct}% acima/abaixo do declarado no OCR`;
+    return `Líquido computado difere ${pct}% do Total Líquido declarado no OCR (R$ ${check.liquidoOcr.toFixed(2)})`;
   }
   return null;
 }
@@ -752,8 +748,15 @@ export function scoreHolerite(
       level: nivel(scoreFinal),
       reasons,
       bloqueador: true,
+      bloqueador_motivo: bloqueio,
     };
   }
 
-  return { score: clamp(score), level: nivel(clamp(score)), reasons };
+  return {
+    score: clamp(score),
+    level: nivel(clamp(score)),
+    reasons,
+    bloqueador: false,
+    bloqueador_motivo: null,
+  };
 }
