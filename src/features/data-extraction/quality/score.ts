@@ -49,6 +49,16 @@ export interface ConfidenceScore {
   janelas?: JanelaPeriodo[];
   /** Datas fora de qualquer janela detectada (cartão-ponto). */
   datasForaJanela?: string[];
+  /**
+   * FASE 1.4 — quando `true`, a extração tem inconsistência grave o suficiente
+   * para BLOQUEAR download (não só sinalizar). Dialogs renderizam banner
+   * vermelho e desabilitam botão de download independente dos checkboxes
+   * humanos. Razões típicas:
+   *   - holerite: parser soma > 20% acima do bruto declarado no OCR
+   *   - holerite: 0 rubricas extraídas
+   *   - cartão-ponto: 0 apurações em OCR não-vazio
+   */
+  bloqueador?: boolean;
 }
 
 /**
@@ -118,7 +128,7 @@ export function scoreCartaoPonto(
   const reasons: string[] = [];
   const apuracoes = parsed.apuracoes;
 
-  // Curto-circuito: nada extraído.
+  // Curto-circuito: nada extraído. FASE 1.4 — bloqueador.
   if (apuracoes.length === 0) {
     const janelas = detectarJanelasPeriodo(ocr);
     return {
@@ -130,6 +140,7 @@ export function scoreCartaoPonto(
         "Nenhuma apuração extraída — OCR pode estar corrompido.",
       janelas,
       datasForaJanela: [],
+      bloqueador: true,
     };
   }
 
@@ -572,6 +583,39 @@ export function scoreFaltas(
 // Holerite
 // ============================================================
 
+/**
+ * FASE 1.4 — detecta condições BLOQUEADORAS de holerite (parser produziu
+ * lixo, não dá pra mascarar com score baixo). Retorna razão explicativa ou
+ * null. Quando bloqueador, score é forçado a ≤ 30 e dialogs desabilitam
+ * download mesmo se humano marcou os 3 checkboxes.
+ */
+function detectarBloqueadorHolerite(
+  parsed: HoleriteParseResult,
+  ocr: string,
+): string | null {
+  if (parsed.rubricas.length === 0) {
+    return "0 rubricas extraídas — parser falhou";
+  }
+  const check = checkHoleriteTotais(parsed.rubricas, ocr);
+  if (
+    check.totalBrutoOcr !== null &&
+    check.totalBrutoOcr > 0 &&
+    Math.abs(check.diffBruto) / check.totalBrutoOcr > 0.20
+  ) {
+    const pct = ((Math.abs(check.diffBruto) / check.totalBrutoOcr) * 100).toFixed(0);
+    return `parser produziu soma ${pct}% acima/abaixo do bruto declarado no OCR`;
+  }
+  if (
+    check.liquidoOcr !== null &&
+    check.liquidoOcr > 0 &&
+    Math.abs(check.diffLiquido) / check.liquidoOcr > 0.20
+  ) {
+    const pct = ((Math.abs(check.diffLiquido) / check.liquidoOcr) * 100).toFixed(0);
+    return `parser produziu líquido ${pct}% acima/abaixo do declarado no OCR`;
+  }
+  return null;
+}
+
 export function scoreHolerite(
   parsed: HoleriteParseResult,
   ocr: string,
@@ -579,13 +623,12 @@ export function scoreHolerite(
   const reasons: string[] = [];
 
   if (parsed.rubricas.length === 0) {
+    // FASE 1.4 — sem rubrica = parser falhou completamente. Bloqueador.
     return {
       score: 10,
       level: "baixa",
       reasons: ["Nenhuma rubrica extraída."],
       bloqueador: true,
-      bloqueador_motivo:
-        "Nenhuma rubrica extraída — OCR pode estar corrompido.",
     };
   }
 
@@ -696,40 +739,21 @@ export function scoreHolerite(
   }
 
   score = score + bonusTotal - penalidadeTotal;
-  const final = clamp(score);
 
-  // Bloqueador: diferenças >20% entre soma de rubricas e totalizadores
-  // declarados no OCR indicam duplicação ou totalizador classificado como
-  // rubrica. Score <30 também bloqueia. Não há override humano possível.
-  let bloqueador = false;
-  let bloqueador_motivo: string | null = null;
-  if (
-    checkTot.totalBrutoOcr !== null &&
-    checkTot.totalBrutoOcr > 0 &&
-    Math.abs(checkTot.diffBruto / checkTot.totalBrutoOcr) > 0.2
-  ) {
-    const pct = Math.abs(checkTot.diffBruto / checkTot.totalBrutoOcr) * 100;
-    bloqueador = true;
-    bloqueador_motivo = `Soma de rubricas (R$ ${checkTot.somaProventos.toFixed(2)}) difere ${pct.toFixed(0)}% do Total Bruto declarado (R$ ${checkTot.totalBrutoOcr.toFixed(2)}). Provável duplicação ou totalizador classificado como rubrica.`;
-  } else if (
-    checkTot.liquidoOcr !== null &&
-    checkTot.liquidoOcr > 0 &&
-    Math.abs(checkTot.diffLiquido / checkTot.liquidoOcr) > 0.2
-  ) {
-    const pct = Math.abs(checkTot.diffLiquido / checkTot.liquidoOcr) * 100;
-    const liqComp = checkTot.somaProventos - checkTot.somaDescontos;
-    bloqueador = true;
-    bloqueador_motivo = `Soma líquida computada (R$ ${liqComp.toFixed(2)}) difere ${pct.toFixed(0)}% do Líquido declarado (R$ ${checkTot.liquidoOcr.toFixed(2)}). Provável duplicação ou totalizador classificado como rubrica.`;
-  } else if (final < 30) {
-    bloqueador = true;
-    bloqueador_motivo = `Score ${final} abaixo do mínimo aceitável (30).`;
+  // FASE 1.4 — bloqueador: força score ≤ 30 e flag.
+  // detectarBloqueadorHolerite() cobre: 0 rubricas, |diff bruto/líquido|/total > 20%.
+  // Banner é visual apenas (não trava download — operador decide).
+  const bloqueio = detectarBloqueadorHolerite(parsed, ocr);
+  if (bloqueio) {
+    reasons.unshift(`BLOQUEADOR: ${bloqueio}`);
+    const scoreFinal = Math.min(clamp(score), 30);
+    return {
+      score: scoreFinal,
+      level: nivel(scoreFinal),
+      reasons,
+      bloqueador: true,
+    };
   }
 
-  return {
-    score: final,
-    level: nivel(final),
-    reasons,
-    bloqueador,
-    bloqueador_motivo,
-  };
+  return { score: clamp(score), level: nivel(clamp(score)), reasons };
 }

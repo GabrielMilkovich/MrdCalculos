@@ -153,3 +153,71 @@ describe("scoreHolerite — sem rubricas é baixo", () => {
     expect(s.reasons.some((r) => /compet[êe]ncia/i.test(r))).toBe(true);
   });
 });
+
+// ============================================================
+// FASE 1.4 — score.bloqueador
+// ============================================================
+describe("FASE 1.4 — score.bloqueador", () => {
+  it("holerite com 0 rubricas → score≤30 + bloqueador=true", () => {
+    const s = scoreHolerite(
+      {
+        competencia: "03/2024",
+        rubricas: [],
+        layout_usado: "generico_v1",
+        warnings: [],
+      },
+      "qualquer texto",
+    );
+    expect(s.bloqueador).toBe(true);
+    expect(s.score).toBeLessThanOrEqual(30);
+  });
+
+  it("soma das rubricas > 20% acima do bruto declarado → bloqueador=true", () => {
+    // Bruto OCR = 3.000, parser somou 6.000 (100% acima do bruto).
+    const ocrTexto = `
+      REFERÊNCIA: 03/2024
+      0001 SALARIO 6.000,00
+      Total Bruto 3.000,00
+    `;
+    const s = scoreHolerite(
+      {
+        competencia: "03/2024",
+        rubricas: [
+          { codigo: "1", nome: "Salario", valor_vencimento: 6000, valor_desconto: null, quantidade: null, ordem: 0 },
+        ],
+        layout_usado: "generico_v1",
+        warnings: [],
+      },
+      ocrTexto,
+    );
+    expect(s.bloqueador).toBe(true);
+    expect(s.score).toBeLessThanOrEqual(30);
+    expect(s.reasons.some((r) => /BLOQUEADOR/i.test(r))).toBe(true);
+  });
+
+  it("soma das rubricas dentro de 20% do bruto → bloqueador=falsy", () => {
+    const ocrTexto = `
+      REFERÊNCIA: 03/2024
+      0001 SALARIO 3.000,00
+      Total Bruto 3.000,00
+    `;
+    const s = scoreHolerite(
+      {
+        competencia: "03/2024",
+        rubricas: [
+          { codigo: "1", nome: "Salario", valor_vencimento: 3000, valor_desconto: null, quantidade: null, ordem: 0 },
+        ],
+        layout_usado: "generico_v1",
+        warnings: [],
+      },
+      ocrTexto,
+    );
+    expect(s.bloqueador).toBeFalsy();
+  });
+
+  it("cartão-ponto vazio → bloqueador=true", () => {
+    const r = parseCartaoPonto("nada aqui só ruído");
+    const s = scoreCartaoPonto(r, "nada aqui só ruído");
+    expect(s.bloqueador).toBe(true);
+  });
+});

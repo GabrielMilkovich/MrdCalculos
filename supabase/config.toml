@@ -75,3 +75,6 @@ verify_jwt = true  # frontend (modo data_extraction v2 — DataExtractionValidat
 
 [functions.parse-sentenca-jornada]
 verify_jwt = true  # frontend (ModuloAjusteSentenca)
+
+[functions.extract-rubricas-ai]
+verify_jwt = true  # FASE 2 — LLM extractor (shadow do parser determinístico)

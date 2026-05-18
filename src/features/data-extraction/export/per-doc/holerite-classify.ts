@@ -20,27 +20,19 @@ import type { CategoriaSlug, HintResult } from '../../types';
 import type { RubricaParseada } from '../../parsers/holerite/types';
 import { getDefaultHint } from '../../classification/hints';
 
-/**
- * Defesa em profundidade: o parser já filtra totalizadores em
- * `RE_LINHA_TOTALIZADOR`, mas se algum vazar (layout específico, OCR
- * truncado), o classifier reconhece pelo NOME da rubrica e marca com
- * `origem='totalizador_suspeito'`. Linhas suspeitas saem do CSV
- * automaticamente (`incluir=false`).
- */
-const RE_NOME_TOTALIZADOR =
-  /^(?:(?:total|valor|sal[áa]rio)\s+(?:bruto|venc(?:imentos?)?|prov(?:entos?)?|desc(?:ontos?)?|l[íi]quido|geral|receber)|l[íi]quido(?:\s+a\s+receber)?|bruto)$/i;
-
-function nomeParaceTotalizador(nome: string): boolean {
-  return RE_NOME_TOTALIZADOR.test(nome.trim());
-}
-
 export type LinhaClassificada = {
   /** Identificador estável dentro do preview (codigo+ordem). */
   key: string;
   rubrica: RubricaParseada;
   /** Categoria atribuída. `null` quando o usuário marcou "Ignorar". */
   categoria: CategoriaSlug | null;
-  /** Como veio a categoria inicial (informativo para UI). */
+  /**
+   * Como veio a categoria inicial (informativo para UI).
+   * FASE 1.2: adicionado `'totalizador_suspeito'` para rubricas cujo
+   * nome bate heurística de totalizador OU `flag_suspeita=true` veio
+   * do parser. Forçam `categoria=null, incluir=false` e a UI destaca
+   * em vermelho com tooltip.
+   */
   origem:
     | 'hint'
     | 'fallback'
@@ -54,6 +46,18 @@ export type LinhaClassificada = {
   /** Se está marcado para entrar no CSV (toggle do preview). */
   incluir: boolean;
 };
+
+/**
+ * FASE 1.2 — defesa-em-profundidade: mesmo se a regex de totalizador no
+ * parser falhar, o nome da rubrica entra aqui. Cobre as mesmas variantes
+ * de `RE_LINHA_TOTALIZADOR` (holerite/layouts/generico-v1.ts), mantidas
+ * em sincronia manual.
+ */
+export function nomeParaceTotalizador(nome: string): boolean {
+  if (!nome) return false;
+  const RE = /^\s*(total\s+(bruto|venc(?:imentos)?\.?|proventos|prov\.?|descont[oa]?s?|desc(?:ontos?)?\.?|l[ií]q(?:uido)?\.?|geral|a\s+(pagar|receber)|empregad[oa]r?)|valor\s+l[ií]quido|l[ií]quido(\s+a\s+receber)?|salario\s+l[ií]quido|s[aá]l[aá]rio\s+l[ií]quido)\s*$/i;
+  return RE.test(nome);
+}
 
 export type ClassificacaoHolerite = {
   competencia: string;
@@ -78,6 +82,21 @@ export function classifyHolerite(
 
     const hint = getDefaultHint(rub.nome);
     const key = `${rub.codigo ?? 'sem'}-${i}`;
+
+    // FASE 1.2 — primeira camada de defesa: se o NOME parece totalizador
+    // (Total Bruto, Liquido, Total Desc, etc.) ou se o parser marcou
+    // `flag_suspeita=true` por colagem inline, NUNCA inclui no CSV.
+    if (rub.flag_suspeita === true || nomeParaceTotalizador(rub.nome)) {
+      return {
+        key,
+        rubrica: rub,
+        categoria: null,
+        origem: 'totalizador_suspeito',
+        hint,
+        valorParaCsv: 0,
+        incluir: false,
+      };
+    }
 
     if (isDesconto) {
       return {
@@ -110,20 +129,6 @@ export function classifyHolerite(
         hint,
         valorParaCsv,
         incluir: valorParaCsv > 0,
-      };
-    }
-    // Defesa em profundidade: se o nome ESTRUTURALMENTE parece totalizador
-    // (Total Bruto, Liquido, Total Desc...), classifier exclui mesmo que o
-    // parser tenha deixado passar. Evita que o CSV some o salário inflado.
-    if (nomeParaceTotalizador(rub.nome)) {
-      return {
-        key,
-        rubrica: rub,
-        categoria: null,
-        origem: 'totalizador_suspeito',
-        hint: null,
-        valorParaCsv: 0,
-        incluir: false,
       };
     }
     // Sem hint → fallback salario_fixo

@@ -28,6 +28,11 @@ import { TipoOcorrenciaIrpfEnum } from '../../../constantes/enums';
 import { OcorrenciaDeIrpf } from './ocorrencia-de-irpf';
 import type { Irpf } from './irpf';
 import type { ProporcoesIrpf } from './proporcoes-irpf';
+import { TabelaIrpf } from '../../irpf/tabela-irpf';
+import { TabelaDeJurosDeIrpf } from './tabela-de-juros-de-irpf';
+import { TaxaMultaPrevidenciaria } from '../../inss/multa/taxa-multa-previdenciaria';
+import { OcorrenciaDeIrpfAtualizacao } from './ocorrencia-de-irpf-atualizacao';
+import { Competencia } from '../../../base/comum/competencia';
 
 // Placeholders — entidades de Pagamento (Fase 9) ainda nao portadas.
 export interface Pagamento {
@@ -142,11 +147,215 @@ export class MaquinaDeCalculoDeIrpf {
   // Memoria interna do ultimo input usado em liquidarComDados().
   private _ultimoInput: CalculoIrpfInput | null = null;
 
+  /**
+   * Tabela IRPF vigente. Carregada via `TabelaIrpf.obterTabelaDa(data)`.
+   * Java guarda no campo `tabelaImpostoRenda`.
+   */
+  private tabelaImpostoRenda: TabelaIrpf | null = null;
+
+  /**
+   * Tabela de juros SELIC IRPF acumulada (Lei 9.430). Java instancia em
+   * `calcularTaxaDeJurosDeIrpf(dataOcorrencia, dataEvento)`.
+   */
+  private tabelaDeJurosIrpf: TabelaDeJurosDeIrpf | null = null;
+
+  /**
+   * Tabela de multa previdenciária (TBTAXAMULTAINSS). Mesma instância é
+   * reusada por INSS e IRPF — Java permite injeção via setter.
+   */
+  private tabelaTaxaDeMulta: TaxaMultaPrevidenciaria | null = null;
+
   constructor(irpf: Irpf) {
     this.irpf = irpf;
   }
 
   getIrpf(): Irpf { return this.irpf; }
+
+  /** Java setter usado por Calculo.liquidar() para injetar tabela RFB. */
+  setTabelaImpostoRenda(t: TabelaIrpf): void { this.tabelaImpostoRenda = t; }
+  getTabelaImpostoRenda(): TabelaIrpf | null { return this.tabelaImpostoRenda; }
+
+  /** Java setter para tabela de multa (usada em calcularTaxaDeMultaDeIrpf). */
+  setTabelaTaxaDeMulta(t: TaxaMultaPrevidenciaria): void { this.tabelaTaxaDeMulta = t; }
+
+  // =========================================================================
+  // FASE 2 (SPRINT 2 — auditoria Java→TS)
+  // Métodos auto-contidos portados 1:1 do Java MaquinaDeCalculoDeIrpf.java.
+  // Cada um marcado com a faixa de linhas Java de origem.
+  // =========================================================================
+
+  /**
+   * Porte de `encontrarDescontoParaDependentes()` — MaquinaDeCalculoDeIrpf.java:851-858.
+   *
+   * Java:
+   * ```
+   * private BigDecimal encontrarDescontoParaDependentes() {
+   *   BigDecimal descontoBaseParaDependentes = BigDecimal.ZERO;
+   *   if (this.irpf.getPossuiDependentes().booleanValue()) {
+   *     descontoBaseParaDependentes = this.tabelaImpostoRenda
+   *       .getValorDeducaoPorDependente()
+   *       .multiply(new BigDecimal(this.irpf.getQuantidadeDependentes()), Utils.CONTEXTO_MATEMATICO);
+   *     descontoBaseParaDependentes = Utils.nulo(descontoBaseParaDependentes)
+   *       ? BigDecimal.ZERO : descontoBaseParaDependentes;
+   *   }
+   *   return descontoBaseParaDependentes;
+   * }
+   * ```
+   *
+   * Regra fiscal: RFB Instrução Normativa 1500 — R$ 189,59 por
+   * dependente/mês (vigente desde 2015, mantido em 2024-2025).
+   */
+  encontrarDescontoParaDependentes(): Decimal {
+    if (!this.irpf.getPossuiDependentes()) return ZERO;
+    if (!this.tabelaImpostoRenda) return ZERO;
+    const valorPorDependente = this.tabelaImpostoRenda.getValorDeducaoPorDependente();
+    if (!valorPorDependente || valorPorDependente.isZero()) return ZERO;
+    const qtd = new Decimal(this.irpf.getQuantidadeDependentes());
+    return valorPorDependente.times(qtd);
+  }
+
+  /**
+   * Porte de `encontrarDescontoParaAposentadoMaiorQue65Anos()` —
+   * MaquinaDeCalculoDeIrpf.java:842-849.
+   *
+   * Java:
+   * ```
+   * if (this.irpf.getAposentadoMaiorQue65Anos().booleanValue()) {
+   *   descontoBaseParaAposentadoMaiorQue65Anos =
+   *     this.tabelaImpostoRenda.getValorDeducaoParaAposentadoMaiorQue65Anos();
+   *   descontoBaseParaAposentadoMaiorQue65Anos = Utils.nulo(...) ? BigDecimal.ZERO : ...;
+   * }
+   * ```
+   *
+   * Regra fiscal: Lei 7.713/88 art. 6º XV — isenção parcial para
+   * aposentados ≥ 65 anos (R$ 1.903,98/mês em 2025).
+   */
+  encontrarDescontoParaAposentadoMaiorQue65Anos(): Decimal {
+    if (!this.irpf.getAposentadoMaiorQue65Anos()) return ZERO;
+    if (!this.tabelaImpostoRenda) return ZERO;
+    const valor = this.tabelaImpostoRenda.getValorDeducaoParaAposentadoMaiorQue65Anos();
+    return valor && !valor.isZero() ? valor : ZERO;
+  }
+
+  /**
+   * Porte de `calcularTaxaDeJurosDeIrpf(Date, Date)` —
+   * MaquinaDeCalculoDeIrpf.java:1660-1664.
+   *
+   * Java:
+   * ```
+   * Date dataOcorrenciaDiaPrimeiro = HelperDate.getInstance(dataOcorrencia).setDay(1).getDate();
+   * this.tabelaDeJurosIrpf = new TabelaDeJurosDeIrpf(this.irpf.getCalculo(), dataOcorrenciaDiaPrimeiro, dataEvento);
+   * return this.tabelaDeJurosIrpf.calcularTaxaDeJuros(dataOcorrenciaDiaPrimeiro);
+   * ```
+   *
+   * Constrói uma TabelaDeJurosDeIrpf (SELIC acumulada do periodo) e
+   * retorna a taxa para a competência da ocorrência. Retorna 0 quando
+   * tabela não tem entrada na data (fallback defensivo, não null como
+   * o Java — `null` poluiria o cálculo downstream).
+   */
+  calcularTaxaDeJurosDeIrpf(dataOcorrencia: Date, dataEvento: Date): Decimal {
+    const calc = this.irpf.getCalculo();
+    if (!calc) return ZERO;
+    const dataPrimeiroDia = new Date(Date.UTC(
+      dataOcorrencia.getUTCFullYear(),
+      dataOcorrencia.getUTCMonth(),
+      1,
+    ));
+    this.tabelaDeJurosIrpf = new TabelaDeJurosDeIrpf(calc, dataPrimeiroDia, dataEvento);
+    return this.tabelaDeJurosIrpf.calcularTaxaDeJuros(dataPrimeiroDia) ?? ZERO;
+  }
+
+  /**
+   * Porte de `calcularTaxaDeMultaDeIrpf(Date, Date)` —
+   * MaquinaDeCalculoDeIrpf.java:1666-1673.
+   *
+   * Java:
+   * ```
+   * Competencia competencia = new Competencia();
+   * competencia.update(dataPagamento);
+   * if (Utils.naoNulo(this.tabelaTaxaDeMulta) && Utils.naoNulo(competencia.getData())
+   *     && HelperDate.dateBeforeOrEquals(competencia.getData(), HelperDate.getCurrentCompetence(dataEvento).getDate())) {
+   *   return this.tabelaTaxaDeMulta.resolverTaxaIrpf(competencia, dataEvento);
+   * }
+   * return null;
+   * ```
+   *
+   * Retorna null quando tabela ausente ou data fora do período coberto
+   * — caller decide se isso é erro (zerar) ou propagar.
+   */
+  calcularTaxaDeMultaDeIrpf(dataPagamento: Date, dataEvento: Date): Decimal | null {
+    if (!this.tabelaTaxaDeMulta) return null;
+    const competencia = new Competencia();
+    competencia.update(dataPagamento);
+    if (!competencia.getData()) return null;
+    const dataEventoMes = new Date(Date.UTC(
+      dataEvento.getUTCFullYear(),
+      dataEvento.getUTCMonth(),
+      1,
+    ));
+    if (competencia.getData()!.getTime() > dataEventoMes.getTime()) return null;
+    return this.tabelaTaxaDeMulta.resolverTaxaIrpf(competencia, dataEvento);
+  }
+
+  /**
+   * Porte de `preencherFaixaFiscal(OcorrenciaDeIrpfAtualizacao)` —
+   * MaquinaDeCalculoDeIrpf.java:210-228.
+   *
+   * Calcula a faixa progressiva RFB MULTIPLICADA pela quantidade de
+   * competências (regime de competência consolidado — Lei 12.350/2010).
+   *
+   * Java (resumido):
+   * ```
+   * FaixaFiscal faixa = this.tabelaImpostoRenda.obterFaixaParaValor(
+   *   ocorrenciaAnosAnteriores.getValorBase(),
+   *   ocorrenciaAnosAnteriores.getQuantidadeCompetencias()
+   * );
+   * BigDecimal valorInicialDaFaixa = faixa.getValorInicial().subtract(UM_CENTAVO);
+   * valorInicialDaFaixa = valorInicialDaFaixa.multiply(qtdCompetencias);
+   * valorInicialDaFaixa = valorInicialDaFaixa.add(UM_CENTAVO);
+   * if (zero > valorInicialDaFaixa) valorInicialDaFaixa = zero;
+   * ocorrencia.setValorInicialFaixa(valorInicialDaFaixa);
+   * ocorrencia.setValorFinalFaixa(valorFinal * qtdCompetencias);
+   * if (qtdCompetencias > 0) {
+   *   ocorrencia.setValorAliquota(faixa.getAliquota());
+   *   ocorrencia.setValorDeducao(faixa.getDeducao() * qtdCompetencias);
+   *   ocorrencia.atualizaValorDevido();
+   * } else {
+   *   ocorrencia.setValorAliquota(0);
+   *   ocorrencia.setValorDeducao(0);
+   *   ocorrencia.setValorDevido(0);
+   * }
+   * ```
+   */
+  preencherFaixaFiscal(ocorrencia: OcorrenciaDeIrpfAtualizacao): void {
+    if (!this.tabelaImpostoRenda) return;
+    const valorBase = ocorrencia.getValorBase();
+    const qtdComp = ocorrencia.getQuantidadeCompetencias() ?? ZERO;
+    const faixa = this.tabelaImpostoRenda.obterFaixaParaValorComCompetencias(valorBase, qtdComp);
+
+    const UM_CENTAVO = new Decimal('0.01');
+
+    let valorInicialFaixa = (faixa.getValorInicial() ?? ZERO).minus(UM_CENTAVO);
+    valorInicialFaixa = valorInicialFaixa.times(qtdComp);
+    valorInicialFaixa = valorInicialFaixa.plus(UM_CENTAVO);
+    if (valorInicialFaixa.isNegative()) valorInicialFaixa = ZERO;
+    ocorrencia.setValorInicialFaixa(valorInicialFaixa);
+
+    const valorFinalRaw = faixa.getValorFinal();
+    ocorrencia.setValorFinalFaixa(
+      valorFinalRaw ? valorFinalRaw.times(qtdComp) : null,
+    );
+
+    if (qtdComp.gt(ZERO)) {
+      ocorrencia.setValorAliquota(faixa.getAliquota());
+      ocorrencia.setValorDeducao(faixa.getDeducao().times(qtdComp));
+      ocorrencia.atualizaValorDevido();
+    } else {
+      ocorrencia.setValorAliquota(ZERO);
+      ocorrencia.setValorDeducao(ZERO);
+      ocorrencia.setValorDevido(ZERO);
+    }
+  }
 
   /** Java limparOcorrencias() — esvazia ocorrencias antes de re-liquidar. */
   private limparOcorrencias(): void {

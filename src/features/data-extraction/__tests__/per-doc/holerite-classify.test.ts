@@ -170,3 +170,70 @@ describe("aggregateByCategoria", () => {
     expect(buckets.has("comissao")).toBe(false);
   });
 });
+
+describe("FASE 1.2 — defesa-em-profundidade do classifier", () => {
+  it("rubrica nomeada 'Liquido' + valor positivo NÃO entra em salario_fixo", () => {
+    const r = classifyHolerite({
+      competencia: "08/2016",
+      layout_usado: "generico_v1",
+      warnings: [],
+      rubricas: [
+        baseRubrica({ codigo: null, nome: "Liquido", valor_vencimento: 2989.25 }),
+      ],
+    });
+    expect(r.linhas[0].origem).toBe("totalizador_suspeito");
+    expect(r.linhas[0].categoria).toBeNull();
+    expect(r.linhas[0].incluir).toBe(false);
+    expect(r.linhas[0].valorParaCsv).toBe(0);
+  });
+
+  it("'Total Bruto' / 'Total Desc' / 'Salario Liquido' → todos totalizador_suspeito", () => {
+    const r = classifyHolerite({
+      competencia: "08/2016",
+      layout_usado: "generico_v1",
+      warnings: [],
+      rubricas: [
+        baseRubrica({ codigo: null, nome: "Total Bruto", valor_vencimento: 3250 }),
+        baseRubrica({ codigo: null, nome: "Total Desc", valor_vencimento: 385.75 }),
+        baseRubrica({ codigo: null, nome: "Salario Liquido", valor_vencimento: 2989.25 }),
+      ],
+    });
+    for (const l of r.linhas) {
+      expect(l.origem).toBe("totalizador_suspeito");
+      expect(l.incluir).toBe(false);
+    }
+  });
+
+  it("rubrica com flag_suspeita=true do parser → bloqueada mesmo com nome inocente", () => {
+    const r = classifyHolerite({
+      competencia: "08/2016",
+      layout_usado: "generico_v1",
+      warnings: [],
+      rubricas: [
+        baseRubrica({
+          codigo: "0001",
+          nome: "SALARIO BASE",
+          valor_vencimento: 3250,
+          flag_suspeita: true,
+        }),
+      ],
+    });
+    expect(r.linhas[0].origem).toBe("totalizador_suspeito");
+    expect(r.linhas[0].incluir).toBe(false);
+  });
+
+  it("agregado por categoria não inclui valores de totalizador_suspeito", () => {
+    const r = classifyHolerite({
+      competencia: "08/2016",
+      layout_usado: "generico_v1",
+      warnings: [],
+      rubricas: [
+        baseRubrica({ codigo: "0001", nome: "SALARIO BASE", valor_vencimento: 2500 }),
+        baseRubrica({ codigo: null, nome: "Liquido", valor_vencimento: 2989.25 }),
+      ],
+    });
+    const buckets = aggregateByCategoria(r.linhas);
+    // só o SALARIO BASE entra
+    expect(buckets.get("salario_fixo")?.toNumber()).toBe(2500);
+  });
+});

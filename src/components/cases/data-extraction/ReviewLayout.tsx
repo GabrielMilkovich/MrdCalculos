@@ -30,7 +30,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
-  AlertTriangle,
   ChevronDown,
   ChevronUp,
   Download,
@@ -83,21 +82,21 @@ interface Props {
   onConfirm: (opts?: { bloqueioBurlado: boolean }) => Promise<void> | void;
   confirmDisabled?: boolean;
   /**
+   * FASE 1.5 — quando `true`, renderiza banner vermelho no topo do dialog
+   * e força `confirmDisabled=true` (não permite override via checkbox).
+   * Vem do `ConfidenceScore.bloqueador` (parser produziu lixo, único caminho
+   * é re-extrair ou corrigir manualmente).
+   */
+  bloqueador?: boolean;
+  /** Razões textuais do bloqueio (renderizadas no banner). */
+  bloqueadorReasons?: string[];
+  /**
    * F0.4 — quantidade de divergências detectadas (linhas rejeitadas + warnings
    * críticos do parser/builder). Quando > 0, exige 4º checkbox override
    * "Confirmo que revisei manualmente cada divergência acima" e setamos
    * `bloqueioBurlado=true` no callback.
    */
   divergenciasCount?: number;
-  /**
-   * F0.5 — Quando `true`, o pipeline detectou inconsistência grave (score
-   * baixo, marcação impossível, totais divergentes >20%). Mostra banner
-   * vermelho e DESABILITA o botão de download — sem checkbox de override.
-   * Operador precisa corrigir o OCR/dados antes de baixar.
-   */
-  bloqueador?: boolean;
-  /** Motivo legível do bloqueio, exibido no banner. */
-  bloqueadorMotivo?: string | null;
   /**
    * Identificador estável (ex: filename + tipo) para persistir preferências
    * de layout (split, fullscreen) por documento. Quando ausente, persiste
@@ -146,9 +145,9 @@ export function ReviewLayout({
   onConfirm,
   confirmDisabled,
   divergenciasCount,
-  bloqueador,
-  bloqueadorMotivo,
   layoutKey,
+  bloqueador,
+  bloqueadorReasons,
 }: Props) {
   const lsSuffix = layoutKey ? `:${layoutKey}` : "";
 
@@ -165,10 +164,11 @@ export function ReviewLayout({
   const [headerCollapsed, setHeaderCollapsed] = useState<boolean>(() =>
     readLs(LS_KEY_HEADER_COLLAPSED + lsSuffix, false),
   );
-  // Default: OCR VISÍVEL. Operador precisa do contexto fonte para revisão
-  // jurídica responsável. Pode esconder se quiser e a preferência persiste.
+  // OCR começa OCULTO por padrão — a planilha ocupa toda a área e o
+  // operador ganha tela útil. O botão "Mostrar OCR" no header reexibe
+  // pontualmente quando ele quer comparar com a referência.
   const [ocrHidden, setOcrHidden] = useState<boolean>(() =>
-    readLs(LS_KEY_OCR_HIDDEN + lsSuffix, false),
+    readLs(LS_KEY_OCR_HIDDEN + lsSuffix, true),
   );
   const ocrPanelInitial = readLs(LS_KEY_OCR_PANEL_SIZE + lsSuffix, 50);
 
@@ -317,20 +317,29 @@ export function ReviewLayout({
             header colapsável). Warnings continuam acessíveis via tooltip
             das linhas marcadas. */}
 
-        {bloqueador && (
-          <div
-            role="alert"
-            className="border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded p-2 text-xs space-y-0.5"
-          >
-            <div className="flex items-center gap-1.5 font-semibold text-rose-900 dark:text-rose-100">
-              <AlertTriangle className="h-3.5 w-3.5" /> Download bloqueado —{" "}
-              {bloqueadorMotivo ?? "inconsistência grave detectada."}
+        {/* FASE 1.5 — banner de ATENÇÃO (não bloqueia download).
+            Decisão de produto: operador SEMPRE decide se baixa. O banner
+            apenas sinaliza onde estão os possíveis erros para revisão
+            manual nas linhas vermelhas da tabela. */}
+        {bloqueador === true && (
+          <div className="border-2 border-red-400 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1 mx-3 mt-2">
+            <div className="font-bold text-red-900 dark:text-red-100">
+              Atenção — possíveis erros detectados na extração
             </div>
-            <p className="text-[11px] text-rose-900/80 dark:text-rose-100/80">
-              Re-execute o OCR no documento original ou corrija manualmente as
-              rubricas/marcações marcadas em vermelho antes de baixar. Este
-              bloqueio não pode ser sobrescrito.
-            </p>
+            <div className="text-red-800 dark:text-red-200 text-xs">
+              Revise as linhas marcadas em vermelho antes de baixar. O
+              download está liberado, mas a inconsistência abaixo indica
+              que o resultado pode estar incorreto.
+            </div>
+            {bloqueadorReasons && bloqueadorReasons.length > 0 && (
+              <div className="text-red-700 dark:text-red-300 text-xs font-mono space-y-0.5 pt-1">
+                {bloqueadorReasons
+                  .filter((r) => /BLOQUEADOR|Nenhuma/i.test(r))
+                  .map((r, i) => (
+                    <div key={i}>· {r.replace(/^BLOQUEADOR:\s*/, "")}</div>
+                  ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -442,11 +451,11 @@ export function ReviewLayout({
             onClick={() => {
               if (!downloading) handleConfirm();
             }}
-            disabled={confirmDisabled || downloading || bloqueador === true}
+            disabled={confirmDisabled || downloading}
             className="gap-1.5"
             title={
               bloqueador === true
-                ? `Download bloqueado: ${bloqueadorMotivo ?? "inconsistência grave"}`
+                ? "Atenção: extração com possíveis erros. Revise as linhas marcadas antes de usar o CSV em laudo."
                 : "Baixar CSV — divergências e perdas, se houver, ficam visíveis no painel de relatório do build."
             }
           >

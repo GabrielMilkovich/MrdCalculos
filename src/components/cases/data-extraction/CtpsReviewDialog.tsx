@@ -13,14 +13,7 @@
  * Confirmação: 1 download = 1 ZIP com 2 CSVs (ferias + faltas) + LEIA-ME.
  */
 import { useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  Calendar,
-  ClipboardX,
-  Download,
-  FileText,
-  Loader2,
-} from "lucide-react";
+import { Calendar, ClipboardX, Download, FileText, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -134,11 +127,10 @@ export function CtpsReviewDialog({
     [faltasParsed, ocrText],
   );
 
-  // F0.5 — bloqueio agregado: se qualquer sub-score bloqueia, CTPS bloqueia.
-  const bloqueador =
-    confidenceFerias.bloqueador || confidenceFaltas.bloqueador;
-  const bloqueadorMotivo =
-    confidenceFerias.bloqueador_motivo ?? confidenceFaltas.bloqueador_motivo;
+  // FASE 1.5 — qualquer um dos dois sub-componentes (férias/faltas)
+  // bloqueia o CTPS. Não permite parcial.
+  const bloqueadorCtps =
+    confidenceFerias.bloqueador === true || confidenceFaltas.bloqueador === true;
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -223,20 +215,18 @@ export function CtpsReviewDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {bloqueador && (
-            <div
-              role="alert"
-              className="border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded p-2 text-xs space-y-0.5"
-            >
-              <div className="flex items-center gap-1.5 font-semibold text-rose-900 dark:text-rose-100">
-                <AlertTriangle className="h-3.5 w-3.5" /> Download bloqueado —{" "}
-                {bloqueadorMotivo ?? "inconsistência grave detectada."}
+          {/* FASE 1.5 — banner de ATENÇÃO (não bloqueia download).
+              Decisão de produto: operador SEMPRE decide se baixa. */}
+          {bloqueadorCtps && (
+            <div className="border-2 border-red-400 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
+              <div className="font-bold text-red-900 dark:text-red-100">
+                Atenção — possíveis erros detectados na extração
               </div>
-              <p className="text-[11px] text-rose-900/80 dark:text-rose-100/80">
-                Re-execute o OCR no documento original ou corrija manualmente os
-                dados marcados em vermelho antes de baixar. Este bloqueio não
-                pode ser sobrescrito.
-              </p>
+              <div className="text-red-800 dark:text-red-200 text-xs">
+                Revise os campos de férias/faltas antes de baixar. O download
+                está liberado, mas a inconsistência detectada indica que o
+                ZIP pode estar incorreto.
+              </div>
             </div>
           )}
 
@@ -348,15 +338,10 @@ export function CtpsReviewDialog({
               disabled={
                 downloading ||
                 (feriasParsed.ferias.length === 0 &&
-                  faltasParsed.faltas.length === 0) ||
-                bloqueador === true
+                  faltasParsed.faltas.length === 0)
               }
               className="gap-1.5"
-              title={
-                bloqueador
-                  ? `Download bloqueado: ${bloqueadorMotivo ?? "inconsistência grave"}`
-                  : "Abre o gate de confirmação antes do download do ZIP"
-              }
+              title="Abre o gate de confirmação antes do download do ZIP"
             >
               {downloading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -1,14 +1,55 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Audit-fix S3 — OpenAI API é paga, limite global por usuário.
+const PARSE_FICHA_RATE_LIMIT = 60;
+const PARSE_FICHA_RATE_WINDOW_SEC = 3600;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // Audit-fix S3: extrair user_id do JWT (verify_jwt já validou no edge)
+    // e aplicar rate-limit global antes de chamar a OpenAI.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Authorization header obrigatório" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Token inválido" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const rl = await checkRateLimit(
+      supabaseAuth,
+      user.id,
+      "parse-ficha-financeira",
+      PARSE_FICHA_RATE_LIMIT,
+      PARSE_FICHA_RATE_WINDOW_SEC,
+    );
+    if (!rl.allowed) {
+      return new Response(JSON.stringify({
+        error: "Rate limit excedido",
+        hint: `Limite de ${rl.limit} chamadas/hora atingido. Tente novamente em ~${Math.round(rl.retryAfterSec / 60)} min.`,
+        used: rl.used, limit: rl.limit,
+      }), {
+        status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { texto_documento, tipo_documento, ano_referencia } = await req.json();
 
     if (!texto_documento) {

@@ -49,6 +49,8 @@ import {
   type ParseFeriasResult,
   type TipoExtracao,
 } from "@/features/data-extraction";
+import type { LlmStatus } from "@/features/data-extraction/export/per-doc";
+import type { ComparacaoResultado } from "@/features/data-extraction/quality/comparador-llm-parser";
 
 export interface DocForBadge {
   id: string;
@@ -80,6 +82,9 @@ export function ExtractionTypeBadgeAndSelect({
     documentId: string;
     ocrText: string;
     filename: string;
+    llmStatus?: LlmStatus;
+    comparacao?: ComparacaoResultado;
+    llmAiConfidence?: number;
   } | null>(null);
   const [cartaoState, setCartaoState] = useState<{
     parsed: ParseCartaoPontoResult;
@@ -148,6 +153,10 @@ export function ExtractionTypeBadgeAndSelect({
             documentId: result.document_id,
             ocrText: result.ocr_text,
             filename: result.filename,
+            // FASE 3 — propaga estado do shadow check IA.
+            llmStatus: result.llm_status,
+            comparacao: result.comparacao,
+            llmAiConfidence: result.llm_ai_confidence,
           });
           break;
         case "cartao-ponto-review":
@@ -291,6 +300,9 @@ export function ExtractionTypeBadgeAndSelect({
           documentId={previewState.documentId}
           ocrText={previewState.ocrText}
           filename={previewState.filename}
+          llmStatus={previewState.llmStatus}
+          comparacao={previewState.comparacao}
+          llmAiConfidence={previewState.llmAiConfidence}
         />
       )}
       {cartaoState && (

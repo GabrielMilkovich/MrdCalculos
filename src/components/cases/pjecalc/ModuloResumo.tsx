@@ -452,6 +452,21 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         carga_horaria_mensal: Number(e.carga_horaria_mensal) || 0,
       }));
 
+      // Audit-fix C4: multasConfig precisa refletir banco (pjecalc_multas_config).
+      // Antes passava `{ apurar_467: false, apurar_477: false, ... }` HARDCODED,
+      // o que sobrescrevia silenciosamente correcaoConfig.multa_467 (gate l.1428
+      // do engine-v3: `if (apurar_467 === false) return 0`).
+      const multasConfigLocal = {
+        apurar_467: d(multasData, 'apurar_467', false) as boolean,
+        apurar_477: d(multasData, 'apurar_477', false) as boolean,
+        percentual_467: d(multasData, 'percentual_467', 50) as number,
+        valor_477_tipo: d(multasData, 'valor_477_tipo', 'salario') as 'salario' | 'informado',
+        valor_477_informado: d(multasData, 'valor_477_informado') as number | undefined,
+        apurar_523_cpc: d(multasData, 'apurar_523_cpc', false) as boolean,
+        percentual_523: d(multasData, 'percentual_523', 10) as number,
+        multas_indenizacoes: d(multasData, 'multas_indenizacoes', []) as Array<unknown>,
+      };
+
       const engine = new PjeCalcEngineV3(
         params, historicos, faltas, ferias, verbasCast, cartaoPonto,
         fgtsConfig, csConfig, irConfig, correcaoConfigLocal,
@@ -467,8 +482,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         salarioFamiliaDBRows,
         excecoesSabadoRows,
         salarioMinimoDBRows,
-        // multasConfig: 467/477 propagadas via correcaoConfigLocal; indenizações vazias por default
-        { apurar_467: false, apurar_477: false, multas_indenizacoes: [] },
+        multasConfigLocal,
         // Sprint 4.2-C1: aba Atualização (defaults preservam comportamento)
         atualizacaoConfig,
       );

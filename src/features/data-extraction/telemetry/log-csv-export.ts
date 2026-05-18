@@ -46,6 +46,14 @@ export interface LogCsvExportInput {
    * 'cartao_generico_v1', 'regex_v5_via_varejo', 'regex_v5_holerite'.
    */
   parserOrigem?: string | null;
+  /** FASE 3.4 — extract-rubricas-ai foi chamada nesse export? */
+  llmInvoked?: boolean;
+  /** FASE 3.4 — confiança autoreportada pela IA (0..100). */
+  llmAiConfidence?: number | null;
+  /** FASE 3.4 — taxa de concordância parser × IA (0.000..1.000). */
+  llmParserConcordancia?: number | null;
+  /** FASE 3.4 — status da chamada IA. */
+  llmStatus?: 'ok' | 'unavailable' | 'timeout' | 'rate_limit' | 'error' | 'not_attempted' | null;
 }
 
 /**
@@ -77,6 +85,11 @@ export async function logCsvExport(input: LogCsvExportInput): Promise<void> {
       report: input.report as unknown as Record<string, unknown>,
       campos_nao_exportados: input.report.camposNaoExportados ?? [],
       parser_origem: input.parserOrigem ?? null,
+      // FASE 3.4 — shadow check parser × LLM.
+      llm_invoked: input.llmInvoked ?? false,
+      llm_ai_confidence: input.llmAiConfidence ?? null,
+      llm_parser_concordancia: input.llmParserConcordancia ?? null,
+      llm_status: input.llmStatus ?? null,
       criado_por: user.id,
     });
     if (error) {

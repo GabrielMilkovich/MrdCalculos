@@ -100,6 +100,9 @@ import {
 import {
   type HoleriteParseResult,
 } from "@/features/data-extraction";
+import type { LlmStatus } from "@/features/data-extraction/export/per-doc";
+import type { ComparacaoResultado } from "@/features/data-extraction/quality/comparador-llm-parser";
+import { ComparacaoLLMPanel } from "./ComparacaoLLMPanel";
 
 interface Props {
   open: boolean;
@@ -112,6 +115,12 @@ interface Props {
   documentId?: string;
   /** OCR original — usado no scoring de confiança. */
   ocrText?: string;
+  /** FASE 3 — status da chamada LLM extractor (shadow check). */
+  llmStatus?: LlmStatus;
+  /** FASE 3 — comparação parser × LLM (presente quando llmStatus='ok'). */
+  comparacao?: ComparacaoResultado;
+  /** FASE 3 — confiança autoreportada pela IA (0..100). */
+  llmAiConfidence?: number;
 }
 
 const CATEGORIA_LABELS: Record<CategoriaSlug, string> = {
@@ -140,6 +149,8 @@ const ORIGEM_BADGE: Record<
   fallback: { label: "revise", tone: "amber" },
   desconto: { label: "desconto", tone: "muted" },
   ignorar_hint: { label: "ignorado", tone: "muted" },
+  // FASE 1.2 — totalizador identificado em linha de rubrica (defesa em
+  // profundidade: parser ou nome do item parece totalizador). Vermelho.
   totalizador_suspeito: { label: "totalizador", tone: "red" },
 };
 
@@ -151,6 +162,9 @@ export function HoleritePreviewDialog({
   filename,
   documentId: _documentId,
   ocrText,
+  llmStatus,
+  comparacao,
+  llmAiConfidence,
 }: Props) {
   const effectiveClassificacao = classificacao;
 
@@ -199,7 +213,7 @@ export function HoleritePreviewDialog({
 
   // Score de confiança da extração (recalcula quando linhas mudam, p.ex.
   // se o usuário corrige rubricas).
-  const confidence = useMemo(
+  const confidenceBase = useMemo(
     () =>
       scoreHolerite(
         {
@@ -212,6 +226,29 @@ export function HoleritePreviewDialog({
       ),
     [effectiveClassificacao, linhas, ocrText],
   );
+
+  // FASE 3.3 — divergência grande entre IA e parser determinístico
+  // (taxa_concordancia < 0.70) FORÇA bloqueador, mesmo que o score
+  // interno do parser tenha passado. Uma das duas fontes está enganada;
+  // operador precisa intervir.
+  const confidence = useMemo(() => {
+    if (
+      llmStatus === "ok" &&
+      comparacao &&
+      comparacao.taxa_concordancia < 0.70
+    ) {
+      const pct = Math.round(comparacao.taxa_concordancia * 100);
+      return {
+        ...confidenceBase,
+        bloqueador: true,
+        reasons: [
+          `BLOQUEADOR: IA e parser concordam em apenas ${pct}% das rubricas (limite ≥70%)`,
+          ...confidenceBase.reasons,
+        ],
+      };
+    }
+    return confidenceBase;
+  }, [confidenceBase, llmStatus, comparacao]);
 
   // Ações em lote
   const setIncluirAll = (predicate: (l: LinhaClassificada) => boolean, v: boolean) => {
@@ -396,22 +433,38 @@ export function HoleritePreviewDialog({
           </div>
         )}
 
-        {confidence.bloqueador && (
-          <div
-            role="alert"
-            className="border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded p-2 text-xs space-y-0.5"
-          >
-            <div className="flex items-center gap-1.5 font-semibold text-rose-900 dark:text-rose-100">
-              <AlertTriangle className="h-3.5 w-3.5" /> Download bloqueado —{" "}
-              {confidence.bloqueador_motivo ??
-                "inconsistência grave detectada."}
+        {/* FASE 1.5 — banner de ATENÇÃO (não bloqueia download).
+            Decisão de produto: operador SEMPRE decide se baixa. O banner
+            sinaliza onde estão os possíveis erros para revisão manual.
+            Linhas suspeitas continuam destacadas em vermelho na tabela. */}
+        {confidence.bloqueador === true && (
+          <div className="border-2 border-red-400 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-red-900 dark:text-red-100">
+              <AlertTriangle className="h-4 w-4" />
+              Atenção — possíveis erros detectados na extração
             </div>
-            <p className="text-[11px] text-rose-900/80 dark:text-rose-100/80">
-              Re-execute o OCR no documento original ou corrija manualmente as
-              rubricas/marcações marcadas em vermelho antes de baixar. Este
-              bloqueio não pode ser sobrescrito.
-            </p>
+            <div className="text-red-800 dark:text-red-200 text-xs">
+              Revise as rubricas marcadas em vermelho antes de baixar. O
+              download está liberado, mas a inconsistência abaixo indica
+              que o CSV pode estar incorreto.
+            </div>
+            {confidence.reasons
+              .filter((r) => /BLOQUEADOR/i.test(r))
+              .map((r, i) => (
+                <div key={i} className="text-red-700 dark:text-red-300 text-xs font-mono">
+                  · {r.replace(/^BLOQUEADOR:\s*/, "")}
+                </div>
+              ))}
           </div>
+        )}
+
+        {/* FASE 3.3 — comparação parser × LLM extractor (shadow check). */}
+        {llmStatus && (
+          <ComparacaoLLMPanel
+            llmStatus={llmStatus}
+            comparacao={comparacao}
+            aiConfidence={llmAiConfidence}
+          />
         )}
 
         {classificacao.warnings.length > 0 && (
@@ -563,15 +616,14 @@ export function HoleritePreviewDialog({
             disabled={
               downloading ||
               totalCategorias === 0 ||
-              competenciaInvalida ||
-              confidence.bloqueador === true
+              competenciaInvalida
             }
             className="gap-1.5"
             title={
-              confidence.bloqueador
-                ? `Download bloqueado: ${confidence.bloqueador_motivo ?? "inconsistência grave"}`
-                : competenciaInvalida
+              competenciaInvalida
                 ? `Competência "${effectiveClassificacao.competencia || "vazia"}" inválida. Corrija antes de baixar — o cálculo trabalhista não pode alocar rubricas sem mês de referência válido.`
+                : confidence.bloqueador === true
+                ? "Atenção: extração com possíveis erros. Revise as rubricas marcadas antes de usar o CSV em laudo."
                 : "Abre o gate de confirmação (3 itens dirigidos) antes do download"
             }
           >
@@ -710,21 +762,19 @@ function LinhaRow({
   const desc = linha.rubrica.valor_desconto;
   const valorMostrado = venc !== null && venc > 0 ? venc : (desc ?? 0);
   const isDesconto = linha.origem === "desconto";
-  const isTotalizadorSuspeito = linha.origem === "totalizador_suspeito";
 
   const currentValue: CategoriaSlug | "ignorar" = linha.categoria ?? "ignorar";
   const badge = ORIGEM_BADGE[linha.origem];
 
   // Highlight por origem
-  const rowClass = isTotalizadorSuspeito
-    ? "bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
-    : linha.origem === "fallback"
-    ? "bg-amber-50/40 hover:bg-amber-50/70 dark:bg-amber-950/10"
-    : isDesconto
-    ? "text-muted-foreground hover:bg-muted/40"
-    : !linha.incluir
-    ? "opacity-60 hover:bg-muted/30"
-    : "hover:bg-muted/30";
+  const rowClass =
+    linha.origem === "fallback"
+      ? "bg-amber-50/40 hover:bg-amber-50/70 dark:bg-amber-950/10"
+      : isDesconto
+      ? "text-muted-foreground hover:bg-muted/40"
+      : !linha.incluir
+      ? "opacity-60 hover:bg-muted/30"
+      : "hover:bg-muted/30";
 
   return (
     <TableRow className={`text-xs ${rowClass}`}>
@@ -732,7 +782,7 @@ function LinhaRow({
         <Checkbox
           checked={linha.incluir}
           onCheckedChange={(v) => onUpdate(linha.key, { incluir: Boolean(v) })}
-          disabled={isDesconto || isTotalizadorSuspeito}
+          disabled={isDesconto}
         />
       </TableCell>
       <TableCell className="p-1 font-mono text-[11px] text-muted-foreground">
@@ -800,10 +850,7 @@ function OrigemBadge({
   hint: LinhaClassificada["hint"];
 }) {
   const meta = ORIGEM_BADGE[origem];
-  const motivo =
-    origem === "totalizador_suspeito"
-      ? "Linha parece totalizador (Total Bruto / Líquido / Total Desc). Excluída do CSV automaticamente."
-      : hint?.motivo ?? null;
+  const motivo = hint?.motivo ?? null;
   const Icon =
     origem === "hint"
       ? Sparkles
@@ -815,8 +862,6 @@ function OrigemBadge({
       ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300"
       : meta.tone === "amber"
       ? "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/20 dark:text-amber-200"
-      : meta.tone === "red"
-      ? "border-rose-400 bg-rose-50 text-rose-800 dark:bg-rose-950/20 dark:text-rose-200"
       : "border-muted bg-muted/40 text-muted-foreground";
   return (
     <Badge
