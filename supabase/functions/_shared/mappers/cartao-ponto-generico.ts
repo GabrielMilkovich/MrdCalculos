@@ -25,6 +25,17 @@ const RE_DATA_BR = /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/;
 const RE_HORA_GLOBAL = /\b(\d{1,2}):(\d{2})\b/g;
 const RE_DIA_SEMANA = /\b(Seg|Ter|Qua|Qui|Sex|S[áa]b|Dom)\.?\b/i;
 
+// Filtros de metadado e rodapé jurídico — replicados do parser cliente
+// (src/features/data-extraction/parsers/cartao-ponto/layouts/generico-v1.ts)
+// para evitar que timestamps PJe (assinatura digital ICP-Brasil, protocolo,
+// juntada de petição) vazem como batidas de jornada na Camada 3.
+const RE_METADADO_LINHA =
+  /\b(ADMISS[ÃA]O|DEMISS[ÃA]O|EMISS[ÃA]O|MATR[ÍI]CULA|PIS|CARGO|DEPARTAMENTO|JUNTAD[OA]\s+EM|JUNTAD[OA]\s+DE\s+PETI[ÇC][ÃA]O|ASSINAD[OA]\s+ELETRONICAMENTE|ASSINAD[OA]\s+DIGITALMENTE|SIGNAT[ÁA]RIO|N[ÚU]MERO\s+(?:do\s+)?PROCESSO|N[ÚU]MERO\s+(?:do\s+)?DOCUMENTO|DOCUMENTO\s+N[º°o.]|VALIDAD[EO]|RAZ[ÃA]O\s+SOCIAL|CNPJ|CEP|ENDERE[ÇC]O|LOCALIZA[ÇC][ÃA]O|Per[íi]odo\s+\d{2}\/\d{2}\/\d{4}\s+a\s+\d{2}\/\d{2}\/\d{4}|APROVAD[OA]\b|HOMOLOGAD[OA]\b|REGISTRAD[OA]\s+ELETRONICAMENTE|VALIDAD[OA]\s+(?:PELO|POR|EM)|CONFIRMAD[OA]\s+(?:PELO|POR|EM)|CONFERID[OA]\s+(?:PELO|POR|EM)|PROTOCOLAD[OA]|PROTOCOLO\s+\d|LEI\s+11\.?\s*419|ICP[\s\-]?BRASIL|CI[ÊE]NCIA\s+(?:DA\s+PARTE|EM)|INTIMA[ÇC][ÃA]O\s+ELETR[ÔO]NICA|EXPEDI[ÇC][ÃA]O\s+DE\s+MANDADO|MOVIMENTO\s+\d|HASH\s*[:\-]|CERTIFICAD[OA]\s+DIGITAL)\b/i;
+const RE_TIMESTAMP_APROVACAO =
+  /\b(?:no\s+dia|em)\s+\d{1,2}\/\d{1,2}\/\d{4}\s+(?:[àa]s|as)\s+\d{1,2}:\d{2}\b/i;
+const RE_TIMESTAMP_JURIDICO_CANONICO =
+  /\b\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}:\d{2}\b(?!.*\d{1,2}:\d{2}:\d{2})/;
+
 const MARCADORES_OCORRENCIA: Array<[RegExp, OcorrenciaDominio]> = [
   [/\bF[ée]rias\b/i, 'FERIAS'],
   [/\bLicen[çc]a\s+m[ée]dica/i, 'LICENCA_MEDICA'],
@@ -108,6 +119,16 @@ export const mapperCartaoGenerico: Mapper<ParseCartaoPontoResultDominio> = {
     const linhas = doc.textoCompleto.split(/\r?\n/);
 
     for (const linha of linhas) {
+      // Descarta linhas de metadado / rodapé jurídico antes de tentar extrair
+      // batidas — timestamps de assinatura digital, protocolo PJe e juntada
+      // de petição NÃO são jornada e corrompem apurações legítimas.
+      if (
+        RE_METADADO_LINHA.test(linha) ||
+        RE_TIMESTAMP_APROVACAO.test(linha) ||
+        RE_TIMESTAMP_JURIDICO_CANONICO.test(linha)
+      ) {
+        continue;
+      }
       const md = linha.match(RE_DATA_BR);
       if (!md) continue;
       const dd = md[1].padStart(2, '0');

@@ -313,7 +313,7 @@ const RE_OCORRENCIA_PURA =
 // nocivos: o parser detectaria a data + hora e CRIARIA uma batida fantasma
 // ("inventaria jornada onde não houve trabalho"). Filtramos antes do split.
 const RE_METADADO_LINHA =
-  /\b(ADMISS[ÃA]O|DEMISS[ÃA]O|EMISS[ÃA]O|MATR[ÍI]CULA|PIS|CARGO|DEPARTAMENTO|JUNTAD[OA]\s+EM|ASSINAD[OA]\s+ELETRONICAMENTE|N[ÚU]MERO\s+(?:do\s+)?PROCESSO|N[ÚU]MERO\s+(?:do\s+)?DOCUMENTO|VALIDAD[EO]|RAZ[ÃA]O\s+SOCIAL|CNPJ|CEP|ENDERE[ÇC]O|LOCALIZA[ÇC][ÃA]O|Per[íi]odo\s+\d{2}\/\d{2}\/\d{4}\s+a\s+\d{2}\/\d{2}\/\d{4}|APROVAD[OA]\b|HOMOLOGAD[OA]\b|REGISTRAD[OA]\s+ELETRONICAMENTE|VALIDAD[OA]\s+(?:PELO|POR|EM)|CONFIRMAD[OA]\s+(?:PELO|POR|EM)|CONFERID[OA]\s+(?:PELO|POR|EM))\b/i;
+  /\b(ADMISS[ÃA]O|DEMISS[ÃA]O|EMISS[ÃA]O|MATR[ÍI]CULA|PIS|CARGO|DEPARTAMENTO|JUNTAD[OA]\s+EM|JUNTAD[OA]\s+DE\s+PETI[ÇC][ÃA]O|ASSINAD[OA]\s+ELETRONICAMENTE|ASSINAD[OA]\s+DIGITALMENTE|SIGNAT[ÁA]RIO|N[ÚU]MERO\s+(?:do\s+)?PROCESSO|N[ÚU]MERO\s+(?:do\s+)?DOCUMENTO|DOCUMENTO\s+N[º°o.]|VALIDAD[EO]|RAZ[ÃA]O\s+SOCIAL|CNPJ|CEP|ENDERE[ÇC]O|LOCALIZA[ÇC][ÃA]O|Per[íi]odo\s+\d{2}\/\d{2}\/\d{4}\s+a\s+\d{2}\/\d{2}\/\d{4}|APROVAD[OA]\b|HOMOLOGAD[OA]\b|REGISTRAD[OA]\s+ELETRONICAMENTE|VALIDAD[OA]\s+(?:PELO|POR|EM)|CONFIRMAD[OA]\s+(?:PELO|POR|EM)|CONFERID[OA]\s+(?:PELO|POR|EM)|PROTOCOLAD[OA]|PROTOCOLO\s+\d|LEI\s+11\.?\s*419|ICP[\s\-]?BRASIL|CI[ÊE]NCIA\s+(?:DA\s+PARTE|EM)|INTIMA[ÇC][ÃA]O\s+ELETR[ÔO]NICA|EXPEDI[ÇC][ÃA]O\s+DE\s+MANDADO|MOVIMENTO\s+\d|HASH\s*[:\-]|CERTIFICAD[OA]\s+DIGITAL)\b/i;
 
 /**
  * Padrão "no dia DD/MM/YYYY às HH:MM" / "em DD/MM/YYYY às HH:MM" — sinal
@@ -323,6 +323,13 @@ const RE_METADADO_LINHA =
  */
 const RE_TIMESTAMP_APROVACAO =
   /\b(?:no\s+dia|em)\s+\d{1,2}\/\d{1,2}\/\d{4}\s+(?:[àa]s|as)\s+\d{1,2}:\d{2}\b/i;
+
+// Timestamp jurídico canônico ICP-Brasil / PJe: DD/MM/YYYY HH:MM:SS isolado.
+// Rodapés (assinatura digital, protocolo, juntada) trazem UM único HH:MM:SS;
+// batidas legítimas com segundos (sistemas REP que exportam HH:MM:SS) trazem 2+.
+// Lookahead negativo: só descarta se NÃO houver outro HH:MM:SS na mesma linha.
+const RE_TIMESTAMP_JURIDICO_CANONICO =
+  /\b\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}:\d{2}\b(?!.*\d{1,2}:\d{2}:\d{2})/;
 
 // =====================================================
 // FASE 1 — Detecção de zonas suspeitas (filosofia MARCAR-NÃO-DESCARTAR)
@@ -589,7 +596,8 @@ export function parseCartaoPontoGenerico(
     // "aprovado pelo usuário no dia 20/12/2021 às 10:14").
     if (
       RE_METADADO_LINHA.test(linhaSemPipes) ||
-      RE_TIMESTAMP_APROVACAO.test(linhaSemPipes)
+      RE_TIMESTAMP_APROVACAO.test(linhaSemPipes) ||
+      RE_TIMESTAMP_JURIDICO_CANONICO.test(linhaSemPipes)
     ) {
       continue;
     }
@@ -946,6 +954,7 @@ function mesclarContinuacoes(lines: string[]): string[] {
       ultimaAncoraIdx >= 0 &&
       !RE_METADADO_LINHA.test(limpa) &&
       !RE_TIMESTAMP_APROVACAO.test(limpa) &&
+      !RE_TIMESTAMP_JURIDICO_CANONICO.test(limpa) &&
       (comecaComPipe || (comecaIndentada && soHorariosERuido));
     if (podeSerContinuacao) {
       out[ultimaAncoraIdx] = `${out[ultimaAncoraIdx]} ${linha}`;
