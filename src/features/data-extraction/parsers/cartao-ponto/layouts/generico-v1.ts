@@ -204,6 +204,45 @@ const MARCADORES_RESULTADO = [
 const RE_BATIDA_TAG =
   /\b(\d{1,2}):(\d{2})\s*[-–]\s*(Inserid[oa]|Desconsiderad[oa])\b/gi;
 
+/**
+ * Tokens que indicam fim das marcações e início de totalizadores na linha.
+ * Espelhos de Senior, ADP, Totvs costumam concatenar HT/HE/DSR na mesma
+ * linha das batidas. Se não cortarmos, esses valores viram "batidas-fantasma".
+ *
+ * Match case-insensitive. Sempre com espaço/borda antes do token para
+ * evitar quebrar nomes legítimos.
+ */
+const TOKENS_FIM_BATIDAS: RegExp[] = [
+  /\s+HT\s+/i,
+  /\s+HE\s+/i,
+  /\s+H\.E\.?\s+/i,
+  /\s+H\.T\.?\s+/i,
+  /\s+DSR\s+/i,
+  /\s+RSR\s+/i,
+  /\s+BH\s+/i,
+  /\s+BANCO(?:\s+DE\s+HORAS)?\s+/i,
+  /\s+HORAS?\s+EXTRAS?\b/i,
+  /\s+HORAS?\s+TRAB(?:ALHADAS?)?\b/i,
+  /\s+H\.NORMAIS\b/i,
+  /\s+H\.NORM\b/i,
+];
+
+/**
+ * Corta a linha no primeiro token de totalizador encontrado. Mantém só
+ * o que vem ANTES — região onde estão as batidas reais. Eventos
+ * continuam a ser extraídos pelo `extrairEventos` que opera sobre a
+ * parte DEPOIS do split de MARCADORES_RESULTADO.
+ */
+function cortarTotalizadoresInline(linha: string): string {
+  let menorIdx = linha.length;
+  for (const re of TOKENS_FIM_BATIDAS) {
+    const fresh = new RegExp(re.source, re.flags.replace("g", ""));
+    const m = fresh.exec(linha);
+    if (m && m.index < menorIdx) menorIdx = m.index;
+  }
+  return linha.slice(0, menorIdx);
+}
+
 const RE_HORA_OPCIONAL_ASTERISCO = /\b(\d{1,2}):(\d{2})(?::\d{2})?(\*?)/g;
 const RE_TEM_DIGITO = /\d/;
 
@@ -391,6 +430,16 @@ export function parseCartaoPontoGenerico(
     /Hor[áa]rio\s+Registrado/i.test(ocrText) &&
     /Hor[áa]rio\s+(?:de\s+)?Trabalho|Hor[áa]rio\s+Previsto/i.test(ocrText);
 
+  // F0.5 — Cartões corporativos (Senior/ADP/Totvs) frequentemente trazem
+  // colunas HT/HE/DSR de totalizador na MESMA linha das batidas. O detector
+  // procura essas colunas no cabeçalho ("E1 S1 E2 S2 HT HE", "HE DSR", etc).
+  // Quando presentes, limita capturarMarcacoes a 4 horas (1 par manhã + 1 par
+  // tarde = 4 batidas) — totalizadores no final da linha não viram batidas.
+  const TEM_COLUNAS_HT_HE =
+    /\bHT\b[\s\S]{0,40}?\bHE\b/i.test(ocrText) ||
+    /\bHE\b[\s\S]{0,40}?\bHT\b/i.test(ocrText) ||
+    /\bHE\b[\s\S]{0,40}?\bDSR\b/i.test(ocrText);
+
   // Pré-processamento: mescla linhas-continuação que o OCR quebra quando
   // a célula da tabela tem muito conteúdo. Padrão típico (Casas Bahia):
   //   | 13/09/2021 - Seg | 08:30* | 12:00* | 13:05* | ... |
@@ -536,9 +585,12 @@ export function parseCartaoPontoGenerico(
 
     // Captura horários da parte de batidas (após a data).
     // Remove a data da string para não confundir o regex.
-    const semData = parteBatidas
-      .replace(RE_DATA_BR, " ")
-      .replace(RE_DIA_SEMANA, " ");
+    // Corta também tokens HT/HE/DSR/BH inline para evitar que totalizadores
+    // colados na mesma linha das batidas virem "batidas-fantasma" (caso
+    // típico de espelhos Senior/ADP/Totvs).
+    const semData = cortarTotalizadoresInline(
+      parteBatidas.replace(RE_DATA_BR, " ").replace(RE_DIA_SEMANA, " "),
+    );
     // Quando documento tem coluna dupla "Horário Registrado | Horário
     // de Trabalho", limita a 4 horas (1° grupo = batidas reais; o 2°
     // grupo é a escala prevista e NÃO deve virar batida).
@@ -546,7 +598,7 @@ export function parseCartaoPontoGenerico(
       semData,
       inseridas,
       desconsideradas,
-      TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO ? 4 : undefined,
+      TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO || TEM_COLUNAS_HT_HE ? 4 : undefined,
     );
 
     // Detecta ocorrência baseada na LINHA INTEIRA (não só parteEventos):
