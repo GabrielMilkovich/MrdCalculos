@@ -395,6 +395,24 @@ export function HoleritePreviewDialog({
           </div>
         )}
 
+        {confidence.bloqueador && (
+          <div
+            role="alert"
+            className="border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded p-2 text-xs space-y-0.5"
+          >
+            <div className="flex items-center gap-1.5 font-semibold text-rose-900 dark:text-rose-100">
+              <AlertTriangle className="h-3.5 w-3.5" /> Download bloqueado —{" "}
+              {confidence.bloqueador_motivo ??
+                "inconsistência grave detectada."}
+            </div>
+            <p className="text-[11px] text-rose-900/80 dark:text-rose-100/80">
+              Re-execute o OCR no documento original ou corrija manualmente as
+              rubricas/marcações marcadas em vermelho antes de baixar. Este
+              bloqueio não pode ser sobrescrito.
+            </p>
+          </div>
+        )}
+
         {classificacao.warnings.length > 0 && (
           <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-xs space-y-0.5">
             <div className="flex items-center gap-1.5 font-medium text-amber-900 dark:text-amber-100">
@@ -542,11 +560,16 @@ export function HoleritePreviewDialog({
             size="sm"
             onClick={() => setConfirmacaoOpen(true)}
             disabled={
-              downloading || totalCategorias === 0 || competenciaInvalida
+              downloading ||
+              totalCategorias === 0 ||
+              competenciaInvalida ||
+              confidence.bloqueador === true
             }
             className="gap-1.5"
             title={
-              competenciaInvalida
+              confidence.bloqueador
+                ? `Download bloqueado: ${confidence.bloqueador_motivo ?? "inconsistência grave"}`
+                : competenciaInvalida
                 ? `Competência "${effectiveClassificacao.competencia || "vazia"}" inválida. Corrija antes de baixar — o cálculo trabalhista não pode alocar rubricas sem mês de referência válido.`
                 : "Abre o gate de confirmação (3 itens dirigidos) antes do download"
             }

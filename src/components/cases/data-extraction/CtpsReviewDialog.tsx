@@ -13,7 +13,14 @@
  * Confirmação: 1 download = 1 ZIP com 2 CSVs (ferias + faltas) + LEIA-ME.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, ClipboardX, Download, FileText, Loader2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Calendar,
+  ClipboardX,
+  Download,
+  FileText,
+  Loader2,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -127,6 +134,12 @@ export function CtpsReviewDialog({
     [faltasParsed, ocrText],
   );
 
+  // F0.5 — bloqueio agregado: se qualquer sub-score bloqueia, CTPS bloqueia.
+  const bloqueador =
+    confidenceFerias.bloqueador || confidenceFaltas.bloqueador;
+  const bloqueadorMotivo =
+    confidenceFerias.bloqueador_motivo ?? confidenceFaltas.bloqueador_motivo;
+
   const handleDownload = async () => {
     setDownloading(true);
     try {
@@ -209,6 +222,23 @@ export function CtpsReviewDialog({
               com os 2 CSVs.
             </DialogDescription>
           </DialogHeader>
+
+          {bloqueador && (
+            <div
+              role="alert"
+              className="border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded p-2 text-xs space-y-0.5"
+            >
+              <div className="flex items-center gap-1.5 font-semibold text-rose-900 dark:text-rose-100">
+                <AlertTriangle className="h-3.5 w-3.5" /> Download bloqueado —{" "}
+                {bloqueadorMotivo ?? "inconsistência grave detectada."}
+              </div>
+              <p className="text-[11px] text-rose-900/80 dark:text-rose-100/80">
+                Re-execute o OCR no documento original ou corrija manualmente os
+                dados marcados em vermelho antes de baixar. Este bloqueio não
+                pode ser sobrescrito.
+              </p>
+            </div>
+          )}
 
           <Tabs
             value={tab}
@@ -318,10 +348,15 @@ export function CtpsReviewDialog({
               disabled={
                 downloading ||
                 (feriasParsed.ferias.length === 0 &&
-                  faltasParsed.faltas.length === 0)
+                  faltasParsed.faltas.length === 0) ||
+                bloqueador === true
               }
               className="gap-1.5"
-              title="Abre o gate de confirmação antes do download do ZIP"
+              title={
+                bloqueador
+                  ? `Download bloqueado: ${bloqueadorMotivo ?? "inconsistência grave"}`
+                  : "Abre o gate de confirmação antes do download do ZIP"
+              }
             >
               {downloading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

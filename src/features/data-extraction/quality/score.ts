@@ -40,10 +40,31 @@ export interface ConfidenceScore {
   level: ConfianceLevel;
   /** Razões em linguagem humana, da maior penalidade pra menor. */
   reasons: string[];
+  /** True quando o pipeline detectou inconsistência grave que torna o
+   *  download inseguro. Não pode ser sobrescrito por checkbox humano. */
+  bloqueador: boolean;
+  /** Motivo legível do bloqueio (mostrado em banner). null se não bloqueado. */
+  bloqueador_motivo: string | null;
   /** Janelas de competência detectadas no OCR (cartão-ponto). */
   janelas?: JanelaPeriodo[];
   /** Datas fora de qualquer janela detectada (cartão-ponto). */
   datasForaJanela?: string[];
+}
+
+/**
+ * Marcação considerada IMPOSSÍVEL — saída cronologicamente antes da entrada,
+ * sem flag explícita de virada-meia-noite. Quando aparece numa apuração, é
+ * forte indício de que o parser concatenou totalizadores HT/HE na linha das
+ * batidas e formou pares cronologicamente inválidos.
+ */
+function marcacaoImpossivel(m: { e: string; s: string }): boolean {
+  if (!m.e || !m.s) return false;
+  const me = m.e.match(/^(\d{1,2}):(\d{2})$/);
+  const ms = m.s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!me || !ms) return false;
+  const e = parseInt(me[1], 10) * 60 + parseInt(me[2], 10);
+  const s = parseInt(ms[1], 10) * 60 + parseInt(ms[2], 10);
+  return s < e;
 }
 
 function clamp(n: number, min = 0, max = 100): number {
@@ -104,6 +125,9 @@ export function scoreCartaoPonto(
       score: 5,
       level: "baixa",
       reasons: ["Nenhuma apuração extraída."],
+      bloqueador: true,
+      bloqueador_motivo:
+        "Nenhuma apuração extraída — OCR pode estar corrompido.",
       janelas,
       datasForaJanela: [],
     };
@@ -263,10 +287,32 @@ export function scoreCartaoPonto(
 
   score = score + bonusTotal - penalidadeTotal;
   const final = clamp(score);
+
+  // Bloqueador: marcação impossível (saída < entrada sem flag virada) ou
+  // score muito baixo. Inconsistências graves não podem ser sobrescritas
+  // por checkbox humano — operador precisa corrigir antes de baixar.
+  let bloqueador = false;
+  let bloqueador_motivo: string | null = null;
+  const apuracaoComMarcacaoImpossivel = apuracoes.find((a) =>
+    a.marcacoes.some((m) => marcacaoImpossivel(m)),
+  );
+  if (apuracaoComMarcacaoImpossivel) {
+    bloqueador = true;
+    const mImp = apuracaoComMarcacaoImpossivel.marcacoes.find((m) =>
+      marcacaoImpossivel(m),
+    );
+    bloqueador_motivo = `Marcação impossível detectada em ${apuracaoComMarcacaoImpossivel.data} (entrada ${mImp?.e} → saída ${mImp?.s}). Provável totalizador HT/HE classificado como batida.`;
+  } else if (final < 30) {
+    bloqueador = true;
+    bloqueador_motivo = `Score ${final} abaixo do mínimo aceitável (30).`;
+  }
+
   return {
     score: final,
     level: nivel(final),
     reasons,
+    bloqueador,
+    bloqueador_motivo,
     janelas,
     datasForaJanela: fora,
   };
@@ -287,6 +333,10 @@ export function scoreFerias(
       score: 15,
       level: "baixa",
       reasons: ["Nenhum período de férias detectado."],
+      // Vazio em férias pode ser legítimo (CTPS sem férias gozadas).
+      // Não bloqueia.
+      bloqueador: false,
+      bloqueador_motivo: null,
     };
   }
 
@@ -393,7 +443,17 @@ export function scoreFerias(
   }
 
   score = score + bonusTotal - penalidadeTotal;
-  return { score: clamp(score), level: nivel(clamp(score)), reasons };
+  const final = clamp(score);
+  const bloqueador = final < 30 && parsed.ferias.length > 0;
+  return {
+    score: final,
+    level: nivel(final),
+    reasons,
+    bloqueador,
+    bloqueador_motivo: bloqueador
+      ? `Score ${final} abaixo do mínimo aceitável (30) com ${parsed.ferias.length} período(s) de férias extraído(s).`
+      : null,
+  };
 }
 
 // ============================================================
@@ -413,6 +473,8 @@ export function scoreFaltas(
       score: 60,
       level: "media",
       reasons: ["Nenhuma falta detectada (pode ser legítimo)."],
+      bloqueador: false,
+      bloqueador_motivo: null,
     };
   }
 
@@ -493,7 +555,17 @@ export function scoreFaltas(
   }
 
   score = score + bonusTotal - penalidadeTotal;
-  return { score: clamp(score), level: nivel(clamp(score)), reasons };
+  const final = clamp(score);
+  const bloqueador = final < 30 && parsed.faltas.length > 0;
+  return {
+    score: final,
+    level: nivel(final),
+    reasons,
+    bloqueador,
+    bloqueador_motivo: bloqueador
+      ? `Score ${final} abaixo do mínimo aceitável (30) com ${parsed.faltas.length} falta(s) extraída(s).`
+      : null,
+  };
 }
 
 // ============================================================
@@ -511,6 +583,9 @@ export function scoreHolerite(
       score: 10,
       level: "baixa",
       reasons: ["Nenhuma rubrica extraída."],
+      bloqueador: true,
+      bloqueador_motivo:
+        "Nenhuma rubrica extraída — OCR pode estar corrompido.",
     };
   }
 
@@ -621,5 +696,40 @@ export function scoreHolerite(
   }
 
   score = score + bonusTotal - penalidadeTotal;
-  return { score: clamp(score), level: nivel(clamp(score)), reasons };
+  const final = clamp(score);
+
+  // Bloqueador: diferenças >20% entre soma de rubricas e totalizadores
+  // declarados no OCR indicam duplicação ou totalizador classificado como
+  // rubrica. Score <30 também bloqueia. Não há override humano possível.
+  let bloqueador = false;
+  let bloqueador_motivo: string | null = null;
+  if (
+    checkTot.totalBrutoOcr !== null &&
+    checkTot.totalBrutoOcr > 0 &&
+    Math.abs(checkTot.diffBruto / checkTot.totalBrutoOcr) > 0.2
+  ) {
+    const pct = Math.abs(checkTot.diffBruto / checkTot.totalBrutoOcr) * 100;
+    bloqueador = true;
+    bloqueador_motivo = `Soma de rubricas (R$ ${checkTot.somaProventos.toFixed(2)}) difere ${pct.toFixed(0)}% do Total Bruto declarado (R$ ${checkTot.totalBrutoOcr.toFixed(2)}). Provável duplicação ou totalizador classificado como rubrica.`;
+  } else if (
+    checkTot.liquidoOcr !== null &&
+    checkTot.liquidoOcr > 0 &&
+    Math.abs(checkTot.diffLiquido / checkTot.liquidoOcr) > 0.2
+  ) {
+    const pct = Math.abs(checkTot.diffLiquido / checkTot.liquidoOcr) * 100;
+    const liqComp = checkTot.somaProventos - checkTot.somaDescontos;
+    bloqueador = true;
+    bloqueador_motivo = `Soma líquida computada (R$ ${liqComp.toFixed(2)}) difere ${pct.toFixed(0)}% do Líquido declarado (R$ ${checkTot.liquidoOcr.toFixed(2)}). Provável duplicação ou totalizador classificado como rubrica.`;
+  } else if (final < 30) {
+    bloqueador = true;
+    bloqueador_motivo = `Score ${final} abaixo do mínimo aceitável (30).`;
+  }
+
+  return {
+    score: final,
+    level: nivel(final),
+    reasons,
+    bloqueador,
+    bloqueador_motivo,
+  };
 }

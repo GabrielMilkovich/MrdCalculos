@@ -372,6 +372,8 @@ export function FeriasReviewDialog({
       divergenciasCount={
         unparsedLines.length + (effectiveParsed.warnings?.length ?? 0)
       }
+      bloqueador={confidence.bloqueador}
+      bloqueadorMotivo={confidence.bloqueador_motivo}
     >
       <div className="p-2 flex items-center justify-between border-b sticky top-0 bg-background z-10">
         <span className="text-[11px] text-muted-foreground">

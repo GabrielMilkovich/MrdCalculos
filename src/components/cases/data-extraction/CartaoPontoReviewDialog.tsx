@@ -572,6 +572,8 @@ export function CartaoPontoReviewDialog({
       divergenciasCount={
         unparsedLines.length + outOfWindowLines.length + warnings.length
       }
+      bloqueador={confidence.bloqueador}
+      bloqueadorMotivo={confidence.bloqueador_motivo}
     >
       <div className="h-10 px-2 flex items-center justify-between border-b sticky top-0 bg-background z-20 shrink-0">
         <span className="text-[11px] text-muted-foreground flex items-center gap-2">

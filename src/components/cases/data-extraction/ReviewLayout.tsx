@@ -30,6 +30,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronUp,
   Download,
@@ -89,6 +90,15 @@ interface Props {
    */
   divergenciasCount?: number;
   /**
+   * F0.5 — Quando `true`, o pipeline detectou inconsistência grave (score
+   * baixo, marcação impossível, totais divergentes >20%). Mostra banner
+   * vermelho e DESABILITA o botão de download — sem checkbox de override.
+   * Operador precisa corrigir o OCR/dados antes de baixar.
+   */
+  bloqueador?: boolean;
+  /** Motivo legível do bloqueio, exibido no banner. */
+  bloqueadorMotivo?: string | null;
+  /**
    * Identificador estável (ex: filename + tipo) para persistir preferências
    * de layout (split, fullscreen) por documento. Quando ausente, persiste
    * globalmente via key "default".
@@ -136,6 +146,8 @@ export function ReviewLayout({
   onConfirm,
   confirmDisabled,
   divergenciasCount,
+  bloqueador,
+  bloqueadorMotivo,
   layoutKey,
 }: Props) {
   const lsSuffix = layoutKey ? `:${layoutKey}` : "";
@@ -153,11 +165,10 @@ export function ReviewLayout({
   const [headerCollapsed, setHeaderCollapsed] = useState<boolean>(() =>
     readLs(LS_KEY_HEADER_COLLAPSED + lsSuffix, false),
   );
-  // OCR começa OCULTO por padrão — a planilha ocupa toda a área e o
-  // operador ganha tela útil. O botão "Mostrar OCR" no header reexibe
-  // pontualmente quando ele quer comparar com a referência.
+  // Default: OCR VISÍVEL. Operador precisa do contexto fonte para revisão
+  // jurídica responsável. Pode esconder se quiser e a preferência persiste.
   const [ocrHidden, setOcrHidden] = useState<boolean>(() =>
-    readLs(LS_KEY_OCR_HIDDEN + lsSuffix, true),
+    readLs(LS_KEY_OCR_HIDDEN + lsSuffix, false),
   );
   const ocrPanelInitial = readLs(LS_KEY_OCR_PANEL_SIZE + lsSuffix, 50);
 
@@ -306,6 +317,23 @@ export function ReviewLayout({
             header colapsável). Warnings continuam acessíveis via tooltip
             das linhas marcadas. */}
 
+        {bloqueador && (
+          <div
+            role="alert"
+            className="border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded p-2 text-xs space-y-0.5"
+          >
+            <div className="flex items-center gap-1.5 font-semibold text-rose-900 dark:text-rose-100">
+              <AlertTriangle className="h-3.5 w-3.5" /> Download bloqueado —{" "}
+              {bloqueadorMotivo ?? "inconsistência grave detectada."}
+            </div>
+            <p className="text-[11px] text-rose-900/80 dark:text-rose-100/80">
+              Re-execute o OCR no documento original ou corrija manualmente as
+              rubricas/marcações marcadas em vermelho antes de baixar. Este
+              bloqueio não pode ser sobrescrito.
+            </p>
+          </div>
+        )}
+
         {!headerCollapsed && contadores && (
           <div className="flex items-center gap-2 text-xs">
             <Badge variant="secondary" className="text-[11px]">
@@ -414,9 +442,13 @@ export function ReviewLayout({
             onClick={() => {
               if (!downloading) handleConfirm();
             }}
-            disabled={confirmDisabled || downloading}
+            disabled={confirmDisabled || downloading || bloqueador === true}
             className="gap-1.5"
-            title="Baixar CSV — divergências e perdas, se houver, ficam visíveis no painel de relatório do build."
+            title={
+              bloqueador === true
+                ? `Download bloqueado: ${bloqueadorMotivo ?? "inconsistência grave"}`
+                : "Baixar CSV — divergências e perdas, se houver, ficam visíveis no painel de relatório do build."
+            }
           >
             {downloading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
