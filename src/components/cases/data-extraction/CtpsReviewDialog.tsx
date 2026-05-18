@@ -215,15 +215,17 @@ export function CtpsReviewDialog({
             </DialogDescription>
           </DialogHeader>
 
-          {/* FASE 1.5 — banner BLOQUEADOR. Não permite override. */}
+          {/* FASE 1.5 — banner de ATENÇÃO (não bloqueia download).
+              Decisão de produto: operador SEMPRE decide se baixa. */}
           {bloqueadorCtps && (
-            <div className="border-2 border-red-500 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
+            <div className="border-2 border-red-400 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
               <div className="font-bold text-red-900 dark:text-red-100">
-                Extração com inconsistência grave — download bloqueado
+                Atenção — possíveis erros detectados na extração
               </div>
               <div className="text-red-800 dark:text-red-200 text-xs">
-                Re-execute o OCR ou corrija manualmente os campos de férias/faltas.
-                Não é possível liberar o download enquanto a extração estiver fundamentalmente quebrada.
+                Revise os campos de férias/faltas antes de baixar. O download
+                está liberado, mas a inconsistência detectada indica que o
+                ZIP pode estar incorreto.
               </div>
             </div>
           )}
@@ -433,9 +435,9 @@ export function CtpsReviewDialog({
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
-                if (conferido && !downloading && !bloqueadorCtps) void handleDownload();
+                if (conferido && !downloading) void handleDownload();
               }}
-              disabled={!conferido || downloading || bloqueadorCtps}
+              disabled={!conferido || downloading}
               className="gap-1.5"
             >
               {downloading ? (

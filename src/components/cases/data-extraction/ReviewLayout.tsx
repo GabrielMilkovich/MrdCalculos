@@ -317,24 +317,26 @@ export function ReviewLayout({
             header colapsável). Warnings continuam acessíveis via tooltip
             das linhas marcadas. */}
 
-        {/* FASE 1.5 — banner BLOQUEADOR. Não permite override por checkbox.
-            Single source of truth: ou conserta, ou abandona. */}
+        {/* FASE 1.5 — banner de ATENÇÃO (não bloqueia download).
+            Decisão de produto: operador SEMPRE decide se baixa. O banner
+            apenas sinaliza onde estão os possíveis erros para revisão
+            manual nas linhas vermelhas da tabela. */}
         {bloqueador === true && (
-          <div className="border-2 border-red-500 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1 mx-3 mt-2">
+          <div className="border-2 border-red-400 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1 mx-3 mt-2">
             <div className="font-bold text-red-900 dark:text-red-100">
-              Extração com inconsistência grave — download bloqueado
+              Atenção — possíveis erros detectados na extração
             </div>
             <div className="text-red-800 dark:text-red-200 text-xs">
-              Re-execute o OCR ou corrija manualmente as divergências
-              marcadas. Não é possível liberar o download enquanto a
-              extração estiver fundamentalmente quebrada.
+              Revise as linhas marcadas em vermelho antes de baixar. O
+              download está liberado, mas a inconsistência abaixo indica
+              que o resultado pode estar incorreto.
             </div>
             {bloqueadorReasons && bloqueadorReasons.length > 0 && (
               <div className="text-red-700 dark:text-red-300 text-xs font-mono space-y-0.5 pt-1">
                 {bloqueadorReasons
                   .filter((r) => /BLOQUEADOR|Nenhuma/i.test(r))
                   .map((r, i) => (
-                    <div key={i}>· {r}</div>
+                    <div key={i}>· {r.replace(/^BLOQUEADOR:\s*/, "")}</div>
                   ))}
               </div>
             )}
@@ -447,13 +449,13 @@ export function ReviewLayout({
           <Button
             size="sm"
             onClick={() => {
-              if (!downloading && bloqueador !== true) handleConfirm();
+              if (!downloading) handleConfirm();
             }}
-            disabled={confirmDisabled || downloading || bloqueador === true}
+            disabled={confirmDisabled || downloading}
             className="gap-1.5"
             title={
               bloqueador === true
-                ? "BLOQUEADO — extração com inconsistência grave. Re-execute o OCR ou corrija manualmente."
+                ? "Atenção: extração com possíveis erros. Revise as linhas marcadas antes de usar o CSV em laudo."
                 : "Baixar CSV — divergências e perdas, se houver, ficam visíveis no painel de relatório do build."
             }
           >

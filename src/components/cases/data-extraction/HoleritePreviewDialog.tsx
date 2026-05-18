@@ -433,26 +433,26 @@ export function HoleritePreviewDialog({
           </div>
         )}
 
-        {/* FASE 1.5 — banner BLOQUEADOR (score.bloqueador=true).
-            Não permite override por checkbox. Single source of truth:
-            se o parser produziu lixo, ou conserta, ou abandona. */}
+        {/* FASE 1.5 — banner de ATENÇÃO (não bloqueia download).
+            Decisão de produto: operador SEMPRE decide se baixa. O banner
+            sinaliza onde estão os possíveis erros para revisão manual.
+            Linhas suspeitas continuam destacadas em vermelho na tabela. */}
         {confidence.bloqueador === true && (
-          <div className="border-2 border-red-500 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
+          <div className="border-2 border-red-400 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
             <div className="flex items-center gap-1.5 font-bold text-red-900 dark:text-red-100">
               <AlertTriangle className="h-4 w-4" />
-              Extração com inconsistência grave — download bloqueado
+              Atenção — possíveis erros detectados na extração
             </div>
             <div className="text-red-800 dark:text-red-200 text-xs">
-              Re-execute o OCR ou corrija manualmente as rubricas marcadas em
-              vermelho. Não é possível liberar o download enquanto o parser
-              estiver produzindo dados inconsistentes com os totais declarados
-              no documento.
+              Revise as rubricas marcadas em vermelho antes de baixar. O
+              download está liberado, mas a inconsistência abaixo indica
+              que o CSV pode estar incorreto.
             </div>
             {confidence.reasons
               .filter((r) => /BLOQUEADOR/i.test(r))
               .map((r, i) => (
                 <div key={i} className="text-red-700 dark:text-red-300 text-xs font-mono">
-                  · {r}
+                  · {r.replace(/^BLOQUEADOR:\s*/, "")}
                 </div>
               ))}
           </div>
@@ -616,15 +616,14 @@ export function HoleritePreviewDialog({
             disabled={
               downloading ||
               totalCategorias === 0 ||
-              competenciaInvalida ||
-              confidence.bloqueador === true
+              competenciaInvalida
             }
             className="gap-1.5"
             title={
-              confidence.bloqueador === true
-                ? "BLOQUEADO — extração com inconsistência grave. Re-execute o OCR ou corrija manualmente."
-                : competenciaInvalida
+              competenciaInvalida
                 ? `Competência "${effectiveClassificacao.competencia || "vazia"}" inválida. Corrija antes de baixar — o cálculo trabalhista não pode alocar rubricas sem mês de referência válido.`
+                : confidence.bloqueador === true
+                ? "Atenção: extração com possíveis erros. Revise as rubricas marcadas antes de usar o CSV em laudo."
                 : "Abre o gate de confirmação (3 itens dirigidos) antes do download"
             }
           >
@@ -715,12 +714,12 @@ export function HoleritePreviewDialog({
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
-                if (conferido && !downloading && confidence.bloqueador !== true) {
+                if (conferido && !downloading) {
                   setConfirmacaoOpen(false);
                   void handleConfirmar();
                 }
               }}
-              disabled={!conferido || downloading || confidence.bloqueador === true}
+              disabled={!conferido || downloading}
               className="gap-1.5"
             >
               {downloading ? (
