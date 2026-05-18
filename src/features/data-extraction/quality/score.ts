@@ -40,6 +40,11 @@ export interface ConfidenceScore {
   level: ConfianceLevel;
   /** Razões em linguagem humana, da maior penalidade pra menor. */
   reasons: string[];
+  /** True quando o pipeline detectou inconsistência grave que torna o
+   *  download inseguro. Não pode ser sobrescrito por checkbox humano. */
+  bloqueador: boolean;
+  /** Motivo legível do bloqueio (mostrado em banner). null se não bloqueado. */
+  bloqueador_motivo: string | null;
   /** Janelas de competência detectadas no OCR (cartão-ponto). */
   janelas?: JanelaPeriodo[];
   /** Datas fora de qualquer janela detectada (cartão-ponto). */
@@ -54,6 +59,22 @@ export interface ConfidenceScore {
    *   - cartão-ponto: 0 apurações em OCR não-vazio
    */
   bloqueador?: boolean;
+}
+
+/**
+ * Marcação considerada IMPOSSÍVEL — saída cronologicamente antes da entrada,
+ * sem flag explícita de virada-meia-noite. Quando aparece numa apuração, é
+ * forte indício de que o parser concatenou totalizadores HT/HE na linha das
+ * batidas e formou pares cronologicamente inválidos.
+ */
+function marcacaoImpossivel(m: { e: string; s: string }): boolean {
+  if (!m.e || !m.s) return false;
+  const me = m.e.match(/^(\d{1,2}):(\d{2})$/);
+  const ms = m.s.match(/^(\d{1,2}):(\d{2})$/);
+  if (!me || !ms) return false;
+  const e = parseInt(me[1], 10) * 60 + parseInt(me[2], 10);
+  const s = parseInt(ms[1], 10) * 60 + parseInt(ms[2], 10);
+  return s < e;
 }
 
 function clamp(n: number, min = 0, max = 100): number {
@@ -114,6 +135,9 @@ export function scoreCartaoPonto(
       score: 5,
       level: "baixa",
       reasons: ["Nenhuma apuração extraída."],
+      bloqueador: true,
+      bloqueador_motivo:
+        "Nenhuma apuração extraída — OCR pode estar corrompido.",
       janelas,
       datasForaJanela: [],
       bloqueador: true,
@@ -274,10 +298,32 @@ export function scoreCartaoPonto(
 
   score = score + bonusTotal - penalidadeTotal;
   const final = clamp(score);
+
+  // Bloqueador: marcação impossível (saída < entrada sem flag virada) ou
+  // score muito baixo. Inconsistências graves não podem ser sobrescritas
+  // por checkbox humano — operador precisa corrigir antes de baixar.
+  let bloqueador = false;
+  let bloqueador_motivo: string | null = null;
+  const apuracaoComMarcacaoImpossivel = apuracoes.find((a) =>
+    a.marcacoes.some((m) => marcacaoImpossivel(m)),
+  );
+  if (apuracaoComMarcacaoImpossivel) {
+    bloqueador = true;
+    const mImp = apuracaoComMarcacaoImpossivel.marcacoes.find((m) =>
+      marcacaoImpossivel(m),
+    );
+    bloqueador_motivo = `Marcação impossível detectada em ${apuracaoComMarcacaoImpossivel.data} (entrada ${mImp?.e} → saída ${mImp?.s}). Provável totalizador HT/HE classificado como batida.`;
+  } else if (final < 30) {
+    bloqueador = true;
+    bloqueador_motivo = `Score ${final} abaixo do mínimo aceitável (30).`;
+  }
+
   return {
     score: final,
     level: nivel(final),
     reasons,
+    bloqueador,
+    bloqueador_motivo,
     janelas,
     datasForaJanela: fora,
   };
@@ -298,6 +344,10 @@ export function scoreFerias(
       score: 15,
       level: "baixa",
       reasons: ["Nenhum período de férias detectado."],
+      // Vazio em férias pode ser legítimo (CTPS sem férias gozadas).
+      // Não bloqueia.
+      bloqueador: false,
+      bloqueador_motivo: null,
     };
   }
 
@@ -404,7 +454,17 @@ export function scoreFerias(
   }
 
   score = score + bonusTotal - penalidadeTotal;
-  return { score: clamp(score), level: nivel(clamp(score)), reasons };
+  const final = clamp(score);
+  const bloqueador = final < 30 && parsed.ferias.length > 0;
+  return {
+    score: final,
+    level: nivel(final),
+    reasons,
+    bloqueador,
+    bloqueador_motivo: bloqueador
+      ? `Score ${final} abaixo do mínimo aceitável (30) com ${parsed.ferias.length} período(s) de férias extraído(s).`
+      : null,
+  };
 }
 
 // ============================================================
@@ -424,6 +484,8 @@ export function scoreFaltas(
       score: 60,
       level: "media",
       reasons: ["Nenhuma falta detectada (pode ser legítimo)."],
+      bloqueador: false,
+      bloqueador_motivo: null,
     };
   }
 
@@ -504,7 +566,17 @@ export function scoreFaltas(
   }
 
   score = score + bonusTotal - penalidadeTotal;
-  return { score: clamp(score), level: nivel(clamp(score)), reasons };
+  const final = clamp(score);
+  const bloqueador = final < 30 && parsed.faltas.length > 0;
+  return {
+    score: final,
+    level: nivel(final),
+    reasons,
+    bloqueador,
+    bloqueador_motivo: bloqueador
+      ? `Score ${final} abaixo do mínimo aceitável (30) com ${parsed.faltas.length} falta(s) extraída(s).`
+      : null,
+  };
 }
 
 // ============================================================
@@ -669,6 +741,8 @@ export function scoreHolerite(
   score = score + bonusTotal - penalidadeTotal;
 
   // FASE 1.4 — bloqueador: força score ≤ 30 e flag.
+  // detectarBloqueadorHolerite() cobre: 0 rubricas, |diff bruto/líquido|/total > 20%.
+  // Banner é visual apenas (não trava download — operador decide).
   const bloqueio = detectarBloqueadorHolerite(parsed, ocr);
   if (bloqueio) {
     reasons.unshift(`BLOQUEADOR: ${bloqueio}`);

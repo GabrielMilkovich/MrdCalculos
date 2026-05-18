@@ -58,6 +58,7 @@ const RE_LINHA_RUBRICA_COD =
 const RE_LINHA_BASE = /^(base\s+(de\s+)?(c[áa]lculo\s+)?(ir|irrf|inss|fgts(\s+rescis[aã]o)?))$/i;
 
 /**
+/**
  * Linhas TOTALIZADORAS — não são rubricas, são somas declaradas.
  * Incluí-las no parse duplica o cálculo (somam consigo mesmas).
  * Detectadas separadamente via `detectarTotalBruto`.

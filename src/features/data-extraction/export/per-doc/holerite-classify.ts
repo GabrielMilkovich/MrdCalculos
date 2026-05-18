@@ -33,7 +33,12 @@ export type LinhaClassificada = {
    * do parser. Forçam `categoria=null, incluir=false` e a UI destaca
    * em vermelho com tooltip.
    */
-  origem: 'hint' | 'fallback' | 'desconto' | 'ignorar_hint' | 'totalizador_suspeito';
+  origem:
+    | 'hint'
+    | 'fallback'
+    | 'desconto'
+    | 'ignorar_hint'
+    | 'totalizador_suspeito';
   /** Hint original (motivo); usado em tooltip. */
   hint: HintResult;
   /** Valor que vai pro CSV (sempre vencimento; descontos zeram). */

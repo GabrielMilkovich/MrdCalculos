@@ -232,6 +232,45 @@ const MAX_BATIDA_TOKENS = 12;
 const RE_BATIDA_TAG =
   /\b(\d{1,2}):(\d{2})\s*[-–]\s*(Inserid[oa]|Desconsiderad[oa])\b/gi;
 
+/**
+ * Tokens que indicam fim das marcações e início de totalizadores na linha.
+ * Espelhos de Senior, ADP, Totvs costumam concatenar HT/HE/DSR na mesma
+ * linha das batidas. Se não cortarmos, esses valores viram "batidas-fantasma".
+ *
+ * Match case-insensitive. Sempre com espaço/borda antes do token para
+ * evitar quebrar nomes legítimos.
+ */
+const TOKENS_FIM_BATIDAS: RegExp[] = [
+  /\s+HT\s+/i,
+  /\s+HE\s+/i,
+  /\s+H\.E\.?\s+/i,
+  /\s+H\.T\.?\s+/i,
+  /\s+DSR\s+/i,
+  /\s+RSR\s+/i,
+  /\s+BH\s+/i,
+  /\s+BANCO(?:\s+DE\s+HORAS)?\s+/i,
+  /\s+HORAS?\s+EXTRAS?\b/i,
+  /\s+HORAS?\s+TRAB(?:ALHADAS?)?\b/i,
+  /\s+H\.NORMAIS\b/i,
+  /\s+H\.NORM\b/i,
+];
+
+/**
+ * Corta a linha no primeiro token de totalizador encontrado. Mantém só
+ * o que vem ANTES — região onde estão as batidas reais. Eventos
+ * continuam a ser extraídos pelo `extrairEventos` que opera sobre a
+ * parte DEPOIS do split de MARCADORES_RESULTADO.
+ */
+function cortarTotalizadoresInline(linha: string): string {
+  let menorIdx = linha.length;
+  for (const re of TOKENS_FIM_BATIDAS) {
+    const fresh = new RegExp(re.source, re.flags.replace("g", ""));
+    const m = fresh.exec(linha);
+    if (m && m.index < menorIdx) menorIdx = m.index;
+  }
+  return linha.slice(0, menorIdx);
+}
+
 const RE_HORA_OPCIONAL_ASTERISCO = /\b(\d{1,2}):(\d{2})(?::\d{2})?(\*?)/g;
 const RE_TEM_DIGITO = /\d/;
 
@@ -419,16 +458,14 @@ export function parseCartaoPontoGenerico(
     /Hor[áa]rio\s+Registrado/i.test(ocrText) &&
     /Hor[áa]rio\s+(?:de\s+)?Trabalho|Hor[áa]rio\s+Previsto/i.test(ocrText);
 
-  // FASE 1.3 — detector de HEADER com totalizadores HT/HE/BH/DSR como
-  // colunas dedicadas. Cartões Senior/ADP/Totvs e similares colocam os
+  // FASE 1.3 + F0.5 — detector de HEADER com totalizadores HT/HE/BH/DSR
+  // como colunas dedicadas. Cartões Senior/ADP/Totvs colocam os
   // totalizadores na mesma TABELA das batidas, separados só por colunas.
-  // Quando o cabeçalho ("Data E1 S1 E2 S2 HT HE") sinaliza esse layout,
-  // ativamos limite de 4 horas/linha (8 tokens = 4 pares E/S) — o que
-  // vem depois é totalizador, não batida.
   //
-  // Detecção heurística: header contém ≥2 das siglas (HT/HE/BH/DSR/H.T/H.E)
-  // como palavras isoladas, PRÓXIMAS uma da outra (mesma linha). Sem essa
-  // proximidade, "HE" pode ser de "EVENTO HE" no rodapé e não cabeçalho.
+  // Heurística com âncora E[12]/S[12]: cabeçalho contém E1/S1 PRÓXIMO de
+  // HT/HE/BH/DSR/RSR (≤ 40 chars). Sem proximidade, "HE" pode ser de
+  // "EVENTO HE" no rodapé e não cabeçalho. Quando dispara, limite efetivo
+  // cai para 4 horas (= 2 pares E/S) e o restante da linha vira evento.
   const HEADER_TOTALIZADOR_INLINE_RE =
     /\b(?:E[12]|S[12])\b[\s\S]{0,40}\b(?:HT|HE|H\.T|H\.E|BH|DSR|RSR)\b/i;
   const TEM_HEADER_TOTALIZADOR_INLINE =
@@ -579,14 +616,15 @@ export function parseCartaoPontoGenerico(
 
     // Captura horários da parte de batidas (após a data).
     // Remove a data da string para não confundir o regex.
-    const semData = parteBatidas
-      .replace(RE_DATA_BR, " ")
-      .replace(RE_DIA_SEMANA, " ");
+    // Defesa em camadas:
+    // (1) cortarTotalizadoresInline (F0.5): remove HT/HE/DSR/BH inline antes
+    //     da extração das batidas. Evita batidas-fantasma de Senior/ADP/Totvs.
+    // (2) MAX_BATIDA_TOKENS (FASE 1.3): se ainda restarem > 12 tokens HH:MM
+    //     após corte, é poluição não-coberta — trunca + warning.
+    const semData = cortarTotalizadoresInline(
+      parteBatidas.replace(RE_DATA_BR, " ").replace(RE_DIA_SEMANA, " "),
+    );
 
-    // FASE 1.3 — contar tokens HH:MM ANTES do limite estrutural. Quando
-    // restam > MAX_BATIDA_TOKENS (12 = 6 pares E/S) APÓS o split por
-    // MARCADORES_RESULTADO, é sinal forte de que totalizadores HT/HE inline
-    // (sem palavra-chave Mistral-friendly) vazaram. Truncar + warning.
     const tokensDetectados = [...semData.matchAll(RE_HORA_OPCIONAL_ASTERISCO)]
       .filter((m) => {
         const h = parseInt(m[1], 10);
@@ -596,7 +634,7 @@ export function parseCartaoPontoGenerico(
     const truncadoExcesso = tokensDetectados > MAX_BATIDA_TOKENS;
     if (truncadoExcesso) {
       warnings.push(
-        `Linha ${i + 1} (${data}): ${tokensDetectados} tokens HH:MM detectados antes do limite de ${MAX_BATIDA_TOKENS}. Descartados a partir do 9º (possível HT/HE inline sem marcador explícito).`,
+        `Linha ${i + 1} (${data}): ${tokensDetectados} tokens HH:MM detectados antes do limite de ${MAX_BATIDA_TOKENS}. Descartados a partir do 13º (possível HT/HE inline sem marcador explícito).`,
       );
     }
 
