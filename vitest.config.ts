@@ -5,7 +5,14 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      // FASE 2 — edge functions com lógica puramente TS (sem APIs Deno-only)
+      // podem ter testes em __tests__ co-localizados. Vitest no Node consegue
+      // executar contanto que o módulo testado não importe `Deno.*` direto.
+      'supabase/functions/**/__tests__/**/*.test.ts',
+    ],
     exclude: [
       // These tests require .pjc corpus files that are not committed to the repo
       'src/lib/pjecalc/__tests__/blind-audit.test.ts',
