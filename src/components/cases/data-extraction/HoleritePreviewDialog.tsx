@@ -140,6 +140,7 @@ const ORIGEM_BADGE: Record<
   fallback: { label: "revise", tone: "amber" },
   desconto: { label: "desconto", tone: "muted" },
   ignorar_hint: { label: "ignorado", tone: "muted" },
+  totalizador_suspeito: { label: "totalizador", tone: "red" },
 };
 
 export function HoleritePreviewDialog({
@@ -709,19 +710,21 @@ function LinhaRow({
   const desc = linha.rubrica.valor_desconto;
   const valorMostrado = venc !== null && venc > 0 ? venc : (desc ?? 0);
   const isDesconto = linha.origem === "desconto";
+  const isTotalizadorSuspeito = linha.origem === "totalizador_suspeito";
 
   const currentValue: CategoriaSlug | "ignorar" = linha.categoria ?? "ignorar";
   const badge = ORIGEM_BADGE[linha.origem];
 
   // Highlight por origem
-  const rowClass =
-    linha.origem === "fallback"
-      ? "bg-amber-50/40 hover:bg-amber-50/70 dark:bg-amber-950/10"
-      : isDesconto
-      ? "text-muted-foreground hover:bg-muted/40"
-      : !linha.incluir
-      ? "opacity-60 hover:bg-muted/30"
-      : "hover:bg-muted/30";
+  const rowClass = isTotalizadorSuspeito
+    ? "bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100"
+    : linha.origem === "fallback"
+    ? "bg-amber-50/40 hover:bg-amber-50/70 dark:bg-amber-950/10"
+    : isDesconto
+    ? "text-muted-foreground hover:bg-muted/40"
+    : !linha.incluir
+    ? "opacity-60 hover:bg-muted/30"
+    : "hover:bg-muted/30";
 
   return (
     <TableRow className={`text-xs ${rowClass}`}>
@@ -729,7 +732,7 @@ function LinhaRow({
         <Checkbox
           checked={linha.incluir}
           onCheckedChange={(v) => onUpdate(linha.key, { incluir: Boolean(v) })}
-          disabled={isDesconto}
+          disabled={isDesconto || isTotalizadorSuspeito}
         />
       </TableCell>
       <TableCell className="p-1 font-mono text-[11px] text-muted-foreground">
@@ -797,7 +800,10 @@ function OrigemBadge({
   hint: LinhaClassificada["hint"];
 }) {
   const meta = ORIGEM_BADGE[origem];
-  const motivo = hint?.motivo ?? null;
+  const motivo =
+    origem === "totalizador_suspeito"
+      ? "Linha parece totalizador (Total Bruto / Líquido / Total Desc). Excluída do CSV automaticamente."
+      : hint?.motivo ?? null;
   const Icon =
     origem === "hint"
       ? Sparkles
@@ -809,6 +815,8 @@ function OrigemBadge({
       ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300"
       : meta.tone === "amber"
       ? "border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/20 dark:text-amber-200"
+      : meta.tone === "red"
+      ? "border-rose-400 bg-rose-50 text-rose-800 dark:bg-rose-950/20 dark:text-rose-200"
       : "border-muted bg-muted/40 text-muted-foreground";
   return (
     <Badge

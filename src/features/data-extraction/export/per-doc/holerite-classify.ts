@@ -20,6 +20,20 @@ import type { CategoriaSlug, HintResult } from '../../types';
 import type { RubricaParseada } from '../../parsers/holerite/types';
 import { getDefaultHint } from '../../classification/hints';
 
+/**
+ * Defesa em profundidade: o parser já filtra totalizadores em
+ * `RE_LINHA_TOTALIZADOR`, mas se algum vazar (layout específico, OCR
+ * truncado), o classifier reconhece pelo NOME da rubrica e marca com
+ * `origem='totalizador_suspeito'`. Linhas suspeitas saem do CSV
+ * automaticamente (`incluir=false`).
+ */
+const RE_NOME_TOTALIZADOR =
+  /^(?:(?:total|valor|sal[áa]rio)\s+(?:bruto|venc(?:imentos?)?|prov(?:entos?)?|desc(?:ontos?)?|l[íi]quido|geral|receber)|l[íi]quido(?:\s+a\s+receber)?|bruto)$/i;
+
+function nomeParaceTotalizador(nome: string): boolean {
+  return RE_NOME_TOTALIZADOR.test(nome.trim());
+}
+
 export type LinhaClassificada = {
   /** Identificador estável dentro do preview (codigo+ordem). */
   key: string;
@@ -27,7 +41,12 @@ export type LinhaClassificada = {
   /** Categoria atribuída. `null` quando o usuário marcou "Ignorar". */
   categoria: CategoriaSlug | null;
   /** Como veio a categoria inicial (informativo para UI). */
-  origem: 'hint' | 'fallback' | 'desconto' | 'ignorar_hint';
+  origem:
+    | 'hint'
+    | 'fallback'
+    | 'desconto'
+    | 'ignorar_hint'
+    | 'totalizador_suspeito';
   /** Hint original (motivo); usado em tooltip. */
   hint: HintResult;
   /** Valor que vai pro CSV (sempre vencimento; descontos zeram). */
@@ -91,6 +110,20 @@ export function classifyHolerite(
         hint,
         valorParaCsv,
         incluir: valorParaCsv > 0,
+      };
+    }
+    // Defesa em profundidade: se o nome ESTRUTURALMENTE parece totalizador
+    // (Total Bruto, Liquido, Total Desc...), classifier exclui mesmo que o
+    // parser tenha deixado passar. Evita que o CSV some o salário inflado.
+    if (nomeParaceTotalizador(rub.nome)) {
+      return {
+        key,
+        rubrica: rub,
+        categoria: null,
+        origem: 'totalizador_suspeito',
+        hint: null,
+        valorParaCsv: 0,
+        incluir: false,
       };
     }
     // Sem hint → fallback salario_fixo

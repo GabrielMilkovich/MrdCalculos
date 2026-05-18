@@ -58,12 +58,18 @@ const RE_LINHA_RUBRICA_COD =
 const RE_LINHA_BASE = /^(base\s+(de\s+)?(c[áa]lculo\s+)?(ir|irrf|inss|fgts(\s+rescis[aã]o)?))$/i;
 
 /**
- * Linhas TOTALIZADORAS — não são rubricas, são somas declaradas.
- * Incluí-las no parse duplica o cálculo (somam consigo mesmas).
- * Detectadas separadamente via `detectarTotalBruto`.
+ * Linhas que são TOTALIZADORES — não são rubricas. Cobertura ampla:
+ *   - Com prefixo: "Total Bruto", "Valor Líquido", "Salário Líquido", etc.
+ *   - SEM prefixo, sozinha na linha: "Liquido", "Líquido", "Bruto"
+ *   - Abreviações: "Total Desc", "Total Venc", "Desc.", "Venc.", "Prov."
+ *   - "Liquido a Receber"
+ *
+ * Casa LINHA INTEIRA (ancorado ^...$). Incluí-las no parse duplica o
+ * cálculo (somam consigo mesmas). Detectadas separadamente via
+ * `detectarTotalBruto`.
  */
 const RE_LINHA_TOTALIZADOR =
-  /^(total\s+(bruto|venc(?:imentos)?|proventos|descont[oa]s?|l[ií]quido|geral)|valor\s+l[ií]quido|liquido\s+a\s+receber|salario\s+l[ií]quido)\b/i;
+  /^(?:\s*)(?:(?:total|valor|sal[áa]rio)\s+(?:bruto|venc(?:imentos?)?|prov(?:entos?)?|desc(?:ontos?)?(?!\w)|l[íi]quido|geral|receber)|l[íi]quido(?:\s+a\s+receber)?|bruto)\b[^\n]*$/i;
 
 /**
  * Marcadores de "Total Bruto" no OCR — usados pra cross-validation.
