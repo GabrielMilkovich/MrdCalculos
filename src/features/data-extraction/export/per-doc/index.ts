@@ -22,6 +22,23 @@ import { buildFaltasCSVBlob, buildFaltasCSVBlobWithReport } from './faltas-csv';
 import { classifyHolerite, type ClassificacaoHolerite } from './holerite-classify';
 import { buildHoleriteZip, buildHoleriteZipWithReport } from './holerite-zip';
 import { buildCtpsZip, buildCtpsZipWithReport } from './ctps-zip';
+import {
+  callExtractRubricasAI,
+  type ExtractedPayload,
+  type DiscardedHallucination,
+} from '../../api/extract-rubricas-ai';
+import {
+  compararRubricas,
+  type ComparacaoResultado,
+} from '../../quality/comparador-llm-parser';
+
+export type LlmStatus =
+  | 'ok'
+  | 'unavailable'
+  | 'timeout'
+  | 'rate_limit'
+  | 'error'
+  | 'not_attempted';
 
 export type ExportResult =
   | {
@@ -33,6 +50,16 @@ export type ExportResult =
       document_id: string;
       ocr_text: string;
       filename: string;
+      /** FASE 3 — status da chamada LLM extractor (shadow check). */
+      llm_status: LlmStatus;
+      /** FASE 3 — payload extraído pela IA (apenas quando llm_status='ok'). */
+      llmExtracted?: ExtractedPayload;
+      /** FASE 3 — comparação parser × LLM (apenas quando llm_status='ok'). */
+      comparacao?: ComparacaoResultado;
+      /** FASE 3 — alucinações detectadas pelo pipeline anti-alucinação. */
+      llm_discarded?: DiscardedHallucination[];
+      /** FASE 3 — confiança autoreportada pela IA (0..100). */
+      llm_ai_confidence?: number;
     }
   | {
       ok: true;
@@ -109,6 +136,44 @@ export async function generateExportForDocument(
     case 'holerite': {
       const parsed = parseHolerite(ocrText);
       const preview = classifyHolerite(parsed);
+
+      // FASE 3.2 — LLM extractor em paralelo (shadow check).
+      // Não substitui o parser determinístico. Quando indisponível/timeout/erro,
+      // retorna `llm_status='unavailable'` e o dialog mostra banner amber
+      // ("usando só parser, revisão manual mais cuidadosa recomendada").
+      // Timeout server-side é 60s — o caller espera o tempo necessário.
+      const llmResult = await callExtractRubricasAI(
+        documentId,
+        'holerite',
+        ocrText,
+      );
+
+      if (!llmResult.ok) {
+        const llmStatus: LlmStatus =
+          llmResult.error === 'timeout'
+            ? 'timeout'
+            : llmResult.error === 'rate_limit'
+            ? 'rate_limit'
+            : llmResult.error === 'unavailable'
+            ? 'unavailable'
+            : 'error';
+        return {
+          ok: true,
+          kind: 'holerite-preview',
+          preview,
+          parsed,
+          document_id: documentId,
+          ocr_text: ocrText,
+          filename: `${baseName}_pjecalc.zip`,
+          llm_status: llmStatus,
+        };
+      }
+
+      const comparacao = compararRubricas(
+        parsed.rubricas,
+        llmResult.extracted.rubricas,
+      );
+
       return {
         ok: true,
         kind: 'holerite-preview',
@@ -117,6 +182,11 @@ export async function generateExportForDocument(
         document_id: documentId,
         ocr_text: ocrText,
         filename: `${baseName}_pjecalc.zip`,
+        llm_status: 'ok',
+        llmExtracted: llmResult.extracted,
+        comparacao,
+        llm_discarded: llmResult.discarded_hallucinations,
+        llm_ai_confidence: llmResult.ai_confidence,
       };
     }
     case 'cartao_ponto': {

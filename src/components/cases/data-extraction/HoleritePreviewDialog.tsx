@@ -100,6 +100,9 @@ import {
 import {
   type HoleriteParseResult,
 } from "@/features/data-extraction";
+import type { LlmStatus } from "@/features/data-extraction/export/per-doc";
+import type { ComparacaoResultado } from "@/features/data-extraction/quality/comparador-llm-parser";
+import { ComparacaoLLMPanel } from "./ComparacaoLLMPanel";
 
 interface Props {
   open: boolean;
@@ -112,6 +115,12 @@ interface Props {
   documentId?: string;
   /** OCR original — usado no scoring de confiança. */
   ocrText?: string;
+  /** FASE 3 — status da chamada LLM extractor (shadow check). */
+  llmStatus?: LlmStatus;
+  /** FASE 3 — comparação parser × LLM (presente quando llmStatus='ok'). */
+  comparacao?: ComparacaoResultado;
+  /** FASE 3 — confiança autoreportada pela IA (0..100). */
+  llmAiConfidence?: number;
 }
 
 const CATEGORIA_LABELS: Record<CategoriaSlug, string> = {
@@ -153,6 +162,9 @@ export function HoleritePreviewDialog({
   filename,
   documentId: _documentId,
   ocrText,
+  llmStatus,
+  comparacao,
+  llmAiConfidence,
 }: Props) {
   const effectiveClassificacao = classificacao;
 
@@ -201,7 +213,7 @@ export function HoleritePreviewDialog({
 
   // Score de confiança da extração (recalcula quando linhas mudam, p.ex.
   // se o usuário corrige rubricas).
-  const confidence = useMemo(
+  const confidenceBase = useMemo(
     () =>
       scoreHolerite(
         {
@@ -214,6 +226,29 @@ export function HoleritePreviewDialog({
       ),
     [effectiveClassificacao, linhas, ocrText],
   );
+
+  // FASE 3.3 — divergência grande entre IA e parser determinístico
+  // (taxa_concordancia < 0.70) FORÇA bloqueador, mesmo que o score
+  // interno do parser tenha passado. Uma das duas fontes está enganada;
+  // operador precisa intervir.
+  const confidence = useMemo(() => {
+    if (
+      llmStatus === "ok" &&
+      comparacao &&
+      comparacao.taxa_concordancia < 0.70
+    ) {
+      const pct = Math.round(comparacao.taxa_concordancia * 100);
+      return {
+        ...confidenceBase,
+        bloqueador: true,
+        reasons: [
+          `BLOQUEADOR: IA e parser concordam em apenas ${pct}% das rubricas (limite ≥70%)`,
+          ...confidenceBase.reasons,
+        ],
+      };
+    }
+    return confidenceBase;
+  }, [confidenceBase, llmStatus, comparacao]);
 
   // Ações em lote
   const setIncluirAll = (predicate: (l: LinhaClassificada) => boolean, v: boolean) => {
@@ -421,6 +456,15 @@ export function HoleritePreviewDialog({
                 </div>
               ))}
           </div>
+        )}
+
+        {/* FASE 3.3 — comparação parser × LLM extractor (shadow check). */}
+        {llmStatus && (
+          <ComparacaoLLMPanel
+            llmStatus={llmStatus}
+            comparacao={comparacao}
+            aiConfidence={llmAiConfidence}
+          />
         )}
 
         {classificacao.warnings.length > 0 && (
