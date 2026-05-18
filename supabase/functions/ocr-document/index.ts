@@ -28,6 +28,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { ocrBytes, runOcr, type MistralOcrOptions } from "../_shared/mistral-ocr.ts";
+import { checkRateLimit } from "../_shared/rate-limit.ts";
+
+// Audit-fix S3 — limite GLOBAL por usuário (Mistral API é paga).
+// 100 chamadas/h é folgado para uso real (~3 docs/min sustained) e segura
+// contra farming. Complementa o per-case existente (AUTO_EXTRACTION_RATE_LIMIT_PER_CASE).
+const OCR_DOCUMENT_RATE_LIMIT = 100;
+const OCR_DOCUMENT_RATE_WINDOW_SEC = 3600;
 
 const ABSOLUTE_MAX_BYTES = 30 * 1024 * 1024; // 30MB
 
@@ -267,6 +274,26 @@ serve(async (req) => {
     if (authError || !user) return jsonResponse({ error: "Token inválido" }, 401);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Audit-fix S3: rate-limit global por usuário (Mistral API paga).
+    const rl = await checkRateLimit(
+      supabase,
+      user.id,
+      "ocr-document",
+      OCR_DOCUMENT_RATE_LIMIT,
+      OCR_DOCUMENT_RATE_WINDOW_SEC,
+    );
+    if (!rl.allowed) {
+      return jsonResponse(
+        {
+          error: "Rate limit excedido",
+          hint: `Limite de ${rl.limit} OCRs/hora atingido. Tente novamente em ~${Math.round(rl.retryAfterSec / 60)} min.`,
+          used: rl.used,
+          limit: rl.limit,
+        },
+        429,
+      );
+    }
 
     // Carrega doc + ownership check
     const { data: document, error: docError } = await supabase

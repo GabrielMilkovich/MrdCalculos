@@ -514,6 +514,33 @@ function toEngineCustasConfig(cfg: PjecalcCustasConfigRow | null): PjeCustasConf
   };
 }
 
+/**
+ * Audit-fix C3: adapter PjecalcMultasConfigRow → PjeMultasConfig.
+ *
+ * Antes deste fix o orchestrator chamava `new PjeCalcEngineV3(...)` com 25
+ * argumentos, deixando o construtor cair no default
+ *   multasConfig = { apurar_467: false, apurar_477: false }
+ * O gate interno (engine-v3.ts:1428: `if (apurar_467 === false) return 0`)
+ * zerava a multa 467 mesmo quando o usuário marcava no ModuloMultasCLT.
+ *
+ * Agora lemos `caseData.multasConfig` do banco e passamos como 26º arg.
+ */
+function toEngineMultasConfig(
+  cfg: import('./types').PjecalcMultasConfigRow | null,
+): import('./engine-types').PjeMultasConfig {
+  if (!cfg) return { apurar_467: false, apurar_477: false };
+  const c = cfg as unknown as Record<string, unknown>;
+  return {
+    apurar_467: Boolean(c.apurar_467),
+    apurar_477: Boolean(c.apurar_477),
+    valor_477_tipo: (c.valor_477_tipo as 'salario' | 'informado' | undefined) ?? 'salario',
+    valor_477_informado: c.valor_477_informado as number | undefined,
+    apurar_523_cpc: Boolean(c.apurar_523_cpc),
+    percentual_523: (c.percentual_523 as number | undefined) ?? 10,
+    multas_indenizacoes: (c.multas_indenizacoes as import('./engine-types').PjeMultaItem[] | undefined) ?? [],
+  };
+}
+
 // =====================================================
 // EXECUTION RESULT
 // =====================================================
@@ -1405,8 +1432,10 @@ export async function executarLiquidacao(
     throw new Error(`Cálculo bloqueado por falta de dados essenciais: ${blockReasons}`);
   }
 
-  // 4. Execute engine — ALL 21 constructor params populated
-  
+  // 4. Execute engine — 26 constructor params (audit-fix C3 adicionou multasConfig)
+
+  const engineMultas = toEngineMultasConfig(caseData.multasConfig);
+
   const engine = new PjeCalcEngineV3(
     engineParams, engineHistoricos, engineFaltas, engineFerias,
     engineVerbas, engineCartao, engineFgts, engineCs, engineIr,
@@ -1423,6 +1452,7 @@ export async function executarLiquidacao(
     salarioFamiliaDB,    // 23: salário-família DB rows
     excecoesSabadoDB,    // 24: exceções de sábado
     salarioMinimoDB,     // 25: salário mínimo DB
+    engineMultas,        // 26: multas config (audit-fix C3) — antes default false
   );
 
   const result = engine.liquidar();

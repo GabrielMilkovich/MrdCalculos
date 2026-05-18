@@ -61,9 +61,14 @@ const RE_LINHA_BASE = /^(base\s+(de\s+)?(c[áa]lculo\s+)?(ir|irrf|inss|fgts(\s+r
  * Linhas TOTALIZADORAS — não são rubricas, são somas declaradas.
  * Incluí-las no parse duplica o cálculo (somam consigo mesmas).
  * Detectadas separadamente via `detectarTotalBruto`.
+ *
+ * Cobertura ampliada (audit #Bug-2): captura abreviações comuns em holerites
+ * de mercado — "Total Desc" (sem "ontos"), "Liquido NNNN,NN" sozinho,
+ * "Total a Pagar", "Total Empregado/Empregador" — que antes vazavam para o
+ * parse e infl ávam o salário em 100%+.
  */
 const RE_LINHA_TOTALIZADOR =
-  /^(total\s+(bruto|venc(?:imentos)?|proventos|descont[oa]s?|l[ií]quido|geral)|valor\s+l[ií]quido|liquido\s+a\s+receber|salario\s+l[ií]quido)\b/i;
+  /^(total\s+(bruto|venc(?:imentos)?|proventos|descont[oa]?s?|desc(?:ontos?)?|l[ií]q(?:uido)?|geral|a\s+pagar|empregad[oa]r?)|valor\s+l[ií]quido|l[ií]quido\s+a\s+receber|salario\s+l[ií]quido|l[ií]quido\s+\d)/i;
 
 /**
  * Marcadores de "Total Bruto" no OCR — usados pra cross-validation.

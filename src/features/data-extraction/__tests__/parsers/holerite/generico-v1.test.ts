@@ -387,3 +387,53 @@ describe("F0.2 — cross-validation total bruto", () => {
     ).toBe(false);
   });
 });
+
+describe("Bug #2 — totalizadores abreviados não devem virar rubrica", () => {
+  // Reproduz cenário audit-bug-2: "Total Desc" (sem "ontos") e "Liquido"
+  // sozinho passavam pelo RE_LINHA_TOTALIZADOR e eram inseridos como
+  // rubrica → inflavam o salário em >100%.
+  const ocrAbreviado = `
+    REFERÊNCIA: 03/2024
+    0001 SALARIO BASE        3.250,00
+    Total Bruto              3.250,00
+    Total Desc                 385,75
+    Liquido                  2.989,25
+  `;
+
+  it("'Total Desc' não vira rubrica", () => {
+    const r = parseHolerite(ocrAbreviado);
+    const nomes = r.rubricas.map((x) => x.nome.toLowerCase());
+    expect(nomes.some((n) => /total\s+desc/i.test(n))).toBe(false);
+  });
+
+  it("'Liquido NNNN,NN' sozinho não vira rubrica", () => {
+    const r = parseHolerite(ocrAbreviado);
+    const nomes = r.rubricas.map((x) => x.nome.toLowerCase());
+    expect(nomes.some((n) => /^l[ií]quido/i.test(n))).toBe(false);
+  });
+
+  it("soma de vencimentos ≈ Total Bruto (não infla 100%)", () => {
+    const r = parseHolerite(ocrAbreviado);
+    const soma = r.rubricas.reduce(
+      (acc, x) => acc + (x.valor_vencimento ?? 0),
+      0,
+    );
+    // Soma deve ser ~3250, não 6625 (que era o bug).
+    expect(soma).toBeLessThanOrEqual(3250 * 1.05);
+  });
+
+  it("variantes adicionais — 'Total a Pagar', 'Total Liq', 'Total Empregado'", () => {
+    const variantes = `
+      REFERÊNCIA: 03/2024
+      0001 SALARIO BASE        3.250,00
+      Total a Pagar            2.989,25
+      Total Liq                2.989,25
+      Total Empregado          2.989,25
+    `;
+    const r = parseHolerite(variantes);
+    const nomes = r.rubricas.map((x) => x.nome.toLowerCase());
+    expect(nomes.some((n) => /total\s+a\s+pagar/i.test(n))).toBe(false);
+    expect(nomes.some((n) => /total\s+liq/i.test(n))).toBe(false);
+    expect(nomes.some((n) => /total\s+empregad/i.test(n))).toBe(false);
+  });
+});

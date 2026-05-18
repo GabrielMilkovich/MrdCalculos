@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { seedPjecalcFromCase } from "@/lib/pjecalc/seed-from-wizard";
 import {
   ChevronRight, ChevronLeft, Check, FileText, Calendar, Clock,
   Shield, Scale, Calculator, AlertTriangle, Plus, Trash2, Loader2,
@@ -242,6 +243,40 @@ export default function NovoCalculo() {
           data_fim: insalubFim || null,
           metadata_json: { grau: insalubGrau, base: insalubBase },
         });
+      }
+
+      // Audit-fix C1+C2: bridge case → pjecalc_*.
+      // Antes daqui o engine V3 não encontrava nada nas tabelas pjecalc_*
+      // e a tela /casos/:id/pjecalc abria vazia. Os 4 campos do Step 5
+      // (índiceCorrecao/juros/multa467/multa477) eram write-only no DOM
+      // — agora persistem em pjecalc_correcao_config + pjecalc_multas_config.
+      try {
+        await seedPjecalcFromCase({
+          caseId: caso.id,
+          uf: uf || undefined,
+          cidade: cidade || undefined,
+          dataAdmissao,
+          dataDemissao,
+          ajuizamentoData: ajuizamentoData || undefined,
+          salarioInicial: parseFloat(salarioInicial),
+          mudancasSalariais: mudancasSalariais
+            .filter((m) => m.data && m.valor)
+            .map((m) => ({ data: m.data, valor: parseFloat(m.valor) })),
+          divisor: parseInt(divisor),
+          horasSemanais: parseInt(horasSemanais),
+          indiceCorrecao,
+          juros,
+          multa467,
+          multa477,
+        });
+      } catch (seedErr) {
+        // Não-fatal: caso foi criado, só a ponte falhou. Usuário pode
+        // reabrir o caso e configurar manualmente o PJe-Calc.
+        logger.error("seedPjecalcFromCase falhou", { error: String(seedErr), caseId: caso.id });
+        toast.warning(
+          "Caso criado, mas configuração inicial do PJe-Calc falhou. " +
+          "Configure manualmente na aba PJe-Calc do caso."
+        );
       }
 
       toast.success('Caso criado com sucesso! Redirecionando...');
