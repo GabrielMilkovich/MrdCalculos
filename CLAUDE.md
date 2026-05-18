@@ -132,9 +132,26 @@ export function MyComponent({ value, onChange }: Props) { ... }
 - Não sugerir Express, Next.js ou qualquer backend Node — o backend é Supabase
 - Não criar arquivos `.js` — apenas `.ts` e `.tsx`
 - Não instalar bibliotecas de data pesadas (ex: moment.js) — usar date-fns ou nativo
+- Não criar dependência nova sem justificativa explícita registrada na seção "Exceções autorizadas" abaixo
 - Não duplicar lógica que já existe em hooks ou lib/
 - Não propor soluções que contornem o RLS do Supabase
 - Não usar `parseFloat` ou `parseInt` em valores monetários
+
+---
+
+## Exceções autorizadas a "Não criar dependência nova"
+
+Cada entrada documenta: data + sessão + dependência + justificativa.
+Próximo agente que ler esta seção: presença de uma dependência aqui ≠
+licença para adicionar outras "porque parecem legais". Cada nova
+adição precisa de exceção explicitamente autorizada pelo dono.
+
+- `@testing-library/react@^16.3.2` + `@testing-library/jest-dom@^6.9.1`
+  — 2026-05-18, sessão hotfix OCR/CSV (Gate 2). devDependencies.
+  Justificativa: testes unitários de componente React (banner do
+  score-bloqueador). Padrão da indústria desde 2018. Alternativas
+  (Playwright e2e com mocking de Supabase, ou Storybook) tinham custo
+  desproporcional ao escopo. Setup em `tests/setup.ts` + `vitest.config.ts`.
 
 ---
 
