@@ -82,6 +82,15 @@ interface Props {
   onConfirm: (opts?: { bloqueioBurlado: boolean }) => Promise<void> | void;
   confirmDisabled?: boolean;
   /**
+   * FASE 1.5 — quando `true`, renderiza banner vermelho no topo do dialog
+   * e força `confirmDisabled=true` (não permite override via checkbox).
+   * Vem do `ConfidenceScore.bloqueador` (parser produziu lixo, único caminho
+   * é re-extrair ou corrigir manualmente).
+   */
+  bloqueador?: boolean;
+  /** Razões textuais do bloqueio (renderizadas no banner). */
+  bloqueadorReasons?: string[];
+  /**
    * F0.4 — quantidade de divergências detectadas (linhas rejeitadas + warnings
    * críticos do parser/builder). Quando > 0, exige 4º checkbox override
    * "Confirmo que revisei manualmente cada divergência acima" e setamos
@@ -137,6 +146,8 @@ export function ReviewLayout({
   confirmDisabled,
   divergenciasCount,
   layoutKey,
+  bloqueador,
+  bloqueadorReasons,
 }: Props) {
   const lsSuffix = layoutKey ? `:${layoutKey}` : "";
 
@@ -306,6 +317,30 @@ export function ReviewLayout({
             header colapsável). Warnings continuam acessíveis via tooltip
             das linhas marcadas. */}
 
+        {/* FASE 1.5 — banner BLOQUEADOR. Não permite override por checkbox.
+            Single source of truth: ou conserta, ou abandona. */}
+        {bloqueador === true && (
+          <div className="border-2 border-red-500 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1 mx-3 mt-2">
+            <div className="font-bold text-red-900 dark:text-red-100">
+              Extração com inconsistência grave — download bloqueado
+            </div>
+            <div className="text-red-800 dark:text-red-200 text-xs">
+              Re-execute o OCR ou corrija manualmente as divergências
+              marcadas. Não é possível liberar o download enquanto a
+              extração estiver fundamentalmente quebrada.
+            </div>
+            {bloqueadorReasons && bloqueadorReasons.length > 0 && (
+              <div className="text-red-700 dark:text-red-300 text-xs font-mono space-y-0.5 pt-1">
+                {bloqueadorReasons
+                  .filter((r) => /BLOQUEADOR|Nenhuma/i.test(r))
+                  .map((r, i) => (
+                    <div key={i}>· {r}</div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {!headerCollapsed && contadores && (
           <div className="flex items-center gap-2 text-xs">
             <Badge variant="secondary" className="text-[11px]">
@@ -412,11 +447,15 @@ export function ReviewLayout({
           <Button
             size="sm"
             onClick={() => {
-              if (!downloading) handleConfirm();
+              if (!downloading && bloqueador !== true) handleConfirm();
             }}
-            disabled={confirmDisabled || downloading}
+            disabled={confirmDisabled || downloading || bloqueador === true}
             className="gap-1.5"
-            title="Baixar CSV — divergências e perdas, se houver, ficam visíveis no painel de relatório do build."
+            title={
+              bloqueador === true
+                ? "BLOQUEADO — extração com inconsistência grave. Re-execute o OCR ou corrija manualmente."
+                : "Baixar CSV — divergências e perdas, se houver, ficam visíveis no painel de relatório do build."
+            }
           >
             {downloading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

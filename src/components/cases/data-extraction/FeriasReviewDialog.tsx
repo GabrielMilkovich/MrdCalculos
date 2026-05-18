@@ -340,6 +340,8 @@ export function FeriasReviewDialog({
       unparsedLines={unparsedLines}
       warnings={effectiveParsed.warnings}
       contadores={{ extraidos: rows.length, etiqueta: "período" }}
+      bloqueador={confidence.bloqueador === true}
+      bloqueadorReasons={confidence.reasons}
       headerSlot={
         <div className="flex items-center gap-2 flex-wrap">
           <ConfidenceBadge score={confidence} />

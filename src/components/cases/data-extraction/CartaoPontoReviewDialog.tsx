@@ -530,6 +530,8 @@ export function CartaoPontoReviewDialog({
       outOfWindowLines={outOfWindowLines}
       warnings={warnings}
       contadores={{ extraidos: rows.length, etiqueta: "apuração" }}
+      bloqueador={confidence.bloqueador === true}
+      bloqueadorReasons={confidence.reasons}
       headerSlot={
         <div className="flex items-center gap-2 flex-wrap">
           {pdfUrl && (

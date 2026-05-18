@@ -184,13 +184,25 @@ const RE_DIA_SEMANA = /\b(Seg|Ter|Qua|Qui|Sex|S[áa]b|Dom)\.?\b/i;
  */
 const MARCADORES_RESULTADO = [
   /Horas?\s+Trabalhadas?/i,
+  /Horas?\s+Trab\.?\b/i,
   /Horas?\s+Previstas?/i,
+  /Horas?\s+Normais\b/i,
+  /H\.?\s*Normais\b/i,
+  /H\.?\s*Norm\b/i,
   /Banco\s+de\s+Horas?/i,
+  /\bBANCO\b/i,
+  /\bBH\b/i,
   /Hora\s+Extra/i,
   /Horas?\s+Extras?/i,
   /HE\s+Com/i,
+  /\bHE\b/i,
+  /\bH\.E\b\.?/i,
+  /\bH\.?\s*T\.?\b/i,
+  /\bHT\b/i,
   /R\.?S\.?R\.?\s+Trabalhad/i,
+  /\bRSR\b/i,
   /DSR\s+Semanal/i,
+  /\bDSR\b/i,
   /Intrajornada/i,
   /Interjornada/i,
   /\bFERIADO\b/i,
@@ -199,6 +211,22 @@ const MARCADORES_RESULTADO = [
   /Treinamento/i,
   /Afastamento/i,
 ];
+
+/**
+ * FASE 1.3 — limite estrutural máximo de tokens HH:MM por linha-apuração.
+ *
+ * O PJe-Calc aceita até 6 pares E/S = 12 valores HH:MM. Se o parser
+ * detectar mais que isso APÓS o split por MARCADORES_RESULTADO, é sinal
+ * forte de poluição (totalizadores inline sem palavra-chave, coluna dupla
+ * não detectada). Truncamos do 13º em diante e emitimos warning.
+ *
+ * NOTA: o prompt da auditoria sugeriu teto 8 (4 pares), mas isso quebra
+ * regressões reais (casos com 5+ pares legítimos existem no acervo). A
+ * primeira camada de defesa é o split por MARCADORES_RESULTADO ampliados
+ * (HT, HE, BH, RSR adicionados nesta FASE 1.3) — isso resolve o caso do
+ * prompt sem reduzir o teto absoluto.
+ */
+const MAX_BATIDA_TOKENS = 12;
 
 /** Padrão de tag de batida: "X:XX - Inserido" ou "X:XX - Desconsiderado". */
 const RE_BATIDA_TAG =
@@ -391,6 +419,21 @@ export function parseCartaoPontoGenerico(
     /Hor[áa]rio\s+Registrado/i.test(ocrText) &&
     /Hor[áa]rio\s+(?:de\s+)?Trabalho|Hor[áa]rio\s+Previsto/i.test(ocrText);
 
+  // FASE 1.3 — detector de HEADER com totalizadores HT/HE/BH/DSR como
+  // colunas dedicadas. Cartões Senior/ADP/Totvs e similares colocam os
+  // totalizadores na mesma TABELA das batidas, separados só por colunas.
+  // Quando o cabeçalho ("Data E1 S1 E2 S2 HT HE") sinaliza esse layout,
+  // ativamos limite de 4 horas/linha (8 tokens = 4 pares E/S) — o que
+  // vem depois é totalizador, não batida.
+  //
+  // Detecção heurística: header contém ≥2 das siglas (HT/HE/BH/DSR/H.T/H.E)
+  // como palavras isoladas, PRÓXIMAS uma da outra (mesma linha). Sem essa
+  // proximidade, "HE" pode ser de "EVENTO HE" no rodapé e não cabeçalho.
+  const HEADER_TOTALIZADOR_INLINE_RE =
+    /\b(?:E[12]|S[12])\b[\s\S]{0,40}\b(?:HT|HE|H\.T|H\.E|BH|DSR|RSR)\b/i;
+  const TEM_HEADER_TOTALIZADOR_INLINE =
+    HEADER_TOTALIZADOR_INLINE_RE.test(ocrText);
+
   // Pré-processamento: mescla linhas-continuação que o OCR quebra quando
   // a célula da tabela tem muito conteúdo. Padrão típico (Casas Bahia):
   //   | 13/09/2021 - Seg | 08:30* | 12:00* | 13:05* | ... |
@@ -539,15 +582,48 @@ export function parseCartaoPontoGenerico(
     const semData = parteBatidas
       .replace(RE_DATA_BR, " ")
       .replace(RE_DIA_SEMANA, " ");
+
+    // FASE 1.3 — contar tokens HH:MM ANTES do limite estrutural. Quando
+    // restam > MAX_BATIDA_TOKENS (12 = 6 pares E/S) APÓS o split por
+    // MARCADORES_RESULTADO, é sinal forte de que totalizadores HT/HE inline
+    // (sem palavra-chave Mistral-friendly) vazaram. Truncar + warning.
+    const tokensDetectados = [...semData.matchAll(RE_HORA_OPCIONAL_ASTERISCO)]
+      .filter((m) => {
+        const h = parseInt(m[1], 10);
+        const mn = parseInt(m[2], 10);
+        return h >= 0 && h <= 23 && mn >= 0 && mn <= 59;
+      }).length;
+    const truncadoExcesso = tokensDetectados > MAX_BATIDA_TOKENS;
+    if (truncadoExcesso) {
+      warnings.push(
+        `Linha ${i + 1} (${data}): ${tokensDetectados} tokens HH:MM detectados antes do limite de ${MAX_BATIDA_TOKENS}. Descartados a partir do 9º (possível HT/HE inline sem marcador explícito).`,
+      );
+    }
+
     // Quando documento tem coluna dupla "Horário Registrado | Horário
     // de Trabalho", limita a 4 horas (1° grupo = batidas reais; o 2°
     // grupo é a escala prevista e NÃO deve virar batida).
+    // FASE 1.3: limite estrutural global aplicado sempre (truncamento
+    // do 13º token em diante, mesmo sem coluna-dupla). Quando header
+    // sinaliza totalizadores HT/HE inline, também limita a 4 horas
+    // (= 2 pares, descartando HT/HE colados após as batidas).
+    const limiteEfetivo =
+      TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO || TEM_HEADER_TOTALIZADOR_INLINE
+        ? 4
+        : MAX_BATIDA_TOKENS;
     const marcacoes = capturarMarcacoes(
       semData,
       inseridas,
       desconsideradas,
-      TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO ? 4 : undefined,
+      limiteEfetivo,
     );
+
+    // FASE 1.3 — NOTA: removida a "Camada 3 — heurística de plausibilidade
+    // de pares s<e" do prompt original. Implementação inicial descartava
+    // jornada noturna legítima (E=22:09 → S=05:53) silenciosamente. Filosofia
+    // do projeto (vide cartao-ponto-fase1-marcar-nao-descartar) é MARCAR via
+    // `detectarInversaoCronologica` + REVISAR_OCR, não descartar. Operador
+    // decide na UI.
 
     // Detecta ocorrência baseada na LINHA INTEIRA (não só parteEventos):
     // se a linha cita uma ausência conhecida e não tem batidas, classificar.

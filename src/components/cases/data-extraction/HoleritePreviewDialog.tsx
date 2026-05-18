@@ -140,6 +140,9 @@ const ORIGEM_BADGE: Record<
   fallback: { label: "revise", tone: "amber" },
   desconto: { label: "desconto", tone: "muted" },
   ignorar_hint: { label: "ignorado", tone: "muted" },
+  // FASE 1.2 — totalizador identificado em linha de rubrica (defesa em
+  // profundidade: parser ou nome do item parece totalizador). Vermelho.
+  totalizador_suspeito: { label: "totalizador", tone: "red" },
 };
 
 export function HoleritePreviewDialog({
@@ -395,6 +398,31 @@ export function HoleritePreviewDialog({
           </div>
         )}
 
+        {/* FASE 1.5 — banner BLOQUEADOR (score.bloqueador=true).
+            Não permite override por checkbox. Single source of truth:
+            se o parser produziu lixo, ou conserta, ou abandona. */}
+        {confidence.bloqueador === true && (
+          <div className="border-2 border-red-500 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-red-900 dark:text-red-100">
+              <AlertTriangle className="h-4 w-4" />
+              Extração com inconsistência grave — download bloqueado
+            </div>
+            <div className="text-red-800 dark:text-red-200 text-xs">
+              Re-execute o OCR ou corrija manualmente as rubricas marcadas em
+              vermelho. Não é possível liberar o download enquanto o parser
+              estiver produzindo dados inconsistentes com os totais declarados
+              no documento.
+            </div>
+            {confidence.reasons
+              .filter((r) => /BLOQUEADOR/i.test(r))
+              .map((r, i) => (
+                <div key={i} className="text-red-700 dark:text-red-300 text-xs font-mono">
+                  · {r}
+                </div>
+              ))}
+          </div>
+        )}
+
         {classificacao.warnings.length > 0 && (
           <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-xs space-y-0.5">
             <div className="flex items-center gap-1.5 font-medium text-amber-900 dark:text-amber-100">
@@ -542,11 +570,16 @@ export function HoleritePreviewDialog({
             size="sm"
             onClick={() => setConfirmacaoOpen(true)}
             disabled={
-              downloading || totalCategorias === 0 || competenciaInvalida
+              downloading ||
+              totalCategorias === 0 ||
+              competenciaInvalida ||
+              confidence.bloqueador === true
             }
             className="gap-1.5"
             title={
-              competenciaInvalida
+              confidence.bloqueador === true
+                ? "BLOQUEADO — extração com inconsistência grave. Re-execute o OCR ou corrija manualmente."
+                : competenciaInvalida
                 ? `Competência "${effectiveClassificacao.competencia || "vazia"}" inválida. Corrija antes de baixar — o cálculo trabalhista não pode alocar rubricas sem mês de referência válido.`
                 : "Abre o gate de confirmação (3 itens dirigidos) antes do download"
             }
@@ -638,12 +671,12 @@ export function HoleritePreviewDialog({
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
-                if (conferido && !downloading) {
+                if (conferido && !downloading && confidence.bloqueador !== true) {
                   setConfirmacaoOpen(false);
                   void handleConfirmar();
                 }
               }}
-              disabled={!conferido || downloading}
+              disabled={!conferido || downloading || confidence.bloqueador === true}
               className="gap-1.5"
             >
               {downloading ? (

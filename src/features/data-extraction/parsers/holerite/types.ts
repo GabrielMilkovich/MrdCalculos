@@ -9,6 +9,14 @@ export type RubricaParseada = {
   valor_desconto: number | null;
   quantidade: number | null;
   ordem: number;
+  /**
+   * FASE 1.1 — marca quando o parser detectou totalizador no MEIO da linha
+   * (não na origem) mas ainda extraiu a rubrica. Classifier + UI usam para
+   * destacar e bloquear inclusão no CSV. Defesa-em-profundidade contra
+   * "Total Desc 385,75 R$ 2.989,25" onde o totalizador colou na linha
+   * de rubrica seguinte por OCR ruim.
+   */
+  flag_suspeita?: boolean;
 };
 
 export type HoleriteParseResult = {

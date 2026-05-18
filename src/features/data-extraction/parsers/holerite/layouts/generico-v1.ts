@@ -62,13 +62,27 @@ const RE_LINHA_BASE = /^(base\s+(de\s+)?(c[áa]lculo\s+)?(ir|irrf|inss|fgts(\s+r
  * Incluí-las no parse duplica o cálculo (somam consigo mesmas).
  * Detectadas separadamente via `detectarTotalBruto`.
  *
- * Cobertura ampliada (audit #Bug-2): captura abreviações comuns em holerites
- * de mercado — "Total Desc" (sem "ontos"), "Liquido NNNN,NN" sozinho,
- * "Total a Pagar", "Total Empregado/Empregador" — que antes vazavam para o
- * parse e infl ávam o salário em 100%+.
+ * Cobertura ampliada (audit #Bug-2 + FASE 1.1): captura abreviações comuns
+ * em holerites de mercado — "Total Desc" (sem "ontos"), "Liquido NNNN,NN"
+ * sozinho, "Total a Pagar", "Total Empregado/Empregador", "Total Receber",
+ * "Salario Liquido" etc. — que antes vazavam para o parse e inflavam o
+ * salário em 100%+.
+ *
+ * Ancorada em `^` para casar a LINHA INTEIRA como totalizador (descartar).
  */
 const RE_LINHA_TOTALIZADOR =
-  /^(total\s+(bruto|venc(?:imentos)?|proventos|descont[oa]?s?|desc(?:ontos?)?|l[ií]q(?:uido)?|geral|a\s+pagar|empregad[oa]r?)|valor\s+l[ií]quido|l[ií]quido\s+a\s+receber|salario\s+l[ií]quido|l[ií]quido\s+\d)/i;
+  /^(total\s+(bruto|venc(?:imentos)?\.?|proventos|prov\.?|descont[oa]?s?|desc(?:ontos?)?\.?|l[ií]q(?:uido)?\.?|geral|a\s+(pagar|receber)|empregad[oa]r?)|valor\s+l[ií]quido|l[ií]quido\s+a\s+receber|salario\s+l[ií]quido|s[aá]l[aá]rio\s+l[ií]quido|l[ií]quido\s+\d)/i;
+
+/**
+ * FASE 1.1 — RE_LINHA_TOTALIZADOR_INLINE: mesma cobertura mas SEM âncora `^`.
+ * Casa no MEIO da linha. Quando dispara mas a linha NÃO casa
+ * `RE_LINHA_TOTALIZADOR` (totalizador colado em rubrica por OCR sujo, ex:
+ * "Total Desc 385,75 R$ 2.989,25" ou "0001 SALARIO 3.500,00 Total Bruto 3.500"),
+ * extraímos a rubrica MAS marcamos `flag_suspeita=true`. Classifier força
+ * `incluir=false` por defesa-em-profundidade.
+ */
+const RE_LINHA_TOTALIZADOR_INLINE =
+  /\b(total\s+(bruto|venc(?:imentos)?\.?|proventos|prov\.?|descont[oa]?s?|desc(?:ontos?)?\.?|l[ií]q(?:uido)?\.?|geral|a\s+(pagar|receber)|empregad[oa]r?)|valor\s+l[ií]quido|l[ií]quido\s+a\s+receber|salario\s+l[ií]quido|s[aá]l[aá]rio\s+l[ií]quido)\b/i;
 
 /**
  * Marcadores de "Total Bruto" no OCR — usados pra cross-validation.
@@ -242,6 +256,14 @@ export const layoutGenericoV1: LayoutHolerite = {
       // `detectarTotalBruto`. Incluí-los como rubricas duplicaria o total.
       if (RE_LINHA_TOTALIZADOR.test(line)) continue;
 
+      // FASE 1.1 — totalizador no MEIO da linha (não ancorado em ^).
+      // OCR colado: "Total Desc 385,75 R$ 2.989,25" ou
+      // "0001 SALARIO 3.500,00 Total Bruto 3.500,00". Continuamos extraindo
+      // a rubrica, mas marcamos `flag_suspeita=true` → classifier força
+      // `incluir=false` para defesa-em-profundidade.
+      const totalizadorInline = !RE_LINHA_TOTALIZADOR.test(line) &&
+        RE_LINHA_TOTALIZADOR_INLINE.test(line);
+
       // Caso 1: linha com código numérico
       const matchCod = line.match(RE_LINHA_RUBRICA_COD);
       if (matchCod) {
@@ -260,6 +282,7 @@ export const layoutGenericoV1: LayoutHolerite = {
           valor_vencimento: cols.valor_vencimento,
           valor_desconto: cols.valor_desconto,
           ordem: rubricasRaw.length,
+          ...(totalizadorInline ? { flag_suspeita: true } : {}),
         });
         continue;
       }
@@ -274,6 +297,12 @@ export const layoutGenericoV1: LayoutHolerite = {
           basesDetectadas.push(nomeTrim);
           continue;
         }
+        // FASE 1.1 — Defesa adicional: se o nome capturado é em si um
+        // totalizador (ex: "Liquido" sozinho seguido de valor), descartar
+        // como rubrica mesmo que a regex de início não tenha pegado.
+        if (RE_LINHA_TOTALIZADOR_INLINE.test(nomeTrim + " 0")) {
+          continue;
+        }
         const cols = classificarColunas(valoresRaw);
         rubricasRaw.push({
           codigo: null,
@@ -282,6 +311,7 @@ export const layoutGenericoV1: LayoutHolerite = {
           valor_vencimento: cols.valor_vencimento,
           valor_desconto: cols.valor_desconto,
           ordem: rubricasRaw.length,
+          ...(totalizadorInline ? { flag_suspeita: true } : {}),
         });
       }
     }

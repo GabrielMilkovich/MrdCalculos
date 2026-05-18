@@ -127,6 +127,11 @@ export function CtpsReviewDialog({
     [faltasParsed, ocrText],
   );
 
+  // FASE 1.5 — qualquer um dos dois sub-componentes (férias/faltas)
+  // bloqueia o CTPS. Não permite parcial.
+  const bloqueadorCtps =
+    confidenceFerias.bloqueador === true || confidenceFaltas.bloqueador === true;
+
   const handleDownload = async () => {
     setDownloading(true);
     try {
@@ -209,6 +214,19 @@ export function CtpsReviewDialog({
               com os 2 CSVs.
             </DialogDescription>
           </DialogHeader>
+
+          {/* FASE 1.5 — banner BLOQUEADOR. Não permite override. */}
+          {bloqueadorCtps && (
+            <div className="border-2 border-red-500 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
+              <div className="font-bold text-red-900 dark:text-red-100">
+                Extração com inconsistência grave — download bloqueado
+              </div>
+              <div className="text-red-800 dark:text-red-200 text-xs">
+                Re-execute o OCR ou corrija manualmente os campos de férias/faltas.
+                Não é possível liberar o download enquanto a extração estiver fundamentalmente quebrada.
+              </div>
+            </div>
+          )}
 
           <Tabs
             value={tab}
@@ -415,9 +433,9 @@ export function CtpsReviewDialog({
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
-                if (conferido && !downloading) void handleDownload();
+                if (conferido && !downloading && !bloqueadorCtps) void handleDownload();
               }}
-              disabled={!conferido || downloading}
+              disabled={!conferido || downloading || bloqueadorCtps}
               className="gap-1.5"
             >
               {downloading ? (
