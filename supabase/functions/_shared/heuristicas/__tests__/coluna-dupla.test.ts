@@ -185,6 +185,15 @@ describe('detectarColunaDuplaPorContagem', () => {
       total: 10,
     });
   });
+
+  it('input degenerado: strings vazias / só whitespace → fração=0', () => {
+    expect(detectarColunaDuplaPorContagem(['', '   ', '\t\n'])).toEqual({
+      detectado: false,
+      fracao: 0,
+      linhasOitoHorarios: 0,
+      total: 3,
+    });
+  });
 });
 
 describe('detectarColunaDupla — salvaguardas combinadas', () => {
