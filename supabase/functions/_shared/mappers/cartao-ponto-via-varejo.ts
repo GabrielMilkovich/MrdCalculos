@@ -94,9 +94,9 @@ function isoFromUtc(d: Date): string {
 
 /**
  * Extrai pares E/S de uma string. Aceita ímpares — último horário sem par
- * vira `{e: 'X', s: ''}`.
+ * vira `{e: 'X', s: ''}`. Função pura — caller decide truncamento.
  */
-function extrairPares(s: string, colunaDupla: boolean): MarcacaoDominio[] {
+function extrairPares(s: string): MarcacaoDominio[] {
   const horas: string[] = [];
   RE_HORA.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -106,12 +106,9 @@ function extrairPares(s: string, colunaDupla: boolean): MarcacaoDominio[] {
     if (h < 0 || h > 23 || min < 0 || min > 59) continue;
     horas.push(`${m[1].padStart(2, '0')}:${m[2]}`);
   }
-  // Coluna dupla "Real vs Previsto": trunca em 4 horas
-  // (1° grupo = batidas reais; 2° grupo = escala prevista, descartada).
-  const horasEfetivas = colunaDupla ? horas.slice(0, 4) : horas;
   const out: MarcacaoDominio[] = [];
-  for (let i = 0; i < horasEfetivas.length; i += 2) {
-    out.push({ e: horasEfetivas[i], s: horasEfetivas[i + 1] ?? '' });
+  for (let i = 0; i < horas.length; i += 2) {
+    out.push({ e: horas[i], s: horas[i + 1] ?? '' });
   }
   return out;
 }
@@ -176,7 +173,15 @@ function processarBloco(
     // rodapé do cartão anterior na mesma linha — caso extremo).
     const idxLabel = linha.search(RE_LINHA_DIA);
     const trechoBatidas = idxLabel >= 0 ? linha.slice(idxLabel) : linha;
-    const marcacoes = extrairPares(trechoBatidas, colunaDupla);
+    const todasMarcacoes = extrairPares(trechoBatidas);
+    // Coluna dupla "Real vs Previsto": mantém apenas o 1° par (4 horas
+    // reais = 2 pares); 2° par é escala prevista, descartado.
+    // Nota: truncamento aqui é em PARES (slice(0,2)); no mapper genérico
+    // o equivalente é em HORAS (slice(0,4)). Mesmo efeito, unidades
+    // diferentes — não confundir.
+    const marcacoes = colunaDupla
+      ? todasMarcacoes.slice(0, 2)
+      : todasMarcacoes;
 
     if ((tipoInfo.tipo === 'dsr' || tipoInfo.tipo === 'feriado') && marcacoes.length === 0) {
       continue; // descanso/feriado sem batida — não exporta
