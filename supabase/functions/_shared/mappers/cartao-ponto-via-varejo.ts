@@ -21,6 +21,9 @@ import type {
   OcorrenciaDominio,
   ParseCartaoPontoResultDominio,
 } from '../tipos-dominio.ts';
+import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
+
+const RE_DATA_BR = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/;
 
 const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v6-2026-05-06';
 
@@ -93,7 +96,7 @@ function isoFromUtc(d: Date): string {
  * Extrai pares E/S de uma string. Aceita ímpares — último horário sem par
  * vira `{e: 'X', s: ''}`.
  */
-function extrairPares(s: string): MarcacaoDominio[] {
+function extrairPares(s: string, colunaDupla: boolean): MarcacaoDominio[] {
   const horas: string[] = [];
   RE_HORA.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -103,9 +106,12 @@ function extrairPares(s: string): MarcacaoDominio[] {
     if (h < 0 || h > 23 || min < 0 || min > 59) continue;
     horas.push(`${m[1].padStart(2, '0')}:${m[2]}`);
   }
+  // Coluna dupla "Real vs Previsto": trunca em 4 horas
+  // (1° grupo = batidas reais; 2° grupo = escala prevista, descartada).
+  const horasEfetivas = colunaDupla ? horas.slice(0, 4) : horas;
   const out: MarcacaoDominio[] = [];
-  for (let i = 0; i < horas.length; i += 2) {
-    out.push({ e: horas[i], s: horas[i + 1] ?? '' });
+  for (let i = 0; i < horasEfetivas.length; i += 2) {
+    out.push({ e: horasEfetivas[i], s: horasEfetivas[i + 1] ?? '' });
   }
   return out;
 }
@@ -147,6 +153,7 @@ function quebrarEmBlocos(texto: string): Array<{
 function processarBloco(
   bloco: { periodo: PeriodoDetectado; trecho: string },
   warnings: string[],
+  colunaDupla: boolean,
 ): ApuracaoDominio[] {
   const apuracoes: ApuracaoDominio[] = [];
   const linhas = bloco.trecho.split(/\r?\n/);
@@ -169,7 +176,7 @@ function processarBloco(
     // rodapé do cartão anterior na mesma linha — caso extremo).
     const idxLabel = linha.search(RE_LINHA_DIA);
     const trechoBatidas = idxLabel >= 0 ? linha.slice(idxLabel) : linha;
-    const marcacoes = extrairPares(trechoBatidas);
+    const marcacoes = extrairPares(trechoBatidas, colunaDupla);
 
     if ((tipoInfo.tipo === 'dsr' || tipoInfo.tipo === 'feriado') && marcacoes.length === 0) {
       continue; // descanso/feriado sem batida — não exporta
@@ -237,10 +244,19 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
     const blocos = quebrarEmBlocos(doc.textoCompleto);
     if (blocos.length === 0) return null;
 
+    // Detecção de coluna dupla "Real vs Previsto" no nível do documento.
+    const linhasComData = doc.textoCompleto
+      .split(/\r?\n/)
+      .filter((l) => RE_DATA_BR.test(l));
+    const colunaDupla = detectarColunaDupla(
+      doc.textoCompleto,
+      linhasComData,
+    ).detectado;
+
     const apuracoes: ApuracaoDominio[] = [];
     const competencias = new Map<string, number>();
     for (const bloco of blocos) {
-      for (const ap of processarBloco(bloco, warnings)) {
+      for (const ap of processarBloco(bloco, warnings, colunaDupla)) {
         apuracoes.push(ap);
         const [yyyy, mm] = ap.data.split('-');
         const k = `${mm}/${yyyy}`;
