@@ -594,3 +594,37 @@ describe("mapperHoleriteViaVarejo — Fix V6.2 (calibração com texto real)", (
     expect(codigosComissoes.length).toBe(1);
   });
 });
+
+// =====================================================
+// Regressão: rodapé jurídico PJe na Camada 3 (Caso B do prompt)
+// =====================================================
+
+describe("mapperCartaoGenerico — rodapé jurídico", () => {
+  it("'Protocolado em DD/MM/YYYY HH:MM:SS' não vira batida no mapper V6", () => {
+    const texto = `Cartão de Ponto - Empresa XYZ
+01/06/2025 Seg 08:00 12:00 13:00 17:00
+09/06/2025 Seg 08:00 12:00 13:00 17:00
+10/06/2025 Ter 08:00 12:00 13:00 17:00
+11/06/2025 Qua 08:00 12:00 13:00 17:00
+12/06/2025 Qui 08:00 12:00 13:00 17:00
+
+Protocolado em 10/06/2025 09:23:15 - Protocolo 1234567`;
+    const doc = docTabularSintetico(texto);
+    const r = mapperCartaoGenerico.mapear(doc);
+    expect(r).not.toBeNull();
+
+    const dia10 = r!.apuracoes.find((a) => a.data === "2025-06-10");
+    expect(dia10).toBeDefined();
+    expect(dia10!.marcacoes).toEqual([
+      { e: "08:00", s: "12:00" },
+      { e: "13:00", s: "17:00" },
+    ]);
+
+    // Nenhuma marcação 09:23 espúria
+    const todas = r!.apuracoes.flatMap((a) => a.marcacoes);
+    for (const m of todas) {
+      expect(m.e).not.toBe("09:23");
+      expect(m.s).not.toBe("09:23");
+    }
+  });
+});
