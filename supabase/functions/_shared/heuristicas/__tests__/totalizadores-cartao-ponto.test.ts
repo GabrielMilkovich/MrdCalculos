@@ -232,6 +232,51 @@ describe('Estratégia 2: label-depois-backtrack', () => {
     expect(r.origem).toBe('label-antes');
     expect(r.confianca).toBe('alta');
   });
+
+  it('refinamento: HH:MM totalizador grande (cronologia volta) aceita', () => {
+    // Cenário: batida real 17:25, depois totalizador 12:30 BCre (banco acumulado)
+    // 12:30 < 17:25 → cronologia indica volta no tempo → totalizador legítimo
+    const linha = '01/03 SEG 08:00 12:00 13:00 17:25 12:30 BCre 5:00 BDeb';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-depois-backtrack');
+    expect(r.confianca).toBe('media');
+    expect(r.parteBatidas).toContain('17:25');
+    expect(r.parteBatidas).not.toContain('12:30'); // 12:30 vai pra parteTotalizadores
+  });
+
+  it('refinamento: HH:MM batida real (cronologia preservada) rejeita', () => {
+    // Cenário: 17:25 BCre — 17:25 É batida real, BCre é palavra de outro contexto
+    // Cronologia: 17:25 > 13:00 (último anterior) → preservada → NÃO totalizador
+    // Estratégia 2 rejeita, cai para estratégia 3
+    const linha = '01/03 SEG 08:00 12:00 13:00 17:25 BCre';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).not.toBe('label-depois-backtrack');
+    // Pode cair em estratégia 1 (BCre como label-antes) ou estratégia 3
+    // O importante: 17:25 NÃO é cortado
+    expect(r.parteBatidas).toContain('17:25');
+  });
+
+  it('refinamento: 1 dígito sempre aceita (totalizador pequeno padrão)', () => {
+    // Cenário canônico do bug original: 1:28 BDeb
+    const linha = '... 17:25 7:25 BCre 1:28 BDeb';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-depois-backtrack');
+    // Usa word boundary para evitar match parcial (17:25 contém "7:25" como substring)
+    expect(r.parteBatidas).not.toMatch(/\b7:25\b/);
+    expect(r.parteBatidas).not.toMatch(/\b1:28\b/);
+    expect(r.parteTotalizadores).toContain('7:25');
+    expect(r.parteTotalizadores).toContain('1:28');
+  });
+
+  it('refinamento: HH:MM sem nada antes (sem cronologia) rejeita conservador', () => {
+    // Cenário degenerado: linha começa com 12:30 BCre — não há cronologia anterior
+    const linha = '12:30 BCre';
+    const r = cortarTotalizadores(linha);
+    // Sem cronologia: rejeita por design (falso-negativo > falso-positivo)
+    // Provavelmente cai em estratégia 1 (BCre como label-antes) com confiança alta
+    // mas o ponto: NÃO usa estratégia 2 sem cronologia válida
+    expect(r.origem).not.toBe('label-depois-backtrack');
+  });
 });
 
 describe('Estratégia 3: posicional', () => {

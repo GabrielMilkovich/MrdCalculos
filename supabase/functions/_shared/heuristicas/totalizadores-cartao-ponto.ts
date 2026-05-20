@@ -102,29 +102,68 @@ function tentarLabelAntes(
 // Estratégia 2: label-depois-backtrack
 // =====================================================
 
-// Regex específica para Estratégia 2 — não reutilizar RE_TOTALIZADORES_LABEL_ANTES.
+// Padrão: valor SEGUIDO de palavra-âncora.
+// Aceita HH:MM (2 dígitos) APENAS se cronologia indica que voltou no tempo
+// (típico de totalizador grande). Aceita H:MM (1 dígito) sempre — totalizador
+// pequeno padrão.
 //
-// DISCRIMINADOR CRÍTICO: o valor antes do label PRECISA ser 1-dígito (`H:MM`).
-// Valores `HH:MM` (2 dígitos) são batidas reais — não totalizadores —
-// e cortá-los antes do label seria falso positivo catastrófico
-// (ex: "17:25 BCre 7:25" — 17:25 é batida, 7:25 é totalizador).
-// Um `H:MM` natural (`7:25`) só ocorre em saldos/durações, nunca em
-// relógio de batida real (que sempre tem `HH:MM` zero-paddado).
-const RE_LABEL_DEPOIS: RegExp[] = [
-  /\b(\d{1}:\d{2})\s+(?:H(?:Ext|CIe|Emb|Norm|Trab)|Ad(?:Not|Diu|Trab)|B(?:Cre|Deb|Co))\b/gi,
-  /\b(\d{1}:\d{2})\s+(?:Descanso|Desconto|Cr[ée]dito|D[ée]bito|Abono|Saldo\s+(?:Banco|BCO|Negativo|Positivo))\b/gi,
-];
+// Discriminador `H:MM` (1 dígito de hora) é sinal de totalizador pequeno
+// padrão. Para totalizadores grandes `HH:MM` (banco acumulado tipo `12:30`),
+// validação adicional por cronologia: aceita match somente se valor < último
+// horário cronológico anterior (voltou no tempo = totalizador).
+// Caso cronologia preservada (ex: `17:25 BCre` após `13:00`), rejeita match
+// e segue cascata para Estratégia 3 (princípio falso-negativo > falso-positivo).
+const RE_PADRAO_AMPLO =
+  /(\d{1,3}):(\d{2})\s+(?:H(?:Ext|CIe|Emb|Norm|Trab)|Ad(?:Not|Diu|Trab)|B(?:Cre|Deb|Co)|Descanso|Desconto|Cr[ée]dito|D[ée]bito|Abono|Saldo\s+(?:Banco|BCO|Negativo|Positivo))\b/gi;
 
 function tentarLabelDepois(linha: string): { idx: number } | null {
-  let menorIdx = -1;
-  for (const re of RE_LABEL_DEPOIS) {
-    re.lastIndex = 0;
-    const m = re.exec(linha);
-    if (m && m.index !== undefined && (menorIdx === -1 || m.index < menorIdx)) {
-      menorIdx = m.index;
+  RE_PADRAO_AMPLO.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  let menorIdxValido = -1;
+
+  // Para validação de cronologia, precisamos saber o "último horário cronológico anterior"
+  // antes da posição do match candidato.
+  while ((m = RE_PADRAO_AMPLO.exec(linha)) !== null) {
+    const matchIdx = m.index;
+    const horaCandidata = parseInt(m[1], 10);
+    const minCandidato = parseInt(m[2], 10);
+    if (horaCandidata < 0 || horaCandidata > 23) continue;
+    if (minCandidato < 0 || minCandidato > 59) continue;
+    const minutoCandidato = horaCandidata * 60 + minCandidato;
+    const umDigito = m[1].length === 1;
+
+    // Regra:
+    // - 1 dígito (H:MM): aceita direto (totalizador pequeno típico)
+    // - 2 dígitos (HH:MM): aceita SE cronologia indica que voltou no tempo
+    //   (totalizador grande tipo "12:30" após batida "17:25")
+    if (umDigito) {
+      if (menorIdxValido === -1 || matchIdx < menorIdxValido) {
+        menorIdxValido = matchIdx;
+      }
+      continue;
     }
+
+    // 2 dígitos — precisa validar cronologia
+    // Extrai TODOS os horários ANTES de matchIdx para encontrar último cronológico
+    const trechoAntes = linha.slice(0, matchIdx);
+    const horariosAntes = extrairHorariosComPosicao(trechoAntes);
+    if (horariosAntes.length === 0) {
+      // Sem horários anteriores → não pode validar cronologia.
+      // Conservador: rejeita (princípio falso-negativo > falso-positivo).
+      continue;
+    }
+    const ultimoAnterior = horariosAntes[horariosAntes.length - 1];
+    const minutoAnterior = ultimoAnterior.hora * 60 + ultimoAnterior.minuto;
+    // Aceita se candidato < anterior (voltou no tempo = totalizador)
+    if (minutoCandidato < minutoAnterior) {
+      if (menorIdxValido === -1 || matchIdx < menorIdxValido) {
+        menorIdxValido = matchIdx;
+      }
+    }
+    // Caso contrário (cronologia preservada): cai pra estratégia 3.
   }
-  return menorIdx === -1 ? null : { idx: menorIdx };
+
+  return menorIdxValido === -1 ? null : { idx: menorIdxValido };
 }
 
 // =====================================================
