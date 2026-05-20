@@ -313,6 +313,31 @@ serve(async (req) => {
       return jsonResponse({ error: "Sem acesso a este documento" }, 403);
     }
 
+    // Idempotência V6/Mistral (Fase 2 v7 — adicionado 2026-05-20):
+    // Se o documento já foi processado uma vez (`parsed_by` populado),
+    // re-invocações ficam cached. Evita reprocessar PDF de 63 pgs (30-60s)
+    // quando operador re-clica OCR. Padrão espelha process-document-mistral.
+    //
+    // Não retorna o resultado completo (parsed jsonb pode ser grande) — só
+    // o sinal de "já feito + qual provider". Consumers que precisam do
+    // resultado leem da tabela direto.
+    //
+    // Pra forçar reprocessamento (admin), usar reprocess-v6 (que tem auth
+    // separada). Não há gate aqui pra "force_reprocess" deliberadamente —
+    // operador comum não deve reprocessar à toa.
+    if (document.parsed_by) {
+      console.log(
+        `[ocr-document] doc ${document_id}: idempotência — parsed_by=${document.parsed_by}, ocr_provider=${document.ocr_provider}, skip V6+Mistral`,
+      );
+      return jsonResponse({
+        success: true,
+        cached: true,
+        provider: document.ocr_provider,
+        parsed_by: document.parsed_by,
+        message: `Documento já processado (${document.parsed_by}) — re-OCR pulado.`,
+      });
+    }
+
     // Idempotência: se já está processando, não duplica.
     if (document.status === "ocr_running") {
       const startedAt = document.processing_started_at
@@ -345,6 +370,29 @@ serve(async (req) => {
     }
     if (!fileUrl) fileUrl = (document.arquivo_url as string | null) ?? null;
     if (!fileUrl) return jsonResponse({ error: "Sem URL de download para o documento" }, 400);
+
+    // Lock anti-race (Fase 2 v7 — adicionado 2026-05-20):
+    // Marca `status='ocr_running' + processing_started_at` ANTES de qualquer
+    // trabalho expensive (V6 ou Mistral). Invocações concorrentes (ex:
+    // DocumentsManager.tsx:332 auto-fire + clique manual do operador) que
+    // carregarem o documento APÓS este update verão o lock no check de
+    // `ocr_running` acima e bouncerão 409. Janela de race ainda existe
+    // (entre load do document e este update) mas reduz drasticamente o
+    // cenário comum de 2 invocações em paralelo.
+    //
+    // Pra Mistral isso já existia (era depois do bloco V6 antes do download).
+    // Movido pra cá pra proteger V6 também — sem isso, 2 V6s em paralelo
+    // produziriam 2 parsed jsonb (last-write-wins) que podem ter pequena
+    // variação por causa de não-determinismo do pdfjs em alguns PDFs.
+    await supabase
+      .from("documents")
+      .update({
+        status: "ocr_running",
+        processing_started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        error_message: null,
+      })
+      .eq("id", document_id);
 
     // =====================================================
     // V6 GEOMETRIC PATH (integrado 2026-05-20 — Fase 2 v7)
@@ -442,16 +490,16 @@ serve(async (req) => {
       `[ocr-document] doc ${document_id}: caminho Mistral — V6 outcome=${v6?.outcome ?? "skipped"}`,
     );
 
-    // Marca em processamento
+    // Inicializa contadores de chunks pro Mistral (status já está
+    // 'ocr_running' do lock anti-race acima — não re-escreve pra evitar
+    // perder o processing_started_at que outras consultas usam pra calcular
+    // STALE_AFTER_MS).
     await supabase
       .from("documents")
       .update({
-        status: "ocr_running",
-        processing_started_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        error_message: null,
         ocr_chunks_total: 1,
         ocr_chunks_done: 0,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", document_id);
 
