@@ -85,6 +85,23 @@ Período 16/12/2022 a 15/01/2023 - Data de emissão 13/08/2024
 17 SAB FOLGA
 `.trim();
 
+// PDF do Roque extraído via pdfjs (V6.2) preserva o texto EXATAMENTE como
+// renderizado, inclusive um ponto literal antes do ":" no header de período
+// ("PERÍODO .:") e o header de tabela como "Cartão Ponto" sem o "de".
+// Diagnóstico de 2026-05-20 (sessão fase 6 v7) — antes do fix, o detector
+// casava só 2 sinais (Via Varejo + CGC) e ficava abaixo do limiar `>=3`,
+// caindo pro mapper genérico. Este caso garante que a regressão não volte.
+const TEXTO_ROQUE_PDFJS_REAL = `
+25/06/2021 Programa de detalhe Fls.: 1
+VIA VAREJO SA Cartão Ponto Página
+33.041.260/0652-90 1
+PERÍODO .: 11/01/2016 A 15/02/2016 Competência: FEVEREIRO/2016
+Empregado: 278823 ROQUE GUERREIRO TEIXEIRA
+Dia 1. Período 2. Período Ocorrências
+11 SEG 08:00 12:00 13:00 17:30
+12 TER 08:00 12:00 13:00 17:30
+`.trim();
+
 const TEXTO_HIBRIDO = `
 VIA VAREJO S/A
 CARTÃO DE PONTO
@@ -121,6 +138,17 @@ describe("mapperCartaoViaVarejo.detectar() — relaxação de formato de períod
   it("Híbrido (Cartão E Espelho presentes) → aplica=true (veto só dispara se Espelho sem Cartão)", () => {
     const det = mapperCartaoViaVarejo.detectar(docSintetico(TEXTO_HIBRIDO));
     expect(det.aplica, `motivos: ${det.motivos.join(" | ")}`).toBe(true);
+  });
+
+  it("Roque PDF real ('PERÍODO .:' + 'Cartão Ponto' sem 'de') → aplica=true [FIX 2026-05-20]", () => {
+    // Reproduz o cenário exato que o diag end-to-end V6 capturou contra o
+    // PDF do Roque. Antes do fix: acertos=2 (Via Varejo + CGC), aplica=false.
+    // Pós-fix: RE_PERIODO aceita "Período .:" e título aceita "Cartão Ponto"
+    // sem "de" → acertos>=4, aplica=true.
+    const det = mapperCartaoViaVarejo.detectar(docSintetico(TEXTO_ROQUE_PDFJS_REAL));
+    expect(det.aplica, `motivos: ${det.motivos.join(" | ")}`).toBe(true);
+    expect(det.motivos.join(" ")).toMatch(/formato Período/i);
+    expect(det.motivos.join(" ")).toMatch(/Cartão de Ponto/i);
   });
 });
 

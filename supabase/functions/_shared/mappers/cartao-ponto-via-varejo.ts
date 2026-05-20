@@ -44,10 +44,18 @@ const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v6-2026-05-06';
 //
 // O nome "dataPontoToUtc" preserva legado (era só dots antes da relaxação
 // de 2026-05-20). Função em si não usa pontos — apenas dá nome ao bind.
+//
+// O `\.?` entre "Período" e o `:` cobre uma peculiaridade observada no
+// PDF do Roque (Via Varejo, fase 6 v7): a string vem como "PERÍODO .:"
+// com ponto literal antes do dois-pontos. Causa exata desconhecida —
+// pode ser quirk de versão do ADP-Web ou artefato da extração pdfjs
+// preservando um caracter que outros extractors normalizariam. É
+// defensivo: não introduz falso-positivo significativo. Descoberto em
+// 2026-05-20 no diagnóstico V6 end-to-end contra o PDF do Roque.
 const RE_PERIODO =
-  /Per[íi]odo\s*:?\s+(\d{2})[./](\d{2})[./](\d{4})\s+[Aa]\s+(\d{2})[./](\d{2})[./](\d{4})/i;
+  /Per[íi]odo\s*\.?\s*:?\s+(\d{2})[./](\d{2})[./](\d{4})\s+[Aa]\s+(\d{2})[./](\d{2})[./](\d{4})/i;
 const RE_PERIODO_GLOBAL =
-  /Per[íi]odo\s*:?\s+(\d{2})[./](\d{2})[./](\d{4})\s+[Aa]\s+(\d{2})[./](\d{2})[./](\d{4})/gi;
+  /Per[íi]odo\s*\.?\s*:?\s+(\d{2})[./](\d{2})[./](\d{4})\s+[Aa]\s+(\d{2})[./](\d{2})[./](\d{4})/gi;
 const RE_LINHA_DIA =
   /\b(\d{1,2})\s+(SEG|TER|QUA|QUI|SEX|SAB|DOM|D\.?S\.?R\.?|FERIADO|FER\.?\s*DESC\.?)\b/i;
 const RE_HORA = /\b(\d{1,2}):(\d{2})\b/g;
@@ -446,7 +454,11 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
       acertos += 2;
       motivos.push('formato Período DD.MM.YYYY');
     }
-    if (/CART[ÃA]O\s+DE\s+PONTO/i.test(t)) {
+    // O "de" é opcional porque PDFs Via Varejo extraídos via pdfjs vêm
+    // como "Cartão Ponto" (sem "de") no header — observado no PDF do
+    // Roque, 2026-05-20. Sem o opcional, o detector perdia esse acerto
+    // e podia cair pro mapper genérico.
+    if (/CART[ÃA]O\s+(?:DE\s+)?PONTO/i.test(t)) {
       acertos++;
       motivos.push('título Cartão de Ponto');
     }
