@@ -321,11 +321,24 @@ export async function persistirPJCAnalysis(
   //
   // Isso garante que, ao importar um .PJC, TODOS os módulos da UI venham
   // preenchidos automaticamente — não só verbas/ocorrências.
+  // Cada upsert de configuração é isolado em seu próprio runStep para que
+  // uma falha em uma tabela (ex: schema desalinhado) NÃO cascateie e bloqueie
+  // as próximas — antes do fix, o try/catch único deixava o caso sem params
+  // e com a importação falsamente marcada como "concluída com sucesso".
+  const runStep = async (label: string, fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+    } catch (stepErr) {
+      const msg = stepErr instanceof Error ? stepErr.message : String(stepErr);
+      warnings.push(`${label}: ${msg}`);
+    }
+  };
+
   try {
     const inputs = convertPjcToEngineInputs(analysis, `pjc-import-${calculoId}`);
 
     // 10.1 Parâmetros gerais (pjecalc_parametros)
-    await svc.upsertParametros({
+    await runStep('Parâmetros', () => svc.upsertParametros({
       case_id: caseId,
       data_admissao: inputs.params.data_admissao,
       data_demissao: inputs.params.data_demissao ?? null,
@@ -340,10 +353,10 @@ export async function persistirPJCAnalysis(
       prescricao_quinquenal: inputs.params.prescricao_quinquenal ?? true,
       prescricao_fgts: inputs.params.prescricao_fgts ?? false,
       projetar_aviso_indenizado: inputs.params.projetar_aviso_indenizado ?? false,
-    } as never);
+    } as never));
 
     // 10.2 Correção / Juros (pjecalc_correcao_config)
-    await svc.upsertCorrecaoConfig({
+    await runStep('Correção/Juros', () => svc.upsertCorrecaoConfig({
       case_id: caseId,
       indice: inputs.correcaoConfig.indice,
       epoca: inputs.correcaoConfig.epoca,
@@ -363,10 +376,10 @@ export async function persistirPJCAnalysis(
       aplicar_juros_fase_pre_judicial: inputs.correcaoConfig.aplicar_juros_fase_pre_judicial,
       base_de_juros_das_verbas: inputs.correcaoConfig.base_de_juros_das_verbas,
       ente_publico: inputs.correcaoConfig.ente_publico,
-    } as never);
+    } as never));
 
     // 10.3 FGTS (pjecalc_fgts_config)
-    await svc.upsertFgtsConfig({
+    await runStep('FGTS', () => svc.upsertFgtsConfig({
       case_id: caseId,
       apurar: inputs.fgtsConfig.apurar,
       destino: inputs.fgtsConfig.destino,
@@ -383,10 +396,10 @@ export async function persistirPJCAnalysis(
       multa_art_467: inputs.fgtsConfig.multa_art_467 ?? false,
       excluir_aviso_multa: inputs.fgtsConfig.excluir_aviso_multa ?? false,
       perdas_monetarias: inputs.fgtsConfig.perdas_monetarias ?? false,
-    } as never);
+    } as never));
 
     // 10.4 Contribuição Social (pjecalc_cs_config)
-    await svc.upsertCsConfig({
+    await runStep('Contribuição Social', () => svc.upsertCsConfig({
       case_id: caseId,
       apurar_segurado: inputs.csConfig.apurar_segurado,
       cobrar_reclamante: inputs.csConfig.cobrar_reclamante,
@@ -402,10 +415,10 @@ export async function persistirPJCAnalysis(
       aliquota_terceiros_fixa: inputs.csConfig.aliquota_terceiros_fixa,
       periodos_simples: inputs.csConfig.periodos_simples ?? [],
       cnae: inputs.csConfig.cnae ?? null,
-    } as never);
+    } as never));
 
     // 10.5 Imposto de Renda (pjecalc_ir_config)
-    await svc.upsertIrConfig({
+    await runStep('IR', () => svc.upsertIrConfig({
       case_id: caseId,
       apurar: inputs.irConfig.apurar,
       incidir_sobre_juros: inputs.irConfig.incidir_sobre_juros ?? false,
@@ -419,10 +432,10 @@ export async function persistirPJCAnalysis(
       deduzir_honorarios: inputs.irConfig.deduzir_honorarios ?? true,
       aposentado_65: inputs.irConfig.aposentado_65 ?? false,
       dependentes: inputs.irConfig.dependentes ?? 0,
-    } as never);
+    } as never));
 
     // 10.6 Honorários (pjecalc_honorarios)
-    await svc.upsertHonorarios({
+    await runStep('Honorários', () => svc.upsertHonorarios({
       case_id: caseId,
       apurar_sucumbenciais: inputs.honorariosConfig.apurar_sucumbenciais,
       percentual_sucumbenciais: inputs.honorariosConfig.percentual_sucumbenciais,
@@ -431,10 +444,10 @@ export async function persistirPJCAnalysis(
       percentual_contratuais: inputs.honorariosConfig.percentual_contratuais,
       valor_fixo: inputs.honorariosConfig.valor_fixo ?? null,
       items: inputs.honorariosConfig.items ?? [],
-    } as never);
+    } as never));
 
     // 10.7 Custas (pjecalc_custas_config)
-    await svc.upsertCustasConfig({
+    await runStep('Custas', () => svc.upsertCustasConfig({
       case_id: caseId,
       apurar: inputs.custasConfig.apurar,
       tipo_custas: inputs.custasConfig.tipo_custas,
@@ -442,10 +455,10 @@ export async function persistirPJCAnalysis(
       valor_informado: inputs.custasConfig.valor_informado ?? null,
       pagar_reclamado: inputs.custasConfig.pagar_reclamado ?? true,
       isento: inputs.custasConfig.isento ?? false,
-    } as never);
+    } as never));
 
     // 10.8 Seguro-Desemprego (pjecalc_seguro_config)
-    await svc.upsertSeguroConfig(caseId, {
+    await runStep('Seguro-Desemprego', () => svc.upsertSeguroConfig(caseId, {
       apurar: inputs.seguroConfig.apurar,
       parcelas: inputs.seguroConfig.parcelas,
       valor_parcela: inputs.seguroConfig.valor_parcela ?? null,
@@ -454,40 +467,43 @@ export async function persistirPJCAnalysis(
       empregado_domestico: (inputs.seguroConfig as Record<string, unknown>).empregado_domestico ?? false,
       tipo_solicitacao: (inputs.seguroConfig as Record<string, unknown>).tipo_solicitacao ?? 'trabalhador_urbano',
       compor_principal: (inputs.seguroConfig as Record<string, unknown>).compor_principal ?? true,
-    });
+    }));
 
     // 10.9 Pensão Alimentícia (pjecalc_pensao_config)
     if (inputs.pensaoConfig) {
-      await svc.upsertPensaoConfig(caseId, {
-        apurar: inputs.pensaoConfig.apurar,
-        percentual: inputs.pensaoConfig.percentual,
-        incidir_sobre_juros: inputs.pensaoConfig.incidir_sobre_juros ?? false,
-        base: inputs.pensaoConfig.base ?? 'liquido',
-        beneficiario: inputs.pensaoConfig.beneficiario ?? '',
-        observacoes: inputs.pensaoConfig.observacoes ?? '',
-        valor_fixo: inputs.pensaoConfig.valor_fixo ?? null,
-      });
+      const pensao = inputs.pensaoConfig;
+      await runStep('Pensão', () => svc.upsertPensaoConfig(caseId, {
+        apurar: pensao.apurar,
+        percentual: pensao.percentual,
+        incidir_sobre_juros: pensao.incidir_sobre_juros ?? false,
+        base: pensao.base ?? 'liquido',
+        beneficiario: pensao.beneficiario ?? '',
+        observacoes: pensao.observacoes ?? '',
+        valor_fixo: pensao.valor_fixo ?? null,
+      }));
     }
 
     // 10.10 Previdência Privada (pjecalc_prev_priv_config)
     if (inputs.prevPrivadaConfig) {
-      await svc.upsertPrevPrivConfig(caseId, {
-        apurar: inputs.prevPrivadaConfig.apurar,
-        percentual: inputs.prevPrivadaConfig.percentual,
-        base_calculo: inputs.prevPrivadaConfig.base_calculo ?? 'diferenca',
-        periodos: (inputs.prevPrivadaConfig as Record<string, unknown>).periodos ?? [],
+      const prev = inputs.prevPrivadaConfig;
+      await runStep('Previdência Privada', () => svc.upsertPrevPrivConfig(caseId, {
+        apurar: prev.apurar,
+        percentual: prev.percentual,
+        base_calculo: prev.base_calculo ?? 'diferenca',
+        periodos: (prev as Record<string, unknown>).periodos ?? [],
         observacao: null,
-      });
+      }));
     }
 
     // 10.11 Salário-Família (pjecalc_salario_familia_config)
     if (inputs.salarioFamiliaConfig) {
-      await svc.upsertSalarioFamiliaConfig(caseId, {
-        apurar: inputs.salarioFamiliaConfig.apurar,
-        numero_filhos: inputs.salarioFamiliaConfig.numero_filhos,
-        filhos_detalhes: inputs.salarioFamiliaConfig.filhos_detalhes ?? [],
+      const sf = inputs.salarioFamiliaConfig;
+      await runStep('Salário-Família', () => svc.upsertSalarioFamiliaConfig(caseId, {
+        apurar: sf.apurar,
+        numero_filhos: sf.numero_filhos,
+        filhos_detalhes: sf.filhos_detalhes ?? [],
         observacoes: '',
-      });
+      }));
     }
 
     // 10.12 Multas CLT / Indenizações (pjecalc_multas_config).
@@ -495,7 +511,7 @@ export async function persistirPJCAnalysis(
     // com defaults seguros. As multas 467/477 são inferidas pelo usuário
     // via UI (ModuloMultasCLT). Preserva o registro existente caso haja.
     const multasRaw = (analysis as unknown as { multas?: Record<string, unknown> }).multas;
-    await svc.upsertMultasConfig(caseId, {
+    await runStep('Multas CLT', () => svc.upsertMultasConfig(caseId, {
       apurar_467: Boolean(multasRaw?.apurar_467),
       apurar_477: Boolean(multasRaw?.apurar_477),
       valor_467: (multasRaw?.valor_467 as number) ?? 0,
@@ -503,9 +519,12 @@ export async function persistirPJCAnalysis(
       valor_477_informado: (multasRaw?.valor_477_informado as number | null) ?? null,
       observacoes: '',
       multas_indenizacoes: (multasRaw?.items as unknown[]) ?? [],
-    });
+    }));
   } catch (cfgErr) {
-    warnings.push(`Configurações: ${cfgErr instanceof Error ? cfgErr.message : String(cfgErr)}`);
+    // Só captura erros de conversão (convertPjcToEngineInputs). Os upserts
+    // individuais agora são isolados por runStep — falhas viram warnings
+    // específicos e não bloqueiam os steps subsequentes.
+    warnings.push(`Conversão PJC→Engine: ${cfgErr instanceof Error ? cfgErr.message : String(cfgErr)}`);
   }
 
   return {
