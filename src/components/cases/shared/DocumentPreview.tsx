@@ -66,7 +66,7 @@ export function DocumentPreview({
           <a
             href={url}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="text-xs underline text-muted-foreground hover:text-foreground"
           >
             Nova aba

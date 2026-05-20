@@ -338,7 +338,7 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
                   Documento original
                 </span>
                 {pdfUrl && (
-                  <a href={pdfUrl} target="_blank" rel="noreferrer" className="text-xs underline text-muted-foreground hover:text-foreground">
+                  <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="text-xs underline text-muted-foreground hover:text-foreground">
                     Abrir em nova aba
                   </a>
                 )}

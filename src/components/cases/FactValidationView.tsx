@@ -1424,7 +1424,7 @@ export function FactValidationView({
                       size="sm"
                       className="gap-2"
                     >
-                      <a href={selectedDocUrl} target="_blank" rel="noreferrer">
+                      <a href={selectedDocUrl} target="_blank" rel="noopener noreferrer">
                         <ExternalLink className="h-4 w-4" />
                         Abrir em nova aba
                       </a>
