@@ -46,6 +46,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ReviewLayout } from "./ReviewLayout";
+import { V6FallbackBanner } from "./V6FallbackBanner";
 import {
   buildCartaoPontoZipWithReport,
   logCsvExport,
@@ -673,6 +674,8 @@ export function CartaoPontoReviewDialog({
           : confidence.bloqueador_motivo
       }
     >
+      {/* Fase 5 v7 — banner V6 fallback (amarelo, informativo) */}
+      <V6FallbackBanner documentId={_documentId} />
       {/* Fase 4 v7 — banner de reconciliação divergente (vermelho, BLOQUEIA) */}
       {bloqueadoPorReconciliacao && (
         <div className="mx-3 mt-2 border-2 border-red-500 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-2">
