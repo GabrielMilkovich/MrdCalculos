@@ -113,6 +113,54 @@ function classificarTipoDia(token: string): {
   return { tipo: 'normal', diaSemana: token.toUpperCase() };
 }
 
+/**
+ * Classifica o motivo de um afastamento (linha "AFAST X X" no pdfjs) em
+ * uma das categorias estruturadas. Cobre os casos observados no PDF do
+ * Roque (Fase 6 v7, 2026-05-20):
+ *   - "Férias" → FERIAS
+ *   - "Suspensão Contrato de Trabalho" → SUSPENSAO_CONTRATO (MP 936/Lei 14.020)
+ *   - "Atestado Médico" (variantes) → ATESTADO_MEDICO
+ *   - "Falta Justificada" → FALTA_JUSTIFICADA
+ *   - "Falta" (sem qualifier) → FALTA_INJUSTIFICADA
+ *   - qualquer outro → OUTRO (texto raw preservado em `motivo` no caller)
+ *
+ * Retorna também `textoBruto` — o que veio do PDF, em "Title Case" pra UI
+ * humana ("Suspensão Contrato de Trabalho" e não "SUSPENSÃO CONTRATO DE TRABALHO").
+ */
+function classificarAfastamento(trechoAposLabel: string): {
+  categoria:
+    | 'FERIAS'
+    | 'SUSPENSAO_CONTRATO'
+    | 'ATESTADO_MEDICO'
+    | 'FALTA_JUSTIFICADA'
+    | 'FALTA_INJUSTIFICADA'
+    | 'OUTRO';
+  textoBruto: string;
+} {
+  // Captura o texto após "AFAST" até o fim da linha ou repetição.
+  // pdfjs costuma duplicar o motivo ("AFAST Férias Férias") — pegamos
+  // a primeira ocorrência limpando duplicatas adjacentes.
+  const afastMatch = trechoAposLabel.match(
+    /\bAFAST\b\s+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ0-9\s\/\.\-]+?)(?=\s{2,}|\s*$|\s+\d{1,2}:\d{2}|\s+AFAST\b)/i,
+  );
+  let textoBruto = afastMatch ? afastMatch[1].trim() : 'AFAST (motivo não identificado)';
+  // pdfjs duplica: "Férias Férias" → "Férias". Detecta e remove duplicação adjacente.
+  const meio = Math.floor(textoBruto.length / 2);
+  const primeiraMetade = textoBruto.slice(0, meio).trim();
+  const segundaMetade = textoBruto.slice(meio).trim();
+  if (primeiraMetade && primeiraMetade.toLowerCase() === segundaMetade.toLowerCase()) {
+    textoBruto = primeiraMetade;
+  }
+
+  const lower = textoBruto.toLowerCase();
+  if (/\bf[ée]rias\b/i.test(lower)) return { categoria: 'FERIAS', textoBruto };
+  if (/suspens[ãa]o.*contrato/i.test(lower)) return { categoria: 'SUSPENSAO_CONTRATO', textoBruto };
+  if (/atestado.*m[ée]dico/i.test(lower)) return { categoria: 'ATESTADO_MEDICO', textoBruto };
+  if (/falta.*justificad/i.test(lower)) return { categoria: 'FALTA_JUSTIFICADA', textoBruto };
+  if (/falta/i.test(lower)) return { categoria: 'FALTA_INJUSTIFICADA', textoBruto };
+  return { categoria: 'OUTRO', textoBruto };
+}
+
 interface PeriodoDetectado {
   inicio: Date;
   fim: Date;
@@ -292,8 +340,8 @@ function processarBloco(
     // "DOM" (dia-semana) como label, mas a ocorrência real é DSR (token
     // presente no resto da linha). Só sobrescreve quando não há batidas
     // (linha de jornada normal nunca tem token "DSR"/"FERIADO" pendurado).
+    const trechoAposLabel = idxLabel >= 0 ? linha.slice(idxLabel + m[0].length) : '';
     if (tipoInfo.tipo === 'normal' && marcacoes.length === 0) {
-      const trechoAposLabel = idxLabel >= 0 ? linha.slice(idxLabel + m[0].length) : '';
       if (/\bD\.?S\.?R\.?\b/i.test(trechoAposLabel)) {
         tipoInfo = { tipo: 'dsr', diaSemana: tipoInfo.diaSemana };
       } else if (/\bFERIADO\b/i.test(trechoAposLabel)) {
@@ -312,6 +360,26 @@ function processarBloco(
       });
       continue;
     }
+
+    // Afastamentos (Férias, MP 936/Lei 14.020, Atestado, Falta) — pdfjs
+    // entrega linhas tipo "30/04/2020 QUI 997 N AFAST Suspensão Contrato
+    // de Trabalho Suspensão Contrato de Trabalho". Têm o token "AFAST" e
+    // o motivo (Férias/Suspensão/Atestado) no resto da linha. Sem batida
+    // pra exportar, mas precisam de rastro estruturado (PJe-Calc trata
+    // cada tipo de afastamento de forma diferente — suspensão MP 936 ≠
+    // férias ≠ atestado ≠ falta).
+    if (tipoInfo.tipo === 'normal' && marcacoes.length === 0 && /\bAFAST\b/i.test(trechoAposLabel)) {
+      const motivoAfastamento = classificarAfastamento(trechoAposLabel);
+      diasDescartados.push({
+        data: isoFromUtc(data),
+        dia_semana: tipoInfo.diaSemana,
+        ocorrencia: 'AFASTAMENTO',
+        motivo: `Afastamento: ${motivoAfastamento.textoBruto}`,
+        motivo_afastamento: motivoAfastamento.categoria,
+      });
+      continue;
+    }
+
     if (tipoInfo.tipo === 'normal' && marcacoes.length === 0) continue;
 
     let ocorrencia: OcorrenciaDominio = 'NORMAL';
@@ -363,9 +431,33 @@ function processarBloco(
  * Cérebro humano observar que 9081 (feriado trabalhado) é comum em PDFs
  * ADP-Web Via Varejo reais — sem ele, todo dia de feriado trabalhado vira
  * "batidas > declarado" → falsa divergência → bloqueio de export errado.
+ *
+ * EXPANSÃO 2 — 2026-05-20 (Fase 6 v7, pós-diagnóstico Roque): adicionados
+ * 3 códigos que aparecem nos rodapés com tempo bruto trabalhado em casos
+ * fora da jornada padrão. Sem eles, 7 períodos do Roque tinham delta >10h
+ * (parser somava batidas reais, mas declarado=9000+9080 não cobria as
+ * horas extras especiais):
+ *   - `3884 Horas Trabalhadas Feriado/DS` — horas BRUTAS em feriado/DSR
+ *     (não confundir com `8865 FERIADO/DSR` que é o benefício pago, não
+ *     o tempo trabalhado).
+ *   - `7338 HORAS EXTRAS 75% - INTERVALO` — HE por intrajornada não
+ *     respeitada.
+ *   - `7358 Horas Extras DSR/Feriado 0%` — HE em DSR/feriado SEM
+ *     adicional (já compensado via banco de horas).
+ *
+ * NÃO inclui (por design — não são tempo trabalhado):
+ *   - `3960 Adicional Sábado 25%` — adicional percentual, não tempo bruto
+ *   - `8865 FERIADO/DSR` — feriado pago sem trabalho
+ *   - `7863/7864 Quantid` — quantidades (dias), não tempo
+ *   - `7361/7489/7490 Saldo Banco` — saldos do banco de horas, não tempo
+ *     trabalhado naquele período
+ *   - `8875 DIAS TRABALHADOS - SABADOS` — quantidade de dias, não tempo
+ *
+ * Char class do label expandido pra `\/` (cobre "DSR/Feriado") e `-`
+ * (cobre "75% - INTERVALO").
  */
 const RE_TOTALIZADOR_TEMPO =
-  /\b(9000|908[0-9])\s+([A-Za-zÀ-ÿ0-9%\.\s]+?)\s+(\d{1,4}):(\d{2})(?=\s|$)/g;
+  /\b(9000|908[0-9]|3884|7338|7358)\s+([A-Za-zÀ-ÿ0-9%\.\s\/\-]+?)\s+(\d{1,4}):(\d{2})(?=\s|$)/g;
 
 function hhmmToMin(h: string, m: string): number {
   return parseInt(h, 10) * 60 + parseInt(m, 10);
@@ -621,12 +713,14 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
       }
     }
 
-    if (final.length === 0) {
+    if (final.length === 0 && diasDescartados.length === 0) {
       warnings.push(
-        `Detectados ${blocos.length} blocos Via Varejo mas nenhuma apuração extraída.`,
+        `Detectados ${blocos.length} blocos Via Varejo mas nenhuma apuração nem descarte extraídos.`,
       );
       return null;
     }
+    // Quando só há descartes (período inteiro de férias/afastamento), retorna
+    // resultado válido com apuracoes=[] — caller decide o que fazer.
 
     // reconciliacao_geral_ok: true se TODOS os períodos têm ok=true.
     // Importante: períodos com declarado=null (totalizador ausente) também

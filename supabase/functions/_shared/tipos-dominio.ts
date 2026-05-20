@@ -111,8 +111,26 @@ export interface ParseCartaoPontoResultDominio {
   dias_classificados_descartados?: Array<{
     data: string;
     dia_semana: string;
-    ocorrencia: 'DSR' | 'FERIADO';
+    ocorrencia: 'DSR' | 'FERIADO' | 'AFASTAMENTO';
+    /**
+     * Texto humano do motivo (ex: "DSR sem batida — não exportado",
+     * "Afastamento: Férias", "Afastamento: Suspensão Contrato de Trabalho").
+     */
     motivo: string;
+    /**
+     * Subcategoria estruturada quando ocorrencia='AFASTAMENTO'. Permite UI
+     * resumir "X dias de férias, Y dias suspensão MP 936" sem regex sobre
+     * texto livre. undefined pra DSR/FERIADO. 'OUTRO' quando o texto do PDF
+     * não casa nenhum dos padrões conhecidos (capturamos o texto raw em
+     * `motivo` pra futura calibração).
+     */
+    motivo_afastamento?:
+      | 'FERIAS'
+      | 'SUSPENSAO_CONTRATO'
+      | 'ATESTADO_MEDICO'
+      | 'FALTA_JUSTIFICADA'
+      | 'FALTA_INJUSTIFICADA'
+      | 'OUTRO';
   }>;
 }
 

@@ -248,3 +248,110 @@ Período 16.02.2016 A 15.03.2016
     expect(resultado!.apuracoes[1].data).toBe("2016-02-17");
   });
 });
+
+// =============================================================================
+// Fase 6 v7 ext — AFASTAMENTO estruturado (item 2 da revisão do crítico)
+// =============================================================================
+
+const TEXTO_AFAST_ROQUE = `
+VIA VAREJO SA 33.041.260/0652-90 Cartão Ponto
+PERÍODO .: 16/04/2020 A 15/05/2020 Competência: MAIO/2020
+Empregado: 278823 ROQUE GUERREIRO TEIXEIRA
+Data Dia Horário Ref P Horário Registrado Horário de Trabalho
+30/04/2020 QUI 997 N AFAST Suspensão Contrato de Trabalho Suspensão Contrato de Trabalho
+01/05/2020 SEX 997 N AFAST Suspensão Contrato de Trabalho Suspensão Contrato de Trabalho
+05/05/2020 TER 997 N AFAST Férias Férias
+11/05/2020 SEG 162 N AFAST Atestado Médico Atestado Médico
+12/05/2020 TER 162 N AFAST Falta Justificada Falta Justificada
+13/05/2020 QUA 162 N AFAST Falta Falta
+Assinado eletronicamente por: TATIANE - 30/11/2021 16:15:52
+`.trim();
+
+describe("AFASTAMENTO — rastro estruturado de dias com AFAST (item 2 revisão crítico)", () => {
+  it("Suspensão Contrato (MP 936) → categoria SUSPENSAO_CONTRATO", () => {
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(TEXTO_AFAST_ROQUE));
+    expect(resultado!.dias_classificados_descartados).toBeDefined();
+    const ds = resultado!.dias_classificados_descartados!;
+    const susp = ds.find((d) => d.data === "2020-04-30");
+    expect(susp, "30/04/2020 deveria estar rastreado").toBeDefined();
+    expect(susp!.ocorrencia).toBe("AFASTAMENTO");
+    expect(susp!.motivo_afastamento).toBe("SUSPENSAO_CONTRATO");
+    expect(susp!.motivo).toMatch(/Suspens.o Contrato/i);
+  });
+
+  it("Férias → categoria FERIAS", () => {
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(TEXTO_AFAST_ROQUE));
+    const ferias = resultado!.dias_classificados_descartados!.find((d) => d.data === "2020-05-05");
+    expect(ferias).toBeDefined();
+    expect(ferias!.motivo_afastamento).toBe("FERIAS");
+  });
+
+  it("Atestado Médico → categoria ATESTADO_MEDICO", () => {
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(TEXTO_AFAST_ROQUE));
+    const at = resultado!.dias_classificados_descartados!.find((d) => d.data === "2020-05-11");
+    expect(at).toBeDefined();
+    expect(at!.motivo_afastamento).toBe("ATESTADO_MEDICO");
+  });
+
+  it("Falta Justificada vs Falta Injustificada — categorias distintas", () => {
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(TEXTO_AFAST_ROQUE));
+    const fj = resultado!.dias_classificados_descartados!.find((d) => d.data === "2020-05-12");
+    const fi = resultado!.dias_classificados_descartados!.find((d) => d.data === "2020-05-13");
+    expect(fj?.motivo_afastamento).toBe("FALTA_JUSTIFICADA");
+    expect(fi?.motivo_afastamento).toBe("FALTA_INJUSTIFICADA");
+  });
+
+  it("AFASTAMENTO não vai pra apuracoes (CSV PJe-Calc não precisa)", () => {
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(TEXTO_AFAST_ROQUE));
+    // Nenhum dia AFAST deveria ter virado apuração exportável.
+    const datasAfast = ["2020-04-30", "2020-05-01", "2020-05-05", "2020-05-11", "2020-05-12", "2020-05-13"];
+    for (const d of datasAfast) {
+      const ap = resultado!.apuracoes.find((a) => a.data === d);
+      expect(ap, `${d} (AFAST) NÃO deve aparecer em apuracoes`).toBeUndefined();
+    }
+  });
+});
+
+// =============================================================================
+// Fase 6 v7 ext — Família de totalizadores expandida (item 3 revisão crítico)
+// =============================================================================
+
+const TEXTO_TOTALIZADORES_EXPANDIDOS = `
+VIA VAREJO SA 33.041.260/0652-90 Cartão Ponto
+PERÍODO .: 16/10/2019 A 15/11/2019 Competência: NOVEMBRO/2019
+Data Dia Horário Ref P Horário Registrado Horário de Trabalho
+16/10/2019 QUA 162 N 09:00 12:00 13:05 17:25
+Movimentos: (Período de 16/10/2019 a 15/11/2019)
+3884 Horas Trabalhadas Feriado/DS 11:25 | 7338 HORAS EXTRAS 75% - INTERVALO 0:02 |
+7358 Horas Extras DSR/Feriado 0% 7:14 9000 Horas Normais 183:20 9080 Horas Extras 75% 2:51
+9192 SD Atual Banco 75% 7:16
+Assinado eletronicamente por: TATIANE - 30/11/2021
+`.trim();
+
+describe("Reconciliação — família de totalizadores expandida (item 3 revisão crítico)", () => {
+  it("3884 (Horas Trabalhadas Feriado/DS) é somado ao declarado", () => {
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(TEXTO_TOTALIZADORES_EXPANDIDOS));
+    expect(resultado!.reconciliacao).toBeDefined();
+    const rec = resultado!.reconciliacao![0];
+    // declarado = 9000 (183:20) + 9080 (2:51) + 3884 (11:25) + 7338 (0:02) + 7358 (7:14)
+    // = 183:20 + 2:51 + 11:25 + 0:02 + 7:14 = 204:52
+    const esperadoMin = 183 * 60 + 20 + 2 * 60 + 51 + 11 * 60 + 25 + 0 * 60 + 2 + 7 * 60 + 14;
+    expect(rec.declarado_minutos, `motivo: ${rec.motivo}`).toBe(esperadoMin);
+    // detalhes devem listar TODOS os 5 códigos
+    expect(rec.motivo).toMatch(/9000=/);
+    expect(rec.motivo).toMatch(/9080=/);
+    expect(rec.motivo).toMatch(/3884=/);
+    expect(rec.motivo).toMatch(/7338=/);
+    expect(rec.motivo).toMatch(/7358=/);
+  });
+
+  it("3960 (Adicional Sábado 25%) NÃO é somado — é adicional %, não tempo trabalhado", () => {
+    const textoComAdicional = TEXTO_TOTALIZADORES_EXPANDIDOS.replace(
+      "9000 Horas Normais 183:20",
+      "3960 Adicional Sábado 25% 21:39 9000 Horas Normais 183:20",
+    );
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(textoComAdicional));
+    const rec = resultado!.reconciliacao![0];
+    expect(rec.motivo, `motivo: ${rec.motivo}`).not.toMatch(/3960=/);
+  });
+});
