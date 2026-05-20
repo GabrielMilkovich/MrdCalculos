@@ -166,6 +166,70 @@ PERÍODO: 11/01/2016 A 15/02/2016
     expect(Math.abs(r!.reconciliacao![0].delta_minutos)).toBeLessThanOrEqual(5);
   });
 
+  it("período com 9081 (horas extras 100% — feriado trabalhado) entra na soma", () => {
+    // Cenário comum em loja Via Varejo: cliente trabalha o domingo/feriado.
+    // Esse tempo é declarado em 9081 (extras 100%), separado de 9080 (extras
+    // 75% dia útil). Sem 9081 no regex, batidas do feriado virariam delta
+    // negativo grande → falsa divergência → bloqueio de export errado.
+    //
+    // Setup: 4 dias normais (32h) + 1 dia feriado trabalhado (8h)
+    //   Sum batidas = 4 × (08:00→12:00 + 13:00→17:00) + 1 × (08:00→12:00 + 13:00→17:00) = 5 × 8h = 40h
+    //   Declarado: 9000=32:00 + 9081=8:00 = 40:00
+    //   Delta=0 → ok=true
+    const txt = `
+VIA VAREJO S/A
+CARTÃO DE PONTO
+PERÍODO: 01/04/2018 A 30/04/2018
+01 SEG 08:00 12:00 13:00 17:00
+02 TER 08:00 12:00 13:00 17:00
+03 QUA 08:00 12:00 13:00 17:00
+04 QUI 08:00 12:00 13:00 17:00
+21 SAB 08:00 12:00 13:00 17:00
+9000 Horas Normais 32:00
+9081 Horas Extras 100% 8:00
+`.trim();
+    const r = mapperCartaoViaVarejo.mapear(docSintetico(txt));
+    expect(r).not.toBeNull();
+    expect(r!.reconciliacao).toHaveLength(1);
+    const p = r!.reconciliacao![0];
+    expect(p.declarado_minutos).toBe(2400); // 32:00 + 8:00 = 40:00 = 2400min
+    expect(p.somado_minutos).toBe(2400);
+    expect(p.delta_minutos).toBe(0);
+    expect(p.ok).toBe(true);
+    expect(p.motivo).toMatch(/9000=32:00/i);
+    expect(p.motivo).toMatch(/9081=8:00/i);
+  });
+
+  it("códigos 9024 (Férias), 9012 (Falta), 9050 (DSR) NÃO entram na soma — semântica", () => {
+    // Cenário antagonista pro override do template (que sugeria incluir
+    // 9024/9012/9050). Se incluíssemos, esse teste FALHARIA com
+    // delta artificial grande. Mantemos fora.
+    //
+    // Setup: 2 dias normais (16h) declarados em 9000=16:00. Período TAMBÉM
+    // tem 9024 Férias 8:00 (rumor de período de férias do colaborador,
+    // sem batidas). Soma batidas só pega os 16h. Declarado deve ser 16:00,
+    // NÃO 24:00. Reconciliação OK.
+    const txt = `
+VIA VAREJO S/A
+CARTÃO DE PONTO
+PERÍODO: 01/03/2019 A 31/03/2019
+01 SEX 08:00 12:00 13:00 17:00
+02 SAB 08:00 12:00 13:00 17:00
+9000 Horas Normais 16:00
+9024 Férias 8:00
+9012 Falta Justificada 4:00
+9050 DSR 8:00
+`.trim();
+    const r = mapperCartaoViaVarejo.mapear(docSintetico(txt));
+    expect(r).not.toBeNull();
+    const p = r!.reconciliacao![0];
+    // Só 9000 conta. 9024/9012/9050 são tempo NÃO-trabalhado, ignorados.
+    expect(p.declarado_minutos).toBe(960); // 16:00 = 960min
+    expect(p.somado_minutos).toBe(960);
+    expect(p.delta_minutos).toBe(0);
+    expect(p.ok).toBe(true);
+  });
+
   it("delta de exatamente 6min (limite + 1) já é ok=false", () => {
     // 4 dias × 8:30 = 34:00 = 2040min. Declara 33:54 = 2034min. delta=+6min.
     const txt = `

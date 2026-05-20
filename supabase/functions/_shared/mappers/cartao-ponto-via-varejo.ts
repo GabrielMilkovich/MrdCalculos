@@ -239,22 +239,35 @@ function processarBloco(
 /**
  * Códigos de totalizadores Via Varejo que somam tempo TRABALHADO no período:
  *   - 9000 Horas Normais (jornada regular)
- *   - 9080 Horas Extras 75% (adicional sobre regular)
+ *   - 9080 Horas Extras 75% (adicional dia útil)
+ *   - 9081 Horas Extras 100% (feriado trabalhado, domingo)
+ *   - 9082-9089 outras variantes da família 908x (defensivo)
  *
- * Outros códigos comuns (9024 Férias, 9012, 9050) NÃO entram na soma de
- * batidas — são afastamentos/eventos, não tempo de jornada. Detectados pra
- * referência futura mas excluídos do cálculo de delta.
+ * Por que NÃO inclui 9024 (Férias), 9012 (Falta Justificada), 9050 (DSR):
+ * esses são tempo NÃO-TRABALHADO. Férias/falta/DSR não têm batidas. Somar
+ * a `declarado_minutos` produziria falsa divergência em TODO PDF com
+ * férias/faltas/DSR no período (declarado=somado_batidas + tempo_off,
+ * batidas só somam tempo_worked → delta artificialmente grande).
  *
- * Regex: aceita "9000 Horas Normais 183:20", "9080 Horas Extras 75% 5:17",
- * "9000 H. Normais 12:30" etc. Label não-greedy entre código e HH:MM.
+ * Por que NÃO inclui 9090/9091: códigos sem semântica confirmada pra Via
+ * Varejo. Adicionar quando aparecerem em PDF real (Fase 6 com Roque vai
+ * sinalizar se tiver).
+ *
+ * Regex: aceita "9000 Horas Normais 183:20", "9081 Horas Extras 100% 8:00",
+ * "9080 Horas Extras 75% 3:00". Label não-greedy entre código e HH:MM.
  *
  * IMPORTANTE: char class do label INCLUI dígitos `0-9` porque "9080 Horas
  * Extras 75% 3:00" tem "75%" no meio. Sem 0-9 na classe, label seria
  * cortada em "Horas Extras " e o regex falharia. Lookahead `(?=\s|$)`
  * depois de HH:MM ancora pra não casar pedaço de número maior.
+ *
+ * EXPANSÃO 2026-05-20: era `(9000|9080)`. Família 908x foi ampliada após
+ * Cérebro humano observar que 9081 (feriado trabalhado) é comum em PDFs
+ * ADP-Web Via Varejo reais — sem ele, todo dia de feriado trabalhado vira
+ * "batidas > declarado" → falsa divergência → bloqueio de export errado.
  */
 const RE_TOTALIZADOR_TEMPO =
-  /\b(9000|9080)\s+([A-Za-zÀ-ÿ0-9%\.\s]+?)\s+(\d{1,4}):(\d{2})(?=\s|$)/g;
+  /\b(9000|908[0-9])\s+([A-Za-zÀ-ÿ0-9%\.\s]+?)\s+(\d{1,4}):(\d{2})(?=\s|$)/g;
 
 function hhmmToMin(h: string, m: string): number {
   return parseInt(h, 10) * 60 + parseInt(m, 10);
@@ -294,8 +307,15 @@ function extrairMinutosDeclarados(trecho: string): {
 /**
  * Soma TODOS os pares (saída-entrada) das marcações de um conjunto de
  * apurações. Pares com saída antes da entrada (turno noturno cruzando
- * meia-noite OU artifact de extração) são ignorados — não invertemos
- * porque jornada noturna NÃO é o padrão Via Varejo cartão antigo.
+ * meia-noite OU artifact de extração) são ignorados.
+ *
+ * SUPOSIÇÃO TESTÁVEL: Via Varejo cartão antigo é padrão lojista/comercial
+ * (jornada 08-18 com intervalo). Jornadas cruzando meia-noite (segurança
+ * 22h-06h, limpeza noturna) NÃO são vistas neste mapper. Se aparecer
+ * cliente com turno noturno legítimo, a soma fica subdimensionada e a
+ * reconciliação flagar divergência sem motivo real — refinamento futuro
+ * exige detectar "virada de meia-noite" via flag explícita do parser
+ * (similar a `e_inserida` que já existe pro caso de batida manual).
  */
 function somarBatidas(apuracoes: readonly ApuracaoDominio[]): number {
   let total = 0;
