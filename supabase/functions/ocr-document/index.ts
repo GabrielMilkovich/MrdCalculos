@@ -1,14 +1,20 @@
 // =====================================================
 // ocr-document — versão simplificada (match n8n workflow)
 // =====================================================
-// Mimics o fluxo do n8n que funciona em produção:
+// Pipeline atual (pós-Fase 2 v7, 2026-05-20):
+//   0. **V6 geométrico (tentado ANTES do Mistral pra PDF)**:
+//      - extrairGeometrico (unpdf + pdfjs)
+//      - escolherMapper (Via Varejo / Genérico / outros)
+//      - Se mapper sucesso → persiste parsed jsonb + retorna SEM Mistral
+//      - Se mapper falha → telemetria gravada em metadata.v6_*, cai pro Mistral
 //   1. POST /v1/files (upload PDF/imagem)        → file_id
 //   2. GET  /v1/files/{id}/url                   → signed URL Mistral
 //   3. POST /v1/ocr  { document_url: ... }       → resultado
 //   4. DELETE /v1/files/{id}                     (cleanup, best-effort)
 //
 // Diferente da versão anterior: SEM splitting, SEM parallel chunks, SEM
-// retryWeakPages, SEM native PDF extraction, SEM EdgeRuntime.waitUntil.
+// retryWeakPages, **COM V6 native PDF extraction (integrada 2026-05-20)**,
+// SEM EdgeRuntime.waitUntil.
 // Síncrono — handler não retorna até o OCR completar (Mistral leva 5-15s
 // na média; edge timeout é 150s, com folga 10x).
 //
@@ -29,6 +35,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { ocrBytes, runOcr, type MistralOcrOptions } from "../_shared/mistral-ocr.ts";
 import { checkRateLimit } from "../_shared/rate-limit.ts";
+import { tentarV6, metadataV6, type V6Tentativa } from "../_shared/v6-pipeline.ts";
 
 // Audit-fix S3 — limite GLOBAL por usuário (Mistral API é paga).
 // 100 chamadas/h é folgado para uso real (~3 docs/min sustained) e segura
@@ -338,6 +345,102 @@ serve(async (req) => {
     }
     if (!fileUrl) fileUrl = (document.arquivo_url as string | null) ?? null;
     if (!fileUrl) return jsonResponse({ error: "Sem URL de download para o documento" }, 400);
+
+    // =====================================================
+    // V6 GEOMETRIC PATH (integrado 2026-05-20 — Fase 2 v7)
+    // =====================================================
+    // Tenta extração geométrica nativa via pdfjs ANTES do Mistral OCR.
+    //   - Sucesso: persiste `parsed` jsonb + retorna sem chamar Mistral
+    //     (economiza cota Mistral + zero latência da API externa).
+    //   - Falha: telemetria gravada em `metadata.v6_*`, fluxo Mistral
+    //     abaixo roda exatamente como antes (zero regressão).
+    //
+    // Antes desta integração, 91% dos uploads (42/46 dos últimos 90 dias)
+    // pulavam V6 e iam direto pro Mistral, gerando CSVs ruins em
+    // documentos text-native como o do Roque Guerreiro (Via Varejo
+    // pós-2018). Diagnóstico empírico no banco confirmou.
+    //
+    // TODO 2026-05-20 (Risco 3 da Fase 0): ImportadorFichaFinanceira.tsx:96
+    // e CTPSUploader.tsx:72 chamam esta função com body `{ storage_path,
+    // mime_type }` em vez de `{ document_id }`. Investigação empírica
+    // (paths característicos no banco) confirma que esses 2 callers NÃO
+    // produzem rows em `documents` hoje. Duas leituras possíveis:
+    //   (a) Componentes BROKEN — sempre 400 silenciosamente, operador
+    //       desiste e usa DocumentsManager (caminho com document_id).
+    //   (b) Componentes DESIGN DIFERENTE — fazem upload → OCR → consomem
+    //       texto direto pra parse-ficha-financeira → removem arquivo,
+    //       sem nunca persistir em `documents`. Nesse cenário, é um
+    //       CAMINHO DE OCR SEM TELEMETRIA V6 — buraco de qualidade
+    //       silencioso, NÃO bug funcional. Vale issue separada.
+    // Em ambos: a Fase 2 NÃO preserva storage_path (não produz valor
+    // mensurável hoje). Refinamento pertence a backlog separado.
+    let v6: V6Tentativa | null = null;
+    if (document.mime_type === "application/pdf") {
+      v6 = await tentarV6(document, fileUrl);
+      console.log(
+        `[ocr-document] doc ${document_id}: V6 outcome=${v6.outcome}` +
+          (v6.mapper ? ` mapper=${v6.mapper}` : "") +
+          (v6.score !== undefined ? ` score=${v6.score.toFixed(2)}` : ""),
+      );
+
+      // V6 success: persiste resultado completo + retorna SEM chamar Mistral.
+      // Update único (não 2-step) pra evitar race com consumers que leem
+      // entre os writes. Mesmo padrão de columns que process-document-mistral
+      // (incluindo extracao_status='done').
+      if (v6.outcome === "success" && v6.parsedJson && v6.textoCompleto) {
+        await supabase
+          .from("documents")
+          .update({
+            status: "ocr_done",
+            extracao_status: "done",
+            ocr_provider: "pdfjs_geometric",
+            parsed: v6.parsedJson,
+            parsed_by: v6.mapper,
+            ocr_text: v6.textoCompleto,
+            ocr_validated: true,
+            ocr_confidence: v6.score ?? null,
+            metadata: { ...(document.metadata ?? {}), ...metadataV6(v6) },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", document_id);
+        console.log(
+          `[ocr-document] doc ${document_id} extraído via V6 (${v6.mapper}, ${v6.pageCount} pg) — Mistral pulado`,
+        );
+        return jsonResponse({
+          success: true,
+          provider: "pdfjs_geometric",
+          mapper: v6.mapper,
+          score: v6.score,
+          pages: v6.pageCount,
+          message: `Processado via extração geométrica nativa (V6 — ${v6.mapper}) — sem Mistral OCR.`,
+        });
+      }
+
+      // V6 falhou: grava só telemetria + cai pro Mistral abaixo. Telemetria
+      // gravada SEMPRE — resolve bug histórico de `metadata.v6_*` null em
+      // 91% dos rows. Status NÃO muda (Mistral cuida disso adiante).
+      await supabase
+        .from("documents")
+        .update({
+          metadata: { ...(document.metadata ?? {}), ...metadataV6(v6) },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", document_id);
+    } else {
+      // Não-PDF (imagem, etc): registra outcome explícito pra telemetria
+      // consistente. Mistral roda como sempre abaixo.
+      v6 = { outcome: "not_pdf" };
+      await supabase
+        .from("documents")
+        .update({
+          metadata: { ...(document.metadata ?? {}), ...metadataV6(v6) },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", document_id);
+    }
+    console.log(
+      `[ocr-document] doc ${document_id}: caminho Mistral — V6 outcome=${v6?.outcome ?? "skipped"}`,
+    );
 
     // Marca em processamento
     await supabase
