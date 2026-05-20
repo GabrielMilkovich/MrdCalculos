@@ -25,7 +25,8 @@ interface Props {
 
 async function getFreshSignedUrl(storagePath: string): Promise<string | null> {
   for (const bucket of ["juriscalculo-documents", "case-documents"]) {
-    const { data } = await supabase.storage.from(bucket).createSignedUrl(storagePath, 7200);
+    // TTL 15min — URL deve durar só o suficiente pra renderizar o preview.
+    const { data } = await supabase.storage.from(bucket).createSignedUrl(storagePath, 900);
     if (data?.signedUrl) return data.signedUrl;
   }
   return null;

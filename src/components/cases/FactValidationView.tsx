@@ -661,7 +661,8 @@ export function FactValidationView({
 
     const { data, error } = await supabase.storage
       .from(STORAGE_BUCKET)
-      .createSignedUrl(baseDoc.storage_path, 3600);
+      // TTL 15min — URL viva só pelo handler de click.
+      .createSignedUrl(baseDoc.storage_path, 900);
 
     if (error || !data?.signedUrl) return null;
 

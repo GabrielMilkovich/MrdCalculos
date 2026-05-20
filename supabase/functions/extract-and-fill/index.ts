@@ -2205,7 +2205,7 @@ serve(async (req) => {
       for (const bucket of ["juriscalculo-documents", "case-documents"]) {
         const { data: signed } = await supabase.storage
           .from(bucket)
-          .createSignedUrl(doc.storage_path, 7200); // 2h para processamento longo
+          .createSignedUrl(doc.storage_path, 1800); // 30min para processamento longo (Mistral + extração)
         if (signed?.signedUrl) {
           fileUrl = signed.signedUrl;
           break;

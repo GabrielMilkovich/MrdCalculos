@@ -371,7 +371,7 @@ async function processDocumentInternal(
 
     const { data: signedUrlData, error: signedErr } = await supabase.storage
       .from("juriscalculo-documents")
-      .createSignedUrl(document.storage_path, 3600);
+      .createSignedUrl(document.storage_path, 1800); // 30min — pipeline assíncrono pode demorar
 
     if (signedErr || !signedUrlData?.signedUrl) {
       console.error("[PROCESS] Could not create signed URL:", signedErr);

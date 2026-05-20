@@ -327,7 +327,9 @@ serve(async (req) => {
     if (document.storage_path) {
       const buckets = ["juriscalculo-documents", "case-documents", "documents"];
       for (const b of buckets) {
-        const { data } = await supabase.storage.from(b).createSignedUrl(document.storage_path, 7200);
+        // TTL 30min (1800s): OCR via Mistral pode demorar — meio termo entre
+        // 15min (recomendado) e 2h (anterior). URL só viva durante a função.
+        const { data } = await supabase.storage.from(b).createSignedUrl(document.storage_path, 1800);
         if (data?.signedUrl) {
           fileUrl = data.signedUrl;
           break;

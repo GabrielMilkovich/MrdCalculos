@@ -233,7 +233,8 @@ serve(async (req) => {
 
       const { data: signedUrlData, error: signedErr } = await supabase.storage
         .from("juriscalculo-documents")
-        .createSignedUrl(document.storage_path, 3600);
+        // TTL 15min — URL só viva durante o processamento da edge function.
+        .createSignedUrl(document.storage_path, 900);
 
       if (signedErr || !signedUrlData?.signedUrl) {
         console.error("Could not create signed URL:", signedErr);

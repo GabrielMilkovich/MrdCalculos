@@ -283,9 +283,14 @@ export function DocumentsManager({
           continue;
         }
 
+        // TTL 15min. ATENÇÃO: URL é persistida em `documents.arquivo_url`
+        // pra preview rápido pós-upload. Após expirar, consumers DEVEM
+        // regenerar via `getFreshSignedUrl(storage_path)`. Padrão correto
+        // já implementado em DocumentPreview/DocumentOcrValidation. Refactor
+        // futuro: parar de persistir e forçar regeneração sempre.
         const { data: signedUrlData } = await supabase.storage
           .from("juriscalculo-documents")
-          .createSignedUrl(storagePath, 3600);
+          .createSignedUrl(storagePath, 900);
 
         const { data: docData, error: docError } = await supabase
           .from("documents")

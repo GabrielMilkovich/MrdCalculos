@@ -133,7 +133,8 @@ export function CartaoPontoReviewDialog({
       ]) {
         const { data } = await supabase.storage
           .from(bucket)
-          .createSignedUrl(path, 7200);
+          // TTL 15min — URL deve durar só o suficiente pra revisão do dialog.
+          .createSignedUrl(path, 900);
         if (!cancelado && data?.signedUrl) {
           setPdfUrl(data.signedUrl);
           return;

@@ -159,7 +159,7 @@ async function processarDoc(
   }
   const { data: signedUrlData } = await supabase.storage
     .from("juriscalculo-documents")
-    .createSignedUrl(doc.storage_path, 3600);
+    .createSignedUrl(doc.storage_path, 900); // TTL 15min
   if (!signedUrlData?.signedUrl) {
     return { id: doc.id, sucesso: false, outcome: "pdf_download_failed", razao: "sem signed url" };
   }

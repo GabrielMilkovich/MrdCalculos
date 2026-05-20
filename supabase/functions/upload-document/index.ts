@@ -100,9 +100,10 @@ serve(async (req) => {
     }
 
     // Gerar URL assinada (válida por 1 hora para processamento)
+    // TTL 15min — URL persistida em DB; consumers devem regenerar via storage_path.
     const { data: signedUrlData } = await supabase.storage
       .from("juriscalculo-documents")
-      .createSignedUrl(storagePath, 3600);
+      .createSignedUrl(storagePath, 900);
 
     // Criar registro em documents
     const { data: document, error: docError } = await supabase

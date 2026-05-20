@@ -52,7 +52,10 @@ serve(async (req) => {
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const documentId = body.document_id;
-    const expiresIn = Math.max(60, Math.min(3600, body.expires_in ?? 3600));
+    // Política: TTL default 15min, máximo 30min (para casos de processamento
+    // assíncrono no caller). Antes era 1h-default/1h-max, considerado largo
+    // demais para um endpoint genérico de URL fresca.
+    const expiresIn = Math.max(60, Math.min(1800, body.expires_in ?? 900));
     const mode = body.mode ?? "url";
 
     if (!documentId) {

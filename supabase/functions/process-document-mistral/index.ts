@@ -247,7 +247,7 @@ serve(async (req) => {
     if (doc.mime_type === "application/pdf") {
       const { data: signed } = await supabase.storage
         .from("juriscalculo-documents")
-        .createSignedUrl(doc.storage_path, 3600);
+        .createSignedUrl(doc.storage_path, 1800); // 30min — Mistral OCR pode demorar
       if (signed?.signedUrl) {
         v6 = await tentarV6(doc, signed.signedUrl);
         console.log(

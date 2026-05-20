@@ -221,7 +221,7 @@ serve(async (req) => {
 
     const { data: signedUrlData } = await supabase.storage
       .from("juriscalculo-documents")
-      .createSignedUrl(document.storage_path, 3600);
+      .createSignedUrl(document.storage_path, 900); // TTL 15min
 
     if (!signedUrlData?.signedUrl) {
       await supabase
