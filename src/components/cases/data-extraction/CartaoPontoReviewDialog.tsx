@@ -524,7 +524,7 @@ export function CartaoPontoReviewDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Revisar jornada — Cartão de Ponto"
-      subtitle={`${rows.length} apurações detectadas em ${effectiveParsed.competencias.size} competência(s) · ${filename} · parser ${effectiveParsed.parser_version}`}
+      subtitle={`${rows.length} apurações detectadas em ${effectiveParsed.competencias.size} competência(s) · ${filename}${import.meta.env.DEV ? ` · parser ${effectiveParsed.parser_version}` : ""}`}
       ocrText={ocrText}
       unparsedLines={unparsedLines}
       outOfWindowLines={outOfWindowLines}

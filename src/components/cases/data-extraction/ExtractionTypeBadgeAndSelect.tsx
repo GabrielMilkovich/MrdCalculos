@@ -227,15 +227,17 @@ export function ExtractionTypeBadgeAndSelect({
         onChange={(novo) => void onChange(novo)}
       />
 
-      {/* Marca visual da versão do parser ativa — permite confirmar a
-          olho nu se o deploy novo está em produção. Mostra o
-          PARSER_VERSION real declarado em cartao-ponto.ts. */}
-      <span
-        className="text-[9px] text-muted-foreground/60 select-none font-mono"
-        title="Versão do parser ativa (use para confirmar deploy)"
-      >
-        {CARTAO_PONTO_PARSER_VERSION.replace(/^cartao-ponto-/, "")}
-      </span>
+      {/* Marca visual da versão do parser — visível apenas em modo dev.
+          Em produção fica oculto: operador final (sócio/advogado) não precisa
+          ver string técnica. Dev local continua vendo pra confirmar deploy. */}
+      {import.meta.env.DEV && (
+        <span
+          className="text-[9px] text-muted-foreground/60 select-none font-mono"
+          title="Versão do parser ativa (DEV only)"
+        >
+          {CARTAO_PONTO_PARSER_VERSION.replace(/^cartao-ponto-/, "")}
+        </span>
+      )}
 
       {showDownloadButton && (
         <TooltipProvider>
