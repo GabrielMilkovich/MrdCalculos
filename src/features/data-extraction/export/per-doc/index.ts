@@ -106,7 +106,7 @@ export async function generateExportForDocument(
   const { data: doc, error } = await supabase
     .from('documents')
     .select(
-      'id, file_name, tipo_extracao, ocr_text, ocr_validated, competencia_referencia, parsed, parsed_by',
+      'id, file_name, tipo_extracao, ocr_text, ocr_validated, competencia_referencia, parsed, parsed_by, ocr_provider',
     )
     .eq('id', documentId)
     .single();
@@ -125,6 +125,22 @@ export async function generateExportForDocument(
   // extraída" pra documentos cujo OCR Mistral entrega Layout B colapsado
   // (parser v5 falha na deferência dia↔batidas).
   const v6Parsed = (doc as { parsed?: unknown }).parsed;
+  const ocrProvider = (doc as { ocr_provider?: string | null }).ocr_provider;
+
+  // GUARD anti-race condition: docs processados pelo V6 (ocr_provider =
+  // pdfjs_geometric) precisam de `parsed` populado para export V6. Sem
+  // ele, o fallback regex sobre o texto pdfjs gera resultados ruins —
+  // cabeçalho/admissão viram falsas batidas, datas históricas anteriores
+  // ao período real aparecem como apurações. Bloqueia o export até o
+  // pipeline V6 escrever o JSONB, evitando ZIP/CSV silenciosamente incorreto.
+  if (ocrProvider === 'pdfjs_geometric' && (!v6Parsed || typeof v6Parsed !== 'object')) {
+    return {
+      ok: false,
+      error:
+        'Pipeline V6 ainda não terminou de processar este documento. ' +
+        'Aguarde alguns segundos e tente novamente. Se persistir, rode "Reprocessar V6" na lista de documentos.',
+    };
+  }
 
   // F1.3 (PR-4): switch usa string crua porque a tabela `documents` pode
   // ainda retornar tipos legados ('recibo_ferias', 'registro_faltas') em

@@ -123,10 +123,22 @@ function buildReadme(parsed: ParseCartaoPontoResult, maxParesCompleto: number): 
   lines.push('CARTÃO DE PONTO — ZIP de exportação');
   lines.push('===================================');
   lines.push('');
+  // Pipeline: V6 (pdfjs geométrico → mapper Via Varejo/genérico) ou V5 (regex
+  // sobre OCR Mistral). O nome do parser indica origem: mapper-vX ou layout-vX
+  // → V6 (server-side); cartao-ponto-v3/v6-dispatcher → V5 frontend.
+  const isV6 = parsed.parser_version.includes('mapper-v');
+  const pipeline = isV6 ? 'V6 geométrico (pdfjs server-side)' : 'V5 regex frontend';
+  lines.push(`Pipeline: ${pipeline}`);
   lines.push(`Parser: ${parsed.parser_version}`);
   lines.push(`Período: ${parsed.data_inicial || '?'} a ${parsed.data_final || '?'}`);
   lines.push(`Apurações: ${parsed.apuracoes.length}`);
   lines.push(`Competências: ${parsed.competencias.size}`);
+  if (!isV6) {
+    lines.push('');
+    lines.push('⚠ ATENÇÃO: este export usou o parser V5 regex (fallback) — pode');
+    lines.push('  conter ruído de OCR. Se o documento foi processado por pdfjs');
+    lines.push('  geométrico, prefira re-exportar para obter resultado V6 limpo.');
+  }
   lines.push('');
   lines.push('ARQUIVOS NESTE ZIP');
   lines.push('------------------');
