@@ -56,8 +56,31 @@ const RE_PERIODO =
   /Per[íi]odo\s*\.?\s*:?\s+(\d{2})[./](\d{2})[./](\d{4})\s+[Aa]\s+(\d{2})[./](\d{2})[./](\d{4})/i;
 const RE_PERIODO_GLOBAL =
   /Per[íi]odo\s*\.?\s*:?\s+(\d{2})[./](\d{2})[./](\d{4})\s+[Aa]\s+(\d{2})[./](\d{2})[./](\d{4})/gi;
-const RE_LINHA_DIA =
-  /\b(\d{1,2})\s+(SEG|TER|QUA|QUI|SEX|SAB|DOM|D\.?S\.?R\.?|FERIADO|FER\.?\s*DESC\.?)\b/i;
+// Aceita 2 formatos de linha de dia (duas regex separadas pra preservar
+// a INFORMAÇÃO COMPLETA da data quando disponível):
+//
+//   1. pdfjs V6 (text-native):   "16/02/2016 TER 162 N 10:26 13:00 ..."
+//      → m[1]=dd m[2]=mm m[3]=yyyy m[4]=dia-semana
+//      → data reconstruída direto do texto (não precisa do período pra inferir mês)
+//
+//   2. OCR Mistral V5 (legado):  "16 TER 08:00 12:00 ..."
+//      → m[1]=dd m[2]=dia-semana
+//      → data reconstruída via `reconstruirData(dia, periodo)` (heurística antiga)
+//
+// `(?:^|\s)` substitui o `\b` antigo: mais determinístico, exige
+// início-de-linha OU whitespace antes do dígito. Evita backtrack que
+// pegava dígitos espúrios em "9000", "183:20", etc.
+//
+// Por que DUAS regex em vez de uma com grupo opcional: descoberto em
+// 2026-05-20 que regex `\d{1,2}(?:/MM/YYYY)?\s+DIA-SEMANA` joga fora a
+// info de mês quando a data está completa — `reconstruirData(11, periodo)`
+// volta com 11/01 mesmo quando o texto dizia 11/02 (período "11/01 A
+// 15/02" tem dois candidatos válidos pro dia 11). A solução é usar
+// `dataPontoToUtc(dd, mm, yyyy)` direto quando o pdfjs nos deu tudo.
+const RE_LINHA_DIA_PDFJS =
+  /(?:^|\s)(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\s+(SEG|TER|QUA|QUI|SEX|SAB|DOM|D\.?S\.?R\.?|FERIADO|FER\.?\s*DESC\.?)\b/i;
+const RE_LINHA_DIA_OCR =
+  /(?:^|\s)(\d{1,2})\s+(SEG|TER|QUA|QUI|SEX|SAB|DOM|D\.?S\.?R\.?|FERIADO|FER\.?\s*DESC\.?)\b/i;
 const RE_HORA = /\b(\d{1,2}):(\d{2})\b/g;
 
 const MARCADORES_FIM = [
@@ -67,6 +90,12 @@ const MARCADORES_FIM = [
   /^\s*Afastamentos\s+do\s+Per[íi]odo/i,
   /^\s*Assinado\s+eletronicamente/i,
   /^\s*N[úu]mero\s+do\s+processo:/i,
+  // pdfjs V6 do PDF Via Varejo coloca "Movimentos: (Período de DD/MM/YYYY a
+  // DD/MM/YYYY)" antes do bloco de totalizadores (códigos 38XX/73XX/9XXX).
+  // Marcador defensivo: hoje as linhas de totalizador não casam RE_LINHA_DIA,
+  // mas se algum totalizador novo casar acidentalmente, esse fim corta antes.
+  // Descoberto em 2026-05-20 (Fase 6 v7).
+  /^\s*Movimentos:\s*\(Per[íi]odo/i,
 ];
 
 function eFimDeTabela(linha: string): boolean {
@@ -182,32 +211,72 @@ function quebrarEmBlocos(texto: string): Array<{
 /**
  * Processa um bloco linha-a-linha. Para no primeiro marcador de fim.
  * Cada linha que casa RE_LINHA_DIA + tem horários vira uma apuração.
+ *
+ * `diasDescartados` é populado quando DSR/feriado é VISTO mas tem batidas
+ * vazias — exporter downstream não precisa dessas linhas, mas precisamos
+ * registrar que o parser as enxergou pra distinguir "ausente legítimo" de
+ * "ausente por bug". Ver `ParseCartaoPontoResultDominio.dias_classificados_descartados`.
  */
 function processarBloco(
   bloco: { periodo: PeriodoDetectado; trecho: string },
   warnings: string[],
+  diasDescartados: NonNullable<ParseCartaoPontoResultDominio['dias_classificados_descartados']>,
   colunaDupla: boolean,
 ): ApuracaoDominio[] {
   const apuracoes: ApuracaoDominio[] = [];
   const linhas = bloco.trecho.split(/\r?\n/);
   for (const linha of linhas) {
     if (eFimDeTabela(linha)) break;
-    const m = linha.match(RE_LINHA_DIA);
+
+    // Tenta pdfjs primeiro (preserva mês/ano do texto). Cai pra OCR V5 só
+    // quando a linha não tem a data completa.
+    const mPdfjs = linha.match(RE_LINHA_DIA_PDFJS);
+    const mOcr = !mPdfjs ? linha.match(RE_LINHA_DIA_OCR) : null;
+    const m = mPdfjs ?? mOcr;
     if (!m) continue;
-    const dia = parseInt(m[1], 10);
-    const tipoInfo = classificarTipoDia(m[2]);
-    const data = reconstruirData(dia, bloco.periodo);
-    if (!data) {
-      warnings.push(
-        `Dia ${dia} fora do período ${bloco.periodo.textoOriginal} — linha ignorada.`,
-      );
-      continue;
+
+    let dia: number;
+    let labelDS: string;
+    let data: Date | null;
+
+    if (mPdfjs) {
+      // Formato pdfjs: usa a data COMPLETA do texto.
+      // m[1]=dd m[2]=mm m[3]=yyyy m[4]=dia-semana
+      dia = parseInt(mPdfjs[1], 10);
+      labelDS = mPdfjs[4];
+      data = dataPontoToUtc(mPdfjs[1], mPdfjs[2], mPdfjs[3]);
+      // Sanidade: garante que a data está dentro do período do bloco.
+      if (data < bloco.periodo.inicio || data > bloco.periodo.fim) {
+        warnings.push(
+          `Data ${isoFromUtc(data)} fora do período ${bloco.periodo.textoOriginal} — linha ignorada.`,
+        );
+        continue;
+      }
+    } else {
+      // Formato OCR V5: reconstrói data via heurística do período.
+      // m[1]=dia m[2]=dia-semana
+      dia = parseInt(mOcr![1], 10);
+      labelDS = mOcr![2];
+      data = reconstruirData(dia, bloco.periodo);
+      if (!data) {
+        warnings.push(
+          `Dia ${dia} fora do período ${bloco.periodo.textoOriginal} — linha ignorada.`,
+        );
+        continue;
+      }
     }
+
+    // tipoInfo é let — pode ser sobrescrito quando o pdfjs entrega o
+    // dia-semana (ex: "DOM") como label mas a ocorrência real (DSR/FERIADO)
+    // aparece como TOKEN SEPARADO no resto da linha (ex: "21/02/2016 DOM
+    // 999 N DSR DSR"). Sobrescrita acontece só quando: tipo inicial=normal,
+    // sem batidas, e token DSR/FERIADO aparece após o label.
+    let tipoInfo = classificarTipoDia(labelDS);
     if (tipoInfo.tipo === 'fer_desc') continue; // férias descansadas — não vira jornada
 
     // Extrai horários DEPOIS do label do dia (texto antes do label pode ser
     // rodapé do cartão anterior na mesma linha — caso extremo).
-    const idxLabel = linha.search(RE_LINHA_DIA);
+    const idxLabel = mPdfjs ? linha.search(RE_LINHA_DIA_PDFJS) : linha.search(RE_LINHA_DIA_OCR);
     const trechoBatidas = idxLabel >= 0 ? linha.slice(idxLabel) : linha;
     const todasMarcacoes = extrairPares(trechoBatidas);
     // Coluna dupla "Real vs Previsto": mantém apenas o 1° par (4 horas
@@ -219,8 +288,29 @@ function processarBloco(
       ? todasMarcacoes.slice(0, 2)
       : todasMarcacoes;
 
+    // Sobrescrita pdfjs V6: linha "21/02/2016 DOM 999 N DSR DSR" captura
+    // "DOM" (dia-semana) como label, mas a ocorrência real é DSR (token
+    // presente no resto da linha). Só sobrescreve quando não há batidas
+    // (linha de jornada normal nunca tem token "DSR"/"FERIADO" pendurado).
+    if (tipoInfo.tipo === 'normal' && marcacoes.length === 0) {
+      const trechoAposLabel = idxLabel >= 0 ? linha.slice(idxLabel + m[0].length) : '';
+      if (/\bD\.?S\.?R\.?\b/i.test(trechoAposLabel)) {
+        tipoInfo = { tipo: 'dsr', diaSemana: tipoInfo.diaSemana };
+      } else if (/\bFERIADO\b/i.test(trechoAposLabel)) {
+        tipoInfo = { tipo: 'feriado', diaSemana: tipoInfo.diaSemana };
+      }
+    }
+
     if ((tipoInfo.tipo === 'dsr' || tipoInfo.tipo === 'feriado') && marcacoes.length === 0) {
-      continue; // descanso/feriado sem batida — não exporta
+      // Design intencional: CSV PJe-Calc não precisa de DSR/feriado vazio.
+      // Mas registramos como "visto e classificado" pra distinguir de bug.
+      diasDescartados.push({
+        data: isoFromUtc(data),
+        dia_semana: tipoInfo.diaSemana,
+        ocorrencia: tipoInfo.tipo === 'dsr' ? 'DSR' : 'FERIADO',
+        motivo: `${tipoInfo.tipo === 'dsr' ? 'DSR' : 'Feriado'} sem batida — não exportado.`,
+      });
+      continue;
     }
     if (tipoInfo.tipo === 'normal' && marcacoes.length === 0) continue;
 
@@ -489,9 +579,13 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
     // totalizadores DAQUELE bloco específico. Sem isso, somaria batidas de
     // todo o documento contra totalizador de um único período.
     const reconciliacao: ReconciliacaoPeriodo[] = [];
+    // Rastro Fase 6 v7: DSR/feriado sem batida que viu e descartou.
+    const diasDescartados: NonNullable<
+      ParseCartaoPontoResultDominio['dias_classificados_descartados']
+    > = [];
 
     for (const bloco of blocos) {
-      const apuracoesNesseBloco = processarBloco(bloco, warnings, colunaDupla);
+      const apuracoesNesseBloco = processarBloco(bloco, warnings, diasDescartados, colunaDupla);
       for (const ap of apuracoesNesseBloco) {
         apuracoes.push(ap);
         const [yyyy, mm] = ap.data.split('-');
@@ -560,6 +654,7 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
       parser_version: PARSER_VERSION,
       reconciliacao,
       reconciliacao_geral_ok,
+      dias_classificados_descartados: diasDescartados.length > 0 ? diasDescartados : undefined,
     };
   },
 };

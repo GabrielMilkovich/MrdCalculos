@@ -97,6 +97,23 @@ export interface ParseCartaoPontoResultDominio {
   reconciliacao?: ReconciliacaoPeriodo[];
   /** true quando TODOS os períodos têm ok=true. Default true se array vazio. */
   reconciliacao_geral_ok?: boolean;
+  /**
+   * Rastro de dias VISTOS pelo parser mas DESCARTADOS do `apuracoes`
+   * (Fase 6 v7, 2026-05-20). Hoje só inclui DSR/Feriado sem batida — esses
+   * NÃO viram apuração exportável (CSV PJe-Calc não precisa), mas o parser
+   * precisa registrar que os enxergou pra distinguir "ausente legítimo"
+   * (foi visto e classificado como DSR/FERIADO) de "ausente por bug"
+   * (linha não casou regex e sumiu sem rastro).
+   *
+   * Populado por mappers que reconhecem o token DSR/FERIADO. Mapper
+   * genérico não popula (deixa undefined). Camada de export ignora.
+   */
+  dias_classificados_descartados?: Array<{
+    data: string;
+    dia_semana: string;
+    ocorrencia: 'DSR' | 'FERIADO';
+    motivo: string;
+  }>;
 }
 
 export interface RubricaDominio {

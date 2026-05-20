@@ -168,3 +168,83 @@ describe("mapperCartaoViaVarejo.mapear() — quebra de blocos com novo formato",
     expect(resultado!.apuracoes[0].data).toBe("2011-06-21");
   });
 });
+
+// =============================================================================
+// Fase 6 v7 (2026-05-20) — RE_LINHA_DIA aceita formato pdfjs DD/MM/YYYY DIA-SEMANA
+// =============================================================================
+
+// Linhas no formato exato que o pdfjs extrai do PDF do Roque. Cada linha começa
+// com "DD/MM/YYYY DIA-SEMANA NNN N [horários reais] [observação] [horários previstos]".
+// Header "Horário Registrado Horário de Trabalho" → detectarColunaDupla = true →
+// processarBloco pega apenas os 2 primeiros pares (horários reais).
+const TEXTO_ROQUE_PDFJS_LINHAS_DIA = `
+VIA VAREJO SA Cartão Ponto Página 1
+33.041.260/0652-90
+PERÍODO .: 16/02/2016 A 15/03/2016 Competência: MARÇO/2016
+Empregado: 278823 ROQUE GUERREIRO TEIXEIRA
+Data Dia Horário Ref P Horário Registrado Horário de Trabalho Desc HExt AdNot
+16/02/2016 TER 162 N 10:26 13:00 14:26 19:15 09:00 12:00 13:05 17:25
+17/02/2016 QUA 238 N 10:47 13:56 15:29 19:05 Débito Banco de horas 11:00 15:00 16:00 19:20 0:35
+20/02/2016 SAB 162 N 09:13 12:01 13:21 18:31 09:00 12:00 13:05 17:25 0:38
+21/02/2016 DOM 999 N DSR DSR
+9000 Horas Normais 183:20 9009 Atraso Abonado 0:45
+Assinado eletronicamente por: FULANO - 30/11/2021 16:15:52
+`.trim();
+
+describe("RE_LINHA_DIA — formato pdfjs DD/MM/YYYY DIA-SEMANA [FIX Fase 6 v7]", () => {
+  it("linha pdfjs '16/02/2016 TER 162 N 10:26 13:00 14:26 19:15 ...' → dia=16, ocorrência=NORMAL", () => {
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(TEXTO_ROQUE_PDFJS_LINHAS_DIA));
+    expect(resultado).not.toBeNull();
+    const ap16 = resultado!.apuracoes.find((a) => a.data === "2016-02-16");
+    expect(ap16, "Apuração 2016-02-16 (linha pdfjs) deveria existir").toBeDefined();
+    expect(ap16!.ocorrencia).toBe("NORMAL");
+    expect(ap16!.dia_semana).toBe("TER");
+    // 2 pares = 4 horas reais (10:26→13:00, 14:26→19:15). Horas previstas
+    // (09:00 12:00 13:05 17:25) descartadas via detectarColunaDupla.
+    expect(ap16!.marcacoes).toHaveLength(2);
+    expect(ap16!.marcacoes[0]).toEqual({ e: "10:26", s: "13:00" });
+    expect(ap16!.marcacoes[1]).toEqual({ e: "14:26", s: "19:15" });
+  });
+
+  it("linha pdfjs com observação no meio ('Débito Banco de horas') → 2 pares reais [item #2 da auditoria]", () => {
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(TEXTO_ROQUE_PDFJS_LINHAS_DIA));
+    const ap17 = resultado!.apuracoes.find((a) => a.data === "2016-02-17");
+    expect(ap17, "Apuração 2016-02-17 (linha com observação) deveria existir").toBeDefined();
+    // Real: 10:47 13:56 15:29 19:05 | Obs no meio: "Débito Banco de horas" |
+    // Previsto: 11:00 15:00 16:00 19:20 | HE final: 0:35
+    expect(ap17!.marcacoes).toHaveLength(2);
+    expect(ap17!.marcacoes[0]).toEqual({ e: "10:47", s: "13:56" });
+    expect(ap17!.marcacoes[1]).toEqual({ e: "15:29", s: "19:05" });
+  });
+
+  it("DSR sem batida ('21/02/2016 DOM 999 N DSR DSR') → vai pra dias_classificados_descartados [item #4]", () => {
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(TEXTO_ROQUE_PDFJS_LINHAS_DIA));
+    // DSR vazio NÃO entra em apuracoes (design intencional — CSV não precisa).
+    const ap21 = resultado!.apuracoes.find((a) => a.data === "2016-02-21");
+    expect(ap21, "DSR vazio NÃO deve aparecer em apuracoes").toBeUndefined();
+    // MAS deve aparecer em dias_classificados_descartados (rastro pra distinguir
+    // 'ausente legítimo' de 'ausente por bug').
+    expect(resultado!.dias_classificados_descartados).toBeDefined();
+    const dsr21 = resultado!.dias_classificados_descartados!.find((d) => d.data === "2016-02-21");
+    expect(dsr21, "DSR descartado precisa de rastro estruturado").toBeDefined();
+    expect(dsr21!.ocorrencia).toBe("DSR");
+    expect(dsr21!.dia_semana).toBe("DOM");
+    expect(dsr21!.motivo).toMatch(/DSR sem batida/i);
+  });
+
+  it("regression guard — formato OCR V5 ('16 TER 10:26 ...') continua funcionando", () => {
+    const textoOcrV5 = `
+VIA VAREJO S/A 33.041.260/0652-90
+CARTÃO DE PONTO
+Período 16.02.2016 A 15.03.2016
+16 TER 10:26 13:00 14:26 19:15
+17 QUA 10:47 13:56 15:29 19:05
+`.trim();
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(textoOcrV5));
+    expect(resultado).not.toBeNull();
+    expect(resultado!.apuracoes.length).toBe(2);
+    expect(resultado!.apuracoes[0].data).toBe("2016-02-16");
+    expect(resultado!.apuracoes[0].dia_semana).toBe("TER");
+    expect(resultado!.apuracoes[1].data).toBe("2016-02-17");
+  });
+});
