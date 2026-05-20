@@ -20,6 +20,7 @@ import type {
   MarcacaoDominio,
   OcorrenciaDominio,
   ParseCartaoPontoResultDominio,
+  ReconciliacaoPeriodo,
 } from '../tipos-dominio.ts';
 import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
 
@@ -231,6 +232,139 @@ function processarBloco(
   return apuracoes;
 }
 
+// ============================================================
+// Reconciliação contra totalizadores (Fase 3 v7 — 2026-05-20)
+// ============================================================
+
+/**
+ * Códigos de totalizadores Via Varejo que somam tempo TRABALHADO no período:
+ *   - 9000 Horas Normais (jornada regular)
+ *   - 9080 Horas Extras 75% (adicional sobre regular)
+ *
+ * Outros códigos comuns (9024 Férias, 9012, 9050) NÃO entram na soma de
+ * batidas — são afastamentos/eventos, não tempo de jornada. Detectados pra
+ * referência futura mas excluídos do cálculo de delta.
+ *
+ * Regex: aceita "9000 Horas Normais 183:20", "9080 Horas Extras 75% 5:17",
+ * "9000 H. Normais 12:30" etc. Label não-greedy entre código e HH:MM.
+ *
+ * IMPORTANTE: char class do label INCLUI dígitos `0-9` porque "9080 Horas
+ * Extras 75% 3:00" tem "75%" no meio. Sem 0-9 na classe, label seria
+ * cortada em "Horas Extras " e o regex falharia. Lookahead `(?=\s|$)`
+ * depois de HH:MM ancora pra não casar pedaço de número maior.
+ */
+const RE_TOTALIZADOR_TEMPO =
+  /\b(9000|9080)\s+([A-Za-zÀ-ÿ0-9%\.\s]+?)\s+(\d{1,4}):(\d{2})(?=\s|$)/g;
+
+function hhmmToMin(h: string, m: string): number {
+  return parseInt(h, 10) * 60 + parseInt(m, 10);
+}
+
+function minToHhmm(min: number): string {
+  const sign = min < 0 ? '-' : '';
+  const abs = Math.abs(min);
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  return `${sign}${h}:${String(m).padStart(2, '0')}`;
+}
+
+/**
+ * Extrai a soma de minutos declarados em totalizadores de tempo trabalhado
+ * (códigos 9000 + 9080) dentro de um trecho de bloco. Retorna null se
+ * NENHUM totalizador for encontrado (não validável).
+ */
+function extrairMinutosDeclarados(trecho: string): {
+  total_min: number | null;
+  detalhes: Array<{ codigo: string; label: string; min: number }>;
+} {
+  RE_TOTALIZADOR_TEMPO.lastIndex = 0;
+  const detalhes: Array<{ codigo: string; label: string; min: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = RE_TOTALIZADOR_TEMPO.exec(trecho)) !== null) {
+    const codigo = m[1];
+    const label = m[2].trim();
+    const min = hhmmToMin(m[3], m[4]);
+    detalhes.push({ codigo, label, min });
+  }
+  if (detalhes.length === 0) return { total_min: null, detalhes: [] };
+  const total = detalhes.reduce((acc, d) => acc + d.min, 0);
+  return { total_min: total, detalhes };
+}
+
+/**
+ * Soma TODOS os pares (saída-entrada) das marcações de um conjunto de
+ * apurações. Pares com saída antes da entrada (turno noturno cruzando
+ * meia-noite OU artifact de extração) são ignorados — não invertemos
+ * porque jornada noturna NÃO é o padrão Via Varejo cartão antigo.
+ */
+function somarBatidas(apuracoes: readonly ApuracaoDominio[]): number {
+  let total = 0;
+  for (const ap of apuracoes) {
+    for (const par of ap.marcacoes) {
+      if (!par.e || !par.s) continue;
+      const e = par.e.match(/^(\d{1,2}):(\d{2})$/);
+      const s = par.s.match(/^(\d{1,2}):(\d{2})$/);
+      if (!e || !s) continue;
+      const eMin = hhmmToMin(e[1], e[2]);
+      const sMin = hhmmToMin(s[1], s[2]);
+      if (sMin <= eMin) continue;
+      total += sMin - eMin;
+    }
+  }
+  return total;
+}
+
+/**
+ * Constrói ReconciliacaoPeriodo pra um bloco com suas apurações.
+ * Tolerância: 5 min absoluto (não cumulativo).
+ *
+ * Quando totalizador ausente: ok=true por convenção ("não foi possível
+ * validar" não é motivo pra bloquear export — a Fase 4 distingue via
+ * `declarado_minutos === null`).
+ */
+function reconciliarPeriodo(
+  periodoInicio: Date,
+  periodoFim: Date,
+  trechoBloco: string,
+  apuracoesNoPeriodo: readonly ApuracaoDominio[],
+): ReconciliacaoPeriodo {
+  const { total_min: declarado, detalhes } = extrairMinutosDeclarados(trechoBloco);
+  const somado = somarBatidas(apuracoesNoPeriodo);
+  const inicioIso = isoFromUtc(periodoInicio);
+  const fimIso = isoFromUtc(periodoFim);
+
+  if (declarado === null) {
+    return {
+      periodo: { inicio: inicioIso, fim: fimIso },
+      declarado_minutos: null,
+      declarado_str: null,
+      somado_minutos: somado,
+      somado_str: minToHhmm(somado),
+      delta_minutos: 0,
+      ok: true,
+      motivo: `Totalizadores 9000/9080 ausentes no rodapé — não foi possível validar contra batidas (somado=${minToHhmm(somado)}).`,
+    };
+  }
+
+  const delta = somado - declarado;
+  const ok = Math.abs(delta) <= 5;
+  const detalhesStr = detalhes
+    .map((d) => `${d.codigo}=${minToHhmm(d.min)}`)
+    .join(', ');
+  return {
+    periodo: { inicio: inicioIso, fim: fimIso },
+    declarado_minutos: declarado,
+    declarado_str: minToHhmm(declarado),
+    somado_minutos: somado,
+    somado_str: minToHhmm(somado),
+    delta_minutos: delta,
+    ok,
+    motivo: ok
+      ? `Reconciliação OK (delta ${minToHhmm(delta)}, tolerância 5min). Totalizadores: ${detalhesStr}.`
+      : `Reconciliação DIVERGENTE: declarado ${minToHhmm(declarado)} (${detalhesStr}), somado das batidas ${minToHhmm(somado)}, delta ${minToHhmm(delta)} excede tolerância 5min.`,
+  };
+}
+
 export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
   slug: 'cartao_via_varejo_v1',
   nome: 'Cartão de Ponto Via Varejo / Casa Bahia',
@@ -319,13 +453,30 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
 
     const apuracoes: ApuracaoDominio[] = [];
     const competencias = new Map<string, number>();
+    // Reconciliação Fase 3 v7: track apurações por bloco pra comparar com
+    // totalizadores DAQUELE bloco específico. Sem isso, somaria batidas de
+    // todo o documento contra totalizador de um único período.
+    const reconciliacao: ReconciliacaoPeriodo[] = [];
+
     for (const bloco of blocos) {
-      for (const ap of processarBloco(bloco, warnings, colunaDupla)) {
+      const apuracoesNesseBloco = processarBloco(bloco, warnings, colunaDupla);
+      for (const ap of apuracoesNesseBloco) {
         apuracoes.push(ap);
         const [yyyy, mm] = ap.data.split('-');
         const k = `${mm}/${yyyy}`;
         competencias.set(k, (competencias.get(k) ?? 0) + 1);
       }
+      // Computa reconciliação pra ESTE período antes de passar pro próximo.
+      // Trecho usado é o que veio do quebrarEmBlocos (já contém o rodapé do
+      // período antes da próxima âncora "Período X").
+      reconciliacao.push(
+        reconciliarPeriodo(
+          bloco.periodo.inicio,
+          bloco.periodo.fim,
+          bloco.trecho,
+          apuracoesNesseBloco,
+        ),
+      );
     }
 
     // Dedup por data — defesa em profundidade.
@@ -351,6 +502,21 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
       return null;
     }
 
+    // reconciliacao_geral_ok: true se TODOS os períodos têm ok=true.
+    // Importante: períodos com declarado=null (totalizador ausente) também
+    // têm ok=true por convenção — não bloqueia export por falta de dado
+    // pra validar. Apenas divergências CONFIRMADAS bloqueiam (Fase 4).
+    const reconciliacao_geral_ok = reconciliacao.every((r) => r.ok);
+    if (!reconciliacao_geral_ok) {
+      const divergentes = reconciliacao
+        .filter((r) => !r.ok)
+        .map((r) => `${r.periodo.inicio}↔${r.periodo.fim}: delta ${minToHhmm(r.delta_minutos)}`)
+        .join('; ');
+      warnings.push(
+        `Reconciliação detectou ${reconciliacao.filter((r) => !r.ok).length} período(s) divergente(s) (>5min): ${divergentes}. Export bloqueado pela Fase 4 quando essa flag está false.`,
+      );
+    }
+
     return {
       apuracoes: final,
       competencias,
@@ -360,6 +526,8 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
       warnings,
       unparsed_lines: [],
       parser_version: PARSER_VERSION,
+      reconciliacao,
+      reconciliacao_geral_ok,
     };
   },
 };

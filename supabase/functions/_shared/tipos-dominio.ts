@@ -45,6 +45,40 @@ export interface ApuracaoDominio {
   ocr_line?: number;
 }
 
+/**
+ * Reconciliação entre soma de batidas extraídas e totalizadores declarados
+ * no rodapé de cada período do cartão (códigos Via Varejo: 9000 Horas
+ * Normais, 9080 Horas Extras 75%, etc).
+ *
+ * Anexada por mappers V6 quando capazes de detectar totalizadores. Camada
+ * de export (Fase 4 v7) decide se bloqueia export baseado em
+ * `reconciliacao_geral_ok`. Tolerância: 5 minutos por período, não
+ * cumulativa.
+ *
+ * `declarado_minutos: null` significa "totalizador ausente no rodapé —
+ * não foi possível validar" (não é erro, é "sem dado pra confrontar").
+ * Nesse caso `ok=true` por convenção (não bloquear export por ausência
+ * de dado pra validar).
+ */
+export interface ReconciliacaoPeriodo {
+  /** Período do bloco (yyyy-mm-dd). */
+  periodo: { inicio: string; fim: string };
+  /** Soma minutos declarada no totalizador (9000 + 9080 se ambos). null = ausente. */
+  declarado_minutos: number | null;
+  /** Representação legível, ex: "183:20" ou null. */
+  declarado_str: string | null;
+  /** Soma minutos computada dos pares (saída-entrada) das batidas extraídas. */
+  somado_minutos: number;
+  /** Representação legível, ex: "182:55". */
+  somado_str: string;
+  /** Diferença signed (somado - declarado). Em minutos. 0 se declarado=null. */
+  delta_minutos: number;
+  /** true quando |delta| ≤ 5min OU totalizador ausente. */
+  ok: boolean;
+  /** Explicação humana. Sempre presente. */
+  motivo: string;
+}
+
 export interface ParseCartaoPontoResultDominio {
   apuracoes: ApuracaoDominio[];
   competencias: Map<string, number>;
@@ -54,6 +88,15 @@ export interface ParseCartaoPontoResultDominio {
   warnings: string[];
   unparsed_lines: Array<{ linha: number; conteudo: string }>;
   parser_version: string;
+  /**
+   * Reconciliação contra totalizadores declarados (Fase 3 v7, 2026-05-20).
+   * Populada apenas por mappers que detectam totalizadores no rodapé. Mapper
+   * genérico atualmente não popula (TODO — deixa array vazio).
+   * Camada de export decide se bloqueia baseado em reconciliacao_geral_ok.
+   */
+  reconciliacao?: ReconciliacaoPeriodo[];
+  /** true quando TODOS os períodos têm ok=true. Default true se array vazio. */
+  reconciliacao_geral_ok?: boolean;
 }
 
 export interface RubricaDominio {
