@@ -27,10 +27,26 @@ const RE_DATA_BR = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/;
 
 const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v6-2026-05-06';
 
+// Aceita 2 formatos de cabeçalho de período:
+//   1. ANTIGO (Via Varejo 2011-2016): "Período 11.01.2016 A 15.02.2016"
+//      (separator = ponto, "A" maiúsculo, sem ":")
+//   2. MODERNO (Via Varejo / Casas Bahia 2018+): "PERÍODO: 11/01/2016 A 15/02/2016"
+//      ou "Período 11/01/2016 a 15/02/2016" (separator = barra, ":" opcional,
+//      "A" maiúsculo ou minúsculo).
+//
+// Separator `[./]` cobre ambos. `\s*:?\s+` cobre "Período:" do layout novo.
+// `[Aa]` cobre case-insensitive "A entre dia inicial e final".
+//
+// Capture groups: m[1..3] = dd, mm, yyyy de início; m[4..6] = dd, mm, yyyy de fim.
+// `dataPontoToUtc(dd, mm, yyyy)` é format-agnostic (parseInt em strings
+// numéricas separadas) — não importa qual separator no input original.
+//
+// O nome "dataPontoToUtc" preserva legado (era só dots antes da relaxação
+// de 2026-05-20). Função em si não usa pontos — apenas dá nome ao bind.
 const RE_PERIODO =
-  /Per[íi]odo\s+(\d{2})\.(\d{2})\.(\d{4})\s+A\s+(\d{2})\.(\d{2})\.(\d{4})/i;
+  /Per[íi]odo\s*:?\s+(\d{2})[./](\d{2})[./](\d{4})\s+[Aa]\s+(\d{2})[./](\d{2})[./](\d{4})/i;
 const RE_PERIODO_GLOBAL =
-  /Per[íi]odo\s+(\d{2})\.(\d{2})\.(\d{4})\s+A\s+(\d{2})\.(\d{2})\.(\d{4})/gi;
+  /Per[íi]odo\s*:?\s+(\d{2})[./](\d{2})[./](\d{4})\s+[Aa]\s+(\d{2})[./](\d{2})[./](\d{4})/gi;
 const RE_LINHA_DIA =
   /\b(\d{1,2})\s+(SEG|TER|QUA|QUI|SEX|SAB|DOM|D\.?S\.?R\.?|FERIADO|FER\.?\s*DESC\.?)\b/i;
 const RE_HORA = /\b(\d{1,2}):(\d{2})\b/g;
@@ -130,7 +146,10 @@ function quebrarEmBlocos(texto: string): Array<{
       periodo: {
         inicio: dataPontoToUtc(m[1], m[2], m[3]),
         fim: dataPontoToUtc(m[4], m[5], m[6]),
-        textoOriginal: `${m[1]}.${m[2]}.${m[3]} A ${m[4]}.${m[5]}.${m[6]}`,
+        // Preserva o separador real do match (./) e case do "A/a" — evita
+        // que warnings/observações reportem formato dots quando o input usou
+        // barras (era cosmético antes da relaxação, vale registrar agora).
+        textoOriginal: m[0],
       },
     });
   }
@@ -213,6 +232,28 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
     const motivos: string[] = [];
     let acertos = 0;
     const t = doc.textoCompleto;
+
+    // VETO ANTI-REGRESSÃO: documentos do layout Casas Bahia pós-2018 usam
+    // "ESPELHO DE PONTO" em vez de "Cartão de Ponto". Mesmo que o CGC
+    // (33.041.260) ou o formato de período moderno (com barras) case, esse
+    // mapper foi calibrado para o layout Via Varejo "Cartão de Ponto" antigo
+    // — colunas, marcadores de fim de tabela, RE_LINHA_DIA são todos
+    // específicos daquele layout. Rosicleia 2022-2024 (Casas Bahia novo)
+    // é o caso de regressão que esse veto previne quando a relaxação de
+    // RE_PERIODO (2026-05-20) passou a aceitar barras.
+    //
+    // O veto exige "ESPELHO DE PONTO" PRESENTE E "CARTÃO DE PONTO" AUSENTE.
+    // Documentos híbridos (raros, mas possíveis) seguem fluxo normal.
+    if (/ESPELHO\s+DE\s+PONTO/i.test(t) && !/CART[ÃA]O\s+DE\s+PONTO/i.test(t)) {
+      return {
+        aplica: false,
+        score: 0,
+        motivos: [
+          'ESPELHO DE PONTO sem CARTÃO DE PONTO — layout Casas Bahia pós-2018, fora do escopo deste mapper',
+        ],
+      };
+    }
+
     if (/NOVA\s+CASA\s+BAHIA\s+S\/?A/i.test(t)) {
       acertos++;
       motivos.push('razão social Nova Casa Bahia');
