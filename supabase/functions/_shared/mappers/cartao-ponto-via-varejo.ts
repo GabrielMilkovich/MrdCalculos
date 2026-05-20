@@ -81,6 +81,14 @@ interface PeriodoDetectado {
   textoOriginal: string;
 }
 
+// =====================================================
+// NOTA — NOME LEGADO. Função recebe (dd, mm, yyyy) como strings numéricas
+// SEPARADAS via parseInt. NÃO depende de "pontos" como separator no input
+// original. O nome "dataPontoToUtc" preserva história (era estritamente
+// formato dots antes da relaxação de 2026-05-20 que adicionou suporte a
+// barras). Não renomeei pra não expandir escopo — se vir esse nome no
+// futuro, lê esse comentário antes de assumir que dots são exigidos.
+// =====================================================
 function dataPontoToUtc(dd: string, mm: string, yyyy: string): Date {
   return new Date(Date.UTC(parseInt(yyyy, 10), parseInt(mm, 10) - 1, parseInt(dd, 10)));
 }
@@ -244,6 +252,16 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
     //
     // O veto exige "ESPELHO DE PONTO" PRESENTE E "CARTÃO DE PONTO" AUSENTE.
     // Documentos híbridos (raros, mas possíveis) seguem fluxo normal.
+    //
+    // PREMISSA TESTÁVEL: PDFs do layout Via Varejo Cartão antigo SEMPRE têm
+    // a string "Cartão de Ponto" em algum lugar do texto extraído (header
+    // do PDF ou rodapé fiscal). Se aparecer PDF híbrido com "ESPELHO DE
+    // PONTO" no header E "Cartão" só num footer técnico (improvável mas
+    // possível em layouts mistos pós-fusão), o veto NÃO dispara — fluxo
+    // segue normal e pode causar parse incorreto. Se observar esse caso
+    // em produção: refinar veto pra exigir presença de "Cartão" EM
+    // proximidade léxica (ex: ±200 chars do início do texto) em vez de
+    // qualquer match no documento inteiro.
     if (/ESPELHO\s+DE\s+PONTO/i.test(t) && !/CART[ÃA]O\s+DE\s+PONTO/i.test(t)) {
       return {
         aplica: false,
