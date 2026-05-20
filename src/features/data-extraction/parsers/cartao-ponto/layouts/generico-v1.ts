@@ -23,6 +23,8 @@
  *     (`desconsiderada: true`).
  */
 
+import { detectarColunaDupla } from '../../../../../../supabase/functions/_shared/heuristicas/coluna-dupla';
+
 export type Marcacao = {
   e: string;
   s: string;
@@ -447,8 +449,8 @@ export function parseCartaoPontoGenerico(
     };
   }
 
-  // FASE 1 — detector de COLUNA DUPLA "Horário Registrado | Horário de
-  // Trabalho" (cartões Via Varejo / Casas Bahia / SAP / similares).
+  // FASE 1 — detector de COLUNA DUPLA "Real vs Previsto" (Via Varejo /
+  // Casas Bahia / SAP / Senior / ADP / Totvs e variantes sem header).
   // Cada linha de dia traz 8 horas: 4 batidas reais + 4 horas previstas
   // da escala. Sem esse detector, parser pega as 8 e a 5ª (09:00) fica
   // ANTES da 4ª (19:08) — cronologia falsa-inválida.
@@ -457,13 +459,17 @@ export function parseCartaoPontoGenerico(
   // batidas reais). Quando INATIVO: comportamento atual (até 12 horas =
   // 6 pares, limite PJe-Calc).
   //
-  // Detecção é POR DOCUMENTO inteiro. Funciona mesmo quando o OCR perde
-  // o cabeçalho da tabela em algumas páginas — a flag fica ativa pra
-  // o documento todo (decisão conservadora: melhor cortar de mais que
-  // de menos, com flag REVISAR_OCR cobrindo edge cases).
-  const TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO =
-    /Hor[áa]rio\s+Registrado/i.test(ocrText) &&
-    /Hor[áa]rio\s+(?:de\s+)?Trabalho|Hor[áa]rio\s+Previsto/i.test(ocrText);
+  // Detecção delega no módulo compartilhado heuristicas/coluna-dupla, que
+  // combina (i) headers textuais conhecidos com (ii) heurística por
+  // contagem com 4 salvaguardas (amostra mínima, turnos múltiplos,
+  // jornada noturna, fração de linhas com 8 horários).
+  const _linhasComData = ocrText
+    .split(/\r?\n/)
+    .filter((l) => RE_DATA_BR.test(l));
+  const TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO = detectarColunaDupla(
+    ocrText,
+    _linhasComData,
+  ).detectado;
 
   // FASE 1.3 + F0.5 — detector de HEADER com totalizadores HT/HE/BH/DSR
   // como colunas dedicadas. Cartões Senior/ADP/Totvs colocam os

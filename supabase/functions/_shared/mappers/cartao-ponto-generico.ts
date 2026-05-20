@@ -18,6 +18,7 @@ import type {
   OcorrenciaDominio,
   ParseCartaoPontoResultDominio,
 } from '../tipos-dominio.ts';
+import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
 
 const PARSER_VERSION = 'cartao-ponto-generico-mapper-v6-2026-05-06';
 
@@ -118,6 +119,15 @@ export const mapperCartaoGenerico: Mapper<ParseCartaoPontoResultDominio> = {
     const competencias = new Map<string, number>();
     const linhas = doc.textoCompleto.split(/\r?\n/);
 
+    // Detecção de coluna dupla "Real vs Previsto" — quando ativa,
+    // a 2ª coluna (4 horas previstas da escala) deve ser descartada
+    // antes do pareamento.
+    const linhasComData = linhas.filter((l) => RE_DATA_BR.test(l));
+    const colunaDupla = detectarColunaDupla(
+      doc.textoCompleto,
+      linhasComData,
+    ).detectado;
+
     for (const linha of linhas) {
       // Descarta linhas de metadado / rodapé jurídico antes de tentar extrair
       // batidas — timestamps de assinatura digital, protocolo PJe e juntada
@@ -142,7 +152,9 @@ export const mapperCartaoGenerico: Mapper<ParseCartaoPontoResultDominio> = {
       // Remove a data da linha pra não contaminar extração de horas
       const semData = linha.replace(RE_DATA_BR, ' ');
       const horas = extrairHoras(semData);
-      const marcacoes = pares(horas);
+      // Coluna dupla: trunca em 4 horas (1° grupo = batidas reais).
+      const horasEfetivas = colunaDupla ? horas.slice(0, 4) : horas;
+      const marcacoes = pares(horasEfetivas);
       const diaSemanaMatch = linha.match(RE_DIA_SEMANA);
       const diaSemana = diaSemanaMatch ? diaSemanaMatch[1] : null;
       const ocorrencia = detectarOcorrencia(linha, marcacoes.length > 0);

@@ -21,6 +21,9 @@ import type {
   OcorrenciaDominio,
   ParseCartaoPontoResultDominio,
 } from '../tipos-dominio.ts';
+import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
+
+const RE_DATA_BR = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/;
 
 const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v6-2026-05-06';
 
@@ -91,7 +94,7 @@ function isoFromUtc(d: Date): string {
 
 /**
  * Extrai pares E/S de uma string. Aceita ímpares — último horário sem par
- * vira `{e: 'X', s: ''}`.
+ * vira `{e: 'X', s: ''}`. Função pura — caller decide truncamento.
  */
 function extrairPares(s: string): MarcacaoDominio[] {
   const horas: string[] = [];
@@ -147,6 +150,7 @@ function quebrarEmBlocos(texto: string): Array<{
 function processarBloco(
   bloco: { periodo: PeriodoDetectado; trecho: string },
   warnings: string[],
+  colunaDupla: boolean,
 ): ApuracaoDominio[] {
   const apuracoes: ApuracaoDominio[] = [];
   const linhas = bloco.trecho.split(/\r?\n/);
@@ -169,7 +173,15 @@ function processarBloco(
     // rodapé do cartão anterior na mesma linha — caso extremo).
     const idxLabel = linha.search(RE_LINHA_DIA);
     const trechoBatidas = idxLabel >= 0 ? linha.slice(idxLabel) : linha;
-    const marcacoes = extrairPares(trechoBatidas);
+    const todasMarcacoes = extrairPares(trechoBatidas);
+    // Coluna dupla "Real vs Previsto": mantém apenas o 1° par (4 horas
+    // reais = 2 pares); 2° par é escala prevista, descartado.
+    // Nota: truncamento aqui é em PARES (slice(0,2)); no mapper genérico
+    // o equivalente é em HORAS (slice(0,4)). Mesmo efeito, unidades
+    // diferentes — não confundir.
+    const marcacoes = colunaDupla
+      ? todasMarcacoes.slice(0, 2)
+      : todasMarcacoes;
 
     if ((tipoInfo.tipo === 'dsr' || tipoInfo.tipo === 'feriado') && marcacoes.length === 0) {
       continue; // descanso/feriado sem batida — não exporta
@@ -237,10 +249,19 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
     const blocos = quebrarEmBlocos(doc.textoCompleto);
     if (blocos.length === 0) return null;
 
+    // Detecção de coluna dupla "Real vs Previsto" no nível do documento.
+    const linhasComData = doc.textoCompleto
+      .split(/\r?\n/)
+      .filter((l) => RE_DATA_BR.test(l));
+    const colunaDupla = detectarColunaDupla(
+      doc.textoCompleto,
+      linhasComData,
+    ).detectado;
+
     const apuracoes: ApuracaoDominio[] = [];
     const competencias = new Map<string, number>();
     for (const bloco of blocos) {
-      for (const ap of processarBloco(bloco, warnings)) {
+      for (const ap of processarBloco(bloco, warnings, colunaDupla)) {
         apuracoes.push(ap);
         const [yyyy, mm] = ap.data.split('-');
         const k = `${mm}/${yyyy}`;

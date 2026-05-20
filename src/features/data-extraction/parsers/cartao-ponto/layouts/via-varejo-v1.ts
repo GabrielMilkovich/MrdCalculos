@@ -41,6 +41,7 @@ import type {
   ParseCartaoPontoOptions,
   PeriodoCartao,
 } from '../types';
+import { detectarColunaDupla } from '../../../../../../supabase/functions/_shared/heuristicas/coluna-dupla';
 
 export const PARSER_VERSION = 'cartao-ponto-via-varejo-v1-2026-05-05';
 
@@ -278,10 +279,11 @@ function extrairPares(s: string): Marcacao[] {
 function processarBloco(
   bloco: BlocoCartao,
   warnings: string[],
+  temColunaDupla: boolean,
 ): ApuracaoDiaria[] {
-  const apuracoesA = processarLayoutA(bloco, warnings);
+  const apuracoesA = processarLayoutA(bloco, warnings, temColunaDupla);
   if (apuracoesA.length > 0) return apuracoesA;
-  return processarLayoutB(bloco, warnings);
+  return processarLayoutB(bloco, warnings, temColunaDupla);
 }
 
 interface DiaParseado {
@@ -309,6 +311,7 @@ function classificarTipo(token: string): DiaParseado['tipo'] {
 function processarLayoutA(
   bloco: BlocoCartao,
   warnings: string[],
+  temColunaDupla: boolean,
 ): ApuracaoDiaria[] {
   const out: ApuracaoDiaria[] = [];
   for (const raw of bloco.linhas) {
@@ -331,7 +334,10 @@ function processarLayoutA(
     const p2 = celulasComHora[1] ?? '';
     const marcs1 = extrairPares(p1);
     const marcs2 = extrairPares(p2);
-    const marcacoes = [...marcs1, ...marcs2];
+    // Se detectada coluna dupla "Real vs Previsto", marcs2 é a coluna
+    // PREVISTA (escala teórica) e não deve contaminar batidas reais.
+    // Caso contrário, p1=manhã + p2=tarde (layout Casa Bahia 2011-2016).
+    const marcacoes = temColunaDupla ? [...marcs1] : [...marcs1, ...marcs2];
 
     const data = reconstruirData(dia, bloco.periodo);
     if (!data) {
@@ -367,6 +373,7 @@ function processarLayoutA(
 function processarLayoutB(
   bloco: BlocoCartao,
   warnings: string[],
+  temColunaDupla: boolean,
 ): ApuracaoDiaria[] {
   // Junta linhas em uma string única e re-divide por `|`.
   const texto = bloco.linhas.join('\n');
@@ -465,7 +472,10 @@ function processarLayoutB(
     }
     const marcs1 = dadosP1[i] ?? [];
     const marcs2 = i < totalP2 ? dadosP2[i] : [];
-    const marcacoes = [...marcs1, ...marcs2];
+    // Coluna dupla "Real vs Previsto": p2 é PREVISTA — descartar.
+    const marcacoes = temColunaDupla
+      ? [...marcs1]
+      : [...marcs1, ...marcs2];
     if (marcacoes.length === 0) continue;
     out.push(criarApuracao(data, d.diaSemana, d.tipo, marcacoes));
   }
@@ -508,8 +518,16 @@ export function parseCartaoPontoViaVarejo(
   const apuracoes: ApuracaoDiaria[] = [];
   const competencias = new Map<string, number>();
 
+  // Detecção de coluna dupla "Real vs Previsto" feita UMA vez no nível
+  // do documento e propagada para os processadores de layout.
+  const RE_DATA_BR = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/;
+  const linhasComData = ocrText
+    .split(/\r?\n/)
+    .filter((l) => RE_DATA_BR.test(l));
+  const temColunaDupla = detectarColunaDupla(ocrText, linhasComData).detectado;
+
   for (const bloco of blocos) {
-    const aps = processarBloco(bloco, warnings);
+    const aps = processarBloco(bloco, warnings, temColunaDupla);
     for (const ap of aps) {
       apuracoes.push(ap);
       const [yyyy, mm] = ap.data.split('-');
