@@ -98,6 +98,21 @@ export interface ParseCartaoPontoResultDominio {
   /** true quando TODOS os períodos têm ok=true. Default true se array vazio. */
   reconciliacao_geral_ok?: boolean;
   /**
+   * Subconjunto de `reconciliacao` com divergências GRANDES (|delta| > 10h)
+   * que NÃO foram explicadas pelos totalizadores capturados pelo parser.
+   * Fase 6 v7 (2026-05-20): dívida técnica conhecida — Roque tem 3 períodos
+   * desse tipo. UI deve sinalizar pro operador "esses meses precisam de
+   * revisão manual antes de confiar nos números". Hipóteses pra investigar
+   * em sessão futura: pares E→S inválidos sendo somados; totalizador com
+   * código/formato fora da família atual; intrajornada sendo dupla-contada.
+   */
+  reconciliacao_residuais?: Array<{
+    periodo: { inicio: string; fim: string };
+    delta_minutos: number;
+    delta_str: string;
+    motivo: string;
+  }>;
+  /**
    * Rastro de dias VISTOS pelo parser mas DESCARTADOS do `apuracoes`
    * (Fase 6 v7, 2026-05-20). Hoje só inclui DSR/Feriado sem batida — esses
    * NÃO viram apuração exportável (CSV PJe-Calc não precisa), mas o parser

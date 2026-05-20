@@ -355,3 +355,49 @@ describe("Reconciliação — família de totalizadores expandida (item 3 revis�
     expect(rec.motivo, `motivo: ${rec.motivo}`).not.toMatch(/3960=/);
   });
 });
+
+// =============================================================================
+// Fase 6 v7 ext — reconciliacao_residuais (dívida técnica explícita)
+// =============================================================================
+
+describe("reconciliacao_residuais — dívida técnica explícita pra divergências >10h", () => {
+  it("período com delta >10h vai pra reconciliacao_residuais com motivo de investigação", () => {
+    // Sintético: totalizador 9000=10:00 mas batidas somam 25:00 (delta +15h).
+    // Forço só 3 dias com pares grandes — soma de batidas = 15h*3 = 45h, mas
+    // o totalizador 9000 declara 10h. delta = +35h (excede 10h, vira residual).
+    const textoBigDelta = `
+VIA VAREJO SA 33.041.260/0652-90 Cartão Ponto
+PERÍODO .: 16/10/2019 A 15/11/2019 Competência: NOVEMBRO/2019
+Data Dia Horário Ref P Horário Registrado Horário de Trabalho
+16/10/2019 QUA 162 N 08:00 13:00 14:00 22:00
+17/10/2019 QUI 162 N 08:00 13:00 14:00 22:00
+18/10/2019 SEX 162 N 08:00 13:00 14:00 22:00
+Movimentos: (Período de 16/10/2019 a 15/11/2019)
+9000 Horas Normais 10:00
+Assinado eletronicamente por: TATIANE - 30/11/2021
+`.trim();
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(textoBigDelta));
+    expect(resultado!.reconciliacao_residuais).toBeDefined();
+    expect(resultado!.reconciliacao_residuais!.length).toBe(1);
+    const res = resultado!.reconciliacao_residuais![0];
+    expect(res.periodo.inicio).toBe("2019-10-16");
+    expect(Math.abs(res.delta_minutos)).toBeGreaterThan(600);
+    expect(res.motivo).toMatch(/Investigação manual recomendada/i);
+  });
+
+  it("período com delta <10h NÃO vai pra reconciliacao_residuais (só ruído / divergência comum)", () => {
+    // Totalizador 9000=14:00 + batidas 14:30 → delta 30min (entra em reconciliacao
+    // mas NÃO em residuais).
+    const textoPequeno = `
+VIA VAREJO SA 33.041.260/0652-90 Cartão Ponto
+PERÍODO .: 16/10/2019 A 15/11/2019 Competência: NOVEMBRO/2019
+Data Dia Horário Ref P Horário Registrado Horário de Trabalho
+16/10/2019 QUA 162 N 08:00 12:00 13:00 22:30
+Movimentos: (Período de 16/10/2019 a 15/11/2019)
+9000 Horas Normais 14:00
+Assinado eletronicamente por: TATIANE - 30/11/2021
+`.trim();
+    const resultado = mapperCartaoViaVarejo.mapear(docSintetico(textoPequeno));
+    expect(resultado!.reconciliacao_residuais).toBeUndefined();
+  });
+});

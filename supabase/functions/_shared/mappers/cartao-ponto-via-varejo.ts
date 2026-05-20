@@ -748,6 +748,21 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
       parser_version: PARSER_VERSION,
       reconciliacao,
       reconciliacao_geral_ok,
+      // Dívida técnica explícita (Fase 6 v7): períodos com divergência >10h
+      // que a expansão de família de totalizadores não conseguiu fechar.
+      // 600 min = 10h. Limiar deliberadamente alto pra distinguir de ruído
+      // de arredondamento (<5min) e de pequenas divergências mensais (5-60min).
+      reconciliacao_residuais: (() => {
+        const grandes = reconciliacao.filter((r) => Math.abs(r.delta_minutos) > 600);
+        if (grandes.length === 0) return undefined;
+        return grandes.map((r) => ({
+          periodo: r.periodo,
+          delta_minutos: r.delta_minutos,
+          delta_str: minToHhmm(r.delta_minutos),
+          motivo:
+            'Divergência grande (>10h) não explicada pelos totalizadores capturados (9000/908x/3884/7338/7358). Investigação manual recomendada — possíveis causas: pares E→S inválidos sendo somados; totalizador em código/formato fora da família atual; intrajornada dupla-contada.',
+        }));
+      })(),
       dias_classificados_descartados: diasDescartados.length > 0 ? diasDescartados : undefined,
     };
   },
