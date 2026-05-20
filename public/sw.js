@@ -1,9 +1,15 @@
 // =====================================================
 // MRD Calc — Service Worker for Offline Support (PWA)
 // VERSÃO 2: fix cache-first em HTML causando tela branca após deploy
+// VERSÃO 3 (2026-05-20): bump v3→v4 — força invalidação de cache em todos
+//   os clientes que ainda servem bundle do ciclo v6. Após o ciclo Fase 2-6
+//   v7 (mapper Via Varejo pdfjs, V6 fallback banner, reconciliação, etc.)
+//   alguns clientes podiam ainda ler o constant PARSER_VERSION do bundle
+//   antigo via cache do SW. Bump → activate apaga STATIC_CACHE + DATA_CACHE
+//   antigos → próximo fetch traz bundle novo com v7.
 // =====================================================
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const STATIC_CACHE = `mrd-calc-static-${CACHE_VERSION}`;
 const DATA_CACHE = `mrd-calc-data-${CACHE_VERSION}`;
 
