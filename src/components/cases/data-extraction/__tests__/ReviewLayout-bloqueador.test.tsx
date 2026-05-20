@@ -2,20 +2,26 @@
 /**
  * Gate 2 — Cenário 1: lógica do banner-bloqueador no `ReviewLayout`.
  *
- * Por que aqui e não em cada um dos 4 dialogs (Faltas, Férias, Cartão,
- * Holerite): `ReviewLayout` é o ponto único onde 3 dos 4 dialogs renderizam
- * o banner-bloqueador. `HoleritePreviewDialog` e `CtpsReviewDialog` têm
- * banners inline pelo mesmo padrão (dívida de design registrada — extrair
- * para `<BlockerBanner />` quando estabilizar).
+ * NOTA HISTÓRICA: design mudou entre 2 sessões.
+ * - Versão A (esta sessão, commit a32ab36 original): banner role="alert" com
+ *   texto "Download bloqueado — ...", botão Baixar CSV DISABLED, sem override.
+ * - Versão B (atual em main após commit 2c5282a "fix(ui): banner de bloqueador
+ *   vira ALERTA visual — não trava mais download"): banner div em vermelho com
+ *   texto "Atenção — possíveis erros detectados", botão Baixar CSV CONTINUA
+ *   HABILITADO. Decisão de produto: operador SEMPRE decide se baixa.
+ *
+ * Este teste valida a Versão B (estado atual em main). Se a equipe voltar
+ * para Versão A no futuro, atualizar este arquivo.
+ *
+ * Por que aqui e não em cada um dos 4 dialogs: `ReviewLayout` é o ponto único
+ * onde 3 dos 4 dialogs renderizam o banner-bloqueador.
  *
  * Cobertura intencional:
- *   - bloqueador=true  → banner com role="alert" visível, botão "Baixar CSV"
- *     disabled, motivo legível renderizado.
- *   - bloqueador=false → banner ausente, botão habilitado.
+ *   - bloqueador=true  → banner em vermelho visível, com motivo legível
+ *   - bloqueador=false → banner ausente
  *
- * Não testa: behavior tátil ("cursor: not-allowed", clique no botão
- * disabled não dispara handler). Tátil só humano pega — fica no checklist
- * de Gate 2 e validação no Gate 3 com acervo real.
+ * Não testa: comportamento tátil + interação com checkbox de override.
+ * Tátil só humano pega — fica no checklist de Gate 2 e validação no Gate 3.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
@@ -43,57 +49,64 @@ const baseProps = {
   children: <div data-testid="tabela-children">tabela</div>,
 };
 
-describe("ReviewLayout — banner-bloqueador", () => {
-  it("bloqueador=true: renderiza banner role=alert + desabilita botão Baixar CSV", () => {
+describe("ReviewLayout — banner-bloqueador (design 'Atenção' pós-2c5282a)", () => {
+  it("bloqueador=true + reasons: renderiza banner com 'Atenção' e razões", () => {
     render(
       <ReviewLayout
         {...baseProps}
         bloqueador={true}
-        bloqueadorMotivo="Score 12 abaixo do mínimo aceitável (30)."
+        bloqueadorReasons={[
+          "BLOQUEADOR: Score 12 abaixo do mínimo aceitável (30).",
+          "BLOQUEADOR: Nenhuma rubrica reconhecida.",
+        ]}
       />,
     );
 
-    const banner = screen.getByRole("alert");
-    expect(banner).toBeVisible();
-    expect(banner).toHaveTextContent(/Download bloqueado/i);
-    expect(banner).toHaveTextContent(
-      /Score 12 abaixo do mínimo aceitável \(30\)/i,
-    );
-    expect(banner).toHaveTextContent(/não pode ser sobrescrito/i);
-
-    const botao = screen.getByRole("button", { name: /baixar csv/i });
-    expect(botao).toBeDisabled();
+    expect(
+      screen.getByText(/Atenção.*possíveis erros detectados/i),
+    ).toBeVisible();
+    // Razões aparecem na lista (sem o prefixo "BLOQUEADOR:" que é stripado pelo componente).
+    expect(
+      screen.getByText(/Score 12 abaixo do mínimo aceitável/i),
+    ).toBeVisible();
+    expect(
+      screen.getByText(/Nenhuma rubrica reconhecida/i),
+    ).toBeVisible();
   });
 
-  it("bloqueador=false: banner ausente + botão Baixar CSV habilitado", () => {
+  it("bloqueador=true sem reasons: banner ainda mostra cabeçalho de atenção", () => {
+    render(<ReviewLayout {...baseProps} bloqueador={true} />);
+
+    expect(
+      screen.getByText(/Atenção.*possíveis erros detectados/i),
+    ).toBeVisible();
+    // Bloco de reasons não aparece quando reasons é vazio/undefined.
+    expect(screen.queryByText(/Score \d+ abaixo/i)).toBeNull();
+  });
+
+  it("bloqueador=false: banner de atenção ausente", () => {
     render(<ReviewLayout {...baseProps} bloqueador={false} />);
-
-    expect(screen.queryByRole("alert")).toBeNull();
-
-    const botao = screen.getByRole("button", { name: /baixar csv/i });
-    expect(botao).toBeEnabled();
+    expect(screen.queryByText(/Atenção.*possíveis erros detectados/i)).toBeNull();
   });
 
-  it("sem bloqueador (prop omitida): banner ausente + botão habilitado (default seguro)", () => {
+  it("sem bloqueador (prop omitida): banner ausente (default seguro)", () => {
     render(<ReviewLayout {...baseProps} />);
-
-    expect(screen.queryByRole("alert")).toBeNull();
-
-    const botao = screen.getByRole("button", { name: /baixar csv/i });
-    expect(botao).toBeEnabled();
+    expect(screen.queryByText(/Atenção.*possíveis erros detectados/i)).toBeNull();
   });
 
-  it("bloqueadorMotivo null/undefined: banner mostra fallback genérico", () => {
+  it("botão 'Baixar CSV' fica habilitado MESMO com bloqueador=true (design pós-2c5282a)", () => {
+    // Decisão de produto explícita no commit 2c5282a: o banner é INFORMATIVO,
+    // operador SEMPRE decide se baixa. Se este teste quebrar no futuro, é
+    // sinal de que a equipe reverteu para o design "hard block" — aí
+    // ajustar este teste em conjunto.
     render(
       <ReviewLayout
         {...baseProps}
         bloqueador={true}
-        bloqueadorMotivo={null}
+        bloqueadorReasons={["BLOQUEADOR: Teste"]}
       />,
     );
-
-    const banner = screen.getByRole("alert");
-    expect(banner).toBeVisible();
-    expect(banner).toHaveTextContent(/inconsistência grave detectada/i);
+    const botao = screen.getByRole("button", { name: /baixar csv/i });
+    expect(botao).toBeEnabled();
   });
 });
