@@ -47,7 +47,7 @@ export type {
 } from './types';
 
 /** Versão do dispatcher — UI mostra para confirmar deploy. */
-export const PARSER_VERSION = 'cartao-ponto-v6-dispatcher-2026-05-07';
+export const PARSER_VERSION = 'cartao-ponto-v7-dispatcher-2026-05-20';
 
 /**
  * Detecta o layout do cartão de ponto baseado em marcadores no OCR.

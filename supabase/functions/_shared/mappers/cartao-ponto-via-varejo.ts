@@ -26,7 +26,7 @@ import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
 
 const RE_DATA_BR = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/;
 
-const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v6-2026-05-06';
+const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v7-2026-05-20';
 
 // Aceita 2 formatos de cabeçalho de período:
 //   1. ANTIGO (Via Varejo 2011-2016): "Período 11.01.2016 A 15.02.2016"
