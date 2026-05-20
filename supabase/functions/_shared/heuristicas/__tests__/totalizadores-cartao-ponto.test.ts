@@ -206,6 +206,167 @@ describe('Estratégia 1: label-antes — literais e ambíguos', () => {
   });
 });
 
+describe('Estratégia 1: label-antes — siglas e variantes legadas (Opção A)', () => {
+  // Tokens migrados de TOKENS_FIM_BATIDAS (generico-v1.ts) para o módulo
+  // compartilhado via PR #95. Cobrem layouts Senior/ADP/Totvs/VIA S/A que
+  // concatenam totalizadores na mesma linha das batidas.
+
+  it('HT casa como label-antes (sigla Horas Trabalhadas)', () => {
+    const linha = '09:00 12:00 13:00 17:30 HT 8:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteBatidas).toContain('17:30');
+    expect(r.parteTotalizadores).toContain('HT');
+  });
+
+  it('HE casa como label-antes (sigla Horas Extras)', () => {
+    const linha = '09:00 12:00 13:00 17:30 HE 0:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('HE');
+  });
+
+  it('BH casa como label-antes (sigla Banco de Horas)', () => {
+    const linha = '09:00 12:00 13:00 17:30 BH 1:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('BH');
+  });
+
+  it('DSR (sigla) casa como label-antes', () => {
+    const linha = '09:00 12:00 13:00 17:30 DSR 8:00';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('DSR');
+  });
+
+  it('RSR (sigla) casa como label-antes', () => {
+    const linha = '09:00 12:00 13:00 17:30 RSR 8:00';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('RSR');
+  });
+
+  it('H.E. com pontos casa como label-antes', () => {
+    const linha = '09:00 12:00 13:00 17:30 H.E. 0:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+  });
+
+  it('H.T. com pontos casa como label-antes', () => {
+    const linha = '09:00 12:00 13:00 17:30 H.T. 8:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+  });
+
+  it('Banco de Horas (forma plena) casa', () => {
+    const linha = '09:00 12:00 13:00 17:30 Banco de Horas 1:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('Banco de Horas');
+  });
+
+  it('Horas Trabalhadas (forma plena) casa', () => {
+    const linha = '09:00 12:00 13:00 17:30 Horas Trabalhadas 8:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('Horas Trabalhadas');
+  });
+
+  it('Horas Normais casa', () => {
+    const linha = '09:00 12:00 13:00 17:30 Horas Normais 8:00';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('Horas Normais');
+  });
+
+  it('H. Normais casa (com ponto)', () => {
+    const linha = '09:00 12:00 13:00 17:30 H. Normais 8:00';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+  });
+
+  it('H. Norm casa (abreviado)', () => {
+    const linha = '09:00 12:00 13:00 17:30 H. Norm 8:00';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+  });
+
+  it('Horas Previstas casa (layout VIA S/A)', () => {
+    const linha = '09:00 12:00 13:00 17:30 Horas Previstas 8:00';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('Horas Previstas');
+  });
+
+  it('Hora Extra (singular sem "s") casa', () => {
+    const linha = '09:00 12:00 13:00 17:30 Hora Extra 0:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('Hora Extra');
+  });
+
+  it('Horas Extras (plural) casa', () => {
+    const linha = '09:00 12:00 13:00 17:30 Horas Extras 0:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('Horas Extras');
+  });
+
+  // ====== Testes adversariais críticos ======
+
+  it('"HExt" continua sendo casado pela família camelCase, não pela sigla "HE"', () => {
+    // 'HE' tem boundary `\b` em ambos os lados. Em 'HExt', o caractere após
+    // 'HE' é 'x' (word-char), então `\bHE\b` NÃO casa. A regex camelCase
+    // `\bH(?:Ext|...)\b` casa em 'HExt' inteiro. Resultado: o índice de corte
+    // é o início de 'HExt' (consistente com comportamento pré-migração).
+    const linha = '09:00 12:00 13:00 17:30 HExt 1:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    // O corte ocorre no início de 'HExt' — verificamos que 'HExt' está no
+    // lado dos totalizadores (não foi fragmentado em 'HE' + 'xt').
+    expect(r.parteTotalizadores).toContain('HExt');
+    expect(r.parteBatidas).not.toContain('HE');
+  });
+
+  it('"HTrab" continua sendo casado pela família camelCase, não pela sigla "HT"', () => {
+    // Mesmo princípio: `\bHT\b` não casa em 'HTrab' (caractere seguinte 'r'
+    // é word-char). A regex camelCase `\bH(?:...|Trab)\b` casa 'HTrab' inteiro.
+    const linha = '09:00 12:00 13:00 17:30 HTrab 8:00';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('HTrab');
+  });
+
+  it('"H Extras" (com espaço) continua casando — adição de "HE" sigla não interfere', () => {
+    // Garante que a adição de `\bHE\b` (sigla) não interfere com a regex
+    // existente `/\bH\.?\s*Extras?\b/i`.
+    const linha = '09:00 12:00 13:00 17:30 H Extras 0:30';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('H Extras');
+  });
+
+  it('"Descanso" continua casando (DSR forma plena) — não conflita com sigla DSR', () => {
+    const linha = '09:00 12:00 Descanso 8:00';
+    const r = cortarTotalizadores(linha);
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteTotalizadores).toContain('Descanso');
+  });
+
+  it('"HT FULANO" (sigla dentro de nome próprio) — comportamento documentado', () => {
+    // Caso ambíguo: se um operador escreveu "HT FULANO" em campo de empregado,
+    // `\bHT\b` casaria. Não há fixture real evidenciando esse caso (o split de
+    // MARCADORES_RESULTADO em generico-v1 também casa HT igualmente — mesmo
+    // comportamento pré-migração).
+    const linha = 'Empregado HT FULANO admitido 01/01/2020';
+    const r = cortarTotalizadores(linha);
+    // Documentar: corta em HT (mesma decisão que TOKENS_FIM_BATIDAS legacy).
+    expect(r.origem).toBe('label-antes');
+    expect(r.parteBatidas).toBe('Empregado ');
+  });
+});
+
 describe('Estratégia 2: label-depois-backtrack', () => {
   it('"7:25 BCre 1:28 BDeb" — backtrack corta antes de 7:25', () => {
     const linha = '09:00 12:00 13:05 17:25 7:25 BCre 1:28 BDeb';

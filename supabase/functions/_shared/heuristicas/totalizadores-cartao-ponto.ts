@@ -70,12 +70,46 @@ const RE_TOTALIZADOR_LITERAL: RegExp[] = [
   /\bArmazena\s+BCO\b/i,
 ];
 
+/**
+ * Siglas e variantes legadas (migradas de TOKENS_FIM_BATIDAS em
+ * generico-v1.ts via PR #95 — Opção A).
+ *
+ * Cobrem layouts Senior/ADP/Totvs/VIA S/A que concatenam totalizadores
+ * HT/HE/BH/DSR/RSR e variantes plenas (Banco de Horas, Horas
+ * Trabalhadas, Horas Normais, Horas Previstas, Hora Extra) na mesma
+ * linha das batidas. Sem essa whitelist, esses valores virariam
+ * "batidas-fantasma" durante a extração.
+ *
+ * Princípio: literais estritos com `\b` em ambas as bordas — palavras
+ * inteiras conhecidas. Bordas previnem casamento parcial dentro de
+ * tokens camelCase já cobertos (ex: "HE" em "HExt" não casa aqui
+ * porque "x" é word-char, e a regex `\bHE\b` exige non-word logo
+ * após — comportamento validado no Passo 0 do PR #95).
+ */
+const RE_TOTALIZADOR_LEGADO: RegExp[] = [
+  /\bHT\b/i, // Horas Trabalhadas (sigla)
+  /\bHE\b/i, // Horas Extras (sigla)
+  /\bBH\b/i, // Banco de Horas (sigla)
+  /\bDSR\b/i, // Descanso Semanal Remunerado
+  /\bRSR\b/i, // Repouso Semanal Remunerado
+  /\bH\.?\s*E\.?\b/i, // H.E. com pontos
+  /\bH\.?\s*T\.?\b/i, // H.T. com pontos
+  /\bBanco\s+de\s+Horas?\b/i, // forma plena
+  /\bHoras?\s+Trabalhadas?\b/i, // forma plena
+  /\bHoras?\s+Normais\b/i, // Horas Normais
+  /\bH\.?\s*Normais\b/i, // H. Normais com ponto
+  /\bH\.?\s*Norm\b/i, // H. Norm abreviado
+  /\bHoras?\s+Previstas?\b/i, // layout VIA S/A
+  /\bHoras?\s+Extras?\b/i, // forma plena (singular ou plural)
+];
+
 // União de todas as estratégias 1 (label-antes)
 const RE_TOTALIZADORES_LABEL_ANTES: RegExp[] = [
   ...RE_TOTALIZADOR_FAMILIA_CAMELCASE,
   ...RE_TOTALIZADOR_ABREVIADO,
   ...RE_TOTALIZADOR_COM_TEMPO,
   ...RE_TOTALIZADOR_LITERAL,
+  ...RE_TOTALIZADOR_LEGADO,
 ];
 
 // =====================================================
