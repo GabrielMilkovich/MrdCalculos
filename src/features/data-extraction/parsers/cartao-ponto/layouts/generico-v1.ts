@@ -24,6 +24,7 @@
  */
 
 import { detectarColunaDupla } from '../../../../../../supabase/functions/_shared/heuristicas/coluna-dupla';
+import { cortarTotalizadores } from '../../../../../../supabase/functions/_shared/heuristicas/totalizadores-cartao-ponto';
 
 export type Marcacao = {
   e: string;
@@ -623,10 +624,42 @@ export function parseCartaoPontoGenerico(
 
     // Particiona a linha em "antes do primeiro marcador de resultado"
     // e "depois". Tudo antes vira candidato a batida; tudo depois é evento.
+    //
+    // Caminho legacy primeiro (MARCADORES_RESULTADO) — preserva
+    // comportamento atual em layouts já cobertos (Casa Bahia / Senior
+    // padrão / ADP com HT/HE inline).
+    //
+    // Fallback novo: quando splitIdx === -1, delega ao módulo
+    // cortarTotalizadores (cascata 2→1→3) que cobre layouts
+    // corporativos modernos (BCre, BDeb, HExt, AdNot) e o caso do
+    // áudio sem palavra-label.
+    const motivosTotalizadorRevisao: string[] = [];
     const splitIdx = primeiraOcorrenciaMarcador(linhaSemPipes);
-    const parteBatidas =
-      splitIdx >= 0 ? linhaSemPipes.slice(0, splitIdx) : linhaSemPipes;
-    const parteEventos = splitIdx >= 0 ? linhaSemPipes.slice(splitIdx) : "";
+    let parteBatidas: string;
+    let parteEventos: string;
+    if (splitIdx >= 0) {
+      parteBatidas = linhaSemPipes.slice(0, splitIdx);
+      parteEventos = linhaSemPipes.slice(splitIdx);
+    } else if (TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO) {
+      // Coluna dupla já vai truncar para 4 horas; cortarTotalizadores
+      // seria redundante e poderia disparar REVISAR_OCR desnecessariamente
+      // em linhas onde a 2ª metade é a escala prevista (não totalizador).
+      parteBatidas = linhaSemPipes;
+      parteEventos = '';
+    } else {
+      const cortado = cortarTotalizadores(linhaSemPipes);
+      parteBatidas = cortado.parteBatidas;
+      parteEventos = cortado.parteTotalizadores;
+      if (cortado.confianca === 'baixa') {
+        motivosTotalizadorRevisao.push(
+          'totalizador detectado por heurística posicional',
+        );
+      } else if (cortado.confianca === 'media') {
+        motivosTotalizadorRevisao.push(
+          'totalizador detectado por backtrack (label depois)',
+        );
+      }
+    }
 
     // Captura horários da parte de batidas (após a data).
     // Remove a data da string para não confundir o regex.
@@ -709,7 +742,7 @@ export function parseCartaoPontoGenerico(
     // não descartamos a apuração; sinalizamos pra revisão humana. Cada
     // motivo aqui = uma classe de ambiguidade detectada. Advogado
     // decide na UI se mantém ou descarta cada apuração marcada.
-    const motivosRevisao: string[] = [];
+    const motivosRevisao: string[] = [...motivosTotalizadorRevisao];
 
     // Motivo 1: linha CASOU como cabeçalho/admissão/legenda.
     // Ex: "Admiro: 24/11/2003 ... 91 08:00 11:00 12:00 14:25"

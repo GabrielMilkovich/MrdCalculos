@@ -42,6 +42,7 @@ import type {
   PeriodoCartao,
 } from '../types';
 import { detectarColunaDupla } from '../../../../../../supabase/functions/_shared/heuristicas/coluna-dupla';
+import { cortarTotalizadores } from '../../../../../../supabase/functions/_shared/heuristicas/totalizadores-cartao-ponto';
 
 export const PARSER_VERSION = 'cartao-ponto-via-varejo-v1-2026-05-05';
 
@@ -329,7 +330,12 @@ function processarLayoutA(
     // (alguns OCRs Mistral colocam coluna vazia entre os períodos)
     const celulasComHora = celulas
       .slice(1)
-      .filter((c) => /\d{1,2}:\d{2}/.test(c));
+      .filter((c) => /\d{1,2}:\d{2}/.test(c))
+      // Defesa adicional contra OCR colapsado: aplica cortarTotalizadores
+      // por célula descartando parteTotalizadores. Layout Casa Bahia
+      // 2011-2016 tem split estrutural por pipes que já é confiável;
+      // este corte é uma rede de segurança extra.
+      .map((c) => cortarTotalizadores(c).parteBatidas);
     const p1 = celulasComHora[0] ?? '';
     const p2 = celulasComHora[1] ?? '';
     const marcs1 = extrairPares(p1);
@@ -444,8 +450,15 @@ function processarLayoutB(
   // já foram excluídos pelo corte semântico do bloco).
   const p1Filtradas = p1Linhas.filter((l) => /^\s*(\d{1,2}:\d{2}\s*)+$/.test(l));
   const p2Filtradas = p2Linhas.filter((l) => /^\s*(\d{1,2}:\d{2}\s*)+$/.test(l));
-  const dadosP1 = (p1Filtradas.length >= 2 ? p1Filtradas : p1Linhas).map(extrairPares);
-  const dadosP2 = (p2Filtradas.length >= 2 ? p2Filtradas : p2Linhas).map(extrairPares);
+  // Defesa adicional: aplica cortarTotalizadores por linha descartando
+  // parteTotalizadores antes do pareamento (proteção contra OCR colapsado).
+  const cortar = (l: string): string => cortarTotalizadores(l).parteBatidas;
+  const dadosP1 = (p1Filtradas.length >= 2 ? p1Filtradas : p1Linhas)
+    .map(cortar)
+    .map(extrairPares);
+  const dadosP2 = (p2Filtradas.length >= 2 ? p2Filtradas : p2Linhas)
+    .map(cortar)
+    .map(extrairPares);
 
   // Filtra dias elegíveis (que devem casar com batidas).
   const diasElegiveis = diasParseados.filter((d) => d.exportar);
