@@ -22,6 +22,7 @@ import type {
   ParseCartaoPontoResultDominio,
 } from '../tipos-dominio.ts';
 import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
+import { cortarTotalizadores } from '../heuristicas/totalizadores-cartao-ponto.ts';
 
 const RE_DATA_BR = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/;
 
@@ -171,9 +172,13 @@ function processarBloco(
 
     // Extrai horários DEPOIS do label do dia (texto antes do label pode ser
     // rodapé do cartão anterior na mesma linha — caso extremo).
+    // cortarTotalizadores aplicado antes do extrairPares descarta a
+    // parteTotalizadores (BCre/BDeb/HExt inline). extrairPares permanece
+    // função pura.
     const idxLabel = linha.search(RE_LINHA_DIA);
     const trechoBatidas = idxLabel >= 0 ? linha.slice(idxLabel) : linha;
-    const todasMarcacoes = extrairPares(trechoBatidas);
+    const cortado = cortarTotalizadores(trechoBatidas);
+    const todasMarcacoes = extrairPares(cortado.parteBatidas);
     // Coluna dupla "Real vs Previsto": mantém apenas o 1° par (4 horas
     // reais = 2 pares); 2° par é escala prevista, descartado.
     // Nota: truncamento aqui é em PARES (slice(0,2)); no mapper genérico

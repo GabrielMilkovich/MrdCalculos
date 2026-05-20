@@ -19,6 +19,7 @@ import type {
   ParseCartaoPontoResultDominio,
 } from '../tipos-dominio.ts';
 import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
+import { cortarTotalizadores } from '../heuristicas/totalizadores-cartao-ponto.ts';
 
 const PARSER_VERSION = 'cartao-ponto-generico-mapper-v6-2026-05-06';
 
@@ -149,9 +150,14 @@ export const mapperCartaoGenerico: Mapper<ParseCartaoPontoResultDominio> = {
       const d = parseInt(dd, 10);
       const y = parseInt(yyyy, 10);
       if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900 || y > 2200) continue;
-      // Remove a data da linha pra não contaminar extração de horas
+      // Remove a data da linha pra não contaminar extração de horas.
+      // cortarTotalizadores aplicado antes do extrairHoras descarta a
+      // parteTotalizadores (BCre/BDeb/HExt/etc inline na mesma linha
+      // das batidas). Camada 3 V6 não tem flag REVISAR_OCR, então
+      // apenas descarta silenciosamente.
       const semData = linha.replace(RE_DATA_BR, ' ');
-      const horas = extrairHoras(semData);
+      const cortado = cortarTotalizadores(semData);
+      const horas = extrairHoras(cortado.parteBatidas);
       // Coluna dupla: trunca em 4 horas (1° grupo = batidas reais).
       const horasEfetivas = colunaDupla ? horas.slice(0, 4) : horas;
       const marcacoes = pares(horasEfetivas);
