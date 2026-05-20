@@ -297,6 +297,18 @@ function adaptarV6CartaoPonto(raw: unknown): ParseCartaoPontoResult | null {
     }
   }
 
+  // Fase 4 v7: propaga reconciliação do V6 jsonb. Edge mapper anexa
+  // `reconciliacao[]` + `reconciliacao_geral_ok` quando capaz (mapper
+  // Via Varejo). Mapper genérico não popula → ficam undefined → dialog
+  // não bloqueia export (comportamento legado preservado).
+  const reconciliacao = Array.isArray(obj.reconciliacao)
+    ? (obj.reconciliacao as ParseCartaoPontoResult['reconciliacao'])
+    : undefined;
+  const reconciliacao_geral_ok =
+    typeof obj.reconciliacao_geral_ok === 'boolean'
+      ? obj.reconciliacao_geral_ok
+      : undefined;
+
   return {
     apuracoes: obj.apuracoes as ParseCartaoPontoResult['apuracoes'],
     competencias,
@@ -310,6 +322,8 @@ function adaptarV6CartaoPonto(raw: unknown): ParseCartaoPontoResult | null {
       : [],
     parser_version:
       typeof obj.parser_version === 'string' ? obj.parser_version : 'v6_geometric',
+    reconciliacao,
+    reconciliacao_geral_ok,
   };
 }
 

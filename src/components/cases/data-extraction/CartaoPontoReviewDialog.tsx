@@ -13,11 +13,23 @@
  *   - Avisa quando há mais de 6 pares preenchidos (excedente truncado).
  */
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { AlertTriangle, ExternalLink, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -241,6 +253,85 @@ export function CartaoPontoReviewDialog({
     () => scoreCartaoPonto(effectiveParsed, ocrText),
     [effectiveParsed, ocrText],
   );
+
+  // ─────────────────────────────────────────────────────────────────
+  // Fase 4 v7 — bloqueio de export por reconciliação divergente
+  // ─────────────────────────────────────────────────────────────────
+  // Quando V6 mapper Via Varejo detecta delta > 5min entre batidas e
+  // totalizadores declarados (9000+908x), `effectiveParsed.reconciliacao_geral_ok`
+  // vem `false`. Por padrão, export é BLOQUEADO. Operador pode forçar
+  // via AlertDialog com justificativa obrigatória (≥20 chars), gravada
+  // em `documents.metadata` pra audit trail.
+  //
+  // V5 path (parser regex) não popula reconciliação — campos ficam
+  // undefined → reconciliacaoDivergente=false → comportamento legado
+  // preservado (não bloqueia).
+  const reconciliacaoDivergente =
+    effectiveParsed.reconciliacao_geral_ok === false;
+  const periodosReconcDivergentes = useMemo(
+    () =>
+      (effectiveParsed.reconciliacao ?? []).filter(
+        (r) => !r.ok && r.declarado_minutos !== null,
+      ),
+    [effectiveParsed.reconciliacao],
+  );
+  const [reconciliacaoOverride, setReconciliacaoOverride] = useState<string | null>(
+    null,
+  );
+  const [justifDialogOpen, setJustifDialogOpen] = useState(false);
+  const [justifText, setJustifText] = useState("");
+  const [persistindoOverride, setPersistindoOverride] = useState(false);
+
+  const bloqueadoPorReconciliacao =
+    reconciliacaoDivergente && reconciliacaoOverride === null;
+
+  async function handleForcarOverride() {
+    const txt = justifText.trim();
+    if (txt.length < 20) {
+      toast.error(
+        `Justificativa precisa ter no mínimo 20 caracteres (atual: ${txt.length}).`,
+      );
+      return;
+    }
+    setPersistindoOverride(true);
+    try {
+      if (_documentId) {
+        const { data: userRes } = await supabase.auth.getUser();
+        const { data: docRow } = await supabase
+          .from("documents")
+          .select("metadata")
+          .eq("id", _documentId)
+          .single();
+        const metaAtual = (docRow?.metadata ?? {}) as Record<string, unknown>;
+        await supabase
+          .from("documents")
+          .update({
+            metadata: {
+              ...metaAtual,
+              reconciliacao_override_justificativa: txt,
+              reconciliacao_override_forced_at: new Date().toISOString(),
+              reconciliacao_override_forced_by: userRes?.user?.id ?? null,
+              reconciliacao_override_periodos: periodosReconcDivergentes.map((p) => ({
+                inicio: p.periodo.inicio,
+                fim: p.periodo.fim,
+                declarado: p.declarado_str,
+                somado: p.somado_str,
+                delta_min: p.delta_minutos,
+              })),
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", _documentId);
+      }
+      setReconciliacaoOverride(txt);
+      setJustifDialogOpen(false);
+      toast.success("Override aplicado. Você pode baixar o CSV agora.");
+    } catch (err) {
+      toast.error(`Erro ao persistir justificativa: ${(err as Error).message}`);
+    } finally {
+      setPersistindoOverride(false);
+    }
+  }
 
   // Mapa de discrepância de Horas Trabalhadas por data — destaca dias
   // onde a soma das batidas não bate com o evento HT do OCR.
@@ -575,9 +666,72 @@ export function CartaoPontoReviewDialog({
       divergenciasCount={
         unparsedLines.length + outOfWindowLines.length + warnings.length
       }
-      bloqueador={confidence.bloqueador}
-      bloqueadorMotivo={confidence.bloqueador_motivo}
+      bloqueador={confidence.bloqueador || bloqueadoPorReconciliacao}
+      bloqueadorMotivo={
+        bloqueadoPorReconciliacao
+          ? `Reconciliação contra totalizadores divergente em ${periodosReconcDivergentes.length} período(s). Use "Forçar com justificativa" pra liberar.`
+          : confidence.bloqueador_motivo
+      }
     >
+      {/* Fase 4 v7 — banner de reconciliação divergente (vermelho, BLOQUEIA) */}
+      {bloqueadoPorReconciliacao && (
+        <div className="mx-3 mt-2 border-2 border-red-500 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-2">
+          <div className="font-bold text-red-900 dark:text-red-100 flex items-center gap-1.5">
+            <ShieldAlert className="h-4 w-4" />
+            Export bloqueado — reconciliação contra totalizadores divergente
+          </div>
+          <div className="text-red-800 dark:text-red-200 text-xs">
+            A soma das batidas extraídas não bate com os totalizadores
+            declarados no rodapé do PDF em{" "}
+            {periodosReconcDivergentes.length} período(s) (tolerância: 5min).
+            Revise as marcações antes de baixar, OU force exportação com
+            justificativa obrigatória (gravada em audit trail).
+          </div>
+          <div className="text-[11px] font-mono text-red-700 dark:text-red-300 space-y-0.5">
+            {periodosReconcDivergentes.slice(0, 5).map((p, i) => (
+              <div key={i}>
+                · {p.periodo.inicio} ↔ {p.periodo.fim}: declarado{" "}
+                {p.declarado_str}, somado {p.somado_str}, delta{" "}
+                {p.delta_minutos > 0 ? "+" : ""}
+                {p.delta_minutos}min
+              </div>
+            ))}
+            {periodosReconcDivergentes.length > 5 && (
+              <div className="italic">
+                ... e mais {periodosReconcDivergentes.length - 5} período(s)
+              </div>
+            )}
+          </div>
+          <div className="pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1 border-red-400 text-red-900 hover:bg-red-100 dark:border-red-700 dark:text-red-100 dark:hover:bg-red-900/30"
+              onClick={() => {
+                setJustifText("");
+                setJustifDialogOpen(true);
+              }}
+            >
+              <ShieldAlert className="h-3 w-3" />
+              Forçar exportação com justificativa
+            </Button>
+          </div>
+        </div>
+      )}
+      {/* Fase 4 v7 — banner de override APLICADO (amarelo, audit trail) */}
+      {reconciliacaoOverride !== null && (
+        <div className="mx-3 mt-2 border border-amber-400 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-xs">
+          <div className="font-semibold text-amber-900 dark:text-amber-100 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Export liberado mediante justificativa (audit trail registrado)
+          </div>
+          <div className="text-[11px] text-amber-800 dark:text-amber-200 mt-1 italic">
+            "{reconciliacaoOverride.length > 200
+              ? reconciliacaoOverride.slice(0, 200) + "…"
+              : reconciliacaoOverride}"
+          </div>
+        </div>
+      )}
       <div className="h-10 px-2 flex items-center justify-between border-b sticky top-0 bg-background z-20 shrink-0">
         <span className="text-[11px] text-muted-foreground flex items-center gap-2">
           <span>
@@ -853,6 +1007,70 @@ export function CartaoPontoReviewDialog({
         apuracoesRevisar={apuracoesParaRevisar.length}
         periodosDivergentes={periodosDivergentes.length}
       />
+
+      {/* Fase 4 v7 — AlertDialog de justificativa pra forçar export */}
+      <AlertDialog open={justifDialogOpen} onOpenChange={setJustifDialogOpen}>
+        <AlertDialogContent className="max-w-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-red-600" />
+              Forçar exportação com justificativa
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                A reconciliação detectou {periodosReconcDivergentes.length}{" "}
+                período(s) onde a soma das batidas não bate com os
+                totalizadores do PDF (delta &gt; 5min).
+              </span>
+              <span className="block">
+                Pra liberar o download, descreva por que a divergência é
+                aceitável neste caso. A justificativa será gravada no audit
+                trail (`documents.metadata`) junto com seu user_id e
+                timestamp, vinculada permanentemente a este documento.
+              </span>
+              <span className="block font-semibold text-amber-700 dark:text-amber-400">
+                Mínimo: 20 caracteres. Não aceitamos "ok", "ciente", "ok
+                tudo certo".
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Textarea
+              value={justifText}
+              onChange={(e) => setJustifText(e.target.value)}
+              placeholder="Ex: Períodos divergentes correspondem a meses em que o cliente recebeu adicional noturno (código 9085) sem batidas associadas — totalizador inclui o adicional mas a soma das batidas reflete só jornada diurna. Validado contra ficha financeira do cliente."
+              rows={5}
+              className="text-xs"
+              disabled={persistindoOverride}
+            />
+            <div className="text-[10px] text-muted-foreground flex justify-between">
+              <span>
+                {justifText.trim().length} / 20 caracteres mínimos
+              </span>
+              {justifText.trim().length >= 20 && (
+                <span className="text-emerald-600">✓ válido</span>
+              )}
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={persistindoOverride}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleForcarOverride();
+              }}
+              disabled={
+                justifText.trim().length < 20 || persistindoOverride
+              }
+              className="bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+            >
+              {persistindoOverride ? "Persistindo..." : "Forçar exportação"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ReviewLayout>
   );
 }

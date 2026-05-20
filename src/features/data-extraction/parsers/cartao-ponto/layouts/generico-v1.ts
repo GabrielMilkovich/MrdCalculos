@@ -149,7 +149,32 @@ export type ParseCartaoPontoResult = {
    * está rodando a versão correta após deploy.
    */
   parser_version: string;
+  /**
+   * Reconciliação contra totalizadores declarados (Fase 3 v7, 2026-05-20).
+   * Populada APENAS pelo caminho V6 (`adaptarV6CartaoPonto`). V5 regex
+   * (`parseCartaoPontoGenerico`) NÃO popula — campos ficam undefined.
+   * Dialog deve tratar undefined como "sem reconciliação disponível"
+   * (não bloqueia export, fluxo legado).
+   */
+  reconciliacao?: ReconciliacaoPeriodo[];
+  reconciliacao_geral_ok?: boolean;
 };
+
+/**
+ * Espelho frontend de `ReconciliacaoPeriodo` do edge (tipos-dominio.ts).
+ * Duplicado por design — frontend não consegue importar do edge function
+ * file paths em runtime. Manter sincronizado se schema mudar.
+ */
+export interface ReconciliacaoPeriodo {
+  periodo: { inicio: string; fim: string };
+  declarado_minutos: number | null;
+  declarado_str: string | null;
+  somado_minutos: number;
+  somado_str: string;
+  delta_minutos: number;
+  ok: boolean;
+  motivo: string;
+}
 
 export const PARSER_VERSION = "cartao-ponto-v3-2026-05-01";
 
