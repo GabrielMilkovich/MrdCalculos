@@ -24,6 +24,7 @@
  */
 
 import { detectarColunaDupla } from '../../../../../../supabase/functions/_shared/heuristicas/coluna-dupla';
+import { cortarTotalizadores } from '../../../../../../supabase/functions/_shared/heuristicas/totalizadores-cartao-ponto';
 
 export type Marcacao = {
   e: string;
@@ -183,6 +184,13 @@ const RE_DIA_SEMANA = /\b(Seg|Ter|Qua|Qui|Sex|S[áa]b|Dom)\.?\b/i;
  * NOTA: "Inserido" e "Desconsiderado" NÃO são marcadores — são tags de
  * batida individual (formato "X:XX - Inserido"). Tratados separadamente
  * em `extrairTagsBatidas` antes do split.
+ *
+ * DÍVIDA TÉCNICA: esta lista coexiste com a whitelist de
+ * totalizadores-cartao-ponto.ts (RE_TOTALIZADOR_LEGADO). Manter
+ * sincronizada quando adicionar token novo. Refactor de unificação
+ * adiada para PR separado (depende de auditoria de
+ * `primeiraOcorrenciaMarcador` e seus callers múltiplos — caminho
+ * estrutural do parser, não apenas filtro de batidas-fantasma).
  */
 const MARCADORES_RESULTADO = [
   /Horas?\s+Trabalhadas?/i,
@@ -234,43 +242,24 @@ const MAX_BATIDA_TOKENS = 12;
 const RE_BATIDA_TAG =
   /\b(\d{1,2}):(\d{2})\s*[-–]\s*(Inserid[oa]|Desconsiderad[oa])\b/gi;
 
-/**
- * Tokens que indicam fim das marcações e início de totalizadores na linha.
- * Espelhos de Senior, ADP, Totvs costumam concatenar HT/HE/DSR na mesma
- * linha das batidas. Se não cortarmos, esses valores viram "batidas-fantasma".
- *
- * Match case-insensitive. Sempre com espaço/borda antes do token para
- * evitar quebrar nomes legítimos.
- */
-const TOKENS_FIM_BATIDAS: RegExp[] = [
-  /\s+HT\s+/i,
-  /\s+HE\s+/i,
-  /\s+H\.E\.?\s+/i,
-  /\s+H\.T\.?\s+/i,
-  /\s+DSR\s+/i,
-  /\s+RSR\s+/i,
-  /\s+BH\s+/i,
-  /\s+BANCO(?:\s+DE\s+HORAS)?\s+/i,
-  /\s+HORAS?\s+EXTRAS?\b/i,
-  /\s+HORAS?\s+TRAB(?:ALHADAS?)?\b/i,
-  /\s+H\.NORMAIS\b/i,
-  /\s+H\.NORM\b/i,
-];
+// TOKENS_FIM_BATIDAS migrado para totalizadores-cartao-ponto.ts (módulo
+// compartilhado, família RE_TOTALIZADOR_LEGADO). cortarTotalizadoresInline
+// agora delega ao módulo — duas fontes de verdade unificadas em uma só.
+// Migração validada via baseline SHA256 idêntico da fixture
+// roque-via-varejo-63paginas (PR #95, Opção A).
 
 /**
  * Corta a linha no primeiro token de totalizador encontrado. Mantém só
  * o que vem ANTES — região onde estão as batidas reais. Eventos
  * continuam a ser extraídos pelo `extrairEventos` que opera sobre a
  * parte DEPOIS do split de MARCADORES_RESULTADO.
+ *
+ * Wrapper de compatibilidade: callers existentes esperam apenas
+ * `parteBatidas` como string. Delega para o módulo compartilhado
+ * `cortarTotalizadores` (cascata 2→1→3) e devolve só a parte ANTES.
  */
 function cortarTotalizadoresInline(linha: string): string {
-  let menorIdx = linha.length;
-  for (const re of TOKENS_FIM_BATIDAS) {
-    const fresh = new RegExp(re.source, re.flags.replace("g", ""));
-    const m = fresh.exec(linha);
-    if (m && m.index < menorIdx) menorIdx = m.index;
-  }
-  return linha.slice(0, menorIdx);
+  return cortarTotalizadores(linha).parteBatidas;
 }
 
 const RE_HORA_OPCIONAL_ASTERISCO = /\b(\d{1,2}):(\d{2})(?::\d{2})?(\*?)/g;
@@ -623,10 +612,42 @@ export function parseCartaoPontoGenerico(
 
     // Particiona a linha em "antes do primeiro marcador de resultado"
     // e "depois". Tudo antes vira candidato a batida; tudo depois é evento.
+    //
+    // Caminho legacy primeiro (MARCADORES_RESULTADO) — preserva
+    // comportamento atual em layouts já cobertos (Casa Bahia / Senior
+    // padrão / ADP com HT/HE inline).
+    //
+    // Fallback novo: quando splitIdx === -1, delega ao módulo
+    // cortarTotalizadores (cascata 2→1→3) que cobre layouts
+    // corporativos modernos (BCre, BDeb, HExt, AdNot) e o caso do
+    // áudio sem palavra-label.
+    const motivosTotalizadorRevisao: string[] = [];
     const splitIdx = primeiraOcorrenciaMarcador(linhaSemPipes);
-    const parteBatidas =
-      splitIdx >= 0 ? linhaSemPipes.slice(0, splitIdx) : linhaSemPipes;
-    const parteEventos = splitIdx >= 0 ? linhaSemPipes.slice(splitIdx) : "";
+    let parteBatidas: string;
+    let parteEventos: string;
+    if (splitIdx >= 0) {
+      parteBatidas = linhaSemPipes.slice(0, splitIdx);
+      parteEventos = linhaSemPipes.slice(splitIdx);
+    } else if (TEM_COLUNA_DUPLA_REGISTRADO_TRABALHO) {
+      // Coluna dupla já vai truncar para 4 horas; cortarTotalizadores
+      // seria redundante e poderia disparar REVISAR_OCR desnecessariamente
+      // em linhas onde a 2ª metade é a escala prevista (não totalizador).
+      parteBatidas = linhaSemPipes;
+      parteEventos = '';
+    } else {
+      const cortado = cortarTotalizadores(linhaSemPipes);
+      parteBatidas = cortado.parteBatidas;
+      parteEventos = cortado.parteTotalizadores;
+      if (cortado.confianca === 'baixa') {
+        motivosTotalizadorRevisao.push(
+          'totalizador detectado por heurística posicional',
+        );
+      } else if (cortado.confianca === 'media') {
+        motivosTotalizadorRevisao.push(
+          'totalizador detectado por backtrack (label depois)',
+        );
+      }
+    }
 
     // Captura horários da parte de batidas (após a data).
     // Remove a data da string para não confundir o regex.
@@ -709,7 +730,7 @@ export function parseCartaoPontoGenerico(
     // não descartamos a apuração; sinalizamos pra revisão humana. Cada
     // motivo aqui = uma classe de ambiguidade detectada. Advogado
     // decide na UI se mantém ou descarta cada apuração marcada.
-    const motivosRevisao: string[] = [];
+    const motivosRevisao: string[] = [...motivosTotalizadorRevisao];
 
     // Motivo 1: linha CASOU como cabeçalho/admissão/legenda.
     // Ex: "Admiro: 24/11/2003 ... 91 08:00 11:00 12:00 14:25"

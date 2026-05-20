@@ -296,4 +296,19 @@ describe('detectarColunaDupla — salvaguardas combinadas', () => {
       origem: 'header',
     });
   });
+
+  it('salvaguarda (c): 00:00 exato NÃO conta como noturno (totalizador zerado)', () => {
+    const texto = 'Empregado FULANO sem header';
+    // 10 linhas com 00:00 (totalizador zerado) e horários diurnos —
+    // antes da exceção, 00:00 era classificado como noturno, bloqueando
+    // o detector erroneamente. Agora 00:00 exato é ignorado e o detector
+    // dispara via contagem (8 horários/linha).
+    const linhas = Array.from({ length: 10 }, (_, i) =>
+      `0${i + 1}/05/2024 SEG 08:00 12:00 13:00 17:30 00:00 09:00 10:00 00:00`,
+    );
+    expect(detectarColunaDupla(texto, linhas)).toEqual({
+      detectado: true,
+      origem: 'contagem-com-salvaguarda',
+    });
+  });
 });

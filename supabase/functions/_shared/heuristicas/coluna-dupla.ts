@@ -38,6 +38,9 @@ export interface DetectarColunaDuplaResult {
 
 const RE_HORA_LINHA = /\b\d{1,2}:\d{2}\b/g;
 const RE_HORA_CAPTURA_HH = /\b(\d{1,2}):\d{2}\b/g;
+// Variante que captura hora E minuto — usada na salvaguarda (c) para
+// distinguir 00:00 exato (totalizador zerado) de outras horas noturnas.
+const RE_HORA_CAPTURA_HM = /\b(\d{1,2}):(\d{2})\b/g;
 const RE_INDICIO_TURNOS_MULTIPLOS = /\bturno|escala\s+\d|6x1|12x36|noturno\b/i;
 
 /**
@@ -142,15 +145,23 @@ export function detectarColunaDupla(
   }
 
   // 2.c — indício estrutural de jornada noturna
+  // EXCEÇÃO: 00:00 exato NÃO conta como noturno porque é virtualmente
+  // sempre totalizador zerado em cartão de ponto (sem débito de banco de
+  // horas naquele dia), não batida real à meia-noite.
+  //
+  // Esta exceção tem interação com o PR de totalizadores: 00:00 vindo
+  // como totalizador zerado bloqueava o detector de coluna dupla em
+  // cenários comuns. Ver auditoria-debito-bh.md seção 8.b cenário 1.
   const total = linhasComData.length;
   let linhasSuspeitas = 0;
   for (const linha of linhasComData) {
-    RE_HORA_CAPTURA_HH.lastIndex = 0;
+    RE_HORA_CAPTURA_HM.lastIndex = 0;
     let m: RegExpExecArray | null;
     let temNoturno = false;
-    while ((m = RE_HORA_CAPTURA_HH.exec(linha)) !== null) {
+    while ((m = RE_HORA_CAPTURA_HM.exec(linha)) !== null) {
       const h = parseInt(m[1], 10);
-      if (h >= 22 || h <= 6) {
+      const minuto = parseInt(m[2], 10);
+      if (h >= 22 || (h <= 6 && !(h === 0 && minuto === 0))) {
         temNoturno = true;
         break;
       }
