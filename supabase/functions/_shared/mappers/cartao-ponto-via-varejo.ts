@@ -327,25 +327,29 @@ function paresFromHoras(horas: string[]): MarcacaoDominio[] {
  * as escalas vigentes no topo:
  *   `Horários ..: 91 08:00 11:00 12:05 16:25 | 162 09:00 12:00 13:05 17:25 | ...`
  *
- * Cada escala = sequência de 4hh após um código numérico (91/162/207/238/etc.)
- * delimitada por `|` ou quebra de linha ou próximo código.
+ * Cada escala = sequência de 4hh consecutivos (precedidos por código numérico,
+ * não capturado). Limitamos a busca ao CABEÇALHO (texto antes da primeira
+ * linha de dia DD/MM/YYYY) — sem isso, regex global no trecho inteiro de
+ * 70KB+ trava o Deno runtime (546 worker limit).
  *
- * Retorna Set de strings no formato "HH:MM|HH:MM|HH:MM|HH:MM" — pronto
- * pra comparação O(1) com os "últimos 4" de uma linha de dia.
+ * Retorna Set de strings "HH:MM|HH:MM|HH:MM|HH:MM" — comparação O(1) com
+ * os "últimos 4" de uma linha de dia.
  */
 function extrairEscalasConhecidas(trechoBloco: string): Set<string> {
   const escalas = new Set<string>();
-  // Tudo após "Horários" e antes do header "Data Dia Horário Ref"
-  const reSecao = /Hor[áa]rios\s*\.?\s*:?\s*([\s\S]*?)(?=\n\s*Data\s+Dia|\n\s*¯+\s*$|$)/i;
-  const sec = reSecao.exec(trechoBloco);
-  if (!sec) return escalas;
-  const corpo = sec[1];
-
-  // Sequência: <código 1-4 dígitos> seguida de 4 HH:MM consecutivos.
-  const reEscala = /\b(\d{1,4})\b\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\b/g;
+  // Corta no início da primeira linha de dia (DD/MM/YYYY). Se não houver,
+  // limita a 2000 chars (cabeçalho típico tem <1500). Evita pegar horários
+  // das linhas de jornada como "escalas".
+  const mPrimeiraData = /\b\d{2}\/\d{2}\/\d{4}\b/.exec(trechoBloco);
+  const cabecalho = mPrimeiraData
+    ? trechoBloco.slice(0, mPrimeiraData.index)
+    : trechoBloco.slice(0, 2000);
+  // 4 HH:MM consecutivos (separados por whitespace) = uma escala. Sem
+  // captura do código (pode ser 1-4 dígitos OU símbolo | OU vazio).
+  const RE_ESCALA = /(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/g;
   let m: RegExpExecArray | null;
-  while ((m = reEscala.exec(corpo)) !== null) {
-    const padded = [m[2], m[3], m[4], m[5]].map(h => {
+  while ((m = RE_ESCALA.exec(cabecalho)) !== null) {
+    const padded = [m[1], m[2], m[3], m[4]].map(h => {
       const [hh, mm] = h.split(':');
       return `${hh.padStart(2, '0')}:${mm}`;
     });
