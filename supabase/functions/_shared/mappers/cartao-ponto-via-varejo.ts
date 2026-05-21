@@ -26,7 +26,7 @@ import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
 
 const RE_DATA_BR = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/;
 
-const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v7.1-2026-05-21';
+const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v7.2-2026-05-21';
 
 // Aceita 2 formatos de cabeçalho de período:
 //   1. ANTIGO (Via Varejo 2011-2016): "Período 11.01.2016 A 15.02.2016"
@@ -233,39 +233,35 @@ const RE_MARCADOR_COLUNA_DUPLA =
  * Extrai pares E/S em layout coluna-dupla "Registrado vs Escala".
  *
  * Bug fechado em 2026-05-21 (auditoria Roque, PDF Via Varejo 2016-2021):
- *   Caller anterior fazia `extrairPares(linha).slice(0, 2)` — assumia que
- *   sempre havia 4hh no Registrado. Falhava em DOIS casos:
  *
- *   A) Registrado VAZIO + 4hh da Escala teórica
- *      Ex: `10/02/2016 QUA 162 N 09:00 12:00 13:05 17:25`
- *      slice(0,2) capturava os 2 pares da escala como se fossem batidas.
- *      Empregado não bateu, mas CSV mostrava jornada completa.
+ *   Camada anterior usava `slice(0, N)` baseado em contagem total,
+ *   falhando em variações reais:
  *
- *   B) Registrado 2hh + texto + 4hh da Escala
- *      Ex: `09/11/2017 QUI 162 N 10:57 15:09 Débito Banco de horas 09:00 12:00 13:05 17:25 3:08`
- *      slice(0,2) capturava [par_real, par_escala_1], misturando real
- *      com previsto. Empregado trabalhou 4h12, mas CSV mostrava jornada
- *      completa fictícia.
+ *   A) Reg vazio + 4hh Escala  → CSV mostrava 2 pares fictícios
+ *   B) Reg 2hh + Débito + 4hh Escala → CSV mostrava par real + 1 escala
+ *   C) Reg 4hh + 4hh Escala (sem marcador) → CSV mostrava 4 pares
+ *   D) Reg 4hh + 4hh Escala + 1hh HExt → 9 hh totais, fallback mantinha tudo
+ *   E) Reg 4hh + 4hh Escala + 2hh (HExt+AdNot) → 10 hh totais, idem
  *
- * Estratégia em camadas (vai do mais específico ao mais genérico):
+ * Estratégia robusta em 3 camadas:
  *
- *   1. MARCADOR SEMÂNTICO: se há "Débito Banco de horas" (ou similar)
- *      ENTRE horários, tudo antes = Registrado, tudo depois = Escala.
- *      Resolve caso B (Registrado parcial com observação).
+ *   1) MARCADOR SEMÂNTICO: detecta separadores textuais conhecidos
+ *      ("Débito Banco de horas", "Atraso Abonado", etc). Tudo antes
+ *      do marcador = Registrado; tudo depois = Escala+extras (descartar).
  *
- *   2. ESCALA CONHECIDA: se total = N >= 4 e os ÚLTIMOS 4 horários
- *      casam EXATAMENTE com uma escala do conjunto `escalasConhecidas`
- *      (extraídas do cabeçalho "Horários ..:" do bloco), descarta esses 4.
- *      Resolve caso A (Registrado vazio = 4hh totais) e validação para
- *      jornadas normais (8hh totais).
+ *   2) JANELA DESLIZANTE SOBRE ESCALAS: procura SEQUÊNCIA DE 4HH
+ *      consecutivos batendo EXATAMENTE com uma escala conhecida
+ *      (extraída do cabeçalho do bloco). A primeira posição que
+ *      casar é a fronteira: matches[0..i-1] = Registrado, matches[i..]
+ *      descartado (escala + qualquer HExt/AdNot/BDeb/Abono depois).
  *
- *   3. FALLBACK: assume jornada completa coluna-dupla — primeiros 4hh =
- *      Registrado, últimos 4hh = Escala. Para N=2,3,5,6,7 sem marcador
- *      e sem casamento de escala: mantém todos (heurística de segurança,
- *      "registrado parcial" sem evidência de coluna dupla).
+ *      Resolve casos A (i=0 → Reg vazio), B (i=2 → 1 par), C (i=4 →
+ *      2 pares), D/E (i=4, extras após escala descartados).
  *
- * O conjunto `escalasConhecidas` vem do cabeçalho do bloco
- * (linha "Horários ..:" com códigos 91/162/207/238/etc.).
+ *   3) FALLBACK: nenhuma escala casou. Assume jornada coluna-dupla
+ *      simétrica (4 Reg + 4 Escala). Se total=8, primeiros 4 = Reg.
+ *      Caso contrário, mantém tudo (heurística de segurança — não
+ *      perder batida real em formato desconhecido).
  */
 function extrairParesColunaDupla(
   s: string,
@@ -294,23 +290,27 @@ function extrairParesColunaDupla(
     return paresFromHoras(registrado);
   }
 
-  // Camada 2: últimos 4 batem com escala conhecida → descarta-os
-  if (matches.length >= 4 && escalasConhecidas.size > 0) {
-    const ultimos4 = matches.slice(-4).map(x => x.h).join('|');
-    if (escalasConhecidas.has(ultimos4)) {
-      const registrado = matches.slice(0, -4).map(x => x.h);
-      return paresFromHoras(registrado);
+  // Camada 2: janela deslizante — primeira sequência de 4hh consecutivos
+  // casando uma escala conhecida = fronteira Registrado|Escala.
+  if (escalasConhecidas.size > 0 && matches.length >= 4) {
+    for (let i = 0; i <= matches.length - 4; i++) {
+      const janela = `${matches[i].h}|${matches[i + 1].h}|${matches[i + 2].h}|${matches[i + 3].h}`;
+      if (escalasConhecidas.has(janela)) {
+        const registrado = matches.slice(0, i).map(x => x.h);
+        return paresFromHoras(registrado);
+      }
     }
   }
 
-  // Camada 3: fallback coluna-dupla — assume jornada completa (4 reg + 4 escala)
+  // Camada 3: fallback. Total=8 sem escala detectada → assume 4+4
+  // (jornada coluna-dupla padrão sem cabeçalho de escalas casado).
+  // Demais quantidades → mantém tudo (preserva batida real em formato
+  // desconhecido; melhor um falso-positivo de escala que descartar
+  // batida verdadeira).
   if (matches.length === 8) {
     const registrado = matches.slice(0, 4).map(x => x.h);
     return paresFromHoras(registrado);
   }
-
-  // Casos ambíguos (2,3,5,6,7 horários sem marcador): mantém tudo —
-  // preserva comportamento legado pra não perder batidas reais.
   return paresFromHoras(matches.map(x => x.h));
 }
 
