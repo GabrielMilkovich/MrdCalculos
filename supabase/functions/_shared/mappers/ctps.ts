@@ -21,7 +21,7 @@ import type { DocumentoTabular } from '../documento-tabular.ts';
 import type { Mapper, DeteccaoMapper } from './index.ts';
 import type { CtpsDominio } from '../tipos-dominio.ts';
 
-const PARSER_VERSION = 'ctps-mapper-v6.1-2026-05-07';
+const PARSER_VERSION = 'ctps-mapper-v7-2026-05-20';
 
 const RE_DATA_BR = /(\d{2})\/(\d{2})\/(\d{4})/;
 const RE_CNPJ = /\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/;

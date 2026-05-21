@@ -216,7 +216,7 @@ export async function generateExportForDocument(
             parsed: adapted,
             document_id: documentId,
             ocr_text: ocrText,
-            filename: `${baseName}_jornada.zip`,
+            filename: `${baseName}_jornada.csv`,
           };
         }
       }

@@ -20,7 +20,7 @@ import type {
 } from '../tipos-dominio.ts';
 import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
 
-const PARSER_VERSION = 'cartao-ponto-generico-mapper-v6-2026-05-06';
+const PARSER_VERSION = 'cartao-ponto-generico-mapper-v7-2026-05-20';
 
 const RE_DATA_BR = /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/;
 const RE_HORA_GLOBAL = /\b(\d{1,2}):(\d{2})\b/g;

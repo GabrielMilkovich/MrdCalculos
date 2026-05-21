@@ -19,7 +19,7 @@ import type { DocumentoTabular } from '../documento-tabular.ts';
 import type { Mapper, DeteccaoMapper } from './index.ts';
 import type { FaltaDominio } from '../tipos-dominio.ts';
 
-const PARSER_VERSION = 'registro-faltas-mapper-v6.1-2026-05-07';
+const PARSER_VERSION = 'registro-faltas-mapper-v7-2026-05-20';
 
 const RE_INTERVALO_DATA =
   /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\s*(?:a|at[ée]|-|–)\s*(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/i;

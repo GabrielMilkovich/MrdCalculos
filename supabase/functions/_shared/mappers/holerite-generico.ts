@@ -32,7 +32,7 @@ import type { DocumentoTabular } from '../documento-tabular.ts';
 import type { Mapper, DeteccaoMapper } from './index.ts';
 import type { HoleriteResultDominio, RubricaDominio } from '../tipos-dominio.ts';
 
-const PARSER_VERSION = 'holerite-generico-mapper-v6.1-2026-05-07';
+const PARSER_VERSION = 'holerite-generico-mapper-v7-2026-05-20';
 
 const RE_REFERENCIA_NUM = /\bREFER[ÊE]NCIA\b[^\n]*?\b(\d{2})\s*\/\s*(\d{4})\b/i;
 const RE_REFERENCIA_MMM =

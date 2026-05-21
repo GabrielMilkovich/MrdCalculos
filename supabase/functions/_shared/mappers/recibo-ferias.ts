@@ -24,7 +24,7 @@ import type { DocumentoTabular } from '../documento-tabular.ts';
 import type { Mapper, DeteccaoMapper } from './index.ts';
 import type { FeriasDominio } from '../tipos-dominio.ts';
 
-const PARSER_VERSION = 'recibo-ferias-mapper-v6.1-2026-05-07';
+const PARSER_VERSION = 'recibo-ferias-mapper-v7-2026-05-20';
 
 const RE_RELATIVA = /\b(19\d{2}|20\d{2})\s*\/\s*(19\d{2}|20\d{2})\b/;
 const RE_GOZO =

@@ -24,7 +24,7 @@ import type { CelulaTabular, DocumentoTabular, TabelaDetectada } from '../docume
 import type { Mapper, DeteccaoMapper } from './index.ts';
 import type { HoleriteResultDominio, RubricaDominio } from '../tipos-dominio.ts';
 
-const PARSER_VERSION = 'holerite-via-varejo-mapper-v6.2-2026-05-07';
+const PARSER_VERSION = 'holerite-via-varejo-mapper-v7-2026-05-20';
 
 const RE_COMPETENCIA = /\b(0[1-9]|1[0-2])\/(\d{4})\b/;
 
