@@ -418,18 +418,18 @@ export function HoleritePreviewDialog({
         {competenciaInvalida && (
           <div className="border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded p-2 text-xs space-y-0.5">
             <div className="flex items-center gap-1.5 font-medium text-rose-900 dark:text-rose-100">
-              <AlertTriangle className="h-3.5 w-3.5" /> Competência inválida —
-              download bloqueado
+              <AlertTriangle className="h-3.5 w-3.5" /> Atenção — competência
+              inválida (download liberado mesmo assim)
             </div>
             <p className="text-[11px] text-rose-900/80 dark:text-rose-100/80">
               A competência detectada é{" "}
               <code className="text-[10px] bg-rose-100 dark:bg-rose-950/40 px-1 rounded">
                 {effectiveClassificacao.competencia || "(vazio)"}
               </code>
-              . Holerites devem ter competência no formato MM/AAAA (mês
-              01–12). Sem competência válida, as rubricas não podem entrar
-              corretamente no histórico salarial. Reabra o documento e ajuste
-              a competência manualmente, ou re-execute a IA em modo profundo.
+              . O ideal é MM/AAAA (mês 01–12) — sem isso, as rubricas podem
+              entrar no histórico salarial em mês indefinido. Você pode
+              baixar assim mesmo e ajustar no PJe-Calc, ou reabrir o
+              documento pra corrigir a competência antes.
             </p>
           </div>
         )}
@@ -627,13 +627,12 @@ export function HoleritePreviewDialog({
             onClick={() => setConfirmacaoOpen(true)}
             disabled={
               downloading ||
-              totalCategorias === 0 ||
-              competenciaInvalida
+              totalCategorias === 0
             }
             className="gap-1.5"
             title={
               competenciaInvalida
-                ? `Competência "${effectiveClassificacao.competencia || "vazia"}" inválida. Corrija antes de baixar — o cálculo trabalhista não pode alocar rubricas sem mês de referência válido.`
+                ? `ATENÇÃO: Competência "${effectiveClassificacao.competencia || "vazia"}" inválida. Download liberado, mas as rubricas podem entrar no histórico salarial alocadas em mês indefinido. Revise no PJe-Calc antes de fechar o cálculo.`
                 : confidence.bloqueador === true
                 ? "Atenção: extração com possíveis erros. Revise as rubricas marcadas antes de usar o CSV em laudo."
                 : "Abre o gate de confirmação (3 itens dirigidos) antes do download"
