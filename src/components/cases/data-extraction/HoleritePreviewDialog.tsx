@@ -91,6 +91,7 @@ import {
 } from "@/features/data-extraction";
 import { ConfidenceBadge } from "./ConfidenceBadge";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
+import { OntologiaClassificacaoBanner } from "./OntologiaClassificacaoBanner";
 import { SugerirBucketIA } from "./SugerirBucketIA";
 import {
   VerifyExtractionAIButton,
@@ -158,9 +159,9 @@ export function HoleritePreviewDialog({
   open,
   onOpenChange,
   classificacao,
-  parsed: _parsed,
+  parsed,
   filename,
-  documentId: _documentId,
+  documentId,
   ocrText,
   llmStatus,
   comparacao,
@@ -354,7 +355,7 @@ export function HoleritePreviewDialog({
       void logCsvExport({
         builder: "holerite",
         report: reportPreview.report,
-        documentId: _documentId ?? null,
+        documentId: documentId ?? null,
         baixadoComPerdas: reportPreview.report.linhasRejeitadas.length > 0,
         bloqueioBurlado: exigeOverride && conferiuDivergencias,
         aiInvoked: aiTelemetry?.aiInvoked ?? false,
@@ -393,7 +394,7 @@ export function HoleritePreviewDialog({
               <VerifyExtractionAIButton
                 score={confidence.score}
                 builder="holerite"
-                documentId={_documentId ?? null}
+                documentId={documentId ?? null}
                 parsed={{
                   competencia: effectiveClassificacao.competencia,
                   layout_usado: effectiveClassificacao.layout_usado,
@@ -466,6 +467,17 @@ export function HoleritePreviewDialog({
             aiConfidence={llmAiConfidence}
           />
         )}
+
+        {/* Sprint 2 / Fase 3 — banner de rubricas não classificadas pela ontologia
+            do escritório. Não bloqueia download (escopo é DSR sobre comissões,
+            separado do bucket-mapper que monta o ZIP). */}
+        {parsed?.resumo_classificacao &&
+          parsed.resumo_classificacao.nao_classificadas > 0 && (
+            <OntologiaClassificacaoBanner
+              documentId={documentId}
+              resumo={parsed.resumo_classificacao}
+            />
+          )}
 
         {classificacao.warnings.length > 0 && (
           <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-xs space-y-0.5">

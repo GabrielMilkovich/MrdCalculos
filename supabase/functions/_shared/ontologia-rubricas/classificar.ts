@@ -42,6 +42,11 @@ export function normalizarRubrica(texto: string): string {
   return texto
     .trim()
     .toLowerCase()
+    // Unifica ordinal masculino (\u00ba, U+00BA) e sinal de grau (\u00b0, U+00B0)
+    // ANTES do strip de pontua\u00e7\u00e3o. Defesa contra "13\u00ba Sal" vs "13\u00b0 Sal".
+    // (Em pr\u00e1tica o strip seguinte mapeia ambos pra espa\u00e7o; manter aqui
+    // por defensividade caso o pipeline de normaliza\u00e7\u00e3o mude no futuro.)
+    .replace(/[\u00ba\u00b0]/g, '\u00b0')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^\w\s]/g, ' ')

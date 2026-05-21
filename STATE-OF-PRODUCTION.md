@@ -115,3 +115,49 @@ Roadmap Tier 3 (pixel-perfect) está documentado e não bloqueante.
 ---
 
 *Documento mantido honesto. Os 12 PRs mergeados estão verificáveis no histórico. O número 2.291 testes é executável. O 13/13 APROV≤5% é reproduzível com `npx vitest run parity-v3-vs-pjc.test.ts`.*
+
+---
+
+## Sprint 2 — Ontologia de Rubricas para DSR sobre Comissões (2026-05-21)
+
+Mergeada via PR `feat/ontologia-rubricas-sprint-2`. Codifica a planilha
+oficial do escritório como ontologia consultável; mappers de holerite
+agora populam `rubricas_classificadas[]` + `resumo_classificacao` no
+`documents.parsed`. UI exibe banner amarelo + dialog manual quando há
+rubricas `NAO_CLASSIFICADO`, com persistência em
+`documents.metadata.classificacoes_manuais_holerite`.
+
+**Métricas E2E em holerite Via Varejo real (572 linhas, doc 585b6cdf):**
+
+| Recorte | Taxa final | Critério (≥85%) |
+|---|---|---|
+| Todas as linhas (vencimentos + descontos) | 66.8% | ❌ — descontos fora do escopo da planilha |
+| Linhas com `valor_vencimento` (relevantes pra base de DSR) | **91.6%** | ✅ |
+| Soma R$ classificada / total | **94.7%** | ✅ |
+
+### Pendências do escritório (Sprint 2.5)
+
+5 rubricas observadas em produção que **não constam na planilha** e
+foram deliberadamente deixadas como `NAO_CLASSIFICADO` (não inventamos
+categoria sem validação jurídica do escritório):
+
+| Rubrica | Hipótese técnica | Decisão pendente |
+|---|---|---|
+| `Salário Família` | Verba previdenciária INSS; geralmente não integra base trabalhista | Validar com escritório (depende de CCT) |
+| `Licença por Atestado Médico` | Afastamento — integra DSR sim/não conforme súmula | Validar com escritório |
+| `1/3 Adic Const Fer` + `Difer 1/3 Adic Const` | Verba de férias (1/3 constitucional) | Validar (sumária trat. DSR) |
+| `Restituição Provis. Férias` | Verba contábil de férias | Validar |
+| `Diferença Média Férias` | Ajuste de média de férias | Validar |
+| `Horas Extras Com 70%` (+ variantes Intervalo, Noturna, 100%) | HE — análoga a `DSR H. Extra` (já em DESCONSIDERAR via Súmula 172) | Provavelmente DESCONSIDERAR, mas confirmar com escritório se inclui HE base ou só DSR-sobre-HE |
+| `Insuf Saldo no Mês` | **Ambígua** (R$ 191 — natureza não clara) | Esclarecer com escritório |
+
+**Próxima iteração:** depois do escritório validar essas 7 verbas
+(via planilha v2), adicionar como canônicas/sinônimos na ontologia e
+re-rodar E2E. Expectativa: taxa salta pra >97% no recorte B.
+
+### Limpeza pendente no GitHub
+
+Branch órfão `claude/determined-lovelace-7mb5h` (auto-gerado, renomeado
+pra `feat/ontologia-rubricas-sprint-2`). Tentativa de delete via push
+HTTP retornou 403 do proxy git do ambiente managed — **precisa ser
+deletado manual via UI do GitHub** depois do merge da Sprint 2.

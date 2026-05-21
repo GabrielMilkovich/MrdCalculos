@@ -19,11 +19,64 @@ export type RubricaParseada = {
   flag_suspeita?: boolean;
 };
 
+/**
+ * Categoria atribuída pela ontologia de rubricas (Sprint 2, 2026-05-21).
+ * Espelho de `CategoriaRubricaDominio` em
+ * `supabase/functions/_shared/tipos-dominio.ts` — mantido sincronizado
+ * manualmente até publicarmos os tipos compartilhados como pacote.
+ */
+export type CategoriaOntologiaRubrica =
+  | 'MINIMO_GARANTIDO'
+  | 'COMISSAO_PRODUTOS'
+  | 'COMISSAO_SERVICOS'
+  | 'PREMIO'
+  | 'DSR_PAGO'
+  | 'DESCONSIDERAR'
+  | 'NAO_CLASSIFICADO';
+
+export type MetodoMatchOntologia =
+  | 'exato'
+  | 'normalizado'
+  | 'sinonimo'
+  | 'fuzzy'
+  | 'nao_encontrado';
+
+export type RubricaClassificada = {
+  rubrica: RubricaParseada;
+  categoria: CategoriaOntologiaRubrica;
+  metodo_match: MetodoMatchOntologia;
+  score_match: number;
+  texto_canonico: string | null;
+  divergencia_juridica: boolean;
+};
+
+export type ResumoClassificacaoOntologia = {
+  total_rubricas: number;
+  classificadas: number;
+  nao_classificadas: number;
+  por_metodo: Record<MetodoMatchOntologia, number>;
+  base_dsr_comissoes_produtos_centavos: number;
+  base_dsr_comissoes_servicos_centavos: number;
+  base_dsr_premios_centavos: number;
+  dsr_ja_pago_centavos: number;
+  minimo_garantido_centavos: number;
+  desconsiderado_centavos: number;
+  nao_classificadas_centavos: number;
+  rubricas_nao_classificadas: string[];
+};
+
 export type HoleriteParseResult = {
   competencia: string; // "MM/yyyy"
   rubricas: RubricaParseada[];
   layout_usado: string;
   warnings: string[];
+  /**
+   * Classificação ontológica das rubricas (Sprint 2 / Fase 3, 2026-05-21).
+   * Populada pelos mappers Deno em `supabase/functions/_shared/mappers/` ao
+   * salvar `documents.parsed`. Ausente em documentos antigos (pré-Sprint 2).
+   */
+  rubricas_classificadas?: RubricaClassificada[];
+  resumo_classificacao?: ResumoClassificacaoOntologia;
 };
 
 export interface LayoutHolerite {

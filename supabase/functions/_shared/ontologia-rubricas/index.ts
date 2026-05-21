@@ -63,9 +63,17 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
   // MINIMO_GARANTIDO (Coluna B da planilha)
   // =========================================================================
   {
+    // Sinônimo "Mínimo Garantido - Comissão" adicionado em 2026-05-21 (Sprint 2,
+    // Fase 3.1) — variação contextual observada em holerite Via Varejo real.
     texto_canonico: 'Mínimo Garantido',
     categoria: 'MINIMO_GARANTIDO',
-    sinonimos: ['Minimo Garantido', 'Mín. Garantido', 'Min Garantido'],
+    sinonimos: [
+      'Minimo Garantido',
+      'Mín. Garantido',
+      'Min Garantido',
+      'Mínimo Garantido - Comissão',
+      'Minimo Garantido - Comissao',
+    ],
   },
   {
     texto_canonico: 'Horas Justificadas / TRN',
@@ -87,14 +95,23 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
     sinonimos: ['Adicional Tempo de Serviço', 'Ad. Tempo Serviço', 'ATS'],
   },
   {
+    // Sinônimo "Antec Ação Produtos Selecionados" adicionado em 2026-05-21
+    // (Sprint 2, Fase 3.1) — variante de antecipação ligada a campanha de
+    // produtos, alocada à categoria mais próxima conforme decisão do Gabriel.
     texto_canonico: 'Antec. Crédito Dif. De Comissões',
     categoria: 'COMISSAO_PRODUTOS',
-    sinonimos: ['Antecipação Crédito Dif. Comissões', 'Antec Cred Dif Comissoes'],
+    sinonimos: [
+      'Antecipação Crédito Dif. Comissões',
+      'Antec Cred Dif Comissoes',
+      'Antec Ação Produtos Selecionados',
+      'Antec Acao Produtos Selecionados',
+    ],
   },
   {
+    // Sinônimo "Ajuste de Liquido" adicionado em 2026-05-21 (Sprint 2, Fase 3.1).
     texto_canonico: 'Ajuste Líquido',
     categoria: 'COMISSAO_PRODUTOS',
-    sinonimos: ['Ajuste Liquido', 'Aj. Líquido'],
+    sinonimos: ['Ajuste Liquido', 'Aj. Líquido', 'Ajuste de Liquido', 'Ajuste de Líquido'],
   },
   {
     texto_canonico: 'Comissões',
@@ -192,9 +209,18 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
     sinonimos: ['Comissoes Venda Produto Online', 'Com. Venda Produto Online'],
   },
   {
+    // Sinônimo "Dif Comissão Mes Ant (SemMin)" adicionado em 2026-05-21
+    // (Sprint 2, Fase 3.1) — observado em holerite Via Varejo real (variação
+    // que carrega flag "sem mínimo garantido" entre parênteses).
     texto_canonico: 'Dif comissão mês ant',
     categoria: 'COMISSAO_PRODUTOS',
-    sinonimos: ['Diferença comissão mês anterior', 'Dif Comissao Mes Anterior', 'Dif. Comissão Mês Ant.'],
+    sinonimos: [
+      'Diferença comissão mês anterior',
+      'Dif Comissao Mes Anterior',
+      'Dif. Comissão Mês Ant.',
+      'Dif Comissão Mes Ant (SemMin)',
+      'Dif Comissao Mes Ant (SemMin)',
+    ],
   },
   {
     texto_canonico: 'adiantamento em folha (EMP)',
@@ -256,9 +282,17 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
   // Implementar como lógica condicional em iteração futura.
   // =========================================================================
   {
+    // Sinônimo "COM.SEGUROS" adicionado em 2026-05-21 (Sprint 2, Fase 3.1) —
+    // grafia abreviada sem "Serv" observada no holerite real (28 ocorrências).
     texto_canonico: 'Com. Serv. Seguros',
     categoria: 'COMISSAO_SERVICOS',
-    sinonimos: ['Comissão Serviços Seguros', 'Com Serv Seguros', 'Com. Servicos Seguros'],
+    sinonimos: [
+      'Comissão Serviços Seguros',
+      'Com Serv Seguros',
+      'Com. Servicos Seguros',
+      'COM.SEGUROS',
+      'Com. Seguros',
+    ],
   },
   {
     texto_canonico: 'Com. Serv. Garantia',
@@ -312,9 +346,20 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
   },
   {
     // Typo corrigido (planilha E14: "Camapanha" -> "Campanha").
+    // Sinônimos "Campanha Categorias/Retira/Serv Fin/Via+" adicionados em
+    // 2026-05-21 (Sprint 2, Fase 3.1) — variações observadas no holerite
+    // real, todas seguem a mesma natureza de "Campanha".
     texto_canonico: 'Campanha',
     categoria: 'COMISSAO_SERVICOS',
-    sinonimos: ['Camapanha', 'Campanha Geral'],
+    sinonimos: [
+      'Camapanha',
+      'Campanha Geral',
+      'Campanha Categorias',
+      'Campanha Retira',
+      'Campanha Serv Fin',
+      'Campanha Via+',
+      'Campanha Via',
+    ],
   },
   {
     // Typo corrigido (planilha E15: "Camapanha Móveis" -> "Campanha Móveis").
@@ -365,9 +410,18 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
     sinonimos: ['Premio Meta', 'Pr. Meta'],
   },
   {
+    // Sinônimo "PREMIO ANTECIPADO QUINZENAL" adicionado em 2026-05-21
+    // (Sprint 2, Fase 3.1) — variação de cadência (quinzenal vs mensal)
+    // do mesmo prêmio antecipado; 24 ocorrências no holerite real.
     texto_canonico: 'Prêmio Antecipado',
     categoria: 'PREMIO',
-    sinonimos: ['Premio Antecipado', 'Pr. Antecipado'],
+    sinonimos: [
+      'Premio Antecipado',
+      'Pr. Antecipado',
+      'PREMIO ANTECIPADO QUINZENAL',
+      'Prêmio Antecipado Quinzenal',
+      'Premio Antecipado Quinzenal',
+    ],
   },
   {
     texto_canonico: 'Prêmio Estímulo',
@@ -410,9 +464,21 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
     sinonimos: ['Gratificacao', 'Gratif.'],
   },
   {
+    // Sinônimos "Antec Dif Premio" e "DIF. PREMIO" adicionados em 2026-05-21
+    // (Sprint 2, Fase 3.1) — variações de prêmio que carregam "diferença"
+    // sem o sufixo "Vendedor" da grafia canônica; alocadas aqui por serem
+    // semanticamente mais próximas (todas tratam de diferença de prêmio).
     texto_canonico: 'Dif. Prêmio Vendedor',
     categoria: 'PREMIO',
-    sinonimos: ['Diferença Prêmio Vendedor', 'Dif Premio Vendedor'],
+    sinonimos: [
+      'Diferença Prêmio Vendedor',
+      'Dif Premio Vendedor',
+      'Antec Dif Premio',
+      'Antec. Dif. Prêmio',
+      'DIF. PREMIO',
+      'Dif. Prêmio',
+      'Dif Premio',
+    ],
   },
   {
     texto_canonico: 'PPR Pula meio (MagaLu)',
@@ -472,9 +538,21 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
     sinonimos: ['Diferença Férias', 'Dif Ferias', 'Dif. Ferias'],
   },
   {
+    // Sinônimo "Dif. de Médias 13º Sal" adicionado em 2026-05-21 (Sprint 2,
+    // Fase 3.1) — observada no holerite real com ordinal masculino (º) em
+    // vez de sinal de grau (°) E abreviação "Sal" em vez de "Salário".
+    // A normalização º↔° em normalizarRubrica garante que a diferença de
+    // codepoint Unicode não cause miss; a abreviação fica como sinônimo
+    // explícito porque levenshtein "sal"<->"salario" passa do threshold.
     texto_canonico: 'Dif. de Médias 13° Salário',
     categoria: 'DESCONSIDERAR',
-    sinonimos: ['Diferença de Médias 13° Salário', 'Dif de Medias 13 Salario'],
+    sinonimos: [
+      'Diferença de Médias 13° Salário',
+      'Dif de Medias 13 Salario',
+      'Dif. de Médias 13º Sal',
+      'Dif. de Médias 13° Sal',
+      'Dif de Medias 13 Sal',
+    ],
   },
   {
     texto_canonico: 'Férias Pagas',

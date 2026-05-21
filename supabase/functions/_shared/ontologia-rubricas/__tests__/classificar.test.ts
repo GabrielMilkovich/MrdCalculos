@@ -307,6 +307,83 @@ describe('observacao_juridica - travas anti-"correção silenciosa"', () => {
   });
 });
 
+describe('Fase 3.1 — sinônimos adicionados após E2E em holerite real', () => {
+  // Sinônimos calibrados em 2026-05-21 contra documento real de produção
+  // (holerite Via Varejo consolidado, 572 linhas). Esses testes travam o
+  // contrato — qualquer remoção da lista volta o gap pro relatório.
+
+  it('"COM.SEGUROS" classifica como COMISSAO_SERVICOS', () => {
+    const r = classificarRubrica('COM.SEGUROS');
+    expect(r.categoria).toBe<CategoriaRubrica>('COMISSAO_SERVICOS');
+    expect(r.rubrica_canonica?.texto_canonico).toBe('Com. Serv. Seguros');
+  });
+
+  it('"PREMIO ANTECIPADO QUINZENAL" classifica como PREMIO', () => {
+    const r = classificarRubrica('PREMIO ANTECIPADO QUINZENAL');
+    expect(r.categoria).toBe<CategoriaRubrica>('PREMIO');
+    expect(r.rubrica_canonica?.texto_canonico).toBe('Prêmio Antecipado');
+  });
+
+  it('"Mínimo Garantido - Comissão" classifica como MINIMO_GARANTIDO', () => {
+    const r = classificarRubrica('Mínimo Garantido - Comissão');
+    expect(r.categoria).toBe<CategoriaRubrica>('MINIMO_GARANTIDO');
+    expect(r.rubrica_canonica?.texto_canonico).toBe('Mínimo Garantido');
+  });
+
+  it.each([
+    'Campanha Categorias',
+    'Campanha Retira',
+    'Campanha Serv Fin',
+    'Campanha Via+',
+  ])('"%s" classifica como COMISSAO_SERVICOS (variação de Campanha)', (nome) => {
+    const r = classificarRubrica(nome);
+    expect(r.categoria).toBe<CategoriaRubrica>('COMISSAO_SERVICOS');
+    expect(r.rubrica_canonica?.texto_canonico).toBe('Campanha');
+  });
+
+  it('"Dif Comissão Mes Ant (SemMin)" classifica como COMISSAO_PRODUTOS', () => {
+    const r = classificarRubrica('Dif Comissão Mes Ant (SemMin)');
+    expect(r.categoria).toBe<CategoriaRubrica>('COMISSAO_PRODUTOS');
+    expect(r.rubrica_canonica?.texto_canonico).toBe('Dif comissão mês ant');
+  });
+
+  it.each(['Antec Dif Premio', 'DIF. PREMIO'])(
+    '"%s" classifica como PREMIO',
+    (nome) => {
+      const r = classificarRubrica(nome);
+      expect(r.categoria).toBe<CategoriaRubrica>('PREMIO');
+      expect(r.rubrica_canonica?.texto_canonico).toBe('Dif. Prêmio Vendedor');
+    },
+  );
+
+  it('"Ajuste de Liquido" classifica como COMISSAO_PRODUTOS', () => {
+    const r = classificarRubrica('Ajuste de Liquido');
+    expect(r.categoria).toBe<CategoriaRubrica>('COMISSAO_PRODUTOS');
+    expect(r.rubrica_canonica?.texto_canonico).toBe('Ajuste Líquido');
+  });
+
+  it('"Antec Ação Produtos Selecionados" classifica como COMISSAO_PRODUTOS', () => {
+    const r = classificarRubrica('Antec Ação Produtos Selecionados');
+    expect(r.categoria).toBe<CategoriaRubrica>('COMISSAO_PRODUTOS');
+    expect(r.rubrica_canonica?.texto_canonico).toBe('Antec. Crédito Dif. De Comissões');
+  });
+
+  it('"Dif. de Médias 13º Sal" (ordinal + abreviação) classifica como DESCONSIDERAR', () => {
+    const r = classificarRubrica('Dif. de Médias 13º Sal');
+    expect(r.categoria).toBe<CategoriaRubrica>('DESCONSIDERAR');
+    expect(r.rubrica_canonica?.texto_canonico).toBe('Dif. de Médias 13° Salário');
+  });
+});
+
+describe('normalizarRubrica — defesas adicionais', () => {
+  it('ordinal masculino (º) e sinal de grau (°) viram o mesmo resultado', () => {
+    // Codepoints distintos: U+00BA (ordinal) vs U+00B0 (degree).
+    // Em qualquer contexto a normalização deve produzir o mesmo output.
+    expect(normalizarRubrica('Salário 13º')).toBe(normalizarRubrica('Salário 13°'));
+    expect(normalizarRubrica('1º lugar')).toBe(normalizarRubrica('1° lugar'));
+  });
+});
+
 describe('integridade estrutural da ONTOLOGIA', () => {
   it('nenhum texto_canonico está duplicado', () => {
     const seen = new Set<string>();
@@ -346,6 +423,8 @@ describe('integridade estrutural da ONTOLOGIA', () => {
 
   it('contagens por categoria batem com a planilha (após decisões da Fase 1)', () => {
     // Esperado conforme planilha + decisões de typos/exclusões da Fase 1.
+    // Sinônimos adicionados na Fase 3.1 (2026-05-21) NÃO mudam contagem de
+    // rubricas canônicas — apenas expandem o vocabulário de matching.
     const esperado: Record<Exclude<CategoriaRubrica, 'NAO_CLASSIFICADO'>, number> = {
       MINIMO_GARANTIDO: 3, // B3, B4, B5 (B12/B14 excluídos — pendentes)
       COMISSAO_PRODUTOS: 24, // toda coluna C
