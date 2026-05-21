@@ -26,7 +26,7 @@ import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
 
 const RE_DATA_BR = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/;
 
-const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v7-2026-05-20';
+const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v7.1-2026-05-21';
 
 // Aceita 2 formatos de cabeçalho de período:
 //   1. ANTIGO (Via Varejo 2011-2016): "Período 11.01.2016 A 15.02.2016"
@@ -223,6 +223,137 @@ function extrairPares(s: string): MarcacaoDominio[] {
   return out;
 }
 
+// Marcadores que separam Registrado da Escala numa linha do PDF Via Varejo.
+// Quando aparecem ENTRE dois horários, indicam fim do "Horário Registrado"
+// e início do "Horário de Trabalho" (escala teórica, descartar).
+const RE_MARCADOR_COLUNA_DUPLA =
+  /\b(?:D[ée]bito|Cr[eé]dito)\s+Banco\s+de\s+horas\b|\bAtraso\s+Abonado\b|\bSa[íi]da\s+Antecipada\b|\bAfast(?:amento)?\s+Abonado\b/i;
+
+/**
+ * Extrai pares E/S em layout coluna-dupla "Registrado vs Escala".
+ *
+ * Bug fechado em 2026-05-21 (auditoria Roque, PDF Via Varejo 2016-2021):
+ *   Caller anterior fazia `extrairPares(linha).slice(0, 2)` — assumia que
+ *   sempre havia 4hh no Registrado. Falhava em DOIS casos:
+ *
+ *   A) Registrado VAZIO + 4hh da Escala teórica
+ *      Ex: `10/02/2016 QUA 162 N 09:00 12:00 13:05 17:25`
+ *      slice(0,2) capturava os 2 pares da escala como se fossem batidas.
+ *      Empregado não bateu, mas CSV mostrava jornada completa.
+ *
+ *   B) Registrado 2hh + texto + 4hh da Escala
+ *      Ex: `09/11/2017 QUI 162 N 10:57 15:09 Débito Banco de horas 09:00 12:00 13:05 17:25 3:08`
+ *      slice(0,2) capturava [par_real, par_escala_1], misturando real
+ *      com previsto. Empregado trabalhou 4h12, mas CSV mostrava jornada
+ *      completa fictícia.
+ *
+ * Estratégia em camadas (vai do mais específico ao mais genérico):
+ *
+ *   1. MARCADOR SEMÂNTICO: se há "Débito Banco de horas" (ou similar)
+ *      ENTRE horários, tudo antes = Registrado, tudo depois = Escala.
+ *      Resolve caso B (Registrado parcial com observação).
+ *
+ *   2. ESCALA CONHECIDA: se total = N >= 4 e os ÚLTIMOS 4 horários
+ *      casam EXATAMENTE com uma escala do conjunto `escalasConhecidas`
+ *      (extraídas do cabeçalho "Horários ..:" do bloco), descarta esses 4.
+ *      Resolve caso A (Registrado vazio = 4hh totais) e validação para
+ *      jornadas normais (8hh totais).
+ *
+ *   3. FALLBACK: assume jornada completa coluna-dupla — primeiros 4hh =
+ *      Registrado, últimos 4hh = Escala. Para N=2,3,5,6,7 sem marcador
+ *      e sem casamento de escala: mantém todos (heurística de segurança,
+ *      "registrado parcial" sem evidência de coluna dupla).
+ *
+ * O conjunto `escalasConhecidas` vem do cabeçalho do bloco
+ * (linha "Horários ..:" com códigos 91/162/207/238/etc.).
+ */
+function extrairParesColunaDupla(
+  s: string,
+  escalasConhecidas: Set<string>,
+): MarcacaoDominio[] {
+  RE_HORA.lastIndex = 0;
+  const matches: Array<{ h: string; idx: number; end: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = RE_HORA.exec(s)) !== null) {
+    const h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if (h < 0 || h > 23 || min < 0 || min > 59) continue;
+    matches.push({
+      h: `${m[1].padStart(2, '0')}:${m[2]}`,
+      idx: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  if (matches.length === 0) return [];
+
+  // Camada 1: marcador semântico ("Débito Banco de horas" etc.)
+  const mMarc = RE_MARCADOR_COLUNA_DUPLA.exec(s);
+  if (mMarc) {
+    const corte = mMarc.index;
+    const registrado = matches.filter(x => x.end <= corte).map(x => x.h);
+    return paresFromHoras(registrado);
+  }
+
+  // Camada 2: últimos 4 batem com escala conhecida → descarta-os
+  if (matches.length >= 4 && escalasConhecidas.size > 0) {
+    const ultimos4 = matches.slice(-4).map(x => x.h).join('|');
+    if (escalasConhecidas.has(ultimos4)) {
+      const registrado = matches.slice(0, -4).map(x => x.h);
+      return paresFromHoras(registrado);
+    }
+  }
+
+  // Camada 3: fallback coluna-dupla — assume jornada completa (4 reg + 4 escala)
+  if (matches.length === 8) {
+    const registrado = matches.slice(0, 4).map(x => x.h);
+    return paresFromHoras(registrado);
+  }
+
+  // Casos ambíguos (2,3,5,6,7 horários sem marcador): mantém tudo —
+  // preserva comportamento legado pra não perder batidas reais.
+  return paresFromHoras(matches.map(x => x.h));
+}
+
+function paresFromHoras(horas: string[]): MarcacaoDominio[] {
+  const out: MarcacaoDominio[] = [];
+  for (let i = 0; i < horas.length; i += 2) {
+    out.push({ e: horas[i], s: horas[i + 1] ?? '' });
+  }
+  return out;
+}
+
+/**
+ * Extrai escalas conhecidas do cabeçalho do bloco. PDF Via Varejo lista
+ * as escalas vigentes no topo:
+ *   `Horários ..: 91 08:00 11:00 12:05 16:25 | 162 09:00 12:00 13:05 17:25 | ...`
+ *
+ * Cada escala = sequência de 4hh após um código numérico (91/162/207/238/etc.)
+ * delimitada por `|` ou quebra de linha ou próximo código.
+ *
+ * Retorna Set de strings no formato "HH:MM|HH:MM|HH:MM|HH:MM" — pronto
+ * pra comparação O(1) com os "últimos 4" de uma linha de dia.
+ */
+function extrairEscalasConhecidas(trechoBloco: string): Set<string> {
+  const escalas = new Set<string>();
+  // Tudo após "Horários" e antes do header "Data Dia Horário Ref"
+  const reSecao = /Hor[áa]rios\s*\.?\s*:?\s*([\s\S]*?)(?=\n\s*Data\s+Dia|\n\s*¯+\s*$|$)/i;
+  const sec = reSecao.exec(trechoBloco);
+  if (!sec) return escalas;
+  const corpo = sec[1];
+
+  // Sequência: <código 1-4 dígitos> seguida de 4 HH:MM consecutivos.
+  const reEscala = /\b(\d{1,4})\b\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = reEscala.exec(corpo)) !== null) {
+    const padded = [m[2], m[3], m[4], m[5]].map(h => {
+      const [hh, mm] = h.split(':');
+      return `${hh.padStart(2, '0')}:${mm}`;
+    });
+    escalas.add(padded.join('|'));
+  }
+  return escalas;
+}
+
 /**
  * Quebra o textoCompleto em blocos por período e processa cada bloco.
  * Resiliente a layout (texto plano já vem ordenado pelo extrator).
@@ -272,6 +403,13 @@ function processarBloco(
   colunaDupla: boolean,
 ): ApuracaoDominio[] {
   const apuracoes: ApuracaoDominio[] = [];
+  // Escalas do cabeçalho do bloco — usadas pela heurística "últimos 4
+  // batem com escala conhecida → descartar" em extrairParesColunaDupla.
+  // Fix bug Roque (2026-05-21): linhas com Registrado vazio ou parcial
+  // estavam absorvendo a escala como se fosse batida real.
+  const escalasConhecidas = colunaDupla
+    ? extrairEscalasConhecidas(bloco.trecho)
+    : new Set<string>();
   const linhas = bloco.trecho.split(/\r?\n/);
   for (const linha of linhas) {
     if (eFimDeTabela(linha)) break;
@@ -326,15 +464,13 @@ function processarBloco(
     // rodapé do cartão anterior na mesma linha — caso extremo).
     const idxLabel = mPdfjs ? linha.search(RE_LINHA_DIA_PDFJS) : linha.search(RE_LINHA_DIA_OCR);
     const trechoBatidas = idxLabel >= 0 ? linha.slice(idxLabel) : linha;
-    const todasMarcacoes = extrairPares(trechoBatidas);
-    // Coluna dupla "Real vs Previsto": mantém apenas o 1° par (4 horas
-    // reais = 2 pares); 2° par é escala prevista, descartado.
-    // Nota: truncamento aqui é em PARES (slice(0,2)); no mapper genérico
-    // o equivalente é em HORAS (slice(0,4)). Mesmo efeito, unidades
-    // diferentes — não confundir.
+    // Coluna dupla "Registrado vs Escala": detecta fronteira por gap de
+    // espaços (ver extrairParesColunaDupla). Antes usava slice(0,2) que
+    // misturava escala quando Registrado tinha <4 horários (bug Roque
+    // 09/11/2017 etc.: 2hh Registrado + 4hh Escala virava 4hh ficticios).
     const marcacoes = colunaDupla
-      ? todasMarcacoes.slice(0, 2)
-      : todasMarcacoes;
+      ? extrairParesColunaDupla(trechoBatidas, escalasConhecidas)
+      : extrairPares(trechoBatidas);
 
     // Sobrescrita pdfjs V6: linha "21/02/2016 DOM 999 N DSR DSR" captura
     // "DOM" (dia-semana) como label, mas a ocorrência real é DSR (token
