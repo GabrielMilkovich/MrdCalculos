@@ -131,9 +131,27 @@ rubricas `NAO_CLASSIFICADO`, com persistência em
 
 | Recorte | Taxa final | Critério (≥85%) |
 |---|---|---|
-| Todas as linhas (vencimentos + descontos) | 66.8% | ❌ — descontos fora do escopo da planilha |
-| Linhas com `valor_vencimento` (relevantes pra base de DSR) | **91.6%** | ✅ |
-| Soma R$ classificada / total | **94.7%** | ✅ |
+| **(A)** Todas as linhas (vencimentos + descontos) | 66.8% | ⚠️ — ver nota abaixo |
+| **(B)** Linhas com `valor_vencimento` (relevantes pra base de DSR) | **91.6%** | ✅ |
+| **(C)** Soma R$ classificada / total | **94.7%** | ✅ |
+
+**Nota sobre o recorte (A) — 66.8%:** o número baixo NÃO é bug — é
+**escopo deliberado**. O recorte (A) inclui ~155 linhas de DESCONTO
+(INSS, IRRF, Vale Transporte, Empréstimos consignados, etc.) que a
+planilha do escritório **não cobre por design**, porque a planilha é
+sobre VENCIMENTOS pra base de DSR sobre comissões. Descontos não entram
+nessa base — então deixá-los como `NAO_CLASSIFICADO` é o comportamento
+correto.
+
+Se em iteração futura o MRD Calc precisar processar descontos pra outro
+tipo de cálculo (ex.: líquido a receber, base IRRF, cálculo previdenciário),
+considerar **Sprint 3 de expansão** — uma segunda ontologia de descontos
+com sua própria taxonomia (INSS, IRRF, Convencional, Empréstimo, etc.)
+e seu próprio classificador, mantida separada da ontologia de vencimentos
+pra não misturar contextos jurídicos.
+
+A juridicamente relevante pra DSR é **(C) — 94.7% por valor monetário**,
+e em segundo lugar **(B) — 91.6% por linhas com vencimento**.
 
 ### Pendências do escritório (Sprint 2.5)
 
