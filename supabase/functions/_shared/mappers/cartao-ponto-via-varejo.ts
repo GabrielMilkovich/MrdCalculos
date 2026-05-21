@@ -337,12 +337,15 @@ function paresFromHoras(horas: string[]): MarcacaoDominio[] {
  */
 function extrairEscalasConhecidas(trechoBloco: string): Set<string> {
   const escalas = new Set<string>();
-  // Corta no início da primeira linha de dia (DD/MM/YYYY). Se não houver,
-  // limita a 2000 chars (cabeçalho típico tem <1500). Evita pegar horários
-  // das linhas de jornada como "escalas".
-  const mPrimeiraData = /\b\d{2}\/\d{2}\/\d{4}\b/.exec(trechoBloco);
-  const cabecalho = mPrimeiraData
-    ? trechoBloco.slice(0, mPrimeiraData.index)
+  // Corta no início da primeira LINHA DE DIA (DD/MM/YYYY + dia-semana
+  // SEG/TER/QUA/etc). Datas isoladas como impressão "25/06/2021 Programa de
+  // detalhe" ou "Admissão ..: 24/11/2003" NÃO marcam fim do cabeçalho —
+  // só a primeira linha de jornada real. Sem isso, o corte é prematuro
+  // e as escalas listadas após "Horários ..:" ficam de fora.
+  const mPrimeiraLinhaDia =
+    /\b\d{2}\/\d{2}\/\d{4}\s+(?:SEG|TER|QUA|QUI|SEX|SAB|DOM)\b/i.exec(trechoBloco);
+  const cabecalho = mPrimeiraLinhaDia
+    ? trechoBloco.slice(0, mPrimeiraLinhaDia.index)
     : trechoBloco.slice(0, 2000);
   // 4 HH:MM consecutivos (separados por whitespace) = uma escala. Sem
   // captura do código (pode ser 1-4 dígitos OU símbolo | OU vazio).
