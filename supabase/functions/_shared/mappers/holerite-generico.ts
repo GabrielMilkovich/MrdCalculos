@@ -31,6 +31,7 @@
 import type { DocumentoTabular } from '../documento-tabular.ts';
 import type { Mapper, DeteccaoMapper } from './index.ts';
 import type { HoleriteResultDominio, RubricaDominio } from '../tipos-dominio.ts';
+import { enriquecerComClassificacao } from '../ontologia-rubricas/enriquecer.ts';
 
 const PARSER_VERSION = 'holerite-generico-mapper-v7-2026-05-20';
 
@@ -274,11 +275,16 @@ export const mapperHoleriteGenerico: Mapper<HoleriteResultDominio> = {
       return null;
     }
 
+    const { rubricas_classificadas, resumo_classificacao } =
+      enriquecerComClassificacao(rubricas);
+
     return {
       competencia,
       rubricas,
       layout_usado: PARSER_VERSION,
       warnings,
+      rubricas_classificadas,
+      resumo_classificacao,
     };
   },
 };

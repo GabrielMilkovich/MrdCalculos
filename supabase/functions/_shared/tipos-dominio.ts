@@ -163,6 +163,89 @@ export interface HoleriteResultDominio {
   rubricas: RubricaDominio[];
   layout_usado: string;
   warnings: string[];
+  /**
+   * Classificação ontológica das rubricas contra a planilha do escritório
+   * (Sprint 2 / Fase 3, 2026-05-21). Populada pelos mappers de holerite
+   * após `rubricas` ser extraída. Co-existe com o bucket-mapper de
+   * `src/features/rubrica-mapping/` (responsabilidades distintas — este
+   * alimenta cálculo de DSR sobre comissões; aquele alimenta export ZIP
+   * pra PJe-Calc).
+   *
+   * Ausência = mapper antigo (pré-Sprint-2) ou rubricas vazias.
+   */
+  rubricas_classificadas?: RubricaClassificadaDominio[];
+  resumo_classificacao?: ResumoClassificacaoHolerite;
+}
+
+/**
+ * Categoria atribuída pela ontologia. Espelho de
+ * `CategoriaRubrica` em `_shared/ontologia-rubricas/index.ts`.
+ * Re-declarado aqui pra evitar dependência circular indireta com
+ * o ponto de entrada da ontologia.
+ */
+export type CategoriaRubricaDominio =
+  | 'MINIMO_GARANTIDO'
+  | 'COMISSAO_PRODUTOS'
+  | 'COMISSAO_SERVICOS'
+  | 'PREMIO'
+  | 'DSR_PAGO'
+  | 'DESCONSIDERAR'
+  | 'NAO_CLASSIFICADO';
+
+export type MetodoMatchDominio =
+  | 'exato'
+  | 'normalizado'
+  | 'sinonimo'
+  | 'fuzzy'
+  | 'nao_encontrado';
+
+/**
+ * Rubrica enriquecida com o resultado da classificação contra a ontologia.
+ * `texto_canonico` é null quando o método foi `nao_encontrado`.
+ */
+export interface RubricaClassificadaDominio {
+  rubrica: RubricaDominio;
+  categoria: CategoriaRubricaDominio;
+  metodo_match: MetodoMatchDominio;
+  score_match: number;
+  texto_canonico: string | null;
+  /** true quando a rubrica canônica tem `observacao_juridica` (divergência de súmula). */
+  divergencia_juridica: boolean;
+}
+
+/**
+ * Agregação por categoria.
+ *
+ * Valores monetários em centavos inteiros (não float-reais).
+ * Conversão: `Math.round(valor_reais * 100)`. Cada valor é arredondado
+ * pra inteiro ANTES da soma — sem float-drift, sem dependência de
+ * Decimal.js (que seria redundante após `Math.round` colapsar a
+ * imprecisão herdada do `parseFloat` upstream).
+ *
+ * Apenas `valor_vencimento` é considerado nas somas — descontos não
+ * entram em base de DSR.
+ */
+export interface ResumoClassificacaoHolerite {
+  total_rubricas: number;
+  classificadas: number;
+  nao_classificadas: number;
+  por_metodo: Record<MetodoMatchDominio, number>;
+  /** Base de DSR sobre comissões de produto. */
+  base_dsr_comissoes_produtos_centavos: number;
+  /** Base de DSR sobre comissões de serviço. */
+  base_dsr_comissoes_servicos_centavos: number;
+  /** Prêmios integram base de DSR. */
+  base_dsr_premios_centavos: number;
+  /** DSR já pago pelo empregador — não recalcular. */
+  dsr_ja_pago_centavos: number;
+  /** Salário base / mínimo garantido / treinamento. */
+  minimo_garantido_centavos: number;
+  /** Verbas que não entram em base de DSR. */
+  desconsiderado_centavos: number;
+  /** Soma das rubricas que caíram em NAO_CLASSIFICADO. */
+  nao_classificadas_centavos: number;
+  /** Nomes (originais) das rubricas não classificadas — input pro banner UI. */
+  rubricas_nao_classificadas: string[];
 }
 
 export interface FeriasDominio {
