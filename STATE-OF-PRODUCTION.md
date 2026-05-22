@@ -308,3 +308,161 @@ features que produzem dados pra cálculo trabalhista — o custo de errar
 em escala é alto demais. Quando o autor do código também escreve o
 ground truth (tautologia), buscar fonte externa (revisão humana, parser
 alternativo, dados de produção pareados manualmente).
+
+---
+
+## Sprint 3c — Holerite ↔ Ontologia (2026-05-22)
+
+**Entrega:** a ontologia de 96 rubricas validadas pelo escritório
+(Sprint 2) agora **chega no CSV final** exportado pra PJe-Calc Cidadão.
+Antes da 3c a ontologia ficava inerte: o operador via a classificação
+no banner `OntologiaClassificacaoBanner` mas o CSV usava categorização
+do `hints.ts` legado. **A Sprint 2 estava funcionalmente fechada mas
+sem entrega — a 3c liga os dois mundos.**
+
+### O que mudou
+
+`classifyHolerite` ganhou uma **camada nova (camada 2)** entre as
+defesas existentes (totalizador, desconto) e o `hints.ts` legado:
+
+```
+Camada 1: defesa em profundidade  (flag_suspeita, totalizador, isDesconto)
+Camada 2: ontologia (Sprint 3c)   ← NOVO
+Camada 3: hints.ts legado         (HE, INSS, comissão por regex)
+Camada 4: fallback                (salario_fixo)
+```
+
+Quando `parsed.rubricas_classificadas` (populado pelos mappers Deno)
+classifica uma rubrica em categoria válida da ontologia, o classifier
+promove pra `CategoriaSlug` correspondente via tabela
+`ONTOLOGIA_PARA_CATEGORIA_SLUG`. Origens novas: `'ontologia'` (mapeado
+pra slug, vai pro CSV) e `'ontologia_desconsiderar'` (catalogado como
+"fora do CSV", não inclui).
+
+### Hidratação do JSONB no callsite
+
+`per-doc/index.ts` agora lê `rubricas_classificadas` de
+`documents.parsed` JSONB (campo `v6Parsed`, populado em produção pelos
+mappers Deno) e injeta no `classifyHolerite`. Helper
+`extrairRubricasClassificadasDoV6` faz narrowing seguro de `unknown`
+com validação mínima de shape — quando JSONB vier malformado/ausente,
+retorna `undefined` e classifier opera só com hints + fallback
+(não-regressão garantida).
+
+Drift warning via `logger.warn` quando
+`parsed.rubricas.length !== rubricasClassificadas.length` — sinaliza
+discordância entre parser frontend e mapper Deno sobre quantas rubricas
+existem no holerite.
+
+### Calibração contra 3 PDFs reais (Fase 4 + 4.1)
+
+Pipeline replica o caminho V6 de produção:
+`docTabularSintetico(ocrText) → escolherMapper(doc, 'holerite') →
+mapper.mapear() → classifyHolerite`.
+
+| PDF | Mapper | Holerites OK | Total rubricas | Cob. todas | **Cob. efetiva** | **Correção** |
+|---|---|---|---|---|---|---|
+| Roque (VV antigo, 73p)         | `holerite_via_varejo_v1` | 52/73 | 1072 | 35.4% | **80.1%** ✅ | **100%** (155/155) |
+| Rosicleia antigo (VV, 44p)     | `holerite_via_varejo_v1` | 38/44 |  693 | 59.3% | **95.6%** ✅ | **100%** (196/196) |
+| Rosicleia novo (Casas Bahia SAP) | — (não detectado)      |  0/35 |    0 |   n/a |   n/a       | n/a (0/0)         |
+
+**Total auditável: 351 linhas, ZERO divergências.** Meta ≥80% efetiva
++ 100% correção batida nos PDFs Via Varejo antigo.
+
+**Cobertura efetiva** = `(ontologia + ontologia_desconsiderar) / (total
+- descontos - totalizadores - ignorar_hint)`. Exclui linhas que jamais
+seriam ontologia (defesa em profundidade da camada 1.5), pra não
+diluir a métrica artificialmente.
+
+### Metodologia anti-tautologia
+
+Ground truth = **lookup literal direto no catálogo `ONTOLOGIA`**
+(`texto_canonico` ou string em `sinonimos[]`, com normalização mínima:
+`trim + toLowerCase`). Observado = saída do `classifyHolerite` (interno
+usa `enriquecerComClassificacao` com NFD + sinônimo + fuzzy Levenshtein
+@ 0.85). Diferença real:
+
+- Concordância → ok
+- Literal não acha (fuzzy do classifier foi mais agressivo) → `fuzzy_only`,
+  não conta (439 casos: variações tipo `DSR(Comissão)`, `COM. GARANTIA`)
+- Literal acha e diverge → BUG REAL (zero ocorrências nos 3 PDFs)
+
+### JSONB round-trip (Fase 4.1 — fechamento do gap)
+
+Fase 4 inicial chamou `mapper.mapear(doc)` e injetou direto no
+classifier — mesmo runtime, sem serialização. Em produção, V6 passa
+por `documents.parsed` JSONB no PostgreSQL: mapper Deno persiste,
+frontend lê via cliente Supabase. Serialização JSON quebra referências
+de objeto, pode normalizar tipos e expõe o type guard.
+
+4 testes E2E em `__tests__/calibracao/holerite-jsonb-roundtrip.test.ts`
+validam:
+
+1. Round-trip preserva shape (extrair → array de length correto,
+   categorias e score_match preservados)
+2. Match por referência QUEBRA após JSONB, fallback `(codigo, nome)`
+   salva — com pré-assertion `Object.is(...) === false` ANTES da
+   chamada (pega regressão se o teste passar por acidente)
+3. E2E pipeline real (`parsed → jsonRoundtrip → extrair → classify`)
+   preserva metadados pós-serialização
+4. Type guard resiste a JSONB malformado em 9 cenários, **+1 cenário
+   documenta fragilidade conhecida** (`{ rubrica: null, categoria:
+   'STRING_QUALQUER' }` passa porque `'rubrica' in rc` checa só
+   presença) — gate intencional pra Sprint 3c.1 endurecer.
+
+### Métricas técnicas
+
+| Item | Valor |
+|---|---|
+| Testes verdes | **2612 / 0 failing / 43 skipped** (baseline 2590 + 22 novos Sprint 3c) |
+| Typecheck | exit 0 |
+| Arquivos modificados | 5 produção + 2 teste + 1 script Python + .gitignore |
+| Linhas adicionadas | ~860 |
+| Correção em rubricas reais | 100% (351/351 auditáveis) |
+| Cobertura efetiva Via Varejo antigo | 80–96% |
+
+### Lição metodológica (Fase 4 → 4.1)
+
+**A Fase 4 inicial omitiu o caminho de produção real.** Calibrei contra
+`mapper.mapear(doc) → classifyHolerite` no MESMO runtime, sem
+serialização. Produção V6 passa por `documents.parsed` JSONB no
+PostgreSQL — serialização quebra referências de objeto. Sem a Fase 4.1,
+o teste teria assumido que o caminho `Object.is` funciona em prod (NÃO
+funciona — sempre cai no fallback `(codigo, nome)`).
+
+**Regra pra próximas sprints**: calibração precisa validar o caminho
+de produção REAL, não pipeline simulado em laboratório. Pra features
+que envolvem persistência (JSONB, fila, cache), incluir round-trip
+no critério de aceite da calibração. Idealmente um teste E2E que faça
+o caminho completo do dado, mesmo que sintético — pegar serialização
+e narrowing antes de aparecer em prod.
+
+### Pendências Sprint 3c.1 (não-bloqueantes)
+
+1. **Mapper `holerite-casas-bahia-sap-v1`** + expansão da ontologia
+   pra layout SAP (Rosicleia novo: 0/35 detectados — header usa
+   `"Proventos Descontos"` e competência `"Período : MM.YYYY"`,
+   `detectCompetencia` retorna null). **Alta prioridade** — é o futuro
+   próximo do empregador.
+
+2. **Páginas puladas em PDFs com transição mid-PDF** (Roque 21/73,
+   Rosicleia antigo 6/44). Provavelmente últimas competências viraram
+   layout SAP no meio do PDF. Resolvido junto com (1).
+
+3. **UI** mostrando origem da classificação: verde pra `origem='ontologia'`
+   (validada pelo escritório), azul pra `'ontologia_desconsiderar'`,
+   badge "Validado pelo escritório", tooltip com `metodo_match`,
+   `score_match`, `divergencia_juridica`. Metadados já preservados em
+   `LinhaClassificada.classificacao_ontologia` — só falta o componente.
+
+4. **Endurecer type guard** de `extrairRubricasClassificadasDoV6`
+   adicionando `typeof rubrica === 'object' && rubrica !== null &&
+   CATEGORIAS_VALIDAS.has(categoria)`. O teste 4 cenário 9 da Fase 4.1
+   está com assertion intencional `expect(...).toBeDefined()` — quando
+   o guard for apertado, esse teste falha de propósito e força revisão
+   consciente.
+
+5. **Parser frontend `parseHolerite` cobrir pipes ADP** (regex
+   `RE_LINHA_RUBRICA` não aceita `|`). Baixa prioridade — caminho V6
+   (mapper Deno) cobre. Relevante só no fluxo legado
+   `ocr_provider ≠ pdfjs_geometric`.
