@@ -258,11 +258,17 @@ genérico sem competição.
 
 ### Pendências Sprint 3.5 (não-bloqueantes)
 
-1. **Coincidência "4 batidas = escala"** (descoberta na Fase 1):
-   quando funcionário cumpre jornada exata e a linha tem só 4 batidas
-   (não 8), o sistema interpreta como "Reg vazio + Escala = sem
-   batidas reais" e descarta o dia. Não é regressão da Sprint 3 — é
-   ambiguidade preexistente. Investigar volume em calibração futura.
+1. **Coincidência "4 batidas = escala" — NÃO-MENSURÁVEL na calibração
+   atual** (achado da Fase 1 que persiste). O `calibrar.py` usa a MESMA
+   heurística do mapper antigo (extraída do código), então ambos
+   descartam os mesmos dias e dão 100% tautológico. Pra medir de verdade
+   precisa ground truth INDEPENDENTE. Opções (sugestão Gabriel):
+   - (a) Pedir 10-20 cartões com confirmação humana de "jornada exata"
+   - (b) Modo "agressivo" no calibrar.py (sem heurística da escala),
+     mede delta. Se delta ≈ 0, padrão raro → fica como está
+   - (c) Aceitar como decisão de produto: "operador valida na revisão"
+
+   Recomendação: começar com (b) — custo zero, dá número real pra decidir.
 
 2. **Reconciliação flag false** nos PDFs Jefferson antigo (35 períodos
    divergentes) e Híbrido (9 períodos). Preexistente. Não regressão
@@ -273,3 +279,32 @@ genérico sem competição.
    Design intencional (CSV PJe-Calc não precisa de DSR/feriado vazio),
    mas pode confundir UI que mostra só `apuracoes`. Considerar expor
    `diasDescartados` no preview.
+
+4. **Divergências residuais < 1% da calibração** (8 casos totais nos 3 PDFs):
+   - `05/02/2022` Jefferson novo: 5 batidas reais legítimas (sábado
+     longo) onde heurística `len==5 sem palavra-chave → descarta 5ª`
+     perde a 5ª. Caso raro. Reformular heurística (Sprint 3.5).
+   - `00:00` vazando como batida em dias FERIADO (3 ocorrências) — o
+     totalizador `Hora Extra Feriado 0% : 00:00` vem da TABELA (não do
+     texto plano), então a expansão do `RE_INICIO_RESULTADO` não pegou.
+     Fix: aplicar `RE_INICIO_RESULTADO` também no AJUSTES da tabela.
+   - `00:10` extra em 15/03/2022 Izabela — o separador `|` no texto
+     do PDF (`HE-Comiss-|50% Intervalo`) quebra a regex `HE\s*[-–]\s*Comiss`.
+     Fix: regex tolerante a `|` entre tokens.
+
+### Lição metodológica registrada (Gabriel, Sprint 3 Fase 4)
+
+**Counting ≠ Calibração.** O primeiro relatório da Fase 4 reportou 440
+apurações extraídas com "0 warnings" como aceitação — passou no smoke
+test mas tinha dezenas de bugs invisíveis (4ª batida vazando pra AJUSTES,
+páginas inteiras perdidas por clustering, totalizadores virando batidas).
+A calibração real linha-por-linha contra ground truth revelou **7 bugs
+distintos** que foram fixados.
+
+**Regra pra futuras sprints**: nunca aceitar smoke test (contagem de
+saídas, presença de warnings, distribuição de ocorrências) como aceitação
+final. Calibração contra ground truth independente é obrigatória pra
+features que produzem dados pra cálculo trabalhista — o custo de errar
+em escala é alto demais. Quando o autor do código também escreve o
+ground truth (tautologia), buscar fonte externa (revisão humana, parser
+alternativo, dados de produção pareados manualmente).
