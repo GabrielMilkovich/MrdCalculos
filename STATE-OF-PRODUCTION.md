@@ -179,3 +179,86 @@ Branch órfão `claude/determined-lovelace-7mb5h` (auto-gerado, renomeado
 pra `feat/ontologia-rubricas-sprint-2`). Tentativa de delete via push
 HTTP retornou 403 do proxy git do ambiente managed — **precisa ser
 deletado manual via UI do GitHub** depois do merge da Sprint 2.
+
+---
+
+## Sprint 3 — Cobertura 99%+ dos 2 layouts Via Varejo (2026-05-22)
+
+Mergeada via PR `feat/sprint-3-layouts-via-varejo`. Resolve cobertura
+parcial do layout NOVO "Espelho de Ponto Minha" (pós-2018) e melhora
+o layout ANTIGO com 5 marcadores semânticos novos + camada 2.5
+(totalizador FERIADO/DSR) + fix camada 2 (batidas reais coincidem com
+escala). Dispatcher novo `escolherEMapear` roda AMBOS mappers em PDFs
+híbridos e mescla por data.
+
+### Versões dos mappers
+- `cartao_via_varejo_v1`: **v7.2 → v7.3** (5 marcadores novos + 2 camadas novas + delegação SÓ-ESPELHO)
+- `cartao_via_varejo_minha_v1`: **v1** (novo — consome `paginas[].tabelas` direto)
+
+### Métricas de calibração contra PDFs reais
+
+| PDF | Páginas | Mappers executados | Apurações | Período coberto |
+|---|---|---|---|---|
+| Jefferson NOVO (16/06/2021+) | 26 | `cartao_via_varejo_minha_v1` (score 1.0) | 440 (268 com batidas + 172 ocorrências) | 2021-06-16 → 2023-02-05 |
+| Jefferson ANTIGO (até 15/06/2021) | 72 | `cartao_via_varejo_v1` (score 0.71) | 744 com batidas + **243 diasDescartados** (75 AFASTAMENTO ≈ férias+atestado spec, 144 DSR, 24 FERIADO) | 2018-08-13 → 2021-06-15 |
+| **Híbrido Izabela** | 37 | **`minha_v1` + `v1` (MERGE)** | 392 com `parser_version: "merged:..."` | 2020-11-14 → 2022-04-15 |
+
+Ocorrências detectadas no PDF Híbrido: NORMAL 321, DSR 40, LICENCA_MEDICA
+24, FERIADO 5, AFASTAMENTO 2. **Merge real funcionou** — datas pré-
+e pós-transição (16/06/2021) processadas pelos mappers corretos e
+combinadas sem conflito.
+
+### Marcadores novos no mapper antigo (Fase 1)
+
+Adicionados ao `RE_MARCADOR_COLUNA_DUPLA`:
+- `ABONO AUTORIZADO` (CAPS — distingue do "Abono Autorizado" do layout novo)
+- `AFAST` standalone (CAPS — prefixa "Férias Férias" e "Atestado Médico")
+- `Falta Injustificada` (i)
+
+Movidos pra camada 0 (`RE_MARCADOR_PRE_BATIDAS`, só dispara se sem HH:MM antes):
+- `Treinamento` (i) — defesa contra palavra em contexto histórico
+- `Problemas Relogio` (sem acento, i)
+
+### Decisões de design
+
+**Opção (b) — mapeamento dos 6 slugs novos pros 10 do enum existente**
+(sem migration, granularidade em `apuracao.observacao`):
+
+| Slug spec | Mapeio pra | Observação |
+|---|---|---|
+| Licença falecimento | AFASTAMENTO | "Licença falecimento" |
+| Acompanhamento Medico | ATESTADO | "Acompanhamento médico" |
+| Abono Autorizado | AFASTAMENTO | "Abono autorizado" |
+| Dia do Comerciario | FOLGA | "Dia do Comerciário" |
+| DSR Descontado | FALTA | "DSR descontado" |
+| Problemas Relogio (com batidas) | NORMAL | "Problemas relogio" |
+| Problemas Relogio (sem batidas, `--`) | AFASTAMENTO | "Problemas relogio" |
+
+**Modo merge no dispatcher**: regra de precedência por data é "prevalece
+quem tem mais batidas reais". Empate de contagem mantém o mapper de
+maior score (já vem primeiro na lista). Competência predominante
+RECALCULADA das apurações pós-merge (evita dupla-contagem).
+
+**Fallback hierárquico no `escolherMappersCartaoPonto`**: se algum
+mapper ESPECÍFICO (Via Varejo) aplica, fallback `cartao_generico_v1` fica
+de fora. Garante que PDFs Via Varejo híbridos rodem só os 2 Via Varejo
+(sem ruído do genérico) E que PDFs de outro empregador caiam pro
+genérico sem competição.
+
+### Pendências Sprint 3.5 (não-bloqueantes)
+
+1. **Coincidência "4 batidas = escala"** (descoberta na Fase 1):
+   quando funcionário cumpre jornada exata e a linha tem só 4 batidas
+   (não 8), o sistema interpreta como "Reg vazio + Escala = sem
+   batidas reais" e descarta o dia. Não é regressão da Sprint 3 — é
+   ambiguidade preexistente. Investigar volume em calibração futura.
+
+2. **Reconciliação flag false** nos PDFs Jefferson antigo (35 períodos
+   divergentes) e Híbrido (9 períodos). Preexistente. Não regressão
+   da Sprint 3 — Fase 4 v7 já documentou como dívida técnica.
+
+3. **Mapper antigo: 0 ocorrências não-NORMAL no Jefferson antigo**
+   apesar de 75 AFASTAMENTOS detectados (foram pra `diasDescartados`).
+   Design intencional (CSV PJe-Calc não precisa de DSR/feriado vazio),
+   mas pode confundir UI que mostra só `apuracoes`. Considerar expor
+   `diasDescartados` no preview.
