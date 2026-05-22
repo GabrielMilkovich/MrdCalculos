@@ -219,6 +219,17 @@ function processarTabela(
       }
     }
 
+    // Sprint 3 caveat: cap defensivo em 6 batidas (PJe-Calc CSV aceita 12
+    // colunas = 6 pares). Mais que isso quase certamente é bug de parsing
+    // (BATIDAS concatenando outra coluna). NÃO descarta silenciosamente —
+    // warning permite operador investigar.
+    if (horas.length > 6) {
+      warnings.push(
+        `${dataIso}: ${horas.length} batidas extraídas, truncando pra 6 (limite PJe-Calc).`,
+      );
+      horas = horas.slice(0, 6);
+    }
+
     const marcacoes = paresFromHoras(horas);
     const { ocorrencia, observacao } = detectarOcorrenciaDoResultado(
       resultadoTxt,

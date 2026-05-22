@@ -18,7 +18,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extrairGeometrico } from "../_shared/extrator-geometrico.ts";
-import { escolherMapper } from "../_shared/mappers/dispatcher.ts";
+import { escolherEMapear } from "../_shared/mappers/dispatcher.ts";
 import { sanitizePII } from "../_shared/sanitize-pii.ts";
 
 const corsHeaders = {
@@ -192,8 +192,10 @@ async function processarDoc(
       textFullLength,
     };
   }
-  const dispatch = escolherMapper(docTab);
-  if (!dispatch) {
+  // Sprint 3: escolherEMapear encapsula merge de PDFs híbridos de cartão
+  // de ponto. Discriminated union preserva telemetria granular.
+  const dispatch = escolherEMapear(docTab);
+  if (dispatch.kind === "no_mapper_matched") {
     return {
       id: doc.id,
       sucesso: false,
@@ -205,26 +207,28 @@ async function processarDoc(
       textFullLength,
     };
   }
-  const resultado = dispatch.mapper.mapear(docTab);
-  if (!resultado) {
+  if (dispatch.kind === "mapper_returned_null") {
+    const slugs = dispatch.tentados.map((t) => t.mapper.slug).join(", ");
+    const primeiroSlug = dispatch.tentados[0]?.mapper.slug ?? "unknown";
     return {
       id: doc.id,
       sucesso: false,
       outcome: "mapper_returned_null",
-      mapper: dispatch.mapper.slug,
-      razao: `mapper ${dispatch.mapper.slug} retornou null`,
-      score: dispatch.score,
+      mapper: primeiroSlug,
+      razao: `mapper(s) [${slugs}] retornou null`,
+      score: dispatch.tentados[0]?.score ?? 0,
       pageCount: docTab.numeroPaginas,
       textPreview,
       textFullLength,
     };
   }
-  const parsedJson = serializarParaParsed(resultado);
+  const { executado } = dispatch;
+  const parsedJson = serializarParaParsed(executado.resultado);
   await supabase
     .from("documents")
     .update({
       parsed: parsedJson,
-      parsed_by: dispatch.mapper.slug,
+      parsed_by: executado.slug,
       ocr_provider: "pdfjs_geometric",
       ocr_text: docTab.textoCompleto,
       ocr_validated: true,
@@ -239,10 +243,12 @@ async function processarDoc(
         v6_quality_score: docTab.qualidade.score,
         v6_quality_reason: docTab.qualidade.razao,
         v6_page_count: docTab.numeroPaginas,
-        v6_mapper: dispatch.mapper.slug,
-        v6_mapper_tried: dispatch.mapper.slug,
-        v6_mapper_score: dispatch.score,
-        v6_mapper_motivos: dispatch.motivos,
+        v6_mapper: executado.slug,
+        v6_mapper_tried: executado.slug,
+        v6_mapper_score: executado.score,
+        v6_mapper_motivos: executado.motivos,
+        // Sprint 3 — lista de mappers que rodaram (1 elemento se não-híbrido)
+        v6_mappers_executados: executado.mappers_executados,
         v6_reprocessed_at: new Date().toISOString(),
       },
     })
@@ -261,10 +267,13 @@ async function processarDoc(
     id: doc.id,
     sucesso: true,
     outcome: "success",
-    mapper: dispatch.mapper.slug,
-    score: dispatch.score,
+    mapper: executado.slug,
+    score: executado.score,
     pageCount: docTab.numeroPaginas,
-    razao: `score ${dispatch.score.toFixed(2)}` +
+    razao: `score ${executado.score.toFixed(2)}` +
+      (executado.mappers_executados.length > 1
+        ? ` · merged=[${executado.mappers_executados.join("+")}]`
+        : "") +
       (chunkResult.ok
         ? ` · ${chunkResult.chunks_created ?? "?"} chunks RAG`
         : ` · chunk-and-embed falhou (${chunkResult.error ?? "?"}) — re-rodar`),

@@ -15,7 +15,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extrairGeometrico } from "../_shared/extrator-geometrico.ts";
-import { escolherMapper } from "../_shared/mappers/dispatcher.ts";
+import { escolherEMapear } from "../_shared/mappers/dispatcher.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -101,29 +101,37 @@ async function tentarCaminhoV6(
       );
       return { tentado: true, sucesso: false };
     }
-    const dispatch = escolherMapper(docTab);
-    if (!dispatch) {
+    // Sprint 3: escolherEMapear encapsula merge de PDFs híbridos de cartão
+    // de ponto. Discriminated union preserva distinção telemétrica entre
+    // "nenhum mapper aplica" e "mapper aplicou mas falhou em mapear()".
+    const dispatch = escolherEMapear(docTab);
+    if (dispatch.kind === "no_mapper_matched") {
       console.log(
         `[process-start] doc ${document_id}: v6 nenhum mapper aplica — caminho v5`,
       );
       return { tentado: true, sucesso: false };
     }
-    const resultado = dispatch.mapper.mapear(docTab);
-    if (!resultado) {
+    if (dispatch.kind === "mapper_returned_null") {
+      const slugs = dispatch.tentados.map((t) => t.mapper.slug).join(", ");
       console.log(
-        `[process-start] doc ${document_id}: v6 mapper ${dispatch.mapper.slug} retornou null — caminho v5`,
+        `[process-start] doc ${document_id}: v6 mapper(s) [${slugs}] retornou null — caminho v5`,
       );
       return { tentado: true, sucesso: false };
     }
-    const parsedJson = serializarParaParsed(resultado);
+    const { executado } = dispatch;
+    const parsedJson = serializarParaParsed(executado.resultado);
+    const mappersLog =
+      executado.mappers_executados.length > 1
+        ? ` merged=[${executado.mappers_executados.join("+")}]`
+        : "";
     console.log(
-      `[process-start] doc ${document_id}: v6 SUCCESS — mapper=${dispatch.mapper.slug} score=${dispatch.score.toFixed(2)} (gravando em parsed jsonb)`,
+      `[process-start] doc ${document_id}: v6 SUCCESS — mapper=${executado.slug} score=${executado.score.toFixed(2)}${mappersLog} (gravando em parsed jsonb)`,
     );
     await supabase
       .from("documents")
       .update({
         parsed: parsedJson,
-        parsed_by: dispatch.mapper.slug,
+        parsed_by: executado.slug,
         ocr_provider: "pdfjs_geometric",
         // V6 popula ocr_text com o textoCompleto do extrator — UI continua
         // mostrando o "OCR" no painel de referência. Pipeline V5 (regex)
@@ -139,14 +147,17 @@ async function tentarCaminhoV6(
           v6_quality_score: docTab.qualidade.score,
           v6_quality_reason: docTab.qualidade.razao,
           v6_page_count: docTab.numeroPaginas,
-          v6_mapper: dispatch.mapper.slug,
-          v6_mapper_score: dispatch.score,
-          v6_mapper_motivos: dispatch.motivos,
+          v6_mapper: executado.slug,
+          v6_mapper_score: executado.score,
+          v6_mapper_motivos: executado.motivos,
+          // Sprint 3: novo campo — lista de mappers que rodaram
+          // (1 elemento em casos non-híbridos, 2+ em merge).
+          v6_mappers_executados: executado.mappers_executados,
           v6_attempted_at: new Date().toISOString(),
         },
       })
       .eq("id", document_id);
-    return { tentado: true, sucesso: true, mapper: dispatch.mapper.slug };
+    return { tentado: true, sucesso: true, mapper: executado.slug };
   } catch (err) {
     console.warn(
       `[process-start] doc ${document_id}: caminho v6 lançou erro — caindo pro v5:`,

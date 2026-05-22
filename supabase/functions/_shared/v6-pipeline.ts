@@ -24,7 +24,7 @@
 //     e propagada por testes em produção via re-upload de PDFs.
 
 import { extrairGeometrico } from "./extrator-geometrico.ts";
-import { escolherMapper } from "./mappers/dispatcher.ts";
+import { escolherEMapear } from "./mappers/dispatcher.ts";
 import { sanitizePII } from "./sanitize-pii.ts";
 
 // Possíveis transições do caminho V6. Vira `metadata.v6_outcome`. Cada
@@ -124,8 +124,13 @@ export async function tentarV6(
         pageCount: docTab.numeroPaginas,
       };
     }
-    const dispatch = escolherMapper(docTab);
-    if (!dispatch) {
+    // Sprint 3: escolherEMapear encapsula merge de PDFs híbridos de
+    // cartão de ponto (Via Varejo Antigo + Espelho Minha). Pra outros
+    // tipos, comportamento idêntico a escolherMapper + mapear.
+    // Discriminated union preserva distinção entre no_mapper_matched
+    // e mapper_returned_null pra telemetria.
+    const dispatch = escolherEMapear(docTab);
+    if (dispatch.kind === "no_mapper_matched") {
       return {
         outcome: "no_mapper_matched",
         score: docTab.qualidade.score,
@@ -135,12 +140,11 @@ export async function tentarV6(
         textFullLength,
       };
     }
-    const resultado = dispatch.mapper.mapear(docTab);
-    if (!resultado) {
+    if (dispatch.kind === "mapper_returned_null") {
       return {
         outcome: "mapper_returned_null",
-        mapper: dispatch.mapper.slug,
-        score: dispatch.score,
+        mapper: dispatch.tentados[0]?.mapper.slug ?? "unknown",
+        score: dispatch.tentados[0]?.score ?? 0,
         pageCount: docTab.numeroPaginas,
         textPreview,
         textFullLength,
@@ -148,9 +152,9 @@ export async function tentarV6(
     }
     return {
       outcome: "success",
-      mapper: dispatch.mapper.slug,
-      score: dispatch.score,
-      parsedJson: serializarParaParsed(resultado),
+      mapper: dispatch.executado.slug,
+      score: dispatch.executado.score,
+      parsedJson: serializarParaParsed(dispatch.executado.resultado),
       textoCompleto: docTab.textoCompleto,
       pageCount: docTab.numeroPaginas,
       qualidadeRazao: docTab.qualidade.razao,

@@ -311,6 +311,25 @@ describe("mapperCartaoViaVarejoMinha — mapeamento Opção b dos 6 slugs novos"
   });
 });
 
+describe("mapperCartaoViaVarejoMinha — cap defensivo de 6 batidas", () => {
+  it("8 batidas na célula (bug de parsing concatenado) → trunca pra 6 + warning", () => {
+    // Cenário patológico: BATIDAS pega texto de coluna adjacente por bug
+    // de clusterização. Cap defensivo evita estourar coluna PJe-Calc.
+    const t = tab(
+      ["DATA", "BATIDAS", "AJUSTES", "RESULTADO"],
+      [["18/06/2021 - Sex", "08:00 12:00 13:00 17:00 18:00 19:00 20:00 21:00", "", ""]],
+    );
+    const res = mapperCartaoViaVarejoMinha.mapear(docMinha({ tabelas: [t] }));
+    expect(res).not.toBeNull();
+    // Trunca pras 6 primeiras
+    expect(res!.apuracoes[0].marcacoes.length).toBe(3); // 6 horas → 3 pares
+    expect(res!.apuracoes[0].marcacoes[0]).toEqual({ e: "08:00", s: "12:00" });
+    expect(res!.apuracoes[0].marcacoes[2]).toEqual({ e: "18:00", s: "19:00" });
+    // Warning emitido com a data e contagem original
+    expect(res!.warnings.some((w) => /2021-06-18/.test(w) && /8 batidas/.test(w))).toBe(true);
+  });
+});
+
 describe("mapperCartaoViaVarejoMinha — dedup por data", () => {
   it("mesma data em 2 tabelas → 1 apuração, prevalece a com mais batidas", () => {
     const t1 = tab(
