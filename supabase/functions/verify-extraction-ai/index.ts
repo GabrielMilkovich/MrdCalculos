@@ -41,6 +41,13 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  type AiProvider,
+  escolherProvider,
+  type IAResponseParsed,
+  parseAnthropicToolUse,
+  type Suggestion,
+} from "./helpers.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,11 +79,8 @@ const SCORE_MAX = 85;
 const MODEL = "gpt-5";
 
 // Sprint Verify-AI Claude (2026-05-22) — coexistência de providers
-// via feature flag. Default vira Anthropic; OpenAI fica como fallback
-// emergencial até a calibração de Fase 5 validar a migração.
-type AiProvider = "openai" | "anthropic";
-const AI_PROVIDERS_VALIDOS: AiProvider[] = ["openai", "anthropic"];
-const DEFAULT_PROVIDER: AiProvider = "anthropic";
+// via feature flag. Tipos + constantes + helpers puros vivem em
+// `./helpers.ts` (testáveis em vitest, fora do runtime Deno).
 // Claude Sonnet 4.6: 1M context, sem extended thinking por default
 // (resposta direta, latência ~3-8s). Reputação anti-alucinação alinha
 // com o contrato existente.
@@ -130,13 +134,6 @@ REGRAS RÍGIDAS — NÃO QUEBRE NENHUMA:
 7. **Anti-alucinação self-check.** Antes de incluir cada sugestão, pergunte: "Eu consigo APONTAR para esse valor (ou para a evidência da remoção) no OCR enviado?" Se não, descarte.
 
 Responda APENAS no schema JSON definido.`;
-
-interface Suggestion {
-  field: string;
-  current: unknown;
-  suggested: unknown;
-  reason: string;
-}
 
 interface DiscardedHallucination {
   field: string;
@@ -215,12 +212,6 @@ function valorAparecemNoOcr(valor: unknown, ocr: string): boolean {
     if (variantes.some((v) => ocrN.includes(v))) return true;
   }
   return false;
-}
-
-interface IAResponseParsed {
-  suggestions: Suggestion[];
-  ai_confidence: number;
-  summary: string;
 }
 
 /**
@@ -713,33 +704,8 @@ Chame a tool emitir_revisao com sua análise.
         `Anthropic retornou ${resp.status}: ${errBody.slice(0, 500)}`,
       );
     }
-    const json = await resp.json() as {
-      content?: Array<{
-        type: string;
-        name?: string;
-        input?: unknown;
-        text?: string;
-      }>;
-    };
-    if (!Array.isArray(json.content)) {
-      throw new Error("Anthropic retornou response sem content[]");
-    }
-    const toolUseBlock = json.content.find(
-      (b) => b.type === "tool_use" && b.name === "emitir_revisao",
-    );
-    if (!toolUseBlock || !toolUseBlock.input) {
-      // Se Claude ignorou tool_choice e mandou texto livre, dá erro
-      // claro ao operador em vez de retornar resposta indefinida.
-      const textoLivre = json.content
-        .filter((b) => b.type === "text" && b.text)
-        .map((b) => b.text)
-        .join(" ")
-        .slice(0, 300);
-      throw new Error(
-        `Anthropic não retornou tool_use emitir_revisao. Texto livre (se houver): "${textoLivre}"`,
-      );
-    }
-    const parsed = toolUseBlock.input as IAResponseParsed;
+    const json = await resp.json() as { content?: unknown };
+    const parsed = parseAnthropicToolUse(json.content);
     return { raw: parsed, durationMs, status: resp.status };
   } finally {
     clearTimeout(timer);
@@ -784,12 +750,9 @@ serve(async (req) => {
     // Sprint Verify-AI Claude — feature flag pro provider.
     // Default 'anthropic' (Claude Sonnet 4.6); cliente pode forçar
     // 'openai' (rollback emergencial). Telemetria registra qual rodou.
-    const aiProviderRaw = body.ai_provider;
-    const provider: AiProvider =
-      typeof aiProviderRaw === "string" &&
-        AI_PROVIDERS_VALIDOS.includes(aiProviderRaw as AiProvider)
-        ? aiProviderRaw as AiProvider
-        : DEFAULT_PROVIDER;
+    // Lógica de validação vive em `escolherProvider` (helpers.ts),
+    // testável em vitest.
+    const provider: AiProvider = escolherProvider(body.ai_provider);
     const API_KEY = provider === "anthropic"
       ? Deno.env.get("ANTHROPIC_API_KEY")
       : Deno.env.get("OPENAI_API_KEY");
