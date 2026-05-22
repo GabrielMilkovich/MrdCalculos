@@ -129,10 +129,14 @@ describe("mapperCartaoViaVarejo.detectar() — relaxação de formato de períod
     expect(det.motivos.join(" ")).toMatch(/formato Período/i);
   });
 
-  it("Rosicleia (slashes + Casas Bahia + ESPELHO DE PONTO) → aplica=false [VETO]", () => {
+  it("Rosicleia (slashes + Casas Bahia + ESPELHO DE PONTO) → aplica=false [delegado ao Minha]", () => {
+    // Sprint 3 (2026-05-22): o motivo era "fora do escopo deste mapper",
+    // agora é "delegado ao mapper Minha" — semântica mais clara, mesmo
+    // efeito (aplica=false), porque o novo mapper cartao_via_varejo_minha_v1
+    // assume PDFs SÓ-ESPELHO.
     const det = mapperCartaoViaVarejo.detectar(docSintetico(TEXTO_ROSICLEIA));
     expect(det.aplica, `motivos: ${det.motivos.join(" | ")}`).toBe(false);
-    expect(det.motivos.join(" ")).toMatch(/ESPELHO DE PONTO.*Casas Bahia/i);
+    expect(det.motivos.join(" ")).toMatch(/ESPELHO DE PONTO.*delegado/i);
   });
 
   it("Híbrido (Cartão E Espelho presentes) → aplica=true (veto só dispara se Espelho sem Cartão)", () => {

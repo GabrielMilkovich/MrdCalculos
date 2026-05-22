@@ -26,7 +26,7 @@ import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
 
 const RE_DATA_BR = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/;
 
-const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v7.2-2026-05-21';
+const PARSER_VERSION = 'cartao-ponto-via-varejo-mapper-v7.3-2026-05-22';
 
 // Aceita 2 formatos de cabeçalho de período:
 //   1. ANTIGO (Via Varejo 2011-2016): "Período 11.01.2016 A 15.02.2016"
@@ -226,8 +226,22 @@ function extrairPares(s: string): MarcacaoDominio[] {
 // Marcadores que separam Registrado da Escala numa linha do PDF Via Varejo.
 // Quando aparecem ENTRE dois horários, indicam fim do "Horário Registrado"
 // e início do "Horário de Trabalho" (escala teórica, descartar).
+//
+// Sprint 3 (2026-05-22): expandido com 5 marcadores observados em PDFs
+// Jefferson antigo (ADP-Web) que faziam escala vazar como batida quando
+// apareciam no INÍCIO da linha (sem batidas reais antes):
+//   - `ABONO AUTORIZADO` (CAPS — distingue do "Abono Autorizado" do
+//     layout NOVO; o layout antigo usa caixa-alta no rótulo)
+//   - `Treinamento` (i) — 14 ocorrências no PDF Jefferson antigo
+//   - `Problemas Relogio` (sem acento, i) — 9 ocorrências
+//   - `AFAST` (CAPS standalone) — prefixa "Férias Férias" e
+//     "Atestado Médico Atestado Médico" no antigo
+//   - `Falta Injustificada` (i)
+//
+// O termo `\bAfast(?:amento)?\s+Abonado\b` continua existindo separadamente
+// e é diferente de `\bAFAST\b` standalone — manter ambos.
 const RE_MARCADOR_COLUNA_DUPLA =
-  /\b(?:D[ée]bito|Cr[eé]dito)\s+Banco\s+de\s+horas\b|\bAtraso\s+Abonado\b|\bSa[íi]da\s+Antecipada\b|\bAfast(?:amento)?\s+Abonado\b/i;
+  /\b(?:D[ée]bito|Cr[eé]dito)\s+Banco\s+de\s+horas\b|\bAtraso\s+Abonado\b|\bSa[íi]da\s+Antecipada\b|\bAfast(?:amento)?\s+Abonado\b|ABONO\s+AUTORIZADO|\bTreinamento\b|\bProblemas\s+Relogio\b|\bAFAST\b|\bFalta\s+Injustificada\b/i;
 
 /**
  * Extrai pares E/S em layout coluna-dupla "Registrado vs Escala".
@@ -292,14 +306,40 @@ function extrairParesColunaDupla(
 
   // Camada 2: janela deslizante — primeira sequência de 4hh consecutivos
   // casando uma escala conhecida = fronteira Registrado|Escala.
+  //
+  // Sprint 3 (2026-05-22) — fix: quando i===0 (primeiros 4hh batem com a
+  // escala teórica), o comportamento anterior retornava `[]` (interpretava
+  // como "linha só com escala"). Mas se a linha tem 8+ horas no total, os
+  // primeiros 4 são batidas reais que coincidentemente são iguais à escala
+  // (funcionário cumpriu jornada exata). Os 4 seguintes são a repetição
+  // teórica. Detectamos esse caso e mantemos os 4 primeiros como Registrado.
   if (escalasConhecidas.size > 0 && matches.length >= 4) {
     for (let i = 0; i <= matches.length - 4; i++) {
       const janela = `${matches[i].h}|${matches[i + 1].h}|${matches[i + 2].h}|${matches[i + 3].h}`;
       if (escalasConhecidas.has(janela)) {
+        if (i === 0 && matches.length >= 8) {
+          // Batidas reais coincidem com escala — 4 primeiras são batidas
+          // reais, 4 seguintes (e qualquer extra) são repetição da escala.
+          const registrado = matches.slice(0, 4).map(x => x.h);
+          return paresFromHoras(registrado);
+        }
         const registrado = matches.slice(0, i).map(x => x.h);
         return paresFromHoras(registrado);
       }
     }
+  }
+
+  // Sprint 3 (2026-05-22) — Camada 2.5: FERIADO/DSR trabalhados com
+  // totalizador final. Padrão observado em PDFs reais Jefferson antigo:
+  //   "10:34 14:27 15:32 18:47 FERIADO FERIADO 7:08"
+  //   "13:10 16:00 17:05 21:51 DSR DSR 7:36"
+  // As 4 primeiras horas são batidas reais; a 5ª é totalizador de horas
+  // extras de feriado/DSR (NÃO é batida). Sem este tratamento, camada 3
+  // (fallback) com 5 matches retornaria 3 pares (último com saída vazia).
+  const reTotalizadorFeriadoDsr = /\b(?:DSR\s+DSR|FERIADO\s+FERIADO)\b/;
+  if (matches.length === 5 && reTotalizadorFeriadoDsr.test(s)) {
+    const registrado = matches.slice(0, 4).map(x => x.h);
+    return paresFromHoras(registrado);
   }
 
   // Camada 3: fallback. Total=8 sem escala detectada → assume 4+4
@@ -728,34 +768,24 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
     let acertos = 0;
     const t = doc.textoCompleto;
 
-    // VETO ANTI-REGRESSÃO: documentos do layout Casas Bahia pós-2018 usam
-    // "ESPELHO DE PONTO" em vez de "Cartão de Ponto". Mesmo que o CGC
-    // (33.041.260) ou o formato de período moderno (com barras) case, esse
-    // mapper foi calibrado para o layout Via Varejo "Cartão de Ponto" antigo
-    // — colunas, marcadores de fim de tabela, RE_LINHA_DIA são todos
-    // específicos daquele layout. Rosicleia 2022-2024 (Casas Bahia novo)
-    // é o caso de regressão que esse veto previne quando a relaxação de
-    // RE_PERIODO (2026-05-20) passou a aceitar barras.
+    // DELEGAÇÃO PRO MAPPER MINHA (Sprint 3, 2026-05-22):
+    // PDFs SÓ-NOVO ("ESPELHO DE PONTO" sem "CARTÃO DE PONTO") são responsabilidade
+    // do mapper `cartao_via_varejo_minha_v1`. Este mapper antigo continua sendo
+    // o owner do layout "Cartão de Ponto" tradicional (ADP-Web/Via Varejo
+    // pré-2018). PDFs híbridos (caso Izabela: transição 16/06/2021) acionam
+    // AMBOS via dispatcher.escolherMappersCartaoPonto, e os resultados são
+    // mesclados por data com regra "prevalece quem tem mais batidas reais".
     //
-    // O veto exige "ESPELHO DE PONTO" PRESENTE E "CARTÃO DE PONTO" AUSENTE.
-    // Documentos híbridos (raros, mas possíveis) seguem fluxo normal.
-    //
-    // PREMISSA TESTÁVEL: PDFs do layout Via Varejo Cartão antigo SEMPRE têm
-    // a string "Cartão de Ponto" em algum lugar do texto extraído (header
-    // do PDF ou rodapé fiscal). Se aparecer PDF híbrido com "ESPELHO DE
-    // PONTO" no header E "Cartão" só num footer técnico (improvável mas
-    // possível em layouts mistos pós-fusão), o veto NÃO dispara — fluxo
-    // segue normal e pode causar parse incorreto. Se observar esse caso
-    // em produção: refinar veto pra exigir presença de "Cartão" EM
-    // proximidade léxica (ex: ±200 chars do início do texto) em vez de
-    // qualquer match no documento inteiro.
-    if (/ESPELHO\s+DE\s+PONTO/i.test(t) && !/CART[ÃA]O\s+DE\s+PONTO/i.test(t)) {
+    // Histórico do veto que existia aqui (removido nesta sprint):
+    // Antes, esse if abaixo retornava aplica:false pra PDFs só-ESPELHO,
+    // mas o erro de motivo "fora do escopo" induzia o operador a achar que
+    // o PDF era inválido. Agora retornamos aplica:false com motivo neutro
+    // ("delegado ao mapper Minha") e o dispatcher acha o mapper certo.
+    if (/ESPELHO\s+DE\s+PONTO/i.test(t) && !/CART[ÃA]O\s+(?:DE\s+)?PONTO/i.test(t)) {
       return {
         aplica: false,
         score: 0,
-        motivos: [
-          'ESPELHO DE PONTO sem CARTÃO DE PONTO — layout Casas Bahia pós-2018, fora do escopo deste mapper',
-        ],
+        motivos: ['layout só ESPELHO DE PONTO — delegado ao mapper Minha (cartao_via_varejo_minha_v1)'],
       };
     }
 
