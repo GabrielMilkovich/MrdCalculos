@@ -614,7 +614,26 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
     }
   };
 
-  const res = (resultado?.resultado as unknown as PjeLiquidacaoResult) || null;
+  // resultado.resultado é alias da view sobre resumo_verbas. Cuidado:
+  // o campo aceita 2 shapes incompatíveis dependendo do gravador:
+  //   - engine.liquidar() (ModuloResumo:539): PjeLiquidacaoResult completo
+  //     (objeto com .resumo, .fgts, .verbas, etc)
+  //   - pjc-persist.ts:308 (engine_version='PJC_IMPORT'): array compacto
+  //     de verbas {nome, tipo, total_devido, total_pago, total_diferenca}
+  // O cast `as unknown as PjeLiquidacaoResult` mente pro TS no segundo
+  // caso. `resTemResumo` detecta o shape válido pra renderizar o resumo;
+  // PJC_IMPORT recai num fallback ("re-execute Liquidar pra calcular").
+  // Sprint Hotfix.1 deve padronizar gravação em pjc-persist.ts pra
+  // montar PjeLiquidacaoResult completo (refator maior, fora do hotfix).
+  const resRaw = (resultado?.resultado as unknown as PjeLiquidacaoResult) || null;
+  const resTemResumo =
+    resRaw !== null &&
+    !Array.isArray(resRaw) &&
+    typeof resRaw === "object" &&
+    resRaw.resumo !== null &&
+    resRaw.resumo !== undefined;
+  const res = resTemResumo ? resRaw : null;
+  const ehImportPjcSemResumo = resRaw !== null && !resTemResumo;
   const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
   const isFechado = resultado?.status === 'fechado';
@@ -889,7 +908,15 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       {!res ? (
         <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
           <FileBarChart className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
-          Configure todos os módulos e clique em <strong>Liquidar</strong> para executar o cálculo completo.
+          {ehImportPjcSemResumo ? (
+            <>
+              Cálculo importado de XML PJC — o resumo agregado (líquido, juros, FGTS,
+              etc) só é montado pelo engine V3. Clique em <strong>Liquidar</strong> para
+              executar o cálculo completo a partir das verbas importadas.
+            </>
+          ) : (
+            <>Configure todos os módulos e clique em <strong>Liquidar</strong> para executar o cálculo completo.</>
+          )}
         </CardContent></Card>
       ) : (
         <>
