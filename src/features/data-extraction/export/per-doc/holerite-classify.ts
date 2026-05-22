@@ -17,8 +17,73 @@
 
 import Decimal from 'decimal.js';
 import type { CategoriaSlug, HintResult } from '../../types';
-import type { RubricaParseada } from '../../parsers/holerite/types';
+import type {
+  RubricaParseada,
+  RubricaClassificada,
+  CategoriaOntologiaRubrica,
+  MetodoMatchOntologia,
+} from '../../parsers/holerite/types';
 import { getDefaultHint } from '../../classification/hints';
+
+/**
+ * Sprint 3c: mapeamento entre as 7 categorias da ontologia (Sprint 2) e
+ * os 6 slugs de categoria do PJe-Calc Cidadão.
+ *
+ * - `DESCONSIDERAR` → null: rubrica catalogada como "fora do CSV"
+ *   (descontos sociais, totalizadores conhecidos etc.). Linha sai com
+ *   `origem='ontologia_desconsiderar'`, `incluir=false`.
+ * - `NAO_CLASSIFICADO` → null: ontologia não casou. Linha cai pra
+ *   camada hints (`getDefaultHint`) e, se ainda assim sem categoria,
+ *   pro fallback final (`salario_fixo`).
+ * - `COMISSAO_PRODUTOS` e `COMISSAO_SERVICOS` colapsam pra `comissao`
+ *   porque PJe-Calc não diferencia produtos vs serviços nesse nível.
+ *
+ * `salario_fixo` e `salario_familia` não são alcançáveis via ontologia —
+ * continuam exclusivamente via `hints.ts` legado (cobertura genérica).
+ */
+const ONTOLOGIA_PARA_CATEGORIA_SLUG: Record<
+  CategoriaOntologiaRubrica,
+  CategoriaSlug | null
+> = {
+  MINIMO_GARANTIDO: 'minimo_garantido',
+  COMISSAO_PRODUTOS: 'comissao',
+  COMISSAO_SERVICOS: 'comissao',
+  PREMIO: 'premiacao',
+  DSR_PAGO: 'dsr',
+  DESCONSIDERAR: null,
+  NAO_CLASSIFICADO: null,
+};
+
+/**
+ * Sprint 3c: encontra a classificação ontológica de uma rubrica.
+ *
+ * Match por referência primeiro (caminho rápido — funciona quando o
+ * mesmo runtime classifica e exporta, ex: testes unitários, ou quando
+ * o mapper Deno serializa e o frontend usa o objeto direto via
+ * structural sharing). Fallback por tupla `(codigo, nome)` cobre o
+ * caso normal de produção: classificação foi feita no mapper Deno,
+ * persistida em `documents.parsed` JSONB, e re-hidratada como novo
+ * objeto no frontend — referência quebrada, mas (codigo, nome) bate.
+ *
+ * Limitação conhecida: rubricas com `codigo=null` E `nome` duplicado
+ * em listas distintas farão match no primeiro hit. Sprint 3c.1 pode
+ * adicionar `ordem` ao critério se necessário.
+ */
+function buscarClassificacaoOntologia(
+  rub: RubricaParseada,
+  classificadas: readonly RubricaClassificada[] | undefined,
+): RubricaClassificada | null {
+  if (!classificadas || classificadas.length === 0) return null;
+  for (const rc of classificadas) {
+    if (Object.is(rc.rubrica, rub)) return rc;
+  }
+  for (const rc of classificadas) {
+    if (rc.rubrica.codigo === rub.codigo && rc.rubrica.nome === rub.nome) {
+      return rc;
+    }
+  }
+  return null;
+}
 
 export type LinhaClassificada = {
   /** Identificador estável dentro do preview (codigo+ordem). */
@@ -28,23 +93,42 @@ export type LinhaClassificada = {
   categoria: CategoriaSlug | null;
   /**
    * Como veio a categoria inicial (informativo para UI).
-   * FASE 1.2: adicionado `'totalizador_suspeito'` para rubricas cujo
-   * nome bate heurística de totalizador OU `flag_suspeita=true` veio
-   * do parser. Forçam `categoria=null, incluir=false` e a UI destaca
-   * em vermelho com tooltip.
+   *
+   * FASE 1.2: `'totalizador_suspeito'` para rubricas cujo nome bate
+   * heurística de totalizador OU `flag_suspeita=true` veio do parser.
+   *
+   * Sprint 3c (2026-05-22): `'ontologia'` quando a Sprint 2 classificou
+   * numa categoria mapeada (verde — validada pelo escritório);
+   * `'ontologia_desconsiderar'` quando catalogada como DESCONSIDERAR
+   * (azul — conhecida e propositalmente fora do CSV).
    */
   origem:
     | 'hint'
     | 'fallback'
     | 'desconto'
     | 'ignorar_hint'
-    | 'totalizador_suspeito';
+    | 'totalizador_suspeito'
+    | 'ontologia'
+    | 'ontologia_desconsiderar';
   /** Hint original (motivo); usado em tooltip. */
   hint: HintResult;
   /** Valor que vai pro CSV (sempre vencimento; descontos zeram). */
   valorParaCsv: number;
   /** Se está marcado para entrar no CSV (toggle do preview). */
   incluir: boolean;
+  /**
+   * Sprint 3c: metadados da classificação ontológica preservados pra
+   * UI exibir (método de match, score, divergência jurídica, texto
+   * canônico). Presente apenas quando `origem` é `'ontologia'` ou
+   * `'ontologia_desconsiderar'`. `undefined` nos demais origens.
+   */
+  classificacao_ontologia?: {
+    categoria_ontologia: CategoriaOntologiaRubrica;
+    metodo_match: MetodoMatchOntologia;
+    score_match: number;
+    texto_canonico: string | null;
+    divergencia_juridica: boolean;
+  };
 };
 
 /**
@@ -72,6 +156,13 @@ export function classifyHolerite(
     layout_usado: string;
     warnings: string[];
     rubricas: RubricaParseada[];
+    /**
+     * Sprint 3c: classificações da ontologia da Sprint 2. Opcional —
+     * quando ausente (parsed legado ou mapper que não populou), a
+     * camada 2 vira no-op e o classifier se comporta exatamente como
+     * antes (camadas 1, 3 e 4 inalteradas). Não-regressão garantida.
+     */
+    rubricas_classificadas?: readonly RubricaClassificada[];
   },
 ): ClassificacaoHolerite {
   const linhas: LinhaClassificada[] = parsed.rubricas.map((rub, i) => {
@@ -83,9 +174,10 @@ export function classifyHolerite(
     const hint = getDefaultHint(rub.nome);
     const key = `${rub.codigo ?? 'sem'}-${i}`;
 
-    // FASE 1.2 — primeira camada de defesa: se o NOME parece totalizador
-    // (Total Bruto, Liquido, Total Desc, etc.) ou se o parser marcou
-    // `flag_suspeita=true` por colagem inline, NUNCA inclui no CSV.
+    // === Camada 1 (FASE 1.2) — defesa-em-profundidade ============
+    // Totalizador ou flag_suspeita do parser: NUNCA entra no CSV,
+    // mesmo se ontologia disser que é minimo_garantido. Defesa vem
+    // antes de qualquer classificação.
     if (rub.flag_suspeita === true || nomeParaceTotalizador(rub.nome)) {
       return {
         key,
@@ -109,6 +201,52 @@ export function classifyHolerite(
         incluir: false,
       };
     }
+
+    // === Camada 2 (Sprint 3c) — ontologia ========================
+    // Quando a Sprint 2 classificou a rubrica numa categoria mapeada,
+    // promove pra essa categoria com `origem='ontologia'`. Quando
+    // catalogada como DESCONSIDERAR, sai com `incluir=false` e
+    // `origem='ontologia_desconsiderar'`. Quando NAO_CLASSIFICADO ou
+    // rubrica não aparece em `rubricas_classificadas`, segue pra
+    // camada 3 (hints legado).
+    const rc = buscarClassificacaoOntologia(rub, parsed.rubricas_classificadas);
+    if (rc !== null) {
+      const meta = {
+        categoria_ontologia: rc.categoria,
+        metodo_match: rc.metodo_match,
+        score_match: rc.score_match,
+        texto_canonico: rc.texto_canonico,
+        divergencia_juridica: rc.divergencia_juridica,
+      };
+      if (rc.categoria === 'DESCONSIDERAR') {
+        return {
+          key,
+          rubrica: rub,
+          categoria: null,
+          origem: 'ontologia_desconsiderar',
+          hint,
+          valorParaCsv: 0,
+          incluir: false,
+          classificacao_ontologia: meta,
+        };
+      }
+      const slugOntologia = ONTOLOGIA_PARA_CATEGORIA_SLUG[rc.categoria];
+      if (slugOntologia !== null) {
+        return {
+          key,
+          rubrica: rub,
+          categoria: slugOntologia,
+          origem: 'ontologia',
+          hint,
+          valorParaCsv,
+          incluir: valorParaCsv > 0,
+          classificacao_ontologia: meta,
+        };
+      }
+      // NAO_CLASSIFICADO: cai pra camada 3 (hints).
+    }
+
+    // === Camada 3 — hints legado =================================
     if (hint?.tipo === 'sugerir_ignorar') {
       return {
         key,
@@ -131,7 +269,8 @@ export function classifyHolerite(
         incluir: valorParaCsv > 0,
       };
     }
-    // Sem hint → fallback salario_fixo
+
+    // === Camada 4 — fallback final (salario_fixo) ================
     return {
       key,
       rubrica: rub,
