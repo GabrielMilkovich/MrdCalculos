@@ -58,3 +58,7 @@ public/reports/*.pjc
 # Playwright
 playwright-report/
 test-results/
+
+# Sprint 3c — OCR derivado dos PDFs versionados (re-gerar com
+# `python3 scripts/calibracao/extrair-holerites.py`).
+scripts/calibracao/ocr-holerites/
