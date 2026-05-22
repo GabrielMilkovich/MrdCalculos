@@ -227,21 +227,32 @@ function extrairPares(s: string): MarcacaoDominio[] {
 // Quando aparecem ENTRE dois horários, indicam fim do "Horário Registrado"
 // e início do "Horário de Trabalho" (escala teórica, descartar).
 //
-// Sprint 3 (2026-05-22): expandido com 5 marcadores observados em PDFs
+// Sprint 3 (2026-05-22): expandido com marcadores observados em PDFs
 // Jefferson antigo (ADP-Web) que faziam escala vazar como batida quando
 // apareciam no INÍCIO da linha (sem batidas reais antes):
 //   - `ABONO AUTORIZADO` (CAPS — distingue do "Abono Autorizado" do
 //     layout NOVO; o layout antigo usa caixa-alta no rótulo)
-//   - `Treinamento` (i) — 14 ocorrências no PDF Jefferson antigo
-//   - `Problemas Relogio` (sem acento, i) — 9 ocorrências
 //   - `AFAST` (CAPS standalone) — prefixa "Férias Férias" e
 //     "Atestado Médico Atestado Médico" no antigo
 //   - `Falta Injustificada` (i)
 //
+// `Treinamento` e `Problemas Relogio` foram MOVIDOS pra camada 0 (regex
+// `RE_MARCADOR_PRE_BATIDAS` abaixo) porque podem aparecer no meio da
+// linha em outros contextos (cabeçalho de seção, histórico) — só são
+// markers válidos quando precedem todas as batidas.
+//
 // O termo `\bAfast(?:amento)?\s+Abonado\b` continua existindo separadamente
 // e é diferente de `\bAFAST\b` standalone — manter ambos.
 const RE_MARCADOR_COLUNA_DUPLA =
-  /\b(?:D[ée]bito|Cr[eé]dito)\s+Banco\s+de\s+horas\b|\bAtraso\s+Abonado\b|\bSa[íi]da\s+Antecipada\b|\bAfast(?:amento)?\s+Abonado\b|ABONO\s+AUTORIZADO|\bTreinamento\b|\bProblemas\s+Relogio\b|\bAFAST\b|\bFalta\s+Injustificada\b/i;
+  /\b(?:D[ée]bito|Cr[eé]dito)\s+Banco\s+de\s+horas\b|\bAtraso\s+Abonado\b|\bSa[íi]da\s+Antecipada\b|\bAfast(?:amento)?\s+Abonado\b|ABONO\s+AUTORIZADO|\bAFAST\b|\bFalta\s+Injustificada\b/i;
+
+// Sprint 3 (2026-05-22) — Camada 0: marcadores cujo significado depende
+// de POSIÇÃO (só são markers quando precedem qualquer batida).
+// "Treinamento" e "Problemas Relogio" podem aparecer em contextos legítimos
+// no meio/fim da linha (ex: "Histórico de Treinamentos", "...evento 'Treinamento'
+// registrado"). Pra evitar descartar batida real nesses casos, esses dois
+// só viram marker se NÃO houver HH:MM antes deles no trechoBatidas.
+const RE_MARCADOR_PRE_BATIDAS = /\b(?:Treinamento|Problemas\s+Relogio)\b/i;
 
 /**
  * Extrai pares E/S em layout coluna-dupla "Registrado vs Escala".
@@ -296,6 +307,18 @@ function extrairParesColunaDupla(
   }
   if (matches.length === 0) return [];
 
+  // Camada 0 (Sprint 3, 2026-05-22): markers cuja semântica depende de
+  // POSIÇÃO. "Treinamento" e "Problemas Relogio" só são markers válidos
+  // se aparecem ANTES de qualquer batida (HH:MM). Defesa contra falso
+  // positivo em linhas onde a palavra aparece em outro contexto.
+  const mPre = RE_MARCADOR_PRE_BATIDAS.exec(s);
+  if (mPre) {
+    const trechoAntes = s.substring(0, mPre.index);
+    if (!/\b\d{1,2}:\d{2}\b/.test(trechoAntes)) {
+      return [];
+    }
+  }
+
   // Camada 1: marcador semântico ("Débito Banco de horas" etc.)
   const mMarc = RE_MARCADOR_COLUNA_DUPLA.exec(s);
   if (mMarc) {
@@ -336,10 +359,18 @@ function extrairParesColunaDupla(
   // As 4 primeiras horas são batidas reais; a 5ª é totalizador de horas
   // extras de feriado/DSR (NÃO é batida). Sem este tratamento, camada 3
   // (fallback) com 5 matches retornaria 3 pares (último com saída vazia).
-  const reTotalizadorFeriadoDsr = /\b(?:DSR\s+DSR|FERIADO\s+FERIADO)\b/;
-  if (matches.length === 5 && reTotalizadorFeriadoDsr.test(s)) {
-    const registrado = matches.slice(0, 4).map(x => x.h);
-    return paresFromHoras(registrado);
+  //
+  // GUARD APERTADO: exige que "DSR DSR" ou "FERIADO FERIADO" apareça
+  // DEPOIS da 4ª hora. Defesa contra caso patológico: 5 batidas reais
+  // numa linha que tem "DSR Semanal" ou similar concatenado por quirk
+  // OCR no início — antes do aperto, descartava a 5ª batida real
+  // silenciosamente. Risco raro mas catastrófico.
+  if (matches.length === 5) {
+    const trechoAposQuartaHora = s.substring(matches[3].end);
+    if (/\b(?:DSR\s+DSR|FERIADO\s+FERIADO)\b/.test(trechoAposQuartaHora)) {
+      const registrado = matches.slice(0, 4).map(x => x.h);
+      return paresFromHoras(registrado);
+    }
   }
 
   // Camada 3: fallback. Total=8 sem escala detectada → assume 4+4

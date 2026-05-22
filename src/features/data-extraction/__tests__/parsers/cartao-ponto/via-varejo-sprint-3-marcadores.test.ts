@@ -167,6 +167,49 @@ describe("Sprint 3 — fix camada 2 (batidas reais coincidem com escala)", () =>
   });
 });
 
+describe("Sprint 3 — defesas anti-falso-positivo (caveats da revisão)", () => {
+  // Caveat 1: Treinamento/Problemas Relogio são markers só quando precedem
+  // batidas. Se aparecem APÓS batidas (contexto histórico/observação),
+  // não devem descartar as batidas reais.
+
+  it("'Treinamento' APÓS as batidas → batidas mantidas (não é marker nesse contexto)", () => {
+    // Cenário: linha com 4 batidas reais e a palavra "Treinamento" no fim
+    // (ex: anotação "evento Treinamento agendado" ou ruído OCR colando
+    // palavra do cabeçalho de outra seção).
+    const texto = `${HEADER_MIN}
+14/11/2020 SAB 162 N 08:15 12:01 13:04 18:18 Treinamento`;
+    const res = mapperCartaoViaVarejo.mapear(docSintetico(texto));
+    expect(res).not.toBeNull();
+    const ap = res!.apuracoes.find((a) => a.data === "2020-11-14");
+    expect(ap, "linha 14/11 com Treinamento APÓS batidas deve manter as 4 batidas").toBeDefined();
+    expect(ap!.marcacoes).toEqual([
+      { e: "08:15", s: "12:01" },
+      { e: "13:04", s: "18:18" },
+    ]);
+  });
+
+  // Caveat 3: totalizador FERIADO/DSR só dispara se vier APÓS a 4ª hora.
+  // Defesa contra caso patológico: 5 batidas reais + "DSR Semanal" colado
+  // no início por quirk OCR.
+
+  it("5 batidas com 'DSR DSR' ANTES da 1ª hora → mantém 5 batidas (não descarta a 5ª)", () => {
+    // Cenário sintético: o cabeçalho da linha tem ruído OCR "DSR DSR"
+    // (concatenação de totalizador "DSR Semanal" da seção anterior).
+    // Antes do aperto, esse "DSR DSR" disparava o cut e descartava a 5ª.
+    const texto = `${HEADER_MIN}
+16/11/2020 SEG 207 N DSR DSR 08:15 12:01 13:04 18:18 19:30`;
+    const res = mapperCartaoViaVarejo.mapear(docSintetico(texto));
+    expect(res).not.toBeNull();
+    const ap = res!.apuracoes.find((a) => a.data === "2020-11-16");
+    expect(ap).toBeDefined();
+    // 5 horas → 2 pares completos + 1 par com saída vazia (mantém a 5ª)
+    expect(ap!.marcacoes.length).toBe(3);
+    expect(ap!.marcacoes[0]).toEqual({ e: "08:15", s: "12:01" });
+    expect(ap!.marcacoes[1]).toEqual({ e: "13:04", s: "18:18" });
+    expect(ap!.marcacoes[2].e).toBe("19:30"); // 5ª batida preservada
+  });
+});
+
 describe("Sprint 3 — totalizador FERIADO/DSR após 4 batidas", () => {
   it("'FERIADO FERIADO HH:MM' após 4 batidas → 4 batidas (descarta totalizador 7:08)", () => {
     // Padrão PDF Jefferson antigo: "FERIADO FERIADO 7:08" no final é
