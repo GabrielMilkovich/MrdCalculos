@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 /**
- * Sprint Verify-AI Claude Fase 4 — teste de integração do botão.
+ * Smoke test do botão de verificação IA.
  *
- * Escopo MÍNIMO: confirmar que o body do `supabase.functions.invoke`
- * inclui `ai_provider: 'anthropic'` quando o operador clica em
- * "Iniciar análise" dentro do popover.
+ * Escopo MÍNIMO: confirmar que `supabase.functions.invoke` é chamado
+ * com a função correta e os campos esperados do body quando o
+ * operador clica em "Iniciar análise" dentro do popover.
  *
  * NÃO cobrimos:
  *   - response parsing (testado em helpers.test.ts via tool_use)
  *   - rendering das sugestões / dialog de skip
- *   - cálculo de confidence — escopo do componente, não da Sprint
+ *   - cálculo de confidence — escopo do componente
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,7 +39,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe("VerifyExtractionAIButton — Sprint Verify-AI Claude", () => {
+describe("VerifyExtractionAIButton — smoke", () => {
   beforeEach(() => {
     mockInvoke.mockReset();
     mockInvoke.mockResolvedValue({
@@ -50,14 +50,13 @@ describe("VerifyExtractionAIButton — Sprint Verify-AI Claude", () => {
         ai_confidence_raw: 70,
         summary: "mock — sem sugestões",
         model: "claude-sonnet-4-6",
-        provider: "anthropic",
         duration_ms: 100,
       },
       error: null,
     });
   });
 
-  it("passa ai_provider: 'anthropic' no body do invoke quando IA é chamada", async () => {
+  it("invoca verify-extraction-ai com body contendo builder/document_id/score quando IA é chamada", async () => {
     render(
       <VerifyExtractionAIButton
         score={70}
@@ -86,7 +85,6 @@ describe("VerifyExtractionAIButton — Sprint Verify-AI Claude", () => {
     const [funcName, opts] = mockInvoke.mock.calls[0];
     expect(funcName).toBe("verify-extraction-ai");
     expect(opts?.body).toMatchObject({
-      ai_provider: "anthropic",
       builder: "cartao_ponto",
       document_id: "doc-123",
       score: 70,

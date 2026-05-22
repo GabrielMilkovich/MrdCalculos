@@ -11,14 +11,13 @@
 //      contrário, é descartado e listado em `discarded_hallucinations`.
 //      Não aceita "interpretação" — se o operador não consegue achar o
 //      valor no documento original com Ctrl+F, IA inventou.
-//   2. **Structured output strict**: response_format=json_schema strict=true.
-//      Schema permite só campos pré-definidos por builder; qualquer
-//      desvio (campo extra, tipo errado, valor null indevido) gera erro
-//      400 antes mesmo do fetch retornar.
+//   2. **Structured output via tool_use**: Claude é forçado a chamar a
+//      tool `emitir_revisao` (`tool_choice: { type: 'tool', name: ... }`).
+//      Anthropic valida o input contra o schema antes de retornar.
 //   3. **Score 0..100**: a IA explicita seu próprio nível de confiança.
 //      O operador vê o score na UI e decide aplicar.
-//   4. **Timeout 180s** via AbortController. Operador pode pular a análise
-//      se demorar.
+//   4. **Timeout 40s/lote, 130s global** via AbortController. Operador
+//      pode pular a análise se demorar.
 //
 // Body:
 //   {
@@ -42,8 +41,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  type AiProvider,
-  escolherProvider,
   type IAResponseParsed,
   parseAnthropicToolUse,
   type Suggestion,
@@ -73,18 +70,10 @@ const TIMEOUT_MS = 40_000;
 const BUDGET_GLOBAL_MS = 130_000;
 const SCORE_MIN = 50;
 const SCORE_MAX = 85;
-// gpt-5 com reasoning_effort="minimal" — pensamento curto, ~6-12s por
-// chamada. Suficiente pra revisão cirúrgica (operador já fez triagem
-// determinística). low/medium estourava o budget global.
-const MODEL = "gpt-5";
-
-// Sprint Verify-AI Claude (2026-05-22) — coexistência de providers
-// via feature flag. Tipos + constantes + helpers puros vivem em
-// `./helpers.ts` (testáveis em vitest, fora do runtime Deno).
 // Claude Sonnet 4.6: 1M context, sem extended thinking por default
 // (resposta direta, latência ~3-8s). Reputação anti-alucinação alinha
-// com o contrato existente.
-const ANTHROPIC_MODEL = "claude-sonnet-4-6";
+// com o contrato existente (substring literal, sugestões cirúrgicas).
+const MODEL = "claude-sonnet-4-6";
 // API version stable (mesmo header usado pelo SDK oficial).
 const ANTHROPIC_VERSION = "2023-06-01";
 
@@ -140,51 +129,6 @@ interface DiscardedHallucination {
   suggested: string;
   reason: string;
 }
-
-/**
- * Schema JSON strict para response_format. OpenAI valida ANTES de mandar.
- *
- * Os tipos `current` e `suggested` aceitam string|number|null pra cobrir
- * os 3 casos comuns: texto, valor monetário (sempre formatado como string
- * "1.234,56" pra não perder precisão), null (campo ausente).
- */
-const RESPONSE_SCHEMA = {
-  name: "VerifyExtractionResult",
-  strict: true,
-  schema: {
-    type: "object",
-    additionalProperties: false,
-    required: ["suggestions", "ai_confidence", "summary"],
-    properties: {
-      suggestions: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: false,
-          required: ["field", "current", "suggested", "reason"],
-          properties: {
-            field: { type: "string" },
-            current: { type: ["string", "number", "null"] },
-            suggested: { type: ["string", "number", "null"] },
-            reason: { type: "string" },
-          },
-        },
-      },
-      // ai_confidence: INTEIRO de 0 a 100 (porcentagem).
-      // NÃO aceitar decimais entre 0 e 1 — caso clássico de IA confundir
-      // probabilidade (0..1) com porcentagem (0..100). Force integer e
-      // ainda fazemos normalização defensiva no servidor abaixo.
-      ai_confidence: {
-        type: "integer",
-        minimum: 0,
-        maximum: 100,
-        description:
-          "Confiança da IA na revisão, como PORCENTAGEM inteira de 0 a 100. NUNCA use decimal entre 0 e 1 — 0.91 não é '91%', é praticamente zero. Use 91 inteiro pra '91%'.",
-      },
-      summary: { type: "string" },
-    },
-  },
-} as const;
 
 /**
  * Anti-alucinação: confere se `valor` aparece literalmente no OCR.
@@ -427,144 +371,20 @@ function extrairApuracoesRevisar(parsedJson: unknown): Array<{
   return lista;
 }
 
-async function chamarOpenAI(
-  apiKey: string,
-  ocrText: string,
-  parsedJson: unknown,
-  builder: Builder,
-  /**
-   * BATCHING: quando definido, processa SÓ esse subconjunto de
-   * apurações marcadas REVISAR_OCR. Permite paralelizar a análise
-   * de documentos grandes (628 apurações em 21 lotes de 30).
-   */
-  apuracoesDoLote?: Array<{
-    indice: number;
-    ocr_line: number;
-    observacao: string;
-    data: string;
-  }>,
-): Promise<{ raw: IAResponseParsed; durationMs: number; status: number }> {
-  // OCR focado SÓ nas linhas desse lote (se fornecido).
-  // Sem lote: comportamento legado — pega todas as apurações REVISAR_OCR.
-  let ocrTrimmed: string;
-  let parsedString: string;
-
-  if (apuracoesDoLote && apuracoesDoLote.length > 0) {
-    // Batching: OCR só do contexto do lote + lista compacta das apurações.
-    // Orçamento reduzido pra 25k por lote — caber em ~6-10s de reasoning
-    // minimal e ainda dar contexto suficiente pra 50 apurações.
-    ocrTrimmed = construirOcrFocadoEmLinhas(
-      ocrText,
-      apuracoesDoLote.map((a) => a.ocr_line),
-      25_000,
-    );
-    // parsed JSON do lote: lista compacta das apurações deste lote
-    // (índice + data + observacao do parser) — chega rico em sinal
-    // sem o overhead de mandar TODAS as 1374 apurações.
-    parsedString = JSON.stringify(
-      {
-        builder,
-        apuracoes_deste_lote: apuracoesDoLote.map((a) => ({
-          field_path: `apuracoes[${a.indice}].data`,
-          indice: a.indice,
-          data: a.data,
-          motivo_parser: a.observacao,
-          ocr_line: a.ocr_line,
-        })),
-        instrucao:
-          "Verifique CADA apuração desta lista. Para cada uma, decida: REMOVER (suggested=null em field_path 'apuracoes[N].data') ou MANTER (não inclua na resposta). Use SOMENTE o OCR enviado como evidência.",
-      },
-      null,
-      0,
-    );
-  } else {
-    // Sem batching (lote único / fallback): comportamento anterior.
-    ocrTrimmed = construirOcrFocadoEmFlags(ocrText, parsedJson, 60_000);
-    const PARSED_MAX_CHARS = 120_000;
-    parsedString = JSON.stringify(parsedJson);
-    if (parsedString.length > PARSED_MAX_CHARS) {
-      parsedString = parsedString.slice(0, PARSED_MAX_CHARS) +
-        "\n[...parsed JSON truncado em 120k chars...]";
-    }
-  }
-
-  const userPrompt =
-    `Documento tipo: ${builder}
-
-OCR ORIGINAL (focado em trechos próximos às linhas marcadas REVISAR_OCR pelo parser; pode estar truncado em 30k chars):
-${ocrTrimmed}
-
-ESTRUTURA EXTRAÍDA pelo parser determinístico (parsed JSON, pode estar truncada em 60k chars):
-${parsedString}
-
-INSTRUÇÕES:
-1. Verifique e sugira ajustes APENAS para campos onde tem CERTEZA, com base no OCR acima.
-2. Pra REMOVER uma apuração inteira (ex: vazamento de cabeçalho/admissão), retorne field="apuracoes[N].data" com suggested=null e reason explicando.
-3. Todo valor sugerido (que não seja null) DEVE estar LITERALMENTE no OCR.
-4. Se você está chutando por falta de evidência, use ai_confidence baixo (<30) e prefira NÃO sugerir.`;
-
-  const ctrl = new AbortController();
-  const t0 = Date.now();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  try {
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      signal: ctrl.signal,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        // gpt-5: ignora temperature/top_p (reasoning interno).
-        // reasoning_effort="minimal" — pensamento curto pra caber no
-        // budget do Supabase Edge (150s hard). low/medium estourava
-        // em batching paralelo (Promise.all com 5+ lotes simultâneos).
-        reasoning_effort: "minimal",
-        seed: 42,
-        response_format: {
-          type: "json_schema",
-          json_schema: RESPONSE_SCHEMA,
-        },
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
-    const durationMs = Date.now() - t0;
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      throw new Error(`OpenAI retornou ${resp.status}: ${errBody.slice(0, 500)}`);
-    }
-    const json = await resp.json();
-    const content: string = json.choices?.[0]?.message?.content ?? "";
-    if (!content) throw new Error("OpenAI retornou content vazio");
-    const parsed = JSON.parse(content) as IAResponseParsed;
-    return { raw: parsed, durationMs, status: resp.status };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /**
- * Sprint Verify-AI Claude (2026-05-22) — paralelo do `chamarOpenAI` pra
- * Anthropic Claude. Mesma signature/return type pra ser drop-in.
+ * Chama Anthropic Claude para revisar a extração.
  *
- * Diferenças vs OpenAI:
- *   - Tool use em vez de `response_format json_schema` (Claude force
- *     chamada da tool `emitir_revisao` via `tool_choice`). Input schema
- *     espelha exatamente o `RESPONSE_SCHEMA` do OpenAI — paridade total.
- *   - OCR budget 150k chars (vs 25k do GPT-5 com batching) e 200k sem
- *     batching (vs 60k OpenAI). Claude tem 1M context — folga gigante.
- *   - Sem `reasoning_effort` — Claude responde direto (~3-8s).
- *   - Mesmo SYSTEM_PROMPT, mesmas INSTRUCOES no userPrompt (XML tags
- *     pra organização — Claude responde melhor a estrutura XML).
- *   - Fetch direto, sem SDK (mesmo padrão do `chamarOpenAI`).
+ * Tool use forçado (`tool_choice: { type: 'tool', name: 'emitir_revisao' }`)
+ * garante structured output validado server-side pelo Anthropic — Claude
+ * é obrigado a chamar a tool com input no schema definido.
  *
- * `discarded_hallucinations` continua sendo derivado SERVER-SIDE via
- * `valorAparecemNoOcr` pós-IA (igual OpenAI) — não vem da IA, então
- * não entra no input_schema do tool. Paridade entre os 2 providers.
+ * `discarded_hallucinations` é derivado SERVER-SIDE depois via
+ * `valorAparecemNoOcr` — não vem da IA (cobaia honesta não reporta
+ * próprias alucinações). Por isso não entra no input_schema do tool.
+ *
+ * OCR budget: 150k chars/lote (batching), 200k sem batching, parsed
+ * 250k. Claude tem 1M context — folga suficiente pra holerites de
+ * qualquer tamanho prático.
  */
 async function chamarAnthropic(
   apiKey: string,
@@ -617,7 +437,6 @@ async function chamarAnthropic(
   }
 
   // Prompt em XML tags — Claude responde melhor a estrutura explícita.
-  // Conteúdo das instruções é idêntico ao do OpenAI (paridade).
   const userPrompt = `<documento>
   <tipo>${builder}</tipo>
   <ocr_original descricao="focado em trechos próximos às linhas marcadas REVISAR_OCR pelo parser; pode estar truncado">
@@ -650,7 +469,7 @@ Chame a tool emitir_revisao com sua análise.
         "anthropic-version": ANTHROPIC_VERSION,
       },
       body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
+        model: MODEL,
         max_tokens: 4096,
         system: SYSTEM_PROMPT,
         tools: [
@@ -689,8 +508,8 @@ Chame a tool emitir_revisao com sua análise.
             },
           },
         ],
-        // Força Claude a chamar a tool — equivalente funcional ao
-        // `response_format json_schema strict` do OpenAI.
+        // Força Claude a chamar a tool — Anthropic valida o input
+        // contra o schema antes de retornar.
         tool_choice: { type: "tool", name: "emitir_revisao" },
         messages: [
           { role: "user", content: userPrompt },
@@ -719,9 +538,6 @@ serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    // Sprint Verify-AI Claude — carregamento condicional da key acontece
-    // após o body parse (precisamos saber qual provider o cliente pediu).
-
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return jsonResponse({ error: "Authorization header required" }, 401);
@@ -747,22 +563,10 @@ serve(async (req) => {
     const ocr_text = typeof body.ocr_text === "string" ? body.ocr_text : "";
     const score = typeof body.score === "number" ? body.score : -1;
 
-    // Sprint Verify-AI Claude — feature flag pro provider.
-    // Default 'anthropic' (Claude Sonnet 4.6); cliente pode forçar
-    // 'openai' (rollback emergencial). Telemetria registra qual rodou.
-    // Lógica de validação vive em `escolherProvider` (helpers.ts),
-    // testável em vitest.
-    const provider: AiProvider = escolherProvider(body.ai_provider);
-    const API_KEY = provider === "anthropic"
-      ? Deno.env.get("ANTHROPIC_API_KEY")
-      : Deno.env.get("OPENAI_API_KEY");
-    if (!API_KEY) {
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) {
       return jsonResponse(
-        {
-          error: provider === "anthropic"
-            ? "ANTHROPIC_API_KEY não configurada no projeto"
-            : "OPENAI_API_KEY não configurada no projeto",
-        },
+        { error: "ANTHROPIC_API_KEY não configurada no projeto" },
         500,
       );
     }
@@ -833,13 +637,10 @@ serve(async (req) => {
     };
     const resultadosLotes: LoteResult[] = [];
 
-    // Sprint Verify-AI Claude — wrapper de roteamento entre providers.
-    const chamarIA = provider === "anthropic" ? chamarAnthropic : chamarOpenAI;
-
     if (apuracoesRevisar.length <= TAMANHO_LOTE) {
       // Documento pequeno: 1 chamada cobre tudo (com ou sem flags).
-      const r = await chamarIA(
-        API_KEY,
+      const r = await chamarAnthropic(
+        ANTHROPIC_API_KEY,
         ocr_text,
         parsed,
         builder,
@@ -863,7 +664,7 @@ serve(async (req) => {
         const grupo = lotes.slice(i, i + MAX_CONCORRENTES);
         const resultsGrupo = await Promise.allSettled(
           grupo.map((lote) =>
-            chamarIA(API_KEY, ocr_text, parsed, builder, lote),
+            chamarAnthropic(ANTHROPIC_API_KEY, ocr_text, parsed, builder, lote),
           ),
         );
         for (const r of resultsGrupo) {
@@ -945,9 +746,7 @@ serve(async (req) => {
       ai_confidence: confidenceFinal,
       ai_confidence_raw: confidenceMedia,
       summary: summaryAgregado,
-      // Sprint Verify-AI Claude — telemetria de provider/modelo.
-      model: provider === "anthropic" ? ANTHROPIC_MODEL : MODEL,
-      provider,
+      model: MODEL,
       duration_ms: durationTotal,
       lotes_processados: resultadosLotes.length,
       apuracoes_revisar_total: apuracoesRevisar.length,
@@ -968,7 +767,7 @@ serve(async (req) => {
         {
           error: "timeout_180s",
           message:
-            "OpenAI demorou mais de 180s. Operador pode tentar novamente OU pular a análise.",
+            "Anthropic demorou mais de 130s. Operador pode tentar novamente OU pular a análise.",
         },
         504,
       );

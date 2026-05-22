@@ -62,14 +62,6 @@ export interface AIVerifyResponse {
   ai_confidence_raw: number;
   summary: string;
   model: string;
-  /**
-   * Sprint Verify-AI Claude (2026-05-22) — qual provider rodou de fato
-   * (espelha o que voltou da edge function). UI pode usar pra mostrar
-   * "Verificado por Claude / GPT-5". Opcional pra retrocompat com
-   * responses antigas (pré-Sprint Verify-AI Claude) onde só `model`
-   * estava presente.
-   */
-  provider?: "openai" | "anthropic";
   duration_ms: number;
   /** BATCHING — quantos lotes de IA foram processados. */
   lotes_processados?: number;
@@ -168,11 +160,6 @@ export function VerifyExtractionAIButton({
             parsed,
             ocr_text: ocrText,
             score,
-            // Sprint Verify-AI Claude — default explícito pro caminho
-            // Anthropic. Edge function aceita 'openai' como rollback
-            // emergencial; default na edge também é 'anthropic', mas
-            // explicitar aqui torna o caminho rastreável no client.
-            ai_provider: "anthropic",
           },
         },
       );

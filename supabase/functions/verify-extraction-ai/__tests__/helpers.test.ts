@@ -1,28 +1,18 @@
 /**
- * Sprint Verify-AI Claude Fase 4 — testes dos helpers puros extraídos
- * do `verify-extraction-ai/index.ts`.
+ * Testes do parser de tool_use do Anthropic, isolado do `index.ts`
+ * (que importa `serve` do deno.land/std e não roda em vitest).
  *
- * Cobertura por categoria:
- *   - parseAnthropicToolUse (5 cases): caminho feliz + 4 caminhos de erro
- *   - escolherProvider     (4 cases): cada valor válido + fallback
- *
- * O `index.ts` NÃO é testável em vitest direto (importa `serve` do
- * deno.land/std). Por isso os helpers vivem em arquivo separado.
+ * Cobertura: parseAnthropicToolUse (7 cases) — caminho feliz +
+ * 6 caminhos de erro (content malformado, tool_use ausente, etc).
  *
  * Não cobrimos:
- *   - chamada real à API Anthropic (Fase 5 calibração faz)
- *   - validação de schema do input do tool (Claude valida server-side
+ *   - chamada real à API Anthropic
+ *   - validação do schema do input do tool (Anthropic valida server-side
  *     via `tool_choice`; não temos como testar regressão local)
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  DEFAULT_PROVIDER,
-  escolherProvider,
-  parseAnthropicToolUse,
-} from "../helpers";
-
-// ─── parseAnthropicToolUse ────────────────────────────────────────────
+import { parseAnthropicToolUse } from "../helpers";
 
 describe("parseAnthropicToolUse — caminho feliz", () => {
   it("extrai tool_use emitir_revisao do response.content[]", () => {
@@ -129,36 +119,5 @@ describe("parseAnthropicToolUse — caminhos de erro graceful", () => {
     expect(() => parseAnthropicToolUse(content)).toThrow(
       /não retornou tool_use emitir_revisao/,
     );
-  });
-});
-
-// ─── escolherProvider ─────────────────────────────────────────────────
-
-describe("escolherProvider — feature flag + fallback", () => {
-  it("'anthropic' (string válida) → 'anthropic'", () => {
-    expect(escolherProvider("anthropic")).toBe("anthropic");
-  });
-
-  it("'openai' (string válida) → 'openai'", () => {
-    expect(escolherProvider("openai")).toBe("openai");
-  });
-
-  it("string desconhecida → DEFAULT_PROVIDER ('anthropic')", () => {
-    expect(escolherProvider("gpt5")).toBe(DEFAULT_PROVIDER);
-    expect(escolherProvider("gemini")).toBe(DEFAULT_PROVIDER);
-    expect(escolherProvider("")).toBe(DEFAULT_PROVIDER);
-    // Sanity: o DEFAULT_PROVIDER é realmente 'anthropic' (espelha a
-    // decisão da Sprint — se alguém mudar pra 'openai' por engano,
-    // este teste vai te avisar).
-    expect(DEFAULT_PROVIDER).toBe("anthropic");
-  });
-
-  it("não-string (undefined, number, objeto, null) → DEFAULT_PROVIDER", () => {
-    expect(escolherProvider(undefined)).toBe(DEFAULT_PROVIDER);
-    expect(escolherProvider(null)).toBe(DEFAULT_PROVIDER);
-    expect(escolherProvider(42)).toBe(DEFAULT_PROVIDER);
-    expect(escolherProvider({ provider: "anthropic" })).toBe(DEFAULT_PROVIDER);
-    expect(escolherProvider(["anthropic"])).toBe(DEFAULT_PROVIDER);
-    expect(escolherProvider(true)).toBe(DEFAULT_PROVIDER);
   });
 });
