@@ -71,6 +71,19 @@ const SCORE_MAX = 85;
 // determinística). low/medium estourava o budget global.
 const MODEL = "gpt-5";
 
+// Sprint Verify-AI Claude (2026-05-22) — coexistência de providers
+// via feature flag. Default vira Anthropic; OpenAI fica como fallback
+// emergencial até a calibração de Fase 5 validar a migração.
+type AiProvider = "openai" | "anthropic";
+const AI_PROVIDERS_VALIDOS: AiProvider[] = ["openai", "anthropic"];
+const DEFAULT_PROVIDER: AiProvider = "anthropic";
+// Claude Sonnet 4.6: 1M context, sem extended thinking por default
+// (resposta direta, latência ~3-8s). Reputação anti-alucinação alinha
+// com o contrato existente.
+const ANTHROPIC_MODEL = "claude-sonnet-4-6";
+// API version stable (mesmo header usado pelo SDK oficial).
+const ANTHROPIC_VERSION = "2023-06-01";
+
 type Builder = "holerite" | "cartao_ponto" | "ferias" | "faltas" | "ctps";
 const BUILDERS_VALIDOS: Builder[] = [
   "holerite",
@@ -543,6 +556,196 @@ INSTRUÇÕES:
   }
 }
 
+/**
+ * Sprint Verify-AI Claude (2026-05-22) — paralelo do `chamarOpenAI` pra
+ * Anthropic Claude. Mesma signature/return type pra ser drop-in.
+ *
+ * Diferenças vs OpenAI:
+ *   - Tool use em vez de `response_format json_schema` (Claude force
+ *     chamada da tool `emitir_revisao` via `tool_choice`). Input schema
+ *     espelha exatamente o `RESPONSE_SCHEMA` do OpenAI — paridade total.
+ *   - OCR budget 150k chars (vs 25k do GPT-5 com batching) e 200k sem
+ *     batching (vs 60k OpenAI). Claude tem 1M context — folga gigante.
+ *   - Sem `reasoning_effort` — Claude responde direto (~3-8s).
+ *   - Mesmo SYSTEM_PROMPT, mesmas INSTRUCOES no userPrompt (XML tags
+ *     pra organização — Claude responde melhor a estrutura XML).
+ *   - Fetch direto, sem SDK (mesmo padrão do `chamarOpenAI`).
+ *
+ * `discarded_hallucinations` continua sendo derivado SERVER-SIDE via
+ * `valorAparecemNoOcr` pós-IA (igual OpenAI) — não vem da IA, então
+ * não entra no input_schema do tool. Paridade entre os 2 providers.
+ */
+async function chamarAnthropic(
+  apiKey: string,
+  ocrText: string,
+  parsedJson: unknown,
+  builder: Builder,
+  apuracoesDoLote?: Array<{
+    indice: number;
+    ocr_line: number;
+    observacao: string;
+    data: string;
+  }>,
+): Promise<{ raw: IAResponseParsed; durationMs: number; status: number }> {
+  let ocrTrimmed: string;
+  let parsedString: string;
+
+  if (apuracoesDoLote && apuracoesDoLote.length > 0) {
+    // Batching: OCR focado nas linhas do lote — 150k chars (6x mais que
+    // GPT-5). Com 1M context do Claude, sobra contexto pra fluência.
+    ocrTrimmed = construirOcrFocadoEmLinhas(
+      ocrText,
+      apuracoesDoLote.map((a) => a.ocr_line),
+      150_000,
+    );
+    parsedString = JSON.stringify(
+      {
+        builder,
+        apuracoes_deste_lote: apuracoesDoLote.map((a) => ({
+          field_path: `apuracoes[${a.indice}].data`,
+          indice: a.indice,
+          data: a.data,
+          motivo_parser: a.observacao,
+          ocr_line: a.ocr_line,
+        })),
+        instrucao:
+          "Verifique CADA apuração desta lista. Para cada uma, decida: REMOVER (suggested=null em field_path 'apuracoes[N].data') ou MANTER (não inclua na resposta). Use SOMENTE o OCR enviado como evidência.",
+      },
+      null,
+      0,
+    );
+  } else {
+    // Sem batching: 200k chars de OCR + 250k chars de parsed.
+    ocrTrimmed = construirOcrFocadoEmFlags(ocrText, parsedJson, 200_000);
+    const PARSED_MAX_CHARS = 250_000;
+    parsedString = JSON.stringify(parsedJson);
+    if (parsedString.length > PARSED_MAX_CHARS) {
+      parsedString = parsedString.slice(0, PARSED_MAX_CHARS) +
+        "\n[...parsed JSON truncado em 250k chars...]";
+    }
+  }
+
+  // Prompt em XML tags — Claude responde melhor a estrutura explícita.
+  // Conteúdo das instruções é idêntico ao do OpenAI (paridade).
+  const userPrompt = `<documento>
+  <tipo>${builder}</tipo>
+  <ocr_original descricao="focado em trechos próximos às linhas marcadas REVISAR_OCR pelo parser; pode estar truncado">
+${ocrTrimmed}
+  </ocr_original>
+  <estrutura_extraida descricao="parsed JSON do parser determinístico; pode estar truncado">
+${parsedString}
+  </estrutura_extraida>
+</documento>
+
+<instrucoes>
+1. Verifique e sugira ajustes APENAS para campos onde tem CERTEZA, com base no OCR acima.
+2. Pra REMOVER uma apuração inteira (ex: vazamento de cabeçalho/admissão), retorne field="apuracoes[N].data" com suggested=null e reason explicando.
+3. Todo valor sugerido (que não seja null) DEVE estar LITERALMENTE no OCR.
+4. Se você está chutando por falta de evidência, use ai_confidence baixo (<30) e prefira NÃO sugerir.
+
+Chame a tool emitir_revisao com sua análise.
+</instrucoes>`;
+
+  const ctrl = new AbortController();
+  const t0 = Date.now();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 4096,
+        system: SYSTEM_PROMPT,
+        tools: [
+          {
+            name: "emitir_revisao",
+            description:
+              "Emite a revisão da extração com sugestões cirúrgicas. Use field='apuracoes[N].data' com suggested=null para REMOVER apuração-fantasma. Confidence é INTEIRO 0-100 (porcentagem).",
+            input_schema: {
+              type: "object",
+              additionalProperties: false,
+              required: ["suggestions", "ai_confidence", "summary"],
+              properties: {
+                suggestions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["field", "current", "suggested", "reason"],
+                    properties: {
+                      field: { type: "string" },
+                      current: { type: ["string", "number", "null"] },
+                      suggested: { type: ["string", "number", "null"] },
+                      reason: { type: "string" },
+                    },
+                  },
+                },
+                ai_confidence: {
+                  type: "integer",
+                  minimum: 0,
+                  maximum: 100,
+                  description:
+                    "Confiança da IA na revisão, como PORCENTAGEM inteira de 0 a 100. NUNCA use decimal entre 0 e 1 — 0.91 não é '91%', é praticamente zero. Use 91 inteiro pra '91%'.",
+                },
+                summary: { type: "string" },
+              },
+            },
+          },
+        ],
+        // Força Claude a chamar a tool — equivalente funcional ao
+        // `response_format json_schema strict` do OpenAI.
+        tool_choice: { type: "tool", name: "emitir_revisao" },
+        messages: [
+          { role: "user", content: userPrompt },
+        ],
+      }),
+    });
+    const durationMs = Date.now() - t0;
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      throw new Error(
+        `Anthropic retornou ${resp.status}: ${errBody.slice(0, 500)}`,
+      );
+    }
+    const json = await resp.json() as {
+      content?: Array<{
+        type: string;
+        name?: string;
+        input?: unknown;
+        text?: string;
+      }>;
+    };
+    if (!Array.isArray(json.content)) {
+      throw new Error("Anthropic retornou response sem content[]");
+    }
+    const toolUseBlock = json.content.find(
+      (b) => b.type === "tool_use" && b.name === "emitir_revisao",
+    );
+    if (!toolUseBlock || !toolUseBlock.input) {
+      // Se Claude ignorou tool_choice e mandou texto livre, dá erro
+      // claro ao operador em vez de retornar resposta indefinida.
+      const textoLivre = json.content
+        .filter((b) => b.type === "text" && b.text)
+        .map((b) => b.text)
+        .join(" ")
+        .slice(0, 300);
+      throw new Error(
+        `Anthropic não retornou tool_use emitir_revisao. Texto livre (se houver): "${textoLivre}"`,
+      );
+    }
+    const parsed = toolUseBlock.input as IAResponseParsed;
+    return { raw: parsed, durationMs, status: resp.status };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -550,13 +753,8 @@ serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
-      return jsonResponse(
-        { error: "OPENAI_API_KEY não configurada no projeto" },
-        500,
-      );
-    }
+    // Sprint Verify-AI Claude — carregamento condicional da key acontece
+    // após o body parse (precisamos saber qual provider o cliente pediu).
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -582,6 +780,29 @@ serve(async (req) => {
     const parsed = body.parsed;
     const ocr_text = typeof body.ocr_text === "string" ? body.ocr_text : "";
     const score = typeof body.score === "number" ? body.score : -1;
+
+    // Sprint Verify-AI Claude — feature flag pro provider.
+    // Default 'anthropic' (Claude Sonnet 4.6); cliente pode forçar
+    // 'openai' (rollback emergencial). Telemetria registra qual rodou.
+    const aiProviderRaw = body.ai_provider;
+    const provider: AiProvider =
+      typeof aiProviderRaw === "string" &&
+        AI_PROVIDERS_VALIDOS.includes(aiProviderRaw as AiProvider)
+        ? aiProviderRaw as AiProvider
+        : DEFAULT_PROVIDER;
+    const API_KEY = provider === "anthropic"
+      ? Deno.env.get("ANTHROPIC_API_KEY")
+      : Deno.env.get("OPENAI_API_KEY");
+    if (!API_KEY) {
+      return jsonResponse(
+        {
+          error: provider === "anthropic"
+            ? "ANTHROPIC_API_KEY não configurada no projeto"
+            : "OPENAI_API_KEY não configurada no projeto",
+        },
+        500,
+      );
+    }
 
     if (!builder || !BUILDERS_VALIDOS.includes(builder)) {
       return jsonResponse(
@@ -649,10 +870,13 @@ serve(async (req) => {
     };
     const resultadosLotes: LoteResult[] = [];
 
+    // Sprint Verify-AI Claude — wrapper de roteamento entre providers.
+    const chamarIA = provider === "anthropic" ? chamarAnthropic : chamarOpenAI;
+
     if (apuracoesRevisar.length <= TAMANHO_LOTE) {
       // Documento pequeno: 1 chamada cobre tudo (com ou sem flags).
-      const r = await chamarOpenAI(
-        OPENAI_API_KEY,
+      const r = await chamarIA(
+        API_KEY,
         ocr_text,
         parsed,
         builder,
@@ -676,7 +900,7 @@ serve(async (req) => {
         const grupo = lotes.slice(i, i + MAX_CONCORRENTES);
         const resultsGrupo = await Promise.allSettled(
           grupo.map((lote) =>
-            chamarOpenAI(OPENAI_API_KEY, ocr_text, parsed, builder, lote),
+            chamarIA(API_KEY, ocr_text, parsed, builder, lote),
           ),
         );
         for (const r of resultsGrupo) {
@@ -758,7 +982,9 @@ serve(async (req) => {
       ai_confidence: confidenceFinal,
       ai_confidence_raw: confidenceMedia,
       summary: summaryAgregado,
-      model: MODEL,
+      // Sprint Verify-AI Claude — telemetria de provider/modelo.
+      model: provider === "anthropic" ? ANTHROPIC_MODEL : MODEL,
+      provider,
       duration_ms: durationTotal,
       lotes_processados: resultadosLotes.length,
       apuracoes_revisar_total: apuracoesRevisar.length,
