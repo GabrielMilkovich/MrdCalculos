@@ -98,6 +98,25 @@ const RE_PROBLEMAS_RELOGIO = /Problemas\s+Relogio/i;
 // Match "HH:MM - Desconsiderado" na coluna AJUSTES.
 const RE_DESCONSIDERADO = /\b(\d{1,2}):(\d{2})\s*[-–]\s*Desconsiderado/gi;
 
+// Sprint 3 Fase 4: linha-dia no texto-plano da página
+// (fallback quando detectarTabelas falha em algumas páginas).
+// Exemplo: "16/07/2021 - Sex 10:35* 12:00* 13:00* 19:00* Horas Trabalhadas: 07:25"
+const RE_LINHA_DIA_PLANA =
+  /^\s*(\d{2})\/(\d{2})\/(\d{4})\s*[-–]\s*(Dom|Seg|Ter|Qua|Qui|Sex|S[áa]b)\b\s*(.+)?$/i;
+
+// Palavras-chave que marcam INÍCIO do campo RESULTADO em texto plano.
+// Tudo APÓS a primeira ocorrência é descartado pra extração de batidas
+// (mas usado pra detectar ocorrência).
+//
+// Sprint 3 Fase 4 (calibração Izabela): expandido com mais variantes
+// vistas em produção:
+//   - Hora Extra Feriado (variante de HE Com Feriado, casos 07/09 etc)
+//   - Adicional Noturno (totalizador noturno)
+//   - HE-Comiss / HE\s*[-–]\s*Comiss (variante hyphenada)
+//   - 9T0X (códigos de evento totalizador)
+const RE_INICIO_RESULTADO =
+  /\b(?:Horas\s+Trabalhadas|Horas\s+Previstas|Banco\s+de\s+Horas|DSR\s+Semanal|DSR\s+Descontado|FERIADO|FALTA|F[ée]rias|Licen[çc]a|Atestado|Acompanhamento|Treinamento|Abono\s+Autorizado|Problemas\s+Relogio|Dia\s+do\s+Comerciario|Premio|HE\s+Com\s+Feriado|Hora\s+Extra\s+Feriado|HE\s*[-–]\s*Comiss|Adicional\s+Noturno|R\.?\s*S\.?\s*R\.?|RSR\s+Com|FOLGA|9T0\d|Banco\s+Acumulado)/i;
+
 function celulaToTexto(c: CelulaTabular | undefined | null): string {
   return c?.texto?.trim() ?? '';
 }
@@ -117,6 +136,25 @@ function isTabelaEspelho(tab: TabelaDetectada): boolean {
   // Mínimo: DATA + BATIDAS. AJUSTES e RESULTADO são bônus (alguns PDFs
   // omitem RESULTADO quando o dia é trivial; AJUSTES pode estar vazia).
   return hsUpper.includes('DATA') && hsUpper.includes('BATIDAS');
+}
+
+/**
+ * Sprint 3 Fase 4 (2026-05-22) — detecta tabela de CONTINUAÇÃO de mês.
+ *
+ * Páginas de continuação não repetem o header DATA|BATIDAS|AJUSTES|RESULTADO.
+ * O `detectarTabelas` do extrator usa a primeira linha como "header" — então
+ * a primeira linha-dia (ex: "23/07/2021 - Sex") vira header, e
+ * `isTabelaEspelho` rejeita.
+ *
+ * Esta função identifica esse caso: header começa com data + dia-da-semana
+ * no formato do layout novo, E tem ≥2 colunas. Processada posicionalmente
+ * (índice 0 = DATA, restante = batidas/ajustes/resultado concatenados).
+ *
+ * Bug real: páginas 2-4 do Jefferson NOVO perdiam ~150 dias por esse motivo.
+ */
+function isTabelaContinuacao(tab: TabelaDetectada): boolean {
+  if (tab.headers.length < 2) return false;
+  return RE_DATA_NOVO.test(tab.headers[0].trim());
 }
 
 function indiceHeader(tab: TabelaDetectada, nome: RegExp): number {
@@ -187,14 +225,50 @@ function processarTabela(
   competencias: Map<string, number>,
   warnings: string[],
 ): void {
-  const idxData = indiceHeader(tab, /^DATA$/i);
-  const idxBatidas = indiceHeader(tab, /^BATIDAS$/i);
-  const idxAjustes = indiceHeader(tab, /^AJUSTES$/i);
-  const idxResultado = indiceHeader(tab, /^RESULTADO$/i);
+  let idxData: number;
+  let idxBatidas: number;
+  let idxAjustes: number;
+  let idxResultado: number;
+  // Linhas a processar — em tabelas-continuação, INCLUI o "header" (que é
+  // na verdade a primeira linha de dia).
+  let linhasParaProcessar: typeof tab.linhas;
+
+  if (isTabelaEspelho(tab)) {
+    idxData = indiceHeader(tab, /^DATA$/i);
+    idxBatidas = indiceHeader(tab, /^BATIDAS$/i);
+    idxAjustes = indiceHeader(tab, /^AJUSTES$/i);
+    idxResultado = indiceHeader(tab, /^RESULTADO$/i);
+    linhasParaProcessar = tab.linhas;
+  } else if (isTabelaContinuacao(tab)) {
+    // Tabela de continuação — posições: 0=DATA, 1=BATIDAS, (2=AJUSTES opcional),
+    // última coluna não-DATA-não-BATIDAS = RESULTADO. Heurística simples,
+    // calibrada contra Jefferson NOVO/Izabela.
+    idxData = 0;
+    idxBatidas = 1;
+    // Layout NOVO tem 4 colunas (DATA|BATIDAS|AJUSTES|RESULTADO), mas tabelas
+    // de continuação podem aparecer com 3 (AJUSTES vazia foi colapsada).
+    // Se 4 colunas: AJUSTES=2, RESULTADO=3. Se 3 colunas: AJUSTES=-1, RESULTADO=2.
+    if (tab.headers.length >= 4) {
+      idxAjustes = 2;
+      idxResultado = 3;
+    } else {
+      idxAjustes = -1;
+      idxResultado = tab.headers.length >= 3 ? 2 : -1;
+    }
+    // Inclui o "header" (que é dado) como primeira linha
+    const headerComoLinha = tab.headers.map((h, i) => ({
+      texto: h,
+      coluna: i,
+      fragmentos: [],
+    }));
+    linhasParaProcessar = [headerComoLinha, ...tab.linhas];
+  } else {
+    return;
+  }
 
   if (idxData < 0 || idxBatidas < 0) return;
 
-  for (const linha of tab.linhas) {
+  for (const linha of linhasParaProcessar) {
     const celData = linha[idxData];
     const textoData = celulaToTexto(celData);
     const mData = RE_DATA_NOVO.exec(textoData);
@@ -210,8 +284,43 @@ function processarTabela(
     const ajustesTxt = idxAjustes >= 0 ? celulaToTexto(linha[idxAjustes]) : '';
     const resultadoTxt = idxResultado >= 0 ? celulaToTexto(linha[idxResultado]) : '';
 
-    // Extrai batidas; remove as marcadas como "Desconsiderado" em AJUSTES.
-    let horas = extrairBatidas(batidasTxt);
+    // Extrai batidas. Concatenamos BATIDAS + AJUSTES porque o pdfjs às vezes
+    // clusteriza a 4ª batida na coluna AJUSTES (bug de clustering por X-position
+    // limítrofe — observado em Izabela 16-19/06/2021, onde BATIDAS="09:30 13:38
+    // 15:32" e AJUSTES="18:31"). Concat+dedup é defensivo: se a batida estava
+    // realmente em BATIDAS, dedup remove a duplicata; se estava só em AJUSTES
+    // (caso patológico), recuperamos.
+    //
+    // Ajustes textuais ("HH:MM - Inserido", "HH:MM - Desconsiderado") são
+    // processados normalmente — o HH:MM neles é o MESMO que aparece em BATIDAS
+    // com asterisco (caso Inserido) ou que será filtrado abaixo (caso
+    // Desconsiderado). Dedup garante que não vira batida duplicada.
+    const horasBat = extrairBatidas(batidasTxt);
+    // Defensivo: SÓ extrair de AJUSTES quando:
+    //   1. BATIDAS tem pelo menos 1 hora (preserva semântica de `--`), E
+    //   2. BATIDAS tem MENOS de 4 horas (padrão completo). Acima de 4,
+    //      qualquer HH:MM em AJUSTES é provavelmente totalizador vazado
+    //      pelo clustering errado do pdfjs (vimos AJUSTES="07:57" sem
+    //      texto, vindo do "Horas Trabalhadas: 07:57" do RESULTADO). E
+    //   3. AJUSTES NÃO contém palavras-chave de RESULTADO (Horas, Banco,
+    //      DSR, etc.) — defesa adicional caso AJUSTES tenha texto.
+    // Sprint 3 Fase 4: descoberto na calibração contra Jefferson NOVO.
+    const ajustesParaceResultado = RE_INICIO_RESULTADO.test(ajustesTxt);
+    const horasAjusteExtra =
+      horasBat.length > 0 &&
+      horasBat.length < 4 &&
+      !ajustesParaceResultado
+        ? extrairBatidas(ajustesTxt)
+        : [];
+    const horasCombinadas: string[] = [];
+    const seen = new Set<string>();
+    for (const h of [...horasBat, ...horasAjusteExtra]) {
+      if (!seen.has(h)) {
+        seen.add(h);
+        horasCombinadas.push(h);
+      }
+    }
+    let horas = horasCombinadas;
     if (horas.length > 0) {
       const desconsideradas = extrairDesconsideradas(ajustesTxt);
       if (desconsideradas.size > 0) {
@@ -301,11 +410,11 @@ function detectar(doc: DocumentoTabular): DeteccaoMapper {
     motivos.push('razão social Casas Bahia');
   }
 
-  // Existe pelo menos 1 tabela com headers DATA + BATIDAS?
+  // Existe pelo menos 1 tabela com headers DATA + BATIDAS (ou continuação)?
   let temTabelaEspelho = false;
   for (const p of doc.paginas) {
     for (const tab of p.tabelas) {
-      if (isTabelaEspelho(tab)) {
+      if (isTabelaEspelho(tab) || isTabelaContinuacao(tab)) {
         temTabelaEspelho = true;
         break;
       }
@@ -324,16 +433,149 @@ function detectar(doc: DocumentoTabular): DeteccaoMapper {
   };
 }
 
+/**
+ * Sprint 3 Fase 4 — fallback de texto plano.
+ *
+ * detectarTabelas (pdfjs) falha em algumas páginas do layout NOVO,
+ * quebrando tabelas grandes em sub-tabelas e perdendo linhas. Mas o
+ * textoPlano de cada página tem TODAS as linhas-dia preservadas.
+ *
+ * Esta função varre o texto plano linha-a-linha procurando padrão
+ * "DD/MM/YYYY - Dow ..." e ADICIONA datas que ainda NÃO estão em
+ * apuracoesPorData (dedup natural com o que tabelas já capturaram).
+ *
+ * Heurística pra separar batidas de totalizadores:
+ *   1. Procura primeira palavra-chave de RESULTADO (Horas, DSR, FERIADO,
+ *      etc.) — corta a linha antes dela.
+ *   2. Se sem palavra-chave E tem EXATAMENTE 5 HH:MM: descarta a 5ª
+ *      (assume totalizador colapsado, padrão observado em "Banco de
+ *      Horas 60% : 00:18" virando só "00:18" no texto plano).
+ *   3. Cap em 6 batidas (limite PJe-Calc CSV).
+ */
+function processarTextoPlanoFallback(
+  textoPlano: string,
+  apuracoesPorData: Map<string, ApuracaoDominio>,
+  competencias: Map<string, number>,
+  warnings: string[],
+): void {
+  for (const linhaRaw of textoPlano.split(/\r?\n/)) {
+    const m = RE_LINHA_DIA_PLANA.exec(linhaRaw);
+    if (!m) continue;
+    const dd = m[1];
+    const mm = m[2];
+    const yyyy = m[3];
+    const dataIso = `${yyyy}-${mm}-${dd}`;
+    const diaSemana = ddSemana(m[4]);
+    const resto = m[5] ?? '';
+
+    // Trecho de batidas (antes de qualquer palavra-chave de resultado)
+    const mResultado = RE_INICIO_RESULTADO.exec(resto);
+    const trechoBatidas = mResultado ? resto.substring(0, mResultado.index) : resto;
+    const resultadoTxt = mResultado ? resto.substring(mResultado.index) : '';
+
+    // Casos com `--` (sem batidas)
+    let horas: string[] = [];
+    if (!/\-\-/.test(trechoBatidas)) {
+      const horasRaw = extrairBatidas(trechoBatidas);
+      // Dedup preservando ordem — texto plano concatena BATIDAS + AJUSTES,
+      // então "11:40* 13:00* 20:01 11:40 - Inserido | 13:00 - Inserido"
+      // produz duplicatas. Mesma lógica do processarTabela.
+      const seen = new Set<string>();
+      for (const h of horasRaw) {
+        if (!seen.has(h)) {
+          seen.add(h);
+          horas.push(h);
+        }
+      }
+      // Filtra desconsiderados que possam aparecer no texto plano
+      // ("HH:MM - Desconsiderado"). Mesma defesa do processarTabela.
+      const desconsideradas = extrairDesconsideradas(trechoBatidas);
+      if (desconsideradas.size > 0) {
+        horas = horas.filter((h) => !desconsideradas.has(h));
+      }
+      // Heurística: se NÃO encontrou palavra-chave de resultado E tem
+      // exatamente 5 HH:MM, descarta a 5ª (totalizador colapsado).
+      if (!mResultado && horas.length === 5) {
+        horas = horas.slice(0, 4);
+      }
+      // Cap defensivo em 6
+      if (horas.length > 6) {
+        warnings.push(
+          `${dataIso} (fallback-texto): ${horas.length} batidas, truncando pra 6.`,
+        );
+        horas = horas.slice(0, 6);
+      }
+    }
+
+    const marcacoes = paresFromHoras(horas);
+    const { ocorrencia, observacao } = detectarOcorrenciaDoResultado(
+      resultadoTxt,
+      marcacoes.length > 0,
+    );
+
+    // Mesma regra de pular: NORMAL + sem batidas = sem info útil
+    if (marcacoes.length === 0 && ocorrencia === 'NORMAL') continue;
+
+    // Sobrescreve a versão da tabela quando:
+    //   - novo tem MAIS batidas (caso comum: tabela quebrada perdeu HH:MM), OU
+    //   - existente é "suspeito" (>=3 pares, layout novo padrão é 2 pares)
+    //     E novo tem 1-3 pares (padrão normal). Defende contra tabelas onde
+    //     RESULTADO vazou em colunas adicionais — texto plano com regex de
+    //     cut por palavra-chave é mais confiável nesses casos.
+    // Sprint 3 Fase 4: descobertos os dois padrões na calibração Jefferson NOVO.
+    const existente = apuracoesPorData.get(dataIso);
+    let sobrescrever = true;
+    if (existente) {
+      const novoMaisBatidas = marcacoes.length > existente.marcacoes.length;
+      const existenteSuspeito =
+        existente.marcacoes.length >= 3 &&
+        marcacoes.length >= 1 &&
+        marcacoes.length <= 3;
+      sobrescrever = novoMaisBatidas || existenteSuspeito;
+    }
+    if (!sobrescrever) continue;
+    const ehNovo = existente === undefined;
+
+    apuracoesPorData.set(dataIso, {
+      data: dataIso,
+      dia_semana: diaSemana,
+      ocorrencia,
+      marcacoes: marcacoes.slice(0, 6),
+      eventos: [],
+      observacao,
+    });
+
+    // Só incrementa competência se for data NOVA (não substituição)
+    if (ehNovo) {
+      const k = `${mm}/${yyyy}`;
+      competencias.set(k, (competencias.get(k) ?? 0) + 1);
+    }
+  }
+}
+
 function mapear(doc: DocumentoTabular): ParseCartaoPontoResultDominio | null {
   const warnings: string[] = [];
   const apuracoesPorData = new Map<string, ApuracaoDominio>();
   const competencias = new Map<string, number>();
 
+  // 1ª passada: tabelas estruturadas (espelho + continuação)
   for (const pagina of doc.paginas) {
     for (const tab of pagina.tabelas) {
-      if (!isTabelaEspelho(tab)) continue;
+      if (!isTabelaEspelho(tab) && !isTabelaContinuacao(tab)) continue;
       processarTabela(tab, apuracoesPorData, competencias, warnings);
     }
+  }
+
+  // 2ª passada: fallback texto plano (recupera linhas perdidas por
+  // bug de clustering em tabelas grandes ou complexas). DEDUP automático
+  // — só adiciona datas que tabelas não cobriram.
+  for (const pagina of doc.paginas) {
+    processarTextoPlanoFallback(
+      pagina.textoPlano,
+      apuracoesPorData,
+      competencias,
+      warnings,
+    );
   }
 
   if (apuracoesPorData.size === 0) return null;

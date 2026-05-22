@@ -192,21 +192,38 @@ describe("Sprint 3 — defesas anti-falso-positivo (caveats da revisão)", () =>
   // Defesa contra caso patológico: 5 batidas reais + "DSR Semanal" colado
   // no início por quirk OCR.
 
-  it("5 batidas com 'DSR DSR' ANTES da 1ª hora → mantém 5 batidas (não descarta a 5ª)", () => {
-    // Cenário sintético: o cabeçalho da linha tem ruído OCR "DSR DSR"
-    // (concatenação de totalizador "DSR Semanal" da seção anterior).
-    // Antes do aperto, esse "DSR DSR" disparava o cut e descartava a 5ª.
+  it("'DSR DSR' como marker da camada 1 — corta TUDO depois (qualquer posição)", () => {
+    // Sprint 3 Fase 4 (calibração Izabela): DSR DSR / FERIADO FERIADO viraram
+    // markers da camada 1 (cortam tudo após), em qualquer posição da linha.
+    // Antes (Fase 1), eram só camada 2.5 (após exatamente 4 batidas).
+    //
+    // Justificativa: casos reais da Izabela "09:10 11:13 DSR DSR 2:03"
+    // (3 batidas + 1 totalizador) precisam ser cortados. Camada 2.5 com
+    // len=5 não cobria. Camada 1 cobre qualquer posição.
+    //
+    // Trade-off aceito: caso patológico hipotético "DSR DSR no início + 5
+    // batidas reais" agora retorna [] (antes preservava as 5). Esse caso
+    // teórico não aparece em PDFs Via Varejo reais.
     const texto = `${HEADER_MIN}
 16/11/2020 SEG 207 N DSR DSR 08:15 12:01 13:04 18:18 19:30`;
     const res = mapperCartaoViaVarejo.mapear(docSintetico(texto));
     expect(res).not.toBeNull();
     const ap = res!.apuracoes.find((a) => a.data === "2020-11-16");
+    // DSR DSR no início → corta tudo depois → marcacoes vazias → linha pulada
+    expect(ap).toBeUndefined();
+  });
+
+  it("'DSR DSR HH:MM' entre batidas reais → corta no marker (Izabela 09/02/2021)", () => {
+    // Caso real da Izabela: "09:10 11:13 DSR DSR 2:03" deve virar 2 batidas
+    // (09:10, 11:13) — o "DSR DSR 2:03" é totalizador, não batida.
+    // Sprint 3 Fase 4: descoberto na calibração contra PDF real.
+    const texto = `${HEADER_MIN}
+09/11/2020 SEG 207 N 09:10 11:13 DSR DSR 2:03`;
+    const res = mapperCartaoViaVarejo.mapear(docSintetico(texto));
+    expect(res).not.toBeNull();
+    const ap = res!.apuracoes.find((a) => a.data === "2020-11-09");
     expect(ap).toBeDefined();
-    // 5 horas → 2 pares completos + 1 par com saída vazia (mantém a 5ª)
-    expect(ap!.marcacoes.length).toBe(3);
-    expect(ap!.marcacoes[0]).toEqual({ e: "08:15", s: "12:01" });
-    expect(ap!.marcacoes[1]).toEqual({ e: "13:04", s: "18:18" });
-    expect(ap!.marcacoes[2].e).toBe("19:30"); // 5ª batida preservada
+    expect(ap!.marcacoes).toEqual([{ e: "09:10", s: "11:13" }]);
   });
 });
 

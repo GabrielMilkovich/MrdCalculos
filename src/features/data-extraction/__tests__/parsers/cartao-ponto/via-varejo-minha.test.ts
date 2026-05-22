@@ -311,6 +311,55 @@ describe("mapperCartaoViaVarejoMinha — mapeamento Opção b dos 6 slugs novos"
   });
 });
 
+describe("mapperCartaoViaVarejoMinha — clustering pdfjs falho (4ª batida em AJUSTES)", () => {
+  it("BATIDAS '09:30 13:38 15:32' + AJUSTES '18:31' → 4 batidas combinadas (caso Izabela)", () => {
+    // Sprint 3 Fase 4 — bug real descoberto na calibração:
+    // pdfjs clusteriza mal a coluna BATIDAS quando a 4ª hora cai na
+    // fronteira de X com AJUSTES. Resultado: BATIDAS="09:30 13:38 15:32"
+    // e AJUSTES="18:31" (sem texto descritivo, só o HH:MM).
+    // Defesa: concatenar BATIDAS + AJUSTES + dedup recupera a batida.
+    const t = tab(
+      ["DATA", "BATIDAS", "AJUSTES", "RESULTADO"],
+      [["16/06/2021 - Qua", "09:30 13:38 15:32", "18:31", "Horas Trabalhadas : 07:07"]],
+    );
+    const res = mapperCartaoViaVarejoMinha.mapear(docMinha({ tabelas: [t] }));
+    expect(res).not.toBeNull();
+    expect(res!.apuracoes[0].marcacoes).toEqual([
+      { e: "09:30", s: "13:38" },
+      { e: "15:32", s: "18:31" },
+    ]);
+  });
+
+  it("BATIDAS '09:31 13:30* 17:45' + AJUSTES '13:30 - Inserido' → 3 batidas (dedup 13:30)", () => {
+    // Caso já-conhecido: ajuste manual com asterisco em BATIDAS. AJUSTES
+    // tem o mesmo HH:MM com texto "Inserido". Concat extrai HH:MM da
+    // string "13:30 - Inserido", dedup remove duplicata.
+    const t = tab(
+      ["DATA", "BATIDAS", "AJUSTES", "RESULTADO"],
+      [["21/06/2021 - Seg", "09:31 13:30* 17:45", "13:30 - Inserido |", ""]],
+    );
+    const res = mapperCartaoViaVarejoMinha.mapear(docMinha({ tabelas: [t] }));
+    expect(res).not.toBeNull();
+    expect(res!.apuracoes[0].marcacoes).toEqual([
+      { e: "09:31", s: "13:30" },
+      { e: "17:45", s: "" },
+    ]);
+  });
+
+  it("BATIDAS '--' + AJUSTES com HH:MM espúrio → IGNORA AJUSTES (sem batidas)", () => {
+    // Defesa contra injeção espúria: se BATIDAS é `--`, AJUSTES NÃO deve
+    // contribuir batidas (preserva semântica do `--` original).
+    const t = tab(
+      ["DATA", "BATIDAS", "AJUSTES", "RESULTADO"],
+      [["20/06/2021 - Dom", "--", "12:00", "DSR Semanal (dias) : 1"]],
+    );
+    const res = mapperCartaoViaVarejoMinha.mapear(docMinha({ tabelas: [t] }));
+    expect(res).not.toBeNull();
+    expect(res!.apuracoes[0].marcacoes).toEqual([]);
+    expect(res!.apuracoes[0].ocorrencia).toBe("DSR");
+  });
+});
+
 describe("mapperCartaoViaVarejoMinha — cap defensivo de 6 batidas", () => {
   it("8 batidas na célula (bug de parsing concatenado) → trunca pra 6 + warning", () => {
     // Cenário patológico: BATIDAS pega texto de coluna adjacente por bug

@@ -195,13 +195,24 @@ híbridos e mescla por data.
 - `cartao_via_varejo_v1`: **v7.2 → v7.3** (5 marcadores novos + 2 camadas novas + delegação SÓ-ESPELHO)
 - `cartao_via_varejo_minha_v1`: **v1** (novo — consome `paginas[].tabelas` direto)
 
-### Métricas de calibração contra PDFs reais
+### Métricas de calibração contra PDFs reais (linha-por-linha vs ground truth)
 
-| PDF | Páginas | Mappers executados | Apurações | Período coberto |
-|---|---|---|---|---|
-| Jefferson NOVO (16/06/2021+) | 26 | `cartao_via_varejo_minha_v1` (score 1.0) | 440 (268 com batidas + 172 ocorrências) | 2021-06-16 → 2023-02-05 |
-| Jefferson ANTIGO (até 15/06/2021) | 72 | `cartao_via_varejo_v1` (score 0.71) | 744 com batidas + **243 diasDescartados** (75 AFASTAMENTO ≈ férias+atestado spec, 144 DSR, 24 FERIADO) | 2018-08-13 → 2021-06-15 |
-| **Híbrido Izabela** | 37 | **`minha_v1` + `v1` (MERGE)** | 392 com `parser_version: "merged:..."` | 2020-11-14 → 2022-04-15 |
+Calibração via `scripts/calibracao/calibrar.py` (pdfplumber) + validador
+alternativo `scripts/validar-completo.py` que cobre AMBOS layouts page-by-page:
+
+| PDF | Páginas | Mappers executados | Apurações CSV | Coerência | Meta |
+|---|---|---|---|---|---|
+| Jefferson ANTIGO (até 15/06/2021) | 72 | `cartao_via_varejo_v1` | 744 | **100.00%** (744/744 perfeitos) | ≥99% ✅ |
+| Jefferson NOVO (16/06/2021+) | 26 | `cartao_via_varejo_minha_v1` | 596 | **99.33%** (592/596 perfeitos, 4 diverg.) | ≥99% ✅ |
+| **Híbrido Izabela** | 37 | **`minha_v1` + `v1` (MERGE)** | 463 | **99.14%** (459/463 perfeitos, 4 diverg.) | ≥98% ✅ |
+
+Divergências residuais (sub-1%, não-bloqueantes — registradas como Sprint 3.5):
+- 2 casos de 5 batidas reais (sábado longo) onde minha heurística "len==5
+  sem palavra-chave → descarta 5ª" perde batida válida — caso raro
+- 4 casos de `00:00` ou `07:20` vazando como batida de totalizadores
+  específicos não cobertos (Hora Extra Feriado 0%, HE-Comiss 50% Intervalo)
+
+Período coberto pelos 3 PDFs: 2018-08-13 → 2023-02-05 (4.5 anos contínuos).
 
 Ocorrências detectadas no PDF Híbrido: NORMAL 321, DSR 40, LICENCA_MEDICA
 24, FERIADO 5, AFASTAMENTO 2. **Merge real funcionou** — datas pré-

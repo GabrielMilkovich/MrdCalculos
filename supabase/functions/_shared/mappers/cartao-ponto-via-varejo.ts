@@ -236,6 +236,17 @@ function extrairPares(s: string): MarcacaoDominio[] {
 //     "Atestado Médico Atestado Médico" no antigo
 //   - `Falta Injustificada` (i)
 //
+// Sprint 3 Fase 4 (2026-05-22) — calibração contra PDF Izabela detectou
+// que `DSR DSR` e `FERIADO FERIADO` (totalizadores) precisam ser markers
+// da camada 1 (qualquer posição), não só camada 2.5 (após 4 batidas).
+// Casos reais que falhavam:
+//   - "09:10 11:13 DSR DSR 2:03" (3 batidas, 1 totalizador no meio)
+//     Antes: camada 2.5 não disparava (len=3, não 5), camada 3 retornava 3 horas
+//     Agora: camada 1 corta em "09:10 11:13", retorna 2 horas ✓
+//   - "DSR DSR 7:20" (sem batidas, só totalizador)
+//     Antes: camada 3 retornava 1 hora; Agora: camada 1 corta em "", retorna 0 ✓
+// Camada 2.5 mantida como defesa-em-profundidade pro caso len=5.
+//
 // `Treinamento` e `Problemas Relogio` foram MOVIDOS pra camada 0 (regex
 // `RE_MARCADOR_PRE_BATIDAS` abaixo) porque podem aparecer no meio da
 // linha em outros contextos (cabeçalho de seção, histórico) — só são
@@ -244,7 +255,7 @@ function extrairPares(s: string): MarcacaoDominio[] {
 // O termo `\bAfast(?:amento)?\s+Abonado\b` continua existindo separadamente
 // e é diferente de `\bAFAST\b` standalone — manter ambos.
 const RE_MARCADOR_COLUNA_DUPLA =
-  /\b(?:D[ée]bito|Cr[eé]dito)\s+Banco\s+de\s+horas\b|\bAtraso\s+Abonado\b|\bSa[íi]da\s+Antecipada\b|\bAfast(?:amento)?\s+Abonado\b|ABONO\s+AUTORIZADO|\bAFAST\b|\bFalta\s+Injustificada\b/i;
+  /\b(?:D[ée]bito|Cr[eé]dito)\s+Banco\s+de\s+horas\b|\bAtraso\s+Abonado\b|\bSa[íi]da\s+Antecipada\b|\bAfast(?:amento)?\s+Abonado\b|ABONO\s+AUTORIZADO|\bAFAST\b|\bFalta\s+Injustificada\b|\bDSR\s+DSR\b|\bFERIADO\s+FERIADO\b/i;
 
 // Sprint 3 (2026-05-22) — Camada 0: marcadores cujo significado depende
 // de POSIÇÃO (só são markers quando precedem qualquer batida).
