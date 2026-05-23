@@ -659,7 +659,7 @@ function buildRelatorioCompletoHTML(
         <tr>
           <td class="center">${d.competencia}</td>
           <td class="num">${fmt(d.base)}</td>
-          <td class="num">${(d.aliquota * 100).toFixed(1)}%</td>
+          <td class="num">${d.aliquota.toFixed(1)}%</td>
           <td class="num">${fmt(d.valor)}</td>
         </tr>
       `).join('');

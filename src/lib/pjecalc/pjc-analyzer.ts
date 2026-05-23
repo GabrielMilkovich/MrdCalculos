@@ -61,6 +61,14 @@ export interface PJCAnalysis {
     /** Data de citação extraída do PJC */
     data_citacao?: string;
     valor_da_causa?: number;
+    /**
+     * Maior remuneração do contrato (`<valorMaiorRemuneracao>`). Usada na
+     * UI (`ModuloParametrosGerais.valor_maior_remuneracao`) e em
+     * validações. Motor sintetiza base própria a partir do histórico, então
+     * não impacta o cálculo direto — mas se ausente a UI exibe "—" depois
+     * de "importação bem-sucedida", quebrando UX e validações dependentes.
+     */
+    valor_maior_remuneracao?: number;
   };
   resultado: {
     liquido_exequente: number;
@@ -474,6 +482,7 @@ export function analyzePJC(xmlString: string): PJCAnalysis {
     limitar_avos: getTextContent(root, 'limitarAvosAoPeriodoDoCalculo') === 'true',
     data_citacao: tsToDate(getTextContent(root, 'dataCitacao') || getTextContent(root, 'dataDaCitacao')) || undefined,
     valor_da_causa: parseNum(getTextContent(root, 'valorDaCausa')) || undefined,
+    valor_maior_remuneracao: parseNum(getTextContent(root, 'valorMaiorRemuneracao')) || undefined,
   };
 
   // --- Parser-level warnings ---

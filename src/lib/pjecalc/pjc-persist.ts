@@ -253,9 +253,12 @@ export async function persistirPJCAnalysis(
     const dbId = verbaIdMap.get(v.id);
     if (!dbId) continue;
 
-    // Get all occurrences (not just sample)
-    // The analyzer only stores sample, so we use what we have
-    const ocorrencias = v.ocorrencias_sample || [];
+    // Usa `ocorrencias_all` (TODAS as competências) — `ocorrencias_sample`
+    // é só os primeiros 5 itens para preview na UI do PJCAnalyzer. Bug
+    // anterior (resolvido aqui) persistia apenas o sample, fazendo o
+    // cálculo final usar 5 competências em vez das 51+ reais, gerando
+    // valores massivamente subestimados em casos reportados em prod.
+    const ocorrencias = v.ocorrencias_all || [];
     if (ocorrencias.length === 0) continue;
 
     const ocRows = ocorrencias.map((oc: OcorrenciaAnalysis) => ({
