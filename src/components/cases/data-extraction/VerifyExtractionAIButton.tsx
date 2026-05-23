@@ -1,9 +1,12 @@
 /**
  * F2 — Botão "Verificar com IA" para review dialogs.
  *
- * Aparece no header dos dialogs quando score do parser está em [50, 85].
+ * Aparece no header dos dialogs quando score do parser está em [0, 85].
  * Score >= 86 → extração já confiável, IA dispensável.
- * Score < 50  → revisão manual obrigatória, IA pode mascarar problemas.
+ * Score < 50 ainda permitido (2026-05-23): justamente onde IA mais ajuda,
+ * operador vê extração com problemas e quer orientação. Aviso de
+ * "IA pode mascarar problemas" segue ativo nos banners de Atenção do
+ * próprio dialog, não no botão.
  *
  * Invoca edge function `verify-extraction-ai` que tem contrato anti-alucinação:
  *   - Substring literal: todo valor sugerido deve estar no OCR original.
@@ -108,7 +111,7 @@ interface Props {
   onTelemetry?: (result: AIInteractionResult) => void;
 }
 
-const SCORE_MIN = 50;
+const SCORE_MIN = 0;
 const SCORE_MAX = 85;
 // B — Confidence mínima para PERMITIR aplicar sugestões. Abaixo disso,
 // a IA está chutando: aplicar contamina a paridade (caso real reportado
@@ -139,9 +142,11 @@ export function VerifyExtractionAIButton({
 
   const dentroDaFaixa = score >= SCORE_MIN && score <= SCORE_MAX;
 
-  const tooltipForaFaixa = score > SCORE_MAX
-    ? `Extração já confiável (score ${score}/100 ≥ ${SCORE_MAX + 1}). IA dispensável.`
-    : `Extração com score baixo (${score}/100 < ${SCORE_MIN}). Revisão manual obrigatória — IA pode mascarar problemas.`;
+  // SCORE_MIN=0 (2026-05-23) — IA também roda em scores baixos, justamente
+  // onde mais ajuda (operador vê extração com problemas e quer orientação).
+  // Caveat de "IA pode mascarar problemas em score baixo" segue ativo via
+  // banners da própria UI (Atenção/bloqueador) — não bloqueamos no botão.
+  const tooltipForaFaixa = `Extração já confiável (score ${score}/100 ≥ ${SCORE_MAX + 1}). IA dispensável.`;
 
   async function chamarIA() {
     setLoading(true);

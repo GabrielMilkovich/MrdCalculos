@@ -68,7 +68,7 @@ const TIMEOUT_MS = 40_000;
 // limit 150s pra serialização/headers/CORS). Se nos aproximamos do
 // budget, paramos de disparar novos lotes e retornamos parcial.
 const BUDGET_GLOBAL_MS = 130_000;
-const SCORE_MIN = 50;
+const SCORE_MIN = 0;
 const SCORE_MAX = 85;
 // Claude Sonnet 4.6: 1M context, sem extended thinking por default
 // (resposta direta, latência ~3-8s). Reputação anti-alucinação alinha
@@ -586,13 +586,15 @@ serve(async (req) => {
         400,
       );
     }
+    // SCORE_MIN=0 (2026-05-23) — IA também roda em scores baixos, onde mais
+    // ajuda. Só rejeita quando o score já passou de SCORE_MAX (extração
+    // confiável, IA dispensável).
     if (score < SCORE_MIN || score > SCORE_MAX) {
       return jsonResponse(
         {
           error:
             `score=${score} fora da faixa permitida [${SCORE_MIN}, ${SCORE_MAX}]. ` +
-            `Score >= ${SCORE_MAX + 1}: extração já é confiável, IA dispensável. ` +
-            `Score < ${SCORE_MIN}: revisão manual obrigatória, IA pode mascarar problemas.`,
+            `Score >= ${SCORE_MAX + 1}: extração já é confiável, IA dispensável.`,
         },
         400,
       );
