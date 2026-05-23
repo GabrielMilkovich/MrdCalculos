@@ -306,9 +306,59 @@ export interface PjecalcVerbaInsert {
 }
 
 // =====================================================
-// VIEW: pjecalc_ocorrencias (sobre pjecalc_ocorrencia_calculo)
+// TABELA: pjecalc_reflexo (sem view dedicada)
 // =====================================================
+//
+// Sprint Hotfix bug #5 — reflexos persistidos pelo `pjc-persist.ts` ficavam
+// inacessíveis ao orchestrator porque a view `pjecalc_verbas` lê APENAS
+// de `pjecalc_verba_base` (verbas Calculadas). Adicionado `getReflexos` no
+// service para que o orchestrator possa montar `PjeVerba` tipo='reflexa'
+// e o motor não dispare a auto-geração de reflexos padrão.
+export interface PjecalcReflexoRow {
+  id: string;
+  case_id: string;
+  calculo_id: string;
+  nome: string;
+  codigo: string | null;
+  /** Banco grava em `tipo` o equivalente a `caracteristica` (COMUM, 13_SALARIO, etc). */
+  tipo: string | null;
+  comportamento_reflexo: string | null;
+  periodo_media_reflexo: string | null;
+  tratamento_fracao_mes: string | null;
+  media_tipo: string | null;
+  media_meses: number | null;
+  incide_inss: boolean;
+  incide_fgts: boolean;
+  incide_ir: boolean;
+  periodo_inicio: string | null;
+  periodo_fim: string | null;
+  ordem: number;
+  ativa: boolean;
+  /**
+   * Persist grava como boolean (convertido de 'DEVIDO'/'true' no XML).
+   * Read precisa converter de volta pra 'devido' (true) / 'diferenca' (false)
+   * antes de passar pro motor.
+   */
+  gerar_principal: boolean;
+  gerar_reflexo: boolean;
+  observacoes: string | null;
+  multiplicador: number | null;
+  divisor: number | null;
+  divisor_tipo: string | null;
+  quantidade_tipo: string | null;
+  pjc_id: string | null;
+  created_at: string;
+  /**
+   * Resolvido via JOIN com `pjecalc_reflexo_base_verba` no `getReflexos`.
+   * Quando um reflexo aponta pra múltiplas verbas Calculadas (M:N), todos
+   * os ids vêm. Pipeline V3 puro usa `[0]` como `verba_principal_id` —
+   * comportamento replicado aqui.
+   */
+  base_verba_ids: string[];
+}
 
+// =====================================================
+// VIEW: pjecalc_ocorrencias (sobre pjecalc_ocorrencia_calculo)
 export interface PjecalcOcorrenciaRow {
   id: string;
   case_id: string;

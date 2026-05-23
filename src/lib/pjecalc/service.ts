@@ -24,6 +24,7 @@ import type {
   PjecalcHistoricoOcorrenciaRow, PjecalcHistoricoOcorrenciaInsert,
   PjecalcVerbaRow, PjecalcVerbaInsert,
   PjecalcOcorrenciaRow, PjecalcOcorrenciaInsert,
+  PjecalcReflexoRow,
   PjecalcLiquidacaoResultadoRow, PjecalcLiquidacaoResultadoInsert,
   PjecalcCartaoPontoRow,
   PjecalcFgtsConfigRow, PjecalcFgtsConfigInsert,
@@ -244,6 +245,39 @@ export async function getCaseBasic(caseId: string): Promise<{ id: string; client
   const { data, error } = await supabase.from('cases').select('id, cliente, numero_processo, status, tags').eq('id', caseId).maybeSingle();
   if (error) throw error;
   return data;
+}
+
+// =====================================================
+// REFLEXOS (Sprint Hotfix bug #5)
+// =====================================================
+//
+// `pjecalc_reflexo` é tabela direta (sem view dedicada). A view
+// `pjecalc_verbas` lê APENAS de `pjecalc_verba_base`, deixando os
+// reflexos persistidos pela importação PJC invisíveis ao orchestrator.
+// Esta função preenche o gap, fazendo JOIN com `pjecalc_reflexo_base_verba`
+// (M:N) e agregando os ids das verbas base relacionadas em `base_verba_ids`.
+
+export async function getReflexos(caseId: string): Promise<PjecalcReflexoRow[]> {
+  const { data, error } = await fromView('pjecalc_reflexo')
+    .select('*, pjecalc_reflexo_base_verba(verba_base_id)')
+    .eq('case_id', caseId);
+  if (error) throw error;
+  // Achata o nested select PostgREST. Quando um reflexo tem múltiplas
+  // verbas base (M:N), todos os ids vêm — pipeline V3 puro usa [0] como
+  // `verba_principal_id`, comportamento replicado pelo orchestrator.
+  type RbvJoin = { verba_base_id: string | null };
+  type RawRow = Omit<PjecalcReflexoRow, 'base_verba_ids'> & {
+    pjecalc_reflexo_base_verba?: RbvJoin[] | null;
+  };
+  return ((data as RawRow[] | null) ?? []).map((r) => {
+    const rbv = r.pjecalc_reflexo_base_verba ?? [];
+    const base_verba_ids = rbv
+      .map((x) => x.verba_base_id)
+      .filter((x): x is string => typeof x === 'string' && x.length > 0);
+    const { pjecalc_reflexo_base_verba: _omit, ...rest } = r;
+    void _omit;
+    return { ...rest, base_verba_ids };
+  });
 }
 
 // =====================================================
@@ -737,6 +771,16 @@ export interface PjecalcCaseData {
    * direto os valores do PJe-Calc oficial.
    */
   ocorrencias: PjecalcOcorrenciaRow[];
+  /**
+   * Sprint Hotfix bug #5 — reflexos persistidos em `pjecalc_reflexo`.
+   * A view `pjecalc_verbas` consumida por `getVerbas` lê apenas
+   * `pjecalc_verba_base` (verbas Calculadas), então reflexos importados
+   * do XML PJC ficavam invisíveis. O orchestrator agora os concatena
+   * em `engineVerbas` com `tipo='reflexa'`, suprimindo a auto-geração
+   * de reflexos padrão que estava inflando o líquido (~R$ 412k vs alvo
+   * ~R$ 245k para ROSICLEIA).
+   */
+  reflexos: PjecalcReflexoRow[];
   cartaoPonto: PjecalcCartaoPontoRow[];
   resultado: PjecalcLiquidacaoResultadoRow | null;
   fgtsConfig: PjecalcFgtsConfigRow | null;
@@ -773,7 +817,7 @@ export async function getAtualizacaoConfig(caseId: string): Promise<PjecalcAtual
 export async function loadCaseData(caseId: string): Promise<PjecalcCaseData> {
   const [
     params, dadosProcesso, faltas, ferias, historicos, verbas,
-    ocorrencias, cartaoPonto, resultado, fgtsConfig, csConfig, irConfig,
+    ocorrencias, reflexos, cartaoPonto, resultado, fgtsConfig, csConfig, irConfig,
     correcaoConfig, honorarios, custasConfig, multasConfig,
     atualizacaoConfig,
   ] = await Promise.all([
@@ -788,6 +832,10 @@ export async function loadCaseData(caseId: string): Promise<PjecalcCaseData> {
     // orfanizadas e o motor caía em "from scratch", gerando líquido
     // massivamente subestimado pra casos importados.
     getOcorrencias(caseId),
+    // Sprint Hotfix bug #5 — ler reflexos do banco. Sem isto, o
+    // orchestrator não os enxergava (view lê só verba_base), gerava
+    // reflexos PADRÃO automaticamente e inflava o líquido.
+    getReflexos(caseId),
     getCartaoPonto(caseId),
     getResultado(caseId),
     getFgtsConfig(caseId),
@@ -802,7 +850,7 @@ export async function loadCaseData(caseId: string): Promise<PjecalcCaseData> {
 
   return {
     params, dadosProcesso, faltas, ferias, historicos, verbas,
-    ocorrencias, cartaoPonto, resultado, fgtsConfig, csConfig, irConfig,
+    ocorrencias, reflexos, cartaoPonto, resultado, fgtsConfig, csConfig, irConfig,
     correcaoConfig, honorarios, custasConfig, multasConfig,
     atualizacaoConfig,
   };

@@ -58,6 +58,7 @@ import type {
   PjecalcVerbaRow,
   PjecalcHistoricoSalarialRow,
   PjecalcOcorrenciaRow,
+  PjecalcReflexoRow,
   PjecalcFaltaRow,
   PjecalcFeriasRow,
   PjecalcCartaoPontoRow,
@@ -346,6 +347,131 @@ function toEngineVerbas(
       ocorrencias_precomputadas: ocorrenciasPrecomputadas,
     };
   });
+}
+
+/**
+ * Sprint Hotfix bug #5 — converte reflexos persistidos (`pjecalc_reflexo`,
+ * carregados por `getReflexos`) em `PjeVerba` com `tipo='reflexa'` para
+ * o motor V3.
+ *
+ * Sem isso, o orchestrator não enxergava os reflexos do XML PJC (a view
+ * `pjecalc_verbas` lê só `pjecalc_verba_base`), `existingReflexas` ficava
+ * vazio, e `principalsSemReflexo` virava o conjunto inteiro de Calculadas
+ * — disparando `gerarReflexosPadrao` que gerava 13º/Férias/Aviso/DSR
+ * GENÉRICOS por cima das ocorrências já precomputadas, inflando o
+ * líquido (ROSICLEIA: R$ 412k vs alvo R$ 245k).
+ *
+ * Reflexos com múltiplas verbas base (M:N) usam `base_verba_ids[0]` como
+ * `verba_principal_id` — mesmo comportamento do pipeline V3 puro
+ * (`pjc-to-engine.ts:612`). Quando o reflexo tem ocorrências
+ * precomputadas (via `ocorrenciasPorVerba.get(reflexo.id)`), o motor
+ * usa essas ocorrências direto (não recalcula).
+ */
+function toEngineReflexos(
+  reflexos: PjecalcReflexoRow[],
+  ocorrenciasPorVerba: Map<string, PjecalcOcorrenciaRow[]> = new Map(),
+): PjeVerba[] {
+  const out: PjeVerba[] = [];
+  for (const r of reflexos) {
+    if (r.ativa === false) continue;
+    if (r.base_verba_ids.length === 0) {
+      logger.warn(
+        `[ORCHESTRATOR] Reflexo "${r.nome}" (id=${r.id}) sem verba_principal_id (zero links em pjecalc_reflexo_base_verba) — ignorado.`,
+      );
+      continue;
+    }
+    const verbaPrincipalId = r.base_verba_ids[0];
+
+    const caracteristicaMap: Record<string, string> = {
+      'COMUM': 'comum', '13_SALARIO': '13_salario',
+      'AVISO_PREVIO': 'aviso_previo', 'FERIAS': 'ferias',
+    };
+    const rawCaract = (r.tipo || 'COMUM').toUpperCase();
+    const caracteristica = (caracteristicaMap[rawCaract] || rawCaract.toLowerCase()) as PjeVerba['caracteristica'];
+
+    const tipoDivisor = normalizeDivisorTipo(r.divisor_tipo);
+    const tipoQuantidade = normalizeQuantidadeTipo(r.quantidade_tipo, caracteristica);
+    const comportamentoReflexa = r.comportamento_reflexo
+      ? normalizeComportamento(r.comportamento_reflexo)
+      : undefined;
+    const periodoMediaReflexa = r.periodo_media_reflexo as PjeVerba['periodo_media_reflexo'] | undefined;
+    const fracaoMesModo = normalizeFracaoMes(r.tratamento_fracao_mes);
+
+    // Banco grava `gerar_principal`/`gerar_reflexo` como boolean (convertido
+    // do XML PJC). Engine espera 'devido' (true) / 'diferenca' (false) —
+    // padrão idêntico ao do pipeline V3 puro (`pjc-to-engine.ts:615-616`).
+    const gerarReflexa: 'devido' | 'diferenca' = r.gerar_reflexo ? 'devido' : 'diferenca';
+    const gerarPrincipal: 'devido' | 'diferenca' = r.gerar_principal ? 'devido' : 'diferenca';
+
+    const ocs = ocorrenciasPorVerba.get(r.id) ?? [];
+    const ocorrenciasPrecomputadas = ocs.length > 0
+      ? ocs.map(o => ({
+          competencia: typeof o.competencia === 'string'
+            ? o.competencia.slice(0, 7)
+            : String(o.competencia).slice(0, 7),
+          base: Number(o.base_valor) || 0,
+          divisor: Number(o.divisor_valor) || 1,
+          multiplicador: Number(o.multiplicador_valor) || 1,
+          quantidade: Number(o.quantidade_valor) || 1,
+          dobra: Number(o.dobra) >= 2,
+          devido: Number(o.devido) || 0,
+          pago: Number(o.pago) || 0,
+          indice_acumulado: o.indice_acumulado != null
+            ? Number(o.indice_acumulado)
+            : undefined,
+        }))
+      : undefined;
+
+    out.push({
+      id: r.id,
+      nome: r.nome,
+      tipo: 'reflexa',
+      valor: 'calculado',
+      caracteristica,
+      ocorrencia_pagamento: 'mensal',
+      compor_principal: true,
+      zerar_valor_negativo: false,
+      dobrar_valor_devido: false,
+      periodo_inicio: r.periodo_inicio || '',
+      periodo_fim: r.periodo_fim || '',
+      base_calculo: {
+        historicos: [],
+        verbas: r.base_verba_ids,
+        tabelas: [],
+        proporcionalizar: false,
+        integralizar: false,
+      },
+      tipo_divisor: tipoDivisor,
+      divisor_informado: r.divisor ?? 1,
+      multiplicador: r.multiplicador ?? 1,
+      tipo_quantidade: tipoQuantidade,
+      quantidade_informada: 1,
+      quantidade_proporcionalizar: false,
+      fracao_mes_modo: fracaoMesModo,
+      exclusoes: {
+        faltas_justificadas: false,
+        faltas_nao_justificadas: false,
+        ferias_gozadas: false,
+      },
+      incidencias: {
+        fgts: r.incide_fgts !== false,
+        irpf: r.incide_ir !== false,
+        contribuicao_social: r.incide_inss !== false,
+        previdencia_privada: false,
+        pensao_alimenticia: false,
+      },
+      juros_ajuizamento: 'ocorrencias_vencidas',
+      verba_principal_id: verbaPrincipalId,
+      gerar_verba_reflexa: gerarReflexa,
+      gerar_verba_principal: gerarPrincipal,
+      comportamento_reflexo: comportamentoReflexa,
+      periodo_media_reflexo: periodoMediaReflexa,
+      hora_noturna_ficticia: false,
+      ordem: r.ordem || 0,
+      ocorrencias_precomputadas: ocorrenciasPrecomputadas,
+    });
+  }
+  return out;
 }
 
 function toEngineCartaoPonto(cp: PjecalcCartaoPontoRow[]): PjeCartaoPonto[] {
@@ -1342,6 +1468,19 @@ export async function executarLiquidacao(
     caseData.historicos,
     ocorrenciasPorVerba,
   );
+
+  // Sprint Hotfix bug #5 — concatena reflexos persistidos em `pjecalc_reflexo`.
+  // A view `pjecalc_verbas` lê só `pjecalc_verba_base` (Calculadas), então
+  // sem este passo o orchestrator não enxerga os reflexos do PJC e dispara
+  // a auto-geração padrão de 13º/Férias/Aviso/DSR — gerando reflexos
+  // GENÉRICOS sobre as ocorrências já precomputadas e inflando o líquido
+  // (~R$ 412k vs alvo ~R$ 245k para ROSICLEIA).
+  if ((caseData.reflexos ?? []).length > 0) {
+    const reflexasFromDb = toEngineReflexos(caseData.reflexos ?? [], ocorrenciasPorVerba);
+    if (reflexasFromDb.length > 0) {
+      engineVerbas = [...engineVerbas, ...reflexasFromDb];
+    }
+  }
 
   // ── Generate verbas from multas_config (multas/indenizações from ModuloMultasCLT) ──
   const multasVerbas = multasConfigToVerbas(
