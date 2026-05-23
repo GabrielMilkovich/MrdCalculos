@@ -326,8 +326,16 @@ export const layoutGenericoV1: LayoutHolerite = {
     }
 
     if (basesDetectadas.length > 0) {
+      // Dedup + limita a 5 nomes únicos no warning — antes vinham todos
+      // (35× "Base IRRF Base IRRF Base IRRF…") quebrando o layout do
+      // HoleritePreviewDialog.
+      const nomesUnicos = Array.from(new Set(basesDetectadas));
+      const amostra = nomesUnicos.slice(0, 5).join(", ");
+      const restante = nomesUnicos.length > 5
+        ? ` (+${nomesUnicos.length - 5} outras)`
+        : "";
       warnings.push(
-        `${basesDetectadas.length} base(s) de cálculo excluída(s) das rubricas: ${basesDetectadas.join(", ")}.`,
+        `${basesDetectadas.length} base(s) de cálculo excluída(s) das rubricas: ${amostra}${restante}.`,
       );
     }
 

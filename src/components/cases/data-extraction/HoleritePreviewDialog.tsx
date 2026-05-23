@@ -386,7 +386,7 @@ export function HoleritePreviewDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[96vw] max-w-[1500px] max-h-[94vh] overflow-hidden flex flex-col">
-        <DialogHeader className="space-y-1">
+        <DialogHeader className="shrink-0 space-y-1">
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <DialogTitle>Conferir antes de baixar</DialogTitle>
             <div className="flex items-center gap-2 flex-wrap">
@@ -416,21 +416,15 @@ export function HoleritePreviewDialog({
         </DialogHeader>
 
         {competenciaInvalida && (
-          <div className="border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded p-2 text-xs space-y-0.5">
-            <div className="flex items-center gap-1.5 font-medium text-rose-900 dark:text-rose-100">
-              <AlertTriangle className="h-3.5 w-3.5" /> Atenção — competência
-              inválida (download liberado mesmo assim)
-            </div>
-            <p className="text-[11px] text-rose-900/80 dark:text-rose-100/80">
-              A competência detectada é{" "}
-              <code className="text-[10px] bg-rose-100 dark:bg-rose-950/40 px-1 rounded">
-                {effectiveClassificacao.competencia || "(vazio)"}
-              </code>
-              . O ideal é MM/AAAA (mês 01–12) — sem isso, as rubricas podem
-              entrar no histórico salarial em mês indefinido. Você pode
-              baixar assim mesmo e ajustar no PJe-Calc, ou reabrir o
-              documento pra corrigir a competência antes.
-            </p>
+          <div className="shrink-0 border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded px-2 py-1 text-[11px] flex items-center gap-1.5 text-rose-900 dark:text-rose-100">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span className="font-medium">Competência inválida:</span>
+            <code className="text-[10px] bg-rose-100 dark:bg-rose-950/40 px-1 rounded">
+              {effectiveClassificacao.competencia || "(vazio)"}
+            </code>
+            <span className="text-rose-900/80 dark:text-rose-100/80">
+              — ajuste no PJe-Calc ou reabra o documento.
+            </span>
           </div>
         )}
 
@@ -439,33 +433,35 @@ export function HoleritePreviewDialog({
             sinaliza onde estão os possíveis erros para revisão manual.
             Linhas suspeitas continuam destacadas em vermelho na tabela. */}
         {confidence.bloqueador === true && (
-          <div className="border-2 border-red-400 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
-            <div className="flex items-center gap-1.5 font-bold text-red-900 dark:text-red-100">
-              <AlertTriangle className="h-4 w-4" />
-              Atenção — possíveis erros detectados na extração
+          <details className="shrink-0 border border-red-400 bg-red-50 dark:bg-red-950/30 rounded text-xs group">
+            <summary className="px-2 py-1 flex items-center gap-1.5 font-medium text-red-900 dark:text-red-100 cursor-pointer select-none">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Possíveis erros detectados — revise antes de baixar
+              <span className="ml-auto text-[10px] opacity-60 group-open:hidden">
+                clique para ver
+              </span>
+            </summary>
+            <div className="px-2 pb-2 pt-1 space-y-0.5 max-h-24 overflow-y-auto">
+              {confidence.reasons
+                .filter((r) => /BLOQUEADOR/i.test(r))
+                .map((r, i) => (
+                  <div key={i} className="text-red-700 dark:text-red-300 font-mono text-[11px]">
+                    · {r.replace(/^BLOQUEADOR:\s*/, "")}
+                  </div>
+                ))}
             </div>
-            <div className="text-red-800 dark:text-red-200 text-xs">
-              Revise as rubricas marcadas em vermelho antes de baixar. O
-              download está liberado, mas a inconsistência abaixo indica
-              que o CSV pode estar incorreto.
-            </div>
-            {confidence.reasons
-              .filter((r) => /BLOQUEADOR/i.test(r))
-              .map((r, i) => (
-                <div key={i} className="text-red-700 dark:text-red-300 text-xs font-mono">
-                  · {r.replace(/^BLOQUEADOR:\s*/, "")}
-                </div>
-              ))}
-          </div>
+          </details>
         )}
 
         {/* FASE 3.3 — comparação parser × LLM extractor (shadow check). */}
         {llmStatus && (
-          <ComparacaoLLMPanel
-            llmStatus={llmStatus}
-            comparacao={comparacao}
-            aiConfidence={llmAiConfidence}
-          />
+          <div className="shrink-0">
+            <ComparacaoLLMPanel
+              llmStatus={llmStatus}
+              comparacao={comparacao}
+              aiConfidence={llmAiConfidence}
+            />
+          </div>
         )}
 
         {/* Sprint 2 / Fase 3 — banner de rubricas não classificadas pela ontologia
@@ -473,27 +469,39 @@ export function HoleritePreviewDialog({
             separado do bucket-mapper que monta o ZIP). */}
         {parsed?.resumo_classificacao &&
           parsed.resumo_classificacao.nao_classificadas > 0 && (
-            <OntologiaClassificacaoBanner
-              documentId={documentId}
-              resumo={parsed.resumo_classificacao}
-            />
+            <div className="shrink-0">
+              <OntologiaClassificacaoBanner
+                documentId={documentId}
+                resumo={parsed.resumo_classificacao}
+              />
+            </div>
           )}
 
         {classificacao.warnings.length > 0 && (
-          <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-xs space-y-0.5">
-            <div className="flex items-center gap-1.5 font-medium text-amber-900 dark:text-amber-100">
-              <AlertTriangle className="h-3.5 w-3.5" /> Avisos do parser
+          <details className="shrink-0 border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded text-xs group">
+            <summary className="px-2 py-1 flex items-center gap-1.5 font-medium text-amber-900 dark:text-amber-100 cursor-pointer select-none">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              {classificacao.warnings.length} aviso(s) do parser
+              <span className="ml-auto text-[10px] opacity-60 group-open:hidden">
+                clique para ver
+              </span>
+            </summary>
+            <div className="px-2 pb-2 pt-1 space-y-0.5 max-h-24 overflow-y-auto">
+              {classificacao.warnings.map((w, i) => (
+                <div
+                  key={i}
+                  className="text-amber-800 dark:text-amber-200 line-clamp-2"
+                  title={w}
+                >
+                  · {w}
+                </div>
+              ))}
             </div>
-            {classificacao.warnings.slice(0, 3).map((w, i) => (
-              <div key={i} className="text-amber-800 dark:text-amber-200">
-                · {w}
-              </div>
-            ))}
-          </div>
+          </details>
         )}
 
         {/* Toolbar: busca + ações em lote */}
-        <div className="flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
@@ -540,8 +548,10 @@ export function HoleritePreviewDialog({
           </span>
         </div>
 
-        {/* Tabela única */}
-        <ScrollArea className="flex-1 -mx-6 px-6">
+        {/* Tabela única — `min-h-0` é obrigatório no flex child que precisa
+            encolher; sem isso, banners empurram a tabela e o scroll não
+            ativa (CSS bug clássico de flexbox). */}
+        <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
           <div className="rounded-md border">
             <Table>
               <TableHeader className="bg-muted/30 sticky top-0">
