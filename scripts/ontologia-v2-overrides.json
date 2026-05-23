@@ -1,0 +1,54 @@
+{
+  "$comment": "Overrides do gerador ontologia-v2. Cada chave tem propósito separado — não consolidar. Mudanças aqui regeneram ontologia-v2.json via `npm run gen:ontologia`. Auditável por commit.",
+
+  "category_renames": {
+    "MINIMO_GARANTIDO":  "MINIMO_GARANTIDO",
+    "COMISSAO_PRODUTOS": "COMISSOES_PRODUTOS",
+    "COMISSAO_SERVICOS": "COMISSOES_SERVICOS",
+    "PREMIO":            "PREMIOS",
+    "DSR_PAGO":          "DSR_S_COMISSOES",
+    "DESCONSIDERAR":     "DESCONSIDERADAS",
+    "NAO_CLASSIFICADO":  "NAO_CLASSIFICADO"
+  },
+
+  "categoria_rules": {
+    "MINIMO_GARANTIDO":     { "tipo_pjecalc": "SALARIO",              "base_dsr": false, "base_13": true,  "base_ferias": true,  "incluido": true,  "placeholder": false },
+    "SALARIO_SUBSTITUICAO": { "tipo_pjecalc": "SALARIO_SUBSTITUICAO", "base_dsr": false, "base_13": true,  "base_ferias": true,  "incluido": true,  "placeholder": true  },
+    "COMISSOES_PRODUTOS":   { "tipo_pjecalc": "COMISSAO",             "base_dsr": true,  "base_13": true,  "base_ferias": true,  "incluido": true,  "placeholder": false },
+    "COMISSOES_SERVICOS":   { "tipo_pjecalc": "COMISSAO",             "base_dsr": true,  "base_13": true,  "base_ferias": true,  "incluido": true,  "placeholder": false },
+    "DSR_S_COMISSOES":      { "tipo_pjecalc": "DSR",                  "base_dsr": false, "base_13": true,  "base_ferias": true,  "incluido": true,  "placeholder": false },
+    "PREMIOS":              { "tipo_pjecalc": "PREMIO",               "base_dsr": true,  "base_13": true,  "base_ferias": true,  "incluido": true,  "placeholder": false },
+    "DESCONSIDERADAS":      { "tipo_pjecalc": "DESCONSIDERAR",        "base_dsr": false, "base_13": false, "base_ferias": false, "incluido": false, "placeholder": false }
+  },
+
+  "extra_categories_rationale": {
+    "$comment": "Categorias V2 que NÃO vêm de canônico V1 — placeholder=true em categoria_rules.",
+    "SALARIO_SUBSTITUICAO": "Placeholder para substituição salarial (CLT Art. 450). V1 não tem rubrica catalogada. Operador classifica manualmente quando aparecer. Mantém categoria reservada no enum/CHECK para evitar migration corretiva no primeiro uso."
+  },
+
+  "extra_aliases": {
+    "$comment": "Aliases adicionais ancorados em normalized_key da rubrica V1 (após correção de typos no canônico). Cada entrada documenta fonte e razão. Validador rejeita chave que não exista em V1.",
+
+    "antec vale transp admissao": [
+      {
+        "alias": "antec vale transporte admissao",
+        "fonte": "string real em prod (Supabase MRDCALCC, doc 1)",
+        "razao": "V1 fuzzy 0.87 pegava — sinônimos V1 incluem 'Antecipação Vale Transporte Admissão' (forma extensa) mas não 'Antec Vale Transporte Admissão' (Antec curto + transporte extenso)"
+      }
+    ],
+    "comissao garantida": [
+      {
+        "alias": "com garantia",
+        "fonte": "string real em prod (Supabase MRDCALCC, doc 1)",
+        "razao": "V1 fuzzy 0.92 pegava — mudança de gênero (garantida→garantia) não coberta por sinônimos"
+      }
+    ],
+    "dsr s media hora noturna": [
+      {
+        "alias": "dsr s media horas noturnas",
+        "fonte": "string real em prod (Supabase MRDCALCC, doc 1)",
+        "razao": "V1 fuzzy 0.92 pegava — plural feminino não coberto por sinônimos V1 (que ficam todos no singular)"
+      }
+    ]
+  }
+}

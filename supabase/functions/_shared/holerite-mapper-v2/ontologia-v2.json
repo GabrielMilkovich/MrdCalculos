@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
-  "generated_at": "2026-05-23T08:23:55.416Z",
-  "source": "scripts/gen-ontologia-v2-from-v1.ts a partir de supabase/functions/_shared/ontologia-rubricas/index.ts (V1) + scripts/ontologia-v2-overrides.json",
+  "generated_at": "2026-05-23T09:59:19.970Z",
+  "source": "scripts/gen-ontologia-v2-from-snapshot.ts a partir de scripts/ontologia-v1-snapshot.ts + scripts/ontologia-v2-overrides.json",
   "categorias": {
     "MINIMO_GARANTIDO": {
       "tipo_pjecalc": "SALARIO",
