@@ -15,6 +15,7 @@ import { MemoriaCalculoExpandida } from "./MemoriaCalculoExpandida";
 import { ComparacaoCenarios } from "./ComparacaoCenarios";
 import { calcularCompletude } from "@/lib/pjecalc/completude";
 import * as svc from "@/lib/pjecalc/service";
+import { parseDobraFromDb } from "@/lib/pjecalc/parse-dobra-from-db";
 import { PjeCalcEngineV3 } from "@/lib/pjecalc/engine-v3";
 // Engine unification (P-prod): UI manual deve carregar os mesmos 4 DBs
 // históricos que o orchestrator usa, para evitar fallbacks hardcoded em
@@ -252,7 +253,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
           divisor: Number(oc.divisor) || 1,
           multiplicador: Number(oc.multiplicador) || 1,
           quantidade: Number(oc.quantidade) || 0,
-          dobra: !!Number(oc.dobra),
+          dobra: parseDobraFromDb(oc.dobra),
           devido: Number(oc.devido) || 0,
           pago: Number(oc.pago) || 0,
         });
