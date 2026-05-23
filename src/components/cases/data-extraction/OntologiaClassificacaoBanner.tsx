@@ -1,21 +1,26 @@
 /**
- * Banner amarelo + dialog de classificação manual de rubricas não-classificadas
- * pela ontologia do escritório (Sprint 2 / Fase 3, 2026-05-21).
+ * Banner amarelo + dialog de classificação manual de rubricas não classificadas
+ * pela ontologia do escritório.
  *
  * Aparece dentro do HoleritePreviewDialog quando `resumo_classificacao.nao_classificadas > 0`.
- * Operador atribui categoria manualmente por rubrica; persistência fica em
- * `documents.metadata.classificacoes_manuais_holerite` (objeto
- * `{[nome_original]: CategoriaOntologiaRubrica}`).
+ * Operador atribui categoria por rubrica; persistência fica em
+ * `rubrica_aliases_tentativa` (escopo por-case, propaga entre holerites do
+ * mesmo case e — após Confirmar — entre cases via `rubrica_aliases`).
+ *
+ * Sprint 3c (2026-05-23): redirecionada persistência de
+ * `documents.metadata.classificacoes_manuais_holerite` (escopo por-doc) pra
+ * `rubrica_aliases_tentativa`. Hook `useClassificacoesTentativa` cuida do
+ * debounce otimista (800ms) e da hidratação a partir de 3 fontes
+ * (tentativa > legacy > seed).
  *
  * IMPORTANTE: este banner NÃO bloqueia download/export. Apenas informa que
- * existem rubricas sem categoria para cálculo de DSR sobre comissões. A
- * geração de ZIP/CSV pra PJe-Calc continua passando pelo bucket-mapper antigo
+ * existem rubricas sem categoria para cálculo de DSR sobre comissões. ZIP
+ * pra PJe-Calc continua passando pelo bucket-mapper antigo
  * (`src/features/rubrica-mapping/`) — escopo separado.
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ListChecks } from "lucide-react";
-import { toast } from "sonner";
+import { AlertTriangle, CheckCircle2, ListChecks, Undo2, Circle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,10 +39,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type {
   CategoriaOntologiaRubrica,
   ResumoClassificacaoOntologia,
 } from "@/features/data-extraction/parsers/holerite/types";
+import {
+  useClassificacoesTentativa,
+  type SeedInicial,
+} from "@/hooks/useClassificacoesTentativa";
 
 interface Props {
   documentId?: string;
@@ -64,93 +79,84 @@ const CATEGORIA_ORDEM: Array<Exclude<CategoriaOntologiaRubrica, 'NAO_CLASSIFICAD
   "DESCONSIDERADAS",
 ];
 
+/**
+ * Normalize 1:1 com mapper V2 + gerador do seed. Necessário pra computar
+ * `normalized_key` no frontend a partir do nome cru da rubrica (que é o
+ * que está em `resumo.rubricas_nao_classificadas`).
+ */
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function OntologiaClassificacaoBanner({
   documentId,
   resumo,
 }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [escolhas, setEscolhas] = useState<Record<string, CategoriaOntologiaRubrica>>({});
-  const [persistindo, setPersistindo] = useState(false);
-  const [hidratado, setHidratado] = useState(false);
 
-  // Lê classificações manuais já persistidas no documento na primeira vez
-  // que o dialog é aberto. Evita fetch desnecessário enquanto o operador
-  // só está olhando o banner.
+  // Deriva caseId do documentId pra alimentar o hook.
+  const [caseId, setCaseId] = useState<string | null>(null);
   useEffect(() => {
-    if (!dialogOpen || !documentId || hidratado) return;
+    if (!documentId) {
+      setCaseId(null);
+      return;
+    }
     let cancelado = false;
-    (async () => {
-      const { data, error } = await supabase
+    void (async () => {
+      const { data } = await supabase
         .from("documents")
-        .select("metadata")
+        .select("case_id")
         .eq("id", documentId)
-        .single();
-      if (cancelado) return;
-      if (error) {
-        toast.error(`Erro ao carregar classificações salvas: ${error.message}`);
-        setHidratado(true);
-        return;
-      }
-      const meta = (data?.metadata ?? {}) as Record<string, unknown>;
-      const previas = meta.classificacoes_manuais_holerite as
-        | Record<string, CategoriaOntologiaRubrica>
-        | undefined;
-      if (previas && typeof previas === "object") {
-        setEscolhas(previas);
-      }
-      setHidratado(true);
+        .maybeSingle();
+      if (!cancelado) setCaseId((data?.case_id as string | null) ?? null);
     })();
     return () => {
       cancelado = true;
     };
-  }, [dialogOpen, documentId, hidratado]);
+  }, [documentId]);
 
   const naoClassificadasUnicas = useMemo(() => {
     return [...new Set(resumo.rubricas_nao_classificadas)].sort();
   }, [resumo.rubricas_nao_classificadas]);
 
-  const totalManualClassificadas = useMemo(() => {
-    return naoClassificadasUnicas.filter((nome) => escolhas[nome] !== undefined).length;
-  }, [naoClassificadasUnicas, escolhas]);
+  // SeedInicial pro hook: cada rubrica não-classificada vira entry com
+  // categoria=NAO_CLASSIFICADO. Quando operador escolhe, hook atualiza
+  // categoria + deriva tipo_pjecalc/base_* das regras.
+  const rubricasIniciais = useMemo<SeedInicial[]>(
+    () =>
+      naoClassificadasUnicas.map((nome) => ({
+        alias_original: nome,
+        normalized_key: normalize(nome),
+        categoria: "NAO_CLASSIFICADO",
+        tipo_pjecalc: "INDEFINIDO",
+      })),
+    [naoClassificadasUnicas],
+  );
+
+  const { classificacoes, setClassificacao, isLoading } = useClassificacoesTentativa({
+    caseId,
+    documentId,
+    rubricasIniciais,
+  });
+
+  // Tradução normalized_key → estado local pra render. Inclui contagem
+  // de "atribuídas" no rodapé.
+  const totalAtribuidas = useMemo(() => {
+    let n = 0;
+    for (const entry of classificacoes.values()) {
+      if (entry.categoria !== "NAO_CLASSIFICADO") n += 1;
+    }
+    return n;
+  }, [classificacoes]);
 
   if (resumo.nao_classificadas === 0) return null;
-
-  async function persistir() {
-    if (!documentId) {
-      toast.error("documentId ausente — classificações não podem ser salvas.");
-      return;
-    }
-    setPersistindo(true);
-    try {
-      const { data: docRow, error: readErr } = await supabase
-        .from("documents")
-        .select("metadata")
-        .eq("id", documentId)
-        .single();
-      if (readErr) throw readErr;
-      const metaAtual = (docRow?.metadata ?? {}) as Record<string, unknown>;
-      const { error: updErr } = await supabase
-        .from("documents")
-        .update({
-          metadata: {
-            ...metaAtual,
-            classificacoes_manuais_holerite: escolhas,
-            classificacoes_manuais_holerite_at: new Date().toISOString(),
-          },
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", documentId);
-      if (updErr) throw updErr;
-      toast.success(
-        `Classificação manual salva: ${totalManualClassificadas} de ${naoClassificadasUnicas.length} rubricas atribuídas.`,
-      );
-      setDialogOpen(false);
-    } catch (err) {
-      toast.error(`Erro ao salvar classificações: ${(err as Error).message}`);
-    } finally {
-      setPersistindo(false);
-    }
-  }
 
   return (
     <>
@@ -172,7 +178,8 @@ export function OntologiaClassificacaoBanner({
                 Isso não bloqueia o download do CSV/ZIP. Sinaliza apenas que essas
                 rubricas não têm categoria atribuída para cálculo de DSR sobre
                 comissões. Classifique manualmente para incluí-las nas bases
-                agregadas.
+                agregadas — e, ao confirmar, a classificação vira aprendizado
+                aplicado aos próximos casos.
               </p>
             </div>
           </div>
@@ -200,86 +207,106 @@ export function OntologiaClassificacaoBanner({
             <DialogTitle>Classificar rubricas manualmente</DialogTitle>
             <DialogDescription>
               Atribua uma categoria para cada rubrica não classificada
-              automaticamente. As escolhas ficam salvas no documento e podem
-              ser reabertas a qualquer momento. Não é necessário classificar
-              todas — rubricas em branco continuam como{" "}
+              automaticamente. As escolhas são salvas em background — pode
+              fechar o diálogo a qualquer momento. Rubricas em branco continuam
+              como{" "}
               <code className="text-[10px] bg-muted px-1 rounded">
                 NAO_CLASSIFICADO
               </code>
-              .
+              . Ao clicar &quot;Confirmar e baixar ZIP&quot; no diálogo
+              principal, as classificações desta sessão viram aprendizado
+              propagado para próximos casos.
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="max-h-[420px] pr-3">
-            <div className="space-y-2">
-              {naoClassificadasUnicas.map((nome) => {
-                const escolha = escolhas[nome];
-                return (
-                  <div
-                    key={nome}
-                    className="grid grid-cols-[1fr_220px] items-center gap-3 p-2 rounded border border-border bg-card"
-                  >
-                    <div className="text-sm font-mono break-all">{nome}</div>
-                    <Select
-                      value={escolha ?? "__UNSET__"}
-                      onValueChange={(v) => {
-                        setEscolhas((prev) => {
-                          const next = { ...prev };
-                          if (v === "__UNSET__") delete next[nome];
-                          else next[nome] = v as CategoriaOntologiaRubrica;
-                          return next;
-                        });
-                      }}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="(sem categoria)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__UNSET__">
-                          <span className="text-muted-foreground">(deixar em branco)</span>
-                        </SelectItem>
-                        {CATEGORIA_ORDEM.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {CATEGORIA_LABELS[cat]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                );
-              })}
+          {isLoading ? (
+            <div className="text-xs text-muted-foreground py-6 text-center">
+              Carregando classificações deste caso...
             </div>
-          </ScrollArea>
+          ) : (
+            <TooltipProvider>
+              <ScrollArea className="max-h-[420px] pr-3">
+                <div className="space-y-2">
+                  {naoClassificadasUnicas.map((nome) => {
+                    const key = normalize(nome);
+                    const entry = classificacoes.get(key);
+                    const escolha =
+                      entry && entry.categoria !== "NAO_CLASSIFICADO"
+                        ? entry.categoria
+                        : undefined;
+                    return (
+                      <div
+                        key={nome}
+                        className="grid grid-cols-[1fr_24px_220px] items-center gap-2 p-2 rounded border border-border bg-card"
+                      >
+                        <div className="text-sm font-mono break-all">{nome}</div>
+                        <div className="flex justify-center">
+                          {entry?.saving ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Circle
+                                  className="h-2.5 w-2.5 fill-amber-500 text-amber-500 animate-pulse"
+                                  data-testid={`saving-${key}`}
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent>Salvando...</TooltipContent>
+                            </Tooltip>
+                          ) : entry?.origem === "tentativa" || entry?.origem === "legacy" ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Undo2
+                                  className="h-3 w-3 text-muted-foreground"
+                                  data-testid={`herdada-${key}`}
+                                />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Classificada anteriormente neste caso — clique
+                                no dropdown para alterar
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : null}
+                        </div>
+                        <Select
+                          value={escolha ?? "__UNSET__"}
+                          onValueChange={(v) => {
+                            if (v === "__UNSET__") {
+                              setClassificacao(key, "NAO_CLASSIFICADO");
+                            } else {
+                              setClassificacao(key, v as CategoriaOntologiaRubrica);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="(sem categoria)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__UNSET__">
+                              <span className="text-muted-foreground">(deixar em branco)</span>
+                            </SelectItem>
+                            {CATEGORIA_ORDEM.map((cat) => (
+                              <SelectItem key={cat} value={cat}>
+                                {CATEGORIA_LABELS[cat]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </TooltipProvider>
+          )}
 
           <DialogFooter className="flex items-center justify-between gap-3">
             <div className="text-xs text-muted-foreground">
-              {totalManualClassificadas} de {naoClassificadasUnicas.length}{" "}
-              atribuída{totalManualClassificadas === 1 ? "" : "s"}
+              {totalAtribuidas} de {naoClassificadasUnicas.length}{" "}
+              atribuída{totalAtribuidas === 1 ? "" : "s"}
             </div>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDialogOpen(false)}
-                disabled={persistindo}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                onClick={persistir}
-                disabled={persistindo || !documentId}
-              >
-                {persistindo ? (
-                  "Salvando..."
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                    Salvar classificações
-                  </>
-                )}
-              </Button>
-            </div>
+            <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+              Fechar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

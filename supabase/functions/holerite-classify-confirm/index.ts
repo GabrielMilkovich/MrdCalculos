@@ -147,7 +147,7 @@ interface Tentativa {
   base_ferias: boolean | null;
   incluido: boolean | null;
   observacao_juridica: string | null;
-  created_by: string;
+  criado_por: string;
 }
 
 /**
@@ -269,7 +269,7 @@ async function promoverUma(
         observacao_juridica: obsTentativa,
         source: 'user_classification',
         confidence: 0.8, // user_classification começa em 0.8
-        created_by: t.created_by,
+        criado_por: t.criado_por,
         reviewed: true,
       },
       { onConflict: 'normalized_key', ignoreDuplicates: false },

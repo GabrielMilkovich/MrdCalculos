@@ -104,6 +104,9 @@ import {
 import type { LlmStatus } from "@/features/data-extraction/export/per-doc";
 import type { ComparacaoResultado } from "@/features/data-extraction/quality/comparador-llm-parser";
 import { ComparacaoLLMPanel } from "./ComparacaoLLMPanel";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useConfirmClassificacoes } from "@/hooks/useConfirmClassificacoes";
 
 interface Props {
   open: boolean;
@@ -174,6 +177,30 @@ export function HoleritePreviewDialog({
   );
   const [downloading, setDownloading] = useState(false);
   const [search, setSearch] = useState("");
+
+  // Deriva caseId do documentId. Necessário pra invocar holerite-classify-confirm
+  // antes do build do ZIP — promove tentativas registradas pelo banner.
+  const [caseId, setCaseId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!documentId) {
+      setCaseId(null);
+      return;
+    }
+    let cancelado = false;
+    void (async () => {
+      const { data } = await supabase
+        .from('documents')
+        .select('case_id')
+        .eq('id', documentId)
+        .maybeSingle();
+      if (!cancelado) setCaseId((data?.case_id as string | null) ?? null);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [documentId]);
+
+  const { confirm: confirmClassificacoes } = useConfirmClassificacoes(caseId);
 
   // Reset quando classificacao efetiva mudar (novo doc OU troca regex/IA).
   useEffect(() => {
@@ -337,6 +364,42 @@ export function HoleritePreviewDialog({
   const handleConfirmar = async () => {
     setDownloading(true);
     try {
+      // Sprint 3c: antes do build do ZIP, promove tentativas registradas pelo
+      // banner para `rubrica_aliases` canônico via edge function. Conflitos
+      // (categoria divergente OU observacao_juridica mudou) vêm no retorno
+      // mas NÃO bloqueiam o ZIP — operador é notificado e decide depois.
+      // ZIP usa state local (`linhas`), independente do que aconteceu na
+      // promoção (decisão de produto).
+      if (caseId) {
+        try {
+          const { promovidos, conflitos } = await confirmClassificacoes();
+          if (promovidos > 0) {
+            toast.success(
+              `${promovidos} classificação${promovidos === 1 ? '' : 'ões'} salva${
+                promovidos === 1 ? '' : 's'
+              } para futuros casos.`,
+            );
+          }
+          if (conflitos.length > 0) {
+            toast.warning(
+              `${conflitos.length} classificação${
+                conflitos.length === 1 ? '' : 'ões'
+              } pendente${
+                conflitos.length === 1 ? '' : 's'
+              } de revisão jurídica (categoria ou observação divergente).`,
+            );
+          }
+        } catch (err) {
+          // Falha em promover não impede o ZIP — operador pode reclassificar
+          // depois e tentar de novo.
+          toast.error(
+            `Falha ao promover classificações: ${
+              err instanceof Error ? err.message : String(err)
+            }. ZIP continua sendo gerado.`,
+          );
+        }
+      }
+
       const { blob, report } = await buildHoleriteZipWithReport({
         ...classificacao,
         linhas,

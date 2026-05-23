@@ -1,17 +1,36 @@
 // @vitest-environment jsdom
 /**
- * Testes do banner + dialog manual de classificação ontológica (Sprint 2 / Fase 3).
+ * Testes do banner + dialog manual de classificação ontológica.
  *
  * Cobre o caminho mínimo:
  *   - quando `nao_classificadas === 0`: banner ausente
  *   - quando > 0: banner visível com contador e lista resumida
  *   - dialog manual abre e mostra as rubricas pendentes
  *
- * Não testa a persistência via supabase (requer mock do client; escopo de
- * teste de integração futuro).
+ * Sprint 3c (2026-05-23): banner agora persiste em `rubrica_aliases_tentativa`
+ * via `useClassificacoesTentativa`. Mock do supabase client retorna valores
+ * neutros pra que useEffect de hidratação não quebre o teste — não testa
+ * fluxo de escrita (escopo de teste de integração futuro).
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+
+vi.mock("@/integrations/supabase/client", () => {
+  const chain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    single: vi.fn().mockResolvedValue({ data: null, error: null }),
+    upsert: vi.fn().mockResolvedValue({ data: null, error: null }),
+  };
+  return {
+    supabase: {
+      from: vi.fn(() => chain),
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+    },
+  };
+});
+
 import { OntologiaClassificacaoBanner } from "../OntologiaClassificacaoBanner";
 import type { ResumoClassificacaoOntologia } from "@/features/data-extraction/parsers/holerite/types";
 

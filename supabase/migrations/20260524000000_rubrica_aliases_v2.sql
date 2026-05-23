@@ -31,7 +31,7 @@ CREATE TABLE rubrica_aliases (
   observacao_juridica text NULL,
   source          text NOT NULL,
   confidence      numeric(3,2) NOT NULL CHECK (confidence BETWEEN 0 AND 1),
-  created_by      uuid REFERENCES auth.users(id),
+  criado_por      uuid REFERENCES auth.users(id),
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now(),
   reviewed        boolean NOT NULL DEFAULT false,
@@ -111,7 +111,7 @@ CREATE TABLE rubrica_aliases_tentativa (
   -- Operador pode anexar observação ao classificar; promote para canônico
   -- valida se difere do existente (vide handler holerite-classify-confirm).
   observacao_juridica text NULL,
-  created_by      uuid NOT NULL REFERENCES auth.users(id),
+  criado_por      uuid NOT NULL REFERENCES auth.users(id),
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now(),
 
@@ -172,19 +172,41 @@ ALTER TABLE rubrica_aliases             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rubrica_aliases_tentativa   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rubrica_aliases_history     ENABLE ROW LEVEL SECURITY;
 
--- Tentativa: usuário só lê/escreve as próprias
-CREATE POLICY tentativa_owner_select ON rubrica_aliases_tentativa
-  FOR SELECT USING (created_by = auth.uid());
+-- Tentativa: acesso via ownership do case. Alinha com padrão do projeto
+-- (rubricas_extraidas, classificacoes_rubrica_memo, case_categoria_config
+-- usam o mesmo JOIN). Single-tenant single-owner: 1 case → 1 criado_por.
+-- ON DELETE CASCADE em case_id garante cleanup quando case é apagado.
+CREATE POLICY tentativa_case_owner_select ON rubrica_aliases_tentativa
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM cases c
+            WHERE c.id = rubrica_aliases_tentativa.case_id
+              AND c.criado_por = auth.uid())
+  );
 
-CREATE POLICY tentativa_owner_insert ON rubrica_aliases_tentativa
-  FOR INSERT WITH CHECK (created_by = auth.uid());
+CREATE POLICY tentativa_case_owner_insert ON rubrica_aliases_tentativa
+  FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM cases c
+            WHERE c.id = rubrica_aliases_tentativa.case_id
+              AND c.criado_por = auth.uid())
+  );
 
-CREATE POLICY tentativa_owner_update ON rubrica_aliases_tentativa
-  FOR UPDATE USING (created_by = auth.uid())
-              WITH CHECK (created_by = auth.uid());
+CREATE POLICY tentativa_case_owner_update ON rubrica_aliases_tentativa
+  FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM cases c
+            WHERE c.id = rubrica_aliases_tentativa.case_id
+              AND c.criado_por = auth.uid())
+  ) WITH CHECK (
+    EXISTS (SELECT 1 FROM cases c
+            WHERE c.id = rubrica_aliases_tentativa.case_id
+              AND c.criado_por = auth.uid())
+  );
 
-CREATE POLICY tentativa_owner_delete ON rubrica_aliases_tentativa
-  FOR DELETE USING (created_by = auth.uid());
+CREATE POLICY tentativa_case_owner_delete ON rubrica_aliases_tentativa
+  FOR DELETE USING (
+    EXISTS (SELECT 1 FROM cases c
+            WHERE c.id = rubrica_aliases_tentativa.case_id
+              AND c.criado_por = auth.uid())
+  );
 
 -- Aliases canônicos: leitura global pra authenticated, escrita via service_role
 CREATE POLICY aliases_read_authenticated ON rubrica_aliases
