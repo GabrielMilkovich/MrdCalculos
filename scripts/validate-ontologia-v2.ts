@@ -157,13 +157,16 @@ function main() {
   //    Gate permanente: protege contra regressão do incidente Sprint 3 (gerador
   //    inicial leu só XLSX e perdeu 145 sinônimos curados pelo escritório).
   const v2KeyToCat = new Map<string, string>();
+  const v2KeyToObs = new Map<string, string | undefined>();
   for (const r of seed.rubricas) {
     for (const a of r.aliases) {
       v2KeyToCat.set(a, r.categoria);
+      v2KeyToObs.set(a, r.observacao_juridica);
     }
   }
   const missing: { key: string; canon: string; catV2: string }[] = [];
   const wrongCat: { key: string; canon: string; catV1: string; catV2Esperada: string; catV2Atual: string }[] = [];
+  const obsPerdida: { key: string; canon: string; obsV1: string }[] = [];
   for (const v1 of ONTOLOGIA) {
     const catEsperada = CATEGORIA_V1_TO_V2[v1.categoria];
     if (!catEsperada) {
@@ -183,6 +186,10 @@ function main() {
           catV2Atual: catV2,
         });
       }
+      // (3) Se V1 carrega observacao_juridica, V2 precisa preservar
+      if (v1.observacao_juridica && !v2KeyToObs.get(k)) {
+        obsPerdida.push({ key: k, canon: v1.texto_canonico, obsV1: v1.observacao_juridica });
+      }
     }
   }
   if (missing.length > 0) {
@@ -196,6 +203,13 @@ function main() {
       console.error(`  Categoria divergente: key='${w.key}' V1=${w.catV1}→${w.catV2Esperada} mas V2 atual=${w.catV2Atual} (canônico V1: '${w.canon}')`);
     }
     fail(`Cobertura V1→V2: ${wrongCat.length} chaves com categoria divergente. Investigar colisão entre rubricas ou erro de rename.`);
+  }
+  if (obsPerdida.length > 0) {
+    for (const o of obsPerdida) {
+      console.error(`  Observacao_juridica perdida: key='${o.key}' (canônico V1: '${o.canon}')`);
+      console.error(`    V1: ${o.obsV1.slice(0, 120)}${o.obsV1.length > 120 ? '...' : ''}`);
+    }
+    fail(`Cobertura V1→V2: ${obsPerdida.length} chaves V1 com observacao_juridica curada que V2 perdeu. Verificar gerador.`);
   }
 
   // Estatística da cobertura
