@@ -356,7 +356,7 @@ export function VerifyExtractionAIButton({
             <Loader2 className="h-5 w-5 animate-spin" />
             <span>Consultando IA (lotes paralelos)…</span>
             <span className="text-[11px] text-muted-foreground">
-              Modelo: gpt-4o-mini · structured output strict
+              Modelo: claude-sonnet-4-6 · tool use (anti-alucinação)
             </span>
           </div>
         )}
