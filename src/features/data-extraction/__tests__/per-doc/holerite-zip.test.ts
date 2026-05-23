@@ -15,7 +15,7 @@ const r = (over: Partial<RubricaParseada>): RubricaParseada => ({
 });
 
 describe("buildHoleriteZip", () => {
-  it("ZIP contém 1 CSV por categoria com soma > 0 + LEIA-ME.txt", async () => {
+  it("ZIP contém 1 CSV por categoria com soma > 0 (sem README)", async () => {
     const classif = classifyHolerite({
       competencia: "08/2016",
       layout_usado: "via_varejo_v1",
@@ -33,7 +33,9 @@ describe("buildHoleriteZip", () => {
     expect(files).toContain("historico_salarial_comissao.csv");
     expect(files).toContain("historico_salarial_dsr.csv");
     expect(files).toContain("historico_salarial_premiacao.csv");
-    expect(files).toContain("LEIA-ME.txt");
+    // README removido por decisão de produto (2026-05-23) — operador não
+    // queria ler README, só consumir os CSVs. Sanity: ZIP NÃO contém.
+    expect(files).not.toContain("LEIA-ME.txt");
   });
 
   it("Cada CSV tem 1 linha (1 competência por holerite)", async () => {
@@ -89,7 +91,7 @@ describe("buildHoleriteZip", () => {
     expect(lines[1]).toBe('"08/2016";"100,00";"S";"N";"S";"N"');
   });
 
-  it("ZIP vazio (todas linhas excluídas) só tem LEIA-ME", async () => {
+  it("ZIP vazio (todas linhas excluídas) só tem auditoria_completa.csv", async () => {
     const classif = classifyHolerite({
       competencia: "08/2016",
       layout_usado: "via_varejo_v1",
@@ -102,30 +104,13 @@ describe("buildHoleriteZip", () => {
     const zip = await JSZip.loadAsync(buf);
     const files = Object.keys(zip.files).sort();
     // Auditoria sempre presente (mesmo sem CSV oficial gerado), para
-    // registrar o que foi descartado e por quê.
-    expect(files).toEqual(["LEIA-ME.txt", "auditoria_completa.csv"]);
-    const readme = await zip.file("LEIA-ME.txt")!.async("string");
-    expect(readme).toContain("todas as rubricas foram excluídas");
+    // registrar o que foi descartado e por quê. README removido.
+    expect(files).toEqual(["auditoria_completa.csv"]);
     // Auditoria registra a rubrica que ficou de fora.
     const auditoria = await zip
       .file("auditoria_completa.csv")!
       .async("string");
     expect(auditoria).toContain("Comissões");
     expect(auditoria).toContain("N"); // incluido=N
-  });
-
-  it("LEIA-ME inclui warnings do parser", async () => {
-    const classif = classifyHolerite({
-      competencia: "08/2016",
-      layout_usado: "via_varejo_v1",
-      warnings: ["Parser via_varejo_v1 é provisório (sem fixture real)."],
-      rubricas: [r({ codigo: "0620", nome: "Comissões", valor_vencimento: 100 })],
-    });
-    const blob = await buildHoleriteZip(classif);
-    const buf = new Uint8Array(await blob.arrayBuffer());
-    const zip = await JSZip.loadAsync(buf);
-    const readme = await zip.file("LEIA-ME.txt")!.async("string");
-    expect(readme).toContain("provisório");
-    expect(readme).toContain("AVISOS DO PARSER DO HOLERITE");
   });
 });

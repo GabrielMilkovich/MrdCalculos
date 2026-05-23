@@ -270,7 +270,8 @@ export async function generateExportForDocument(
       // CTPS — Carteira de Trabalho. O MESMO OCR alimenta os 2 parsers.
       // Se um deles não achar nada (ex: CTPS sem férias registradas),
       // o resultado fica vazio e só o outro CSV vai pro ZIP — o builder
-      // omite arquivos com 0 linhas e o LEIA-ME explica.
+      // omite arquivos com 0 linhas (header-only fica como sinal de que
+      // o parser tentou e não achou nada).
       const feriasParsed = parseFerias(ocrText);
       const faltasParsed = parseFaltas(ocrText);
       return {

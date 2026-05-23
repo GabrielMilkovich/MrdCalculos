@@ -4,7 +4,7 @@
  *
  * Produz:
  *   - 1 CSV por categoria com soma > 0 (`historico_salarial_<slug>.csv`)
- *   - 1 LEIA-ME.txt com instruções de import passo-a-passo
+ *   - 1 `auditoria_completa.csv` com a trilha completa de classificação
  *
  * Cada CSV é um "Histórico Salarial" separado no PJe-Calc — usuário cria
  * um Histórico Salarial por categoria (ex: "Comissões", "DSR", "Premiações")
@@ -213,14 +213,6 @@ export async function buildHoleriteZipWithReport(
   // depois "o que entrou em cada bucket" e "o que foi descartado".
   zip.file('auditoria_completa.csv', buildAuditoriaCSV(classificacao));
 
-  zip.file(
-    'LEIA-ME.txt',
-    buildReadme(classificacao, buckets, {
-      somaNaoClassificadas,
-      itensNaoClassificadas,
-    }),
-  );
-
   if (buckets.size === 0) {
     report.warnings.push(
       'Nenhum CSV de histórico salarial gerado — todas as rubricas foram excluídas ou estão sem categoria.',
@@ -280,134 +272,3 @@ function formatLinhaAuditoria(l: LinhaClassificada): string {
   ].join(';');
 }
 
-function buildReadme(
-  classificacao: ClassificacaoHolerite,
-  buckets: Map<CategoriaSlug, Decimal>,
-  extras: {
-    somaNaoClassificadas: Decimal;
-    itensNaoClassificadas: Array<{ nome: string; valor: number }>;
-  },
-): string {
-  const lines: string[] = [];
-  lines.push(`HOLERITE — competência ${classificacao.competencia}`);
-  lines.push(`Layout detectado: ${classificacao.layout_usado}`);
-
-  // Cross-check informativo: soma proventos vs soma descontos vs total
-  // que entra no PJe-Calc (somente buckets não-indenizatórios). Permite
-  // o operador validar que não houve perda de rubrica relevante.
-  const somaProventos = classificacao.linhas
-    .filter((l) => l.rubrica.valor_vencimento && l.rubrica.valor_vencimento > 0)
-    .reduce(
-      (acc, l) => acc.plus(new Decimal(l.rubrica.valor_vencimento ?? 0)),
-      new Decimal(0),
-    );
-  const somaDescontos = classificacao.linhas
-    .filter((l) => l.rubrica.valor_desconto && l.rubrica.valor_desconto > 0)
-    .reduce(
-      (acc, l) => acc.plus(new Decimal(l.rubrica.valor_desconto ?? 0)),
-      new Decimal(0),
-    );
-  const somaCsvOficial = [...buckets.values()].reduce(
-    (acc, v) => acc.plus(v),
-    new Decimal(0),
-  );
-  const liquidoEsperado = somaProventos.minus(somaDescontos);
-
-  lines.push('');
-  lines.push('TOTAIS DO DOCUMENTO (informativo)');
-  lines.push('---------------------------------');
-  lines.push(`  Soma de proventos extraídos:  R$ ${formatNumeroBR(somaProventos)}`);
-  lines.push(`  Soma de descontos extraídos:  R$ ${formatNumeroBR(somaDescontos)}`);
-  lines.push(`  Líquido esperado (P - D):     R$ ${formatNumeroBR(liquidoEsperado)}`);
-  lines.push(`  Total que entra nos CSVs:     R$ ${formatNumeroBR(somaCsvOficial)}`);
-  lines.push(
-    '  (CSVs incluem apenas categorias remuneratórias para cálculo trabalhista —',
-  );
-  lines.push(
-    '   diferenças entre proventos e CSV são naturais e refletem rubricas indenizatórias',
-  );
-  lines.push('   ou descartadas conscientemente.)');
-  lines.push('');
-  lines.push('COMO IMPORTAR NO PJe-CALC CIDADÃO');
-  lines.push('==================================');
-  lines.push('');
-  lines.push('Cada arquivo deste ZIP corresponde a UM Histórico Salarial');
-  lines.push('separado no PJe-Calc. Para cada CSV:');
-  lines.push('');
-  lines.push('  1) No menu Cálculo → Históricos Salariais → Adicionar.');
-  lines.push('  2) Dê o nome sugerido abaixo (ex.: "Comissões").');
-  lines.push('  3) Salve o Histórico Salarial.');
-  lines.push('  4) Abra o Histórico criado.');
-  lines.push('  5) Clique em "Importar CSV" e selecione o arquivo correspondente.');
-  lines.push('');
-
-  if (buckets.size === 0 && extras.somaNaoClassificadas.eq(0)) {
-    lines.push('Nenhum CSV gerado — todas as rubricas foram excluídas no preview.');
-  } else {
-    lines.push('ARQUIVOS NESTE ZIP');
-    lines.push('------------------');
-    for (const [slug, soma] of buckets) {
-      const meta = CATEGORIAS_NOMES[slug];
-      lines.push('');
-      lines.push(`* historico_salarial_${slug}.csv`);
-      lines.push(`    Histórico Salarial a criar:  ${meta.nome_pjecalc}`);
-      lines.push(`    Soma da competência:         R$ ${formatNumeroBR(soma)}`);
-      const f = meta.default_flags;
-      if (f.natureza_indenizatoria) {
-        lines.push(`    Flags sugeridas:             Natureza indenizatória (FGTS=N, INSS=N)`);
-      } else {
-        lines.push(
-          `    Flags sugeridas:             FGTS=${f.incide_fgts ? 'S' : 'N'}, INSS=${f.incide_inss ? 'S' : 'N'} (recolhidos = N)`,
-        );
-      }
-    }
-    if (extras.somaNaoClassificadas.gt(0)) {
-      lines.push('');
-      lines.push('* historico_salarial_nao_classificadas.csv');
-      lines.push('    Histórico Salarial a criar:  Não Classificadas (revisar)');
-      lines.push(
-        `    Soma da competência:         R$ ${formatNumeroBR(extras.somaNaoClassificadas)}`,
-      );
-      lines.push(
-        '    Flags sugeridas:             FGTS=S, INSS=S (recolhidos = N) — REVISAR',
-      );
-      lines.push('    Itens (revisar manualmente):');
-      for (const item of extras.itensNaoClassificadas.slice(0, 30)) {
-        lines.push(
-          `      - ${item.nome}: R$ ${formatNumeroBR(new Decimal(item.valor))}`,
-        );
-      }
-      if (extras.itensNaoClassificadas.length > 30) {
-        lines.push(`      … (+${extras.itensNaoClassificadas.length - 30} omitidos — ver auditoria_completa.csv)`);
-      }
-    }
-  }
-
-  lines.push('');
-  lines.push('AUDITORIA');
-  lines.push('---------');
-  lines.push('  Veja `auditoria_completa.csv` neste ZIP para a trilha completa:');
-  lines.push('  todas as rubricas extraídas, com a categoria atribuída, o valor');
-  lines.push('  que entrou no CSV oficial, e a razão da escolha (hint, fallback,');
-  lines.push('  desconto, ignorado). Útil para revisão posterior ou para anexar');
-  lines.push('  ao processo como prova da metodologia de extração.');
-  lines.push('');
-  lines.push('FORMATO DOS CSVs (informativo)');
-  lines.push('------------------------------');
-  lines.push('  Encoding: UTF-8 (sem BOM)');
-  lines.push('  Delimitador: ponto-e-vírgula (;)');
-  lines.push('  Decimal: vírgula brasileira (1234,56)');
-  lines.push('  Booleanos: S/N');
-  lines.push('  Competência: MM/AAAA');
-  lines.push('  Colunas: Competencia;Valor;IncideFGTS;RecolhidoFGTS;IncideINSS;RecolhidoINSS');
-  lines.push('');
-  lines.push('Compatível com PJe-Calc Cidadão 2.5.6+ (incluindo 2.15.1).');
-
-  if (classificacao.warnings.length > 0) {
-    lines.push('');
-    lines.push('AVISOS DO PARSER DO HOLERITE');
-    lines.push('----------------------------');
-    for (const w of classificacao.warnings) lines.push(`  - ${w}`);
-  }
-  return lines.join('\r\n');
-}
