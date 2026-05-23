@@ -281,6 +281,10 @@ export async function persistirPJCAnalysis(
       total: oc.devido - oc.pago,
       origem: 'PJC_IMPORT',
       ativa: true,
+      // Sprint Hotfix bug #4 — preserva o índice acumulado de correção
+      // que o PJe-Calc gravou no XML. Sem isso, o motor recalcula a
+      // correção do zero (via JAM) e diverge da paridade PJC.
+      indice_acumulado: oc.indice_acumulado ?? null,
     }));
 
     const { error: ocErr } = await supabase

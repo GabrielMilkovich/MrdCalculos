@@ -312,7 +312,16 @@ export interface PjecalcVerbaInsert {
 export interface PjecalcOcorrenciaRow {
   id: string;
   case_id: string;
+  /**
+   * Sprint Hotfix bug #4 — agora é `COALESCE(verba_base_id, reflexo_id)`
+   * via view. Reflexos antes ficavam invisíveis. Pra distinguir, leia
+   * `verba_base_id` e `reflexo_id` separadamente.
+   */
   verba_id: string;
+  /** uuid de pjecalc_verba_base — null quando a ocorrência é de reflexo. */
+  verba_base_id: string | null;
+  /** uuid de pjecalc_reflexo — null quando a ocorrência é de verba calculada. */
+  reflexo_id: string | null;
   verba_nome: string | null;
   competencia: string;
   base_valor: number;
@@ -328,6 +337,21 @@ export interface PjecalcOcorrenciaRow {
   total: number;
   origem: string;
   ativa: boolean;
+  /**
+   * Sprint Hotfix bug #4 — índice acumulado de correção que o PJe-Calc
+   * gravou no XML (`<indiceAcumulado>` por ocorrência). O motor V3 usa
+   * como ground truth da correção quando presente; sem ele, recalcula
+   * via JAM e diverge da paridade PJC.
+   */
+  indice_acumulado: number | null;
+  /** Sprint Hotfix bug #4 — base integral antes de proporcionalização. */
+  base_integral: number | null;
+  /** Sprint Hotfix bug #4 — quantidade integral antes de proporcionalização. */
+  quantidade_integral: number | null;
+  /** Sprint Hotfix bug #4 — devido integral antes de proporcionalização. */
+  devido_integral: number | null;
+  /** Sprint Hotfix bug #4 — pago integral antes de proporcionalização. */
+  pago_integral: number | null;
   created_at: string;
   updated_at: string;
 }

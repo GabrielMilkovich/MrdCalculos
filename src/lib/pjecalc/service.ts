@@ -729,6 +729,14 @@ export interface PjecalcCaseData {
   ferias: PjecalcFeriasRow[];
   historicos: PjecalcHistoricoSalarialRow[];
   verbas: PjecalcVerbaRow[];
+  /**
+   * Sprint Hotfix bug #4 — ocorrências por verba (de `pjecalc_ocorrencias`).
+   * Quando presentes (importação XML PJC), o orchestrator monta um
+   * `Map<verba_id, ocorrencias[]>` e popula `PjeVerba.ocorrencias_precomputadas`
+   * antes de chamar o motor — pulando o cálculo "from scratch" e usando
+   * direto os valores do PJe-Calc oficial.
+   */
+  ocorrencias: PjecalcOcorrenciaRow[];
   cartaoPonto: PjecalcCartaoPontoRow[];
   resultado: PjecalcLiquidacaoResultadoRow | null;
   fgtsConfig: PjecalcFgtsConfigRow | null;
@@ -765,7 +773,7 @@ export async function getAtualizacaoConfig(caseId: string): Promise<PjecalcAtual
 export async function loadCaseData(caseId: string): Promise<PjecalcCaseData> {
   const [
     params, dadosProcesso, faltas, ferias, historicos, verbas,
-    cartaoPonto, resultado, fgtsConfig, csConfig, irConfig,
+    ocorrencias, cartaoPonto, resultado, fgtsConfig, csConfig, irConfig,
     correcaoConfig, honorarios, custasConfig, multasConfig,
     atualizacaoConfig,
   ] = await Promise.all([
@@ -775,6 +783,11 @@ export async function loadCaseData(caseId: string): Promise<PjecalcCaseData> {
     getFerias(caseId),
     getHistoricoSalarial(caseId),
     getVerbas(caseId),
+    // Sprint Hotfix bug #4 — ler ocorrências precomputadas do banco.
+    // Sem isto, as ocorrências persistidas pela importação PJC ficavam
+    // orfanizadas e o motor caía em "from scratch", gerando líquido
+    // massivamente subestimado pra casos importados.
+    getOcorrencias(caseId),
     getCartaoPonto(caseId),
     getResultado(caseId),
     getFgtsConfig(caseId),
@@ -789,7 +802,7 @@ export async function loadCaseData(caseId: string): Promise<PjecalcCaseData> {
 
   return {
     params, dadosProcesso, faltas, ferias, historicos, verbas,
-    cartaoPonto, resultado, fgtsConfig, csConfig, irConfig,
+    ocorrencias, cartaoPonto, resultado, fgtsConfig, csConfig, irConfig,
     correcaoConfig, honorarios, custasConfig, multasConfig,
     atualizacaoConfig,
   };

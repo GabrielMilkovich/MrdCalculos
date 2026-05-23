@@ -57,6 +57,7 @@ import type {
   PjecalcParametrosRow,
   PjecalcVerbaRow,
   PjecalcHistoricoSalarialRow,
+  PjecalcOcorrenciaRow,
   PjecalcFaltaRow,
   PjecalcFeriasRow,
   PjecalcCartaoPontoRow,
@@ -200,8 +201,36 @@ function normalizeFracaoMes(raw: string | null | undefined): PjeVerba['fracao_me
 function toEngineVerbas(
   verbas: PjecalcVerbaRow[],
   historicosDisponiveis: PjecalcHistoricoSalarialRow[] = [],
+  ocorrenciasPorVerba: Map<string, PjecalcOcorrenciaRow[]> = new Map(),
 ): PjeVerba[] {
   return verbas.map(v => {
+    // Sprint Hotfix bug #4 — popula `ocorrencias_precomputadas` quando a
+    // verba tem ocorrências persistidas (vindas do import PJC, gravadas
+    // por `pjc-persist.ts`). Sem isto, o motor caía em "from scratch"
+    // mesmo quando o XML PJC trazia ocorrências completas (51 competências),
+    // gerando líquido subestimado em ~5x. Quando `ocorrenciasPorVerba`
+    // não traz entrada pra essa verba, o motor segue cálculo normal.
+    const ocs = ocorrenciasPorVerba.get(v.id) ?? [];
+    const ocorrenciasPrecomputadas = ocs.length > 0
+      ? ocs.map(o => ({
+          // Banco grava `competencia` como DATE (yyyy-mm-dd); motor espera
+          // formato "yyyy-mm" pra agrupar por mês.
+          competencia: typeof o.competencia === 'string'
+            ? o.competencia.slice(0, 7)
+            : String(o.competencia).slice(0, 7),
+          base: Number(o.base_valor) || 0,
+          divisor: Number(o.divisor_valor) || 1,
+          multiplicador: Number(o.multiplicador_valor) || 1,
+          quantidade: Number(o.quantidade_valor) || 1,
+          // Banco grava dobra como NUMERIC(4,2) (1 ou 2). Motor espera boolean.
+          dobra: Number(o.dobra) >= 2,
+          devido: Number(o.devido) || 0,
+          pago: Number(o.pago) || 0,
+          indice_acumulado: o.indice_acumulado != null
+            ? Number(o.indice_acumulado)
+            : undefined,
+        }))
+      : undefined;
     let bcHistoricos: string[] = [];
     let bcVerbas: string[] = [];
     let bcTabelas: string[] = [];
@@ -311,6 +340,10 @@ function toEngineVerbas(
       hora_noturna_ficticia: v.hora_noturna_ficticia === true,
       constante_mensal: v.constante_mensal ?? undefined,
       ordem: v.ordem || 0,
+      // Sprint Hotfix bug #4 — passa ocorrências precomputadas pro motor
+      // quando vieram do PJC import. Quando undefined, motor segue
+      // cálculo "from scratch" (histórico + cartão).
+      ocorrencias_precomputadas: ocorrenciasPrecomputadas,
     };
   });
 }
@@ -1293,7 +1326,22 @@ export async function executarLiquidacao(
       })),
   }));
 
-  let engineVerbas = toEngineVerbas(caseData.verbas, caseData.historicos);
+  // Sprint Hotfix bug #4 — agrupa ocorrências por verba antes de passar
+  // pro motor. As ocorrências vêm da view `pjecalc_ocorrencias` que já
+  // unifica `verba_base_id` e `reflexo_id` em `verba_id` via COALESCE.
+  const ocorrenciasPorVerba = new Map<string, PjecalcOcorrenciaRow[]>();
+  for (const oc of caseData.ocorrencias ?? []) {
+    if (!oc.verba_id) continue;
+    const bucket = ocorrenciasPorVerba.get(oc.verba_id);
+    if (bucket) bucket.push(oc);
+    else ocorrenciasPorVerba.set(oc.verba_id, [oc]);
+  }
+
+  let engineVerbas = toEngineVerbas(
+    caseData.verbas,
+    caseData.historicos,
+    ocorrenciasPorVerba,
+  );
 
   // ── Generate verbas from multas_config (multas/indenizações from ModuloMultasCLT) ──
   const multasVerbas = multasConfigToVerbas(
