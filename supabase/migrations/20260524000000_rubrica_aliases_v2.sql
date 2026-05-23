@@ -24,6 +24,11 @@ CREATE TABLE rubrica_aliases (
   base_13         boolean NOT NULL,
   base_ferias     boolean NOT NULL,
   incluido        boolean NOT NULL,
+  -- Texto livre com decisão do escritório + súmula TST + razão jurídica.
+  -- Quando preenchido, UI sinaliza "divergência jurídica" no banner.
+  -- Editar exige reaprovação jurídica — handler de promote trata mudança
+  -- como conflict_rejected (vide commit refactor V1→V2).
+  observacao_juridica text NULL,
   source          text NOT NULL,
   confidence      numeric(3,2) NOT NULL CHECK (confidence BETWEEN 0 AND 1),
   created_by      uuid REFERENCES auth.users(id),
@@ -97,6 +102,9 @@ CREATE TABLE rubrica_aliases_tentativa (
   base_13         boolean,
   base_ferias     boolean,
   incluido        boolean,
+  -- Operador pode anexar observação ao classificar; promote para canônico
+  -- valida se difere do existente (vide handler holerite-classify-confirm).
+  observacao_juridica text NULL,
   created_by      uuid NOT NULL REFERENCES auth.users(id),
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now(),
@@ -143,8 +151,8 @@ CREATE VIEW rubrica_aliases_ativos
 WITH (security_invoker = true) AS
 SELECT
   id, alias_original, normalized_key, categoria, tipo_pjecalc,
-  base_dsr, base_13, base_ferias, incluido, source, confidence,
-  created_at, updated_at
+  base_dsr, base_13, base_ferias, incluido, observacao_juridica,
+  source, confidence, created_at, updated_at
 FROM rubrica_aliases
 WHERE reviewed = true;
 

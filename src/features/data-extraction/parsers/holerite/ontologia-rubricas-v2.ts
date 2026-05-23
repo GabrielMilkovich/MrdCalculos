@@ -38,6 +38,12 @@ export interface ClassificacaoRubrica {
   incluido: boolean;
   confidence: number; // 0..1
   source: FonteClassificacao;
+  // Texto livre: decisão do escritório + súmula TST + razão jurídica.
+  // Editar exige reaprovação (handler trata como conflict_rejected).
+  observacao_juridica?: string;
+  // Derivado: !!observacao_juridica. Preserva contrato V1 do banner
+  // (RubricaClassificadaDominio.divergencia_juridica) sem refactor extra.
+  divergencia_juridica: boolean;
 }
 
 export interface RegrasCategoria {
@@ -60,6 +66,9 @@ export interface RubricaSeed {
   incluido: boolean;
   confidence: number;
   source: FonteClassificacao;
+  // Texto curado do V1 (observacao_juridica). Quando presente, marca
+  // a rubrica como sujeita a divergência jurídica conhecida.
+  observacao_juridica?: string;
 }
 
 export interface OntologiaSeedV2 {

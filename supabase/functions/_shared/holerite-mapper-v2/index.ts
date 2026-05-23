@@ -4,7 +4,7 @@
 // Roda no edge (Deno), service_role no contexto.
 //
 // FLUXO DE LOOKUP (em ordem):
-//   1. Seed em-memória (97 rubricas + 155 aliases)  → confidence 1.0, source 'seed_v2'/'planilha_v1'
+//   1. Seed em-memória (96 rubricas + 258 aliases)  → confidence 1.0, source 'seed_v2'
 //   2. rubrica_aliases reviewed=true                → confidence persistida
 //   3. NAO_CLASSIFICADO                             → confidence 0, source 'unknown'
 //
@@ -38,6 +38,8 @@ const SEED_INDEX: Map<string, ClassificacaoBase> = (() => {
       incluido: r.incluido,
       confidence: r.confidence,
       source: 'seed_v2',
+      observacao_juridica: r.observacao_juridica,
+      divergencia_juridica: !!r.observacao_juridica,
     };
     m.set(r.normalized_key, entry);
     for (const a of r.aliases) {
@@ -83,7 +85,7 @@ export async function prewarmAliasCache(ctx: MapperContext): Promise<void> {
   const { data, error } = await ctx.supabase
     .from('rubrica_aliases_ativos')
     .select(
-      'normalized_key, categoria, tipo_pjecalc, base_dsr, base_13, base_ferias, incluido, confidence',
+      'normalized_key, categoria, tipo_pjecalc, base_dsr, base_13, base_ferias, incluido, observacao_juridica, confidence',
     );
 
   if (error) {
@@ -104,6 +106,8 @@ export async function prewarmAliasCache(ctx: MapperContext): Promise<void> {
       incluido: row.incluido,
       confidence: Number(row.confidence),
       source: 'user_classification',
+      observacao_juridica: row.observacao_juridica ?? undefined,
+      divergencia_juridica: !!row.observacao_juridica,
     });
   }
 }
@@ -138,7 +142,7 @@ export async function classificarRubrica(
     const { data } = await ctx.supabase
       .from('rubrica_aliases_ativos')
       .select(
-        'normalized_key, categoria, tipo_pjecalc, base_dsr, base_13, base_ferias, incluido, confidence',
+        'normalized_key, categoria, tipo_pjecalc, base_dsr, base_13, base_ferias, incluido, observacao_juridica, confidence',
       )
       .eq('normalized_key', normalized_key)
       .maybeSingle();
@@ -156,6 +160,8 @@ export async function classificarRubrica(
         incluido: data.incluido,
         confidence: Number(data.confidence),
         source: 'user_classification',
+        observacao_juridica: data.observacao_juridica ?? undefined,
+        divergencia_juridica: !!data.observacao_juridica,
       };
     }
   }
@@ -176,6 +182,7 @@ function makeUnknown(descricao: string, normalized_key: string): ClassificacaoRu
     incluido: false,
     confidence: 0,
     source: 'unknown',
+    divergencia_juridica: false,
   };
 }
 

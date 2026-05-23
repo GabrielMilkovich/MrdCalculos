@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
-  "generated_at": "2026-05-23",
-  "source": "Planilha_Comissão_DSR_nova.xlsx",
+  "generated_at": "2026-05-23T08:23:55.416Z",
+  "source": "scripts/gen-ontologia-v2-from-v1.ts a partir de supabase/functions/_shared/ontologia-rubricas/index.ts (V1) + scripts/ontologia-v2-overrides.json",
   "categorias": {
     "MINIMO_GARANTIDO": {
       "tipo_pjecalc": "SALARIO",
@@ -55,421 +55,95 @@
   },
   "rubricas": [
     {
-      "alias_original": "Mínimo Garantido",
-      "normalized_key": "minimo garantido",
+      "alias_original": "13° de Abono Pago",
+      "normalized_key": "13 de abono pago",
       "aliases": [
-        "minimo garantido"
+        "13 abono pago",
+        "13 de abono pago",
+        "13o de abono pago",
+        "decimo de abono pago"
       ],
-      "categoria": "MINIMO_GARANTIDO",
-      "tipo_pjecalc": "SALARIO",
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
       "base_dsr": false,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
     },
     {
-      "alias_original": "Horas Justificadas / TRN",
-      "normalized_key": "horas justificadas trn",
+      "alias_original": "13° de Férias Pagas",
+      "normalized_key": "13 de ferias pagas",
       "aliases": [
-        "horas justificadas trn"
+        "13 de ferias pagas",
+        "13 ferias pagas",
+        "13o de ferias pagas",
+        "decimo de ferias pagas"
       ],
-      "categoria": "MINIMO_GARANTIDO",
-      "tipo_pjecalc": "SALARIO",
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
       "base_dsr": false,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
     },
     {
-      "alias_original": "Treinamento",
-      "normalized_key": "treinamento",
+      "alias_original": "Abono de Férias Pago",
+      "normalized_key": "abono de ferias pago",
       "aliases": [
-        "treinamento"
+        "abono de ferias pago",
+        "abono ferias pago"
       ],
-      "categoria": "MINIMO_GARANTIDO",
-      "tipo_pjecalc": "SALARIO",
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
       "base_dsr": false,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
     },
     {
-      "alias_original": "Adic. Tempo de Serviço",
-      "normalized_key": "adic tempo de servico",
+      "alias_original": "Abono p/ Comissão",
+      "normalized_key": "abono p comissao",
       "aliases": [
-        "adic tempo de serv",
-        "adic tempo de servico"
+        "abono p comissao",
+        "abono para comissao"
       ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
     },
     {
-      "alias_original": "Antec. Crédito Dif. De Comissões",
-      "normalized_key": "antec credito dif de comissoes",
+      "alias_original": "Abono Salarial Conv. Col. Trab.",
+      "normalized_key": "abono salarial conv col trab",
       "aliases": [
-        "antec credito dif de com",
-        "antec credito dif de comissoes",
-        "antec credito dif de coms"
+        "abono salarial cct",
+        "abono salarial conv col trab",
+        "abono salarial convencao coletiva trabalho"
       ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Ajuste Líquido",
-      "normalized_key": "ajuste liquido",
-      "aliases": [
-        "ajuste liquido"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Comissões",
-      "normalized_key": "comissoes",
-      "aliases": [
-        "com",
-        "comissoes",
-        "coms"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Comissão adicional",
-      "normalized_key": "comissao adicional",
-      "aliases": [
-        "com adicional",
-        "comissao ad",
-        "comissao adic",
-        "comissao adicional"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Compl. Comissão",
-      "normalized_key": "compl comissao",
-      "aliases": [
-        "compl com",
-        "compl comissao"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Compl. Comissão vem. Int. II",
-      "normalized_key": "compl comissao vem int ii",
-      "aliases": [
-        "compl com vem int ii",
-        "compl comissao vem int ii"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Comissões Produtos Online",
-      "normalized_key": "comissoes produtos online",
-      "aliases": [
-        "com produtos online",
-        "comissoes produtos online",
-        "coms produtos online"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Comissão Lib. Black Friday",
-      "normalized_key": "comissao lib black friday",
-      "aliases": [
-        "com lib black friday",
-        "comissao lib black friday"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Comissão Garantida",
-      "normalized_key": "comissao garantida",
-      "aliases": [
-        "com garantida",
-        "comissao gar",
-        "comissao garantida"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Dia do Comerciário",
-      "normalized_key": "dia do comerciario",
-      "aliases": [
-        "dia do comerciario"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Dif. De Convenção Coletiva",
-      "normalized_key": "dif de convencao coletiva",
-      "aliases": [
-        "dif de convencao coletiva"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Dif. Salário Dissídio",
-      "normalized_key": "dif salario dissidio",
-      "aliases": [
-        "dif sal dissidio",
-        "dif salario dissidio"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Hora Normal Trabalhada",
-      "normalized_key": "hora normal trabalhada",
-      "aliases": [
-        "hora normal trabalhada"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Inventário",
-      "normalized_key": "inventario",
-      "aliases": [
-        "inventario"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Manuseio de Valores",
-      "normalized_key": "manuseio de valores",
-      "aliases": [
-        "manuseio de valores"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Proventos",
-      "normalized_key": "proventos",
-      "aliases": [
-        "proventos"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Quebra de Caixa",
-      "normalized_key": "quebra de caixa",
-      "aliases": [
-        "quebra de caixa"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Quinquênio / Triênio",
-      "normalized_key": "quinquenio trienio",
-      "aliases": [
-        "quinquenio trienio"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Remuneração Garantida",
-      "normalized_key": "remuneracao garantida",
-      "aliases": [
-        "rem garantida",
-        "remuneracao gar",
-        "remuneracao garantida"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Comissão antecipada",
-      "normalized_key": "comissao antecipada",
-      "aliases": [
-        "com antecipada",
-        "comissao antecipada"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Comissões Venda Produto online",
-      "normalized_key": "comissoes venda produto online",
-      "aliases": [
-        "com venda produto online",
-        "comissoes venda produto online",
-        "coms venda produto online"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Dif comissão mês ant",
-      "normalized_key": "dif comissao mes ant",
-      "aliases": [
-        "dif com mes ant",
-        "dif comissao mes ant"
-      ],
-      "categoria": "COMISSOES_PRODUTOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
     },
     {
       "alias_original": "adiantamento em folha (EMP)",
       "normalized_key": "adiantamento em folha emp",
       "aliases": [
+        "adiant em folha emp",
         "adiantamento em folha emp"
       ],
       "categoria": "COMISSOES_PRODUTOS",
@@ -478,1076 +152,26 @@
       "base_13": true,
       "base_ferias": true,
       "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
+      "confidence": 1,
+      "source": "seed_v2"
     },
     {
-      "alias_original": "DSR (Comissão)",
-      "normalized_key": "dsr comissao",
+      "alias_original": "Adic. Tempo de Serviço",
+      "normalized_key": "adic tempo de servico",
       "aliases": [
-        "dsr com",
-        "dsr comissao"
+        "ad tempo servico",
+        "adic tempo de servico",
+        "adicional tempo de servico",
+        "ats"
       ],
-      "categoria": "DSR_S_COMISSOES",
-      "tipo_pjecalc": "DSR",
-      "base_dsr": false,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "DSR e Feriados",
-      "normalized_key": "dsr e feriados",
-      "aliases": [
-        "dsr e feriados"
-      ],
-      "categoria": "DSR_S_COMISSOES",
-      "tipo_pjecalc": "DSR",
-      "base_dsr": false,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Int. Prêmio no Dsr",
-      "normalized_key": "int premio no dsr",
-      "aliases": [
-        "int prem no dsr",
-        "int premio no dsr"
-      ],
-      "categoria": "DSR_S_COMISSOES",
-      "tipo_pjecalc": "DSR",
-      "base_dsr": false,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "DSR s/ Média Hora Notuma",
-      "normalized_key": "dsr s media hora notuma",
-      "aliases": [
-        "dsr s media hora notuma"
-      ],
-      "categoria": "DSR_S_COMISSOES",
-      "tipo_pjecalc": "DSR",
-      "base_dsr": false,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Rep Rem s/ Comissões",
-      "normalized_key": "rep rem s comissoes",
-      "aliases": [
-        "rep rem s com",
-        "rep rem s comissoes",
-        "rep rem s coms"
-      ],
-      "categoria": "DSR_S_COMISSOES",
-      "tipo_pjecalc": "DSR",
-      "base_dsr": false,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "DSR Prêmios",
-      "normalized_key": "dsr premios",
-      "aliases": [
-        "dsr premios"
-      ],
-      "categoria": "DSR_S_COMISSOES",
-      "tipo_pjecalc": "DSR",
-      "base_dsr": false,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Serv. Seguros",
-      "normalized_key": "com serv seguros",
-      "aliases": [
-        "com serv seguros"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
+      "categoria": "COMISSOES_PRODUTOS",
       "tipo_pjecalc": "COMISSAO",
       "base_dsr": true,
       "base_13": true,
       "base_ferias": true,
       "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Serv. Garantia",
-      "normalized_key": "com serv garantia",
-      "aliases": [
-        "com serv gar",
-        "com serv garantia"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Serv. Técnicos",
-      "normalized_key": "com serv tecnicos",
-      "aliases": [
-        "com serv tecnicos"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Frete",
-      "normalized_key": "com frete",
-      "aliases": [
-        "com frete"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Montagem",
-      "normalized_key": "com montagem",
-      "aliases": [
-        "com montagem"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Serv. Odont.",
-      "normalized_key": "com serv odont",
-      "aliases": [
-        "com serv odont"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Planos Operad.",
-      "normalized_key": "com planos operad",
-      "aliases": [
-        "com planos operad"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Técnicos PTO LJ",
-      "normalized_key": "com tecnicos pto lj",
-      "aliases": [
-        "com tecnicos pto lj"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Catálogo",
-      "normalized_key": "com catalogo",
-      "aliases": [
-        "com catalogo"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Serv. Fin.",
-      "normalized_key": "com serv fin",
-      "aliases": [
-        "com serv fin"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Com. Venda Expressa",
-      "normalized_key": "com venda expressa",
-      "aliases": [
-        "com venda expressa"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Camapanha",
-      "normalized_key": "camapanha",
-      "aliases": [
-        "camapanha"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Camapanha Móveis",
-      "normalized_key": "camapanha moveis",
-      "aliases": [
-        "camapanha moveis"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Camapanha Serviços",
-      "normalized_key": "camapanha servicos",
-      "aliases": [
-        "camapanha serv",
-        "camapanha servicos"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Camapanha Cartão PF",
-      "normalized_key": "camapanha cartao pf",
-      "aliases": [
-        "camapanha cartao pf"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Compl. Com. Seguros",
-      "normalized_key": "compl com seguros",
-      "aliases": [
-        "compl com seguros"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Comissões Serviços Online",
-      "normalized_key": "comissoes servicos online",
-      "aliases": [
-        "com servicos online",
-        "comissoes serv online",
-        "comissoes servicos online",
-        "coms servicos online"
-      ],
-      "categoria": "COMISSOES_SERVICOS",
-      "tipo_pjecalc": "COMISSAO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Prêmio",
-      "normalized_key": "premio",
-      "aliases": [
-        "prem",
-        "premio"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Prêmio Mensal",
-      "normalized_key": "premio mensal",
-      "aliases": [
-        "prem mensal",
-        "premio mensal"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Prêmio Meta",
-      "normalized_key": "premio meta",
-      "aliases": [
-        "prem meta",
-        "premio meta"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Prêmio Antecipado",
-      "normalized_key": "premio antecipado",
-      "aliases": [
-        "prem antecipado",
-        "premio ant",
-        "premio antec",
-        "premio antecipado"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Prêmio Estímulo",
-      "normalized_key": "premio estimulo",
-      "aliases": [
-        "prem estimulo",
-        "premio estimulo"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Prêmio Performance",
-      "normalized_key": "premio performance",
-      "aliases": [
-        "prem performance",
-        "premio performance"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Prêmio (LB)",
-      "normalized_key": "premio lb",
-      "aliases": [
-        "prem lb",
-        "premio lb"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Prêmio Gar. Estendida",
-      "normalized_key": "premio gar estendida",
-      "aliases": [
-        "prem gar estendida",
-        "premio gar estendida"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "PR Recarga de celular",
-      "normalized_key": "pr recarga de celular",
-      "aliases": [
-        "pr recarga de celular"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "PR (Cartão de Crédito)",
-      "normalized_key": "pr cartao de credito",
-      "aliases": [
-        "pr cartao de credito"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "PRM",
-      "normalized_key": "prm",
-      "aliases": [
-        "prm"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Gratificação",
-      "normalized_key": "gratificacao",
-      "aliases": [
-        "gratificacao"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Dif. Prêmio Vendedor",
-      "normalized_key": "dif premio vendedor",
-      "aliases": [
-        "dif prem vendedor",
-        "dif premio vendedor"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "PPR Pula meio (MagaLu)",
-      "normalized_key": "ppr pula meio magalu",
-      "aliases": [
-        "ppr pula meio magalu"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "PR. Adc.",
-      "normalized_key": "pr adc",
-      "aliases": [
-        "pr adc"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Prêmio Seguro",
-      "normalized_key": "premio seguro",
-      "aliases": [
-        "prem seguro",
-        "premio seguro"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "PR. Garantia Compl.",
-      "normalized_key": "pr garantia compl",
-      "aliases": [
-        "pr gar compl",
-        "pr garantia compl"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Premiação Incentivo",
-      "normalized_key": "premiacao incentivo",
-      "aliases": [
-        "premiacao incentivo"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "PR Saúde",
-      "normalized_key": "pr saude",
-      "aliases": [
-        "pr saude"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Prêmio Atend. Loja",
-      "normalized_key": "premio atend loja",
-      "aliases": [
-        "prem atend loja",
-        "premio atend loja"
-      ],
-      "categoria": "PREMIOS",
-      "tipo_pjecalc": "PREMIO",
-      "base_dsr": true,
-      "base_13": true,
-      "base_ferias": true,
-      "incluido": true,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Dif. 13° Salário",
-      "normalized_key": "dif 13 salario",
-      "aliases": [
-        "dif 13 sal",
-        "dif 13 salario"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Dif. Férias",
-      "normalized_key": "dif ferias",
-      "aliases": [
-        "dif ferias"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Dif. de Médias 13° Salário",
-      "normalized_key": "dif de medias 13 salario",
-      "aliases": [
-        "dif de medias 13 sal",
-        "dif de medias 13 salario"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Férias Pagas",
-      "normalized_key": "ferias pagas",
-      "aliases": [
-        "ferias pagas"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Antec. Vale Trasnp. - Admissão",
-      "normalized_key": "antec vale trasnp admissao",
-      "aliases": [
-        "antec vale trasnp admissao"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Banco de Horas 100% Noturna",
-      "normalized_key": "banco de horas 100 noturna",
-      "aliases": [
-        "banco de horas 100 not",
-        "banco de horas 100 noturna"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "DSR H. Extra",
-      "normalized_key": "dsr h extra",
-      "aliases": [
-        "dsr h ex",
-        "dsr h extra"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "13° de Férias Pagas",
-      "normalized_key": "13 de ferias pagas",
-      "aliases": [
-        "13 de ferias pagas"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Média Férias",
-      "normalized_key": "media ferias",
-      "aliases": [
-        "media ferias"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Salário Maternidade / Paternidade",
-      "normalized_key": "salario maternidade paternidade",
-      "aliases": [
-        "sal maternidade paternidade",
-        "salario mat paternidade",
-        "salario maternidade pat",
-        "salario maternidade paternidade"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Devolução INSS 13° Salário",
-      "normalized_key": "devolucao inss 13 salario",
-      "aliases": [
-        "devolucao inss 13 sal",
-        "devolucao inss 13 salario"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Abono de Férias Pago",
-      "normalized_key": "abono de ferias pago",
-      "aliases": [
-        "abono de ferias pago"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Abono p/ Comissão",
-      "normalized_key": "abono p comissao",
-      "aliases": [
-        "abono p com",
-        "abono p comissao"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "13° de Abono Pago",
-      "normalized_key": "13 de abono pago",
-      "aliases": [
-        "13 de abono pago"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Banco de Horas",
-      "normalized_key": "banco de horas",
-      "aliases": [
-        "banco de horas"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Int. Ad. Not. No Dsr",
-      "normalized_key": "int ad not no dsr",
-      "aliases": [
-        "int ad not no dsr"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Auxílio Aimientação",
-      "normalized_key": "auxilio aimientacao",
-      "aliases": [
-        "auxilio aimientacao"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Auxílio Doença",
-      "normalized_key": "auxilio doenca",
-      "aliases": [
-        "auxilio doenca"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "CH. Extras nunca",
-      "normalized_key": "ch extras nunca",
-      "aliases": [
-        "ch ex nunca",
-        "ch extras nunca"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Devolução de carnê",
-      "normalized_key": "devolucao de carne",
-      "aliases": [
-        "devolucao de carne"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Restituição de férias p/ 13°",
-      "normalized_key": "restituicao de ferias p 13",
-      "aliases": [
-        "restituicao de ferias p 13"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Reembolso (de nenhum tipo)",
-      "normalized_key": "reembolso de nenhum tipo",
-      "aliases": [
-        "reembolso de nenhum tipo"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Compl. HE Garatido",
-      "normalized_key": "compl he garatido",
-      "aliases": [
-        "compl he garatido"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Refeição",
-      "normalized_key": "refeicao",
-      "aliases": [
-        "refeicao"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Abono Salarial Conv. Col. Trab.",
-      "normalized_key": "abono salarial conv col trab",
-      "aliases": [
-        "abono salarial conv col trab"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
-    },
-    {
-      "alias_original": "Horas Noturnas",
-      "normalized_key": "horas noturnas",
-      "aliases": [
-        "horas noturnas"
-      ],
-      "categoria": "DESCONSIDERADAS",
-      "tipo_pjecalc": "DESCONSIDERAR",
-      "base_dsr": false,
-      "base_13": false,
-      "base_ferias": false,
-      "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
+      "confidence": 1,
+      "source": "seed_v2"
     },
     {
       "alias_original": "Adicional Noturno",
@@ -1564,8 +188,1478 @@
       "base_13": false,
       "base_ferias": false,
       "incluido": false,
-      "confidence": 1.0,
-      "source": "planilha_v1"
+      "confidence": 1,
+      "source": "seed_v2",
+      "observacao_juridica": "Classificado como DESCONSIDERAR conforme planilha do escritório. Súmula 60 TST estabelece que adicional noturno integra base de DSR. Decisão deliberada do escritório de seguir interpretação restritiva. Não alterar sem reaprovação jurídica."
+    },
+    {
+      "alias_original": "Ajuste Líquido",
+      "normalized_key": "ajuste liquido",
+      "aliases": [
+        "aj liquido",
+        "ajuste de liquido",
+        "ajuste liquido"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Antec. Crédito Dif. De Comissões",
+      "normalized_key": "antec credito dif de comissoes",
+      "aliases": [
+        "antec acao produtos selecionados",
+        "antec cred dif comissoes",
+        "antec credito dif de comissoes",
+        "antecipacao credito dif comissoes"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Antec. Vale Transp. - Admissão",
+      "normalized_key": "antec vale transp admissao",
+      "aliases": [
+        "antec vale transp admissao",
+        "antec vale transporte admissao",
+        "antec vale trasnp admissao",
+        "antecipacao vale transporte admissao"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Auxílio Alimentação",
+      "normalized_key": "auxilio alimentacao",
+      "aliases": [
+        "aux alimentacao",
+        "auxilio aimientacao",
+        "auxilio alimentacao",
+        "vale alimentacao"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Auxílio Doença",
+      "normalized_key": "auxilio doenca",
+      "aliases": [
+        "aux doenca",
+        "auxilio doenca"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Banco de Horas",
+      "normalized_key": "banco de horas",
+      "aliases": [
+        "banco de horas",
+        "banco horas",
+        "bh"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Banco de Horas 100% Noturna",
+      "normalized_key": "banco de horas 100 noturna",
+      "aliases": [
+        "banco de horas 100 noturna",
+        "banco horas 100 noturna",
+        "bh 100 noturna"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2",
+      "observacao_juridica": "Classificado como DESCONSIDERAR conforme planilha do escritório. Por analogia à Súmula 60 TST (adicional noturno integra base de DSR), a parcela noturna do banco de horas poderia ser integrada à base. Decisão deliberada do escritório de seguir interpretação restritiva. Não alterar sem reaprovação jurídica."
+    },
+    {
+      "alias_original": "Campanha",
+      "normalized_key": "campanha",
+      "aliases": [
+        "camapanha",
+        "campanha",
+        "campanha categorias",
+        "campanha geral",
+        "campanha retira",
+        "campanha serv fin",
+        "campanha via"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Campanha Cartão PF",
+      "normalized_key": "campanha cartao pf",
+      "aliases": [
+        "camapanha cartao pf",
+        "campanha cartao pf"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Campanha Móveis",
+      "normalized_key": "campanha moveis",
+      "aliases": [
+        "camapanha moveis",
+        "campanha moveis"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Campanha Serviços",
+      "normalized_key": "campanha servicos",
+      "aliases": [
+        "camapanha servicos",
+        "campanha servicos"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Catálogo",
+      "normalized_key": "com catalogo",
+      "aliases": [
+        "com catalogo",
+        "comissao catalogo"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Frete",
+      "normalized_key": "com frete",
+      "aliases": [
+        "com frete",
+        "comissao frete"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Montagem",
+      "normalized_key": "com montagem",
+      "aliases": [
+        "com montagem",
+        "comissao montagem"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Planos Operad.",
+      "normalized_key": "com planos operad",
+      "aliases": [
+        "com planos operad",
+        "com planos operadora",
+        "comissao planos operadora"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Serv. Fin.",
+      "normalized_key": "com serv fin",
+      "aliases": [
+        "com serv fin",
+        "com serv financeiros",
+        "comissao servicos financeiros"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Serv. Garantia",
+      "normalized_key": "com serv garantia",
+      "aliases": [
+        "com serv garantia",
+        "comissao servicos garantia"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Serv. Odont.",
+      "normalized_key": "com serv odont",
+      "aliases": [
+        "com serv odont",
+        "com serv odontologicos",
+        "comissao servicos odontologicos"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Serv. Seguros",
+      "normalized_key": "com serv seguros",
+      "aliases": [
+        "com seguros",
+        "com serv seguros",
+        "com servicos seguros",
+        "comissao servicos seguros"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Serv. Técnicos",
+      "normalized_key": "com serv tecnicos",
+      "aliases": [
+        "com serv tecnicos",
+        "comissao servicos tecnicos"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Técnicos PTO LJ",
+      "normalized_key": "com tecnicos pto lj",
+      "aliases": [
+        "com tecnicos pto lj",
+        "comissao tecnicos pto loja"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Com. Venda Expressa",
+      "normalized_key": "com venda expressa",
+      "aliases": [
+        "com venda expressa",
+        "comissao venda expressa"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Comissão adicional",
+      "normalized_key": "comissao adicional",
+      "aliases": [
+        "com adicional",
+        "comissao adicional"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Comissão antecipada",
+      "normalized_key": "comissao antecipada",
+      "aliases": [
+        "com antecipada",
+        "comissao antecipada"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Comissão Garantida",
+      "normalized_key": "comissao garantida",
+      "aliases": [
+        "com garantia",
+        "com garantida",
+        "comissao garantida"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Comissão Lib. Black Friday",
+      "normalized_key": "comissao lib black friday",
+      "aliases": [
+        "com lib black friday",
+        "comissao lib black friday",
+        "comissao liberada black friday"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Comissões",
+      "normalized_key": "comissoes",
+      "aliases": [
+        "comissao",
+        "comissoes"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Comissões Produtos Online",
+      "normalized_key": "comissoes produtos online",
+      "aliases": [
+        "com produtos online",
+        "comissoes produtos online"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Comissões Serviços Online",
+      "normalized_key": "comissoes servicos online",
+      "aliases": [
+        "com servicos online",
+        "comissoes servicos online"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Comissões Venda Produto online",
+      "normalized_key": "comissoes venda produto online",
+      "aliases": [
+        "com venda produto online",
+        "comissoes venda produto online"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Compl. Com. Seguros",
+      "normalized_key": "compl com seguros",
+      "aliases": [
+        "compl com seguros",
+        "complemento comissao seguros"
+      ],
+      "categoria": "COMISSOES_SERVICOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Compl. Comissão",
+      "normalized_key": "compl comissao",
+      "aliases": [
+        "compl comissao",
+        "complemento comissao"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Compl. Comissão vem. Int. II",
+      "normalized_key": "compl comissao vem int ii",
+      "aliases": [
+        "compl comissao vem int ii",
+        "complemento comissao vem int ii"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Compl. HE Garantido",
+      "normalized_key": "compl he garantido",
+      "aliases": [
+        "compl he garantido",
+        "compl he garatido",
+        "compl hora extra garantido",
+        "complemento he garantido"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Devolução de carnê",
+      "normalized_key": "devolucao de carne",
+      "aliases": [
+        "dev de carne",
+        "devolucao carne",
+        "devolucao de carne"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Devolução INSS 13° Salário",
+      "normalized_key": "devolucao inss 13 salario",
+      "aliases": [
+        "dev inss 13",
+        "devolucao inss 13 salario",
+        "devolucao inss 13o"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Dia do Comerciário",
+      "normalized_key": "dia do comerciario",
+      "aliases": [
+        "dia comerciario",
+        "dia do comerciario"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Dif. 13° Salário",
+      "normalized_key": "dif 13 salario",
+      "aliases": [
+        "dif 13 salario",
+        "dif 13o salario",
+        "diferenca 13 salario"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Dif comissão mês ant",
+      "normalized_key": "dif comissao mes ant",
+      "aliases": [
+        "dif comissao mes ant",
+        "dif comissao mes ant semmin",
+        "dif comissao mes anterior",
+        "diferenca comissao mes anterior"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Dif. De Convenção Coletiva",
+      "normalized_key": "dif de convencao coletiva",
+      "aliases": [
+        "dif convencao coletiva",
+        "dif de convencao coletiva",
+        "diferenca convencao coletiva"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Dif. de Médias 13° Salário",
+      "normalized_key": "dif de medias 13 salario",
+      "aliases": [
+        "dif de medias 13 sal",
+        "dif de medias 13 salario",
+        "diferenca de medias 13 salario"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Dif. Férias",
+      "normalized_key": "dif ferias",
+      "aliases": [
+        "dif ferias",
+        "diferenca ferias"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Dif. Prêmio Vendedor",
+      "normalized_key": "dif premio vendedor",
+      "aliases": [
+        "antec dif premio",
+        "dif premio",
+        "dif premio vendedor",
+        "diferenca premio vendedor"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Dif. Salário Dissídio",
+      "normalized_key": "dif salario dissidio",
+      "aliases": [
+        "dif salario dissidio",
+        "diferenca salario dissidio"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "DSR (Comissão)",
+      "normalized_key": "dsr comissao",
+      "aliases": [
+        "dsr comissao",
+        "dsr sobre comissao"
+      ],
+      "categoria": "DSR_S_COMISSOES",
+      "tipo_pjecalc": "DSR",
+      "base_dsr": false,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "DSR e Feriados",
+      "normalized_key": "dsr e feriados",
+      "aliases": [
+        "dsr e feriado",
+        "dsr e feriados",
+        "dsr feriados"
+      ],
+      "categoria": "DSR_S_COMISSOES",
+      "tipo_pjecalc": "DSR",
+      "base_dsr": false,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "DSR H. Extra",
+      "normalized_key": "dsr h extra",
+      "aliases": [
+        "dsr h extra",
+        "dsr he",
+        "dsr hora extra",
+        "dsr sobre horas extras"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2",
+      "observacao_juridica": "Classificado como DESCONSIDERAR conforme planilha do escritório. Súmula 172 TST estabelece que horas extras integram base de cálculo do repouso semanal remunerado. Decisão deliberada do escritório de seguir interpretação restritiva para evitar bis in idem (DSR sobre DSR). Não alterar sem reaprovação jurídica."
+    },
+    {
+      "alias_original": "DSR Prêmios",
+      "normalized_key": "dsr premios",
+      "aliases": [
+        "dsr premios",
+        "dsr sobre premios"
+      ],
+      "categoria": "DSR_S_COMISSOES",
+      "tipo_pjecalc": "DSR",
+      "base_dsr": false,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "DSR s/ Média Hora Noturna",
+      "normalized_key": "dsr s media hora noturna",
+      "aliases": [
+        "dsr s media hora notuma",
+        "dsr s media hora noturna",
+        "dsr s media horas noturnas",
+        "dsr sobre media hora noturna"
+      ],
+      "categoria": "DSR_S_COMISSOES",
+      "tipo_pjecalc": "DSR",
+      "base_dsr": false,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Férias Pagas",
+      "normalized_key": "ferias pagas",
+      "aliases": [
+        "f pagas",
+        "ferias pagas"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Gratificação",
+      "normalized_key": "gratificacao",
+      "aliases": [
+        "gratif",
+        "gratificacao"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Hora Normal Trabalhada",
+      "normalized_key": "hora normal trabalhada",
+      "aliases": [
+        "h normal trabalhada",
+        "hora normal trab",
+        "hora normal trabalhada"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Horas Justificadas / TRN",
+      "normalized_key": "horas justificadas trn",
+      "aliases": [
+        "horas just trn",
+        "horas justificadas trn",
+        "hrs justificadas trn"
+      ],
+      "categoria": "MINIMO_GARANTIDO",
+      "tipo_pjecalc": "SALARIO",
+      "base_dsr": false,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Horas Noturnas",
+      "normalized_key": "horas noturnas",
+      "aliases": [
+        "h noturnas",
+        "horas noturnas",
+        "hrs noturnas"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2",
+      "observacao_juridica": "Classificado como DESCONSIDERAR conforme planilha do escritório. Súmula 60 TST estabelece que adicional noturno integra base de DSR — por analogia, horas noturnas trabalhadas seguem o mesmo princípio. Decisão deliberada do escritório de seguir interpretação restritiva. Não alterar sem reaprovação jurídica."
+    },
+    {
+      "alias_original": "Int. Ad. Not. No Dsr",
+      "normalized_key": "int ad not no dsr",
+      "aliases": [
+        "int ad not dsr",
+        "int ad not no dsr",
+        "int adic noturno no dsr",
+        "integracao adicional noturno no dsr"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2",
+      "observacao_juridica": "Classificado como DESCONSIDERAR conforme planilha do escritório. A rubrica representa integração do adicional noturno no DSR já pago — por Súmula 60 TST, o adicional noturno integra a base de DSR. Decisão deliberada do escritório de não recompor para evitar bis in idem. Não alterar sem reaprovação jurídica."
+    },
+    {
+      "alias_original": "Int. Prêmio no Dsr",
+      "normalized_key": "int premio no dsr",
+      "aliases": [
+        "int premio dsr",
+        "int premio no dsr",
+        "integracao premio no dsr"
+      ],
+      "categoria": "DSR_S_COMISSOES",
+      "tipo_pjecalc": "DSR",
+      "base_dsr": false,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Inventário",
+      "normalized_key": "inventario",
+      "aliases": [
+        "inventario"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Manuseio de Valores",
+      "normalized_key": "manuseio de valores",
+      "aliases": [
+        "man valores",
+        "manuseio de valores",
+        "manuseio valores"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Média Férias",
+      "normalized_key": "media ferias",
+      "aliases": [
+        "med ferias",
+        "media ferias"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Mínimo Garantido",
+      "normalized_key": "minimo garantido",
+      "aliases": [
+        "min garantido",
+        "minimo garantido",
+        "minimo garantido comissao"
+      ],
+      "categoria": "MINIMO_GARANTIDO",
+      "tipo_pjecalc": "SALARIO",
+      "base_dsr": false,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "PPR Pula meio (MagaLu)",
+      "normalized_key": "ppr pula meio magalu",
+      "aliases": [
+        "ppr pula meio magalu",
+        "ppr pula meio magazine luiza"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "PR. Adc.",
+      "normalized_key": "pr adc",
+      "aliases": [
+        "pr adc",
+        "pr adicional",
+        "premio adicional"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "PR (Cartão de Crédito)",
+      "normalized_key": "pr cartao de credito",
+      "aliases": [
+        "pr cartao de credito",
+        "premio cartao credito",
+        "premio cartao de credito"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "PR. Garantia Compl.",
+      "normalized_key": "pr garantia compl",
+      "aliases": [
+        "pr gar compl",
+        "pr garantia compl",
+        "pr garantia complementar",
+        "premio garantia complementar"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "PR Recarga de celular",
+      "normalized_key": "pr recarga de celular",
+      "aliases": [
+        "pr recarga",
+        "pr recarga de celular",
+        "premio recarga celular",
+        "premio recarga de celular"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "PR Saúde",
+      "normalized_key": "pr saude",
+      "aliases": [
+        "pr saude",
+        "premio saude"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Premiação Incentivo",
+      "normalized_key": "premiacao incentivo",
+      "aliases": [
+        "prem incentivo",
+        "premiacao incentivo"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Prêmio",
+      "normalized_key": "premio",
+      "aliases": [
+        "premio"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Prêmio Antecipado",
+      "normalized_key": "premio antecipado",
+      "aliases": [
+        "pr antecipado",
+        "premio antecipado",
+        "premio antecipado quinzenal"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Prêmio Atend. Loja",
+      "normalized_key": "premio atend loja",
+      "aliases": [
+        "pr atendimento loja",
+        "premio atend loja",
+        "premio atendimento loja"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Prêmio Estímulo",
+      "normalized_key": "premio estimulo",
+      "aliases": [
+        "pr estimulo",
+        "premio estimulo"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Prêmio Gar. Estendida",
+      "normalized_key": "premio gar estendida",
+      "aliases": [
+        "pr gar estendida",
+        "premio gar estendida",
+        "premio garantia estendida"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Prêmio (LB)",
+      "normalized_key": "premio lb",
+      "aliases": [
+        "pr lb",
+        "premio lb"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Prêmio Mensal",
+      "normalized_key": "premio mensal",
+      "aliases": [
+        "pr mensal",
+        "premio mensal"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Prêmio Meta",
+      "normalized_key": "premio meta",
+      "aliases": [
+        "pr meta",
+        "premio meta"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Prêmio Performance",
+      "normalized_key": "premio performance",
+      "aliases": [
+        "pr performance",
+        "premio performance"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Prêmio Seguro",
+      "normalized_key": "premio seguro",
+      "aliases": [
+        "pr seguro",
+        "premio seguro"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "PRM",
+      "normalized_key": "prm",
+      "aliases": [
+        "premio prm",
+        "prm"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Proventos",
+      "normalized_key": "proventos",
+      "aliases": [
+        "prov",
+        "proventos"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Quebra de Caixa",
+      "normalized_key": "quebra de caixa",
+      "aliases": [
+        "q caixa",
+        "quebra caixa",
+        "quebra de caixa"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Quinquênio / Triênio",
+      "normalized_key": "quinquenio trienio",
+      "aliases": [
+        "quinquenio",
+        "quinquenio trienio",
+        "trienio"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Reembolso (de nenhum tipo)",
+      "normalized_key": "reembolso de nenhum tipo",
+      "aliases": [
+        "reembolso",
+        "reembolso de nenhum tipo"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Refeição",
+      "normalized_key": "refeicao",
+      "aliases": [
+        "refeicao",
+        "vale refeicao"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Remuneração Garantida",
+      "normalized_key": "remuneracao garantida",
+      "aliases": [
+        "rem garantida",
+        "remuneracao garantida"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Rep Rem s/ Comissões",
+      "normalized_key": "rep rem s comissoes",
+      "aliases": [
+        "rep rem s comissoes",
+        "repouso remunerado sobre comissoes"
+      ],
+      "categoria": "DSR_S_COMISSOES",
+      "tipo_pjecalc": "DSR",
+      "base_dsr": false,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Restituição de férias p/ 13°",
+      "normalized_key": "restituicao de ferias p 13",
+      "aliases": [
+        "rest ferias p 13",
+        "restituicao de ferias p 13",
+        "restituicao ferias para 13"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Salário Maternidade / Paternidade",
+      "normalized_key": "salario maternidade paternidade",
+      "aliases": [
+        "sal maternidade paternidade",
+        "salario maternidade",
+        "salario maternidade paternidade"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Treinamento",
+      "normalized_key": "treinamento",
+      "aliases": [
+        "treinam",
+        "treinamento",
+        "treinamentos"
+      ],
+      "categoria": "MINIMO_GARANTIDO",
+      "tipo_pjecalc": "SALARIO",
+      "base_dsr": false,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
     }
   ]
 }
