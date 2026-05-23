@@ -23,36 +23,48 @@ import type {
   CategoriaOntologiaRubrica,
   MetodoMatchOntologia,
 } from '../../parsers/holerite/types';
+import { CATEGORIA_V1_TO_V2 } from '../../parsers/holerite/ontologia-rubricas-v2';
 import { getDefaultHint } from '../../classification/hints';
 
 /**
- * Sprint 3c: mapeamento entre as 7 categorias da ontologia (Sprint 2) e
- * os 6 slugs de categoria do PJe-Calc Cidadão.
+ * Sprint 3c (2026-05-23): mapping V2 → slug PJe-Calc Cidadão.
  *
- * - `DESCONSIDERAR` → null: rubrica catalogada como "fora do CSV"
- *   (descontos sociais, totalizadores conhecidos etc.). Linha sai com
+ * - `DESCONSIDERADAS` → null: catalogada como "fora do CSV". Sai com
  *   `origem='ontologia_desconsiderar'`, `incluir=false`.
- * - `NAO_CLASSIFICADO` → null: ontologia não casou. Linha cai pra
- *   camada hints (`getDefaultHint`) e, se ainda assim sem categoria,
- *   pro fallback final (`salario_fixo`).
- * - `COMISSAO_PRODUTOS` e `COMISSAO_SERVICOS` colapsam pra `comissao`
- *   porque PJe-Calc não diferencia produtos vs serviços nesse nível.
+ * - `NAO_CLASSIFICADO` → null: cai pra camada hints (`getDefaultHint`).
+ * - `COMISSOES_PRODUTOS` e `COMISSOES_SERVICOS` colapsam pra `comissao`
+ *   (PJe-Calc não diferencia no histórico salarial).
+ * - `SALARIO_SUBSTITUICAO` → `minimo_garantido`: substituição salarial
+ *   compõe a mesma base de cálculo que salário base. Decisão alinhada
+ *   com `agregarResumoClassificacao` em `v1-compat.ts` (`SALARIO_SUBSTITUICAO`
+ *   soma em `minimo_garantido_centavos`).
  *
- * `salario_fixo` e `salario_familia` não são alcançáveis via ontologia —
- * continuam exclusivamente via `hints.ts` legado (cobertura genérica).
+ * `salario_fixo` e `salario_familia` só via hints (cobertura genérica).
  */
-const ONTOLOGIA_PARA_CATEGORIA_SLUG: Record<
+const ONTOLOGIA_V2_PARA_CATEGORIA_SLUG: Record<
   CategoriaOntologiaRubrica,
   CategoriaSlug | null
 > = {
   MINIMO_GARANTIDO: 'minimo_garantido',
-  COMISSAO_PRODUTOS: 'comissao',
-  COMISSAO_SERVICOS: 'comissao',
-  PREMIO: 'premiacao',
-  DSR_PAGO: 'dsr',
-  DESCONSIDERAR: null,
+  SALARIO_SUBSTITUICAO: 'minimo_garantido',
+  COMISSOES_PRODUTOS: 'comissao',
+  COMISSOES_SERVICOS: 'comissao',
+  DSR_S_COMISSOES: 'dsr',
+  PREMIOS: 'premiacao',
+  DESCONSIDERADAS: null,
   NAO_CLASSIFICADO: null,
 };
+
+/**
+ * Shim de leitura V1→V2 — JSONB legado em `documents.parsed` pré-migration #2
+ * tem slugs V1 (`COMISSAO_PRODUTOS`, `PREMIO`, `DSR_PAGO`, `DESCONSIDERAR`).
+ * Normaliza pra slug V2 antes do lookup. Após hard-cut (migration #2), o
+ * `CATEGORIA_V1_TO_V2` ainda existe como defesa — pode remover no commit
+ * que dropar a coexistência (mesmo PR que drop a migration).
+ */
+function normalizeCategoria(cat: string): CategoriaOntologiaRubrica {
+  return (CATEGORIA_V1_TO_V2[cat] ?? cat) as CategoriaOntologiaRubrica;
+}
 
 /**
  * Sprint 3c: encontra a classificação ontológica de uma rubrica.
@@ -211,14 +223,16 @@ export function classifyHolerite(
     // camada 3 (hints legado).
     const rc = buscarClassificacaoOntologia(rub, parsed.rubricas_classificadas);
     if (rc !== null) {
+      // Shim V1→V2 absorve JSONB legado pré-migration #2.
+      const categoriaV2 = normalizeCategoria(rc.categoria as unknown as string);
       const meta = {
-        categoria_ontologia: rc.categoria,
+        categoria_ontologia: categoriaV2,
         metodo_match: rc.metodo_match,
         score_match: rc.score_match,
         texto_canonico: rc.texto_canonico,
         divergencia_juridica: rc.divergencia_juridica,
       };
-      if (rc.categoria === 'DESCONSIDERAR') {
+      if (categoriaV2 === 'DESCONSIDERADAS') {
         return {
           key,
           rubrica: rub,
@@ -230,7 +244,7 @@ export function classifyHolerite(
           classificacao_ontologia: meta,
         };
       }
-      const slugOntologia = ONTOLOGIA_PARA_CATEGORIA_SLUG[rc.categoria];
+      const slugOntologia = ONTOLOGIA_V2_PARA_CATEGORIA_SLUG[categoriaV2];
       if (slugOntologia !== null) {
         return {
           key,

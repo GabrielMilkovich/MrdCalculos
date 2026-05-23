@@ -22,9 +22,11 @@ interface ConflitoAlias {
   tentativa_id: string;
   alias_original: string;
   normalized_key: string;
-  motivo: 'conflict_existing';
+  motivo: 'conflict_existing' | 'observacao_juridica_changed';
   categoria_tentativa: string;
   categoria_existente: string;
+  obs_anterior?: string | null;
+  obs_tentativa?: string | null;
 }
 
 interface ConfirmResponse {
@@ -144,7 +146,20 @@ interface Tentativa {
   base_13: boolean | null;
   base_ferias: boolean | null;
   incluido: boolean | null;
+  observacao_juridica: string | null;
   created_by: string;
+}
+
+/**
+ * Normaliza observacao_juridica: trim e converte string vazia/whitespace
+ * pra null. Garante que CHECK constraint do banco (`length(trim(obs)) > 0`)
+ * passa e que comparação de igualdade (entre tentativa e existente) é
+ * direta sem `?? ''` shim.
+ */
+function normalizeObs(s: string | null | undefined): string | null {
+  if (s == null) return null;
+  const t = s.trim();
+  return t.length > 0 ? t : null;
 }
 
 type PromoteResult =
@@ -175,16 +190,18 @@ async function promoverUma(
 
   const { data: existente } = await admin
     .from('rubrica_aliases')
-    .select('id, categoria')
+    .select('id, categoria, observacao_juridica')
     .eq('normalized_key', t.normalized_key)
     .maybeSingle();
 
+  const obsTentativa = normalizeObs(t.observacao_juridica);
+
   if (existente && existente.categoria !== t.categoria) {
-    // Conflito real: já existe com OUTRA categoria. NÃO sobrescrever.
+    // Conflito de categoria: já existe com OUTRA categoria. NÃO sobrescrever.
     await admin.from('rubrica_aliases_history').insert({
       rubrica_alias_id: existente.id,
       action: 'conflict_rejected',
-      payload: { tentativa: t, existente },
+      payload: { tentativa: t, existente, motivo: 'conflict_existing' },
       actor,
       case_id,
     });
@@ -201,7 +218,42 @@ async function promoverUma(
     };
   }
 
-  // 2. Upsert (insert se novo, ignora se já é mesma categoria)
+  if (existente) {
+    const obsExistente = normalizeObs(existente.observacao_juridica);
+    if (obsExistente !== obsTentativa) {
+      // Conflito de observação jurídica: categoria é a mesma, mas observação
+      // mudou. Decisão jurídica não deve ser sobrescrita silenciosamente —
+      // mudança requer reaprovação. Audit grava ambas, retorna conflito.
+      await admin.from('rubrica_aliases_history').insert({
+        rubrica_alias_id: existente.id,
+        action: 'conflict_rejected',
+        payload: {
+          tentativa: t,
+          existente,
+          motivo: 'observacao_juridica_changed',
+          obs_anterior: obsExistente,
+          obs_tentativa: obsTentativa,
+        },
+        actor,
+        case_id,
+      });
+      return {
+        kind: 'conflict',
+        conflito: {
+          tentativa_id: t.id,
+          alias_original: t.alias_original,
+          normalized_key: t.normalized_key,
+          motivo: 'observacao_juridica_changed',
+          categoria_tentativa: t.categoria,
+          categoria_existente: existente.categoria,
+          obs_anterior: obsExistente,
+          obs_tentativa: obsTentativa,
+        },
+      };
+    }
+  }
+
+  // 2. Upsert (insert se novo, ignora se já é mesma categoria + mesma obs)
   const { data: inserted, error: errIns } = await admin
     .from('rubrica_aliases')
     .upsert(
@@ -214,6 +266,7 @@ async function promoverUma(
         base_13: t.base_13 ?? false,
         base_ferias: t.base_ferias ?? false,
         incluido: t.incluido ?? true,
+        observacao_juridica: obsTentativa,
         source: 'user_classification',
         confidence: 0.8, // user_classification começa em 0.8
         created_by: t.created_by,

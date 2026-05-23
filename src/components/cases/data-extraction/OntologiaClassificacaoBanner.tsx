@@ -46,20 +46,22 @@ interface Props {
 
 const CATEGORIA_LABELS: Record<Exclude<CategoriaOntologiaRubrica, 'NAO_CLASSIFICADO'>, string> = {
   MINIMO_GARANTIDO: "Mínimo Garantido",
-  COMISSAO_PRODUTOS: "Comissões — Produtos",
-  COMISSAO_SERVICOS: "Comissões — Serviços",
-  PREMIO: "Prêmios",
-  DSR_PAGO: "DSR (já pago)",
-  DESCONSIDERAR: "Desconsiderar (não entra em DSR)",
+  SALARIO_SUBSTITUICAO: "Salário Substituição",
+  COMISSOES_PRODUTOS: "Comissões — Produtos",
+  COMISSOES_SERVICOS: "Comissões — Serviços",
+  PREMIOS: "Prêmios",
+  DSR_S_COMISSOES: "DSR (já pago)",
+  DESCONSIDERADAS: "Desconsiderar (não entra em DSR)",
 };
 
 const CATEGORIA_ORDEM: Array<Exclude<CategoriaOntologiaRubrica, 'NAO_CLASSIFICADO'>> = [
-  "COMISSAO_PRODUTOS",
-  "COMISSAO_SERVICOS",
-  "PREMIO",
-  "DSR_PAGO",
+  "COMISSOES_PRODUTOS",
+  "COMISSOES_SERVICOS",
+  "PREMIOS",
+  "DSR_S_COMISSOES",
   "MINIMO_GARANTIDO",
-  "DESCONSIDERAR",
+  "SALARIO_SUBSTITUICAO",
+  "DESCONSIDERADAS",
 ];
 
 export function OntologiaClassificacaoBanner({

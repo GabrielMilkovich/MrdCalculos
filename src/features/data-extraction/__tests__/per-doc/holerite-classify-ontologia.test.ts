@@ -105,7 +105,7 @@ describe("classifyHolerite — Sprint 3c ontologia → CategoriaSlug", () => {
     expect(r.linhas[0].incluir).toBe(true);
   });
 
-  it("COMISSAO_PRODUTOS → comissao, origem=ontologia", () => {
+  it("COMISSOES_PRODUTOS → comissao, origem=ontologia", () => {
     const rub = baseRubrica({
       codigo: "0620",
       nome: "Comissões Produtos",
@@ -116,13 +116,13 @@ describe("classifyHolerite — Sprint 3c ontologia → CategoriaSlug", () => {
       layout_usado: "via_varejo_v1",
       warnings: [],
       rubricas: [rub],
-      rubricas_classificadas: [baseClassificada(rub, "COMISSAO_PRODUTOS")],
+      rubricas_classificadas: [baseClassificada(rub, "COMISSOES_PRODUTOS")],
     });
     expect(r.linhas[0].categoria).toBe("comissao");
     expect(r.linhas[0].origem).toBe("ontologia");
   });
 
-  it("COMISSAO_SERVICOS → comissao (mesma slug colapsada), origem=ontologia", () => {
+  it("COMISSOES_SERVICOS → comissao (mesma slug colapsada), origem=ontologia", () => {
     const rub = baseRubrica({
       codigo: "0621",
       nome: "Comissões Serviços",
@@ -133,13 +133,13 @@ describe("classifyHolerite — Sprint 3c ontologia → CategoriaSlug", () => {
       layout_usado: "via_varejo_v1",
       warnings: [],
       rubricas: [rub],
-      rubricas_classificadas: [baseClassificada(rub, "COMISSAO_SERVICOS")],
+      rubricas_classificadas: [baseClassificada(rub, "COMISSOES_SERVICOS")],
     });
     expect(r.linhas[0].categoria).toBe("comissao");
     expect(r.linhas[0].origem).toBe("ontologia");
   });
 
-  it("PREMIO → premiacao, origem=ontologia", () => {
+  it("PREMIOS → premiacao, origem=ontologia", () => {
     const rub = baseRubrica({
       codigo: "0800",
       nome: "Prêmio Produtividade",
@@ -150,13 +150,13 @@ describe("classifyHolerite — Sprint 3c ontologia → CategoriaSlug", () => {
       layout_usado: "via_varejo_v1",
       warnings: [],
       rubricas: [rub],
-      rubricas_classificadas: [baseClassificada(rub, "PREMIO")],
+      rubricas_classificadas: [baseClassificada(rub, "PREMIOS")],
     });
     expect(r.linhas[0].categoria).toBe("premiacao");
     expect(r.linhas[0].origem).toBe("ontologia");
   });
 
-  it("DSR_PAGO → dsr, origem=ontologia", () => {
+  it("DSR_S_COMISSOES → dsr, origem=ontologia", () => {
     const rub = baseRubrica({
       codigo: "0900",
       nome: "DSR sobre Comissões",
@@ -167,13 +167,13 @@ describe("classifyHolerite — Sprint 3c ontologia → CategoriaSlug", () => {
       layout_usado: "via_varejo_v1",
       warnings: [],
       rubricas: [rub],
-      rubricas_classificadas: [baseClassificada(rub, "DSR_PAGO")],
+      rubricas_classificadas: [baseClassificada(rub, "DSR_S_COMISSOES")],
     });
     expect(r.linhas[0].categoria).toBe("dsr");
     expect(r.linhas[0].origem).toBe("ontologia");
   });
 
-  it("DESCONSIDERAR → categoria=null, incluir=false, origem=ontologia_desconsiderar", () => {
+  it("DESCONSIDERADAS → categoria=null, incluir=false, origem=ontologia_desconsiderar", () => {
     const rub = baseRubrica({
       codigo: "3500",
       nome: "Contribuição Sindical",
@@ -184,7 +184,7 @@ describe("classifyHolerite — Sprint 3c ontologia → CategoriaSlug", () => {
       layout_usado: "via_varejo_v1",
       warnings: [],
       rubricas: [rub],
-      rubricas_classificadas: [baseClassificada(rub, "DESCONSIDERAR")],
+      rubricas_classificadas: [baseClassificada(rub, "DESCONSIDERADAS")],
     });
     expect(r.linhas[0].categoria).toBeNull();
     expect(r.linhas[0].incluir).toBe(false);
@@ -239,7 +239,7 @@ describe("classifyHolerite — Sprint 3c defesa vence ontologia", () => {
     expect(r.linhas[0].classificacao_ontologia).toBeUndefined();
   });
 
-  it("isDesconto + ontologia=PREMIO → MANTÉM desconto (defesa vence)", () => {
+  it("isDesconto + ontologia=PREMIOS → MANTÉM desconto (defesa vence)", () => {
     const rub = baseRubrica({
       codigo: "5560",
       nome: "Desconto Adiantamento",
@@ -250,7 +250,7 @@ describe("classifyHolerite — Sprint 3c defesa vence ontologia", () => {
       layout_usado: "via_varejo_v1",
       warnings: [],
       rubricas: [rub],
-      rubricas_classificadas: [baseClassificada(rub, "PREMIO")],
+      rubricas_classificadas: [baseClassificada(rub, "PREMIOS")],
     });
     expect(r.linhas[0].origem).toBe("desconto");
     expect(r.linhas[0].categoria).toBeNull();
@@ -274,7 +274,7 @@ describe("classifyHolerite — Sprint 3c metadados pra UI", () => {
       warnings: [],
       rubricas: [rub],
       rubricas_classificadas: [
-        baseClassificada(rub, "COMISSAO_PRODUTOS", {
+        baseClassificada(rub, "COMISSOES_PRODUTOS", {
           metodo_match: "sinonimo",
           score_match: 0.87,
           texto_canonico: "Comissão sobre Vendas",
@@ -284,7 +284,7 @@ describe("classifyHolerite — Sprint 3c metadados pra UI", () => {
     });
     expect(r.linhas[0].origem).toBe("ontologia");
     expect(r.linhas[0].classificacao_ontologia).toEqual({
-      categoria_ontologia: "COMISSAO_PRODUTOS",
+      categoria_ontologia: "COMISSOES_PRODUTOS",
       metodo_match: "sinonimo",
       score_match: 0.87,
       texto_canonico: "Comissão sobre Vendas",

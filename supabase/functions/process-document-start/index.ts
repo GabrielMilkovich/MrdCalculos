@@ -15,7 +15,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extrairGeometrico } from "../_shared/extrator-geometrico.ts";
-import { escolherEMapear } from "../_shared/mappers/dispatcher.ts";
+import { escolherEMapear, prewarmOntologiaIfNeeded } from "../_shared/mappers/dispatcher.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -104,6 +104,10 @@ async function tentarCaminhoV6(
     // Sprint 3: escolherEMapear encapsula merge de PDFs híbridos de cartão
     // de ponto. Discriminated union preserva distinção telemétrica entre
     // "nenhum mapper aplica" e "mapper aplicou mas falhou em mapear()".
+    //
+    // Sprint 3c (2026-05-23): prewarm da ontologia V2 antes do mapper sync.
+    // No-op se mapper escolhido não declara `requiresOntologiaPrewarm`.
+    await prewarmOntologiaIfNeeded(docTab, supabase);
     const dispatch = escolherEMapear(docTab);
     if (dispatch.kind === "no_mapper_matched") {
       console.log(

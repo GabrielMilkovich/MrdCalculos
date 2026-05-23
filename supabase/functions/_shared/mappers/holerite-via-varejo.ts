@@ -23,7 +23,7 @@
 import type { CelulaTabular, DocumentoTabular, TabelaDetectada } from '../documento-tabular.ts';
 import type { Mapper, DeteccaoMapper } from './index.ts';
 import type { HoleriteResultDominio, RubricaDominio } from '../tipos-dominio.ts';
-import { enriquecerComClassificacao } from '../ontologia-rubricas/enriquecer.ts';
+import { enriquecerComClassificacaoV2 } from '../holerite-mapper-v2/v1-compat.ts';
 
 const PARSER_VERSION = 'holerite-via-varejo-mapper-v7-2026-05-20';
 
@@ -204,6 +204,9 @@ export const mapperHoleriteViaVarejo: Mapper<HoleriteResultDominio> = {
   slug: 'holerite_via_varejo_v1',
   nome: 'Holerite Via Varejo / Casa Bahia',
   tipoDocumento: 'holerite',
+  // Usa ontologia V2 — pipeline pré-carrega cache de aliases aprendidos
+  // antes de invocar `mapear()`.
+  requiresOntologiaPrewarm: true,
 
   detectar(doc: DocumentoTabular): DeteccaoMapper {
     const t = doc.textoCompleto;
@@ -314,7 +317,7 @@ export const mapperHoleriteViaVarejo: Mapper<HoleriteResultDominio> = {
     }
 
     const { rubricas_classificadas, resumo_classificacao } =
-      enriquecerComClassificacao(rubricas);
+      enriquecerComClassificacaoV2(rubricas);
 
     return {
       competencia,

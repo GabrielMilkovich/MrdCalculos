@@ -424,7 +424,7 @@ serve(async (req) => {
     // mensurável hoje). Refinamento pertence a backlog separado.
     let v6: V6Tentativa | null = null;
     if (document.mime_type === "application/pdf") {
-      v6 = await tentarV6(document, fileUrl);
+      v6 = await tentarV6(document, fileUrl, supabase);
       console.log(
         `[ocr-document] doc ${document_id}: V6 outcome=${v6.outcome}` +
           (v6.mapper ? ` mapper=${v6.mapper}` : "") +

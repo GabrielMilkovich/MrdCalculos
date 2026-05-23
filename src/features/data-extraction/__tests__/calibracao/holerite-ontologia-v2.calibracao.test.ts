@@ -74,10 +74,11 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { classifyHolerite } from '../../export/per-doc/holerite-classify';
-import {
-  ONTOLOGIA,
-  type CategoriaRubrica,
-} from '../../../../../supabase/functions/_shared/ontologia-rubricas/index';
+import seedV2 from '../../../../../supabase/functions/_shared/holerite-mapper-v2/ontologia-v2.json';
+import type {
+  CategoriaOntologiaRubricaV2,
+  OntologiaSeedV2,
+} from '../../parsers/holerite/ontologia-rubricas-v2';
 import type {
   DocumentoTabular,
 } from '../../../../../supabase/functions/_shared/documento-tabular';
@@ -88,29 +89,37 @@ import type {
 } from '../../parsers/holerite/types';
 import type { CategoriaSlug } from '../../types';
 
-// ─── Espelho do mapeamento ontologia→slug (Sprint 3c Fase 1) ───────────
-// Repetido aqui APENAS pra computar "qual slug eu esperaria dado o
-// resultado do lookup literal". Sincronizado manualmente com
-// ONTOLOGIA_PARA_CATEGORIA_SLUG do classifier.
+type CategoriaRubrica = CategoriaOntologiaRubricaV2;
+
+// ─── Espelho do mapeamento ontologia V2→slug PJeCalc ──────────────────
+// Sincronizado manualmente com ONTOLOGIA_V2_PARA_CATEGORIA_SLUG do
+// classifier (holerite-classify.ts). Se desincronizar, o teste pega
+// porque "esperado" vai divergir do "observado" sistematicamente.
 const SLUG_ESPERADO: Record<CategoriaRubrica, CategoriaSlug | null> = {
   MINIMO_GARANTIDO: 'minimo_garantido',
-  COMISSAO_PRODUTOS: 'comissao',
-  COMISSAO_SERVICOS: 'comissao',
-  PREMIO: 'premiacao',
-  DSR_PAGO: 'dsr',
-  DESCONSIDERAR: null,
+  SALARIO_SUBSTITUICAO: 'minimo_garantido',
+  COMISSOES_PRODUTOS: 'comissao',
+  COMISSOES_SERVICOS: 'comissao',
+  PREMIOS: 'premiacao',
+  DSR_S_COMISSOES: 'dsr',
+  DESCONSIDERADAS: null,
   NAO_CLASSIFICADO: null,
 };
 
 // ─── Lookup literal independente (anti-tautologia) ─────────────────────
+// V2 não tem texto_canonico vs sinonimos separados — todas as variações
+// vivem em `aliases[]` (já normalizadas pelo gerador). Pra preservar a
+// "normalização mínima" do V1 (trim + toLowerCase, sem NFD/strip),
+// re-indexo os aliases V2 + alias_original aplicando só normLiteral.
 const normLiteral = (s: string): string => s.trim().toLowerCase();
 
+const SEED = seedV2 as OntologiaSeedV2;
 const CATALOGO_LITERAL = new Map<string, CategoriaRubrica>();
-for (const r of ONTOLOGIA) {
-  CATALOGO_LITERAL.set(normLiteral(r.texto_canonico), r.categoria);
-  for (const s of r.sinonimos) {
-    if (!CATALOGO_LITERAL.has(normLiteral(s))) {
-      CATALOGO_LITERAL.set(normLiteral(s), r.categoria);
+for (const r of SEED.rubricas) {
+  CATALOGO_LITERAL.set(normLiteral(r.alias_original), r.categoria);
+  for (const a of r.aliases) {
+    if (!CATALOGO_LITERAL.has(normLiteral(a))) {
+      CATALOGO_LITERAL.set(normLiteral(a), r.categoria);
     }
   }
 }

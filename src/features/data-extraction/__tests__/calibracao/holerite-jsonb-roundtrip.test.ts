@@ -94,8 +94,8 @@ describe('Sprint 3c Fase 4.1 — JSONB round-trip (gap calibração)', () => {
       rubricas: [rub1, rub2, rub3],
       rubricas_classificadas: [
         baseClassificada(rub1, 'MINIMO_GARANTIDO'),
-        baseClassificada(rub2, 'COMISSAO_PRODUTOS'),
-        baseClassificada(rub3, 'DSR_PAGO'),
+        baseClassificada(rub2, 'COMISSOES_PRODUTOS'),
+        baseClassificada(rub3, 'DSR_S_COMISSOES'),
       ],
     };
 
@@ -106,8 +106,8 @@ describe('Sprint 3c Fase 4.1 — JSONB round-trip (gap calibração)', () => {
     expect(Array.isArray(extraido)).toBe(true);
     expect(extraido!.length).toBe(3);
     expect(extraido![0].categoria).toBe('MINIMO_GARANTIDO');
-    expect(extraido![1].categoria).toBe('COMISSAO_PRODUTOS');
-    expect(extraido![2].categoria).toBe('DSR_PAGO');
+    expect(extraido![1].categoria).toBe('COMISSOES_PRODUTOS');
+    expect(extraido![2].categoria).toBe('DSR_S_COMISSOES');
     // E o score_match (número) sobreviveu sem perda
     expect(extraido![0].score_match).toBe(1.0);
   });
@@ -179,12 +179,12 @@ describe('Sprint 3c Fase 4.1 — JSONB round-trip (gap calibração)', () => {
           score_match: 0.95,
           texto_canonico: 'Mínimo Garantido',
         }),
-        baseClassificada(rub2, 'COMISSAO_PRODUTOS', {
+        baseClassificada(rub2, 'COMISSOES_PRODUTOS', {
           metodo_match: 'fuzzy',
           score_match: 0.87,
           divergencia_juridica: true,
         }),
-        baseClassificada(rub3, 'DESCONSIDERAR'),
+        baseClassificada(rub3, 'DESCONSIDERADAS'),
       ],
     };
 
@@ -224,7 +224,7 @@ describe('Sprint 3c Fase 4.1 — JSONB round-trip (gap calibração)', () => {
     );
 
     // rub3 — INSS é desconto (camada 1.5 do classifier vence ontologia)
-    // mesmo ontologia dizendo DESCONSIDERAR, defesa-em-profundidade
+    // mesmo ontologia dizendo DESCONSIDERADAS, defesa-em-profundidade
     // mantém origem='desconto', não 'ontologia_desconsiderar'.
     expect(preview.linhas[2].origem).toBe('desconto');
     expect(preview.linhas[2].incluir).toBe(false);

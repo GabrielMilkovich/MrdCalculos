@@ -13,9 +13,11 @@
  * (holerite, ferias, etc.) o comportamento é idêntico ao antigo.
  */
 
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import type { DocumentoTabular } from '../documento-tabular.ts';
 import type { Mapper, TipoDocumentoMapper } from './index.ts';
 import type { ParseCartaoPontoResultDominio } from '../tipos-dominio.ts';
+import { prewarmAliasCacheIfStale } from '../holerite-mapper-v2/sync-mode.ts';
 
 import { mapperCartaoViaVarejo } from './cartao-ponto-via-varejo.ts';
 import { mapperCartaoViaVarejoMinha } from './cartao-ponto-via-varejo-minha.ts';
@@ -256,4 +258,27 @@ export function escolherEMapear(doc: DocumentoTabular): EscolherEMapearOutcome {
 
 export function listarMappers(): Mapper<unknown>[] {
   return [...TODOS_MAPPERS];
+}
+
+/**
+ * Pre-warmae o cache de aliases aprendidos da ontologia ANTES de invocar
+ * o mapper sync, quando aplicável. Espelha a decisão declarativa em
+ * `Mapper.requiresOntologiaPrewarm` — não acopla v6-pipeline ao slug do
+ * tipo de documento.
+ *
+ * Chamar imediatamente antes de `escolherEMapear(doc)` nos handlers que
+ * processam documentos. Sem efeito quando nenhum mapper aplica ou quando
+ * o mapper escolhido não declara o flag.
+ *
+ * TTL interno de 5min (vide sync-mode.ts). Worker que rodou prewarm há
+ * <5min reutiliza cache sem re-query.
+ */
+export async function prewarmOntologiaIfNeeded(
+  doc: DocumentoTabular,
+  supabase: SupabaseClient,
+): Promise<void> {
+  const melhor = escolherMapper(doc);
+  if (!melhor) return;
+  if (!melhor.mapper.requiresOntologiaPrewarm) return;
+  await prewarmAliasCacheIfStale(supabase);
 }

@@ -98,7 +98,7 @@ serve(async (req) => {
         .from("juriscalculo-documents")
         .createSignedUrl(doc.storage_path, 1800); // 30min — Mistral OCR pode demorar
       if (signed?.signedUrl) {
-        v6 = await tentarV6(doc, signed.signedUrl);
+        v6 = await tentarV6(doc, signed.signedUrl, supabase);
         console.log(
           `[pipeline] doc ${document_id}: V6 outcome=${v6.outcome}` +
             (v6.mapper ? ` mapper=${v6.mapper}` : "") +

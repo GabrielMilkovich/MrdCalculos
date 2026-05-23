@@ -31,7 +31,7 @@
 import type { DocumentoTabular } from '../documento-tabular.ts';
 import type { Mapper, DeteccaoMapper } from './index.ts';
 import type { HoleriteResultDominio, RubricaDominio } from '../tipos-dominio.ts';
-import { enriquecerComClassificacao } from '../ontologia-rubricas/enriquecer.ts';
+import { enriquecerComClassificacaoV2 } from '../holerite-mapper-v2/v1-compat.ts';
 
 const PARSER_VERSION = 'holerite-generico-mapper-v7-2026-05-20';
 
@@ -211,6 +211,9 @@ export const mapperHoleriteGenerico: Mapper<HoleriteResultDominio> = {
   slug: 'holerite_generico_v1',
   nome: 'Holerite genérico (fallback universal V6)',
   tipoDocumento: 'holerite',
+  // Usa ontologia V2 — pipeline pré-carrega cache de aliases aprendidos
+  // antes de invocar `mapear()`.
+  requiresOntologiaPrewarm: true,
 
   detectar(doc: DocumentoTabular): DeteccaoMapper {
     const t = doc.textoCompleto;
@@ -276,7 +279,7 @@ export const mapperHoleriteGenerico: Mapper<HoleriteResultDominio> = {
     }
 
     const { rubricas_classificadas, resumo_classificacao } =
-      enriquecerComClassificacao(rubricas);
+      enriquecerComClassificacaoV2(rubricas);
 
     return {
       competencia,

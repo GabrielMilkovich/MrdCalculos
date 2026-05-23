@@ -65,7 +65,13 @@ CREATE TABLE rubrica_aliases (
   )),
   CONSTRAINT chk_source_valido CHECK (source IN (
     'seed_v2', 'planilha_v1', 'user_classification'
-  ))
+  )),
+  -- Evita string vazia ou whitespace-only no banco. Operador que apagar
+  -- observação via grid grava NULL (handler normaliza). Mantém comparação
+  -- de igualdade direta sem ?? '' shim.
+  CONSTRAINT chk_observacao_nao_vazia CHECK (
+    observacao_juridica IS NULL OR length(trim(observacao_juridica)) > 0
+  )
 );
 
 CREATE INDEX idx_rubrica_aliases_lookup
@@ -115,7 +121,10 @@ CREATE TABLE rubrica_aliases_tentativa (
     'MINIMO_GARANTIDO','SALARIO_SUBSTITUICAO','COMISSOES_PRODUTOS',
     'COMISSOES_SERVICOS','DSR_S_COMISSOES','PREMIOS','DESCONSIDERADAS',
     'NAO_CLASSIFICADO'
-  ))
+  )),
+  CONSTRAINT chk_tentativa_observacao_nao_vazia CHECK (
+    observacao_juridica IS NULL OR length(trim(observacao_juridica)) > 0
+  )
 );
 
 CREATE INDEX idx_tentativa_case ON rubrica_aliases_tentativa(case_id);

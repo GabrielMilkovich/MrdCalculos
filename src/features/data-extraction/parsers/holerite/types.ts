@@ -20,19 +20,19 @@ export type RubricaParseada = {
 };
 
 /**
- * Categoria atribuída pela ontologia de rubricas (Sprint 2, 2026-05-21).
- * Espelho de `CategoriaRubricaDominio` em
- * `supabase/functions/_shared/tipos-dominio.ts` — mantido sincronizado
- * manualmente até publicarmos os tipos compartilhados como pacote.
+ * Categoria atribuída pela ontologia V2 (Sprint 3c, 2026-05-23).
+ *
+ * Re-export do tipo canônico em `./ontologia-rubricas-v2.ts`. Mantido como
+ * alias `CategoriaOntologiaRubrica` (sem sufixo V2) por compatibilidade
+ * com consumidores existentes (UI banner, holerite-classify, testes).
+ *
+ * Para ler JSONB com slugs V1 legados (`COMISSAO_PRODUTOS`, `PREMIO`,
+ * `DSR_PAGO`, `DESCONSIDERAR`), aplicar `CATEGORIA_V1_TO_V2` do mesmo módulo
+ * antes de usar. Migration #2 (`20260524000001_*`) elimina os legados.
  */
-export type CategoriaOntologiaRubrica =
-  | 'MINIMO_GARANTIDO'
-  | 'COMISSAO_PRODUTOS'
-  | 'COMISSAO_SERVICOS'
-  | 'PREMIO'
-  | 'DSR_PAGO'
-  | 'DESCONSIDERAR'
-  | 'NAO_CLASSIFICADO';
+export type {
+  CategoriaOntologiaRubricaV2 as CategoriaOntologiaRubrica,
+} from './ontologia-rubricas-v2';
 
 export type MetodoMatchOntologia =
   | 'exato'

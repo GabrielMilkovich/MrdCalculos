@@ -23,8 +23,9 @@
 //     Qualquer alteração de comportamento deve ser feita aqui (centralizada)
 //     e propagada por testes em produção via re-upload de PDFs.
 
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { extrairGeometrico } from "./extrator-geometrico.ts";
-import { escolherEMapear } from "./mappers/dispatcher.ts";
+import { escolherEMapear, prewarmOntologiaIfNeeded } from "./mappers/dispatcher.ts";
 import { sanitizePII } from "./sanitize-pii.ts";
 
 // Possíveis transições do caminho V6. Vira `metadata.v6_outcome`. Cada
@@ -93,6 +94,7 @@ export async function tentarV6(
   // deno-lint-ignore no-explicit-any
   doc: any,
   signedUrl: string,
+  supabase: SupabaseClient,
 ): Promise<V6Tentativa> {
   try {
     if (doc.mime_type !== "application/pdf") {
@@ -129,6 +131,11 @@ export async function tentarV6(
     // tipos, comportamento idêntico a escolherMapper + mapear.
     // Discriminated union preserva distinção entre no_mapper_matched
     // e mapper_returned_null pra telemetria.
+    //
+    // Sprint 3c (2026-05-23): prewarm da ontologia V2 antes do mapper sync.
+    // No-op quando mapper escolhido não declara `requiresOntologiaPrewarm`
+    // (atualmente, só mappers de holerite). TTL 5min interno.
+    await prewarmOntologiaIfNeeded(docTab, supabase);
     const dispatch = escolherEMapear(docTab);
     if (dispatch.kind === "no_mapper_matched") {
       return {

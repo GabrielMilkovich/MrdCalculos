@@ -178,18 +178,23 @@ export interface HoleriteResultDominio {
 }
 
 /**
- * Categoria atribuída pela ontologia. Espelho de
- * `CategoriaRubrica` em `_shared/ontologia-rubricas/index.ts`.
- * Re-declarado aqui pra evitar dependência circular indireta com
- * o ponto de entrada da ontologia.
+ * Categoria atribuída pela ontologia V2 (Sprint 3, 2026-05-23).
+ *
+ * IMPORTANTE: este tipo descreve o slug ESCRITO por mapper novo no JSONB
+ * `documents.parsed.rubricas_classificadas[].categoria`. JSONB legado tem
+ * slugs V1 (`COMISSAO_PRODUTOS`, `PREMIO`, `DSR_PAGO`, `DESCONSIDERAR`)
+ * — leitor que aceita ambos deve aplicar `CATEGORIA_V1_TO_V2` do
+ * `ontologia-rubricas-v2.ts`. Migration #2 (`20260524000001_*`) faz o
+ * hard-cut em prod.
  */
 export type CategoriaRubricaDominio =
   | 'MINIMO_GARANTIDO'
-  | 'COMISSAO_PRODUTOS'
-  | 'COMISSAO_SERVICOS'
-  | 'PREMIO'
-  | 'DSR_PAGO'
-  | 'DESCONSIDERAR'
+  | 'SALARIO_SUBSTITUICAO'
+  | 'COMISSOES_PRODUTOS'
+  | 'COMISSOES_SERVICOS'
+  | 'DSR_S_COMISSOES'
+  | 'PREMIOS'
+  | 'DESCONSIDERADAS'
   | 'NAO_CLASSIFICADO';
 
 export type MetodoMatchDominio =

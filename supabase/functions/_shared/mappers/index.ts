@@ -38,6 +38,14 @@ export interface Mapper<TSaida> {
   /** Tipo de domínio que este mapper produz. */
   tipoDocumento: TipoDocumentoMapper;
   /**
+   * Quando true, o pipeline pré-carrega o cache de aliases aprendidos
+   * (`rubrica_aliases_ativos`) antes de invocar `mapear()`. Mappers que
+   * usam ontologia de rubricas declaram `true`. Sem o flag (default),
+   * mapper roda só com seed estático. Mecanismo declarativo evita
+   * acoplar v6-pipeline ao slug do tipo de documento.
+   */
+  requiresOntologiaPrewarm?: boolean;
+  /**
    * Detecta se o mapper se aplica ao documento.
    * Score combinado de marcadores estruturais (razão social, CNPJ,
    * cabeçalhos da tabela, etc.).
