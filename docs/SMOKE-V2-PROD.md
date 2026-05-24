@@ -119,7 +119,9 @@ HTTP 400
 ```
 Confirma que function alcançou parser de body e validação responde.
 
-### Smoke 3 — payload válido (esperado 200, **o smoke principal**)
+### Smoke 3 — payload válido (esperado 200)
+
+**IMPORTANTE:** rode esse curl APÓS eu ter executado o passo 4.2 (insert da tentativa de teste). Sem isso, retorna `{"promovidos":0,"conflitos":[]}` (que prova só ~60% dos invariantes — veja Passo 4 abaixo).
 
 ```bash
 curl -sS -w "\nHTTP %{http_code}\n" \
@@ -130,16 +132,19 @@ curl -sS -w "\nHTTP %{http_code}\n" \
   https://xhvlhrgfoeahgofhljbs.supabase.co/functions/v1/holerite-classify-confirm
 ```
 
-Esperado:
+Esperado (com tentativa de teste pré-inserida via 4.2):
 ```
-{"promovidos":0,"conflitos":[]}
+{"promovidos":1,"conflitos":[]}
 HTTP 200
 ```
 
-`promovidos: 0` porque o case não tem tentativas registradas em `rubrica_aliases_tentativa` (banner nunca foi exercitado nesse case). O fato de **chegar a `200` com esse shape** prova que:
+Esse shape prova:
 - Auth funcionou (JWT válido aceito pelo gateway)
 - Function carregou (deploy ok)
-- Query no schema novo funcionou (`SELECT * FROM rubrica_aliases_tentativa WHERE case_id = $1`)
+- SELECT em `rubrica_aliases_tentativa` funcionou (schema novo OK)
+- UPSERT em `rubrica_aliases` funcionou (RLS via service_role bypass, CHECK constraints aceitaram payload, `criado_por` populado)
+- INSERT em `rubrica_aliases_history` funcionou (audit trail)
+- DELETE da tentativa pós-promoção funcionou (cleanup)
 - Retorno serializou corretamente
 
 ---
@@ -161,39 +166,142 @@ HTTP 200
 
 ---
 
-## Passo 4 — SQL pós-smoke (eu rodo via MCP quando você reportar)
+## Passo 4 — Smoke end-to-end (fluxo completo via SQL + curl)
 
-Independente do resultado, vou rodar (não precisa fazer nada):
+Smoke 1+2+3 com case vazio prova ~60% dos invariantes:
+- ✅ Auth funciona (JWT aceito)
+- ✅ CORS funciona
+- ✅ Function alcançou tabela `rubrica_aliases_tentativa` sem erro de schema
+- ❌ NÃO prova INSERT no upsert da promoção
+- ❌ NÃO prova `conflict_rejected`
+- ❌ NÃO prova `criado_por` populado corretamente
+- ❌ NÃO prova audit trail
+- ❌ NÃO prova cleanup da tentativa pós-promoção
+
+Smoke 4 adiciona ~5min meus (SQL via MCP) e cobre ~95% dos invariantes.
+
+### Sequência
+
+**Antes do curl (eu rodo via MCP — você só me passa o email do user teste):**
 
 ```sql
--- Confirma que função NÃO criou lixo (case sem tentativas → nenhum insert em history)
-SELECT count(*) FROM rubrica_aliases_history
-WHERE case_id = '<CASE_ID>' AND created_at > now() - interval '5 minutes';
--- Esperado: 0
+-- 4.1 — Confirma case_id existente do user teste
+SELECT id FROM cases
+WHERE criado_por = (SELECT id FROM auth.users WHERE email = '<EMAIL_TESTE>')
+LIMIT 1;
+-- Anota o case_id.
 
--- Confirma que case_id existe e pertence ao user que loggou
-SELECT id, criado_por FROM cases WHERE id = '<CASE_ID>';
--- Esperado: 1 row com criado_por batendo no auth.uid() do JWT
+-- 4.2 — Insere tentativa de teste (simula classificação via banner)
+INSERT INTO rubrica_aliases_tentativa (
+  case_id, alias_original, normalized_key, categoria, tipo_pjecalc,
+  base_dsr, base_13, base_ferias, incluido, criado_por
+) VALUES (
+  '<CASE_ID>',
+  'SMOKE TEST RUBRICA',
+  'smoke test rubrica',
+  'DESCONSIDERADAS',
+  'DESCONSIDERAR',
+  false, false, false, false,
+  (SELECT id FROM auth.users WHERE email = '<EMAIL_TESTE>')
+);
+-- Esperado: INSERT 0 1
 ```
+
+**Curl smoke 3 atualizado (você roda):**
+
+```bash
+curl -sS -w "\nHTTP %{http_code}\n" \
+  -X POST \
+  -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"case_id":"'"$CASE_ID"'"}' \
+  https://xhvlhrgfoeahgofhljbs.supabase.co/functions/v1/holerite-classify-confirm
+```
+
+Esperado **agora** (com 1 tentativa pra promover):
+```
+{"promovidos":1,"conflitos":[]}
+HTTP 200
+```
+
+**Pós-curl (eu rodo via MCP):**
+
+```sql
+-- 4.3 — Confirma promoção: tentativa virou linha canônica em rubrica_aliases
+SELECT alias_original, normalized_key, categoria, source, reviewed,
+       criado_por, confidence
+FROM rubrica_aliases
+WHERE normalized_key = 'smoke test rubrica';
+-- Esperado: 1 row, source='user_classification', reviewed=true,
+--           criado_por = user_id do JWT, confidence=0.80
+
+-- 4.4 — Confirma audit trail: action='promoted_from_tentativa'
+SELECT action, payload->>'alias_original' AS alias, actor, case_id
+FROM rubrica_aliases_history
+WHERE payload->>'normalized_key' = 'smoke test rubrica'
+ORDER BY created_at DESC LIMIT 1;
+-- Esperado: 1 row, action='promoted_from_tentativa', actor = user_id,
+--           case_id = CASE_ID
+
+-- 4.5 — Confirma cleanup: tentativa foi apagada pós-promoção
+SELECT count(*) FROM rubrica_aliases_tentativa
+WHERE normalized_key = 'smoke test rubrica';
+-- Esperado: 0
+```
+
+**Cleanup obrigatório (eu rodo via MCP — não deixa lixo em prod):**
+
+```sql
+-- 4.6 — Ordem importa: history primeiro (FK), depois canônico
+DELETE FROM rubrica_aliases_history
+WHERE payload->>'normalized_key' = 'smoke test rubrica';
+
+DELETE FROM rubrica_aliases
+WHERE normalized_key = 'smoke test rubrica';
+
+-- Confirma cleanup
+SELECT
+  (SELECT count(*) FROM rubrica_aliases WHERE normalized_key = 'smoke test rubrica') AS canonico_remanescente,
+  (SELECT count(*) FROM rubrica_aliases_history WHERE payload->>'normalized_key' = 'smoke test rubrica') AS history_remanescente,
+  (SELECT count(*) FROM rubrica_aliases_tentativa WHERE normalized_key = 'smoke test rubrica') AS tentativa_remanescente;
+-- Esperado: 0, 0, 0
+```
+
+### Decisão ajustada
+
+| Cenário | Significado | Ação |
+|---|---|---|
+| Smoke 1, 2, 3, 4 verdes | V2 funciona end-to-end | Autorizo merge |
+| Smoke 1, 2, 3 verdes + 4 vermelho (200 mas `promovidos`≠1) | Bug no UPSERT/handler de promoção | PARA, investiga |
+| Smoke 1, 2, 3 verdes + 4 vermelho (500 no curl com tentativa real) | Bug no path de promoção que case vazio não exercitava | PARA, investiga |
+| Smoke 1, 2 ou 3 vermelho | Bloqueador estrutural | PARA, investiga (categoria 3) |
 
 ---
 
-## Como reportar
+## Como reportar / fluxo coordenado (~30min)
+
+| Etapa | Quem | Tempo |
+|---|---|---|
+| Criar usuário teste em prod (Dashboard) + me passar email | você | 10min |
+| Rodar 4.1 + 4.2 (case_id + insert tentativa) via MCP | eu | 5min |
+| Gerar JWT via script Node local | você | 5min |
+| Rodar 3 curls (smoke 1, 2, 3-com-tentativa) e colar output | você | 2min |
+| Rodar 4.3, 4.4, 4.5 (verificadores) + 4.6 (cleanup) via MCP | eu | 5min |
+| Confirmar verde geral → "merge ok" | você | 1min |
 
 Cola aqui:
-1. Output do Smoke 1 (deve ser 401)
-2. Output do Smoke 2 (deve ser 400)
-3. Output do Smoke 3 (deve ser 200 — é o que importa)
-4. Se quiser, valor de `$CASE_ID` pra eu rodar SQL pós-smoke
+1. Output do Smoke 1 (esperado 401)
+2. Output do Smoke 2 (esperado 400)
+3. Output do Smoke 3 (esperado 200 com `promovidos:1` — porque eu inseri tentativa em 4.2)
 
-Se Smoke 3 verde, **autorizo merge** = você manda "merge ok" e eu executo:
+Se Smoke 1+2+3 verdes E 4.3+4.4+4.5 verdes → você manda "merge ok" e eu executo:
 ```bash
 git checkout main
 git merge --ff-only claude/nice-goldberg-o6mzR
 git push origin main
 ```
 
-Se Smoke 3 vermelho, **paro pra investigar** — não merge antes.
+Se qualquer smoke vermelho → **paro pra investigar, não merge.**
 
 ---
 
