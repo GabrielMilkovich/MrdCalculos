@@ -69,7 +69,7 @@ const CATEGORIA_RULES: Record<
 interface DocRow {
   id: string;
   case_id: string | null;
-  criado_por: string | null;
+  owner_user_id: string | null;
   metadata: Record<string, unknown> | null;
 }
 
@@ -82,7 +82,7 @@ async function main() {
   // Lê todos documents com a chave legacy populada
   const { data: docs, error: errDocs } = await supabase
     .from('documents')
-    .select('id, case_id, criado_por, metadata')
+    .select('id, case_id, owner_user_id, metadata')
     .not('metadata->classificacoes_manuais_holerite', 'is', null);
 
   if (errDocs) {
@@ -105,8 +105,8 @@ async function main() {
       skipped.push({ doc_id: doc.id, reason: 'sem case_id' });
       continue;
     }
-    if (!doc.criado_por) {
-      skipped.push({ doc_id: doc.id, reason: 'sem criado_por' });
+    if (!doc.owner_user_id) {
+      skipped.push({ doc_id: doc.id, reason: 'sem owner_user_id' });
       continue;
     }
     const meta = doc.metadata as Record<string, unknown> | null;
@@ -136,7 +136,7 @@ async function main() {
         base_13: regras.base_13,
         base_ferias: regras.base_ferias,
         incluido: regras.incluido,
-        criado_por: doc.criado_por,
+        criado_por: doc.owner_user_id,  // tabela documents usa owner_user_id; rubrica_aliases_tentativa.criado_por
         updated_at: new Date().toISOString(),
       };
 
