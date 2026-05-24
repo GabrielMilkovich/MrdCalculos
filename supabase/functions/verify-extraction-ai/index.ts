@@ -39,7 +39,8 @@
 // =====================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   type IAResponseParsed,
   parseAnthropicToolUse,
@@ -76,6 +77,63 @@ const SCORE_MAX = 85;
 const MODEL = "claude-sonnet-4-6";
 // API version stable (mesmo header usado pelo SDK oficial).
 const ANTHROPIC_VERSION = "2023-06-01";
+
+// PDF direto: quando o documento original está disponível no Storage e tem
+// ≤ PDF_MAX_PAGES páginas, enviamos o PDF como content block `type: document`
+// pra Claude ler o layout visual real em vez de OCR intermediário. Melhora
+// precisão em tabelas com colunas alinhadas (holerites ADP Via Varejo).
+// Documentos grandes (ex: ROSICLEIA 73 páginas) caem no fallback OCR texto.
+const PDF_MAX_PAGES = 20;
+const PDF_MAX_BYTES = 30 * 1024 * 1024; // 30MB safety (Anthropic limit ~32MB base64)
+const PDF_SIGNED_URL_EXPIRY_SECS = 300; // 5 min
+
+/**
+ * Baixa PDF do Supabase Storage e converte pra base64.
+ * Retorna null se qualquer step falhar (fallback pro OCR texto).
+ */
+async function baixarPdfBase64(
+  supabase: SupabaseClient,
+  storagePath: string,
+): Promise<string | null> {
+  try {
+    const buckets = ["juriscalculo-documents", "documents"];
+    let signedUrl: string | null = null;
+    for (const bucket of buckets) {
+      const { data } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(storagePath, PDF_SIGNED_URL_EXPIRY_SECS);
+      if (data?.signedUrl) {
+        signedUrl = data.signedUrl;
+        break;
+      }
+    }
+    if (!signedUrl) {
+      console.warn("[verify-ai] PDF signed URL não gerada — fallback OCR");
+      return null;
+    }
+
+    const resp = await fetch(signedUrl);
+    if (!resp.ok) {
+      console.warn(
+        `[verify-ai] PDF download falhou (${resp.status}) — fallback OCR`,
+      );
+      return null;
+    }
+
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    if (bytes.length > PDF_MAX_BYTES) {
+      console.warn(
+        `[verify-ai] PDF muito grande (${(bytes.length / 1024 / 1024).toFixed(1)}MB) — fallback OCR`,
+      );
+      return null;
+    }
+
+    return base64Encode(bytes);
+  } catch (err) {
+    console.warn("[verify-ai] erro ao baixar PDF:", err);
+    return null;
+  }
+}
 
 type Builder = "holerite" | "cartao_ponto" | "ferias" | "faltas" | "ctps";
 const BUILDERS_VALIDOS: Builder[] = [
@@ -397,6 +455,7 @@ async function chamarAnthropic(
     observacao: string;
     data: string;
   }>,
+  pdfBase64?: string | null,
 ): Promise<{ raw: IAResponseParsed; durationMs: number; status: number }> {
   let ocrTrimmed: string;
   let parsedString: string;
@@ -437,9 +496,22 @@ async function chamarAnthropic(
   }
 
   // Prompt em XML tags — Claude responde melhor a estrutura explícita.
-  const userPrompt = `<documento>
+  // Quando PDF disponível, instrui Claude a ler o documento original.
+  const sourceDesc = pdfBase64
+    ? "Você tem acesso ao PDF original do documento. Leia diretamente o " +
+      "conteúdo visual — tabelas, colunas, valores. Não dependa do OCR " +
+      "texto abaixo (que serve só como referência secundária e pode conter " +
+      "erros de extração). Todo valor sugerido DEVE ser visível no PDF."
+    : "Verifique e sugira ajustes com base no OCR texto abaixo.";
+
+  const userPromptText = `<documento>
   <tipo>${builder}</tipo>
-  <ocr_original descricao="focado em trechos próximos às linhas marcadas REVISAR_OCR pelo parser; pode estar truncado">
+  <fonte_primaria>${pdfBase64 ? "PDF original (anexo)" : "OCR texto (abaixo)"}</fonte_primaria>
+  <ocr_original descricao="${
+    pdfBase64
+      ? "referência secundária — PDF é a fonte primária"
+      : "focado em trechos próximos às linhas marcadas REVISAR_OCR pelo parser; pode estar truncado"
+  }">
 ${ocrTrimmed}
   </ocr_original>
   <estrutura_extraida descricao="parsed JSON do parser determinístico; pode estar truncado">
@@ -448,26 +520,58 @@ ${parsedString}
 </documento>
 
 <instrucoes>
-1. Verifique e sugira ajustes APENAS para campos onde tem CERTEZA, com base no OCR acima.
+${sourceDesc}
+
+1. Verifique e sugira ajustes APENAS para campos onde tem CERTEZA, com base ${
+    pdfBase64 ? "no PDF original" : "no OCR acima"
+  }.
 2. Pra REMOVER uma apuração inteira (ex: vazamento de cabeçalho/admissão), retorne field="apuracoes[N].data" com suggested=null e reason explicando.
-3. Todo valor sugerido (que não seja null) DEVE estar LITERALMENTE no OCR.
+3. Todo valor sugerido (que não seja null) DEVE estar LITERALMENTE ${
+    pdfBase64 ? "visível no PDF" : "no OCR"
+  }.
 4. Se você está chutando por falta de evidência, use ai_confidence baixo (<30) e prefira NÃO sugerir.
 
 Chame a tool emitir_revisao com sua análise.
 </instrucoes>`;
 
+  // Content blocks: quando PDF disponível, envia como `type: document`
+  // seguido do prompt texto. Claude processa o PDF nativamente — vê layout
+  // visual real, tabelas com colunas alinhadas, valores sem noise de OCR.
+  const userContent: Array<Record<string, unknown>> = [];
+  if (pdfBase64) {
+    userContent.push({
+      type: "document",
+      source: {
+        type: "base64",
+        media_type: "application/pdf",
+        data: pdfBase64,
+      },
+      // Cache control: PDF não muda entre lotes do mesmo request.
+      // Anthropic cacheia o processamento do doc se usar prompt caching.
+      cache_control: { type: "ephemeral" },
+    });
+  }
+  userContent.push({ type: "text", text: userPromptText });
+
   const ctrl = new AbortController();
   const t0 = Date.now();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": ANTHROPIC_VERSION,
+    };
+    // Beta header pro PDF support (GA em modelos Claude 4.x mas header
+    // pode ser necessário dependendo da versão da API pinada).
+    if (pdfBase64) {
+      headers["anthropic-beta"] = "pdfs-2024-09-25";
+    }
+
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       signal: ctrl.signal,
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": ANTHROPIC_VERSION,
-      },
+      headers,
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 4096,
@@ -512,7 +616,7 @@ Chame a tool emitir_revisao com sua análise.
         // contra o schema antes de retornar.
         tool_choice: { type: "tool", name: "emitir_revisao" },
         messages: [
-          { role: "user", content: userPrompt },
+          { role: "user", content: userContent },
         ],
       }),
     });
@@ -600,11 +704,13 @@ serve(async (req) => {
       );
     }
 
-    // Ownership check (defense in depth — ai_invoked é audit trail).
+    // Ownership check + metadados pra PDF source.
+    let storagePath: string | null = null;
+    let pageCount: number | null = null;
     if (document_id) {
       const { data: docCheck } = await supabase
         .from("documents")
-        .select("id, cases!inner(criado_por)")
+        .select("id, storage_path, metadata, cases!inner(criado_por)")
         .eq("id", document_id)
         .single();
       if (
@@ -615,6 +721,29 @@ serve(async (req) => {
         return jsonResponse(
           { error: "Documento não encontrado ou sem permissão" },
           403,
+        );
+      }
+      storagePath = (docCheck as { storage_path?: string }).storage_path ?? null;
+      const meta = (docCheck as { metadata?: Record<string, unknown> }).metadata;
+      const rawPageCount = meta?.v6_page_count;
+      pageCount = typeof rawPageCount === "number"
+        ? rawPageCount
+        : typeof rawPageCount === "string"
+        ? parseInt(rawPageCount, 10) || null
+        : null;
+    }
+
+    // PDF direto: quando disponível e dentro do limite de páginas, Claude
+    // lê o layout visual real. Melhora precisão em tabelas com colunas
+    // alinhadas (holerites ADP Via Varejo) vs OCR intermediário.
+    let pdfBase64: string | null = null;
+    const usarPdf = storagePath && pageCount !== null && pageCount <= PDF_MAX_PAGES;
+    if (usarPdf) {
+      pdfBase64 = await baixarPdfBase64(supabase, storagePath!);
+      if (pdfBase64) {
+        console.log(
+          `[verify-ai] PDF source ativo: ${pageCount} páginas, ` +
+            `${(pdfBase64.length * 0.75 / 1024 / 1024).toFixed(1)}MB`,
         );
       }
     }
@@ -641,12 +770,14 @@ serve(async (req) => {
 
     if (apuracoesRevisar.length <= TAMANHO_LOTE) {
       // Documento pequeno: 1 chamada cobre tudo (com ou sem flags).
+      // Se PDF disponível, Claude lê o original em vez do OCR texto.
       const r = await chamarAnthropic(
         ANTHROPIC_API_KEY,
         ocr_text,
         parsed,
         builder,
         apuracoesRevisar.length > 0 ? apuracoesRevisar : undefined,
+        pdfBase64,
       );
       resultadosLotes.push(r);
     } else {
@@ -666,6 +797,10 @@ serve(async (req) => {
         const grupo = lotes.slice(i, i + MAX_CONCORRENTES);
         const resultsGrupo = await Promise.allSettled(
           grupo.map((lote) =>
+            // Batching: cada lote recebe OCR focado nas linhas relevantes.
+            // PDF NÃO é passado aqui — mandaria o doc inteiro N vezes
+            // (custo x N, sem ganho — Claude já viu o doc no single-shot
+            // quando o doc é pequeno o suficiente pra caber em 1 lote).
             chamarAnthropic(ANTHROPIC_API_KEY, ocr_text, parsed, builder, lote),
           ),
         );
@@ -761,6 +896,9 @@ serve(async (req) => {
       ),
       analise_parcial: resultadosLotes.length * TAMANHO_LOTE <
         apuracoesRevisar.length,
+      // Indica se a IA leu o PDF original em vez do OCR texto.
+      // UI pode mostrar badge "Verificado com documento original".
+      pdf_source: !!pdfBase64,
     });
   } catch (err) {
     const isAbort = err instanceof DOMException && err.name === "AbortError";
