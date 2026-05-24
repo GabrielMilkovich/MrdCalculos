@@ -78,3 +78,6 @@ verify_jwt = true  # frontend (ModuloAjusteSentenca)
 
 [functions.extract-rubricas-ai]
 verify_jwt = true  # FASE 2 — LLM extractor (shadow do parser determinístico)
+
+[functions.holerite-classify-confirm]
+verify_jwt = true  # Sprint 3c — frontend (HoleritePreviewDialog "Confirmar e baixar ZIP")

@@ -18,7 +18,19 @@ on:
   push:
     branches:
       - main
-      - 'claude/**'
+      # Branches claude/** REMOVIDAS do gatilho automático em 2026-05-24.
+      # Razão: deploy em prod é ato deliberado, não consequência de push em
+      # branch de desenvolvimento. Reativar exige discussão de equipe.
+      #
+      # Contexto arqueológico: claude/nice-goldberg-o6mzR rodou neste modo
+      # entre 2026-05-23 e 2026-05-24 — Edge Functions Sprint 3c
+      # (holerite-classify-confirm, process-document-{start,mistral},
+      # ocr-document, reprocess-v6) ficaram deployadas em prod antes das
+      # migrations correspondentes (workflow falhou silenciosamente em
+      # `db push` por SUPABASE_DB_PASSWORD ausente/inválido). Commit 4.1
+      # da mesma sprint fechou o gap aplicando migrations via MCP
+      # apply_migration. Pra deploy manual de qualquer branch, usar
+      # workflow_dispatch.
     paths:
       - 'supabase/functions/**'
       - 'supabase/migrations/**'
