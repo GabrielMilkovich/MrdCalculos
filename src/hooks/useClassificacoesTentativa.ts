@@ -1,20 +1,21 @@
 // src/hooks/useClassificacoesTentativa.ts
 //
-// Sprint 3c (2026-05-23) — fecha o loop de aprendizado contínuo V2.
+// Sprint 3c — fecha o loop de aprendizado contínuo V2.
 //
 // CONTRATO:
 //   Hook centraliza estado de classificação manual de rubricas pro
-//   HoleritePreviewDialog + OntologiaClassificacaoBanner. Antes deste
-//   commit, ambos persistiam direto em `documents.metadata.classificacoes_manuais_holerite`
-//   (escopo por-doc). Agora persistem em `rubrica_aliases_tentativa` (escopo
-//   por-case, propaga entre holerites do mesmo case).
+//   HoleritePreviewDialog + OntologiaClassificacaoBanner. Persiste em
+//   `rubrica_aliases_tentativa` (escopo por-case, propaga entre holerites
+//   do mesmo case e — após Confirmar — entre cases via `rubrica_aliases`).
 //
 // FONTES (em ordem de precedência decrescente):
 //   1. `rubrica_aliases_tentativa` (decisões em andamento neste case)
-//   2. `documents.metadata.classificacoes_manuais_holerite` (shim legado,
-//      1 sprint até migration de dados — commit 4)
-//   3. Caller passa estado inicial de `rubricas_classificadas` do JSONB
+//   2. Caller passa estado inicial de `rubricas_classificadas` do JSONB
 //      (seed canônico, vem do mapper edge)
+//
+// Versão pré-4.4 lia também `documents.metadata.classificacoes_manuais_holerite`
+// como shim legacy (escrita do banner pré-V2). Confirmado 0 entries em prod
+// (dry-run em 5fa3a14) e banner novo não cria entries — shim removido.
 //
 // ESCRITA:
 //   setClassificacao(normalized_key, categoria) é OTIMISTA:
@@ -48,7 +49,7 @@ const CATEGORIA_RULES: Record<string, RegrasCategoria> = (
   seedV2 as OntologiaSeedV2
 ).categorias;
 
-export type OrigemClassificacao = 'seed' | 'tentativa' | 'legacy' | 'session';
+export type OrigemClassificacao = 'seed' | 'tentativa' | 'session';
 
 export interface ClassificacaoLocal {
   normalized_key: string;
@@ -71,9 +72,10 @@ export interface SeedInicial {
 
 export interface UseClassificacoesTentativaArgs {
   caseId: string | null | undefined;
-  /** Document atual sendo conferido — usado pra hidratar shim legacy. */
+  /** Document atual sendo conferido — preservado por compat. Antes do 4.4
+   *  era usado pra hidratar shim legacy; agora não é mais lido. */
   documentId?: string | null;
-  /** Seed inicial vindo do JSONB do mapper. Categoria pode estar em V1 (legacy). */
+  /** Seed inicial vindo do JSONB do mapper. Categoria pode estar em V1 — shim aplica. */
   rubricasIniciais: SeedInicial[];
 }
 
@@ -84,7 +86,9 @@ export interface UseClassificacoesTentativaResult {
 }
 
 /**
- * Aplica shim V1→V2 num slug que possa vir do JSONB legado.
+ * Aplica shim V1→V2 num slug que possa vir do JSONB legado de `rubricas_classificadas`
+ * (escrito por mapper edge antes do hard cut da migration #2 — ainda existe defesa
+ * de leitura pra rows pré-migration que algum cliente possa segurar em cache).
  */
 function normalizeCat(c: string): CategoriaOntologiaRubricaV2 {
   return (CATEGORIA_V1_TO_V2[c] ?? c) as CategoriaOntologiaRubricaV2;
@@ -93,7 +97,7 @@ function normalizeCat(c: string): CategoriaOntologiaRubricaV2 {
 export function useClassificacoesTentativa(
   args: UseClassificacoesTentativaArgs,
 ): UseClassificacoesTentativaResult {
-  const { caseId, documentId, rubricasIniciais } = args;
+  const { caseId, rubricasIniciais } = args;
 
   const [classificacoes, setClassificacoes] = useState<Map<string, ClassificacaoLocal>>(
     () => new Map(),
@@ -120,9 +124,8 @@ export function useClassificacoesTentativa(
     };
   }, []);
 
-  // Hidratação inicial: seed (rubricasIniciais) + legacy (documents.metadata)
-  // + tentativa (rubrica_aliases_tentativa). Merge com precedência
-  // tentativa > legacy > seed.
+  // Hidratação inicial: seed (rubricasIniciais) + tentativa (rubrica_aliases_tentativa).
+  // Merge com precedência tentativa > seed.
   useEffect(() => {
     let cancelado = false;
     if (!caseId) {
@@ -146,47 +149,7 @@ export function useClassificacoesTentativa(
         });
       }
 
-      // 2. Legacy shim (documents.metadata.classificacoes_manuais_holerite).
-      // Shape: { [nome_original]: CategoriaV1ouV2 }. Operador classificou no
-      // banner antigo, persistiu por-doc. Mantém precedência maior que seed
-      // mas menor que tentativa. Próximo commit (4) migra → tentativa e
-      // deleta a chave.
-      if (documentId) {
-        const { data: docRow, error: errLegacy } = await supabase
-          .from('documents')
-          .select('metadata')
-          .eq('id', documentId)
-          .maybeSingle();
-        if (!errLegacy && docRow?.metadata) {
-          const meta = docRow.metadata as Record<string, unknown>;
-          const previas = meta.classificacoes_manuais_holerite as
-            | Record<string, string>
-            | undefined;
-          if (previas && typeof previas === 'object') {
-            for (const [nomeOriginal, catRaw] of Object.entries(previas)) {
-              // Acha entry do seed pelo alias_original (chave de match com legacy)
-              const seedEntry = rubricasIniciais.find(
-                (r) => r.alias_original === nomeOriginal,
-              );
-              if (!seedEntry) continue;
-              const atual = mapa.get(seedEntry.normalized_key);
-              mapa.set(seedEntry.normalized_key, {
-                ...(atual ?? {
-                  normalized_key: seedEntry.normalized_key,
-                  alias_original: seedEntry.alias_original,
-                  tipo_pjecalc: seedEntry.tipo_pjecalc as TipoPjeCalc,
-                  saving: false,
-                }),
-                categoria: normalizeCat(catRaw),
-                origem: 'legacy',
-                saving: false,
-              });
-            }
-          }
-        }
-      }
-
-      // 3. Tentativa (precedência maior)
+      // 2. Tentativa (precedência maior)
       const { data: tentativas, error: errTent } = await supabase
         .from('rubrica_aliases_tentativa')
         .select('normalized_key, alias_original, categoria, tipo_pjecalc')
@@ -216,7 +179,7 @@ export function useClassificacoesTentativa(
     return () => {
       cancelado = true;
     };
-  }, [caseId, documentId, rubricasIniciais]);
+  }, [caseId, rubricasIniciais]);
 
   const persistir = useCallback(
     async (entry: ClassificacaoLocal) => {

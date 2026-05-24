@@ -3,11 +3,16 @@
  * Testes do hook useClassificacoesTentativa.
  *
  * Cobertura mínima — caminhos de leitura e escrita mais sensíveis:
- *   - Hidratação aplica precedência tentativa > legacy > seed
+ *   - Hidratação aplica precedência tentativa > seed
  *   - setClassificacao otimista atualiza imediato + saving=true
  *   - Debounce 800ms agrupa edições rápidas
  *   - UPSERT bem-sucedido limpa saving + muda origem pra 'tentativa'
  *   - UPSERT falha mantém valor + dispara toast + saving=false
+ *
+ * Versão pré-4.4 tinha caminho de leitura legacy
+ * (documents.metadata.classificacoes_manuais_holerite). Removido após
+ * confirmar zero entries em prod (dry-run 5fa3a14). Mock de documents
+ * tabela também removido.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
@@ -16,11 +21,6 @@ const upsertMock = vi.fn().mockResolvedValue({ data: null, error: null });
 const tentativaSelectChain = {
   select: vi.fn().mockReturnThis(),
   eq: vi.fn().mockResolvedValue({ data: [], error: null }),
-};
-const documentsSelectChain = {
-  select: vi.fn().mockReturnThis(),
-  eq: vi.fn().mockReturnThis(),
-  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
 };
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
@@ -42,7 +42,13 @@ vi.mock('@/integrations/supabase/client', () => ({
           upsert: upsertMock,
         };
       }
-      return documentsSelectChain;
+      // Hook não consulta outras tabelas pós-4.4. Defesa caso futuro
+      // consumer adicione query nova sem ajustar este mock.
+      return {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
     }),
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -59,8 +65,6 @@ beforeEach(() => {
   upsertMock.mockClear();
   tentativaSelectChain.eq.mockClear();
   tentativaSelectChain.eq.mockResolvedValue({ data: [], error: null });
-  documentsSelectChain.maybeSingle.mockClear();
-  documentsSelectChain.maybeSingle.mockResolvedValue({ data: null, error: null });
   toastErrorMock.mockClear();
   toastSuccessMock.mockClear();
 });

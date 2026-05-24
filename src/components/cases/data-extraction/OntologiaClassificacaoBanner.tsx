@@ -251,7 +251,7 @@ export function OntologiaClassificacaoBanner({
                               </TooltipTrigger>
                               <TooltipContent>Salvando...</TooltipContent>
                             </Tooltip>
-                          ) : entry?.origem === "tentativa" || entry?.origem === "legacy" ? (
+                          ) : entry?.origem === "tentativa" ? (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Undo2
