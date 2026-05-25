@@ -90,8 +90,10 @@ import {
   type LinhaClassificada,
 } from "@/features/data-extraction";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
+import { DetalhesTecnicos } from "./DetalhesTecnicos";
 import { OntologiaClassificacaoBanner } from "./OntologiaClassificacaoBanner";
 import { SugerirBucketIA } from "./SugerirBucketIA";
+import { traduzir } from "./glossario-ux";
 import {
   type AIInteractionResult,
   type AISuggestion,
@@ -176,6 +178,7 @@ export function HoleritePreviewDialog({
   );
   const [downloading, setDownloading] = useState(false);
   const [search, setSearch] = useState("");
+  const [mostrarApenasRelevantes, setMostrarApenasRelevantes] = useState(true);
 
   // Deriva caseId do documentId. Necessário pra invocar holerite-classify-confirm
   // antes do build do ZIP — promove tentativas registradas pelo banner.
@@ -211,15 +214,24 @@ export function HoleritePreviewDialog({
     setLinhas((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
   };
 
+  const relevantFilteredLinhas = useMemo(() => {
+    if (!mostrarApenasRelevantes) return linhas;
+    return linhas.filter(
+      (l) => l.origem !== "ignorar_hint" && l.origem !== "desconto" && l.categoria !== null,
+    );
+  }, [linhas, mostrarApenasRelevantes]);
+
+  const ocultadas = linhas.length - relevantFilteredLinhas.length;
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return linhas;
-    return linhas.filter((l) => {
+    if (!q) return relevantFilteredLinhas;
+    return relevantFilteredLinhas.filter((l) => {
       const cod = (l.rubrica.codigo ?? "").toLowerCase();
       const nome = l.rubrica.nome.toLowerCase();
       return cod.includes(q) || nome.includes(q);
     });
-  }, [linhas, search]);
+  }, [relevantFilteredLinhas, search]);
 
   const totals = useMemo(() => {
     const map = new Map<CategoriaSlug, { soma: number; hasFallback: boolean }>();
@@ -461,9 +473,11 @@ export function HoleritePreviewDialog({
             </div>
           </div>
           <DialogDescription className="text-xs">
-            {linhas.length} verba{linhas.length === 1 ? "" : "s"} identificada
-            {linhas.length === 1 ? "" : "s"} · {totalLinhasIncluidas}{" "}
-            {totalLinhasIncluidas === 1 ? "será considerada" : "serão consideradas"} no cálculo
+            {totalLinhasIncluidas}{" "}
+            {totalLinhasIncluidas === 1 ? "verba será considerada" : "verbas serão consideradas"} no cálculo
+            {linhasFallbackIncluidas > 0 && (
+              <> · <span className="text-amber-700 dark:text-amber-300">{linhasFallbackIncluidas} {linhasFallbackIncluidas === 1 ? "precisa" : "precisam"} de conferência</span></>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -480,36 +494,25 @@ export function HoleritePreviewDialog({
           </div>
         )}
 
-        {/* FASE 1.5 — banner de ATENÇÃO (não bloqueia download).
-            Decisão de produto: operador SEMPRE decide se baixa. O banner
-            sinaliza onde estão os possíveis erros para revisão manual.
-            Linhas suspeitas continuam destacadas em vermelho na tabela. */}
-        {confidence.bloqueador === true && (
-          <details className="shrink-0 border border-red-400 bg-red-50 dark:bg-red-950/30 rounded text-xs group">
-            <summary className="px-2 py-1 flex items-center gap-1.5 font-medium text-red-900 dark:text-red-100 cursor-pointer select-none">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              Alguns dados precisam de conferência
-              <span className="ml-auto text-[10px] opacity-60 group-open:hidden">
-                clique para ver
-              </span>
-            </summary>
-            <div className="px-2 pb-2 pt-1 space-y-0.5 max-h-24 overflow-y-auto">
-              {confidence.reasons
-                .filter((r) => /BLOQUEADOR/i.test(r))
-                .map((r, i) => (
-                  <div key={i} className="text-red-700 dark:text-red-300 font-mono text-[11px]">
-                    · {r.replace(/^BLOQUEADOR:\s*/, "")}
-                  </div>
-                ))}
+        {/* Banner único consolidado — pendências do operador */}
+        {(linhasFallbackIncluidas > 0 || (parsed?.resumo_classificacao && parsed.resumo_classificacao.nao_classificadas > 0)) && (
+          <div className="shrink-0 border border-amber-200 bg-amber-50 dark:bg-amber-950/20 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-amber-900 dark:text-amber-100 text-sm">
+                  {linhasFallbackIncluidas > 0
+                    ? `${linhasFallbackIncluidas} verba${linhasFallbackIncluidas === 1 ? " precisa" : "s precisam"} de conferência antes de continuar`
+                    : `${parsed?.resumo_classificacao?.nao_classificadas ?? 0} verba${(parsed?.resumo_classificacao?.nao_classificadas ?? 0) === 1 ? " sem" : "s sem"} categoria definida`}
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                  Revise os itens destacados na tabela abaixo. Você pode classificar manualmente ou usar o assistente IA.
+                </p>
+              </div>
             </div>
-          </details>
+          </div>
         )}
 
-        {/* Comparação interna (shadow check) usada apenas para bloqueador. */}
-
-        {/* Sprint 2 / Fase 3 — banner de rubricas não classificadas pela ontologia
-            do escritório. Não bloqueia download (escopo é DSR sobre comissões,
-            separado do bucket-mapper que monta o ZIP). */}
         {parsed?.resumo_classificacao &&
           parsed.resumo_classificacao.nao_classificadas > 0 && (
             <div className="shrink-0">
@@ -519,29 +522,6 @@ export function HoleritePreviewDialog({
               />
             </div>
           )}
-
-        {classificacao.warnings.length > 0 && (
-          <details className="shrink-0 border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded text-xs group">
-            <summary className="px-2 py-1 flex items-center gap-1.5 font-medium text-amber-900 dark:text-amber-100 cursor-pointer select-none">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              {classificacao.warnings.length} observação(ões)
-              <span className="ml-auto text-[10px] opacity-60 group-open:hidden">
-                clique para ver
-              </span>
-            </summary>
-            <div className="px-2 pb-2 pt-1 space-y-0.5 max-h-24 overflow-y-auto">
-              {classificacao.warnings.map((w, i) => (
-                <div
-                  key={i}
-                  className="text-amber-800 dark:text-amber-200 line-clamp-2"
-                  title={w}
-                >
-                  · {w}
-                </div>
-              ))}
-            </div>
-          </details>
-        )}
 
         {/* Toolbar: busca + ações em lote */}
         <div className="shrink-0 flex items-center gap-2">
@@ -586,6 +566,13 @@ export function HoleritePreviewDialog({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground whitespace-nowrap cursor-pointer select-none">
+            <Checkbox
+              checked={mostrarApenasRelevantes}
+              onCheckedChange={(v) => setMostrarApenasRelevantes(Boolean(v))}
+            />
+            Só relevantes{ocultadas > 0 && <span className="opacity-70">(oculta {ocultadas})</span>}
+          </label>
           <span className="text-[11px] text-muted-foreground whitespace-nowrap">
             {showingCount} de {linhas.length}
           </span>
@@ -629,6 +616,36 @@ export function HoleritePreviewDialog({
             </Table>
           </div>
         </ScrollArea>
+
+        {/* Detalhes técnicos — colapsável, preserva toda info sem poluir UI */}
+        <DetalhesTecnicos
+          items={[
+            { label: "Método de extração", value: traduzir("layout", effectiveClassificacao.layout_usado) },
+            { label: "Confiança do parser", value: `${confidenceBase.score}/100`, tooltip: "Score interno (90+: alta, 60-89: média, <60: baixa)" },
+            ...(parsed?.resumo_classificacao ? [{ label: "Verbas não classificadas", value: parsed.resumo_classificacao.nao_classificadas }] : []),
+            ...(comparacao ? [{ label: "Concordância parser × IA", value: `${(comparacao.taxa_concordancia * 100).toFixed(0)}%` }] : []),
+            { label: "Observações do extrator", value: classificacao.warnings.length },
+          ]}
+        >
+          {classificacao.warnings.length > 0 && (
+            <div className="text-xs">
+              <p className="font-medium mb-1">Observações do extrator:</p>
+              <ul className="space-y-0.5 text-muted-foreground">
+                {classificacao.warnings.map((w, i) => <li key={i}>· {w}</li>)}
+              </ul>
+            </div>
+          )}
+          {confidence.bloqueador === true && confidence.reasons.length > 0 && (
+            <div className="text-xs">
+              <p className="font-medium mb-1 text-rose-700 dark:text-rose-300">Alertas de consistência:</p>
+              <ul className="space-y-0.5 text-rose-600 dark:text-rose-400">
+                {confidence.reasons.filter((r) => /BLOQUEADOR/i.test(r)).map((r, i) => (
+                  <li key={i}>· {r.replace(/^BLOQUEADOR:\s*/, "")}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </DetalhesTecnicos>
 
         {/* Resumo do CSV final */}
         <div className="border rounded-md bg-muted/20 p-2.5 space-y-1">
