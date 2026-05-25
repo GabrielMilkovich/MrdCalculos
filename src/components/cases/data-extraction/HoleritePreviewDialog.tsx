@@ -98,6 +98,7 @@ import {
   type AIInteractionResult,
   type AISuggestion,
 } from "./VerifyExtractionAIButton";
+import { VerifyParityForenseButton } from "./VerifyParityForenseButton";
 import {
   type HoleriteParseResult,
 } from "@/features/data-extraction";
@@ -466,6 +467,12 @@ export function HoleritePreviewDialog({
                 ocrText={ocrText ?? ""}
                 onApplySuggestions={handleAISuggestions}
                 onTelemetry={setAiTelemetry}
+              />
+              <VerifyParityForenseButton
+                documentId={documentId ?? ""}
+                builder="holerite"
+                parsed={parsed}
+                pdfDisponivel={!!documentId}
               />
             </div>
           </div>

@@ -3,6 +3,7 @@ import { Download, Loader2, AlertTriangle } from 'lucide-react';
 import Decimal from 'decimal.js';
 import { buildFichaFinanceiraZip } from '@/features/data-extraction/export/per-doc/ficha-financeira-zip';
 import { triggerBlobDownload } from '@/features/data-extraction';
+import { VerifyParityForenseButton } from './VerifyParityForenseButton';
 import {
   Dialog,
   DialogContent,
@@ -151,7 +152,15 @@ export function FichaFinanceiraPreviewDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3 flex-1 min-h-0">
-          <ValidationBanner validacao={parsed.validacao} />
+          <div className="flex items-center justify-between">
+            <ValidationBanner validacao={parsed.validacao} />
+            <VerifyParityForenseButton
+              documentId={documentId}
+              builder="ficha_financeira"
+              parsed={parsed}
+              pdfDisponivel={true}
+            />
+          </div>
 
           {review.rubricasNaoClassificadas > 0 && (
             <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">

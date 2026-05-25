@@ -65,6 +65,7 @@ import {
   type AIInteractionResult,
   type AISuggestion,
 } from "./VerifyExtractionAIButton";
+import { VerifyParityForenseButton } from "./VerifyParityForenseButton";
 import { useKeyboardNavigation } from "./useKeyboardNavigation";
 import { checkHorasTrabalhadas } from "@/features/data-extraction";
 import { applyHoraMask, normalizeHoraOnBlur } from "./hora-mask";
@@ -660,6 +661,12 @@ export function CartaoPontoReviewDialog({
             ocrText={ocrText ?? ""}
             onApplySuggestions={handleAISuggestions}
             onTelemetry={setAiTelemetry}
+          />
+          <VerifyParityForenseButton
+            documentId={_documentId ?? ""}
+            builder="cartao_ponto"
+            parsed={parsed}
+            pdfDisponivel={!!_documentId}
           />
         </div>
       }

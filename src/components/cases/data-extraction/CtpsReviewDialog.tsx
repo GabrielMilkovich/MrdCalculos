@@ -43,6 +43,7 @@ import {
   VerifyExtractionAIButton,
   type AIInteractionResult,
 } from "./VerifyExtractionAIButton";
+import { VerifyParityForenseButton } from "./VerifyParityForenseButton";
 import { toast } from "sonner";
 import {
   buildCtpsZipWithReport,
@@ -207,6 +208,12 @@ export function CtpsReviewDialog({
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Revisar CTPS — Carteira de Trabalho
+              <VerifyParityForenseButton
+                documentId={documentId}
+                builder="ctps"
+                parsed={{ ferias: feriasParsed, faltas: faltasParsed }}
+                pdfDisponivel={!!documentId}
+              />
             </DialogTitle>
             <DialogDescription className="text-xs">
               Este documento contém <strong>férias</strong> e <strong>faltas</strong>{" "}
