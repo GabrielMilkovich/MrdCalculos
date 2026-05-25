@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit } from "../_shared/rate-limit.ts";
+import { parseFichaFinanceiraDeterministico } from "../_shared/parsers/ficha-financeira-deterministic.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -239,6 +240,27 @@ serve(async (req) => {
       );
     }
 
+    // FAST PATH: parser determinístico pra layouts conhecidos (ADP/Via Varejo).
+    // Sem chamada LLM — rápido, grátis, determinístico. Funciona sobre output
+    // do extrator geométrico pdfjs (tabela markdown com | separadores).
+    // Se layout não reconhecido → retorna null → cai no Claude fallback abaixo.
+    if (texto_documento && tipo_documento !== "contracheque") {
+      const deterministico = parseFichaFinanceiraDeterministico(texto_documento);
+      if (deterministico && deterministico.rubricas.length >= 3) {
+        console.log(
+          `[parse-ficha] DETERMINISTIC: ${deterministico.rubricas.length} rubricas ` +
+            `extraídas, ${deterministico._meta.linhas_filtradas} filtradas, ` +
+            `parser=${deterministico._meta.parser}`,
+        );
+        return new Response(
+          JSON.stringify(deterministico),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    // FALLBACK: Claude Sonnet + PDF source pra layouts não reconhecidos
+    // ou quando parser determinístico encontra < 3 rubricas (suspeito).
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) {
       return new Response(
