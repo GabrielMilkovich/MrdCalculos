@@ -10,7 +10,10 @@
  *   - Retry exponencial com jitter para 429 e 5xx
  *   - Timeout configurável por chamada (default 120s)
  *   - AbortController para evitar requests penduradas
+ *   - PDF splitting automático para PDFs > 3 páginas (evita timeout 150s)
  */
+
+import { PDFDocument } from "npm:pdf-lib@1.17.1";
 
 const ANTHROPIC_API = "https://api.anthropic.com";
 
@@ -250,6 +253,125 @@ function detectImageMime(filename: string): string {
   if (lower.endsWith(".webp")) return "image/webp";
   if (lower.endsWith(".gif")) return "image/gif";
   return "image/jpeg";
+}
+
+/**
+ * Divide um PDF em múltiplos PDFs com `pagesPerChunk` páginas cada.
+ */
+export async function splitPdf(
+  bytes: Uint8Array,
+  pagesPerChunk: number = 3,
+): Promise<Uint8Array[]> {
+  const source = await PDFDocument.load(bytes);
+  const totalPages = source.getPageCount();
+  if (totalPages <= pagesPerChunk) {
+    return [bytes];
+  }
+  const chunks: Uint8Array[] = [];
+  for (let start = 0; start < totalPages; start += pagesPerChunk) {
+    const end = Math.min(start + pagesPerChunk, totalPages);
+    const chunkPdf = await PDFDocument.create();
+    const pageIndices = Array.from({ length: end - start }, (_, i) => start + i);
+    const copiedPages = await chunkPdf.copyPages(source, pageIndices);
+    copiedPages.forEach((p) => chunkPdf.addPage(p));
+    const chunkBytes = await chunkPdf.save();
+    chunks.push(chunkBytes);
+  }
+  return chunks;
+}
+
+/**
+ * OCR de PDF com splitting automático em chunks paralelos.
+ * Resolve limite 150s do Supabase Edge Function pra PDFs > 3 páginas.
+ *
+ * PDFs ≤ pagesPerChunk páginas: chamada única (idêntico a ocrBytes).
+ * PDFs maiores: split → N chamadas Claude em paralelo → concatena.
+ */
+export async function ocrBytesPaginado(
+  bytes: Uint8Array,
+  filename: string,
+  opts: ClaudeOcrOptions & {
+    pagesPerChunk?: number;
+    concurrency?: number;
+  },
+): Promise<ClaudeOcrResult> {
+  const isPdf = filename.toLowerCase().endsWith(".pdf") || bytes[0] === 0x25;
+  if (!isPdf) {
+    return ocrBytes(bytes, filename, opts);
+  }
+
+  const pagesPerChunk = opts.pagesPerChunk ?? 3;
+  const concurrency = opts.concurrency ?? 5;
+
+  let chunks: Uint8Array[];
+  try {
+    chunks = await splitPdf(bytes, pagesPerChunk);
+  } catch (err) {
+    console.warn(`[claude-ocr] splitPdf falhou, tentando PDF inteiro:`, err);
+    return ocrBytes(bytes, filename, opts);
+  }
+
+  console.log(`[claude-ocr] PDF ${filename}: ${chunks.length} chunk(s) de até ${pagesPerChunk} páginas`);
+
+  if (chunks.length === 1) {
+    return ocrBytes(bytes, filename, opts);
+  }
+
+  const t0 = Date.now();
+  const results = await runInParallel(
+    chunks,
+    async (chunk, idx) => {
+      const chunkResult = await ocrBytes(
+        chunk,
+        `${filename}.chunk${idx + 1}.pdf`,
+        {
+          ...opts,
+          timeoutMs: 60_000,
+          maxRetries: 1,
+        },
+      );
+      return { idx, pages: chunkResult.pages };
+    },
+    concurrency,
+  );
+
+  const allPages: ClaudeOcrPage[] = [];
+  let pageOffset = 0;
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const chunkPageCount = (i < chunks.length - 1) ? pagesPerChunk : undefined;
+    if (r.ok) {
+      for (const p of r.value.pages) {
+        allPages.push({ index: pageOffset + p.index, markdown: p.markdown });
+      }
+      pageOffset += r.value.pages.length || pagesPerChunk;
+    } else {
+      const placeholderCount = chunkPageCount ?? pagesPerChunk;
+      for (let j = 0; j < placeholderCount; j++) {
+        allPages.push({
+          index: pageOffset + j,
+          markdown: `[FALHA NO CHUNK ${i + 1}: ${r.error}]`,
+        });
+      }
+      pageOffset += placeholderCount;
+    }
+  }
+
+  const failedChunks = results.filter((r) => !r.ok).length;
+  if (failedChunks === results.length) {
+    throw new ClaudeOcrError(`Todos os ${results.length} chunks do PDF falharam`);
+  }
+
+  if (failedChunks > 0) {
+    console.warn(`[claude-ocr] ${failedChunks}/${results.length} chunks falharam`);
+  }
+
+  return {
+    pages: allPages,
+    model: opts.model ?? "claude-sonnet-4-6",
+    retries_used: 0,
+    duration_ms: Date.now() - t0,
+  };
 }
 
 /**
