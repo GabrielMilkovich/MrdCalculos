@@ -69,7 +69,7 @@ describe('VerifyParityForenseButton', () => {
     mockIniciar.mockResolvedValue({ ok: false, error: 'Failed to fetch' });
 
     renderButton();
-    fireEvent.click(screen.getByRole('button', { name: /paridade ia/i }));
+    fireEvent.click(screen.getByRole('button', { name: /conferir com ia/i }));
 
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(
@@ -89,7 +89,7 @@ describe('VerifyParityForenseButton', () => {
     hookState.resultado = { discrepancias: [] };
 
     renderButton();
-    fireEvent.click(screen.getByRole('button', { name: /paridade ia/i }));
+    fireEvent.click(screen.getByRole('button', { name: /conferir com ia/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/paridade forense ia/i)).toBeInTheDocument();
