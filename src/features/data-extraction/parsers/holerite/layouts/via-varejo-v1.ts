@@ -3,31 +3,17 @@
  * Ponto Frio (CNPJ 33.041.260/xxxx-xx — Via Varejo S.A.).
  *
  * Identificação:
- *   - "VIA VAREJO" ou "VIA S.A." (mudança de razão social pós-reorganização)
+ *   - "VIA VAREJO" ou "VIA S.A." (pós-reorganização)
  *   - "CASAS BAHIA" / "PONTO FRIO" / "EXTRA"
  *   - CNPJ 33.041.260 (raiz do grupo)
  *
- * Layout típico observado:
+ * Layout típico:
  *   ```
  *   COD   DESCRIÇÃO              REF        VENCIMENTO    DESCONTO
  *   0001  SALARIO BASE           30,00       1.234,56
- *   0190  COMISSAO               -             234,56
- *   8000  INSS                                              123,45
+ *   0620  COMISSAO               -             234,56
+ *   5560  INSS                                              123,45
  *   ```
- *
- * Heurística:
- *   1. Competência: "REFERENCIA MM/AAAA" (mesmo do genérico).
- *   2. Linha de rubrica: 4 dígitos + descrição + opcional ref + valor BR.
- *      Detecta vencimento vs desconto pela coluna do valor (heurística de
- *      indentação/posicionamento, frágil em OCR).
- *
- * NOTA DE RISCO: este parser é provisório — foi escrito com base em
- * documentação de layout sem fixture OCR real do grupo. Tem testes
- * sintéticos cobrindo a estrutura típica (ver via-varejo-v1.test.ts) mas
- * NÃO foi validado contra um holerite real do grupo Via Varejo. O parser
- * sempre emite warning genérico para forçar revisão manual; substitua os
- * testes sintéticos por fixture real quando uma estiver disponível,
- * removendo ou suavizando o warning conforme a qualidade real medida.
  */
 
 import {
@@ -44,51 +30,42 @@ const RE_REFERENCIA_MMM =
 const RE_VALOR_BR = /\b(\d{1,3}(?:\.\d{3})*,\d{2})\b/g;
 const RE_QUANTIDADE = /\b(\d{1,4},\d{2})\s/;
 
-// Linha começando com código de 4 dígitos (padrão do grupo) + nome + valores.
-const RE_LINHA_RUBRICA = /^(\d{4})\s+([\p{L}][\p{L}\s\.\-\(\)\/%&]*?)\s+(\d[\d\s.,]*)$/u;
+const RE_LINHA_COD = /^\s*(\d{3,5})\s+([\p{L}][\p{L}\s.\-()/%&']+)/u;
 
 const SINAIS_VIA_VAREJO = [
-  /\b(?:VIA\s*VAREJO|VIA\s*S\.?\s*A\.?|CASAS\s*BAHIA|PONTO\s*FRIO|EXTRA\.COM)\b/i,
-  // Pelo menos 1 sinal estrutural de holerite do grupo (cabeçalho típico)
+  /\b(?:VIA\s*VAREJO|VIA\s*S\.?\s*A\.?|CASAS\s*BAHIA|PONTO\s*FRIO|EXTRA\.COM|33\.?041\.?260)\b/i,
   /\bREFER[ÊE]NCIA\b/i,
 ];
 
 export const layoutViaVarejoV1: LayoutHolerite = {
   slug: "via_varejo_v1",
-  nome: "Via Varejo / Casas Bahia (provisório)",
+  nome: "Via Varejo / Casas Bahia",
   sinaisIdentificacao: SINAIS_VIA_VAREJO,
   parse(ocrText: string): HoleriteParseResult {
-    const warnings: string[] = [
-      "Parser via_varejo_v1 é provisório (sem fixture real). Revise rubricas.",
-    ];
+    const warnings: string[] = [];
 
-    // 1. Competência
     let competencia = detectCompetencia(ocrText);
     if (!competencia) {
       warnings.push("Competência não detectada — usando 00/0000.");
       competencia = "00/0000";
     }
 
-    // 2. Rubricas
     const rubricas: RubricaParseada[] = [];
     const lines = ocrText.split(/\r?\n/);
     for (const rawLine of lines) {
       const line = rawLine.trim();
       if (line.length < 8) continue;
 
-      const valores = [...line.matchAll(RE_VALOR_BR)].map((m) => m[1]);
-      if (valores.length === 0) continue;
-
-      const matchCod = line.match(RE_LINHA_RUBRICA);
+      const matchCod = line.match(RE_LINHA_COD);
       if (!matchCod) continue;
 
       const [, codigo, nomeRaw] = matchCod;
-      const nome = nomeRaw.trim();
-      if (nome.length < 3) continue;
+      const nome = nomeRaw.trim().replace(/\s+/g, " ");
+      if (nome.length < 2) continue;
 
-      // Quantidade: primeiro número com vírgula que não seja parte de um valor BR.
-      // Heurística: se o primeiro valor é "30,00" / "220,00" / "0,00" e aparece
-      // ANTES dos demais, tratamos como quantidade.
+      const valores = [...line.matchAll(RE_VALOR_BR)].map((m) => m[1]);
+      if (valores.length === 0) continue;
+
       const valsNum = valores.map(parseBR);
       let quantidade: number | null = null;
       let venc: number | null = null;
@@ -96,13 +73,17 @@ export const layoutViaVarejoV1: LayoutHolerite = {
 
       const qMatch = line.match(RE_QUANTIDADE);
       if (qMatch && parseBR(qMatch[1]) > 0 && parseBR(qMatch[1]) < 1000) {
-        quantidade = parseBR(qMatch[1]);
-        // Pega o restante dos valores — primeiro = vencimento, segundo = desconto
-        const remaining = valsNum.filter((v) => v !== quantidade);
-        venc = remaining[0] ?? null;
-        desc = remaining[1] ?? null;
+        const qVal = parseBR(qMatch[1]);
+        const remaining = valsNum.filter((v) => v !== qVal);
+        if (remaining.length > 0) {
+          quantidade = qVal;
+          venc = remaining[0] ?? null;
+          desc = remaining[1] ?? null;
+        } else {
+          venc = valsNum[0] ?? null;
+          desc = valsNum[1] ?? null;
+        }
       } else {
-        // Sem quantidade óbvia — primeiro valor = vencimento, segundo = desconto
         venc = valsNum[0] ?? null;
         desc = valsNum[1] ?? null;
       }

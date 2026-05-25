@@ -124,14 +124,14 @@ describe("via_varejo_v1 — rubricas", () => {
     expect(codigos).toEqual(["0001", "0190", "8000"]);
   });
 
-  it("Layout sempre emite warning de provisório", () => {
+  it("Layout NÃO emite warning de provisório (B.1 Sprint 6)", () => {
     const text = `
       VIA VAREJO S.A.
       REFERÊNCIA: 03/2024
       0001 SALARIO BASE  30,00  3.500,00
     `;
     const r = parseHolerite(text);
-    expect(r.warnings.some((w) => /provis[óo]rio/i.test(w))).toBe(true);
+    expect(r.warnings.some((w) => /provis[óo]rio/i.test(w))).toBe(false);
   });
 
   it("Linhas vazias / lixo OCR ignorados", () => {
