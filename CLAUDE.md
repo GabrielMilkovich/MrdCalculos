@@ -234,3 +234,34 @@ Detalhes em `docs/HARDENING-V2.md`. Principais:
 - `Mapper.mapear` sync via cache module-init (TTL 5min) — migrar pra async quando volume justificar
 - Conflict UX dialog inexistente (só toast.warning)
 - `documents.owner_user_id` vs `criado_por` inconsistência
+
+---
+
+## Auto-fix de CI — escopo de auto-correção por categoria
+
+Quando o Claude GitHub App (ou qualquer agente automatizado) corrigir falhas de CI, seguir estas regras de escopo:
+
+### ✅ PODE auto-corrigir (sem pedir aprovação)
+- Erros de lint (`eslint`, `prettier`)
+- Erros de tipo (`tsc --noEmit`) — imports faltando, tipos incorretos
+- Testes falhando por causa de mudança na interface pública (atualizar `expect`)
+- Imports não usados / variáveis mortas
+- Formatação de código
+
+### ⚠️ PODE corrigir com cautela (documentar no commit)
+- Testes falhando por lógica de negócio — SOMENTE se o fix é óbvio e localizado
+- Migration SQL com erro de sintaxe — corrigir em nova migration, nunca editar a existente
+- Edge function deploy falhando por import quebrado
+
+### ❌ NÃO pode auto-corrigir (pedir aprovação humana)
+- Testes de calibração / paridade falhando — pode ser regressão real
+- Mudanças em lógica de cálculo (`orchestrator.ts`, `engine-v3.ts`, módulos PJe-Calc)
+- Alterações em RLS policies ou schema de banco
+- Rebaixar thresholds de gates (cobertura, paridade, score mínimo)
+- Adicionar dependências novas
+- Desabilitar testes ou marcar como `.skip`
+
+### Loop de execução obrigatório
+1. `npx tsc --noEmit` — zero erros de tipo
+2. `npx vitest run` — todos os testes passando (exceto calibração `.skip`)
+3. Se algum falhar após o fix: **pare e reporte**, não tente workaround
