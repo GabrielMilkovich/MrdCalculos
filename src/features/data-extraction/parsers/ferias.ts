@@ -60,7 +60,7 @@ const RE_DOBRA_GENERICA =
 const RE_TEM_DIGITO = /\d/;
 
 const RE_BLOCO_FERIAS =
-  /\b(recibo|aviso|comunicado|termo|solicita[çc][ãa]o)\s+de\s+f[ée]rias\b/gi;
+  /\b(recibo|aviso|comunicado|termo|solicita[çc][ãa]o|hist[óo]rico)\s+de\s+f[ée]rias\b/gi;
 
 export function parseFerias(ocrText: string): ParseFeriasResult {
   if (!ocrText || ocrText.trim().length === 0) {

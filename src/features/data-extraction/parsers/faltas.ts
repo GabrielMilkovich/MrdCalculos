@@ -46,7 +46,41 @@ const RE_JUSTIFICATIVA =
 const RE_INJUSTIFICADA = /\b(injustifica\w*|sem\s+justifica\w*|n[ãa]o\s+justifica\w*)\b/i;
 const RE_REINICIA = /\breinicia\s+(?:o\s+)?per[íi]odo\s+aquisitivo\b/i;
 
+// CTPS Digital: detecta blocos de férias pra NÃO confundir com faltas.
+// Linha com intervalo de datas dentro de bloco "HISTÓRICO DE FÉRIAS" é
+// período aquisitivo + gozo, não falta. Sem essa exclusão, parser exporta
+// 18 "faltas" que são na verdade férias gozadas (bug do caso ROQUE GUERREIRO).
+const RE_BLOCO_FERIAS_HEADER = /\b(?:hist[óo]rico\s+de\s+f[ée]rias|f[ée]rias\s+gozadas|registro\s+de\s+f[ée]rias|per[íi]odos?\s+de\s+f[ée]rias)\b/i;
+const RE_FIM_BLOCO_FERIAS = /\b(?:afastamento|registro\s+de\s+falt|hist[óo]rico\s+de\s+cargo|hist[óo]rico\s+de\s+lota[çc][ãa]o|contribui[çc][ãa]o\s+sindical|hist[óo]rico\s+salarial|anota[çc][oõ]es\s+gerais)\b/i;
+
 const MAX_JUSTIFICATIVA_LEN = 200;
+
+/**
+ * Identifica faixas de linhas que pertencem ao bloco "HISTÓRICO DE FÉRIAS"
+ * em CTPS Digital. Retorna Set de índices de linhas a excluir do parsing
+ * de faltas. Sem isso, cada período aquisitivo vira uma "falta" falsa.
+ */
+function identificarLinhasDeFerias(lines: string[]): Set<number> {
+  const excluir = new Set<number>();
+  let dentroDeFerias = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (RE_BLOCO_FERIAS_HEADER.test(line)) {
+      dentroDeFerias = true;
+      excluir.add(i);
+      continue;
+    }
+    if (dentroDeFerias && RE_FIM_BLOCO_FERIAS.test(line)) {
+      dentroDeFerias = false;
+      continue;
+    }
+    if (dentroDeFerias) {
+      excluir.add(i);
+    }
+  }
+  return excluir;
+}
 
 export function parseFaltas(ocrText: string): ParseFaltasResult {
   if (!ocrText || ocrText.trim().length === 0) {
@@ -58,9 +92,20 @@ export function parseFaltas(ocrText: string): ParseFaltasResult {
   const warnings: string[] = [];
   const unparsed: Array<{ linha: number; conteudo: string }> = [];
 
+  // CTPS fix: exclui linhas do bloco "HISTÓRICO DE FÉRIAS" pra não gerar
+  // faltas falsas a partir de períodos aquisitivos.
+  const linhasDeFerias = identificarLinhasDeFerias(lines);
+  if (linhasDeFerias.size > 0) {
+    warnings.push(
+      `${linhasDeFerias.size} linhas de bloco "HISTÓRICO DE FÉRIAS" excluídas ` +
+        `do parsing de faltas (evita confusão período aquisitivo → falta).`,
+    );
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line.length === 0) continue;
+    if (linhasDeFerias.has(i)) continue;
 
     const isFaltaLine = RE_LINHA_FALTA.test(line);
     const intervaloMatch = line.match(RE_INTERVALO_DATA);
