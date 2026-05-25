@@ -6,6 +6,7 @@
  *         Memória de Cálculo, FGTS, CS, IR, Honorários/Custas, Assinatura
  */
 import type { PjeLiquidacaoResult } from "./engine-types";
+import { disclaimerHtml } from './pdf-disclaimer';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v || 0);
@@ -845,6 +846,7 @@ function buildRelatorioCompletoHTML(
   ${csPage}
   ${irPage}
   ${assinaturaPage}
+  ${disclaimerHtml()}
 </body>
 </html>`;
 }

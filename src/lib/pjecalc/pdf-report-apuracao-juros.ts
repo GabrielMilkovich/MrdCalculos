@@ -21,6 +21,7 @@ import type {
   PjeCorrecaoConfig,
   PjeCombinacaoJuros,
 } from './engine-types';
+import { disclaimerHtml } from './pdf-disclaimer';
 
 Decimal.set({ precision: 20 });
 
@@ -369,6 +370,7 @@ export function buildApuracaoJurosHTML(input: ApuracaoJurosInput): string {
 </head>
 <body>
 ${body}
+${disclaimerHtml()}
 </body>
 </html>`;
 }

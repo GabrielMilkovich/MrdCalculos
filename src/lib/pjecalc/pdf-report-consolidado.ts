@@ -10,6 +10,7 @@
  */
 import Decimal from "decimal.js";
 import type { PjeLiquidacaoResult, PjeResumo } from "./engine-types";
+import { disclaimerHtml } from './pdf-disclaimer';
 
 Decimal.set({ precision: 20 });
 
@@ -285,6 +286,7 @@ export function gerarRelatorioConsolidado(
   <div class="footer">
     Relatório Consolidado — MRDcalc v${meta.engineVersion || "2.1.0"} — ${new Date().toLocaleString("pt-BR")}
   </div>
+  ${disclaimerHtml()}
 </body>
 </html>`;
 
@@ -492,6 +494,7 @@ export function buildConsolidadoCompletoHTML(
   <div class="footer">
     Relatório Consolidado Completo — MRDcalc v${meta.engineVersion || "3.0.0"} — Precisão Decimal.js (20 dígitos)
   </div>
+  ${disclaimerHtml()}
 </body>
 </html>`;
 
