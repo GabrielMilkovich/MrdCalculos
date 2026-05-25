@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Trash2, Scale } from "lucide-react";
+import { Plus, Trash2, Scale, AlertTriangle } from "lucide-react";
 import * as svc from "@/lib/pjecalc/service";
 
 interface Props { caseId: string; }
@@ -63,6 +63,16 @@ export function ModuloExcecoesJuros({ caseId }: Props) {
         <CardTitle className="text-sm flex items-center gap-2"><Scale className="h-4 w-4" />Exceções de Juros</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="flex items-start gap-3 p-3 border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40 rounded-md">
+          <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-amber-900 dark:text-amber-100 text-sm">Módulo em desenvolvimento</div>
+            <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+              As exceções de juros cadastradas aqui ainda não são lidas pelo motor de cálculo.
+              Para aplicar regime diferente de juros, use a configuração de Combinação por Data no módulo Correção.
+            </p>
+          </div>
+        </div>
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">Períodos com regime de juros diferente do padrão</p>
           <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setAdding(true)}>

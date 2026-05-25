@@ -1219,6 +1219,10 @@ export function multasConfigToVerbas(
         const sm = new Decimal('1518');
         vIns.valor = 'informado';
         vIns.valor_informado_devido = sm.times(percentual).toDP(2).toNumber();
+        warnings.push({
+          code: 'W_INSALUBRIDADE_SM_FALLBACK',
+          message: `Insalubridade SM estático R$ ${sm.toString()} usado para período ${inicio} a ${fim}`,
+        });
       }
       vIns.ordem = 9024;
       vIns.gerar_verba_reflexa = 'devido';
@@ -1592,6 +1596,14 @@ export async function executarLiquidacao(
 
   // Accumulator for orchestrator-level warnings (non-blocking, surfaced in the result)
   const orchestratorWarnings: Array<{ code: string; message: string }> = [];
+
+  // Emit warning when DB has no correction indices (engine falls back to embedded tables)
+  if (indicesDB.length === 0) {
+    orchestratorWarnings.push({
+      code: 'W_SELIC_FALLBACK',
+      message: 'Índices SELIC do banco indisponíveis — usando tabela embedded',
+    });
+  }
 
   // Propagar data_citacao e modo_calculo de dadosProcesso → engine params
   // (a VIEW pjecalc_parametros não expõe esses campos; eles vivem em pjecalc_dados_processo)

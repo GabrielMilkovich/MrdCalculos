@@ -178,3 +178,16 @@ Não buscar perfeição. Buscar:
 4. **Calibração contínua:** N>=10 casos rodando em CI a cada PR
 
 Esse roadmap garante "MRD Calc é confiável para uso profissional em escritório de advocacia trabalhista". Não garante "MRD Calc substitui o PJe-Calc desktop em todo cenário".
+
+---
+
+## 8. Itens descobertos — Auditoria Fake Front-end (2026-05-25)
+
+Detalhes completos em `docs/AUDITORIA-FAKE-FRONTEND-2026-05-25.md`.
+
+| Item | Prioridade | Esforço | Descrição |
+|---|---|---|---|
+| ExcecoesJuros → engine wiring | P1 | 1-2d | `PjeExcecaoJuros` tipo existe, service existe, falta wiring no orchestrator + consumo no engine |
+| AjusteSentenca → cartão bridge | P2 | 3-5d | `worktime-adjuster.ts` existe, falta pipeline para agregar em `PjeCartaoPonto` |
+| ParametrosGerais campos órfãos | P2 | <1d | `percentual_he_50/100`, `tipo_demissao`, `instancia` salvos mas não consumidos |
+| Warnings UI (B1) | P0 | — | Resolvido nesta sprint: `MotorWarningsBanner` renderiza warnings do orchestrator |

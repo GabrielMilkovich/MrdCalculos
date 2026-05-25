@@ -930,6 +930,8 @@ export interface PjeLiquidacaoResult {
   audit_trail?: PjeAuditTrailEntry[];
   /** Structured warnings collected during calculation (fallbacks, missing tables, etc.) */
   calculation_warnings?: { code: string; module: string; message: string; competencia?: string }[];
+  /** Orchestrator-level warnings (non-blocking) surfaced to the user */
+  warnings?: Array<{ code: string; message: string }>;
   /** Memória de cálculo completa (auditoria linha a linha) */
   memoria_calculo?: MemoriaCalculo;
 }
