@@ -147,6 +147,7 @@ export function downloadPJC(data: PJCData, nomeArquivo?: string) {
   const url = URL.createObjectURL(blob);
   const fallback = `PROCESSO_${data.processo?.numero?.replace(/\D/g, '') || 'CALCULO'}_${data.processo?.reclamante?.replace(/\s+/g, '_') || 'RECLAMANTE'}.PJC`;
   const safeName = (nomeArquivo || fallback)
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
     .trim()
     .slice(0, 200) || fallback;

@@ -96,6 +96,7 @@ export function downloadXML(
   const url = URL.createObjectURL(blob);
   const fallback = `pjecalc_${meta.processo?.replace(/\D/g, "") || "liquidacao"}_${new Date().toISOString().slice(0, 10)}.xml`;
   const safeName = fallback
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
     .trim()
     .slice(0, 200) || fallback;

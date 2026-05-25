@@ -36,4 +36,4 @@ jobs:
 
       - name: Rodar análise de paridade independente
         if: steps.check-pjc.outputs.pjc_count != '0'
-        run: npx vitest run src/lib/pjecalc/__tests__/independent-parity-analysis.test.ts --reporter=verbose
+        run: npx vitest run src/lib/pjecalc/__tests__/independent-parity-analysis.test.ts --reporter=verbose --config vitest.parity.config.ts

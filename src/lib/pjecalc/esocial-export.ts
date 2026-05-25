@@ -378,6 +378,7 @@ export function downloadXml(xml: string, filename: string) {
     throw new Error('downloadXml: ambiente sem suporte a File API.');
   }
   const safeName = (filename || 'esocial.xml')
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
     .trim()
     .slice(0, 200) || 'esocial.xml';
@@ -425,6 +426,7 @@ export async function exportarESocialZip(
   zip.file('S-2501.xml', gerarS2501(config, result));
 
   const blob = await zip.generateAsync({ type: 'blob' });
+  // eslint-disable-next-line no-control-regex
   const safeProc = (config.dados.nrProcTrab || 'processo').replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_');
   const url = URL.createObjectURL(blob);
   let a: HTMLAnchorElement | null = null;

@@ -562,6 +562,7 @@ export function exportToCSV(result: PjeLiquidacaoResult): string {
  * Strips control chars, path separators, and limits to 200 chars.
  */
 function sanitizeFilename(name: string, fallback: string): string {
+  // eslint-disable-next-line no-control-regex
   const safe = (name || '').replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_').trim();
   if (!safe) return fallback;
   return safe.slice(0, 200);

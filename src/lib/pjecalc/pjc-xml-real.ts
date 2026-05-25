@@ -866,6 +866,7 @@ export function downloadPJCXml(data: PJCReal, nomeArquivo?: string) {
   const recl = data.processo?.reclamante_nome?.replace(/\s+/g, '_') || 'RECLAMANTE';
   const fallback = `${proc}_${recl}.PJC`;
   const safeName = (nomeArquivo || fallback)
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
     .trim()
     .slice(0, 200) || fallback;

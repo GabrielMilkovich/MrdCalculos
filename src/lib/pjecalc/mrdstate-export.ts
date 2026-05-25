@@ -144,6 +144,7 @@ export function downloadMRDState(state: MRDState, filename?: string) {
   const url = URL.createObjectURL(blob);
   const fallback = `mrdstate_${state.meta?.processo_cnj || 'calculo'}_${new Date().toISOString().slice(0, 10)}.mrdstate.json`;
   const safeName = (filename || fallback)
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
     .trim()
     .slice(0, 200) || fallback;

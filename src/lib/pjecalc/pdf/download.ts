@@ -16,6 +16,7 @@ export function downloadHTML(html: string, filename: string): void {
     throw new Error('downloadHTML: ambiente sem suporte a File API (SSR/Node).');
   }
   const safeName = (filename || 'mrd_calc_report.html')
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x1f<>:"/\\|?*]+/g, '_')
     .trim()
     .slice(0, 200) || 'mrd_calc_report.html';
