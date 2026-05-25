@@ -13,7 +13,6 @@
 // Síncrono — handler não retorna até o OCR completar.
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { ocrBytes, type ClaudeOcrOptions } from "../_shared/claude-vision-ocr.ts";
@@ -248,7 +247,7 @@ function detectDocType(text: string): string {
   return "outro";
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

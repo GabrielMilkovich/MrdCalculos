@@ -26,7 +26,6 @@
 //   - chunk-and-embed continua disparado em ambos os caminhos (R2).
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 // V6 pipeline extraído para _shared/v6-pipeline.ts em 2026-05-20 para reuso
@@ -38,7 +37,7 @@ import {
   type V6Tentativa,
 } from "../_shared/v6-pipeline.ts";
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {

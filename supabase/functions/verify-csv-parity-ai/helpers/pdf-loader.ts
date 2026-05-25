@@ -1,4 +1,4 @@
-import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { encodeBase64 } from "jsr:@std/encoding@1/base64";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 const PDF_MAX_BYTES = 30 * 1024 * 1024;
@@ -25,7 +25,7 @@ export async function baixarPdfBase64(
   const bytes = new Uint8Array(await resp.arrayBuffer());
   if (bytes.length > PDF_MAX_BYTES) return null;
 
-  return { base64: base64Encode(bytes), bytes };
+  return { base64: encodeBase64(bytes), bytes };
 }
 
 export async function extrairTextoDoPdf(bytes: Uint8Array): Promise<string> {

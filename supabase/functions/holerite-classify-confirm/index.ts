@@ -11,7 +11,6 @@
 //
 // verify_jwt = true (default). Usuário precisa estar logado.
 
-import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
 
 interface ConfirmRequest {
@@ -53,7 +52,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   const origin = req.headers.get('origin');
   const headers = { ...corsHeaders(origin), 'Content-Type': 'application/json' };
 

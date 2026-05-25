@@ -3,7 +3,6 @@
 // Detecta layout do documento e extrai dados estruturados
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -408,7 +407,7 @@ function validateExtractions(items: ParsedItem[], templateType: string): Validat
 // MAIN HANDLER
 // =====================================================
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

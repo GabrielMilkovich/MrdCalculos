@@ -11,7 +11,6 @@
 // 5. Post-extraction completeness check
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { ocrBytes } from "../_shared/claude-vision-ocr.ts";
 
@@ -1002,7 +1001,7 @@ async function claudeOcrImage(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 16000,
           messages: [{
             role: "user",
@@ -2123,7 +2122,7 @@ async function processDocumentInBackground(
 // MAIN HANDLER
 // =====================================================
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

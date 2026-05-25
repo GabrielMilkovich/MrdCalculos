@@ -3,7 +3,6 @@
 // OCR, Chunking e Geração de Embeddings
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -175,7 +174,7 @@ async function generateEmbedding(_text: string, _apiKey: string): Promise<number
   return [];
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

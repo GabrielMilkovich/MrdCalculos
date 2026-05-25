@@ -38,8 +38,7 @@
 //   }
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { encodeBase64 } from "jsr:@std/encoding@1/base64";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   type IAResponseParsed,
@@ -129,7 +128,7 @@ async function baixarPdfBase64(
       return null;
     }
 
-    return base64Encode(bytes);
+    return encodeBase64(bytes);
   } catch (err) {
     console.warn("[verify-ai] erro ao baixar PDF:", err);
     return null;
@@ -636,7 +635,7 @@ Chame a tool emitir_revisao com sua análise.
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
   }

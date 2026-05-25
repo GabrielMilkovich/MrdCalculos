@@ -7,7 +7,6 @@
 // Acesso restrito: exige usuario autenticado COM role 'admin' (via has_role).
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.39.0";
 
 const corsHeaders = {
@@ -139,7 +138,7 @@ function sugerir(metricas: MetricaOut[]): SugestaoOut[] {
   return out;
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

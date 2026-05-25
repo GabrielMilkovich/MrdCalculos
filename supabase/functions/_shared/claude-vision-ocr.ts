@@ -4,7 +4,7 @@
  * Substitui Mistral OCR por Claude Vision (Anthropic API).
  * Usa o tipo de conteúdo `document` (PDF nativo) ou `image` (visão).
  *
- * Modelo default: `claude-sonnet-4-6-20250514` (melhor custo-benefício para OCR).
+ * Modelo default: `claude-sonnet-4-6` (melhor custo-benefício para OCR).
  *
  * Resiliência:
  *   - Retry exponencial com jitter para 429 e 5xx
@@ -91,7 +91,7 @@ export async function ocrBytes(
 ): Promise<ClaudeOcrResult> {
   const {
     apiKey,
-    model = "claude-sonnet-4-6-20250514",
+    model = "claude-sonnet-4-6",
     timeoutMs = 300_000,
     maxRetries = 4,
     retryBaseMs = 2000,

@@ -17,7 +17,6 @@
 // reativado no frontend antes de gastar tempo aqui.
 // =====================================================
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -384,7 +383,7 @@ function getHintCategoria(nome: string): "dsr" | "comissao" | "premiacao" | "ign
 // Handler
 // =====================================================
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   // [DEPRECATED v5] — esta edge function não é mais invocada pelo pipeline

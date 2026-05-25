@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { encodeBase64 } from "jsr:@std/encoding@1/base64";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { checkRateLimit } from "../_shared/rate-limit.ts";
 import { parseFichaFinanceiraDeterministico } from "../_shared/parsers/ficha-financeira-deterministic.ts";
@@ -71,7 +70,7 @@ async function baixarPdfBase64(
       return null;
     }
 
-    return base64Encode(bytes);
+    return encodeBase64(bytes);
   } catch (err) {
     console.warn("[parse-ficha] erro ao baixar PDF:", err);
     return null;
@@ -196,7 +195,7 @@ function detectarEmpregadorSlug(empresa: string): string {
   return "GENERICO";
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
