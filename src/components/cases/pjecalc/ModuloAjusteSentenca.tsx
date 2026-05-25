@@ -216,6 +216,18 @@ export function ModuloAjusteSentenca({ caseId, dataAdmissao, dataDemissao, carga
 
   return (
     <div className="space-y-6">
+      <Card className="border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40">
+        <CardContent className="p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-700 dark:text-amber-300 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold text-amber-900 dark:text-amber-100 text-sm">Módulo em desenvolvimento</div>
+            <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+              Os ajustes por sentença cadastrados aqui ainda não alimentam o motor de cálculo.
+              A jornada ajustada precisa ser refletida manualmente no Cartão de Ponto para afetar o resultado.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Scale className="h-5 w-5" /> Ajustes por Sentença

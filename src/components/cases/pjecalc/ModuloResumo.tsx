@@ -13,6 +13,7 @@ import { Play, Loader2, FileBarChart, Printer, FileCode, AlertTriangle, CheckCir
 import { PainelRevisao } from "./PainelRevisao";
 import { MemoriaCalculoExpandida } from "./MemoriaCalculoExpandida";
 import { ComparacaoCenarios } from "./ComparacaoCenarios";
+import { MotorWarningsBanner, hasCriticalWarning } from "./MotorWarningsBanner";
 import { calcularCompletude } from "@/lib/pjecalc/completude";
 import * as svc from "@/lib/pjecalc/service";
 import { parseDobraFromDb } from "@/lib/pjecalc/parse-dobra-from-db";
@@ -174,9 +175,33 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
       const params = paramsRes as unknown as PjeParametros;
       params.case_id = caseId;
 
+      // Accumulator for UI warnings (mirrors orchestrator warning collection)
+      const uiWarnings: Array<{ code: string; message: string }> = [];
+
       // Preencher data_citacao dos Dados do Processo se disponível
       if (dadosProcessoLocal?.data_citacao && !params.data_citacao) {
         params.data_citacao = dadosProcessoLocal.data_citacao;
+      }
+
+      // Emit warnings for missing dates (same logic as orchestrator lines 1608-1628)
+      if (!params.data_citacao) {
+        if (params.data_ajuizamento) {
+          const ajuiz = new Date(params.data_ajuizamento);
+          if (!isNaN(ajuiz.getTime())) {
+            const estimada = new Date(ajuiz);
+            estimada.setDate(estimada.getDate() + 60);
+            params.data_citacao = estimada.toISOString().slice(0, 10);
+            uiWarnings.push({
+              code: 'W_CITACAO_ESTIMADA',
+              message: `data_citacao não informada — usando ajuizamento + 60 dias (${params.data_citacao})`,
+            });
+          }
+        } else {
+          uiWarnings.push({
+            code: 'W_CITACAO_E_AJUIZAMENTO_AUSENTES',
+            message: 'Datas processuais não informadas — correção sem split IPCA-E/SELIC',
+          });
+        }
       }
 
       // Calcular ultima_remuneracao a partir dos historicos se não informada
@@ -503,6 +528,11 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
 
       const result = engine.liquidar();
 
+      // Attach collected warnings to result (persisted in resumo_verbas JSONB)
+      if (uiWarnings.length > 0) {
+        result.warnings = uiWarnings;
+      }
+
       // Get calculo_id from pjecalc_calculos (real table)
       const { data: calculoRow } = await supabase
         .from("pjecalc_calculos")
@@ -771,11 +801,24 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
           {res && (
             <>
               {/* Primary Export Button */}
-              <Button size="sm" onClick={() => gerarRelatorioCompleto(res, reportMetaCompleto)} className="bg-primary text-primary-foreground">
-                <FileBarChart className="h-4 w-4 mr-1" /> Exportar PDF
+              <Button
+                size="sm"
+                onClick={() => gerarRelatorioCompleto(res, reportMetaCompleto)}
+                className="bg-primary text-primary-foreground"
+                disabled={hasCriticalWarning(res.warnings)}
+                title={hasCriticalWarning(res.warnings) ? 'Resolva pendências críticas antes de exportar' : undefined}
+              >
+                <FileBarChart className="h-4 w-4 mr-1" />
+                {hasCriticalWarning(res.warnings) ? 'Pendências críticas' : 'Exportar PDF'}
               </Button>
               {/* Download Button */}
-              <Button size="sm" variant="outline" onClick={() => downloadRelatorioCompleto(res, reportMetaCompleto)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => downloadRelatorioCompleto(res, reportMetaCompleto)}
+                disabled={hasCriticalWarning(res.warnings)}
+                title={hasCriticalWarning(res.warnings) ? 'Resolva pendências críticas antes de exportar' : undefined}
+              >
                 <Download className="h-4 w-4 mr-1" /> Download PDF
               </Button>
 
@@ -955,6 +998,9 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
               </CardContent>
             </Card>
           )}
+
+          {/* Motor Warnings Banner (Track A — B1 blocker fix) */}
+          <MotorWarningsBanner warnings={res.warnings} />
 
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
