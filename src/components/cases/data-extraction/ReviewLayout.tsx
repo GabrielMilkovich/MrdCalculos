@@ -251,19 +251,19 @@ export function ReviewLayout({
                 onClick={() => setOcrHidden((v) => !v)}
                 title={
                   ocrHidden
-                    ? "Mostrar painel do OCR (referência)"
-                    : "Ocultar painel do OCR — a planilha ocupa toda a área. Você pode reexibir a qualquer momento."
+                    ? "Mostrar texto original do documento (referência)"
+                    : "Ocultar texto original — a planilha ocupa toda a área. Você pode reexibir a qualquer momento."
                 }
               >
                 {ocrHidden ? (
                   <>
                     <PanelLeftOpen className="h-3.5 w-3.5" />
-                    Mostrar OCR
+                    Mostrar original
                   </>
                 ) : (
                   <>
                     <PanelLeftClose className="h-3.5 w-3.5" />
-                    Ocultar OCR
+                    Ocultar original
                   </>
                 )}
               </Button>
@@ -324,12 +324,11 @@ export function ReviewLayout({
         {bloqueador === true && (
           <div className="border-2 border-red-400 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1 mx-3 mt-2">
             <div className="font-bold text-red-900 dark:text-red-100">
-              Atenção — possíveis erros detectados na extração
+              Atenção — alguns dados precisam de conferência
             </div>
             <div className="text-red-800 dark:text-red-200 text-xs">
-              Revise as linhas marcadas em vermelho antes de baixar. O
-              download está liberado, mas a inconsistência abaixo indica
-              que o resultado pode estar incorreto.
+              Revise as linhas marcadas em vermelho antes de confirmar.
+              Os dados destacados podem estar incorretos.
             </div>
             {bloqueadorReasons && bloqueadorReasons.length > 0 && (
               <div className="text-red-700 dark:text-red-300 text-xs font-mono space-y-0.5 pt-1">
@@ -346,14 +345,9 @@ export function ReviewLayout({
         {!headerCollapsed && contadores && (
           <div className="flex items-center gap-2 text-xs">
             <Badge variant="secondary" className="text-[11px]">
-              {contadores.extraidos} {contadores.etiqueta} extraído
+              {contadores.extraidos} {contadores.etiqueta} encontrado
               {contadores.extraidos === 1 ? "" : "s"}
             </Badge>
-            {linhasOcr.length > 0 && (
-              <Badge variant="outline" className="text-[11px]">
-                {linhasOcr.length} linha(s) no OCR
-              </Badge>
-            )}
           </div>
         )}
 
@@ -367,7 +361,7 @@ export function ReviewLayout({
             <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide bg-muted/30 border-b flex items-center justify-between">
               <span>Dados extraídos (editáveis)</span>
               <span className="text-muted-foreground font-normal normal-case text-[10px]">
-                OCR oculto · clique em "Mostrar OCR" no topo para reexibir
+                Original oculto · clique em "Mostrar original" no topo para reexibir
               </span>
             </div>
             <div className="flex-1 min-h-0 overflow-auto">{children}</div>
@@ -390,10 +384,9 @@ export function ReviewLayout({
               className="flex flex-col min-h-0"
             >
               <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide bg-muted/30 border-b flex items-center justify-between">
-                <span>Texto do OCR (referência)</span>
+                <span>Documento original (referência)</span>
                 <span className="text-muted-foreground font-normal normal-case text-[10px]">
-                  {linhasOcr.length} linhas · clique numa linha da tabela para
-                  navegar aqui
+                  Clique numa linha da tabela para navegar aqui
                 </span>
               </div>
               <ScrollArea className="flex-1 min-h-0">
@@ -455,8 +448,8 @@ export function ReviewLayout({
             className="gap-1.5"
             title={
               bloqueador === true
-                ? "Atenção: extração com possíveis erros. Revise as linhas marcadas antes de usar o CSV em laudo."
-                : "Baixar CSV — divergências e perdas, se houver, ficam visíveis no painel de relatório do build."
+                ? "Atenção: alguns dados podem estar incorretos. Revise antes de confirmar."
+                : "Confirmar os dados extraídos deste documento."
             }
           >
             {downloading ? (
@@ -464,7 +457,7 @@ export function ReviewLayout({
             ) : (
               <Download className="h-3.5 w-3.5" />
             )}
-            Baixar CSV
+            Confirmar documento
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -132,14 +132,11 @@ export function ExtractionTypeBadgeAndSelect({
     doc.tipo_extracao !== "nao_extrair" &&
     doc.tipo_extracao !== null;
 
-  const buttonLabel =
-    doc.tipo_extracao === "holerite" || doc.tipo_extracao === "ctps" || doc.tipo_extracao === "ficha_financeira"
-      ? "Revisar e baixar ZIP"
-      : "Revisar e baixar CSV";
+  const buttonLabel = "Conferir dados";
 
   const tooltipDisabled =
     doc.ocr_validated !== true
-      ? "Confirme o OCR antes de baixar."
+      ? "Confirme a leitura do documento antes."
       : doc.tipo_extracao === "nao_extrair" || doc.tipo_extracao === null
       ? "Selecione um tipo de extração antes."
       : null;
@@ -289,13 +286,13 @@ export function ExtractionTypeBadgeAndSelect({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Não foi possível extrair</AlertDialogTitle>
+            <AlertDialogTitle>Não foi possível processar</AlertDialogTitle>
             <AlertDialogDescription className="text-xs">
               {errorMsg}
               <br />
               <br />
               <span className="text-muted-foreground">
-                Edite o OCR (na lateral esquerda do card) e tente baixar novamente.
+                Edite o texto do documento e tente novamente.
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>

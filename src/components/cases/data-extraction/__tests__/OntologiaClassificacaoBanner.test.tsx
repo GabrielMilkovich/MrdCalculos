@@ -77,25 +77,21 @@ describe("OntologiaClassificacaoBanner", () => {
     render(<OntologiaClassificacaoBanner documentId="abc-123" resumo={resumoBase} />);
     const banner = screen.getByTestId("ontologia-banner-nao-classificadas");
     expect(banner).toBeInTheDocument();
-    // Contador
-    expect(banner).toHaveTextContent("2 de 20");
-    // Lista resumida
+    expect(banner).toHaveTextContent("categoria definida");
     expect(banner).toHaveTextContent("Salário Família");
     expect(banner).toHaveTextContent("Verba XPTO");
   });
 
-  it("renderiza botão 'Classificar manualmente'", () => {
+  it("renderiza botão 'Corrigir categorias'", () => {
     render(<OntologiaClassificacaoBanner documentId="abc-123" resumo={resumoBase} />);
-    const btn = screen.getByRole("button", { name: /classificar manualmente/i });
+    const btn = screen.getByRole("button", { name: /corrigir categorias/i });
     expect(btn).toBeInTheDocument();
   });
 
   it("abre dialog ao clicar e mostra cada rubrica pendente uma vez", () => {
     render(<OntologiaClassificacaoBanner documentId="abc-123" resumo={resumoBase} />);
-    fireEvent.click(screen.getByRole("button", { name: /classificar manualmente/i }));
-    // Título do dialog
-    expect(screen.getByText(/classificar rubricas manualmente/i)).toBeInTheDocument();
-    // Cada rubrica aparece exatamente uma vez (dedup de duplicatas)
+    fireEvent.click(screen.getByRole("button", { name: /corrigir categorias/i }));
+    expect(screen.getByText(/corrigir categorias das verbas/i)).toBeInTheDocument();
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent("Salário Família");
     expect(dialog).toHaveTextContent("Verba XPTO");
@@ -109,7 +105,7 @@ describe("OntologiaClassificacaoBanner", () => {
       rubricas_nao_classificadas: ["Salário Família", "Salário Família", "Verba XPTO", "Salário Família"],
     };
     render(<OntologiaClassificacaoBanner documentId="abc-123" resumo={resumoDup} />);
-    fireEvent.click(screen.getByRole("button", { name: /classificar manualmente/i }));
+    fireEvent.click(screen.getByRole("button", { name: /corrigir categorias/i }));
     const dialog = screen.getByRole("dialog");
     const ocorrencias = dialog.querySelectorAll('div.font-mono');
     const nomes = Array.from(ocorrencias).map((el) => el.textContent);

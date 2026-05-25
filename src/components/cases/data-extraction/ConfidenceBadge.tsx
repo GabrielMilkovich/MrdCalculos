@@ -38,7 +38,7 @@ export function ConfidenceBadge({ score }: Props) {
           icon: <ShieldX className="h-3 w-3" />,
           tone:
             "bg-rose-100 text-rose-900 dark:bg-rose-950/40 dark:text-rose-200 border-rose-300",
-          label: "Baixa confiança — revise",
+          label: "Requer conferência",
         };
     }
   })();

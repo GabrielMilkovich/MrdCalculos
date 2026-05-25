@@ -99,24 +99,24 @@ export function CsvBuildReportPanel({
             {limpo ? (
               <>
                 <Check className="h-5 w-5 text-emerald-600" />
-                CSV pronto — {nomeRecurso}
+                Dados prontos — {nomeRecurso}
               </>
             ) : temRejeicoes ? (
               <>
                 <XCircle className="h-5 w-5 text-rose-600" />
-                Atenção — dados serão perdidos no CSV de {nomeRecurso}
+                Atenção — alguns dados de {nomeRecurso} serão descartados
               </>
             ) : (
               <>
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
-                CSV de {nomeRecurso} — revisão recomendada
+                {nomeRecurso} — revisão recomendada
               </>
             )}
           </AlertDialogTitle>
           <AlertDialogDescription className="text-xs">
             {limpo
-              ? `${report.linhasGeradas} linha(s) saíram para o CSV sem perda nem ajuste. Pode baixar com segurança.`
-              : `Resumo do que foi feito ao gerar o CSV. Confira antes de baixar.`}
+              ? `${report.linhasGeradas} registro(s) preparados sem pendências.`
+              : `Confira o resumo abaixo antes de confirmar.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -125,7 +125,7 @@ export function CsvBuildReportPanel({
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className="bg-emerald-50 text-emerald-900 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200">
               <Check className="h-3 w-3 mr-1" />
-              {report.linhasGeradas} linha(s) no CSV
+              {report.linhasGeradas} registro(s) preparados
             </Badge>
             {temRejeicoes && (
               <Badge variant="outline" className="bg-rose-50 text-rose-900 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200">
@@ -156,7 +156,7 @@ export function CsvBuildReportPanel({
           {/* Rejeições */}
           {temRejeicoes && (
             <SectionList
-              titulo="Linhas REJEITADAS — não aparecem no CSV final"
+              titulo="Dados descartados — não serão usados no cálculo"
               tom="rose"
               items={report.linhasRejeitadas.map(
                 (r) => `Linha ${r.idx + 1}: ${r.motivo}`,
@@ -187,7 +187,7 @@ export function CsvBuildReportPanel({
           {/* Paridade — campos extraídos que não chegam ao CSV importável */}
           {temCamposNaoExportados && (
             <SectionList
-              titulo="Paridade — campos só em CSVs de auditoria"
+              titulo="Campos disponíveis apenas nos detalhes técnicos"
               tom="sky"
               items={camposNaoExportados.map(
                 (c) => `${c.campo}: ${c.motivo}`,
@@ -198,7 +198,7 @@ export function CsvBuildReportPanel({
           {temRejeicoes && (
             <div className="rounded border border-rose-300 bg-rose-50 dark:bg-rose-950/30 p-2 text-[11px] text-rose-900 dark:text-rose-200">
               <p className="font-medium mb-1">
-                Marque a caixa abaixo para autorizar o download mesmo com perda de dado.
+                Marque a caixa abaixo para confirmar mesmo com dados descartados.
               </p>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -208,7 +208,7 @@ export function CsvBuildReportPanel({
                   className="h-3.5 w-3.5"
                 />
                 <span>
-                  Estou ciente de que {report.linhasRejeitadas.length} linha(s) não entrarão no CSV. Quero baixar assim mesmo.
+                  Estou ciente de que {report.linhasRejeitadas.length} registro(s) não serão usados no cálculo.
                 </span>
               </label>
             </div>
@@ -217,24 +217,22 @@ export function CsvBuildReportPanel({
             <div className="rounded border border-rose-400 bg-rose-100 dark:bg-rose-950/40 p-2 text-[11px] text-rose-900 dark:text-rose-200">
               <p className="font-medium mb-1 flex items-center gap-1">
                 <AlertTriangle className="h-3 w-3" />
-                Atenção — apurações marcadas REVISAR_OCR não foram resolvidas
+                Atenção — alguns registros precisam de conferência
               </p>
               <p className="mb-2">
                 {apuracoesRevisar > 0 && (
                   <>
-                    {apuracoesRevisar} apuração(ões) com flag de revisão (admissão
-                    vazada, eventos como batidas, cronologia inválida).
+                    {apuracoesRevisar} registro(s) com dados inconsistentes
+                    que precisam de verificação.
                     {periodosDivergentes > 0 && " "}
                   </>
                 )}
                 {periodosDivergentes > 0 && (
                   <>
-                    {periodosDivergentes} período(s) com totalizador divergente da
-                    soma das batidas.
+                    {periodosDivergentes} período(s) com valores divergentes.
                   </>
                 )}{" "}
-                Recomenda-se revisar manualmente cada uma ou clicar em{" "}
-                <strong>"Verificar com IA"</strong> antes de exportar.
+                Recomenda-se revisar manualmente antes de confirmar.
               </p>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -244,8 +242,7 @@ export function CsvBuildReportPanel({
                   className="h-3.5 w-3.5"
                 />
                 <span>
-                  Confirmo que revisei manualmente cada apuração marcada
-                  REVISAR_OCR ou conferi com a IA. Quero exportar mesmo assim.
+                  Confirmo que revisei os registros que precisam de atenção.
                 </span>
               </label>
             </div>
@@ -268,7 +265,7 @@ export function CsvBuildReportPanel({
             ) : (
               <Download className="h-4 w-4 mr-1.5" />
             )}
-            {temRejeicoes ? "Baixar mesmo com perdas" : "Baixar"}
+            {temRejeicoes ? "Confirmar mesmo assim" : "Confirmar"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

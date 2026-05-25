@@ -334,7 +334,7 @@ export function FeriasReviewDialog({
     <ReviewLayout
       open={open}
       onOpenChange={onOpenChange}
-      title="Revisar férias"
+      title="Conferir férias"
       subtitle={`${rows.length} período(s) · ${filename}`}
       ocrText={ocrText}
       unparsedLines={unparsedLines}
