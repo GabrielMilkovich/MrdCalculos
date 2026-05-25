@@ -83,24 +83,24 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
 
     try {
       let texto = "";
+      let tempStoragePath: string | null = null;
 
       if (file.type === "text/plain" || file.type === "text/csv") {
         texto = await file.text();
       } else if (file.type === "application/pdf") {
-        // Upload to storage, then OCR
+        // Upload to storage — Claude lê o PDF direto quando disponível
+        // (muito mais preciso que OCR pra tabelas fixed-width ADP/Via Varejo)
         const path = `temp/ficha_${caseId}_${Date.now()}.pdf`;
         const { error: upErr } = await supabase.storage.from("case-documents").upload(path, file);
         if (upErr) throw new Error("Erro no upload: " + upErr.message);
+        tempStoragePath = path;
 
-        // Use OCR edge function
+        // OCR como fallback — texto continua útil se PDF source falhar
         const { data: ocrData, error: ocrErr } = await supabase.functions.invoke("ocr-document", {
           body: { storage_path: path, mime_type: "application/pdf" },
         });
         if (ocrErr) throw new Error("Erro no OCR: " + ocrErr.message);
         texto = ocrData?.text || ocrData?.texto || "";
-
-        // Cleanup temp file
-        await supabase.storage.from("case-documents").remove([path]);
       } else {
         texto = await file.text();
       }
@@ -109,14 +109,23 @@ export function ImportadorFichaFinanceira({ caseId, onImported }: Props) {
         throw new Error("Não foi possível extrair texto do documento. Verifique se é um PDF válido.");
       }
 
-      // Send to AI parser
+      // Send to AI parser — Claude lê PDF direto quando storage_path
+      // disponível, fallback pro OCR texto se download falhar.
       const { data: parsed, error: parseErr } = await supabase.functions.invoke("parse-ficha-financeira", {
         body: {
-          texto_documento: texto.slice(0, 30000), // limit context
+          texto_documento: texto.slice(0, 80000),
           tipo_documento: tipoDoc,
           ano_referencia: new Date().getFullYear(),
+          storage_path: tempStoragePath,
+          storage_bucket: "case-documents",
         },
       });
+
+      // Cleanup temp file DEPOIS do parse (antes deletava antes — Claude
+      // não conseguia baixar o PDF porque já não existia)
+      if (tempStoragePath) {
+        await supabase.storage.from("case-documents").remove([tempStoragePath]);
+      }
 
       if (parseErr) throw new Error("Erro na análise: " + parseErr.message);
       if (parsed?.error) throw new Error(parsed.error);

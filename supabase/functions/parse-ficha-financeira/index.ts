@@ -1,246 +1,418 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit } from "../_shared/rate-limit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Audit-fix S3 — OpenAI API é paga, limite global por usuário.
 const PARSE_FICHA_RATE_LIMIT = 60;
 const PARSE_FICHA_RATE_WINDOW_SEC = 3600;
+const MODEL = "claude-sonnet-4-6";
+const ANTHROPIC_VERSION = "2023-06-01";
+const PDF_MAX_BYTES = 30 * 1024 * 1024;
+
+// Códigos internos de RH Via Varejo / ADP que NÃO entram em cálculo
+// trabalhista. Provisões, bases, encargos patronais, totalizadores.
+const CODIGOS_BLOCKLIST = new Set([
+  // Provisões RH (6xxx)
+  ...Array.from({ length: 600 }, (_, i) => String(6000 + i).padStart(4, "0")),
+  // Bases de cálculo (5xxx — INSS, IR, FGTS são informativos)
+  ...Array.from({ length: 200 }, (_, i) => String(5000 + i).padStart(4, "0")),
+  // Encargos patronais (8xxx, 9xxx)
+  ...Array.from({ length: 200 }, (_, i) => String(8000 + i).padStart(4, "0")),
+  ...Array.from({ length: 100 }, (_, i) => String(9900 + i).padStart(4, "0")),
+  // Totalizadores 13º
+  "0509", "0517", "0521",
+]);
+
+const DENOMINACAO_BLOCKLIST_PATTERNS = [
+  /^prov\b/i,
+  /^base\s+(fgts|inss|ir)\b/i,
+  /^total\s+de\b/i,
+  /^fgts\s*(emp|patr)/i,
+  /^encargo/i,
+];
+
+function deveIgnorar(codigo: string | null, denominacao: string): boolean {
+  if (codigo && CODIGOS_BLOCKLIST.has(codigo.padStart(4, "0"))) return true;
+  return DENOMINACAO_BLOCKLIST_PATTERNS.some((re) => re.test(denominacao.trim()));
+}
+
+async function baixarPdfBase64(
+  supabase: SupabaseClient,
+  storagePath: string,
+  storageBucket: string,
+): Promise<string | null> {
+  try {
+    const { data } = await supabase.storage
+      .from(storageBucket)
+      .createSignedUrl(storagePath, 300);
+    if (!data?.signedUrl) {
+      console.warn("[parse-ficha] signed URL falhou — fallback OCR");
+      return null;
+    }
+
+    const resp = await fetch(data.signedUrl);
+    if (!resp.ok) {
+      console.warn(`[parse-ficha] PDF download ${resp.status} — fallback OCR`);
+      return null;
+    }
+
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    if (bytes.length > PDF_MAX_BYTES) {
+      console.warn("[parse-ficha] PDF grande demais — fallback OCR");
+      return null;
+    }
+
+    return base64Encode(bytes);
+  } catch (err) {
+    console.warn("[parse-ficha] erro ao baixar PDF:", err);
+    return null;
+  }
+}
+
+function buildSystemPrompt(tipoLabel: string, anoRef: string): string {
+  return `Você é um perito contábil trabalhista. Analise o ${tipoLabel} e extraia TODAS as rubricas de PAGAMENTO (classificação "PGTO") com valores mensais.
+
+REGRAS RÍGIDAS:
+
+1. **APENAS PGTO.** Ignore linhas com classificação DESC (desconto), BASE, ENCAR (encargo patronal), OUTRO, PROV (provisão), INFO.
+   A classificação está na coluna "Clas." ou "Cl." — geralmente a 3ª coluna da tabela.
+
+2. **Código numérico obrigatório.** Cada rubrica tem código de 4 dígitos (ex: 0620, 0501, 3290).
+   Se você vê o código no documento, INCLUA-O. Se não vê, use string vazia "".
+
+3. **Colunas = meses.** Cada coluna numérica após a classificação representa um mês (Jan, Fev, ..., Dez, 13º, Total).
+   Mapeie cada coluna pra ${anoRef}-MM. Coluna "13º" vira ${anoRef}-13.
+   NÃO confunda a data de impressão do documento (cabeçalho) com competência das rubricas.
+
+4. **Formato monetário BR.** Ponto = milhar, vírgula = decimal (1.234,56). Converta pra decimal: 1234.56.
+
+5. **Ignora provisões.** Rubricas com código 6xxx (6000-6999) são provisões internas de RH. NÃO inclua.
+   Idem pra códigos 5xxx (bases), 8xxx (encargos), 9xxx (FGTS patronal).
+
+6. **Totalizadores.** Linhas "Total de..." são somas. NÃO inclua como rubrica.
+
+CATEGORIZAÇÃO:
+| Padrão | Categoria |
+|---|---|
+| Comissão, Comissões, COM., cod 0620 | comissao |
+| DSR, Repouso, cod 0501/0502 | dsr |
+| Prêmio, Premio, Gratificação, cod 2377/3290/4101 | premio |
+| Adicional Noturno, cod 1800 | adicional_noturno |
+| Hora Extra, H.Extra, cod 4001/4013 | hora_extra |
+| Salário Base, Mínimo Garantido, cod 0040/0712 | salario_base |
+| Qualquer outro PGTO | outros |
+
+EXTRAIA TUDO que for PGTO. Se há 20 rubricas PGTO, retorne as 20.
+Valores em branco ou zero = mês sem pagamento, OMITA-OS.
+
+Responda APENAS via a tool extrair_dados_financeiros.`;
+}
+
+interface RubricaExtraida {
+  codigo: string;
+  denominacao: string;
+  classificacao?: string;
+  categoria: string;
+  valores_mensais: Array<{ competencia: string; valor: number }>;
+}
+
+interface ResultadoExtracao {
+  ano: number;
+  empregado?: string;
+  empresa?: string;
+  rubricas: RubricaExtraida[];
+  resumo_mensal?: Array<{ competencia: string; total_vencimentos: number }>;
+}
+
+const TOOL_SCHEMA = {
+  name: "extrair_dados_financeiros",
+  description:
+    "Extrai dados estruturados de ficha financeira ou contracheque trabalhista. Use APENAS para rubricas classificadas como PGTO.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      ano: { type: "number" as const, description: "Ano principal de referência" },
+      empregado: { type: "string" as const, description: "Nome do empregado" },
+      empresa: { type: "string" as const, description: "Nome da empresa/empregador" },
+      rubricas: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            codigo: { type: "string" as const, description: "Código numérico 4 dígitos" },
+            denominacao: { type: "string" as const, description: "Nome da rubrica" },
+            classificacao: { type: "string" as const, description: "PGTO, DESC, etc" },
+            categoria: {
+              type: "string" as const,
+              enum: ["comissao", "dsr", "premio", "adicional_noturno", "hora_extra", "salario_base", "outros"],
+            },
+            valores_mensais: {
+              type: "array" as const,
+              items: {
+                type: "object" as const,
+                properties: {
+                  competencia: { type: "string" as const, description: "YYYY-MM" },
+                  valor: { type: "number" as const },
+                },
+                required: ["competencia", "valor"],
+              },
+            },
+          },
+          required: ["codigo", "denominacao", "categoria", "valores_mensais"],
+        },
+      },
+      resumo_mensal: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            competencia: { type: "string" as const },
+            total_vencimentos: { type: "number" as const },
+          },
+          required: ["competencia", "total_vencimentos"],
+        },
+      },
+    },
+    required: ["ano", "rubricas"],
+  },
+};
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
 
   try {
-    // Audit-fix S3: extrair user_id do JWT (verify_jwt já validou no edge)
-    // e aplicar rate-limit global antes de chamar a OpenAI.
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Authorization header obrigatório" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Authorization header obrigatório" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Token inválido" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Token inválido" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
+
     const rl = await checkRateLimit(
-      supabaseAuth,
-      user.id,
-      "parse-ficha-financeira",
-      PARSE_FICHA_RATE_LIMIT,
-      PARSE_FICHA_RATE_WINDOW_SEC,
+      supabase, user.id, "parse-ficha-financeira",
+      PARSE_FICHA_RATE_LIMIT, PARSE_FICHA_RATE_WINDOW_SEC,
     );
     if (!rl.allowed) {
-      return new Response(JSON.stringify({
-        error: "Rate limit excedido",
-        hint: `Limite de ${rl.limit} chamadas/hora atingido. Tente novamente em ~${Math.round(rl.retryAfterSec / 60)} min.`,
-        used: rl.used, limit: rl.limit,
-      }), {
-        status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit excedido",
+          hint: `Limite de ${rl.limit} chamadas/hora. Tente em ~${Math.round(rl.retryAfterSec / 60)} min.`,
+          used: rl.used, limit: rl.limit,
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
-    const { texto_documento, tipo_documento, ano_referencia } = await req.json();
+    const body = await req.json();
+    const {
+      texto_documento,
+      tipo_documento,
+      ano_referencia,
+      storage_path,
+      storage_bucket,
+    } = body;
 
-    if (!texto_documento) {
-      return new Response(JSON.stringify({ error: "Texto do documento é obrigatório" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (!texto_documento && !storage_path) {
+      return new Response(
+        JSON.stringify({ error: "texto_documento ou storage_path obrigatório" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "ANTHROPIC_API_KEY não configurada" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
-    const tipoLabel = tipo_documento === "contracheque" ? "Demonstrativo de Pagamento (Contracheque)" : "Ficha Financeira";
+    const tipoLabel = tipo_documento === "contracheque"
+      ? "Demonstrativo de Pagamento (Contracheque)"
+      : "Ficha Financeira";
+    const anoRef = String(ano_referencia || new Date().getFullYear());
+    const systemPrompt = buildSystemPrompt(tipoLabel, anoRef);
 
-    const systemPrompt = `Você é um perito contábil trabalhista especializado em análise de ${tipoLabel}.
-
-OBJETIVO: Extrair TODAS as rubricas de pagamento com seus valores mensais.
-
-REGRAS DE EXTRAÇÃO — ${tipoLabel}:
-${tipo_documento === "contracheque" ? `
-- Extraia APENAS valores da coluna "VENCIMENTOS" (créditos ao empregado)
-- IGNORE a coluna "DESCONTOS"  
-- O mês de referência está no cabeçalho (ex: "REFERÊNCIA: JAN/2018" ou "Competência: 01/2018")
-- Se houver múltiplos contracheques, extraia cada um com sua competência
-` : `
-- REGRA FUNDAMENTAL: Extraia APENAS linhas com classificação "PGTO" (pagamento)
-- IGNORE linhas com classificação "DESC" (desconto), "BASE", "INFO" ou qualquer outra
-- A classificação geralmente está na 3ª coluna, marcada como "Clas." ou "Cl."
-- Cada coluna numérica após a classificação representa um mês (Jan, Fev, Mar, etc.)
-- Valores em branco ou zero significam que não houve pagamento naquele mês — OMITA-OS
-- Se o documento tiver formato de tabela com meses nas colunas, mapeie cada coluna para YYYY-MM
-`}
-
-IDENTIFICAÇÃO DE RUBRICAS — Categorize cada rubrica:
-| Padrão no nome/código | Categoria |
-|---|---|
-| Comissão, Comissões, COMISSOES, cod 0620 | comissao |
-| DSR, Repouso, Rep.Sem.Rem., cod 0501/0502 | dsr |
-| Prêmio, Premio, Gratificação, Estímulo, cod 2377/2477/2481/3290 | premio |
-| Adicional Noturno, Ad.Not., cod 1800 | adicional_noturno |
-| Hora Extra, H.Extra, HE, cod 4001 | hora_extra |
-| Salário, Sal.Base, Piso, Mínimo Garantido | salario_base |
-| Qualquer outro vencimento PGTO | outros |
-
-FORMATO MONETÁRIO:
-- Documentos brasileiros usam: 1.234,56 (ponto = milhar, vírgula = decimal)
-- Converta para número decimal: 1234.56
-- Nunca inclua R$, pontos de milhar no output numérico
-
-FORMATO DE COMPETÊNCIA: sempre YYYY-MM (ex: 2018-01, 2019-12)
-
-EXTRAIA TUDO: Não omita rubricas. Se existem 10 rubricas PGTO, retorne as 10.
-Se uma rubrica tem valores em 12 meses, retorne os 12 valores.
-
-O ano de referência provável é ${ano_referencia || "indicado no documento"}.`;
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Analise o seguinte documento e extraia TODAS as rubricas de pagamento com seus valores mensais.\n\nDOCUMENTO:\n${texto_documento.slice(0, 50000)}` },
-        ],
-        tools: [{
-          type: "function",
-          function: {
-            name: "extrair_dados_financeiros",
-            description: "Extrai dados estruturados de ficha financeira ou contracheque trabalhista",
-            parameters: {
-              type: "object",
-              properties: {
-                ano: { type: "number", description: "Ano principal de referência" },
-                empregado: { type: "string", description: "Nome do empregado" },
-                empresa: { type: "string", description: "Nome da empresa/empregador" },
-                rubricas: {
-                  type: "array",
-                  description: "Lista de rubricas de pagamento extraídas",
-                  items: {
-                    type: "object",
-                    properties: {
-                      codigo: { type: "string", description: "Código da rubrica (ex: 0620)" },
-                      denominacao: { type: "string", description: "Nome da rubrica (ex: Comissões)" },
-                      classificacao: { type: "string", description: "Classificação: PGTO, DESC, etc." },
-                      categoria: { 
-                        type: "string", 
-                        enum: ["comissao", "dsr", "premio", "adicional_noturno", "hora_extra", "salario_base", "outros"],
-                        description: "Categoria funcional da rubrica" 
-                      },
-                      valores_mensais: {
-                        type: "array",
-                        description: "Valores por competência (apenas meses com valor > 0)",
-                        items: {
-                          type: "object",
-                          properties: {
-                            competencia: { type: "string", description: "YYYY-MM" },
-                            valor: { type: "number", description: "Valor numérico decimal" }
-                          },
-                          required: ["competencia", "valor"]
-                        }
-                      }
-                    },
-                    required: ["codigo", "denominacao", "categoria", "valores_mensais"]
-                  }
-                },
-                resumo_mensal: {
-                  type: "array",
-                  description: "Total de vencimentos por mês",
-                  items: {
-                    type: "object",
-                    properties: {
-                      competencia: { type: "string" },
-                      total_vencimentos: { type: "number" }
-                    },
-                    required: ["competencia", "total_vencimentos"]
-                  }
-                }
-              },
-              required: ["ano", "rubricas"]
-            }
-          }
-        }],
-        tool_choice: { type: "function", function: { name: "extrair_dados_financeiros" } },
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Limite de requisições excedido. Tente novamente em alguns segundos." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    // PDF source: quando caller passa storage_path, baixa o PDF e manda
+    // pra Claude como document block. Claude vê layout visual real — tabelas
+    // fixed-width, colunas de meses, classificação PGTO/DESC. Muito mais
+    // preciso que OCR texto que perde alinhamento de colunas.
+    let pdfBase64: string | null = null;
+    if (storage_path && storage_bucket) {
+      pdfBase64 = await baixarPdfBase64(
+        supabase,
+        storage_path,
+        storage_bucket || "case-documents",
+      );
+      if (pdfBase64) {
+        console.log(
+          `[parse-ficha] PDF source: ${(pdfBase64.length * 0.75 / 1024 / 1024).toFixed(1)}MB`,
+        );
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos insuficientes." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI error:", response.status, t);
-      throw new Error("Falha na análise do documento");
     }
 
-    const aiResult = await response.json();
-    
-    // Handle both tool_calls and content-based responses
-    let extracted: any;
-    
-    const toolCall = aiResult.choices?.[0]?.message?.tool_calls?.[0];
-    if (toolCall?.function?.arguments) {
-      extracted = JSON.parse(toolCall.function.arguments);
+    // Content blocks: PDF quando disponível, OCR texto como fallback
+    const userContent: Array<Record<string, unknown>> = [];
+    if (pdfBase64) {
+      userContent.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
+        cache_control: { type: "ephemeral" },
+      });
+      userContent.push({
+        type: "text",
+        text: `Analise este ${tipoLabel} (PDF anexo). Extraia TODAS as rubricas PGTO com valores mensais.\n\nAno de referência provável: ${anoRef}.\n\nChame a tool extrair_dados_financeiros com o resultado.`,
+      });
     } else {
-      // Try to parse from content (some models return JSON in content)
-      const content = aiResult.choices?.[0]?.message?.content || "";
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        extracted = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("IA não retornou dados estruturados. Tente novamente.");
+      const texto = (texto_documento || "").slice(0, 80000);
+      userContent.push({
+        type: "text",
+        text: `Analise o seguinte ${tipoLabel} e extraia TODAS as rubricas PGTO com valores mensais.\n\nAno de referência: ${anoRef}.\n\nDOCUMENTO:\n${texto}\n\nChame a tool extrair_dados_financeiros com o resultado.`,
+      });
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": ANTHROPIC_VERSION,
+    };
+    if (pdfBase64) {
+      headers["anthropic-beta"] = "pdfs-2024-09-25";
+    }
+
+    const t0 = Date.now();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 120_000);
+
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: ctrl.signal,
+        headers,
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 8192,
+          system: systemPrompt,
+          tools: [TOOL_SCHEMA],
+          tool_choice: { type: "tool", name: "extrair_dados_financeiros" },
+          messages: [{ role: "user", content: userContent }],
+        }),
+      });
+
+      const durationMs = Date.now() - t0;
+
+      if (!resp.ok) {
+        if (resp.status === 429) {
+          return new Response(
+            JSON.stringify({ error: "Rate limit Anthropic. Tente em alguns segundos." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        const errBody = await resp.text();
+        console.error("[parse-ficha] Anthropic error:", resp.status, errBody.slice(0, 500));
+        throw new Error(`Anthropic ${resp.status}: ${errBody.slice(0, 200)}`);
       }
+
+      const json = await resp.json() as { content?: Array<{ type: string; input?: unknown }> };
+
+      // Extrai tool_use input do response Anthropic
+      let extracted: ResultadoExtracao | null = null;
+      for (const block of json.content ?? []) {
+        if (block.type === "tool_use" && block.input) {
+          extracted = block.input as ResultadoExtracao;
+          break;
+        }
+      }
+      if (!extracted) {
+        throw new Error("Claude não retornou dados via tool. Tente novamente.");
+      }
+
+      // Pós-processamento: blocklist + limpeza
+      if (extracted.rubricas) {
+        const antes = extracted.rubricas.length;
+        extracted.rubricas = extracted.rubricas
+          // Remove provisões, bases, encargos, totalizadores
+          .filter((r) => !deveIgnorar(r.codigo || null, r.denominacao || ""))
+          // Remove classificações não-PGTO que Claude pode ter incluído
+          .filter((r) =>
+            !r.classificacao ||
+            r.classificacao.toUpperCase() === "PGTO" ||
+            r.classificacao === ""
+          )
+          // Limpa valores
+          .filter((r) => r.valores_mensais && r.valores_mensais.length > 0)
+          .map((r) => ({
+            ...r,
+            valores_mensais: r.valores_mensais
+              .filter((v) => v.valor != null && v.valor > 0)
+              .map((v) => ({
+                competencia: v.competencia,
+                valor: typeof v.valor === "string"
+                  ? parseFloat(
+                      String(v.valor).replace(/[^\d.,-]/g, "").replace(",", "."),
+                    )
+                  : v.valor,
+              }))
+              .filter((v) => !isNaN(v.valor) && v.valor > 0),
+          }))
+          .filter((r) => r.valores_mensais.length > 0);
+
+        const filtrados = antes - extracted.rubricas.length;
+        if (filtrados > 0) {
+          console.log(
+            `[parse-ficha] blocklist filtrou ${filtrados} de ${antes} rubricas`,
+          );
+        }
+      }
+
+      console.log(
+        `[parse-ficha] ${extracted.rubricas?.length || 0} rubricas extraídas ` +
+          `de ${tipoLabel} (${durationMs}ms, ` +
+          `source=${pdfBase64 ? "PDF" : "OCR"}, model=${MODEL})`,
+      );
+
+      return new Response(
+        JSON.stringify({
+          ...extracted,
+          _meta: {
+            model: MODEL,
+            duration_ms: durationMs,
+            pdf_source: !!pdfBase64,
+            rubricas_pre_filter: extracted.rubricas?.length,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    } finally {
+      clearTimeout(timer);
     }
-
-    // Post-process: validate and clean data
-    if (extracted.rubricas) {
-      extracted.rubricas = extracted.rubricas
-        .filter((r: any) => r.valores_mensais && r.valores_mensais.length > 0)
-        .map((r: any) => ({
-          ...r,
-          valores_mensais: r.valores_mensais
-            .filter((v: any) => v.valor != null && v.valor > 0)
-            .map((v: any) => ({
-              competencia: v.competencia,
-              valor: typeof v.valor === 'string' ? parseFloat(v.valor.replace(/[^\d.,-]/g, '').replace(',', '.')) : v.valor,
-            }))
-            .filter((v: any) => !isNaN(v.valor) && v.valor > 0),
-        }))
-        .filter((r: any) => r.valores_mensais.length > 0);
-    }
-
-    console.log(`Extracted ${extracted.rubricas?.length || 0} rubricas from ${tipoLabel}`);
-
-    return new Response(JSON.stringify(extracted), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-
   } catch (e) {
-    console.error("parse-ficha-financeira error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("[parse-ficha-financeira] error:", e);
+    return new Response(
+      JSON.stringify({
+        error: e instanceof Error ? e.message : "Erro desconhecido",
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   }
 });
