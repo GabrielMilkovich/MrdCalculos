@@ -525,7 +525,7 @@ export function DocumentsManager({
       // cron, ou pra casos onde processo legado de ocr_running continua existindo.
       // Reduzimos pra 60s max (era 5min) já que OCR síncrono completa em <30s.
       const pollInterval = 2000;
-      const maxPolls = 30; // ~60s max — versão síncrona típico 5-15s
+      const maxPolls = 60; // ~120s max — PDFs grandes usam splitting paralelo (até ~90s)
       let finished = false;
 
       for (let poll = 0; poll < maxPolls && !finished; poll++) {

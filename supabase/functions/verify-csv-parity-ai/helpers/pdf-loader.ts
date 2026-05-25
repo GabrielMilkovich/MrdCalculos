@@ -1,3 +1,8 @@
+/**
+ * NOTA (2026-05-25): import de base64 migrado de `deno.land/std` para `jsr:@std/encoding`.
+ * Imports `deno.land/std` antigos crashavam o worker do Supabase Edge Runtime no startup,
+ * causando 503 persistente até no OPTIONS (preflight CORS). Ver hot-fix versão 6.
+ */
 import { encodeBase64 } from "jsr:@std/encoding@1/base64";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 

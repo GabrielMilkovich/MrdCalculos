@@ -49,10 +49,10 @@ jobs:
         id: calibrate
         run: |
           npx tsx scripts/calibration-pipeline-v3.ts | tee calibrate.log
-          # Extrai porcentagem da linha "MEDIA: X%" (formato esperado do script)
-          MEDIA=$(grep -oE 'media[: ]+([0-9]+\.?[0-9]*)' calibrate.log | head -1 | grep -oE '[0-9]+\.?[0-9]*' || echo "0")
+          # Extrai taxa de aprovação ±5% da linha "±5%:  N/M (XX%)"
+          MEDIA=$(grep -oP '±5%:.*\(\K[0-9]+' calibrate.log || echo "0")
           echo "media=$MEDIA" >> $GITHUB_OUTPUT
-          echo "Calibrate media: $MEDIA%"
+          echo "Calibrate ±5% approval: $MEDIA%"
 
       - name: Falhar se media < 94%
         run: |

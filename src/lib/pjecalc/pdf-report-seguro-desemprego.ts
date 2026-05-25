@@ -15,6 +15,7 @@
  */
 import Decimal from 'decimal.js';
 import type { PjeLiquidacaoResult, PjeSeguroConfig } from './engine-types';
+import { disclaimerHtml } from './pdf-disclaimer';
 
 Decimal.set({ precision: 20 });
 
@@ -163,6 +164,7 @@ export function buildRelatorioSeguroDesempregoHTML(
   <span>Gerado por MRDcalc v${meta.engineVersion || '2.1.0'} em ${new Date().toLocaleString('pt-BR')}</span>
   <span>Processo: ${escapeHtml(meta.processo || '—')}</span>
 </div>
+${disclaimerHtml()}
 </body></html>`;
 }
 

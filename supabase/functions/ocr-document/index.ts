@@ -15,7 +15,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { ocrBytes, type ClaudeOcrOptions } from "../_shared/claude-vision-ocr.ts";
+import { ocrBytesPaginado, type ClaudeOcrOptions } from "../_shared/claude-vision-ocr.ts";
 import { checkRateLimit } from "../_shared/rate-limit.ts";
 import { tentarV6, metadataV6, type V6Tentativa } from "../_shared/v6-pipeline.ts";
 
@@ -507,10 +507,14 @@ Deno.serve(async (req) => {
 
       const claudeOpts: ClaudeOcrOptions = { apiKey: ANTHROPIC_API_KEY };
 
-      const result = await ocrBytes(
+      const result = await ocrBytesPaginado(
         new Uint8Array(buffer),
         document.file_name ?? "documento.pdf",
-        claudeOpts,
+        {
+          ...claudeOpts,
+          pagesPerChunk: 3,
+          concurrency: 5,
+        },
       );
 
       // Validação de continuidade de páginas: o Claude retorna `index` em cada
@@ -773,7 +777,10 @@ Deno.serve(async (req) => {
         doc_type: docType,
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      let msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("timeout") || msg.includes("Timeout") || msg.includes("SIGKILL")) {
+        msg = "Leitura demorou demais. PDF muito grande ou complexo. Tente dividir em arquivos menores.";
+      }
       console.error(`[ocr] OCR falhou para doc ${document_id}:`, err);
 
       try {

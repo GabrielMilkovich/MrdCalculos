@@ -3,6 +3,7 @@
  * Generates a printable HTML report that opens in a new window for PDF printing.
  */
 import type { PjeLiquidacaoResult } from "./engine-types";
+import { disclaimerHtml } from './pdf-disclaimer';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -153,6 +154,7 @@ export function gerarRelatorioPDF(
   <div class="footer">
     Relatório gerado por MRDcalc — Motor PJe-Calc v${meta.engineVersion || "2.0.0"} — ${new Date().toLocaleString("pt-BR")}
   </div>
+  ${disclaimerHtml()}
 </body>
 </html>`;
 

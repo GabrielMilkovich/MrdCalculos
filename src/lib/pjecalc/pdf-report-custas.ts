@@ -24,6 +24,7 @@
  */
 import Decimal from 'decimal.js';
 import type { PjeLiquidacaoResult, PjeCustaResult, PjeCustaItem, PjeCustasConfig } from './engine-types';
+import { disclaimerHtml } from './pdf-disclaimer';
 
 Decimal.set({ precision: 20 });
 
@@ -338,6 +339,7 @@ export function buildRelatorioCustasHTML(
   </div>
 
   ${pageFooter(meta)}
+  ${disclaimerHtml()}
 </body>
 </html>`;
 }

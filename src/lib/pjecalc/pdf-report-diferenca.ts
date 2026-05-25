@@ -3,6 +3,7 @@
  * Shows only the net difference per verba/competence.
  */
 import type { PjeLiquidacaoResult } from "./engine-types";
+import { disclaimerHtml } from './pdf-disclaimer';
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
@@ -88,6 +89,7 @@ export function gerarRelatorioDiferenca(
   <div class="footer">
     Relatório de Diferenças — MRDcalc v${meta.engineVersion || "2.1.0"} — ${new Date().toLocaleString("pt-BR")}
   </div>
+  ${disclaimerHtml()}
 </body>
 </html>`;
 

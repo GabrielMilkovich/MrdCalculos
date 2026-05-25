@@ -25,6 +25,7 @@
  */
 import Decimal from 'decimal.js';
 import type { PjeLiquidacaoResult } from './engine-types';
+import { disclaimerHtml } from './pdf-disclaimer';
 
 Decimal.set({ precision: 20 });
 
@@ -337,6 +338,7 @@ export function buildRelatorioPrecatorioHTML(
   <div class="footer">
     Gerado por MRDcalc em ${new Date().toLocaleString('pt-BR')} — ${escapeHtml(TIPO_LABELS[meta.tipoPrecatorio])} / ${escapeHtml(meta.esfera)}
   </div>
+  ${disclaimerHtml()}
 </body>
 </html>`;
 }

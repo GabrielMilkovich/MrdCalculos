@@ -23,6 +23,7 @@ import type {
   PjeIRConfig,
   PjeFGTSConfig,
 } from './engine-types';
+import { disclaimerHtml } from './pdf-disclaimer';
 
 Decimal.set({ precision: 20 });
 
@@ -352,6 +353,7 @@ function buildHTML(input: JustificativaInput): string {
   ${renderIR(input.irConfig)}
   ${renderFGTS(input.fgtsConfig)}
   ${renderMemoriaResumida(input.resultado)}
+  ${disclaimerHtml()}
 </body>
 </html>`;
 }
