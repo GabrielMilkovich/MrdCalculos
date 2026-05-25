@@ -62,16 +62,82 @@ const RE_TEM_DIGITO = /\d/;
 const RE_BLOCO_FERIAS =
   /\b(recibo|aviso|comunicado|termo|solicita[çc][ãa]o|hist[óo]rico)\s+de\s+f[ée]rias\b/gi;
 
+// CTPS tabular: each row has 2 date-ranges + dias + abono on one line
+// "24/11/2003 a 22/11/2004  11/10/2004 a 30/10/2004      20         10"
+const RE_CTPS_FERIAS_ROW =
+  /(\d{2}\/\d{2}\/\d{4})\s*a\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s*a\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{1,3})\s+(\d{1,3})/g;
+
+function parseDateDMY(s: string): string {
+  const [d, m, y] = s.split('/');
+  return `${y}-${m}-${d}`;
+}
+
+function derivarRelativa(aqIni: string): string {
+  const [d, m, y] = aqIni.split('/');
+  const ano1 = parseInt(y, 10);
+  return `${ano1}/${ano1 + 1}`;
+}
+
+function parseCtpsTabularFerias(ocrText: string): FeriasParseada[] {
+  const inicio = ocrText.search(/HIST[ÓO]RICO\s+DE\s+F[ÉE]RIAS/i);
+  if (inicio === -1) return [];
+
+  const restText = ocrText.slice(inicio);
+  const fimMatch = restText.slice(30).search(
+    /\n\s*(?:AFASTAMENTOS|ANOTA[ÇC][ÕO]ES|HIST[ÓO]RICO\s+(?:DE\s+CARGO|SALARIAL)|CONTRIBUI[ÇC][ÃA]O|REGISTRO\s+DE\s+FALT)/i,
+  );
+  const secao = fimMatch === -1 ? restText : restText.slice(0, 30 + fimMatch);
+
+  const ferias: FeriasParseada[] = [];
+  const re = new RegExp(RE_CTPS_FERIAS_ROW.source, 'g');
+  let match;
+  while ((match = re.exec(secao)) !== null) {
+    const [, aqIni, aqFim, gozoIni, gozoFim, diasStr, abonoStr] = match;
+    const diasGozo = Number(diasStr);
+    const diasAbono = Number(abonoStr);
+    ferias.push({
+      relativa: derivarRelativa(aqIni),
+      prazo: diasGozo + diasAbono,
+      prazo_origem: 'detectado',
+      situacao: 'G',
+      dobra_geral: false,
+      abono: diasAbono > 0,
+      dias_abono: diasAbono,
+      gozo1: { inicio: gozoIni, fim: gozoFim, dobra: false },
+      gozo2: null,
+      gozo3: null,
+    });
+  }
+  return ferias;
+}
+
 export function parseFerias(ocrText: string): ParseFeriasResult {
   if (!ocrText || ocrText.trim().length === 0) {
     return { ferias: [], warnings: ["OCR vazio."], unparsed_lines: [] };
   }
 
+  // CTPS tabular format pre-pass: detects "HISTÓRICO DE FÉRIAS" table rows
+  const ctpsFerias = parseCtpsTabularFerias(ocrText);
+
   const blocos = splitInBlocks(ocrText);
   const warnings: string[] = [];
-  const ferias: FeriasParseada[] = [];
+  const ferias: FeriasParseada[] = [...ctpsFerias];
   const allLines = ocrText.split(/\r?\n/);
   const linhasUsadas = new Set<number>();
+
+  // Mark tabular rows as used so they don't appear as unparsed
+  if (ctpsFerias.length > 0) {
+    for (let i = 0; i < allLines.length; i++) {
+      if (RE_CTPS_FERIAS_ROW.test(allLines[i])) {
+        linhasUsadas.add(i);
+      }
+      // Also mark the header line
+      if (/HIST[ÓO]RICO\s+DE\s+F[ÉE]RIAS/i.test(allLines[i])) {
+        linhasUsadas.add(i);
+      }
+    }
+    RE_CTPS_FERIAS_ROW.lastIndex = 0;
+  }
 
   for (let i = 0; i < blocos.length; i++) {
     const f = parseOneBlock(blocos[i], warnings, i, linhasUsadas, allLines);
