@@ -3,10 +3,9 @@ import { MainLayoutPremium } from "@/components/layout/MainLayoutPremium";
 import { CaseCard } from "@/components/cases/CaseCard";
 import { CreateCaseDialog } from "@/components/cases/CreateCaseDialog";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Search, Loader2, Briefcase, TrendingUp, FileStack,
+  Search, Loader2, Briefcase,
   CheckCircle2, Clock, Calculator, Scale, Archive, FileSpreadsheet, Layers
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -144,9 +143,6 @@ export default function Casos() {
   };
 
   // KPIs — apenas casos ativos
-  const totalValue = activeCases.reduce((sum, c) => sum + (c.total_bruto || 0), 0);
-  const totalDocs = activeCases.reduce((sum, c) => sum + c.doc_count, 0);
-  const pendingCases = activeCases.filter(c => c.status === "em_analise").length;
 
   // Handlers arquivar/desarquivar/excluir
   const archiveCase = async (caseId: string, archive: boolean) => {
@@ -175,69 +171,6 @@ export default function Casos() {
   return (
     <MainLayoutPremium breadcrumbs={[{ label: "Casos" }]} title="Casos">
       <div className="space-y-6 animate-fade-in">
-        {/* KPI Stats */}
-        {cases.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 stagger-children">
-            <Card className="bg-card/80">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Briefcase className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-foreground">{cases.length}</div>
-                    <div className="text-xs text-muted-foreground">Casos Total</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-card/80">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-accent/10">
-                    <Clock className="h-4 w-4 text-accent" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-foreground">{pendingCases}</div>
-                    <div className="text-xs text-muted-foreground">Em Análise</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-card/80">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-[hsl(var(--success))]/10">
-                    <FileStack className="h-4 w-4 text-[hsl(var(--success))]" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-foreground">{totalDocs}</div>
-                    <div className="text-xs text-muted-foreground">Documentos</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-card/80">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold text-foreground">
-                      {totalValue > 0 
-                        ? `R$ ${(totalValue / 1000).toFixed(0)}k` 
-                        : "—"
-                      }
-                    </div>
-                    <div className="text-xs text-muted-foreground">Valor Total</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative flex-1 max-w-md">
