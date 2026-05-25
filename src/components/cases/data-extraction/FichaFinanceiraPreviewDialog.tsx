@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Download, Loader2, AlertTriangle } from 'lucide-react';
 import Decimal from 'decimal.js';
+import { buildFichaFinanceiraZip } from '@/features/data-extraction/export/per-doc/ficha-financeira-zip';
+import { triggerBlobDownload } from '@/features/data-extraction';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { ValidationBanner } from './ValidationBanner';
@@ -61,13 +62,10 @@ export function FichaFinanceiraPreviewDialog({
 }: Props) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [aceitaRisco, setAceitaRisco] = useState(false);
 
   const review = useFichaFinanceiraReview(parsed);
 
-  const validacaoOk = parsed.validacao.ok;
-  const podeBaixar =
-    review.podeConfirmar && (validacaoOk || aceitaRisco);
+  const podeBaixar = review.podeConfirmar;
 
   const rubricasPGTO = useMemo(
     () => review.rubricas.filter((r) => r.classificacao?.toUpperCase() === 'PGTO'),
@@ -89,11 +87,48 @@ export function FichaFinanceiraPreviewDialog({
   const handleConfirm = async () => {
     setSaving(true);
     try {
+      const resultadoSalva = await review.salvarClassificacoes();
+      if (resultadoSalva.erros.length > 0) {
+        toast({
+          title: 'Erro ao salvar classificações',
+          description: resultadoSalva.erros[0],
+          variant: 'destructive',
+        });
+      } else if (resultadoSalva.conflitos.length > 0) {
+        toast({
+          title: `${resultadoSalva.conflitos.length} código(s) não salvos`,
+          description: 'Já revisados por admin. ZIP gerado mesmo assim.',
+        });
+      } else if (resultadoSalva.salvas > 0) {
+        toast({
+          title: `${resultadoSalva.salvas} classificação(ões) salva(s)`,
+        });
+      }
+
+      const result = await buildFichaFinanceiraZip({
+        ano: parsed.ano,
+        empregador: parsed._meta?.empregador_detectado ?? 'GENERICO',
+        empregado: parsed.empregado ?? 'desconhecido',
+        rubricas: review.rubricas,
+        validacao: parsed.validacao,
+        parserMeta: {
+          fonte: parsed._meta?.parser ? 'deterministic' : 'claude',
+          duration_ms: parsed._meta?.duration_ms,
+        },
+      });
+
+      triggerBlobDownload(result.blob, result.filename);
       toast({
-        title: 'Classificações salvas',
-        description: 'Exporter ZIP será implementado na Sprint 4.',
+        title: `ZIP baixado: ${result.filename}`,
+        description: `${result.resumo.categorias.length} categorias, ${result.resumo.rubricas_incluidas} rubricas`,
       });
       onOpenChange(false);
+    } catch (e) {
+      toast({
+        title: 'Falha ao gerar ZIP',
+        description: e instanceof Error ? e.message : 'Erro desconhecido',
+        variant: 'destructive',
+      });
     } finally {
       setSaving(false);
     }
@@ -127,16 +162,6 @@ export function FichaFinanceiraPreviewDialog({
                 Classifique antes de baixar.
               </span>
             </div>
-          )}
-
-          {!validacaoOk && (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
-              <Checkbox
-                checked={aceitaRisco}
-                onCheckedChange={(v) => setAceitaRisco(v === true)}
-              />
-              Estou ciente do delta e aceito o risco
-            </label>
           )}
 
           <ScrollArea className="flex-1 min-h-0 border rounded-md">

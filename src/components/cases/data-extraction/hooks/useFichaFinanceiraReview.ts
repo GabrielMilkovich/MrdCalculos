@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import Decimal from 'decimal.js';
+import { supabase } from '@/integrations/supabase/client';
 import type { RubricaEnriquecida } from '@/features/data-extraction/enrichment/enrich-ficha-financeira';
 import {
   type FichaFinanceiraParsed,
@@ -49,6 +50,22 @@ function isNaoClassificada(r: RubricaEditavel): boolean {
     !r.modificada_pelo_operador &&
     r.classificacao?.toUpperCase() === 'PGTO'
   );
+}
+
+const SLUG_TO_CATEGORIA_PJE: Record<FichaCategoriaSlug, string> = {
+  salario_fixo: 'salario_base',
+  comissao: 'comissao',
+  dsr: 'dsr_comissao',
+  premiacao: 'premio',
+  minimo_garantido: 'minimo_garantido',
+  salario_familia: 'salario_familia',
+  ignorar: 'desconto',
+};
+
+export interface SalvarResult {
+  salvas: number;
+  erros: string[];
+  conflitos: Array<{ codigo: string; motivo: string }>;
 }
 
 export function useFichaFinanceiraReview(parsed: FichaFinanceiraParsed) {
@@ -133,6 +150,42 @@ export function useFichaFinanceiraReview(parsed: FichaFinanceiraParsed) {
     return [...meses].sort();
   }, [rubricas]);
 
+  const salvarClassificacoes = useCallback(async (): Promise<SalvarResult> => {
+    const modificadas = rubricas.filter((r) => r.modificada_pelo_operador);
+    if (modificadas.length === 0) {
+      return { salvas: 0, erros: [], conflitos: [] };
+    }
+
+    const empregador = parsed._meta?.empregador_detectado ?? 'GENERICO';
+
+    const { data, error } = await supabase.functions.invoke('ficha-classify-confirm', {
+      body: {
+        codigos: modificadas.map((r) => ({
+          codigo: r.codigo,
+          empregador,
+          denominacao: r.denominacao,
+          categoria_pje: SLUG_TO_CATEGORIA_PJE[r.categoria_atual] ?? r.categoria_atual,
+          classe_documento: r.classificacao || 'PGTO',
+          incide_fgts: r.incide_fgts,
+          incide_inss: r.incide_inss,
+          incide_ir: r.incide_ir,
+          natureza_indenizatoria: r.natureza_indenizatoria,
+          justificativa: r.justificativa,
+        })),
+      },
+    });
+
+    if (error) {
+      return { salvas: 0, erros: [error.message], conflitos: [] };
+    }
+
+    return {
+      salvas: data?.salvas ?? 0,
+      erros: [],
+      conflitos: data?.conflitos ?? [],
+    };
+  }, [rubricas, parsed._meta?.empregador_detectado]);
+
   return {
     rubricas,
     setCategoria,
@@ -143,5 +196,6 @@ export function useFichaFinanceiraReview(parsed: FichaFinanceiraParsed) {
     conflitos,
     podeConfirmar,
     mesesOrdenados,
+    salvarClassificacoes,
   };
 }
