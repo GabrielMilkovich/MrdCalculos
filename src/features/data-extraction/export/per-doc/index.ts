@@ -21,7 +21,10 @@ import { buildCartaoPontoZip, buildCartaoPontoZipWithReport } from './cartao-pon
 import { buildFeriasCSVBlob, buildFeriasCSVBlobWithReport } from './ferias-csv';
 import { buildFaltasCSVBlob, buildFaltasCSVBlobWithReport } from './faltas-csv';
 import { classifyHolerite, type ClassificacaoHolerite } from './holerite-classify';
-import { extrairRubricasClassificadasDoV6 } from './extrair-rubricas-classificadas';
+import {
+  extrairRubricasClassificadasDoV6,
+  extrairResumoClassificacaoDoV6,
+} from './extrair-rubricas-classificadas';
 import { buildHoleriteZip, buildHoleriteZipWithReport } from './holerite-zip';
 import { buildCtpsZip, buildCtpsZipWithReport } from './ctps-zip';
 import {
@@ -162,6 +165,12 @@ export async function generateExportForDocument(
       // quando ausente (doc legado pré-Sprint 2 / mapper falhou),
       // comporta-se como antes (só hints + fallback).
       const rubricasClassificadas = extrairRubricasClassificadasDoV6(v6Parsed);
+      // Sprint 3c hotfix — extrai também `resumo_classificacao` (agregação por
+      // categoria + por método produzida pelo mapper Deno). Sem isso, o banner
+      // `OntologiaClassificacaoBanner` em HoleritePreviewDialog:533 nunca
+      // monta — condicional `parsed?.resumo_classificacao && nao_classificadas
+      // > 0` fica sempre false porque parser frontend nunca popula esse campo.
+      const resumoClassificacao = extrairResumoClassificacaoDoV6(v6Parsed);
       if (
         rubricasClassificadas !== undefined &&
         rubricasClassificadas.length !== parsed.rubricas.length
@@ -177,6 +186,16 @@ export async function generateExportForDocument(
         );
       }
 
+      // Parsed enriquecido com ontologia do JSONB pra propagar até o Dialog,
+      // que passa `resumo_classificacao` como prop pro Banner V2.
+      const parsedComOntologia: HoleriteParseResult = {
+        ...parsed,
+        rubricas_classificadas: rubricasClassificadas,
+        resumo_classificacao: resumoClassificacao,
+      };
+
+      // classifyHolerite não usa `resumo_classificacao` (não está na assinatura
+      // nem no retorno) — passa só os campos que ele lê.
       const preview = classifyHolerite({
         ...parsed,
         rubricas_classificadas: rubricasClassificadas,
@@ -206,7 +225,7 @@ export async function generateExportForDocument(
           ok: true,
           kind: 'holerite-preview',
           preview,
-          parsed,
+          parsed: parsedComOntologia,
           document_id: documentId,
           ocr_text: ocrText,
           filename: `${baseName}_pjecalc.zip`,
@@ -223,7 +242,7 @@ export async function generateExportForDocument(
         ok: true,
         kind: 'holerite-preview',
         preview,
-        parsed,
+        parsed: parsedComOntologia,
         document_id: documentId,
         ocr_text: ocrText,
         filename: `${baseName}_pjecalc.zip`,

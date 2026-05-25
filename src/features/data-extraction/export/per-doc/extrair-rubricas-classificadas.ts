@@ -14,7 +14,10 @@
  * em ambiente Node (Fase 4.1 — round-trip JSONB).
  */
 
-import type { RubricaClassificada } from '../../parsers/holerite/types';
+import type {
+  RubricaClassificada,
+  ResumoClassificacaoOntologia,
+} from '../../parsers/holerite/types';
 
 export function extrairRubricasClassificadasDoV6(
   v6Parsed: unknown,
@@ -33,4 +36,28 @@ export function extrairRubricasClassificadasDoV6(
   );
   if (!todasValidas) return undefined;
   return candidato as readonly RubricaClassificada[];
+}
+
+/**
+ * Narrowing análogo para `resumo_classificacao` (agregação por categoria
+ * + por método produzida pelo mapper Deno). Sem isso, o banner
+ * `OntologiaClassificacaoBanner` em `HoleritePreviewDialog:533` nunca
+ * montaria — condicional `parsed?.resumo_classificacao &&
+ * nao_classificadas > 0` ficaria sempre `false`.
+ *
+ * Validação mínima: precisa ter `nao_classificadas` numérico (campo que
+ * o banner usa pra decidir render). Demais campos do shape são opcionais
+ * do ponto de vista deste helper — banner tolera ausência via `?.`.
+ */
+export function extrairResumoClassificacaoDoV6(
+  v6Parsed: unknown,
+): ResumoClassificacaoOntologia | undefined {
+  if (!v6Parsed || typeof v6Parsed !== 'object') return undefined;
+  const candidato = (v6Parsed as { resumo_classificacao?: unknown })
+    .resumo_classificacao;
+  if (!candidato || typeof candidato !== 'object') return undefined;
+  const naoClass = (candidato as { nao_classificadas: unknown })
+    .nao_classificadas;
+  if (typeof naoClass !== 'number') return undefined;
+  return candidato as ResumoClassificacaoOntologia;
 }
