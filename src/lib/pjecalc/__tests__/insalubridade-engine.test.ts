@@ -26,13 +26,14 @@ function makeCfg(insalubridade_config: Record<string, unknown>): PjecalcMultasCo
   } as unknown as PjecalcMultasConfigRow;
 }
 
-const SM = new Decimal('1518');
+const SM_2023 = new Decimal('1320');
+const SM_2025 = new Decimal('1518');
 
 describe('Insalubridade — multasConfigToVerbas', () => {
   const params = makeParams();
 
-  // 1. Grau mínimo 10% sobre SM
-  it('grau minimo_10 sobre salario_minimo → valor_informado_devido = 151.80', () => {
+  // 1. Grau mínimo 10% sobre SM (2023 → SM=1320)
+  it('grau minimo_10 sobre salario_minimo 2023 → valor_informado_devido = 132.00', () => {
     const cfg = makeCfg({
       ativo: true,
       grau: 'minimo_10',
@@ -44,11 +45,11 @@ describe('Insalubridade — multasConfigToVerbas', () => {
     const principal = verbas.find(v => v.id === 'insalubridade_auto');
     expect(principal).toBeDefined();
     expect(principal!.valor).toBe('informado');
-    expect(principal!.valor_informado_devido).toBe(SM.times(new Decimal('0.10')).toDP(2).toNumber()); // 151.80
+    expect(principal!.valor_informado_devido).toBe(SM_2023.times(new Decimal('0.10')).toDP(2).toNumber());
   });
 
-  // 2. Grau médio 20% sobre SM
-  it('grau medio_20 sobre salario_minimo → valor_informado_devido = 303.60', () => {
+  // 2. Grau médio 20% sobre SM (2023 → SM=1320)
+  it('grau medio_20 sobre salario_minimo 2023 → valor_informado_devido = 264.00', () => {
     const cfg = makeCfg({
       ativo: true,
       grau: 'medio_20',
@@ -59,11 +60,11 @@ describe('Insalubridade — multasConfigToVerbas', () => {
     const verbas = getVerbas(multasConfigToVerbas(cfg, params, []));
     const principal = verbas.find(v => v.id === 'insalubridade_auto');
     expect(principal).toBeDefined();
-    expect(principal!.valor_informado_devido).toBe(303.60);
+    expect(principal!.valor_informado_devido).toBe(SM_2023.times(new Decimal('0.20')).toDP(2).toNumber());
   });
 
-  // 3. Grau máximo 40% sobre SM
-  it('grau maximo_40 sobre salario_minimo → valor_informado_devido = 607.20', () => {
+  // 3. Grau máximo 40% sobre SM (2023 → SM=1320)
+  it('grau maximo_40 sobre salario_minimo 2023 → valor_informado_devido = 528.00', () => {
     const cfg = makeCfg({
       ativo: true,
       grau: 'maximo_40',
@@ -74,7 +75,7 @@ describe('Insalubridade — multasConfigToVerbas', () => {
     const verbas = getVerbas(multasConfigToVerbas(cfg, params, []));
     const principal = verbas.find(v => v.id === 'insalubridade_auto');
     expect(principal).toBeDefined();
-    expect(principal!.valor_informado_devido).toBe(607.20);
+    expect(principal!.valor_informado_devido).toBe(SM_2023.times(new Decimal('0.40')).toDP(2).toNumber());
   });
 
   // 4. Base = salario_base → uses only historicos with "fix" or "base" in name
@@ -129,12 +130,12 @@ describe('Insalubridade — multasConfigToVerbas', () => {
     expect(reflexo13).toBeDefined();
     expect(reflexoFerias).toBeDefined();
 
-    // 13º: SM × 20% / 12
-    const expected13 = SM.times(new Decimal('0.20')).div(12).toDP(2).toNumber();
+    // 13º: SM_2023 × 20% / 12
+    const expected13 = SM_2023.times(new Decimal('0.20')).div(12).toDP(2).toNumber();
     expect(reflexo13!.valor_informado_devido).toBe(expected13);
 
-    // Férias + 1/3: SM × 20% × 1.3333 / 12
-    const expectedFerias = SM.times(new Decimal('0.20')).times(new Decimal('1.3333')).div(12).toDP(2).toNumber();
+    // Férias + 1/3: SM_2023 × 20% × 1.3333 / 12
+    const expectedFerias = SM_2023.times(new Decimal('0.20')).times(new Decimal('1.3333')).div(12).toDP(2).toNumber();
     expect(reflexoFerias!.valor_informado_devido).toBe(expectedFerias);
   });
 

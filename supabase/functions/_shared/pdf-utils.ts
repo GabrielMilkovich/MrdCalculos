@@ -8,7 +8,7 @@
  * Usa pdf-lib (pure JS, funciona em Deno). Processa em memória.
  */
 
-import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument } from "npm:pdf-lib@1.17.1";
 
 export interface PdfChunk {
   /** 1-indexed: primeira página original deste chunk */

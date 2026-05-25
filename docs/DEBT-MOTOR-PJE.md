@@ -62,6 +62,11 @@
 - **Refs jurídicas:** NR 15 MTE, Súmula Vinculante 4 STF, Súmulas 17, 132, 191 TST
 - **Status Sprint 7:** RESOLVIDO — ModuloInsalubridade.tsx criado + orchestrator integrado
 
+### 3.1b — Insalubridade SM estático (hardcoded R$ 1.518) [ALTO]
+- **Evidência:** `orchestrator.ts:1219,1238,1256` — `const sm = new Decimal('1518')` hardcoded
+- **Impacto:** cálculos em 2024 (SM=1412) ou qualquer ano ≠ 2025 usam valor errado (~5% de erro)
+- **Status Sprint Fechamento:** ✅ RESOLVIDO — `getSalarioMinimoVigente(inicio)` dinâmico via `HISTORICO_SALARIO_MINIMO`
+
 ### 3.2 — Periculosidade gera só verba principal, sem reflexos [CRITICO]
 - **Evidência:** `orchestrator.ts:1108-1123` — só cria `'periculosidade_auto'`, sem reflexos
 - **Compara com:** `orchestrator.ts:1175-1216` (equiparação) que tem reflexos em 13o, férias, FGTS

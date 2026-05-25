@@ -71,6 +71,7 @@ import type {
   PjecalcDadosProcessoRow,
 } from './types';
 import { gerarReflexosPadrao, type VerbaBase, type ReflexoGerado } from './reflexo-engine';
+import { getSalarioMinimoVigente } from './salario-minimo';
 import { logger } from '@/lib/logger';
 
 // =====================================================
@@ -1212,11 +1213,8 @@ export function multasConfigToVerbas(
       } else if (ins.base_calculo === 'salario_contratual') {
         if (historicos.length > 0) vIns.base_calculo.historicos = historicos.map(h => h.id);
       } else {
-        // salario_minimo: usar valor_informado_devido como fallback estático
-        // Motor V3 não suporta flag usar_salario_minimo, então calculamos valor fixo
-        // DEBT: perde correção mensal automática do SM
-        // SM 2025 = R$ 1.518,00 (usar params se disponível, senão hardcode)
-        const sm = new Decimal('1518');
+        // salario_minimo: usa SM vigente no início do período
+        const sm = getSalarioMinimoVigente(inicio);
         vIns.valor = 'informado';
         vIns.valor_informado_devido = sm.times(percentual).toDP(2).toNumber();
         warnings.push({
@@ -1239,7 +1237,7 @@ export function multasConfigToVerbas(
       if (ins.base_calculo !== 'salario_minimo' && historicos.length > 0) {
         v13Ins.base_calculo.historicos = historicos.map(h => h.id);
       } else if (ins.base_calculo === 'salario_minimo') {
-        const sm = new Decimal('1518');
+        const sm = getSalarioMinimoVigente(inicio);
         v13Ins.valor = 'informado';
         v13Ins.valor_informado_devido = sm.times(percentual).div(12).toDP(2).toNumber();
       }
@@ -1257,7 +1255,7 @@ export function multasConfigToVerbas(
       if (ins.base_calculo !== 'salario_minimo' && historicos.length > 0) {
         vFeriasIns.base_calculo.historicos = historicos.map(h => h.id);
       } else if (ins.base_calculo === 'salario_minimo') {
-        const sm = new Decimal('1518');
+        const sm = getSalarioMinimoVigente(inicio);
         vFeriasIns.valor = 'informado';
         vFeriasIns.valor_informado_devido = sm.times(percentual).times(new Decimal('1.3333')).div(12).toDP(2).toNumber();
       }
