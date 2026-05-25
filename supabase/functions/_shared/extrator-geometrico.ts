@@ -6,7 +6,7 @@
  * essa estrutura sem conhecer detalhes do PDF.
  *
  * IMPORTANTE — runtime:
- *   - Deno (edge function): usa `pdfjs-dist` via esm.sh.
+ *   - Deno (edge function): usa `pdfjs-dist` via npm: specifier.
  *   - Browser/vitest: NÃO importa o pdfjs neste módulo. Os helpers
  *     puros (`clusterizarLinhas`, `detectarTabelas`) são exportados
  *     separadamente para serem testáveis em vitest com input sintético.
@@ -232,14 +232,13 @@ function montarTabela(
 export async function extrairGeometrico(
   bytes: Uint8Array,
 ): Promise<DocumentoTabular | null> {
-  // V6.2: unpdf é um wrapper que serve pdfjs com a dep canvas removida —
-  // único caminho que esm.sh consegue resolver em Deno runtime.
+  // V6.2: unpdf é um wrapper que serve pdfjs com a dep canvas removida.
   // Quando falhar (rede, módulo indisponível), pipeline cai pro V5.
   // deno-lint-ignore no-explicit-any
   let pdfjs: any;
   try {
     // deno-lint-ignore no-explicit-any
-    const unpdf = (await import('https://esm.sh/unpdf@0.12.1')) as any;
+    const unpdf = (await import('npm:unpdf@0.12.1')) as any;
     pdfjs = await unpdf.getResolvedPDFJS();
   } catch {
     return null;
