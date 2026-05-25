@@ -31,8 +31,6 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { IndexSyncStatusBadge } from "@/components/layout/IndexSyncStatusBadge";
-import { OfflineIndicator } from "@/components/layout/OfflineIndicator";
 import { RunningTasksIndicator } from "@/components/layout/RunningTasksIndicator";
 
 interface Breadcrumb {
@@ -104,22 +102,6 @@ export function Topbar({ breadcrumbs = [], title }: TopbarProps) {
         {/* Right */}
         <div className="flex items-center gap-2">
           <RunningTasksIndicator />
-          <OfflineIndicator />
-          <IndexSyncStatusBadge />
-          {/* Search */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="hidden md:flex gap-2 text-muted-foreground font-normal h-8 px-3 border-border/60"
-            onClick={() => setCommandOpen(true)}
-          >
-            <Search className="h-3.5 w-3.5" />
-            <span className="text-xs">Buscar...</span>
-            <kbd className="ml-2 inline-flex h-5 items-center gap-0.5 rounded border border-border/60 bg-muted/40 px-1.5 font-mono text-[10px] text-muted-foreground">
-              ⌘K
-            </kbd>
-          </Button>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 rounded-full p-0">
