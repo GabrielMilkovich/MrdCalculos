@@ -47,6 +47,19 @@ export {
 // Template
 export { buildReportHTML } from './template';
 
+// Jasper Renderer (feature-flagged PDF via JasperReports service)
+export { renderPdfViaJasper, isJasperEnabled } from './jasper-client';
+export type { JasperRenderOptions } from './jasper-client';
+export {
+  mapToDemonstrativo,
+  mapToFGTS,
+  mapToSeguroDesemprego,
+  mapToResumo,
+  mapToConsolidado,
+  mapResultToJasper,
+} from './jasper-mapper';
+export type { JasperTemplateId } from './jasper-mapper';
+
 // Individual Sections (for custom composition)
 export {
   renderPageHeader,

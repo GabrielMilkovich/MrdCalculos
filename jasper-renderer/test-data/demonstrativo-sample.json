@@ -1,0 +1,52 @@
+{
+  "template": "calculo/calculo-demonstrativo",
+  "params": {},
+  "data": [
+    {
+      "nome": "Horas Extras 50%",
+      "periodo": { "inicial": "2023-01-01", "fim": "2023-12-31" },
+      "incidencia": "FGTS + INSS + IR",
+      "formula": "Salário / 220 * 1.5 * QTD",
+      "totalDoValorCorrigido": 14979.55,
+      "comentario": "Conforme sentença, item 3",
+      "ocorrencias": [
+        {
+          "periodo": { "inicial": "2023-01-01", "fim": "2023-01-31" },
+          "base": 5000.00,
+          "divisor": 220,
+          "multiplicador": 1.5,
+          "quantidade": 40,
+          "dobra": "",
+          "devido": 13636.36,
+          "pago": 0.00,
+          "diferenca": 13636.36,
+          "indiceAcumulado": 1.0985,
+          "valorCorrigido": 14979.55
+        }
+      ]
+    },
+    {
+      "nome": "Reflexo HE 50% s/ 13o Salário",
+      "periodo": { "inicial": "2023-01-01", "fim": "2023-12-31" },
+      "incidencia": "FGTS + INSS + IR",
+      "formula": "HE / 12",
+      "totalDoValorCorrigido": 1248.30,
+      "comentario": "",
+      "ocorrencias": [
+        {
+          "periodo": { "inicial": "2023-12-01", "fim": "2023-12-31" },
+          "base": 13636.36,
+          "divisor": 12,
+          "multiplicador": 1.0,
+          "quantidade": 1,
+          "dobra": "",
+          "devido": 1136.36,
+          "pago": 0.00,
+          "diferenca": 1136.36,
+          "indiceAcumulado": 1.0985,
+          "valorCorrigido": 1248.30
+        }
+      ]
+    }
+  ]
+}
