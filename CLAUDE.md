@@ -6,7 +6,7 @@
 - **Banco:** PostgreSQL via Supabase client SDK — sem ORM, queries via `.rpc()` ou SDK nativo
 - **SQL customizado:** PLpgSQL (funções, triggers, migrations)
 - **Cálculo financeiro/precisão:** Decimal.js com 20 dígitos — NUNCA usar `number` nativo para valores monetários ou cálculos sensíveis
-- **Testes:** Vitest (190+ testes — manter todos passando)
+- Testes: Vitest (2580+ testes — manter todos passando, exceto 2 testes de calibração marcados `.skip` por fixtures ausentes)
 
 ---
 
@@ -14,7 +14,7 @@
 
 - Nunca usar `number` para valores monetários — sempre `Decimal` do Decimal.js
 - Nunca fazer `as any` — se precisar, justifique com comentário
-- Nunca quebrar os 190+ testes existentes — rode `!npx vitest run` antes de encerrar qualquer tarefa
+- Nunca quebrar os 2580+ testes existentes — rode `!npx vitest run` antes de encerrar qualquer tarefa
 - Nunca editar migrations já aplicadas — crie sempre uma nova migration
 - Nunca usar `console.log` em produção — use o padrão de log do projeto
 - Row Level Security (RLS) do Supabase deve ser respeitado — não sugerir desativar RLS como solução
@@ -162,3 +162,75 @@ adição precisa de exceção explicitamente autorizada pelo dono.
 - Ao propor mudanças grandes: liste o plano antes de executar e aguarde confirmação
 - Em caso de dúvida sobre um tipo Supabase: consulte `src/types/supabase.ts`
 - Se os testes falharem após uma mudança: pare, analise e corrija antes de continuar
+- **Antes de propor schema ou refactor que toca código existente:** peça grep ou SELECT específico contra prod/repo. Diagnóstico custa minutos, retrabalho custa rodadas.
+- **Se mudança afeta o que/onde vai ser persistido em prod:** pare e confirme antes. Implementação e UI são decisão autônoma; dados persistidos são decisão compartilhada.
+
+---
+
+## Ontologia de Rubricas V2 (Sprint 3c, 2026-05-24)
+
+Sistema de classificação de rubricas trabalhistas com aprendizado contínuo.
+
+### Onde mora cada coisa
+
+| Artefato | Path | Escopo |
+|---|---|---|
+| **Snapshot V1** (curadoria do escritório, congelado) | `scripts/ontologia-v1-snapshot.ts` | build-time only — NÃO importar em runtime |
+| **Gerador V2** | `scripts/gen-ontologia-v2-from-snapshot.ts` | regenera seed V2 a partir do snapshot + overrides |
+| **Overrides** (renames, regras, aliases extras) | `scripts/ontologia-v2-overrides.json` | renames V1→V2, `categoria_rules`, `extra_aliases` |
+| **Seed V2** (runtime) | `supabase/functions/_shared/holerite-mapper-v2/ontologia-v2.json` | 96 rubricas, 258 aliases |
+| **Mapper V2** (edge, sync) | `supabase/functions/_shared/holerite-mapper-v2/sync-mode.ts` | classificação via seed + cache de aliases aprendidos (TTL 5min) |
+| **Adapter V1-compat** | `supabase/functions/_shared/holerite-mapper-v2/v1-compat.ts` | converte `ClassificacaoRubrica` V2 → `RubricaClassificadaDominio` V1 |
+| **Mapper async** (edge) | `supabase/functions/_shared/holerite-mapper-v2/index.ts` | versão async com supabase client (pra scripts/batch, não pra mapper sync) |
+| **Tipos compartilhados** | `src/features/data-extraction/parsers/holerite/ontologia-rubricas-v2.ts` | `CategoriaOntologiaRubricaV2`, `ClassificacaoRubrica`, `CATEGORIA_V1_TO_V2` |
+| **Edge function confirm** | `supabase/functions/holerite-classify-confirm/index.ts` | promove tentativa → canônico, com conflict_rejected |
+| **Tabelas banco** | `rubrica_aliases` (canônico) + `rubrica_aliases_tentativa` (staging) + `rubrica_aliases_history` (audit) | migration `20260524000000` |
+| **Hook frontend** | `src/hooks/useClassificacoesTentativa.ts` | debounce 800ms, 2 fontes (tentativa > seed) |
+| **Validador** | `scripts/validate-ontologia-v2.ts` | gate de CI (categoria, tipo, normalized_key único, cross-categoria) |
+
+### Fluxo de aprendizado contínuo
+
+```
+UPLOAD PDF → mapper edge (holerite-via-varejo/generico)
+  → enriquecerComClassificacaoV2 (sync-mode) → JSONB parsed
+
+USER ABRE DIALOG → banner mostra NAO_CLASSIFICADO
+  → operador classifica via dropdown → UPSERT em tentativa (debounce 800ms)
+
+USER CLICA "CONFIRMAR E BAIXAR ZIP"
+  → holerite-classify-confirm promove tentativa → canônico (rubrica_aliases)
+  → conflito de categoria ou observação jurídica → conflict_rejected no audit
+  → build ZIP com state local do grid
+```
+
+### Como adicionar rubrica nova
+
+1. Editar `scripts/ontologia-v1-snapshot.ts` — adicionar entry no formato V1:
+   ```ts
+   { texto_canonico: 'Nome Real', categoria: 'COMISSAO_PRODUTOS', sinonimos: ['Variante 1', 'Var. 2'] }
+   ```
+2. Se a rubrica veio de OCR com typo vs forma corrigida, manter typo como sinônimo
+3. `npm run gen:ontologia` — regenera `ontologia-v2.json`
+4. `npm run validate:ontologia` — confirma 0 conflitos
+5. Commit + push
+
+### Comandos
+
+```bash
+npm run gen:ontologia       # regenera seed V2 a partir do snapshot + overrides
+npm run validate:ontologia  # valida seed (categoria, tipo, keys, colisão)
+```
+
+### Convenções de naming
+
+- Coluna de criador: `criado_por` (padrão pt-BR). **Exceção:** `documents.owner_user_id` (dívida P1 — auditar e padronizar)
+- `rubrica_aliases_history.actor` ≠ `criado_por` (semântica de "ator da ação")
+- Categorias V2: `COMISSOES_PRODUTOS`, `COMISSOES_SERVICOS`, `PREMIOS`, `DSR_S_COMISSOES`, `DESCONSIDERADAS`, `MINIMO_GARANTIDO`, `SALARIO_SUBSTITUICAO`, `NAO_CLASSIFICADO`
+- Shim V1→V2: `CATEGORIA_V1_TO_V2` em `ontologia-rubricas-v2.ts` — defesa de leitura pra JSONB antigo
+
+### Dívidas técnicas registradas
+
+Detalhes em `docs/HARDENING-V2.md`. Principais:
+- `Mapper.mapear` sync via cache module-init (TTL 5min) — migrar pra async quando volume justificar
+- Conflict UX dialog inexistente (só toast.warning)
+- `documents.owner_user_id` vs `criado_por` inconsistência

@@ -379,14 +379,18 @@ function imprimirRelatorio(rel: RelatorioPDF): void {
 }
 
 describe('Sprint 3c Fase 4 — calibração ontologia contra holerites reais (via mapper Deno)', () => {
-  it('Roque Guerreiro (Via Varejo antigo, 73 holerites)', () => {
+  // Testes dependem de fixtures OCR em scripts/calibracao/ocr-holerites/{roque,rosicleia-antigo}-pg*.txt
+  // que não estão committados no repo (PDFs reais do processo, sensíveis).
+  // Marcados .skip até fixtures serem adicionados via Git LFS ou gerados localmente.
+  // Vide docs/HARDENING-V2.md item 5.
+  it.skip('Roque Guerreiro (Via Varejo antigo, 73 holerites) — requer fixtures roque-pg*.txt', () => {
     const rel = calibrarPDF('roque');
     imprimirRelatorio(rel);
     expect(rel.total_holerites_processados).toBeGreaterThan(0);
     expect(rel.correcao_pct).toBe(100);
   });
 
-  it('Rosicleia até 06/2021 (Via Varejo antigo, 44 holerites)', () => {
+  it.skip('Rosicleia até 06/2021 (Via Varejo antigo, 44 holerites) — requer fixtures rosicleia-antigo-pg*.txt', () => {
     const rel = calibrarPDF('rosicleia-antigo');
     imprimirRelatorio(rel);
     expect(rel.total_holerites_processados).toBeGreaterThan(0);
