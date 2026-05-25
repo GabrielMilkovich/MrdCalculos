@@ -18,7 +18,7 @@ export function useParidadeForense({ documentId, builder, parsed }: UseParidadeF
   const [erro, setErro] = useState<string | null>(null);
   const [itensSelecionados, setItensSelecionados] = useState<Map<number, boolean>>(new Map());
 
-  const iniciar = useCallback(async () => {
+  const iniciar = useCallback(async (): Promise<{ ok: true } | { ok: false; error: string }> => {
     setEstado('running');
     setErro(null);
     setResultado(null);
@@ -32,7 +32,7 @@ export function useParidadeForense({ documentId, builder, parsed }: UseParidadeF
     if (!resp.ok) {
       setEstado('error');
       setErro(resp.error);
-      return;
+      return { ok: false, error: resp.error };
     }
 
     setResultado(resp.result);
@@ -44,6 +44,7 @@ export function useParidadeForense({ documentId, builder, parsed }: UseParidadeF
       selecao.set(idx, mapping.pre_marcado);
     });
     setItensSelecionados(selecao);
+    return { ok: true };
   }, [documentId, builder, parsed]);
 
   const toggleItem = useCallback((idx: number) => {

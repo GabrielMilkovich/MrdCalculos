@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Tooltip,
@@ -45,16 +45,16 @@ export function VerifyParityForenseButton({
   const hook = useParidadeForense({ documentId, builder, parsed });
 
   const handleClick = async () => {
-    await hook.iniciar();
-    if (hook.estado === 'error') {
+    const result = await hook.iniciar();
+    if (!result.ok) {
       toast({
         title: 'Erro na análise',
-        description: hook.erro ?? 'Erro desconhecido',
+        description: result.error,
         variant: 'destructive',
       });
-    } else {
-      setSheetOpen(true);
+      return;
     }
+    setSheetOpen(true);
   };
 
   const handleApply = async () => {
@@ -73,6 +73,11 @@ export function VerifyParityForenseButton({
     }
     setSheetOpen(false);
     onApply?.(parsed);
+  };
+
+  const handleRetry = async () => {
+    const result = await hook.iniciar();
+    if (result.ok) return;
   };
 
   return (
@@ -110,7 +115,23 @@ export function VerifyParityForenseButton({
               Paridade Forense IA · {BUILDER_LABELS[builder]}
             </SheetTitle>
           </SheetHeader>
-          {hook.resultado && (
+          {hook.estado === 'running' && (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Analisando com IA — pode levar até 2 minutos</p>
+            </div>
+          )}
+          {hook.estado === 'error' && (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <AlertCircle className="h-8 w-8 text-destructive" />
+              <p className="text-sm font-medium">Não foi possível analisar</p>
+              <p className="text-xs text-muted-foreground text-center max-w-sm">{hook.erro ?? 'Erro desconhecido'}</p>
+              <Button size="sm" variant="outline" onClick={handleRetry}>
+                Tentar novamente
+              </Button>
+            </div>
+          )}
+          {hook.estado === 'success' && hook.resultado && (
             <RelatorioParidadeForense
               resultado={hook.resultado}
               itensSelecionados={hook.itensSelecionados}
