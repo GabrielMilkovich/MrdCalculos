@@ -1,5 +1,5 @@
 import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/base64.ts";
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 const PDF_MAX_BYTES = 30 * 1024 * 1024;
 const SIGNED_URL_EXPIRY = 300;

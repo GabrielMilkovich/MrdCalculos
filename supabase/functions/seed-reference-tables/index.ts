@@ -4,7 +4,7 @@
  * POST /seed-reference-tables { tables: ['inss','ir','salario_minimo','seguro_desemprego','salario_familia'] }
  */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

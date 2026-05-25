@@ -17,7 +17,7 @@
 //   pra propagar entre workers. Migrar pra async quando volume justificar
 //   (ou push-invalidation via tabela `cache_invalidations`).
 
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type {
   ClassificacaoRubrica,
   OntologiaSeedV2,

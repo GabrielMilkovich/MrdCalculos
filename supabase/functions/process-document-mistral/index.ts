@@ -27,7 +27,7 @@
 // =====================================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 // V6 pipeline extraído para _shared/v6-pipeline.ts em 2026-05-20 para reuso
 // no ocr-document (que tinha 7 callsites pulando V6, ver diagnóstico em

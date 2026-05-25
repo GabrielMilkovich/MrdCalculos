@@ -20,7 +20,7 @@
 //   if (!limit.allowed) return jsonResponse({ error: "Rate limit exceeded", retryAfterSec: limit.retryAfterSec }, 429);
 // =====================================================
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export interface RateLimitResult {
   allowed: boolean;

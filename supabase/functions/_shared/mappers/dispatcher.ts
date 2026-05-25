@@ -13,7 +13,7 @@
  * (holerite, ferias, etc.) o comportamento é idêntico ao antigo.
  */
 
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type { DocumentoTabular } from '../documento-tabular.ts';
 import type { Mapper, TipoDocumentoMapper } from './index.ts';
 import type { ParseCartaoPontoResultDominio } from '../tipos-dominio.ts';
