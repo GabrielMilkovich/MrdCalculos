@@ -964,7 +964,6 @@ export function DocumentsManager({
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[300px]">Documento</TableHead>
-                  <TableHead>Tipo</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-center">Páginas</TableHead>
                   <TableHead className="text-center">Leitura</TableHead>
@@ -995,28 +994,6 @@ export function DocumentsManager({
                             </p>
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={doc.tipo}
-                          onValueChange={(value) => updateDocType(doc.id, value)}
-                        >
-                          <SelectTrigger className="w-[140px] h-8">
-                            <SelectValue>
-                              <span className="flex items-center gap-1">
-                                <span>{docType?.icon}</span>
-                                <span className="text-sm">{docType?.label || doc.tipo}</span>
-                              </span>
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {docTypeOptions.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.icon} {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5 flex-wrap">
