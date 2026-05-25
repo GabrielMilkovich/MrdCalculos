@@ -21,10 +21,8 @@ import {
   type FaltaParseada,
   type ParseFaltasResult,
 } from "@/features/data-extraction";
-import { ConfidenceBadge } from "./ConfidenceBadge";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import {
-  VerifyExtractionAIButton,
   type AIInteractionResult,
   type AISuggestion,
 } from "./VerifyExtractionAIButton";
@@ -204,29 +202,7 @@ export function FaltasReviewDialog({
       contadores={{ extraidos: rows.length, etiqueta: "falta" }}
       bloqueador={confidence.bloqueador === true}
       bloqueadorReasons={confidence.reasons}
-      headerSlot={
-        <div className="flex items-center gap-2 flex-wrap">
-          <ConfidenceBadge score={confidence} />
-          <VerifyExtractionAIButton
-            score={confidence.score}
-            builder="faltas"
-            documentId={_documentId ?? null}
-            parsed={{
-              faltas: sorted.map((r) => ({
-                data_inicio: r.data_inicio,
-                data_fim: r.data_fim,
-                justificada: r.justificada,
-                reiniciar_periodo_aquisitivo: r.reiniciar_periodo_aquisitivo,
-                justificativa: r.justificativa,
-              })),
-              warnings: effectiveParsed.warnings,
-            }}
-            ocrText={ocrText ?? ""}
-            onApplySuggestions={handleAISuggestions}
-            onTelemetry={setAiTelemetry}
-          />
-        </div>
-      }
+      headerSlot={undefined}
       onConfirm={handleConfirm}
       divergenciasCount={
         unparsedLines.length + (effectiveParsed.warnings?.length ?? 0)

@@ -61,7 +61,6 @@ import {
 } from "@/features/data-extraction";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import {
-  VerifyExtractionAIButton,
   type AIInteractionResult,
   type AISuggestion,
 } from "./VerifyExtractionAIButton";
@@ -640,28 +639,6 @@ export function CartaoPontoReviewDialog({
               Abrir PDF
             </Button>
           )}
-          <VerifyExtractionAIButton
-            score={confidence.score}
-            builder="cartao_ponto"
-            documentId={_documentId ?? null}
-            parsed={{
-              apuracoes: sorted.map((r) => ({
-                data: r.data,
-                dia_semana: r.dia_semana ?? null,
-                ocorrencia: r.ocorrencia,
-                marcacoes: r.marcacoes,
-                eventos: r.eventos ?? [],
-                observacao: r.observacao,
-              })),
-              competencia_predominante: effectiveParsed.competencia_predominante,
-              data_inicial: effectiveParsed.data_inicial,
-              data_final: effectiveParsed.data_final,
-              parser_version: effectiveParsed.parser_version,
-            }}
-            ocrText={ocrText ?? ""}
-            onApplySuggestions={handleAISuggestions}
-            onTelemetry={setAiTelemetry}
-          />
           <VerifyParityForenseButton
             documentId={_documentId ?? ""}
             builder="cartao_ponto"

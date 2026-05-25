@@ -40,7 +40,6 @@ import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import { FeriasReviewDialog } from "./FeriasReviewDialog";
 import { FaltasReviewDialog } from "./FaltasReviewDialog";
 import {
-  VerifyExtractionAIButton,
   type AIInteractionResult,
 } from "./VerifyExtractionAIButton";
 import { VerifyParityForenseButton } from "./VerifyParityForenseButton";
@@ -258,24 +257,6 @@ export function CtpsReviewDialog({
             </TabsList>
 
             <TabsContent value="ferias" className="flex-1 min-h-0 mt-3 space-y-2">
-              <div className="flex items-center justify-end">
-                <VerifyExtractionAIButton
-                  score={confidenceFerias.score}
-                  builder="ferias"
-                  documentId={documentId ?? null}
-                  parsed={{
-                    ferias: feriasParsed.ferias,
-                    warnings: feriasParsed.warnings,
-                  }}
-                  ocrText={ocrText ?? ""}
-                  onApplySuggestions={() => {
-                    toast.info(
-                      "Sugestões de IA recebidas. Abra 'Editar' nesta aba para aplicar manualmente — o dialog CTPS é só leitura.",
-                    );
-                  }}
-                  onTelemetry={setAiTelemetryFerias}
-                />
-              </div>
               <SecaoResumo
                 titulo="Férias encontradas"
                 qtd={feriasParsed.ferias.length}
@@ -293,24 +274,6 @@ export function CtpsReviewDialog({
             </TabsContent>
 
             <TabsContent value="faltas" className="flex-1 min-h-0 mt-3 space-y-2">
-              <div className="flex items-center justify-end">
-                <VerifyExtractionAIButton
-                  score={confidenceFaltas.score}
-                  builder="faltas"
-                  documentId={documentId ?? null}
-                  parsed={{
-                    faltas: faltasParsed.faltas,
-                    warnings: faltasParsed.warnings,
-                  }}
-                  ocrText={ocrText ?? ""}
-                  onApplySuggestions={() => {
-                    toast.info(
-                      "Sugestões de IA recebidas. Abra 'Editar' nesta aba para aplicar manualmente — o dialog CTPS é só leitura.",
-                    );
-                  }}
-                  onTelemetry={setAiTelemetryFaltas}
-                />
-              </div>
               <SecaoResumo
                 titulo="Faltas encontradas"
                 qtd={faltasParsed.faltas.length}

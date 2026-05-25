@@ -29,10 +29,8 @@ import {
   type ParseFeriasResult,
   type SituacaoFerias,
 } from "@/features/data-extraction";
-import { ConfidenceBadge } from "./ConfidenceBadge";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import {
-  VerifyExtractionAIButton,
   type AIInteractionResult,
   type AISuggestion,
 } from "./VerifyExtractionAIButton";
@@ -342,33 +340,7 @@ export function FeriasReviewDialog({
       contadores={{ extraidos: rows.length, etiqueta: "período" }}
       bloqueador={confidence.bloqueador === true}
       bloqueadorReasons={confidence.reasons}
-      headerSlot={
-        <div className="flex items-center gap-2 flex-wrap">
-          <ConfidenceBadge score={confidence} />
-          <VerifyExtractionAIButton
-            score={confidence.score}
-            builder="ferias"
-            documentId={_documentId ?? null}
-            parsed={{
-              ferias: sorted.map((r) => ({
-                relativa: r.relativa,
-                prazo: r.prazo,
-                situacao: r.situacao,
-                dobra_geral: r.dobra_geral,
-                abono: r.abono,
-                dias_abono: r.dias_abono,
-                gozo1: r.gozo1,
-                gozo2: r.gozo2,
-                gozo3: r.gozo3,
-              })),
-              warnings: effectiveParsed.warnings,
-            }}
-            ocrText={ocrText ?? ""}
-            onApplySuggestions={handleAISuggestions}
-            onTelemetry={setAiTelemetry}
-          />
-        </div>
-      }
+      headerSlot={undefined}
       onConfirm={handleConfirm}
       confirmDisabled={totalErros > 0}
       divergenciasCount={

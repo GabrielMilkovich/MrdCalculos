@@ -89,12 +89,10 @@ import {
   type ClassificacaoHolerite,
   type LinhaClassificada,
 } from "@/features/data-extraction";
-import { ConfidenceBadge } from "./ConfidenceBadge";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
 import { OntologiaClassificacaoBanner } from "./OntologiaClassificacaoBanner";
 import { SugerirBucketIA } from "./SugerirBucketIA";
 import {
-  VerifyExtractionAIButton,
   type AIInteractionResult,
   type AISuggestion,
 } from "./VerifyExtractionAIButton";
@@ -454,20 +452,6 @@ export function HoleritePreviewDialog({
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <DialogTitle>Conferir contracheque: {effectiveClassificacao.competencia || "—"}</DialogTitle>
             <div className="flex items-center gap-2 flex-wrap">
-              <ConfidenceBadge score={confidence} />
-              <VerifyExtractionAIButton
-                score={confidence.score}
-                builder="holerite"
-                documentId={documentId ?? null}
-                parsed={{
-                  competencia: effectiveClassificacao.competencia,
-                  layout_usado: effectiveClassificacao.layout_usado,
-                  rubricas: linhas.map((l) => l.rubrica),
-                }}
-                ocrText={ocrText ?? ""}
-                onApplySuggestions={handleAISuggestions}
-                onTelemetry={setAiTelemetry}
-              />
               <VerifyParityForenseButton
                 documentId={documentId ?? ""}
                 builder="holerite"
@@ -521,16 +505,7 @@ export function HoleritePreviewDialog({
           </details>
         )}
 
-        {/* FASE 3.3 — comparação parser × LLM extractor (shadow check). */}
-        {llmStatus && (
-          <div className="shrink-0">
-            <ComparacaoLLMPanel
-              llmStatus={llmStatus}
-              comparacao={comparacao}
-              aiConfidence={llmAiConfidence}
-            />
-          </div>
-        )}
+        {/* Comparação interna (shadow check) usada apenas para bloqueador. */}
 
         {/* Sprint 2 / Fase 3 — banner de rubricas não classificadas pela ontologia
             do escritório. Não bloqueia download (escopo é DSR sobre comissões,

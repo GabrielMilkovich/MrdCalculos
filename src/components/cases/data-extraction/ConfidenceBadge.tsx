@@ -79,19 +79,7 @@ export function ConfidenceBadge({ score }: Props) {
             )}
           </TooltipContent>
         </Tooltip>
-        {/* Razão principal visível — destacada quando o score é < alta. */}
-        {razaoPrincipal && score.level !== "alta" && (
-          <span
-            className={`text-[10px] truncate max-w-[480px] ${
-              score.level === "baixa"
-                ? "text-rose-800 dark:text-rose-300"
-                : "text-amber-800 dark:text-amber-300"
-            }`}
-            title={razaoPrincipal}
-          >
-            {razaoPrincipal}
-          </span>
-        )}
+        {/* Razão técnica oculta do usuário — disponível via tooltip. */}
       </div>
     </TooltipProvider>
   );
