@@ -14,9 +14,21 @@
  *   - default → false (segurança jurídica: assumir injustificada)
  */
 
+export type TipoAfastamento =
+  | 'falta_simples'
+  | 'atestado'
+  | 'aux_doenca'
+  | 'licenca_maternidade'
+  | 'licenca_paternidade'
+  | 'licenca_medica'
+  | 'suspensao'
+  | 'outros';
+
 export type FaltaParseada = {
   data_inicio: string; // "yyyy-mm-dd"
   data_fim: string;
+  tipo_afastamento: TipoAfastamento;
+  duracao_dias: number;
   justificada: boolean;
   reiniciar_periodo_aquisitivo: boolean;
   justificativa: string | null;
@@ -54,6 +66,30 @@ const RE_BLOCO_FERIAS_HEADER = /\b(?:hist[óo]rico\s+de\s+f[ée]rias|f[ée]rias\
 const RE_FIM_BLOCO_FERIAS = /\b(?:afastamentos?|registro\s+de\s+falt|hist[óo]rico\s+de\s+cargo|hist[óo]rico\s+de\s+lota[çc][ãa]o|contribui[çc][ãa]o\s+sindical|hist[óo]rico\s+salarial|anota[çc][oõ]es\s+gerais)\b/i;
 
 const MAX_JUSTIFICATIVA_LEN = 200;
+
+function computarDuracaoDias(inicio: string, fim: string): number {
+  const d1 = new Date(inicio + 'T00:00:00Z');
+  const d2 = new Date(fim + 'T00:00:00Z');
+  if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 1;
+  return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86400000) + 1);
+}
+
+function classificarTipoAfastamento(
+  linha: string,
+  duracaoDias: number,
+  justificativa: string | null,
+): TipoAfastamento {
+  const norm = linha.toLowerCase();
+  if (/suspens[ãa]o/i.test(norm)) return 'suspensao';
+  if (/licen[çc]a\s+maternidade|licenca.?gestante|sal[áa]rio.?maternidade/i.test(norm)) return 'licenca_maternidade';
+  if (/licen[çc]a\s+paternidade/i.test(norm)) return 'licenca_paternidade';
+  if (/aux[ií]lio\s+(?:doen[çc]a|previdenci[áa]rio)|inss/i.test(norm)) return 'aux_doenca';
+  if (duracaoDias > 15) return 'aux_doenca';
+  if (/licen[çc]a\s+m[ée]dica/i.test(norm)) return 'licenca_medica';
+  if (/atestado/i.test(norm) || (justificativa && /m[ée]dic/i.test(justificativa))) return 'atestado';
+  if (/falt\w*|aus[êe]nc/i.test(norm)) return 'falta_simples';
+  return 'outros';
+}
 
 /**
  * Identifica faixas de linhas que pertencem ao bloco "HISTÓRICO DE FÉRIAS"
@@ -168,9 +204,14 @@ export function parseFaltas(ocrText: string): ParseFaltasResult {
       justificativa = line.slice(idx, idx + MAX_JUSTIFICATIVA_LEN).trim();
     }
 
+    const duracao = computarDuracaoDias(dataInicio, dataFim);
+    const tipo = classificarTipoAfastamento(line, duracao, justificativa);
+
     faltas.push({
       data_inicio: dataInicio,
       data_fim: dataFim,
+      tipo_afastamento: tipo,
+      duracao_dias: duracao,
       justificada,
       reiniciar_periodo_aquisitivo: reiniciar,
       justificativa,
