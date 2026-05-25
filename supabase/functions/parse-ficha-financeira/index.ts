@@ -3,6 +3,8 @@ import { encode as base64Encode } from "https://deno.land/std@0.224.0/encoding/b
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit } from "../_shared/rate-limit.ts";
 import { parseFichaFinanceiraDeterministico } from "../_shared/parsers/ficha-financeira-deterministic.ts";
+import { enriquecerViaCatalogo } from "../_shared/enrichment/enrich-from-catalogo.ts";
+import { validarFichaFinanceira } from "../_shared/validators/ficha-financeira-validator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -184,6 +186,16 @@ const TOOL_SCHEMA = {
   },
 };
 
+function detectarEmpregadorSlug(empresa: string): string {
+  const e = empresa.toUpperCase();
+  if (/VIA\s*VAREJO/.test(e)) return "VIA_VAREJO";
+  if (/MAGAZINE\s*LUIZA|MAGALU/.test(e)) return "MAGAZINE_LUIZA";
+  if (/CASAS\s*BAHIA/.test(e)) return "CASAS_BAHIA";
+  if (/RENNER/.test(e)) return "RENNER";
+  if (/CARREFOUR/.test(e)) return "CARREFOUR";
+  return "GENERICO";
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -252,8 +264,46 @@ serve(async (req) => {
             `extraídas, ${deterministico._meta.linhas_filtradas} filtradas, ` +
             `parser=${deterministico._meta.parser}`,
         );
+
+        const empregador = deterministico.empresa
+          ? detectarEmpregadorSlug(deterministico.empresa)
+          : "GENERICO";
+
+        const enriquecimento = await enriquecerViaCatalogo(
+          supabase,
+          deterministico.rubricas,
+          empregador,
+        );
+
+        const totaisPorMes: Record<string, number> = {};
+        for (const r of deterministico.resumo_mensal) {
+          totaisPorMes[r.competencia] = r.total_vencimentos;
+        }
+
+        const validacao = validarFichaFinanceira(
+          enriquecimento.rubricas,
+          totaisPorMes,
+        );
+
+        console.log(
+          `[parse-ficha] ENRICH: ${enriquecimento.resumo.enriquecidas_catalogo}/${enriquecimento.resumo.total_rubricas} via catálogo, ` +
+            `${enriquecimento.resumo.nao_encontradas} sem match. ` +
+            `VALIDATE: ${validacao.ok ? "OK" : "FALHOU"} ` +
+            `(${validacao.resumo.competencias_ok} ok, ${validacao.resumo.competencias_fora} fora, ` +
+            `pior delta ${validacao.resumo.pior_delta_pct.toFixed(2)}%)`,
+        );
+
         return new Response(
-          JSON.stringify(deterministico),
+          JSON.stringify({
+            ...deterministico,
+            rubricas: enriquecimento.rubricas,
+            enriquecimento: enriquecimento.resumo,
+            validacao,
+            _meta: {
+              ...deterministico._meta,
+              empregador_detectado: empregador,
+            },
+          }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -413,14 +463,45 @@ serve(async (req) => {
           `source=${pdfBase64 ? "PDF" : "OCR"}, model=${MODEL})`,
       );
 
+      const empregadorFallback = extracted.empresa
+        ? detectarEmpregadorSlug(extracted.empresa)
+        : "GENERICO";
+
+      const enrichResult = await enriquecerViaCatalogo(
+        supabase,
+        (extracted.rubricas || []).map((r) => ({
+          ...r,
+          classificacao: r.classificacao || "PGTO",
+        })),
+        empregadorFallback,
+      );
+
+      const totaisFallback: Record<string, number> = {};
+      for (const r of extracted.resumo_mensal || []) {
+        totaisFallback[r.competencia] = r.total_vencimentos;
+      }
+      const validacaoFallback = validarFichaFinanceira(
+        enrichResult.rubricas,
+        totaisFallback,
+      );
+
+      console.log(
+        `[parse-ficha] ENRICH (Claude): ${enrichResult.resumo.enriquecidas_catalogo}/${enrichResult.resumo.total_rubricas} via catálogo. ` +
+          `VALIDATE: ${validacaoFallback.ok ? "OK" : "FALHOU"}`,
+      );
+
       return new Response(
         JSON.stringify({
           ...extracted,
+          rubricas: enrichResult.rubricas,
+          enriquecimento: enrichResult.resumo,
+          validacao: validacaoFallback,
           _meta: {
             model: MODEL,
             duration_ms: durationMs,
             pdf_source: !!pdfBase64,
             rubricas_pre_filter: extracted.rubricas?.length,
+            empregador_detectado: empregadorFallback,
           },
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },

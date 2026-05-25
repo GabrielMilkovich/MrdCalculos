@@ -102,6 +102,34 @@ const SINAIS_FALTAS: Sinal[] = [
   },
 ];
 
+const SINAIS_FICHA_FINANCEIRA: Sinal[] = [
+  {
+    pattern: /\bficha\s+financeira\b/i,
+    pontos: 10,
+    motivo: "título 'Ficha Financeira'",
+  },
+  {
+    pattern: /\bano\s+compet[eê]ncia\s*:\s*\d{4}\b/i,
+    pontos: 8,
+    motivo: "header 'Ano Competência: YYYY'",
+  },
+  {
+    pattern: /janeiro.*fevereiro.*mar[çc]o.*abril/is,
+    pontos: 6,
+    motivo: "colunas com 4+ meses distintos",
+  },
+  {
+    pattern: /\bpgto\b[\s\S]{0,200}?\bdesc\b/i,
+    pontos: 4,
+    motivo: "classificações PGTO/DESC no corpo",
+  },
+  {
+    pattern: /\b\d{4}\s+[A-ZÀ-ÚÇ][\wÀ-úÇç\s/.]+\s*\|\s*(PGTO|DESC|BASE|ENCAR)/i,
+    pontos: 6,
+    motivo: "linha com código 4 dígitos + classificação ADP",
+  },
+];
+
 const SINAIS_CARTAO_PONTO: Sinal[] = [
   {
     pattern: /\bcart[ãa]o\s+de\s+ponto\b|\bespelho\s+de\s+ponto\b/i,
@@ -212,6 +240,7 @@ export function autoDetectTipoExtracao(ocrText: string): AutoDetectResult {
 
   const scores = {
     holerite: scoreSinais(ocrText, SINAIS_HOLERITE),
+    ficha_financeira: scoreSinais(ocrText, SINAIS_FICHA_FINANCEIRA),
     ctps: { pontos: ctpsPontos, motivos: ctpsMotivos },
     cartao_ponto: scoreSinais(ocrText, SINAIS_CARTAO_PONTO),
   };

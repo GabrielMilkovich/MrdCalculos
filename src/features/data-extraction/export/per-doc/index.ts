@@ -103,6 +103,13 @@ export type ExportResult =
       baseFilename: string;
       filename: string;
     }
+  | {
+      ok: true;
+      kind: 'ficha-financeira-review';
+      parsed: unknown;
+      document_id: string;
+      filename: string;
+    }
   | { ok: false; error: string };
 
 export async function generateExportForDocument(
@@ -302,6 +309,23 @@ export async function generateExportForDocument(
         ocr_text: ocrText,
         baseFilename: baseName,
         filename: `${baseName}_ctps.zip`,
+      };
+    }
+    case 'ficha_financeira': {
+      if (!v6Parsed || typeof v6Parsed !== 'object') {
+        return {
+          ok: false,
+          error:
+            'Dados da Ficha Financeira não encontrados. ' +
+            'Certifique-se de que o documento foi processado pelo parser.',
+        };
+      }
+      return {
+        ok: true,
+        kind: 'ficha-financeira-review',
+        parsed: v6Parsed,
+        document_id: documentId,
+        filename: `${baseName}_ficha_pjecalc.zip`,
       };
     }
     case 'nao_extrair':

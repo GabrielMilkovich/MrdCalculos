@@ -51,7 +51,7 @@ const RE_REINICIA = /\breinicia\s+(?:o\s+)?per[íi]odo\s+aquisitivo\b/i;
 // período aquisitivo + gozo, não falta. Sem essa exclusão, parser exporta
 // 18 "faltas" que são na verdade férias gozadas (bug do caso ROQUE GUERREIRO).
 const RE_BLOCO_FERIAS_HEADER = /\b(?:hist[óo]rico\s+de\s+f[ée]rias|f[ée]rias\s+gozadas|registro\s+de\s+f[ée]rias|per[íi]odos?\s+de\s+f[ée]rias)\b/i;
-const RE_FIM_BLOCO_FERIAS = /\b(?:afastamento|registro\s+de\s+falt|hist[óo]rico\s+de\s+cargo|hist[óo]rico\s+de\s+lota[çc][ãa]o|contribui[çc][ãa]o\s+sindical|hist[óo]rico\s+salarial|anota[çc][oõ]es\s+gerais)\b/i;
+const RE_FIM_BLOCO_FERIAS = /\b(?:afastamentos?|registro\s+de\s+falt|hist[óo]rico\s+de\s+cargo|hist[óo]rico\s+de\s+lota[çc][ãa]o|contribui[çc][ãa]o\s+sindical|hist[óo]rico\s+salarial|anota[çc][oõ]es\s+gerais)\b/i;
 
 const MAX_JUSTIFICATIVA_LEN = 200;
 
