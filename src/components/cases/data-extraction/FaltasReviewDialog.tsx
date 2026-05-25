@@ -81,6 +81,8 @@ export function FaltasReviewDialog({
       {
         data_inicio: "",
         data_fim: "",
+        tipo_afastamento: "falta_simples" as const,
+        duracao_dias: 0,
         justificada: false,
         reiniciar_periodo_aquisitivo: false,
         justificativa: null,
@@ -268,6 +270,22 @@ function FaltasTable({
 }) {
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
+  const TIPO_LABELS: Record<string, string> = {
+    falta_simples: 'Falta',
+    atestado: 'Atestado',
+    aux_doenca: 'Aux. doença',
+    licenca_maternidade: 'Lic. maternidade',
+    licenca_paternidade: 'Lic. paternidade',
+    licenca_medica: 'Lic. médica',
+    suspensao: 'Suspensão',
+    outros: 'Outros',
+  };
+
+  function tipoLabel(tipo: string | undefined): string {
+    if (!tipo) return 'Falta';
+    return TIPO_LABELS[tipo] ?? tipo;
+  }
+
   function formatDate(iso: string): string {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || "—";
     const [y, m, d] = iso.split("-");
@@ -367,12 +385,11 @@ function FaltasTable({
                 {r.data_inicio !== r.data_fim && <> – {formatDate(r.data_fim)}</>}
               </TableCell>
               <TableCell className="py-1.5">
-                {r.justificada ? (
-                  <Badge variant="outline" className="text-[10px] font-normal">
-                    {r.justificativa || "Justificada"}
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground text-[11px]">Injustificada</span>
+                <Badge variant="outline" className="text-[10px] font-normal">
+                  {tipoLabel(r.tipo_afastamento)}
+                </Badge>
+                {r.justificada && (
+                  <span className="ml-1 text-[10px] text-emerald-600 dark:text-emerald-400">Just.</span>
                 )}
               </TableCell>
               <TableCell className="py-1.5 text-center text-[11px]">
