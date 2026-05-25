@@ -451,7 +451,7 @@ export function HoleritePreviewDialog({
       <DialogContent className="w-[96vw] max-w-[1500px] max-h-[94vh] overflow-hidden flex flex-col">
         <DialogHeader className="shrink-0 space-y-1">
           <div className="flex items-start justify-between gap-2 flex-wrap">
-            <DialogTitle>Conferir antes de baixar</DialogTitle>
+            <DialogTitle>Conferir contracheque: {effectiveClassificacao.competencia || "—"}</DialogTitle>
             <div className="flex items-center gap-2 flex-wrap">
               <ConfidenceBadge score={confidence} />
               <VerifyExtractionAIButton
@@ -470,23 +470,21 @@ export function HoleritePreviewDialog({
             </div>
           </div>
           <DialogDescription className="text-xs">
-            Holerite <strong>{effectiveClassificacao.competencia}</strong> · layout{" "}
-            <code className="text-[10px]">{effectiveClassificacao.layout_usado}</code> ·{" "}
-            {linhas.length} rubrica{linhas.length === 1 ? "" : "s"} extraída
-            {linhas.length === 1 ? "" : "s"} · {totalLinhasIncluidas} entram no
-            ZIP
+            {linhas.length} verba{linhas.length === 1 ? "" : "s"} identificada
+            {linhas.length === 1 ? "" : "s"} · {totalLinhasIncluidas}{" "}
+            {totalLinhasIncluidas === 1 ? "será considerada" : "serão consideradas"} no cálculo
           </DialogDescription>
         </DialogHeader>
 
         {competenciaInvalida && (
           <div className="shrink-0 border border-rose-400 bg-rose-50 dark:bg-rose-950/20 rounded px-2 py-1 text-[11px] flex items-center gap-1.5 text-rose-900 dark:text-rose-100">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            <span className="font-medium">Competência inválida:</span>
+            <span className="font-medium">Mês/ano não identificado:</span>
             <code className="text-[10px] bg-rose-100 dark:bg-rose-950/40 px-1 rounded">
               {effectiveClassificacao.competencia || "(vazio)"}
             </code>
             <span className="text-rose-900/80 dark:text-rose-100/80">
-              — ajuste no PJe-Calc ou reabra o documento.
+              — corrija o período antes de confirmar.
             </span>
           </div>
         )}
@@ -499,7 +497,7 @@ export function HoleritePreviewDialog({
           <details className="shrink-0 border border-red-400 bg-red-50 dark:bg-red-950/30 rounded text-xs group">
             <summary className="px-2 py-1 flex items-center gap-1.5 font-medium text-red-900 dark:text-red-100 cursor-pointer select-none">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              Possíveis erros detectados — revise antes de baixar
+              Alguns dados precisam de conferência
               <span className="ml-auto text-[10px] opacity-60 group-open:hidden">
                 clique para ver
               </span>
@@ -544,7 +542,7 @@ export function HoleritePreviewDialog({
           <details className="shrink-0 border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded text-xs group">
             <summary className="px-2 py-1 flex items-center gap-1.5 font-medium text-amber-900 dark:text-amber-100 cursor-pointer select-none">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              {classificacao.warnings.length} aviso(s) do parser
+              {classificacao.warnings.length} observação(ões)
               <span className="ml-auto text-[10px] opacity-60 group-open:hidden">
                 clique para ver
               </span>
@@ -653,12 +651,11 @@ export function HoleritePreviewDialog({
         {/* Resumo do CSV final */}
         <div className="border rounded-md bg-muted/20 p-2.5 space-y-1">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Total que vai pro ZIP final ({totalCategorias} CSV
-            {totalCategorias === 1 ? "" : "s"})
+            Total considerado neste documento
           </div>
           {totals.size === 0 ? (
             <div className="text-xs text-muted-foreground italic">
-              Nada selecionado — ZIP terá apenas LEIA-ME.
+              Nenhuma verba selecionada para o cálculo.
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs">
@@ -705,10 +702,10 @@ export function HoleritePreviewDialog({
             className="gap-1.5"
             title={
               competenciaInvalida
-                ? `ATENÇÃO: Competência "${effectiveClassificacao.competencia || "vazia"}" inválida. Download liberado, mas as rubricas podem entrar no histórico salarial alocadas em mês indefinido. Revise no PJe-Calc antes de fechar o cálculo.`
+                ? `Atenção: período "${effectiveClassificacao.competencia || "vazio"}" não identificado. Verifique antes de confirmar.`
                 : confidence.bloqueador === true
-                ? "Atenção: extração com possíveis erros. Revise as rubricas marcadas antes de usar o CSV em laudo."
-                : "Abre o gate de confirmação (3 itens dirigidos) antes do download"
+                ? "Atenção: alguns dados podem estar incorretos. Revise as verbas marcadas antes de confirmar."
+                : "Confirmar os dados deste contracheque"
             }
           >
             {downloading ? (
@@ -716,7 +713,7 @@ export function HoleritePreviewDialog({
             ) : (
               <Download className="h-3.5 w-3.5" />
             )}
-            Confirmar e baixar ZIP
+            Confirmar documento
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -727,11 +724,10 @@ export function HoleritePreviewDialog({
       <AlertDialog open={confirmacaoOpen} onOpenChange={setConfirmacaoOpen}>
         <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirme antes de baixar</AlertDialogTitle>
+            <AlertDialogTitle>Confirme antes de continuar</AlertDialogTitle>
             <AlertDialogDescription>
-              Marque os {exigeOverride ? "4" : "3"} itens para liberar o
-              download do ZIP. Esta etapa registra que você revisou os dados —
-              o arquivo será usado em cálculo trabalhista vinculante.
+              Verifique os itens abaixo antes de confirmar. Os dados deste
+              documento serão usados no cálculo.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -743,9 +739,8 @@ export function HoleritePreviewDialog({
                 className="mt-0.5"
               />
               <span>
-                <strong>Rubricas categorizadas</strong> — cada linha incluída
-                tem categoria correta (Salário Fixo / Comissões / DSR /
-                Premiações / Mínimo Garantido / Sal-família).
+                <strong>Verbas categorizadas</strong> — cada verba incluída
+                tem a categoria correta para o cálculo.
               </span>
             </label>
             <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
@@ -755,9 +750,8 @@ export function HoleritePreviewDialog({
                 className="mt-0.5"
               />
               <span>
-                <strong>Valores</strong> conferem com o OCR — sem rubricas de
-                base de cálculo (Base IR/INSS/FGTS) classificadas como
-                remuneração e sem duplicações de histórico.
+                <strong>Valores conferidos</strong> — os valores
+                correspondem ao documento original.
               </span>
             </label>
             <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
@@ -767,9 +761,8 @@ export function HoleritePreviewDialog({
                 className="mt-0.5"
               />
               <span>
-                <strong>Cobertura</strong> e competência <strong>{effectiveClassificacao.competencia}</strong>{" "}
-                conferem — todas as rubricas remuneratórias do holerite estão
-                aqui e nada relevante foi marcado para ignorar.
+                <strong>Período {effectiveClassificacao.competencia}</strong>{" "}
+                está correto e todas as verbas relevantes estão incluídas.
               </span>
             </label>
             {exigeOverride && (
@@ -781,13 +774,9 @@ export function HoleritePreviewDialog({
                 />
                 <span>
                   <strong className="text-amber-900 dark:text-amber-100">
-                    Confirmo que revisei manualmente cada divergência acima
+                    Revisei as {divergenciasCount} verba{divergenciasCount === 1 ? "" : "s"} que precisam de atenção
                   </strong>{" "}
-                  ({divergenciasCount} sinalizada
-                  {divergenciasCount === 1 ? "" : "s"} pelo parser
-                  {linhasFallbackIncluidas > 0 ? "/classifier" : ""}). O
-                  download será registrado como <em>bloqueio burlado</em> na
-                  telemetria para audit trail jurídico.
+                  e confirmo que as categorias estão corretas.
                 </span>
               </label>
             )}

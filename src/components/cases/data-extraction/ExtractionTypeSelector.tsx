@@ -14,7 +14,7 @@ interface Props {
 }
 
 const LABELS: Record<TipoExtracao, string> = {
-  nao_extrair: 'Não extrair',
+  nao_extrair: 'Ignorar',
   holerite: 'Holerite / Contracheque',
   cartao_ponto: 'Cartão de Ponto / Jornada',
   ctps: 'Documento de Férias e/ou Faltas (CTPS, recibo, espelho)',

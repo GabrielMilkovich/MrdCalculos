@@ -206,12 +206,11 @@ export function CtpsReviewDialog({
           <DialogHeader className="space-y-1">
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Revisar CTPS — Carteira de Trabalho
+              Conferir carteira de trabalho
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Este documento contém <strong>férias</strong> e <strong>faltas</strong>{" "}
-              no mesmo OCR. Revise cada aba separadamente. O download gera 1 ZIP
-              com os 2 CSVs.
+              Este documento contém <strong>férias</strong> e <strong>faltas</strong>.
+              Revise cada aba separadamente antes de confirmar.
             </DialogDescription>
           </DialogHeader>
 
@@ -220,12 +219,11 @@ export function CtpsReviewDialog({
           {bloqueadorCtps && (
             <div className="border-2 border-red-400 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
               <div className="font-bold text-red-900 dark:text-red-100">
-                Atenção — possíveis erros detectados na extração
+                Atenção — alguns dados precisam de conferência
               </div>
               <div className="text-red-800 dark:text-red-200 text-xs">
-                Revise os campos de férias/faltas antes de baixar. O download
-                está liberado, mas a inconsistência detectada indica que o
-                ZIP pode estar incorreto.
+                Revise os períodos de férias e faltas antes de confirmar.
+                Foram encontradas inconsistências que precisam de verificação.
               </div>
             </div>
           )}
@@ -272,13 +270,13 @@ export function CtpsReviewDialog({
                 />
               </div>
               <SecaoResumo
-                titulo="Férias parseadas neste documento"
+                titulo="Férias encontradas"
                 qtd={feriasParsed.ferias.length}
                 etiqueta="período(s)"
                 onEditar={() => setFeriasOpen(true)}
                 vazio={
                   feriasParsed.ferias.length === 0
-                    ? "Nenhum período de férias detectado no OCR. Se você espera férias aqui, abra a edição e adicione manualmente."
+                    ? "Nenhum período de férias foi encontrado. Se este documento contém férias, adicione manualmente."
                     : null
                 }
               />
@@ -307,13 +305,13 @@ export function CtpsReviewDialog({
                 />
               </div>
               <SecaoResumo
-                titulo="Faltas parseadas neste documento"
+                titulo="Faltas encontradas"
                 qtd={faltasParsed.faltas.length}
                 etiqueta="registro(s)"
                 onEditar={() => setFaltasOpen(true)}
                 vazio={
                   faltasParsed.faltas.length === 0
-                    ? "Nenhuma falta detectada no OCR. Se você espera faltas aqui, abra a edição e adicione manualmente."
+                    ? "Nenhuma falta foi encontrada. Se este documento contém faltas, adicione manualmente."
                     : null
                 }
               />
@@ -341,14 +339,14 @@ export function CtpsReviewDialog({
                   faltasParsed.faltas.length === 0)
               }
               className="gap-1.5"
-              title="Abre o gate de confirmação antes do download do ZIP"
+              title="Confirmar os dados deste documento"
             >
               {downloading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <Download className="h-3.5 w-3.5" />
               )}
-              Confirmar e baixar ZIP
+              Confirmar documento
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -380,10 +378,10 @@ export function CtpsReviewDialog({
       <AlertDialog open={confirmacaoOpen} onOpenChange={setConfirmacaoOpen}>
         <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirme antes de baixar</AlertDialogTitle>
+            <AlertDialogTitle>Confirme antes de continuar</AlertDialogTitle>
             <AlertDialogDescription>
-              O ZIP terá os 2 CSVs (férias e faltas) + LEIA-ME com as
-              instruções de importação no PJe-Calc.
+              Verifique os dados de férias e faltas antes de confirmar.
+              Estes dados serão usados no cálculo.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -395,8 +393,8 @@ export function CtpsReviewDialog({
                 className="mt-0.5"
               />
               <span>
-                <strong>Férias revisadas</strong> — datas dos gozos, prazo,
-                situação (G/GP/NG/I/P) e abono pecuniário conferem com a CTPS.
+                <strong>Férias conferidas</strong> — datas, situação e
+                abono conferem com o documento original.
               </span>
             </label>
             <label className="flex items-start gap-3 text-sm select-none cursor-pointer">
@@ -406,8 +404,8 @@ export function CtpsReviewDialog({
                 className="mt-0.5"
               />
               <span>
-                <strong>Faltas revisadas</strong> — datas, justificada/injustificada
-                e justificativas conferem com as anotações na CTPS.
+                <strong>Faltas conferidas</strong> — datas e justificativas
+                conferem com o documento original.
               </span>
             </label>
             {exigeOverride && (
@@ -419,12 +417,9 @@ export function CtpsReviewDialog({
                 />
                 <span>
                   <strong className="text-amber-900 dark:text-amber-100">
-                    Confirmo que revisei manualmente cada divergência acima
+                    Revisei os dados que precisam de atenção
                   </strong>{" "}
-                  ({divergenciasCount} sinalizada
-                  {divergenciasCount === 1 ? "" : "s"} pelos parsers). O download
-                  será registrado como <em>bloqueio burlado</em> na telemetria
-                  para audit trail jurídico.
+                  e confirmo que estão corretos.
                 </span>
               </label>
             )}
@@ -445,7 +440,7 @@ export function CtpsReviewDialog({
               ) : (
                 <Download className="h-3.5 w-3.5" />
               )}
-              Baixar ZIP
+              Confirmar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -482,7 +477,7 @@ function SecaoResumo({
       <div className="min-w-0">
         <p className="text-sm font-medium">{titulo}</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {qtd} {etiqueta} {qtd === 1 ? "extraído" : "extraídos"}
+          {qtd} {etiqueta} {qtd === 1 ? "encontrado" : "encontrados"}
         </p>
         {vazio && (
           <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
@@ -491,7 +486,7 @@ function SecaoResumo({
         )}
       </div>
       <Button size="sm" variant="outline" onClick={onEditar}>
-        Editar / revisar
+        Conferir
       </Button>
     </div>
   );
@@ -501,7 +496,7 @@ function ListaAvisos({ itens }: { itens: string[] }) {
   return (
     <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-xs space-y-0.5">
       <p className="font-medium text-amber-900 dark:text-amber-100">
-        Avisos do parser
+        Observações
       </p>
       {itens.slice(0, 5).map((w, i) => (
         <p key={i} className="text-amber-800 dark:text-amber-200">

@@ -51,10 +51,10 @@ export function ComparacaoLLMPanel({ llmStatus, comparacao, aiConfidence }: Prop
       <div className="border border-amber-300 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-xs space-y-0.5">
         <div className="flex items-center gap-1.5 font-medium text-amber-900 dark:text-amber-100">
           <Sparkles className="h-3.5 w-3.5" />
-          IA não disponível — usando só parser determinístico
+          Verificação automática indisponível
         </div>
         <div className="text-amber-800 dark:text-amber-200">
-          {statusLabel(llmStatus)}. Revisão manual mais cuidadosa recomendada.
+          Revise os dados manualmente com mais cuidado.
         </div>
       </div>
     );
@@ -72,8 +72,7 @@ export function ComparacaoLLMPanel({ llmStatus, comparacao, aiConfidence }: Prop
       <div className="border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 rounded p-2 text-xs">
         <div className="flex items-center gap-1.5 font-medium text-emerald-900 dark:text-emerald-100">
           <CheckCircle2 className="h-3.5 w-3.5" />
-          IA e parser concordam em {pct}% das rubricas
-          {typeof aiConfidence === "number" ? ` · IA confiança: ${aiConfidence}%` : ""}
+          Dados verificados automaticamente — {pct}% de consistência
         </div>
       </div>
     );
@@ -85,12 +84,10 @@ export function ComparacaoLLMPanel({ llmStatus, comparacao, aiConfidence }: Prop
       <div className="border-2 border-red-500 bg-red-50 dark:bg-red-950/30 rounded p-3 text-sm space-y-1">
         <div className="flex items-center gap-1.5 font-bold text-red-900 dark:text-red-100">
           <XCircle className="h-4 w-4" />
-          Divergência grande entre IA e parser ({pct}% de concordância)
+          {divergencias} {divergencias === 1 ? "verba precisa" : "verbas precisam"} de conferência manual
         </div>
         <div className="text-red-800 dark:text-red-200 text-xs">
-          {divergencias} divergência{divergencias === 1 ? "" : "s"} detectada
-          {divergencias === 1 ? "" : "s"}. Revise o OCR manualmente antes de
-          baixar — uma das duas fontes está enganada.
+          Revise os dados destacados antes de confirmar.
         </div>
         <ButtonExpansor expandido={expandido} setExpandido={setExpandido} divergencias={divergencias} />
         {expandido && <DiffTable comparacao={comparacao} />}
@@ -103,9 +100,7 @@ export function ComparacaoLLMPanel({ llmStatus, comparacao, aiConfidence }: Prop
     <div className="border border-amber-400 bg-amber-50 dark:bg-amber-950/20 rounded p-2 text-xs space-y-1">
       <div className="flex items-center gap-1.5 font-medium text-amber-900 dark:text-amber-100">
         <AlertTriangle className="h-3.5 w-3.5" />
-        {divergencias} divergência{divergencias === 1 ? "" : "s"} entre IA e
-        parser ({pct}% de concordância)
-        {typeof aiConfidence === "number" ? ` · IA confiança: ${aiConfidence}%` : ""}
+        {divergencias} {divergencias === 1 ? "verba precisa" : "verbas precisam"} de conferência
       </div>
       <ButtonExpansor expandido={expandido} setExpandido={setExpandido} divergencias={divergencias} />
       {expandido && <DiffTable comparacao={comparacao} />}

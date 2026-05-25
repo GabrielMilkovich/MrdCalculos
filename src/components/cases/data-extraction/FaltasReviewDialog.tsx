@@ -196,7 +196,7 @@ export function FaltasReviewDialog({
     <ReviewLayout
       open={open}
       onOpenChange={onOpenChange}
-      title="Revisar faltas"
+      title="Conferir faltas"
       subtitle={`${rows.length} ocorrência(s) · ${filename}`}
       ocrText={ocrText}
       unparsedLines={unparsedLines}

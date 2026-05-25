@@ -251,7 +251,7 @@ export function DocumentOcrValidation({
   const confirmOcr = useCallback(async () => {
     if (!selected) return;
     if (editedText.trim().length < 20) {
-      toast.error("Texto OCR muito curto. Rode o OCR ou cole o texto manualmente.");
+      toast.error("Texto muito curto. Processe o documento ou cole o texto manualmente.");
       return;
     }
     setSavingId(selected.id);
@@ -269,7 +269,7 @@ export function DocumentOcrValidation({
         .eq("id", selected.id);
       if (error) throw error;
 
-      toast.success("OCR confirmado.");
+      toast.success("Leitura confirmada.");
 
       // AUTO-FILL: dispara parsers determinísticos e popula direto as
       // tabelas pjecalc_* dos 4 módulos da calculadora. Mostra toast de
@@ -387,14 +387,14 @@ export function DocumentOcrValidation({
           <div className="flex items-center justify-between gap-3">
             <CardTitle className="text-base flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
-              Validação de OCR
+              Conferência dos dados
             </CardTitle>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>{validatedCount}/{docs.length} validados</span>
+              <span>{validatedCount}/{docs.length} conferidos</span>
               {allValidated && (
                 <Badge variant="default" className="gap-1 bg-green-600">
                   <CheckCircle2 className="h-3 w-3" />
-                  Tudo OK
+                  Tudo conferido
                 </Badge>
               )}
             </div>
@@ -427,8 +427,8 @@ export function DocumentOcrValidation({
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{doc.file_name || "sem nome"}</div>
                     <div className="text-xs text-muted-foreground">
-                      {doc.tipo || "outro"} · {doc.page_count || 0} pg
-                      {doc.ocr_confidence ? ` · conf. ${Math.round(doc.ocr_confidence * 100)}%` : ""}
+                      {doc.tipo || "outro"}
+                      {doc.page_count ? ` · ${doc.page_count} pg` : ""}
                     </div>
                   </div>
                   {(showExtractionTypeSelector || showExtractionTypeBadges) && doc.ocr_validated && (
@@ -465,20 +465,22 @@ export function DocumentOcrValidation({
                   )}
                   {doc.ocr_validated ? (
                     <Badge variant="default" className="gap-1 bg-green-600 text-[10px]">
-                      <CheckCircle2 className="h-3 w-3" /> validado
+                      <CheckCircle2 className="h-3 w-3" /> Conferido
                     </Badge>
                   ) : hasOcr ? (
-                    <Badge variant="secondary" className="text-[10px]">aguardando</Badge>
+                    <Badge variant="secondary" className="text-[10px]">Conferir</Badge>
                   ) : doc.status === "ocr_running" ? (
                     <Badge variant="outline" className="gap-1 text-[10px]">
-                      <Loader2 className="h-3 w-3 animate-spin" /> OCR...
+                      <Loader2 className="h-3 w-3 animate-spin" /> Processando...
                     </Badge>
                   ) : doc.status === "failed" || doc.status === "ocr_failed" ? (
                     <Badge variant="destructive" className="gap-1 text-[10px]">
-                      <AlertTriangle className="h-3 w-3" /> erro
+                      <AlertTriangle className="h-3 w-3" /> Erro
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-[10px]">sem OCR</Badge>
+                    <Badge variant="outline" className="gap-1 text-[10px]">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Processando
+                    </Badge>
                   )}
                 </div>
               );
@@ -494,7 +496,7 @@ export function DocumentOcrValidation({
             <div className="flex items-center gap-2">
               {selected.ocr_validated && (
                 <Badge variant="default" className="gap-1 bg-green-600 text-[10px]">
-                  <CheckCircle2 className="h-3 w-3" /> validado
+                  <CheckCircle2 className="h-3 w-3" /> Conferido
                 </Badge>
               )}
               {dirty && (
@@ -511,7 +513,7 @@ export function DocumentOcrValidation({
                 <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 text-xs font-semibold">
                   <span className="flex items-center gap-1.5">
                     <Pencil className="h-3.5 w-3.5" />
-                    Texto OCR
+                    Texto do documento
                   </span>
                   <div className="flex gap-1">
                     <Button
@@ -567,7 +569,7 @@ export function DocumentOcrValidation({
                 ) : (
                   <RotateCcw className="h-4 w-4 mr-1" />
                 )}
-                {selected.ocr_text ? "Rodar OCR novamente" : "Rodar OCR"}
+                {selected.ocr_text ? "Tentar novamente" : "Processar documento"}
               </Button>
               <div className="flex-1" />
               <Button
@@ -576,7 +578,7 @@ export function DocumentOcrValidation({
                 disabled={savingId === selected.id || editedText.trim().length < 20}
               >
                 <CheckCircle2 className="h-4 w-4 mr-1" />
-                Confirmar OCR
+                Confirmar leitura
               </Button>
             </div>
           </CardContent>
@@ -596,19 +598,19 @@ export function DocumentOcrValidation({
               <div className="flex-1">
                 <div className="text-sm font-medium">
                   {canGoNext
-                    ? "Pronto para avançar."
+                    ? "Todos os documentos foram conferidos."
                     : blockedByCustom
                       ? advanceBlockedReason
                       : allValidated
-                        ? "Todos os documentos validados!"
-                        : `Valide ${docs.length - validatedCount} documento(s) restante(s) para seguir.`}
+                        ? "Todos os documentos conferidos!"
+                        : `Confira ${docs.length - validatedCount} documento(s) restante(s) para seguir.`}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {canGoNext
-                    ? `Clique em '${label}' para continuar.`
+                    ? `${validatedCount} de ${docs.length} documentos preparados.`
                     : blockedByCustom
-                      ? "Resolva o requisito acima para liberar o botão."
-                      : `${ocrReadyCount}/${docs.length} com OCR pronto. Abra cada um acima, revise e confirme.`}
+                      ? "Resolva a pendência acima para liberar o botão."
+                      : `${validatedCount} de ${docs.length} documentos preparados. Abra cada um acima, revise e confirme.`}
                 </div>
               </div>
               <Button onClick={handleGoToCalculo} disabled={!canGoNext || advancing}>

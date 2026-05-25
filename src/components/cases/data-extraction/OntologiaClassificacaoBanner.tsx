@@ -169,17 +169,14 @@ export function OntologiaClassificacaoBanner({
             <AlertTriangle className="h-3.5 w-3.5 mt-0.5 text-amber-700 dark:text-amber-300 shrink-0" />
             <div>
               <div className="font-medium text-amber-900 dark:text-amber-100">
-                {resumo.nao_classificadas} de {resumo.total_rubricas}{" "}
-                {resumo.nao_classificadas === 1 ? "rubrica não foi" : "rubricas não foram"}{" "}
-                classificada{resumo.nao_classificadas === 1 ? "" : "s"} pela
-                ontologia
+                {resumo.nao_classificadas}{" "}
+                {resumo.nao_classificadas === 1 ? "verba ainda não possui" : "verbas ainda não possuem"}{" "}
+                categoria definida
               </div>
               <p className="text-[11px] text-amber-800/90 dark:text-amber-200/90 mt-0.5">
-                Isso não bloqueia o download do CSV/ZIP. Sinaliza apenas que essas
-                rubricas não têm categoria atribuída para cálculo de DSR sobre
-                comissões. Classifique manualmente para incluí-las nas bases
-                agregadas — e, ao confirmar, a classificação vira aprendizado
-                aplicado aos próximos casos.
+                Classifique manualmente para incluí-las no cálculo.
+                Ao confirmar, a classificação será aplicada automaticamente
+                nos próximos documentos.
               </p>
             </div>
           </div>
@@ -191,11 +188,11 @@ export function OntologiaClassificacaoBanner({
             onClick={() => setDialogOpen(true)}
           >
             <ListChecks className="h-3.5 w-3.5 mr-1" />
-            Classificar manualmente
+            Corrigir categorias
           </Button>
         </div>
         <div className="text-[11px] text-amber-800/90 dark:text-amber-200/90">
-          <strong>Rubricas pendentes:</strong>{" "}
+          <strong>Verbas pendentes:</strong>{" "}
           {naoClassificadasUnicas.slice(0, 6).join(", ")}
           {naoClassificadasUnicas.length > 6 && ` e mais ${naoClassificadasUnicas.length - 6}`}
         </div>
@@ -204,18 +201,11 @@ export function OntologiaClassificacaoBanner({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Classificar rubricas manualmente</DialogTitle>
+            <DialogTitle>Corrigir categorias das verbas</DialogTitle>
             <DialogDescription>
-              Atribua uma categoria para cada rubrica não classificada
-              automaticamente. As escolhas são salvas em background — pode
-              fechar o diálogo a qualquer momento. Rubricas em branco continuam
-              como{" "}
-              <code className="text-[10px] bg-muted px-1 rounded">
-                NAO_CLASSIFICADO
-              </code>
-              . Ao clicar &quot;Confirmar e baixar ZIP&quot; no diálogo
-              principal, as classificações desta sessão viram aprendizado
-              propagado para próximos casos.
+              Atribua uma categoria para cada verba pendente. As escolhas são
+              salvas automaticamente. Verbas sem categoria não serão incluídas
+              no cálculo de DSR sobre comissões.
             </DialogDescription>
           </DialogHeader>
 
