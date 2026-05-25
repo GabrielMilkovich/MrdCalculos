@@ -315,7 +315,7 @@ export function VerifyExtractionAIButton({
           </span>
           {response && (
             <Badge variant="outline" className="text-[10px]">
-              IA conf. {Math.round(response.ai_confidence)}/100
+              {response.ai_confidence >= 70 ? "Alta confiança" : response.ai_confidence >= 40 ? "Média confiança" : "Baixa confiança"}
               {response.discarded_hallucinations.length > 0 && (
                 <span className="ml-1 text-rose-600 dark:text-rose-400">
                   ({response.discarded_hallucinations.length} descartadas)
@@ -328,8 +328,7 @@ export function VerifyExtractionAIButton({
         {!response && !loading && !error && (
           <div className="p-4 text-sm space-y-2">
             <p className="text-muted-foreground">
-              Score do parser: <strong>{score}/100</strong> (faixa média).
-              IA vai verificar contra o OCR e sugerir ajustes pontuais.
+              A IA vai verificar os dados extraídos contra o documento original e sugerir ajustes pontuais.
             </p>
             <p className="text-[11px] text-muted-foreground">
               <strong>Anti-alucinação:</strong> sugestões cujo valor não está
