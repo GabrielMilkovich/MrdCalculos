@@ -53,7 +53,7 @@ export function ValidationPanel({ input, onClose }: Props) {
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
           <ShieldCheck className="h-4 w-4 text-primary" />
-          Validação de Dados
+          Conferência de Dados
           {pode ? (
             <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 text-[9px]">
               <CheckCircle2 className="h-3 w-3 mr-0.5" /> OK para fechar

@@ -208,7 +208,7 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
     onSuccess: async ({ acao }) => {
       toast({
         title: acao === 'aprovar' ? 'Aprovado' : acao === 'editar' ? 'Editado' : 'Rejeitado',
-        description: 'Validação registrada com sucesso.',
+        description: 'Dados conferidos com sucesso.',
       });
       await queryClient.invalidateQueries({ queryKey: ['extractions', caseId] });
       await queryClient.invalidateQueries({ queryKey: ['validations', caseId] });
@@ -226,7 +226,7 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
       
       if (!remaining?.length) {
         toast({
-          title: 'Validação concluída',
+          title: 'Conferência concluída',
           description:
             'Todas as extrações foram validadas. Importe um .pjc ou preencha os módulos de cálculo manualmente.',
         });

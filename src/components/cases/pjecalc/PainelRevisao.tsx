@@ -96,7 +96,7 @@ export function PainelRevisao({ caseId, validacao, resultado, modulosStatus }: P
       pendente: { label: 'Pendente', variant: 'secondary' },
       revisado: { label: 'Revisado', variant: 'outline' },
       aprovado: { label: 'Aprovado', variant: 'default' },
-      requer_validacao: { label: 'Validação', variant: 'destructive' },
+      requer_validacao: { label: 'Conferir', variant: 'destructive' },
     };
     const m = map[s] || map.pendente;
     return <Badge variant={m.variant} className="text-[10px]">{m.label}</Badge>;

@@ -881,7 +881,7 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
                 ? <AlertTriangle className="h-4 w-4 text-yellow-500" />
                 : <XCircle className="h-4 w-4 text-destructive" />
               }
-              Validação Pré-Liquidação
+              Verificação Pré-Liquidação
               <Badge variant={validacao.valido ? 'secondary' : 'destructive'} className="text-[10px] ml-auto">
                 {validacao.erros} erros · {validacao.alertas} alertas · {validacao.observacoes} obs
               </Badge>
@@ -1197,7 +1197,7 @@ Total da reclamada: ${fmt(res.resumo.total_reclamada)}`;
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-primary" />
-                  Validação do Cálculo
+                  Verificação do Cálculo
                 </CardTitle>
               </CardHeader>
               <CardContent>

@@ -252,7 +252,7 @@ export function ModuloFerias({ caseId }: Props) {
       onDelete={removeFerias}
       addLabel="Novo Período"
       loading={isLoading}
-      emptyMessage="Nenhum período de férias cadastrado. Períodos extraídos dos documentos via OCR aparecem aqui automaticamente após confirmar a validação."
+      emptyMessage="Nenhum período de férias cadastrado. Períodos encontrados nos documentos aparecem aqui automaticamente após conferir os dados."
       rowClassName={(r) =>
         r.documento_id
           ? "bg-blue-50/60 dark:bg-blue-950/15 border-l-2 border-l-blue-400"

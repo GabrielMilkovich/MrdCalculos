@@ -168,7 +168,7 @@ export function DocumentProcessor({
   // Processar documento individual (OCR + Chunking + Embeddings)
   const processDocument = useCallback(async (documentId: string) => {
     setProcessingDocId(documentId);
-    toast.info("Iniciando processamento com OCR e indexação vetorial...");
+    toast.info("Processando documento...");
 
     try {
       const { data, error } = await supabase.functions.invoke("process-document", {

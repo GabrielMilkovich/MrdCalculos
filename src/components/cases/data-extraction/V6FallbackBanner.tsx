@@ -113,17 +113,15 @@ export function V6FallbackBanner({ documentId }: Props) {
     <div className="mx-3 mt-2 border border-amber-400 bg-amber-50 dark:bg-amber-950/20 rounded p-2.5 text-xs space-y-1">
       <div className="font-semibold text-amber-900 dark:text-amber-100 flex items-center gap-1.5">
         <AlertTriangle className="h-3.5 w-3.5" />
-        Processado via Mistral OCR (caminho de menor precisão)
+        Processado com método alternativo (menor precisão)
       </div>
       <p className="text-[11px] text-amber-800 dark:text-amber-200 leading-snug">
-        Este documento foi extraído pelo Mistral OCR + parser regex v5,
-        não pelo extrator geométrico V6. CSV pode conter divergências
-        sutis (ex: <span className="font-mono">19:15</span> lido como{" "}
-        <span className="font-mono">15:15</span>, dias parcialmente ausentes,
-        cronologia invertida).
+        Este documento foi processado com um método alternativo que pode
+        conter divergências sutis (ex: horários trocados, dias ausentes,
+        cronologia invertida). Confira os dados com atenção.
       </p>
       <p className="text-[11px] text-amber-700 dark:text-amber-300 italic">
-        Motivo V6 não rodou: {motivoLegivel}
+        Motivo: {motivoLegivel}
         {status.v6_error && (
           <>
             {" "}

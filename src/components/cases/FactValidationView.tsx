@@ -1186,7 +1186,7 @@ export function FactValidationView({
                   }`}
                 >
                   {canCalculate
-                    ? "✓ Validação Completa - Pronto para Calcular"
+                    ? "✓ Conferência completa — Pronto para calcular"
                     : `⚠ ${unconfirmedCriticalFacts.length} fato(s) crítico(s) pendente(s)`}
                 </p>
                 <p className="text-sm text-muted-foreground">
