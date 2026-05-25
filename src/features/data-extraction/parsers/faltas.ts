@@ -43,10 +43,13 @@ export type ParseFaltasResult = {
 
 const RE_INTERVALO_DATA =
   /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\s*(?:a|at[ée]|-|–)\s*(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/i;
+// CTPS format: "dd/mm/yyyy  Text  dd/mm/yyyy" — two dates separated by text (not "a"/"até")
+const RE_DUAS_DATAS_SEPARADAS =
+  /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b\s+\S+(?:\s+\S+)*?\s+\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/;
 const RE_DATA_UNICA = /\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\b/;
 // Palavras-chave amplas para detectar linha relevante.
 const RE_LINHA_FALTA =
-  /\b(falt\w*|aus[êe]nc\w+|n[ãa]o\s*compareceu|atestado|licen[çc]a|afastamento|abon\w*)\b/i;
+  /\b(falt\w*|aus[êe]nc\w+|n[ãa]o\s*compareceu|atestado|licen[çc]a|afastamento|abon\w*|aux[ií]lio|doen[çc]a|suspens\w*)\b/i;
 // Justificativa: regex CONSERVADORA — exige contexto explícito quando o
 // termo for ambíguo. "consulta agendada" sozinho NÃO é prova de
 // justificativa (o empregado pode ter agendado e faltado; só
@@ -145,7 +148,8 @@ export function parseFaltas(ocrText: string): ParseFaltasResult {
 
     const isFaltaLine = RE_LINHA_FALTA.test(line);
     const intervaloMatch = line.match(RE_INTERVALO_DATA);
-    const dataMatch = !intervaloMatch ? line.match(RE_DATA_UNICA) : null;
+    const duasDatasMatch = !intervaloMatch ? line.match(RE_DUAS_DATAS_SEPARADAS) : null;
+    const dataMatch = !intervaloMatch && !duasDatasMatch ? line.match(RE_DATA_UNICA) : null;
 
     let dataInicio: string | null = null;
     let dataFim: string | null = null;
@@ -163,6 +167,21 @@ export function parseFaltas(ocrText: string): ParseFaltasResult {
           `Linha ${i + 1}: intervalo invertido (${dataInicio} > ${dataFim}). Linha ignorada.`,
         );
         continue;
+      }
+    } else if (duasDatasMatch && isFaltaLine) {
+      // CTPS format: "dd/mm/yyyy  Tipo Afastamento  dd/mm/yyyy"
+      const [, dd1, mm1, yyyy1, dd2, mm2, yyyy2] = duasDatasMatch;
+      if (!isValidDate(yyyy1, mm1, dd1) || !isValidDate(yyyy2, mm2, dd2)) {
+        warnings.push(`Linha ${i + 1}: data inválida no par de datas.`);
+        continue;
+      }
+      dataInicio = isoDate(yyyy1, mm1, dd1);
+      dataFim = isoDate(yyyy2, mm2, dd2);
+      if (dataInicio > dataFim) {
+        warnings.push(
+          `Linha ${i + 1}: afastamento com data fim anterior ao início (${dataInicio} > ${dataFim}).`,
+        );
+        dataFim = dataInicio;
       }
     } else if (isFaltaLine && dataMatch) {
       const [, dd, mm, yyyy] = dataMatch;
