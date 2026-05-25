@@ -30,7 +30,6 @@ import {
   AlertTriangle,
   Download,
   Loader2,
-  MoreHorizontal,
   Search,
   Sparkles,
   XCircle,
@@ -471,23 +470,12 @@ export function HoleritePreviewDialog({
         <DialogHeader className="shrink-0 space-y-1">
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <DialogTitle>Conferir contracheque: {effectiveClassificacao.competencia || "—"}</DialogTitle>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild className="p-0">
-                  <VerifyParityForenseButton
-                    documentId={documentId ?? ""}
-                    builder="holerite"
-                    parsed={parsed}
-                    pdfDisponivel={!!documentId}
-                  />
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <VerifyParityForenseButton
+              documentId={documentId ?? ""}
+              builder="holerite"
+              parsed={parsed}
+              pdfDisponivel={!!documentId}
+            />
           </div>
           <DialogDescription className="text-xs">
             {totalLinhasIncluidas}{" "}

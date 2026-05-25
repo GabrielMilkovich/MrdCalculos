@@ -65,22 +65,17 @@ describe('VerifyParityForenseButton', () => {
     };
   });
 
-  it('NÃO abre Sheet quando iniciar falha — mostra toast destrutivo', async () => {
-    mockIniciar.mockResolvedValue({ ok: false, error: 'Failed to fetch' });
+  it('abre Sheet e mostra estado de erro quando iniciar falha', async () => {
+    hookState.estado = 'error';
+    hookState.erro = 'Serviço indisponível';
+    mockIniciar.mockResolvedValue({ ok: false, error: 'Serviço indisponível' });
 
     renderButton();
     fireEvent.click(screen.getByRole('button', { name: /conferir com ia/i }));
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Erro na análise',
-          variant: 'destructive',
-        }),
-      );
+      expect(screen.getByText(/não foi possível analisar/i)).toBeInTheDocument();
     });
-
-    expect(screen.queryByText(/paridade forense ia/i)).not.toBeInTheDocument();
   });
 
   it('abre Sheet quando iniciar retorna ok', async () => {
