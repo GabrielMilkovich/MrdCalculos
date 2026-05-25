@@ -312,18 +312,57 @@ export async function generateExportForDocument(
       };
     }
     case 'ficha_financeira': {
-      if (!v6Parsed || typeof v6Parsed !== 'object') {
+      if (v6Parsed && typeof v6Parsed === 'object') {
         return {
-          ok: false,
-          error:
-            'Dados da Ficha Financeira não encontrados. ' +
-            'Certifique-se de que o documento foi processado pelo parser.',
+          ok: true,
+          kind: 'ficha-financeira-review',
+          parsed: v6Parsed,
+          document_id: documentId,
+          filename: `${baseName}_ficha_pjecalc.zip`,
         };
       }
+
+      const storagePathResult = await supabase
+        .from('documents')
+        .select('storage_path')
+        .eq('id', documentId)
+        .single();
+      const storagePath = (storagePathResult.data as { storage_path?: string } | null)?.storage_path;
+
+      const { data: fichaData, error: fichaErr } = await supabase.functions.invoke(
+        'parse-ficha-financeira',
+        {
+          body: {
+            texto_documento: ocrText.slice(0, 80000),
+            tipo_documento: 'ficha_financeira',
+            ano_referencia: new Date().getFullYear(),
+            storage_path: storagePath ?? undefined,
+          },
+        },
+      );
+
+      if (fichaErr) {
+        logger.error('[ficha_financeira] parse edge function error', fichaErr);
+        return {
+          ok: false,
+          error: 'Não foi possível processar a Ficha Financeira. Tente novamente.',
+        };
+      }
+      if (fichaData?.error) {
+        return { ok: false, error: fichaData.error };
+      }
+
+      if (fichaData && typeof fichaData === 'object') {
+        await supabase
+          .from('documents')
+          .update({ parsed: fichaData, parsed_by: 'parse-ficha-financeira' })
+          .eq('id', documentId);
+      }
+
       return {
         ok: true,
         kind: 'ficha-financeira-review',
-        parsed: v6Parsed,
+        parsed: fichaData,
         document_id: documentId,
         filename: `${baseName}_ficha_pjecalc.zip`,
       };
