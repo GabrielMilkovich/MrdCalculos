@@ -133,8 +133,8 @@ export async function generateExportForDocument(
   const baseName = sanitizeFilename(doc.file_name ?? 'documento');
   const ocrText = doc.ocr_text;
   // V6: quando o extrator geométrico produziu resultado, usa direto e
-  // pula o parser regex sobre OCR Claude. Resolve o "Nenhuma apuração
-  // extraída" pra documentos cujo OCR Claude entrega Layout B colapsado
+  // pula o parser regex sobre OCR Mistral. Resolve o "Nenhuma apuração
+  // extraída" pra documentos cujo OCR Mistral entrega Layout B colapsado
   // (parser v5 falha na deferência dia↔batidas).
   const v6Parsed = (doc as { parsed?: unknown }).parsed;
   const ocrProvider = (doc as { ocr_provider?: string | null }).ocr_provider;

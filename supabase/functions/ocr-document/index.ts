@@ -1,25 +1,42 @@
 // =====================================================
 // ocr-document — versão simplificada (match n8n workflow)
 // =====================================================
-// Pipeline atual (pós-Fase 2 v7 + migração Claude Vision):
-//   0. **V6 geométrico (tentado ANTES do Claude pra PDF)**:
+// Pipeline atual (pós-Fase 2 v7, 2026-05-20):
+//   0. **V6 geométrico (tentado ANTES do Mistral pra PDF)**:
 //      - extrairGeometrico (unpdf + pdfjs)
 //      - escolherMapper (Via Varejo / Genérico / outros)
-//      - Se mapper sucesso → persiste parsed jsonb + retorna SEM Claude
-//      - Se mapper falha → telemetria gravada em metadata.v6_*, cai pro Claude
-//   1. POST /v1/messages (Claude Vision — PDF nativo ou imagem)
-//      → markdown por página
+//      - Se mapper sucesso → persiste parsed jsonb + retorna SEM Mistral
+//      - Se mapper falha → telemetria gravada em metadata.v6_*, cai pro Mistral
+//   1. POST /v1/files (upload PDF/imagem)        → file_id
+//   2. GET  /v1/files/{id}/url                   → signed URL Mistral
+//   3. POST /v1/ocr  { document_url: ... }       → resultado
+//   4. DELETE /v1/files/{id}                     (cleanup, best-effort)
 //
-// Síncrono — handler não retorna até o OCR completar.
+// Diferente da versão anterior: SEM splitting, SEM parallel chunks, SEM
+// retryWeakPages, **COM V6 native PDF extraction (integrada 2026-05-20)**,
+// SEM EdgeRuntime.waitUntil.
+// Síncrono — handler não retorna até o OCR completar (Mistral leva 5-15s
+// na média; edge timeout é 150s, com folga 10x).
+//
+// Vantagens:
+//   - 1 ponto de falha (chamada Mistral), não 5
+//   - Cliente recebe resultado direto, sem polling
+//   - Sem background tasks que podem ser killed silenciosamente
+//   - Match 1:1 com workflow n8n já comprovado em produção
+//
+// Limites:
+//   - Mistral OCR API aceita até 50MB / 1000 páginas. Limitamos em 30MB
+//     pra ter folga no edge runtime payload limit.
+//   - PDFs maiores: usuário deve dividir manualmente.
 // =====================================================
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { ocrBytes, type ClaudeOcrOptions } from "../_shared/claude-vision-ocr.ts";
+import { ocrBytes, runOcr, type MistralOcrOptions } from "../_shared/mistral-ocr.ts";
 import { checkRateLimit } from "../_shared/rate-limit.ts";
 import { tentarV6, metadataV6, type V6Tentativa } from "../_shared/v6-pipeline.ts";
 
-// Audit-fix S3 — limite GLOBAL por usuário (Claude API é paga).
+// Audit-fix S3 — limite GLOBAL por usuário (Mistral API é paga).
 // 100 chamadas/h é folgado para uso real (~3 docs/min sustained) e segura
 // contra farming. Complementa o per-case existente (AUTO_EXTRACTION_RATE_LIMIT_PER_CASE).
 const OCR_DOCUMENT_RATE_LIMIT = 100;
@@ -43,7 +60,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 // Espelha src/features/data-extraction/classification/origem-empregador.ts
 // — Magazine Luiza fora de escopo nesta versão. Sinalizamos PÓS-OCR para
 // marcar o documento e mostrar mensagem ao operador. Pré-OCR (peek de
-// texto nativo PDF) seria ideal para economizar cota Claude, mas requer
+// texto nativo PDF) seria ideal para economizar cota Mistral, mas requer
 // extração nativa de PDF que não está disponível neste edge function.
 // =====================================================
 
@@ -255,9 +272,9 @@ Deno.serve(async (req) => {
     const document_id: string | undefined = body?.document_id;
     if (!document_id) return jsonResponse({ error: "document_id obrigatório" }, 400);
 
-    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_API_KEY) {
-      return jsonResponse({ error: "ANTHROPIC_API_KEY não configurado nas Edge Function Secrets." }, 500);
+    const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
+    if (!MISTRAL_API_KEY) {
+      return jsonResponse({ error: "MISTRAL_API_KEY não configurado nas Edge Function Secrets." }, 500);
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -273,7 +290,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Audit-fix S3: rate-limit global por usuário (Claude API paga).
+    // Audit-fix S3: rate-limit global por usuário (Mistral API paga).
     const rl = await checkRateLimit(
       supabase,
       user.id,
@@ -304,10 +321,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Sem acesso a este documento" }, 403);
     }
 
-    // Idempotência V6/Claude (Fase 2 v7 — adicionado 2026-05-20):
+    // Idempotência V6/Mistral (Fase 2 v7 — adicionado 2026-05-20):
     // Se o documento já foi processado uma vez (`parsed_by` populado),
     // re-invocações ficam cached. Evita reprocessar PDF de 63 pgs (30-60s)
-    // quando operador re-clica OCR. Padrão espelha process-document-ocr.
+    // quando operador re-clica OCR. Padrão espelha process-document-mistral.
     //
     // Não retorna o resultado completo (parsed jsonb pode ser grande) — só
     // o sinal de "já feito + qual provider". Consumers que precisam do
@@ -318,7 +335,7 @@ Deno.serve(async (req) => {
     // operador comum não deve reprocessar à toa.
     if (document.parsed_by) {
       console.log(
-        `[ocr-document] doc ${document_id}: idempotência — parsed_by=${document.parsed_by}, ocr_provider=${document.ocr_provider}, skip V6+Claude`,
+        `[ocr-document] doc ${document_id}: idempotência — parsed_by=${document.parsed_by}, ocr_provider=${document.ocr_provider}, skip V6+Mistral`,
       );
       return jsonResponse({
         success: true,
@@ -350,7 +367,7 @@ Deno.serve(async (req) => {
     if (document.storage_path) {
       const buckets = ["juriscalculo-documents", "case-documents", "documents"];
       for (const b of buckets) {
-        // TTL 30min (1800s): OCR via Claude pode demorar — meio termo entre
+        // TTL 30min (1800s): OCR via Mistral pode demorar — meio termo entre
         // 15min (recomendado) e 2h (anterior). URL só viva durante a função.
         const { data } = await supabase.storage.from(b).createSignedUrl(document.storage_path, 1800);
         if (data?.signedUrl) {
@@ -364,14 +381,14 @@ Deno.serve(async (req) => {
 
     // Lock anti-race (Fase 2 v7 — adicionado 2026-05-20):
     // Marca `status='ocr_running' + processing_started_at` ANTES de qualquer
-    // trabalho expensive (V6 ou Claude). Invocações concorrentes (ex:
+    // trabalho expensive (V6 ou Mistral). Invocações concorrentes (ex:
     // DocumentsManager.tsx:332 auto-fire + clique manual do operador) que
     // carregarem o documento APÓS este update verão o lock no check de
     // `ocr_running` acima e bouncerão 409. Janela de race ainda existe
     // (entre load do document e este update) mas reduz drasticamente o
     // cenário comum de 2 invocações em paralelo.
     //
-    // Pra Claude isso já existia (era depois do bloco V6 antes do download).
+    // Pra Mistral isso já existia (era depois do bloco V6 antes do download).
     // Movido pra cá pra proteger V6 também — sem isso, 2 V6s em paralelo
     // produziriam 2 parsed jsonb (last-write-wins) que podem ter pequena
     // variação por causa de não-determinismo do pdfjs em alguns PDFs.
@@ -388,14 +405,14 @@ Deno.serve(async (req) => {
     // =====================================================
     // V6 GEOMETRIC PATH (integrado 2026-05-20 — Fase 2 v7)
     // =====================================================
-    // Tenta extração geométrica nativa via pdfjs ANTES do Claude OCR.
-    //   - Sucesso: persiste `parsed` jsonb + retorna sem chamar Claude
-    //     (economiza cota Claude + zero latência da API externa).
-    //   - Falha: telemetria gravada em `metadata.v6_*`, fluxo Claude
+    // Tenta extração geométrica nativa via pdfjs ANTES do Mistral OCR.
+    //   - Sucesso: persiste `parsed` jsonb + retorna sem chamar Mistral
+    //     (economiza cota Mistral + zero latência da API externa).
+    //   - Falha: telemetria gravada em `metadata.v6_*`, fluxo Mistral
     //     abaixo roda exatamente como antes (zero regressão).
     //
     // Antes desta integração, 91% dos uploads (42/46 dos últimos 90 dias)
-    // pulavam V6 e iam direto pro Claude, gerando CSVs ruins em
+    // pulavam V6 e iam direto pro Mistral, gerando CSVs ruins em
     // documentos text-native como o do Roque Guerreiro (Via Varejo
     // pós-2018). Diagnóstico empírico no banco confirmou.
     //
@@ -422,9 +439,9 @@ Deno.serve(async (req) => {
           (v6.score !== undefined ? ` score=${v6.score.toFixed(2)}` : ""),
       );
 
-      // V6 success: persiste resultado completo + retorna SEM chamar Claude.
+      // V6 success: persiste resultado completo + retorna SEM chamar Mistral.
       // Update único (não 2-step) pra evitar race com consumers que leem
-      // entre os writes. Mesmo padrão de columns que process-document-ocr
+      // entre os writes. Mesmo padrão de columns que process-document-mistral
       // (incluindo extracao_status='done').
       if (v6.outcome === "success" && v6.parsedJson && v6.textoCompleto) {
         await supabase
@@ -443,7 +460,7 @@ Deno.serve(async (req) => {
           })
           .eq("id", document_id);
         console.log(
-          `[ocr-document] doc ${document_id} extraído via V6 (${v6.mapper}, ${v6.pageCount} pg) — Claude pulado`,
+          `[ocr-document] doc ${document_id} extraído via V6 (${v6.mapper}, ${v6.pageCount} pg) — Mistral pulado`,
         );
         return jsonResponse({
           success: true,
@@ -451,13 +468,13 @@ Deno.serve(async (req) => {
           mapper: v6.mapper,
           score: v6.score,
           pages: v6.pageCount,
-          message: `Processado via extração geométrica nativa (V6 — ${v6.mapper}) — sem Claude OCR.`,
+          message: `Processado via extração geométrica nativa (V6 — ${v6.mapper}) — sem Mistral OCR.`,
         });
       }
 
-      // V6 falhou: grava só telemetria + cai pro Claude abaixo. Telemetria
+      // V6 falhou: grava só telemetria + cai pro Mistral abaixo. Telemetria
       // gravada SEMPRE — resolve bug histórico de `metadata.v6_*` null em
-      // 91% dos rows. Status NÃO muda (Claude cuida disso adiante).
+      // 91% dos rows. Status NÃO muda (Mistral cuida disso adiante).
       await supabase
         .from("documents")
         .update({
@@ -467,7 +484,7 @@ Deno.serve(async (req) => {
         .eq("id", document_id);
     } else {
       // Não-PDF (imagem, etc): registra outcome explícito pra telemetria
-      // consistente. Claude roda como sempre abaixo.
+      // consistente. Mistral roda como sempre abaixo.
       v6 = { outcome: "not_pdf" };
       await supabase
         .from("documents")
@@ -478,10 +495,10 @@ Deno.serve(async (req) => {
         .eq("id", document_id);
     }
     console.log(
-      `[ocr-document] doc ${document_id}: caminho Claude — V6 outcome=${v6?.outcome ?? "skipped"}`,
+      `[ocr-document] doc ${document_id}: caminho Mistral — V6 outcome=${v6?.outcome ?? "skipped"}`,
     );
 
-    // Inicializa contadores de chunks pro Claude (status já está
+    // Inicializa contadores de chunks pro Mistral (status já está
     // 'ocr_running' do lock anti-race acima — não re-escreve pra evitar
     // perder o processing_started_at que outras consultas usam pra calcular
     // STALE_AFTER_MS).
@@ -505,15 +522,25 @@ Deno.serve(async (req) => {
         );
       }
 
-      const claudeOpts: ClaudeOcrOptions = { apiKey: ANTHROPIC_API_KEY };
+      const mimeType = document.mime_type || detectMimeFromName(document.file_name);
+      const isImage = IMAGE_MIMES.has(mimeType);
+      const mistralOpts: MistralOcrOptions = { apiKey: MISTRAL_API_KEY };
 
-      const result = await ocrBytes(
-        new Uint8Array(buffer),
-        document.file_name ?? "documento.pdf",
-        claudeOpts,
-      );
+      // Chamada única ao Mistral — sem splitting, sem retry-weak-pages.
+      // Para PDF: ocrBytes faz o fluxo files→get-url→ocr→delete (igual n8n).
+      // Para imagem: data URL inline.
+      let result;
+      if (isImage) {
+        const base64 = arrayBufferToBase64(buffer);
+        result = await runOcr(
+          { type: "image_url", image_url: `data:${mimeType};base64,${base64}` },
+          mistralOpts,
+        );
+      } else {
+        result = await ocrBytes(new Uint8Array(buffer), document.file_name ?? "documento.pdf", mistralOpts);
+      }
 
-      // Validação de continuidade de páginas: o Claude retorna `index` em cada
+      // Validação de continuidade de páginas: o Mistral retorna `index` em cada
       // page (0-based ou 1-based dependendo do tier). Detectamos gaps na sequência
       // — uma página pulada normalmente significa falha no OCR daquela página
       // específica (output vazio que o servidor descartou). Sem isso, o markdown
@@ -547,7 +574,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Markdown usa o índice REAL retornado pelo Claude, não o índice
+      // Markdown usa o índice REAL retornado pelo Mistral, não o índice
       // sequencial. Inclui placeholder visível para páginas faltando.
       const markdownChunks: string[] = [];
       if (indices.length > 0) {
@@ -570,7 +597,7 @@ Deno.serve(async (req) => {
 
       const durationMs = Date.now() - t0;
 
-      // AUDIT #4/#24: Claude OCR não retorna confidence — antes fixávamos
+      // AUDIT #4/#24: Mistral OCR não retorna confidence — antes fixávamos
       // 1.0, deixando a UI mostrar "100%" sempre. Agora derivamos um score
       // heurístico real a partir do texto extraído. Sinais:
       //   - taxa de caracteres alfanuméricos vs lixo (controle, símbolos)
@@ -617,7 +644,7 @@ Deno.serve(async (req) => {
           error_message: null,
           metadata: {
             ...(document.metadata || {}),
-            ocr_provider: "claude-vision",
+            ocr_provider: "mistral-ocr",
             ocr_completed_at: new Date().toISOString(),
             ocr_duration_ms: durationMs,
             ocr_doc_type: docType,
@@ -629,8 +656,8 @@ Deno.serve(async (req) => {
             ocr_paginas_faltando: paginasFaltando,
             ocr_paginas_vazias: paginasVaziasIdx,
             ocr_warnings_qualidade: ocrWarnings,
-            claude_model: result.model,
-            claude_usage: result.usage,
+            mistral_model: result.model,
+            mistral_usage: result.usage,
           },
         })
         .eq("id", document_id);
@@ -788,7 +815,7 @@ Deno.serve(async (req) => {
             metadata: {
               ...(document.metadata || {}),
               ocr_failed_at: new Date().toISOString(),
-              ocr_provider: "claude-vision",
+              ocr_provider: "mistral-ocr",
               ocr_error: msg.slice(0, 1000),
             },
           })

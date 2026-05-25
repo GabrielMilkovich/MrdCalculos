@@ -119,7 +119,7 @@ export async function splitPdfIntoChunks(
  * Decide o número ideal de páginas por chunk com base em heurísticas.
  *
  * Chunks menores = qualidade melhor em PDFs densos (tabelas, cartões
- * de ponto) e menos risco de truncamento na resposta do Claude.
+ * de ponto) e menos risco de truncamento na resposta do Mistral.
  * O tradeoff é mais chamadas à API, mas rodamos em paralelo (4x).
  *
  * - PDFs pequenos (≤ 6 pg): 1 chunk só (sem split).

@@ -384,16 +384,16 @@ export function DocumentsManager({
     }
   }, [caseId, selectedType, onDocumentsChange]);
 
-  // Processar documento (pipeline Claude Vision + chunking + embeddings)
-  // Usa `process-document-ocr` que orquestra:
-  //   1. ocr-document (Claude Vision com split de PDF para cartões grandes)
+  // Processar documento (pipeline Mistral OCR + chunking + embeddings)
+  // Usa `process-document-mistral` que orquestra:
+  //   1. ocr-document (Mistral OCR com split de PDF para cartões grandes)
   //   2. chunk-and-embed (OpenAI embeddings)
   const processDocument = useCallback(async (documentId: string) => {
     setProcessingDocId(documentId);
     toast.info("Processando documento...");
 
     try {
-      const { data, error } = await supabase.functions.invoke("process-document-ocr", {
+      const { data, error } = await supabase.functions.invoke("process-document-mistral", {
         body: { document_id: documentId },
       });
 
@@ -401,7 +401,7 @@ export function DocumentsManager({
 
       const pageCount = data?.ocr?.page_count ?? "?";
       const chunksCreated = data?.chunking?.chunks_created ?? 0;
-      const provider = data?.ocr?.provider ?? "claude";
+      const provider = data?.ocr?.provider ?? "mistral";
       if (data?.partial) {
         toast.warning(`Documento lido (${pageCount} pg), mas o processamento está incompleto. Tente novamente.`);
       } else {
@@ -418,7 +418,7 @@ export function DocumentsManager({
 
   // Reprocessa um PDF com o pipeline V6 (extrator geométrico + mappers).
   // Necessário para documentos enviados antes do deploy V6 — eles têm
-  // parsed=null e o parser regex sobre OCR Claude falha em layouts complexos
+  // parsed=null e o parser regex sobre OCR Mistral falha em layouts complexos
   // (ex: cartão Via Varejo Layout B colapsado → "Nenhuma apuração extraída").
   const reprocessV6 = useCallback(async (documentId: string) => {
     setProcessingDocId(documentId);

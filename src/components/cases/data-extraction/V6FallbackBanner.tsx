@@ -2,9 +2,9 @@
  * V6 Fallback Banner — Fase 5 v7 (2026-05-20)
  *
  * Quando o operador abre o dialog de revisão de um documento cuja
- * extração NÃO usou o caminho V6 geométrico (ou seja, caiu pro Claude
+ * extração NÃO usou o caminho V6 geométrico (ou seja, caiu pro Mistral
  * OCR + parser regex v5), mostra banner amarelo explicando:
- *   - O caminho usado é menos preciso (Claude pode confundir 19:00↔15:00)
+ *   - O caminho usado é menos preciso (Mistral pode confundir 19:00↔15:00)
  *   - Motivo da falha V6 (vem de `metadata.v6_outcome`)
  *   - Recomendação: reprocessar via admin button "Re-OCR V6"
  *
@@ -133,7 +133,7 @@ export function V6FallbackBanner({ documentId }: Props) {
         <strong>Recomendado:</strong> peça pra um admin acionar "Re-OCR V6"
         em DocumentsManager. Se o V6 falhar de novo (mesmo outcome),{" "}
         {status.v6_outcome === "not_pdf"
-          ? "PDF é scan e V6 não se aplica — Claude é o caminho correto."
+          ? "PDF é scan e V6 não se aplica — Mistral é o caminho correto."
           : "abre issue separada pra investigar layout do fornecedor."}
       </p>
     </div>

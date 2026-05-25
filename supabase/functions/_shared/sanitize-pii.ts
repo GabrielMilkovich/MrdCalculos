@@ -16,7 +16,7 @@
  * acessar identificação direta da pessoa.
  *
  * Aplicada antes de gravar v6_text_preview em:
- *   - process-document-ocr/index.ts
+ *   - process-document-mistral/index.ts
  *   - reprocess-v6/index.ts
  */
 export function sanitizePII(s: string): string {

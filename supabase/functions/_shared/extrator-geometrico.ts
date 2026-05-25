@@ -227,7 +227,7 @@ function montarTabela(
  *
  * V6.2 (deploy real): tentamos unpdf primeiro (pdfjs sem canvas via
  * esm.sh — funciona em Deno serverless). Se falhar, devolvemos null e
- * o pipeline cai pro V5 (Claude Vision + parser regex).
+ * o pipeline cai pro V5 (Mistral OCR + parser regex).
  */
 export async function extrairGeometrico(
   bytes: Uint8Array,
@@ -291,7 +291,7 @@ export async function extrairGeometrico(
   //   - taxa de caracteres alfanuméricos (vs lixo / símbolos de controle)
   //   - presença de placeholders de OCR ruim (raros aqui mas possíveis)
   // Resultado: 0.2..0.95, com 0.7 mantido como limiar "aceitável" pelo
-  // pipeline downstream (process-document-ocr).
+  // pipeline downstream (process-document-mistral).
   const alnum = (textoCompleto.match(/[a-zA-Z0-9À-ÿ]/g) || []).length;
   const totalChars = textoCompleto.length;
   const alnumRatio = totalChars > 0 ? alnum / totalChars : 0;

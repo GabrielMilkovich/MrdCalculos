@@ -7,7 +7,7 @@
  *   - Dados contratuais: matrícula, admissão, demissão, cargo, empregador, CNPJ.
  *
  * O detector aceita CTPS Digital E física. Para férias/faltas dentro do
- * mesmo doc, o `process-document-ocr` deve invocar separadamente
+ * mesmo doc, o `process-document-mistral` deve invocar separadamente
  * `mapperReciboFerias.mapear()` e `mapperRegistroFaltas.mapear()` sobre
  * o mesmo `DocumentoTabular` (são mappers independentes que retornam
  * arrays distintos — o caller decide se persiste).

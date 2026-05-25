@@ -7,9 +7,9 @@
 //
 // SECRETS NECESSARIOS no Supabase:
 //   - OPENAI_API_KEY  (Settings -> Edge Functions -> Secrets)
-//   - ANTHROPIC_API_KEY (apenas para ocr-document/process-document-ocr)
+//   - MISTRAL_API_KEY (apenas para ocr-document/process-document-mistral)
 // Configurar via dashboard https://supabase.com/dashboard ou CLI:
-//   supabase secrets set OPENAI_API_KEY=sk-... ANTHROPIC_API_KEY=...
+//   supabase secrets set OPENAI_API_KEY=sk-... MISTRAL_API_KEY=...
 // =====================================================
 
 const corsHeaders = {

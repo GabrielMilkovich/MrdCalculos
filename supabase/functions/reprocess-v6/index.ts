@@ -4,7 +4,7 @@
 // Re-roda o pipeline V6 (extrator geométrico + mapper) para um documento
 // específico OU em lote (parsed IS NULL). Usado para documentos enviados
 // ANTES do deploy V6 — eles ficam com `parsed=null` e o parser regex
-// sobre OCR Claude falha em layouts complexos (ex: Via Varejo Layout B
+// sobre OCR Mistral falha em layouts complexos (ex: Via Varejo Layout B
 // colapsado → "Nenhuma apuração extraída").
 //
 // Auth: JWT do usuário (verify_jwt=true). Ownership do `case` é validada
