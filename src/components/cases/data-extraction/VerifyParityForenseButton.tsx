@@ -45,16 +45,9 @@ export function VerifyParityForenseButton({
   const hook = useParidadeForense({ documentId, builder, parsed });
 
   const handleClick = async () => {
-    const result = await hook.iniciar();
-    if (!result.ok) {
-      toast({
-        title: 'Erro na análise',
-        description: result.error,
-        variant: 'destructive',
-      });
-      return;
-    }
     setSheetOpen(true);
+    const result = await hook.iniciar();
+    if (result.ok) return;
   };
 
   const handleApply = async () => {

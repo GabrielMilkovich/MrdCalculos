@@ -13,7 +13,7 @@
  * Confirmação: 1 download = 1 ZIP com 2 CSVs (ferias + faltas) + LEIA-ME.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, ClipboardX, Download, ExternalLink, FileText, Loader2, MoreHorizontal } from "lucide-react";
+import { Calendar, ClipboardX, Download, ExternalLink, FileText, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -44,12 +44,6 @@ import {
   type AIInteractionResult,
 } from "./VerifyExtractionAIButton";
 import { VerifyParityForenseButton } from "./VerifyParityForenseButton";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useDocumentPdfUrl } from "./hooks/useDocumentPdfUrl";
 import { toast } from "sonner";
 import { validarCtps } from "@/features/data-extraction/validators/ctps-validator";
@@ -237,23 +231,12 @@ export function CtpsReviewDialog({
                     Abrir PDF
                   </Button>
                 )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild className="p-0">
-                      <VerifyParityForenseButton
-                        documentId={documentId}
-                        builder="ctps"
-                        parsed={{ ferias: feriasParsed, faltas: faltasParsed }}
-                        pdfDisponivel={!!documentId}
-                      />
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <VerifyParityForenseButton
+                  documentId={documentId}
+                  builder="ctps"
+                  parsed={{ ferias: feriasParsed, faltas: faltasParsed }}
+                  pdfDisponivel={!!documentId}
+                />
               </div>
             </div>
             <DialogDescription className="text-xs">
