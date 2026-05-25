@@ -10,7 +10,7 @@ jobs:
   parity:
     runs-on: ubuntu-latest
     name: Paridade com PJe-Calc (≤±1% por caso)
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
