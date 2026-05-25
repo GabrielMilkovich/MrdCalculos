@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   Download,
   Loader2,
+  MoreHorizontal,
   Search,
   Sparkles,
   XCircle,
@@ -179,6 +180,7 @@ export function HoleritePreviewDialog({
   const [downloading, setDownloading] = useState(false);
   const [search, setSearch] = useState("");
   const [mostrarApenasRelevantes, setMostrarApenasRelevantes] = useState(true);
+  const [filtrarPendentes, setFiltrarPendentes] = useState(false);
 
   // Deriva caseId do documentId. Necessário pra invocar holerite-classify-confirm
   // antes do build do ZIP — promove tentativas registradas pelo banner.
@@ -215,11 +217,17 @@ export function HoleritePreviewDialog({
   };
 
   const relevantFilteredLinhas = useMemo(() => {
-    if (!mostrarApenasRelevantes) return linhas;
-    return linhas.filter(
-      (l) => l.origem !== "ignorar_hint" && l.origem !== "desconto" && l.categoria !== null,
-    );
-  }, [linhas, mostrarApenasRelevantes]);
+    let result = linhas;
+    if (mostrarApenasRelevantes) {
+      result = result.filter(
+        (l) => l.origem !== "ignorar_hint" && l.origem !== "desconto" && l.categoria !== null,
+      );
+    }
+    if (filtrarPendentes) {
+      result = result.filter((l) => l.origem === "fallback");
+    }
+    return result;
+  }, [linhas, mostrarApenasRelevantes, filtrarPendentes]);
 
   const ocultadas = linhas.length - relevantFilteredLinhas.length;
 
@@ -463,14 +471,23 @@ export function HoleritePreviewDialog({
         <DialogHeader className="shrink-0 space-y-1">
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <DialogTitle>Conferir contracheque: {effectiveClassificacao.competencia || "—"}</DialogTitle>
-            <div className="flex items-center gap-2 flex-wrap">
-              <VerifyParityForenseButton
-                documentId={documentId ?? ""}
-                builder="holerite"
-                parsed={parsed}
-                pdfDisponivel={!!documentId}
-              />
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild className="p-0">
+                  <VerifyParityForenseButton
+                    documentId={documentId ?? ""}
+                    builder="holerite"
+                    parsed={parsed}
+                    pdfDisponivel={!!documentId}
+                  />
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <DialogDescription className="text-xs">
             {totalLinhasIncluidas}{" "}
@@ -508,6 +525,34 @@ export function HoleritePreviewDialog({
                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
                   Revise os itens destacados na tabela abaixo. Você pode classificar manualmente ou usar o assistente IA.
                 </p>
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setFiltrarPendentes(true);
+                      setMostrarApenasRelevantes(false);
+                      setSearch("");
+                    }}
+                  >
+                    Mostrar só pendentes
+                  </Button>
+                  {parsed?.resumo_classificacao && parsed.resumo_classificacao.nao_classificadas > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setMostrarApenasRelevantes(false);
+                        setFiltrarPendentes(false);
+                        setSearch("");
+                      }}
+                    >
+                      Corrigir categorias ({parsed.resumo_classificacao.nao_classificadas})
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
