@@ -26,6 +26,7 @@
 | `calibrate_grep_bug` | ~6+ (todo PR) | ✅ Auto-fix OK | Calibrate Regression Gate | CI config bug |
 | `calibrate_real_92pct` | ~6+ (todo PR) | ❌ NÃO TOCAR | Calibrate Regression Gate | Regressão real |
 | `lint_no_control_regex` | ~4 (PRs antigos) | ✅ Já corrigido | CI | Fixado por ca148a3 |
+| `ci_parity_flaky` | 1+ (intermitente) | ⚠️ REVISAR | Parity Gate | Passa local, falha intermitente em CI |
 | `stale_pr_failures` | 2 PRs | ⚠️ REVISAR | CI, Parity, Calibrate | PRs #95, #98 desatualizados |
 
 ---
@@ -85,7 +86,21 @@ PRs antigos (#95, #98) ainda mostram esta falha porque estão baseados em commit
 
 ---
 
-### 4. `stale_pr_failures` — ⚠️ REVISAR
+### 4. `ci_parity_flaky` — ⚠️ REVISAR
+
+Parity Gate falha intermitentemente em CI, mas passa 100% localmente (128 golden + 16 independent tests).
+
+- PR #99 (mesmo código): ✅ passou
+- PR #101 (mesmo código + docs): ❌ falhou
+- Local com `PARITY_STRICT=true`: ✅ passa
+
+Causas prováveis: timeout (10min limit, ~58s local), recurso do runner, ou `npm ci` transitório.
+
+**Ação sugerida**: Se persistir, aumentar `timeout-minutes` no workflow ou investigar logs do runner.
+
+---
+
+### 5. `stale_pr_failures` — ⚠️ REVISAR
 
 | PR | Branch | Criado em | Falhas | Recomendação |
 |---|---|---|---|---|
@@ -132,6 +147,7 @@ TRIAGEM:
 - calibrate_grep_bug: ✅
 - calibrate_real_92pct: ❌
 - lint_no_control_regex: ✅ (já fixado)
+- ci_parity_flaky: ⚠️
 - stale_pr_failures: ⚠️
 ```
 
