@@ -1,0 +1,5 @@
+categoria	severidade	workflow	status	descricao
+calibrate_grep_bug	auto_fix	Calibrate Regression Gate	ativo	grep pattern em calibrate-regression-gate.yml nao casa com output Média do script
+calibrate_real_92pct	nao_tocar	Calibrate Regression Gate	ativo	taxa aprovacao ±5% é 92% (12/13), abaixo do threshold 94%
+lint_no_control_regex	auto_fix	CI	corrigido	9 erros no-control-regex fixados por ca148a3
+stale_pr_failures	revisar	CI, Parity, Calibrate	ativo	PRs #95 e #98 desatualizados com falhas de codigo antigo
