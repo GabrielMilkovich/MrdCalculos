@@ -188,7 +188,7 @@ export function CaseWorkflowDashboard() {
     {
       id: 'documents',
       title: 'Documentos',
-      description: 'Upload e processamento OCR',
+      description: 'Envio e processamento de documentos',
       icon: FileText,
       status: docsStats?.total === 0 ? 'pending' : 
               docsStats?.pending === 0 ? 'completed' : 'in_progress',
@@ -198,7 +198,7 @@ export function CaseWorkflowDashboard() {
     },
     {
       id: 'validation',
-      title: 'Validação',
+      title: 'Conferência',
       description: 'Conferência e aprovação de dados',
       icon: CheckCircle2,
       status: validationStats?.total === 0 ? 'blocked' :

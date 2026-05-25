@@ -71,10 +71,10 @@ function statusBadge(status: string, validado: boolean | null): JSX.Element {
     );
   }
   if (status === "uploaded") {
-    return <Badge variant="outline">Aguardando OCR</Badge>;
+    return <Badge variant="outline">Processando</Badge>;
   }
   if (status === "completed") {
-    return <Badge variant="outline">OCR completo</Badge>;
+    return <Badge variant="outline">Pronto</Badge>;
   }
   return <Badge variant="outline">{status}</Badge>;
 }

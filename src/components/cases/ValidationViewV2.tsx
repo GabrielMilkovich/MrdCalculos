@@ -359,7 +359,7 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
 
             {/* Confidence — badge sempre visivel quando confianca existe (mesmo low) */}
             <div className="flex items-center gap-2 mt-2">
-              <span className="text-sm text-muted-foreground">Confiança OCR:</span>
+              <span className="text-sm text-muted-foreground">Qualidade da leitura:</span>
               {extraction.confianca !== null && extraction.confianca !== undefined ? (
                 <Badge
                   variant="outline"
@@ -447,9 +447,9 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Validação de Dados</h2>
+          <h2 className="text-xl font-semibold">Conferência de Dados</h2>
           <p className="text-sm text-muted-foreground">
-            Confira e aprove os dados extraídos dos documentos
+            Confira e aprove os dados encontrados nos documentos
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -457,7 +457,7 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
             {pendingExtractions.length} pendente{pendingExtractions.length !== 1 ? 's' : ''}
           </Badge>
           <Badge variant="secondary">
-            {validatedExtractions.length} validado{validatedExtractions.length !== 1 ? 's' : ''}
+            {validatedExtractions.length} conferido{validatedExtractions.length !== 1 ? 's' : ''}
           </Badge>
         </div>
       </div>
@@ -483,7 +483,7 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="pendente">Pendentes</SelectItem>
-                <SelectItem value="validado">Validados</SelectItem>
+                <SelectItem value="validado">Conferidos</SelectItem>
                 <SelectItem value="rejeitado">Rejeitados</SelectItem>
               </SelectContent>
             </Select>
@@ -496,7 +496,7 @@ export function ValidationViewV2({ caseId, onValidationComplete }: ValidationVie
         <div>
           <h3 className="text-lg font-medium mb-3 flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500" />
-            Aguardando Validação ({pendingExtractions.length})
+            Aguardando conferência ({pendingExtractions.length})
           </h3>
           <div className="space-y-3">
             {pendingExtractions.map(renderExtractionRow)}

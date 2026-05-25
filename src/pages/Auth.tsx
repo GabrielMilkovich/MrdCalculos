@@ -122,7 +122,7 @@ function Auth() {
 
   const features = [
     { icon: Shield, title: "Precisão Pericial", desc: "Cálculos auditáveis com rastreabilidade CLT completa" },
-    { icon: FileCheck, title: "OCR Inteligente", desc: "Extração automática de dados de holerites, TRCT e contracheques" },
+    { icon: FileCheck, title: "Leitura Inteligente", desc: "Extração automática de dados de holerites, TRCT e contracheques" },
     { icon: BarChart3, title: "Snapshots & Auditoria", desc: "Versionamento imutável de cada cálculo com memória exportável" },
   ];
 

@@ -128,7 +128,7 @@ export function ProcessingMonitorPanel({
           <div>
             <CardTitle className="text-base">Monitor de Processamento</CardTitle>
             <p className="text-sm text-muted-foreground mt-1">
-              Acompanhe OCR, indexação e erros recentes dos documentos do caso.
+              Acompanhe o processamento e erros recentes dos documentos do caso.
             </p>
           </div>
           <Badge variant="outline" className="gap-2">

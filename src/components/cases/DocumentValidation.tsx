@@ -175,16 +175,16 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
         body: { document_id: documentId },
       });
       if (error) throw await unwrapFunctionsError(error);
-      if (!data?.success) throw new Error(data?.error || "OCR falhou");
+      if (!data?.success) throw new Error(data?.error || "Falha ao processar");
       toast.success(
         data.status === "ocr_running"
-          ? "OCR iniciado. Aguarde — o texto aparece assim que concluir."
-          : `OCR concluído: ${data.page_count ?? "?"} páginas, ${data.text_length ?? "?"} caracteres`
+          ? "Processando documento. Aguarde a conclusão..."
+          : `Documento processado: ${data.page_count ?? "?"} página(s)`
       );
       await load();
     } catch (err) {
       logger.error("OCR error", err);
-      toast.error("Erro no OCR: " + (err as Error).message);
+      toast.error("Erro ao processar: " + (err as Error).message);
     } finally {
       setRunningOcr(false);
     }
@@ -193,7 +193,7 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
   const submit = useCallback(async () => {
     if (!documentId) return;
     if (editedText.trim().length < 20) {
-      toast.error("Texto OCR muito curto. Rode o OCR ou cole o texto manualmente.");
+      toast.error("Texto muito curto. Processe o documento ou cole o texto manualmente.");
       return;
     }
     setSubmitting(true);
@@ -229,7 +229,7 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
         );
       }
 
-      toast.success("Validação enviada.");
+      toast.success("Dados confirmados.");
       onValidated?.();
       onOpenChange(false);
     } catch (err) {
@@ -243,7 +243,7 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
   const resetToOcr = useCallback(() => {
     setEditedText(doc?.ocr_text || "");
     setDirty(false);
-    toast.info("Texto restaurado para o OCR original.");
+    toast.info("Texto restaurado para o original.");
   }, [doc]);
 
   const downloadText = useCallback(() => {
@@ -258,19 +258,18 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
   const statusBadge = () => {
     if (!doc) return null;
     if (doc.status === "failed") {
-      return <Badge variant="destructive" className="gap-1"><AlertTriangle className="h-3 w-3" />Erro: {doc.error_message?.slice(0, 40)}</Badge>;
+      return <Badge variant="destructive" className="gap-1"><AlertTriangle className="h-3 w-3" />Erro ao processar</Badge>;
     }
     if (doc.status === "ocr_running" || doc.status === "uploaded") {
-      return <Badge variant="outline" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" />OCR em andamento...</Badge>;
+      return <Badge variant="outline" className="gap-1"><Loader2 className="h-3 w-3 animate-spin" />Processando...</Badge>;
     }
     if (doc.ocr_validated) {
-      return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle2 className="h-3 w-3" />Já validado</Badge>;
+      return <Badge variant="default" className="gap-1 bg-green-600"><CheckCircle2 className="h-3 w-3" />Conferido</Badge>;
     }
     if (doc.status === "ocr_done" || doc.status === "ocr_partial" || doc.status === "extracted") {
-      const conf = doc.ocr_confidence ? `${Math.round(doc.ocr_confidence * 100)}%` : "—";
       return (
         <Badge variant="secondary" className="gap-1">
-          <Eye className="h-3 w-3" />Aguardando validação · conf. {conf} · {doc.page_count || 0}p
+          <Eye className="h-3 w-3" />Conferir dados · {doc.page_count || 0} pg
         </Badge>
       );
     }
@@ -285,11 +284,11 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
         <DialogHeader className="pb-2 border-b">
           <DialogTitle className="flex items-center gap-2 text-base">
             <FileCheck2 className="h-5 w-5 text-primary" />
-            Validação de OCR — {doc?.file_name || "..."}
+            Conferir documento — {doc?.file_name || "..."}
           </DialogTitle>
           <DialogDescription className="text-xs">
             Compare o texto extraído (esquerda) com o documento original (direita).
-            Edite o texto se necessário antes de confirmar.
+            Edite se necessário antes de confirmar.
           </DialogDescription>
           <div className="flex items-center gap-2 mt-1">
             {statusBadge()}
@@ -309,11 +308,11 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
               <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 text-xs font-semibold">
                 <span className="flex items-center gap-1.5">
                   <Pencil className="h-3.5 w-3.5" />
-                  Texto OCR (editável)
+                  Texto do documento (editável)
                 </span>
                 <div className="flex gap-1">
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={resetToOcr} disabled={!dirty}>
-                    <RotateCcw className="h-3 w-3 mr-1" />Restaurar OCR
+                    <RotateCcw className="h-3 w-3 mr-1" />Restaurar
                   </Button>
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={downloadText}>
                     <Download className="h-3 w-3 mr-1" />Baixar .txt
@@ -324,8 +323,8 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
                 value={editedText}
                 onChange={(e) => { setEditedText(e.target.value); setDirty(true); }}
                 placeholder={doc?.status === "uploaded" || doc?.status === "ocr_running"
-                  ? "OCR em andamento... aguarde alguns segundos."
-                  : "Texto OCR aparecerá aqui. Se estiver vazio, clique em 'Rodar OCR' abaixo."}
+                  ? "Processando documento... aguarde alguns segundos."
+                  : "O texto do documento aparecerá aqui. Se estiver vazio, clique em 'Processar novamente' abaixo."}
                 className="flex-1 font-mono text-xs resize-none rounded-none border-0 focus-visible:ring-0"
                 disabled={runningOcr}
               />
@@ -365,7 +364,7 @@ export function DocumentValidation({ open, onOpenChange, documentId, onValidated
             onClick={runOcr}
             disabled={runningOcr || submitting || !doc}
           >
-            {runningOcr ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />OCR rodando...</> : <><RotateCcw className="h-4 w-4 mr-1.5" />Rodar OCR novamente</>}
+            {runningOcr ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Processando...</> : <><RotateCcw className="h-4 w-4 mr-1.5" />Processar novamente</>}
           </Button>
           <div className="flex-1" />
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>Cancelar</Button>

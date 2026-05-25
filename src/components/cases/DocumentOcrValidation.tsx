@@ -190,7 +190,7 @@ export function DocumentOcrValidation({
       if (autoRetriedRef.current.has(d.id)) continue;
       autoRetriedRef.current.add(d.id);
       logger.warn(`[ocr-watchdog] doc parado em ocr_running, auto-retry`, { id: d.id, file_name: d.file_name, elapsed_s: Math.round(elapsed / 1000) });
-      toast.info(`OCR de "${d.file_name}" parecia travado. Retentando...`);
+      toast.info(`Processamento de "${d.file_name}" parecia travado. Retentando...`);
       // fire-and-forget — runOcr ja recarrega a lista ao terminar
       (async () => {
         try {
@@ -233,16 +233,16 @@ export function DocumentOcrValidation({
         body: { document_id: docId },
       });
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "OCR falhou");
+      if (!data?.success) throw new Error(data?.error || "Falha ao processar");
       toast.success(
         data.status === "ocr_running"
-          ? "OCR rodando em background. Aguarde a conclusão..."
-          : `OCR concluído: ${data.page_count ?? "?"} pg, ${data.text_length ?? "?"} chars`
+          ? "Processando documento. Aguarde a conclusão..."
+          : `Documento processado: ${data.page_count ?? "?"} página(s)`
       );
       await loadDocs();
     } catch (err) {
       logger.error("runOcr error", err);
-      toast.error("Erro no OCR: " + (err as Error).message);
+      toast.error("Erro ao processar: " + (err as Error).message);
     } finally {
       setSavingId(null);
     }
@@ -543,7 +543,7 @@ export function DocumentOcrValidation({
                 <Textarea
                   value={editedText}
                   onChange={(e) => { setEditedText(e.target.value); setDirty(true); }}
-                  placeholder={selected.ocr_text ? "" : "Sem OCR ainda. Clique em 'Rodar OCR' abaixo."}
+                  placeholder={selected.ocr_text ? "" : "Documento ainda não processado. Clique em 'Processar documento' abaixo."}
                   className="flex-1 font-mono text-xs resize-none rounded-none border-0 focus-visible:ring-0"
                 />
               </div>
