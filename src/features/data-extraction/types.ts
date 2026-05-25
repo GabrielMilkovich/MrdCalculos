@@ -22,13 +22,14 @@ export type CaseMode = 'calculation' | 'data_extraction';
  * (ferias + faltas) sobre o mesmo OCR. Quando um deles fica vazio, o
  * CSV correspondente sai header-only no ZIP — operador audita.
  *
- * Migration `20260510000000_f13_unificar_ferias_faltas_em_ctps.sql`
- * já migrou docs antigos e a CHECK constraint só aceita os 4 tipos
- * abaixo.
+ * Sprint 1 Ficha Financeira: `ficha_financeira` adicionado em
+ * migration `20260525000000_add_ficha_financeira_tipo_extracao.sql`.
+ * Cobre fichas anuais ADP/Via Varejo com 12 colunas de meses.
  */
 export type TipoExtracao =
   | 'nao_extrair'
   | 'holerite'
+  | 'ficha_financeira'
   | 'cartao_ponto'
   | 'ctps';
 

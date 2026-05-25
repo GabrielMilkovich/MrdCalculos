@@ -126,7 +126,7 @@ export function ExtractionTypeBadgeAndSelect({
     doc.tipo_extracao !== null;
 
   const buttonLabel =
-    doc.tipo_extracao === "holerite" || doc.tipo_extracao === "ctps"
+    doc.tipo_extracao === "holerite" || doc.tipo_extracao === "ctps" || doc.tipo_extracao === "ficha_financeira"
       ? "Revisar e baixar ZIP"
       : "Revisar e baixar CSV";
 

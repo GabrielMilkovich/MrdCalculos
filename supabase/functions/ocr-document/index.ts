@@ -125,6 +125,7 @@ type EdgeAutoDetectResult = {
   tipo:
     | "nao_extrair"
     | "holerite"
+    | "ficha_financeira"
     | "recibo_ferias"
     | "registro_faltas"
     | "cartao_ponto"
@@ -158,6 +159,13 @@ function autoDetectTipoExtracaoEdge(ocrText: string): EdgeAutoDetectResult {
     { pattern: /\bcid[\s:-]+[a-z]\d{2}/i, pontos: 6, motivo: "código CID" },
     { pattern: /\baus[êe]ncia\s+(injustificada|justificada)\b/i, pontos: 6, motivo: "ausência justificada/injustificada" },
   ];
+  const SINAIS_FICHA_FINANCEIRA: Array<{ pattern: RegExp; pontos: number; motivo: string }> = [
+    { pattern: /\bficha\s+financeira\b/i, pontos: 10, motivo: "título 'Ficha Financeira'" },
+    { pattern: /\bano\s+compet[eê]ncia\s*:\s*\d{4}\b/i, pontos: 8, motivo: "header 'Ano Competência: YYYY'" },
+    { pattern: /janeiro.*fevereiro.*mar[çc]o.*abril/is, pontos: 6, motivo: "colunas com 4+ meses distintos" },
+    { pattern: /\bpgto\b[\s\S]{0,200}?\bdesc\b/i, pontos: 4, motivo: "classificações PGTO/DESC no corpo" },
+    { pattern: /\b\d{4}\s+[A-ZÀ-ÚÇ][\wÀ-úÇç\s/.]+\s*\|\s*(PGTO|DESC|BASE|ENCAR)/i, pontos: 6, motivo: "linha com código 4 dígitos + classificação ADP" },
+  ];
   // Sinais de cartão-ponto sincronizados com o client
   // (src/features/data-extraction/classification/auto-detect-tipo.ts).
   const SINAIS_CARTAO_PONTO: Array<{ pattern: RegExp; pontos: number; motivo: string }> = [
@@ -190,6 +198,7 @@ function autoDetectTipoExtracaoEdge(ocrText: string): EdgeAutoDetectResult {
 
   const scores: Record<string, { pontos: number; motivos: string[] }> = {
     holerite: score(SINAIS_HOLERITE),
+    ficha_financeira: score(SINAIS_FICHA_FINANCEIRA),
     recibo_ferias: score(SINAIS_FERIAS),
     registro_faltas: score(SINAIS_FALTAS),
     cartao_ponto: score(SINAIS_CARTAO_PONTO),

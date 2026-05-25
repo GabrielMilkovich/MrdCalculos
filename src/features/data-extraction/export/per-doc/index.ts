@@ -304,6 +304,14 @@ export async function generateExportForDocument(
         filename: `${baseName}_ctps.zip`,
       };
     }
+    case 'ficha_financeira':
+      return {
+        ok: false,
+        error:
+          'Ficha Financeira detectada. Preview e exportação ZIP ainda não disponíveis — ' +
+          'serão implementados na Sprint 3 (UI) e Sprint 4 (Exporter). ' +
+          'O parser edge já extraiu os dados (veja documents.parsed no banco).',
+      };
     case 'nao_extrair':
     case null:
     case undefined:

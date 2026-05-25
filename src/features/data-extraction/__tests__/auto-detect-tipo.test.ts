@@ -147,13 +147,57 @@ describe("autoDetectTipoExtracao — casos negativos", () => {
   });
 });
 
+describe("autoDetectTipoExtracao — ficha financeira (Sprint 1)", () => {
+  it("ficha financeira ADP/Via Varejo com sinais fortes → alta confiança", () => {
+    const text = `
+      FICHA FINANCEIRA
+      Ano Competência : 2016
+      Empregado: 12345 ROQUE GUERREIRO TEIXEIRA
+      VIA VAREJO S/A
+      | Código Denominação          | Clas. | Janeiro  | Fevereiro | Março    | Abril    |
+      | 0620 Comissões               | PGTO  | 1.309,42 |   515,32  | 2.100,00 | 1.800,00 |
+      | 0501 DSR (Comissão)          | PGTO  |   362,40 |    27,10  |   580,00 |   500,00 |
+      | 5560 INSS                    | DESC  |   125,15 |    98,50  |   200,00 |   180,00 |
+    `;
+    const r = autoDetectTipoExtracao(text);
+    expect(r.tipo).toBe("ficha_financeira");
+    expect(r.confianca).toBe("alta");
+    expect(r.motivos).toContain("título 'Ficha Financeira'");
+  });
+
+  it("ficha financeira sem título explícito mas com Ano Competência + meses → média", () => {
+    const text = `
+      Ano Competência : 2019
+      Empregado: 54321 MARIA DA SILVA
+      Janeiro Fevereiro Março Abril Maio Junho Julho Agosto Setembro
+      0620 Comissões PGTO 1.200,00 800,00 950,00
+    `;
+    const r = autoDetectTipoExtracao(text);
+    expect(r.tipo).toBe("ficha_financeira");
+    expect(r.confianca).toMatch(/alta|media/);
+  });
+
+  it("ficha financeira NÃO confunde com holerite mensal", () => {
+    const text = `
+      RECIBO DE PAGAMENTO DE SALÁRIO
+      Referência: 03/2024
+      Vencimentos                  Descontos
+      0620 Comissões      1.200,00
+      Base de Cálculo INSS: 4.500,00
+    `;
+    const r = autoDetectTipoExtracao(text);
+    expect(r.tipo).toBe("holerite");
+    expect(r.tipo).not.toBe("ficha_financeira");
+  });
+});
+
 describe("autoDetectTipoExtracao — scoresPorTipo", () => {
-  it("retorna scores de todos os tipos avaliados", () => {
-    // Texto > 50 chars com sinal forte de holerite
+  it("retorna scores de todos os tipos avaliados incluindo ficha_financeira", () => {
     const r = autoDetectTipoExtracao(
       "RECIBO DE PAGAMENTO de salário do mês de março — empregado João da Silva",
     );
     expect(r.scoresPorTipo).toHaveProperty("holerite");
+    expect(r.scoresPorTipo).toHaveProperty("ficha_financeira");
     expect(r.scoresPorTipo).toHaveProperty("ctps");
     expect(r.scoresPorTipo).toHaveProperty("cartao_ponto");
     expect(r.scoresPorTipo.holerite).toBeGreaterThan(0);
