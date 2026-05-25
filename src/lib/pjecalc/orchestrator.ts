@@ -1000,14 +1000,15 @@ export async function loadSalarioFamiliaDBRows(): Promise<import('./engine-types
  * - Art. 477 CLT: penalty for late payment of termination amounts (1 month salary)
  * - Generic multas/indenizações: each entry from multas_indenizacoes array
  */
-function multasConfigToVerbas(
+export function multasConfigToVerbas(
   multasConfig: import('./types').PjecalcMultasConfigRow | null,
   params: PjeParametros,
   historicos: PjeHistoricoSalarial[],
-): PjeVerba[] {
-  if (!multasConfig) return [];
+): { verbas: PjeVerba[]; warnings: Array<{ code: string; message: string }> } {
+  if (!multasConfig) return { verbas: [], warnings: [] };
   const cfg = multasConfig as unknown as Record<string, unknown>;
   const result: PjeVerba[] = [];
+  const warnings: Array<{ code: string; message: string }> = [];
 
   // Get base salary from first historico for Art. 477
   const baseSalario = historicos.length > 0 ? (historicos[0].valor_informado || 0) : 0;
@@ -1108,16 +1109,178 @@ function multasConfigToVerbas(
   if (cfg.periculosidade_config) {
     const pc = cfg.periculosidade_config as { ativo: boolean; percentual: string; periodo_inicio: string; periodo_fim: string; base_calculo: string };
     if (pc.ativo) {
+      const percentual = new Decimal(pc.percentual || '30').div(100);
+      const inicio = pc.periodo_inicio || periodoInicio;
+      const fim = pc.periodo_fim || periodoFim;
+
+      // 1. Verba principal (Adicional Periculosidade mensal)
       const v = defaultVerba('periculosidade_auto', 'Adicional de Periculosidade');
       v.valor = 'calculado';
-      v.multiplicador = Number(pc.percentual || 30) / 100;
-      v.periodo_inicio = pc.periodo_inicio || periodoInicio;
-      v.periodo_fim = pc.periodo_fim || periodoFim;
+      v.multiplicador = percentual.toNumber();
+      v.periodo_inicio = inicio;
+      v.periodo_fim = fim;
       v.ocorrencia_pagamento = 'mensal';
       v.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
-      if (historicos.length > 0) v.base_calculo.historicos = [historicos[0].id];
+      // FIX: usar TODOS os históricos, não só [0]
+      if (historicos.length > 0) v.base_calculo.historicos = historicos.map(h => h.id);
       v.ordem = 9020;
+      v.gerar_verba_reflexa = 'devido';
       result.push(v);
+
+      // 2. Reflexo em 13º Salário (1/12 por mês)
+      const v13 = defaultVerba('periculosidade_reflexo_13', 'REFLEXO PERICULOSIDADE EM 13º SALÁRIO');
+      v13.valor = 'calculado';
+      v13.multiplicador = percentual.div(12).toNumber();
+      v13.periodo_inicio = inicio;
+      v13.periodo_fim = fim;
+      v13.ocorrencia_pagamento = 'desligamento';
+      v13.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+      if (historicos.length > 0) v13.base_calculo.historicos = historicos.map(h => h.id);
+      v13.ordem = 9021;
+      result.push(v13);
+
+      // 3. Reflexo em Férias + 1/3 (1.3333/12 CLT 142)
+      const vFerias = defaultVerba('periculosidade_reflexo_ferias', 'REFLEXO PERICULOSIDADE EM FÉRIAS + 1/3');
+      vFerias.valor = 'calculado';
+      vFerias.multiplicador = percentual.times(new Decimal('1.3333')).div(12).toNumber();
+      vFerias.periodo_inicio = inicio;
+      vFerias.periodo_fim = fim;
+      vFerias.ocorrencia_pagamento = 'desligamento';
+      vFerias.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+      if (historicos.length > 0) vFerias.base_calculo.historicos = historicos.map(h => h.id);
+      vFerias.ordem = 9022;
+      result.push(vFerias);
+
+      // 4. Reflexo em DSR (Lei 605/49) — SÓ se houver comissões/variável (Súmula 27 TST)
+      const temVariavel = historicos.some(h =>
+        h.nome?.toLowerCase().includes('comiss') ||
+        h.nome?.toLowerCase().includes('premia') ||
+        h.nome?.toLowerCase().includes('variavel') ||
+        h.nome?.toLowerCase().includes('variável')
+      );
+      if (temVariavel) {
+        const vDsr = defaultVerba('periculosidade_reflexo_dsr', 'REFLEXO PERICULOSIDADE EM DSR');
+        vDsr.valor = 'calculado';
+        vDsr.multiplicador = percentual.times(new Decimal('0.1666')).toNumber();
+        vDsr.periodo_inicio = inicio;
+        vDsr.periodo_fim = fim;
+        vDsr.ocorrencia_pagamento = 'mensal';
+        vDsr.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+        if (historicos.length > 0) vDsr.base_calculo.historicos = historicos.map(h => h.id);
+        vDsr.ordem = 9023;
+        result.push(vDsr);
+      }
+
+      // 5-6: FGTS e FGTS+40% — motor V3 calcula automaticamente via incidencias.fgts=true
+      // 7: Aviso Prévio — motor V3 calcula automaticamente quando periculosidade incide no período
+    }
+  }
+
+  // ── Insalubridade (Art. 192 CLT + NR 15 MTE + Súmula Vinculante 4 STF) ──
+  if (cfg.insalubridade_config) {
+    const ins = cfg.insalubridade_config as {
+      ativo: boolean;
+      grau: 'minimo_10' | 'medio_20' | 'maximo_40';
+      base_calculo: 'salario_minimo' | 'salario_base' | 'salario_contratual';
+      periodo_inicio: string;
+      periodo_fim: string;
+    };
+    if (ins.ativo) {
+      const percentualMap: Record<string, number> = { minimo_10: 10, medio_20: 20, maximo_40: 40 };
+      const percentual = new Decimal(percentualMap[ins.grau] || 0).div(100);
+      const inicio = ins.periodo_inicio || periodoInicio;
+      const fim = ins.periodo_fim || periodoFim;
+
+      // Verba principal
+      const vIns = defaultVerba('insalubridade_auto', `Adicional de Insalubridade (${ins.grau})`);
+      vIns.valor = 'calculado';
+      vIns.multiplicador = percentual.toNumber();
+      vIns.periodo_inicio = inicio;
+      vIns.periodo_fim = fim;
+      vIns.ocorrencia_pagamento = 'mensal';
+      vIns.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+      if (ins.base_calculo === 'salario_base') {
+        const salFixo = historicos.filter(h =>
+          h.nome?.toLowerCase().includes('fix') ||
+          h.nome?.toLowerCase().includes('base') ||
+          h.nome?.toLowerCase().includes('salário') ||
+          h.nome?.toLowerCase().includes('salario')
+        );
+        vIns.base_calculo.historicos = salFixo.length > 0
+          ? salFixo.map(h => h.id)
+          : (historicos.length > 0 ? [historicos[0].id] : []);
+      } else if (ins.base_calculo === 'salario_contratual') {
+        if (historicos.length > 0) vIns.base_calculo.historicos = historicos.map(h => h.id);
+      } else {
+        // salario_minimo: usar valor_informado_devido como fallback estático
+        // Motor V3 não suporta flag usar_salario_minimo, então calculamos valor fixo
+        // DEBT: perde correção mensal automática do SM
+        // SM 2025 = R$ 1.518,00 (usar params se disponível, senão hardcode)
+        const sm = new Decimal('1518');
+        vIns.valor = 'informado';
+        vIns.valor_informado_devido = sm.times(percentual).toDP(2).toNumber();
+      }
+      vIns.ordem = 9024;
+      vIns.gerar_verba_reflexa = 'devido';
+      result.push(vIns);
+
+      // Reflexo em 13º Salário
+      const v13Ins = defaultVerba('insalubridade_reflexo_13', 'REFLEXO INSALUBRIDADE EM 13º SALÁRIO');
+      v13Ins.valor = 'calculado';
+      v13Ins.multiplicador = percentual.div(12).toNumber();
+      v13Ins.periodo_inicio = inicio;
+      v13Ins.periodo_fim = fim;
+      v13Ins.ocorrencia_pagamento = 'desligamento';
+      v13Ins.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+      if (ins.base_calculo !== 'salario_minimo' && historicos.length > 0) {
+        v13Ins.base_calculo.historicos = historicos.map(h => h.id);
+      } else if (ins.base_calculo === 'salario_minimo') {
+        const sm = new Decimal('1518');
+        v13Ins.valor = 'informado';
+        v13Ins.valor_informado_devido = sm.times(percentual).div(12).toDP(2).toNumber();
+      }
+      v13Ins.ordem = 9025;
+      result.push(v13Ins);
+
+      // Reflexo em Férias + 1/3
+      const vFeriasIns = defaultVerba('insalubridade_reflexo_ferias', 'REFLEXO INSALUBRIDADE EM FÉRIAS + 1/3');
+      vFeriasIns.valor = 'calculado';
+      vFeriasIns.multiplicador = percentual.times(new Decimal('1.3333')).div(12).toNumber();
+      vFeriasIns.periodo_inicio = inicio;
+      vFeriasIns.periodo_fim = fim;
+      vFeriasIns.ocorrencia_pagamento = 'desligamento';
+      vFeriasIns.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+      if (ins.base_calculo !== 'salario_minimo' && historicos.length > 0) {
+        vFeriasIns.base_calculo.historicos = historicos.map(h => h.id);
+      } else if (ins.base_calculo === 'salario_minimo') {
+        const sm = new Decimal('1518');
+        vFeriasIns.valor = 'informado';
+        vFeriasIns.valor_informado_devido = sm.times(percentual).times(new Decimal('1.3333')).div(12).toDP(2).toNumber();
+      }
+      vFeriasIns.ordem = 9026;
+      result.push(vFeriasIns);
+
+      // DSR — só se houver variável
+      const temVariavelIns = historicos.some(h =>
+        h.nome?.toLowerCase().includes('comiss') ||
+        h.nome?.toLowerCase().includes('premia') ||
+        h.nome?.toLowerCase().includes('variavel') ||
+        h.nome?.toLowerCase().includes('variável')
+      );
+      if (temVariavelIns) {
+        const vDsrIns = defaultVerba('insalubridade_reflexo_dsr', 'REFLEXO INSALUBRIDADE EM DSR');
+        vDsrIns.valor = 'calculado';
+        vDsrIns.multiplicador = percentual.times(new Decimal('0.1666')).toNumber();
+        vDsrIns.periodo_inicio = inicio;
+        vDsrIns.periodo_fim = fim;
+        vDsrIns.ocorrencia_pagamento = 'mensal';
+        vDsrIns.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+        if (ins.base_calculo !== 'salario_minimo' && historicos.length > 0) {
+          vDsrIns.base_calculo.historicos = historicos.map(h => h.id);
+        }
+        vDsrIns.ordem = 9027;
+        result.push(vDsrIns);
+      }
     }
   }
 
@@ -1209,6 +1372,37 @@ function multasConfigToVerbas(
         vFgts.incidencias = { fgts: false, irpf: false, contribuicao_social: false, previdencia_privada: false, pensao_alimenticia: false };
         vFgts.ordem = 9062;
         result.push(vFgts);
+
+        // DSR reflexo: aplicável quando historicos contêm remuneração variável (comissão/prêmio)
+        const hasVariablePay = historicos.some(h =>
+          /comiss[aã]o|premi[oô]|pr[eê]mio|variav|vari[áa]vel/i.test(h.nome),
+        );
+        if (hasVariablePay) {
+          // DSR sobre diferença de equiparação: diferença / dias úteis * repousos ≈ baseRef / 26 * 4
+          const dsrFator = new Decimal(1).div(26).times(4);
+          const vDsr = defaultVerba('equiparacao_reflexo_dsr', `REFLEXO EQUIPARACAO EM DSR ${eq.paradigma_nome || ''}`.trim());
+          vDsr.valor_informado_devido = baseRef.times(dsrFator).toDP(2).toNumber();
+          vDsr.periodo_inicio = eq.periodo_inicio || periodoInicio;
+          vDsr.periodo_fim = dataReflexo;
+          vDsr.ocorrencia_pagamento = 'desligamento';
+          vDsr.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+          vDsr.ordem = 9063;
+          result.push(vDsr);
+        }
+
+        // Aviso prévio reflexo: quando aviso é "calculado" e projetar_aviso_indenizado = true
+        if (params.prazo_aviso_previo === 'calculado' && params.projetar_aviso_indenizado) {
+          // Aviso prévio = 1/12 da diferença total (projeção mensal)
+          const vAviso = defaultVerba('equiparacao_reflexo_aviso', `REFLEXO EQUIPARACAO EM AVISO PREVIO ${eq.paradigma_nome || ''}`.trim());
+          vAviso.valor_informado_devido = baseRef.times(new Decimal(1).div(12)).toDP(2).toNumber();
+          vAviso.periodo_inicio = eq.periodo_inicio || periodoInicio;
+          vAviso.periodo_fim = dataReflexo;
+          vAviso.ocorrencia_pagamento = 'desligamento';
+          vAviso.caracteristica = 'aviso_previo';
+          vAviso.incidencias = { fgts: true, irpf: true, contribuicao_social: true, previdencia_privada: false, pensao_alimenticia: false };
+          vAviso.ordem = 9064;
+          result.push(vAviso);
+        }
       }
     }
   }
@@ -1242,14 +1436,24 @@ function multasConfigToVerbas(
       if ((!inicio || !fim) && est.data_evento) {
         // Import dinamico — modulo registra-se em cima do registry
         const meses = Number(est.meses_estabilidade || 0);
+        // Defaults legais por tipo de estabilidade
+        const defaultMesesMap: Record<string, number> = { gestante: 5, cipa: 12, acidentaria: 12, acidente_trabalho: 12, acidente: 12 };
+        const effectiveMeses = meses > 0 ? meses : (defaultMesesMap[(est.tipo || '').toLowerCase()] || 0);
+        // Se mesmo com default o período é 0 e a estabilidade está ativa, emitir warning
+        if (effectiveMeses === 0 && est.ativo) {
+          warnings.push({
+            code: 'W_ESTABILIDADE_MESES_ZERO',
+            message: `Estabilidade tipo "${est.tipo || 'outro'}" ativa mas sem meses de estabilidade definidos. Nenhuma verba de estabilidade será gerada. Preencha o campo "Meses de Estabilidade" ou selecione um tipo com default legal.`,
+          });
+        }
         // Calculo simples inline (evita import circular):
-        // fim = data_evento + meses
+        // fim = data_evento + effectiveMeses
         const ev = new Date(est.data_evento + 'T00:00:00Z');
         if (!Number.isNaN(ev.getTime())) {
           if (!inicio) inicio = est.data_evento;
-          if (!fim && meses > 0) {
+          if (!fim && effectiveMeses > 0) {
             const dFim = new Date(ev.getTime());
-            dFim.setUTCMonth(dFim.getUTCMonth() + meses);
+            dFim.setUTCMonth(dFim.getUTCMonth() + effectiveMeses);
             const yyyy = dFim.getUTCFullYear().toString().padStart(4, '0');
             const mm = (dFim.getUTCMonth() + 1).toString().padStart(2, '0');
             const dd = dFim.getUTCDate().toString().padStart(2, '0');
@@ -1276,7 +1480,7 @@ function multasConfigToVerbas(
           previdencia_privada: false,
           pensao_alimenticia: false,
         };
-        if (historicos.length > 0) v.base_calculo.historicos = [historicos[0].id];
+        if (historicos.length > 0) v.base_calculo.historicos = historicos.map(h => h.id);
         v.ordem = 9050;
         if (est.observacoes) v.comentarios = est.observacoes;
         result.push(v);
@@ -1284,7 +1488,7 @@ function multasConfigToVerbas(
     }
   }
 
-  return result;
+  return { verbas: result, warnings };
 }
 
 export async function executarLiquidacao(
@@ -1483,14 +1687,16 @@ export async function executarLiquidacao(
   }
 
   // ── Generate verbas from multas_config (multas/indenizações from ModuloMultasCLT) ──
-  const multasVerbas = multasConfigToVerbas(
+  const multasResult = multasConfigToVerbas(
     caseData.multasConfig,
     engineParams,
     engineHistoricos,
   );
-  if (multasVerbas.length > 0) {
-    engineVerbas = [...engineVerbas, ...multasVerbas];
+  if (multasResult.verbas.length > 0) {
+    engineVerbas = [...engineVerbas, ...multasResult.verbas];
   }
+  // Collect warnings from multasConfigToVerbas (e.g. estabilidade sem meses)
+  orchestratorWarnings.push(...multasResult.warnings);
 
   // ── Auto-generate reflexes if not already present ──
   const principalVerbas = engineVerbas.filter(v => v.tipo === 'principal');
@@ -1617,6 +1823,11 @@ export async function executarLiquidacao(
       .map(e => `[${e.code}] ${e.message_friendly}`)
       .join('; ');
     throw new Error(`Cálculo bloqueado por falta de dados essenciais: ${blockReasons}`);
+  }
+
+  // ── Validação: aviso prévio "informado" exige dias preenchidos ──
+  if (engineParams.prazo_aviso_previo === 'informado' && !engineParams.prazo_aviso_dias) {
+    throw new Error('Aviso prévio configurado como "informado" mas dias não preenchidos. Volte ao módulo Dados do Processo e preencha "Prazo de Aviso (dias)".');
   }
 
   // 4. Execute engine — 26 constructor params (audit-fix C3 adicionou multasConfig)
