@@ -1693,8 +1693,8 @@ export async function executarLiquidacao(
     engine_version: ENGINE_VERSION,
   });
 
-  // 7. Persist ocorrências
-  await svc.deleteOcorrencias(caseId);
+  // 7. Persist ocorrências — só deleta CALCULADA, preserva PJC_IMPORT
+  await svc.deleteOcorrencias(caseId, undefined, 'CALCULADA');
   
   for (const verba of result.verbas) {
     for (const oc of verba.ocorrencias) {

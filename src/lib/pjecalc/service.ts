@@ -302,10 +302,13 @@ export async function insertOcorrencia(payload: PjecalcOcorrenciaInsert): Promis
   if (error) throw error;
 }
 
-export async function deleteOcorrencias(caseId: string, verbaId?: string): Promise<void> {
+export async function deleteOcorrencias(caseId: string, verbaId?: string, origem?: string): Promise<void> {
   let query = fromView('pjecalc_ocorrencias').delete().eq('case_id', caseId);
   if (verbaId) {
     query = query.eq('verba_id', verbaId);
+  }
+  if (origem) {
+    query = query.eq('origem', origem);
   }
   const { error } = await query;
   if (error) throw error;

@@ -13,7 +13,7 @@
 // agenda OCR Mistral, parser regex roda no client.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { extrairGeometrico } from "../_shared/extrator-geometrico.ts";
 import { escolherEMapear, prewarmOntologiaIfNeeded } from "../_shared/mappers/dispatcher.ts";
 

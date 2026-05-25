@@ -11,7 +11,7 @@
 // NUNCA descarta rubrica desconhecida. NAO_CLASSIFICADO é estado válido que
 // força UI a decidir antes do "Confirmar e baixar ZIP".
 
-import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2';
 import type {
   ClassificacaoRubrica,
   OntologiaSeedV2,

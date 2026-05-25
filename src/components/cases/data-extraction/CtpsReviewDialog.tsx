@@ -45,6 +45,7 @@ import {
 } from "./VerifyExtractionAIButton";
 import { VerifyParityForenseButton } from "./VerifyParityForenseButton";
 import { toast } from "sonner";
+import { validarCtps } from "@/features/data-extraction/validators/ctps-validator";
 import {
   buildCtpsZipWithReport,
   logCsvExport,
@@ -126,6 +127,11 @@ export function CtpsReviewDialog({
   const confidenceFaltas = useMemo(
     () => scoreFaltas(faltasParsed, ocrText),
     [faltasParsed, ocrText],
+  );
+
+  const ctpsValidacao = useMemo(
+    () => validarCtps(feriasParsed.ferias, faltasParsed.faltas),
+    [feriasParsed.ferias, faltasParsed.faltas],
   );
 
   // FASE 1.5 — qualquer um dos dois sub-componentes (férias/faltas)
@@ -232,6 +238,24 @@ export function CtpsReviewDialog({
                 Revise os períodos de férias e faltas antes de confirmar.
                 Foram encontradas inconsistências que precisam de verificação.
               </div>
+            </div>
+          )}
+
+          {!ctpsValidacao.ok && (
+            <div className="border border-amber-300 bg-amber-50 rounded p-2 text-xs space-y-1">
+              <div className="font-medium text-amber-900">
+                Validação CTPS: {ctpsValidacao.resumo.violacoes_criticas} crítica(s), {ctpsValidacao.resumo.violacoes_altas} alta(s)
+              </div>
+              {ctpsValidacao.violacoes.slice(0, 3).map((v, i) => (
+                <div key={i} className="text-amber-800">
+                  [{v.severidade}] {v.descricao}
+                </div>
+              ))}
+              {ctpsValidacao.violacoes.length > 3 && (
+                <div className="text-amber-600">
+                  +{ctpsValidacao.violacoes.length - 3} violação(ões)
+                </div>
+              )}
             </div>
           )}
 

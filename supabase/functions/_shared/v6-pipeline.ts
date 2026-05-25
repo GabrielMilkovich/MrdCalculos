@@ -23,7 +23,7 @@
 //     Qualquer alteração de comportamento deve ser feita aqui (centralizada)
 //     e propagada por testes em produção via re-upload de PDFs.
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { extrairGeometrico } from "./extrator-geometrico.ts";
 import { escolherEMapear, prewarmOntologiaIfNeeded } from "./mappers/dispatcher.ts";
 import { sanitizePII } from "./sanitize-pii.ts";
