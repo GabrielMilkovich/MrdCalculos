@@ -312,13 +312,13 @@ export default function CasoDetalhe() {
           completed: documents.length > 0,
           active: activeTab === "documentos",
           count: documents.length,
-          tooltip: "Upload + OCR + classificação de documentos",
+          tooltip: "Envio e classificação de documentos",
         },
         {
-          id: "validacao", label: "Validação", icon: ShieldCheck,
+          id: "validacao", label: "Conferência", icon: ShieldCheck,
           completed: false,
           active: activeTab === "validacao",
-          tooltip: "Revisar dados extraídos e exportar CSVs PJe-Calc",
+          tooltip: "Conferir dados extraídos dos documentos",
         },
       ]
     : [
@@ -333,14 +333,14 @@ export default function CasoDetalhe() {
       completed: documents.length > 0,
       active: activeTab === "documentos",
       count: documents.length,
-      tooltip: "Upload e OCR de documentos",
+      tooltip: "Envio de documentos",
     },
     {
-      id: "validacao", label: "Validação", icon: ShieldCheck,
+      id: "validacao", label: "Conferência", icon: ShieldCheck,
       completed: canCalculate,
       active: activeTab === "validacao",
       count: facts.filter(f => !f.confirmado).length || undefined,
-      tooltip: "Extração e validação de fatos",
+      tooltip: "Conferir dados extraídos dos documentos",
     },
     // Premissas mesclada com Cálculo
     {
@@ -728,8 +728,8 @@ export default function CasoDetalhe() {
                 <Progress value={progressPercent} className="h-2" />
                 <div className="flex justify-between mt-2 text-[10px] text-muted-foreground">
                   <span className={documents.length > 0 ? "text-[hsl(var(--success))]" : ""}>Documentos</span>
-                  <span className={facts.length > 0 ? "text-[hsl(var(--success))]" : ""}>Extração</span>
-                  <span className={canCalculate ? "text-[hsl(var(--success))]" : ""}>Validação</span>
+                  <span className={facts.length > 0 ? "text-[hsl(var(--success))]" : ""}>Dados</span>
+                  <span className={canCalculate ? "text-[hsl(var(--success))]" : ""}>Conferência</span>
                   <span className={snapshotsCount > 0 ? "text-[hsl(var(--success))]" : ""}>Cálculo</span>
                   <span className={caseData.status === "revisado" ? "text-[hsl(var(--success))]" : ""}>Petição</span>
                 </div>
@@ -879,7 +879,7 @@ export default function CasoDetalhe() {
                   (d: any) => d.ocr_validated === true && d.status !== "extracted",
                 );
                 if (toExtract.length === 0) {
-                  toast.info("Nenhum documento validado para extrair. Confirme o OCR primeiro.");
+                  toast.info("Nenhum documento conferido para extrair. Confirme a leitura dos documentos primeiro.");
                   return;
                 }
 
@@ -953,10 +953,10 @@ export default function CasoDetalhe() {
                 <CardContent className="p-4 flex items-center gap-4">
                   <AlertTriangle className="h-5 w-5 text-accent" />
                   <div className="flex-1">
-                    <div className="text-sm font-medium">Validação Pendente</div>
-                    <div className="text-xs text-muted-foreground">Confirme os fatos críticos antes de gerar a petição.</div>
+                    <div className="text-sm font-medium">Conferência pendente</div>
+                    <div className="text-xs text-muted-foreground">Confira os dados antes de seguir para o cálculo.</div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => setActiveTab("validacao")}>Validar</Button>
+                  <Button size="sm" variant="outline" onClick={() => setActiveTab("validacao")}>Conferir</Button>
                 </CardContent>
               </Card>
             )}

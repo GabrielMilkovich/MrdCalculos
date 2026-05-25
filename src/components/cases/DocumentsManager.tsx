@@ -129,22 +129,22 @@ const statusConfig: Record<string, { label: string; icon: typeof Loader2; color:
   queued: { label: "Na fila", icon: Clock, color: "text-blue-500", bgColor: "bg-blue-50" },
   uploaded: { label: "Enviado", icon: Clock, color: "text-muted-foreground", bgColor: "bg-muted" },
   downloading: { label: "Baixando", icon: Loader2, color: "text-blue-600", bgColor: "bg-blue-100" },
-  ocr_pending: { label: "Aguardando OCR", icon: AlertTriangle, color: "text-yellow-600", bgColor: "bg-yellow-100" },
-  ocr: { label: "OCR em andamento", icon: Loader2, color: "text-blue-600", bgColor: "bg-blue-100" },
-  ocr_running: { label: "OCR em andamento", icon: Loader2, color: "text-blue-600", bgColor: "bg-blue-100" },
-  ocr_done: { label: "OCR concluído", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
-  ocr_failed: { label: "OCR falhou", icon: XCircle, color: "text-destructive", bgColor: "bg-destructive/10" },
-  chunking: { label: "Dividindo em chunks", icon: Loader2, color: "text-purple-600", bgColor: "bg-purple-100" },
-  chunk_pending: { label: "Aguardando indexação", icon: Database, color: "text-purple-600", bgColor: "bg-purple-100" },
-  embedding: { label: "Gerando embeddings", icon: Loader2, color: "text-indigo-600", bgColor: "bg-indigo-100" },
-  embedded: { label: "Indexado", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
-  embedded_partial: { label: "Parcialmente indexado", icon: AlertTriangle, color: "text-yellow-600", bgColor: "bg-yellow-100" },
-  failed: { label: "Erro", icon: XCircle, color: "text-destructive", bgColor: "bg-destructive/10" },
+  ocr_pending: { label: "Processando", icon: Loader2, color: "text-blue-600", bgColor: "bg-blue-100" },
+  ocr: { label: "Processando", icon: Loader2, color: "text-blue-600", bgColor: "bg-blue-100" },
+  ocr_running: { label: "Processando", icon: Loader2, color: "text-blue-600", bgColor: "bg-blue-100" },
+  ocr_done: { label: "Documento lido", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
+  ocr_failed: { label: "Não foi possível ler", icon: XCircle, color: "text-destructive", bgColor: "bg-destructive/10" },
+  chunking: { label: "Processando", icon: Loader2, color: "text-purple-600", bgColor: "bg-purple-100" },
+  chunk_pending: { label: "Processando", icon: Loader2, color: "text-purple-600", bgColor: "bg-purple-100" },
+  embedding: { label: "Processando", icon: Loader2, color: "text-indigo-600", bgColor: "bg-indigo-100" },
+  embedded: { label: "Pronto", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
+  embedded_partial: { label: "Processado parcialmente", icon: AlertTriangle, color: "text-yellow-600", bgColor: "bg-yellow-100" },
+  failed: { label: "Erro ao processar", icon: XCircle, color: "text-destructive", bgColor: "bg-destructive/10" },
   retrying: { label: "Tentando novamente", icon: Loader2, color: "text-orange-600", bgColor: "bg-orange-100" },
   processing: { label: "Processando", icon: Loader2, color: "text-blue-600", bgColor: "bg-blue-100" },
-  extracting: { label: "Extraindo com IA", icon: Loader2, color: "text-purple-600", bgColor: "bg-purple-100" },
-  extracted: { label: "Extraído", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
-  completed: { label: "Concluído", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
+  extracting: { label: "Processando", icon: Loader2, color: "text-purple-600", bgColor: "bg-purple-100" },
+  extracted: { label: "Pronto", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
+  completed: { label: "Pronto", icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-100" },
 };
 
 export function DocumentsManager({
@@ -344,7 +344,7 @@ export function DocumentsManager({
       }
 
       if (successCount > 0) {
-        toast.success(`${successCount} documento(s) enviado(s). OCR rodando em background...`);
+        toast.success(`${successCount} documento(s) enviado(s). Processamento em andamento...`);
       }
     } catch (error) {
       logger.error("Upload error", error);
@@ -361,7 +361,7 @@ export function DocumentsManager({
   //   2. chunk-and-embed (OpenAI embeddings)
   const processDocument = useCallback(async (documentId: string) => {
     setProcessingDocId(documentId);
-    toast.info("Iniciando: OCR Mistral → Chunking → Embeddings...");
+    toast.info("Processando documento...");
 
     try {
       const { data, error } = await supabase.functions.invoke("process-document-mistral", {
@@ -374,9 +374,9 @@ export function DocumentsManager({
       const chunksCreated = data?.chunking?.chunks_created ?? 0;
       const provider = data?.ocr?.provider ?? "mistral";
       if (data?.partial) {
-        toast.warning(`OCR concluído (${pageCount} pg, ${provider}), mas chunking falhou. Revise manualmente.`);
+        toast.warning(`Documento lido (${pageCount} pg), mas o processamento está incompleto. Tente novamente.`);
       } else {
-        toast.success(`Documento processado: ${pageCount} pg via ${provider}, ${chunksCreated} chunks.`);
+        toast.success(`Documento processado com sucesso (${pageCount} pg).`);
       }
       onDocumentsChange();
     } catch (err) {
@@ -393,7 +393,7 @@ export function DocumentsManager({
   // (ex: cartão Via Varejo Layout B colapsado → "Nenhuma apuração extraída").
   const reprocessV6 = useCallback(async (documentId: string) => {
     setProcessingDocId(documentId);
-    toast.info("Reprocessando com extrator geométrico V6...");
+    toast.info("Tentando processar novamente...");
     try {
       const { data, error } = await supabase.functions.invoke("reprocess-v6", {
         body: { document_id: documentId },
@@ -401,9 +401,9 @@ export function DocumentsManager({
       if (error) throw error;
       const r = data?.resultados?.[0];
       if (r?.sucesso) {
-        toast.success(`V6 OK — mapper ${r.mapper} (${r.razao}).`);
+        toast.success("Documento reprocessado com sucesso.");
       } else {
-        toast.warning(`V6 não aplicou: ${r?.razao ?? "motivo desconhecido"}. Pipeline V5 continua válido.`);
+        toast.warning("Não foi possível reprocessar este documento. Tente substituir o arquivo.");
       }
       onDocumentsChange();
     } catch (err) {
@@ -540,9 +540,9 @@ export function DocumentsManager({
     setIsBatchProcessing(false);
 
     if (errorCount === 0) {
-      toast.success(`✅ OCR concluído em ${successCount} documento(s). Abra cada um no split view para revisar e extrair.`);
+      toast.success(`${successCount} documento(s) processado(s) com sucesso.`);
     } else {
-      toast.warning(`OCR: ${successCount} ok, ${errorCount} com erro.`);
+      toast.warning(`${successCount} processado(s) com sucesso, ${errorCount} com erro.`);
     }
     queryClient.invalidateQueries({ queryKey: ['cases'] });
     onDocumentsChange();
@@ -793,7 +793,7 @@ export function DocumentsManager({
                       }`}
                     >
                       {status === "processing"
-                        ? "OCR + Indexação..."
+                        ? "Processando..."
                         : status === "done"
                         ? "Concluído ✓"
                         : status === "error"
@@ -896,7 +896,7 @@ export function DocumentsManager({
                 ) : (
                   <Sparkles className="h-4 w-4" />
                 )}
-                {isBatchProcessing ? "Rodando OCR..." : `Rodar OCR de todos (${stats.pending})`}
+                {isBatchProcessing ? "Processando..." : `Processar todos (${stats.pending})`}
               </Button>
             )}
           </div>
@@ -912,16 +912,16 @@ export function DocumentsManager({
           <CardContent className="p-4 flex items-center gap-3">
             <ShieldCheck className="h-5 w-5 text-primary" />
             <div className="flex-1">
-              <div className="text-sm font-medium">OCR concluído em {documents.filter(d => {
+              <div className="text-sm font-medium">{documents.filter(d => {
                 const s = (d.processing_status || d.status || "uploaded") as string;
                 return ["ocr_done", "ocr_partial", "extracted"].includes(s);
-              }).length} documento(s)</div>
+              }).length} documento(s) pronto(s) para conferência</div>
               <div className="text-xs text-muted-foreground">
-                Revise o texto extraído na aba Validação antes de seguir para o cálculo.
+                Confira os dados extraídos antes de seguir para o cálculo.
               </div>
             </div>
             <Button size="sm" onClick={onGoToValidation}>
-              Ir para Validação
+              Conferir dados
             </Button>
           </CardContent>
         </Card>
@@ -938,7 +938,7 @@ export function DocumentsManager({
                   <TableHead>Tipo</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-center">Páginas</TableHead>
-                  <TableHead className="text-center">Confiança OCR</TableHead>
+                  <TableHead className="text-center">Qualidade da leitura</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1017,8 +1017,8 @@ export function DocumentsManager({
                           </div>
                         )}
                         {doc.error_message && (
-                          <p className="text-xs text-destructive mt-1 truncate max-w-[150px]" title={doc.error_message}>
-                            {doc.error_message}
+                          <p className="text-xs text-destructive mt-1 truncate max-w-[200px]" title={doc.error_message}>
+                            Não foi possível processar este arquivo.
                           </p>
                         )}
                       </TableCell>
@@ -1078,7 +1078,7 @@ export function DocumentsManager({
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>
-                                Reprocessar com V6 (extrator geométrico)
+                                Tentar processar novamente
                               </TooltipContent>
                             </Tooltip>
                           )}
