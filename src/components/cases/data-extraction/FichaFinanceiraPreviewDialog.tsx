@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { Download, Loader2, AlertTriangle } from 'lucide-react';
+import { Download, ExternalLink, Loader2, AlertTriangle } from 'lucide-react';
 import Decimal from 'decimal.js';
 import { buildFichaFinanceiraZip } from '@/features/data-extraction/export/per-doc/ficha-financeira-zip';
 import { triggerBlobDownload } from '@/features/data-extraction';
 import { VerifyParityForenseButton } from './VerifyParityForenseButton';
+import { useDocumentPdfUrl } from './hooks/useDocumentPdfUrl';
 import {
   Dialog,
   DialogContent,
@@ -63,6 +64,7 @@ export function FichaFinanceiraPreviewDialog({
 }: Props) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const pdfUrl = useDocumentPdfUrl(documentId, open);
 
   const review = useFichaFinanceiraReview(parsed);
 
@@ -154,12 +156,26 @@ export function FichaFinanceiraPreviewDialog({
         <div className="flex flex-col gap-3 flex-1 min-h-0">
           <div className="flex items-center justify-between">
             <ValidationBanner validacao={parsed.validacao} />
-            <VerifyParityForenseButton
-              documentId={documentId}
-              builder="ficha_financeira"
-              parsed={parsed}
-              pdfDisponivel={true}
-            />
+            <div className="flex items-center gap-2">
+              {pdfUrl && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => window.open(pdfUrl, "_blank", "noopener,noreferrer")}
+                  title="Abre o PDF original em uma nova aba do navegador"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Abrir PDF
+                </Button>
+              )}
+              <VerifyParityForenseButton
+                documentId={documentId}
+                builder="ficha_financeira"
+                parsed={parsed}
+                pdfDisponivel={true}
+              />
+            </div>
           </div>
 
           {review.rubricasNaoClassificadas > 0 && (

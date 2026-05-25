@@ -13,7 +13,7 @@
  * Confirmação: 1 download = 1 ZIP com 2 CSVs (ferias + faltas) + LEIA-ME.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, ClipboardX, Download, FileText, Loader2, MoreHorizontal } from "lucide-react";
+import { Calendar, ClipboardX, Download, ExternalLink, FileText, Loader2, MoreHorizontal } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +50,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useDocumentPdfUrl } from "./hooks/useDocumentPdfUrl";
 import { toast } from "sonner";
 import { validarCtps } from "@/features/data-extraction/validators/ctps-validator";
 import {
@@ -84,6 +85,7 @@ export function CtpsReviewDialog({
   filename,
   documentId,
 }: Props) {
+  const pdfUrl = useDocumentPdfUrl(documentId, open);
   const [tab, setTab] = useState<"ferias" | "faltas">("ferias");
   const [feriasOpen, setFeriasOpen] = useState(false);
   const [faltasOpen, setFaltasOpen] = useState(false);
@@ -222,23 +224,37 @@ export function CtpsReviewDialog({
                 <FileText className="h-4 w-4" />
                 Conferir carteira de trabalho
               </DialogTitle>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                    <MoreHorizontal className="h-4 w-4" />
+              <div className="flex items-center gap-1">
+                {pdfUrl && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => window.open(pdfUrl, "_blank", "noopener,noreferrer")}
+                    title="Abre o PDF original em uma nova aba do navegador"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Abrir PDF
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild className="p-0">
-                    <VerifyParityForenseButton
-                      documentId={documentId}
-                      builder="ctps"
-                      parsed={{ ferias: feriasParsed, faltas: faltasParsed }}
-                      pdfDisponivel={!!documentId}
-                    />
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem asChild className="p-0">
+                      <VerifyParityForenseButton
+                        documentId={documentId}
+                        builder="ctps"
+                        parsed={{ ferias: feriasParsed, faltas: faltasParsed }}
+                        pdfDisponivel={!!documentId}
+                      />
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
             <DialogDescription className="text-xs">
               Dados encontrados: <strong>{feriasParsed.ferias.length}</strong> período(s) de férias e <strong>{faltasParsed.faltas.length}</strong> registro(s) de faltas.
