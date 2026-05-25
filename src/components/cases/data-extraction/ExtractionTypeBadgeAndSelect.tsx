@@ -39,6 +39,8 @@ import { CartaoPontoReviewDialog } from "./CartaoPontoReviewDialog";
 import { FeriasReviewDialog } from "./FeriasReviewDialog";
 import { FaltasReviewDialog } from "./FaltasReviewDialog";
 import { CtpsReviewDialog } from "./CtpsReviewDialog";
+import { FichaFinanceiraPreviewDialog } from "./FichaFinanceiraPreviewDialog";
+import type { FichaFinanceiraParsed } from "./ficha-financeira-types";
 import {
   CARTAO_PONTO_PARSER_VERSION,
   generateExportForDocument,
@@ -110,6 +112,11 @@ export function ExtractionTypeBadgeAndSelect({
     documentId: string;
     ocrText: string;
     baseFilename: string;
+    filename: string;
+  } | null>(null);
+  const [fichaState, setFichaState] = useState<{
+    parsed: FichaFinanceiraParsed;
+    documentId: string;
     filename: string;
   } | null>(null);
 
@@ -190,6 +197,13 @@ export function ExtractionTypeBadgeAndSelect({
             documentId: result.document_id,
             ocrText: result.ocr_text,
             baseFilename: result.baseFilename,
+            filename: result.filename,
+          });
+          break;
+        case "ficha-financeira-review":
+          setFichaState({
+            parsed: result.parsed as FichaFinanceiraParsed,
+            documentId: result.document_id,
             filename: result.filename,
           });
           break;
@@ -347,6 +361,15 @@ export function ExtractionTypeBadgeAndSelect({
           ocrText={ctpsState.ocrText}
           baseFilename={ctpsState.baseFilename}
           filename={ctpsState.filename}
+        />
+      )}
+      {fichaState && (
+        <FichaFinanceiraPreviewDialog
+          open={fichaState !== null}
+          onOpenChange={(o) => !o && setFichaState(null)}
+          parsed={fichaState.parsed}
+          documentId={fichaState.documentId}
+          filename={fichaState.filename}
         />
       )}
     </div>

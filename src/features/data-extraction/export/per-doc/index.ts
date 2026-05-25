@@ -103,6 +103,13 @@ export type ExportResult =
       baseFilename: string;
       filename: string;
     }
+  | {
+      ok: true;
+      kind: 'ficha-financeira-review';
+      parsed: unknown;
+      document_id: string;
+      filename: string;
+    }
   | { ok: false; error: string };
 
 export async function generateExportForDocument(
@@ -304,14 +311,23 @@ export async function generateExportForDocument(
         filename: `${baseName}_ctps.zip`,
       };
     }
-    case 'ficha_financeira':
+    case 'ficha_financeira': {
+      if (!v6Parsed || typeof v6Parsed !== 'object') {
+        return {
+          ok: false,
+          error:
+            'Dados da Ficha Financeira não encontrados. ' +
+            'Certifique-se de que o documento foi processado pelo parser.',
+        };
+      }
       return {
-        ok: false,
-        error:
-          'Ficha Financeira detectada. Preview e exportação ZIP ainda não disponíveis — ' +
-          'serão implementados na Sprint 3 (UI) e Sprint 4 (Exporter). ' +
-          'O parser edge já extraiu os dados (veja documents.parsed no banco).',
+        ok: true,
+        kind: 'ficha-financeira-review',
+        parsed: v6Parsed,
+        document_id: documentId,
+        filename: `${baseName}_ficha_pjecalc.zip`,
       };
+    }
     case 'nao_extrair':
     case null:
     case undefined:
