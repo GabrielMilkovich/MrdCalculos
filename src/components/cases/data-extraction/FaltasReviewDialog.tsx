@@ -6,11 +6,20 @@
  * período aquisitivo, justificativa. Adicionar/remover.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { ReviewLayout } from "./ReviewLayout";
 import {
   buildFaltasCSVBlobWithReport,
@@ -212,7 +221,7 @@ export function FaltasReviewDialog({
     >
       <div className="p-2 flex items-center justify-between border-b sticky top-0 bg-background z-10">
         <span className="text-[11px] text-muted-foreground">
-          Edite/adicione faltas. Datas em dd/mm/aaaa serão aceitas.
+          {sorted.length} registro(s). Clique em "Editar" para alterar.
         </span>
         <Button
           variant="ghost"
@@ -220,25 +229,19 @@ export function FaltasReviewDialog({
           className="h-7 text-xs gap-1"
           onClick={addRow}
         >
-          <Plus className="h-3 w-3" /> Falta
+          <Plus className="h-3 w-3" /> Adicionar falta
         </Button>
       </div>
       {sorted.length === 0 ? (
         <div className="p-6 text-xs text-muted-foreground text-center">
-          Nenhuma falta — clique em "Falta" para adicionar manualmente.
+          Nenhuma falta — clique em "Adicionar falta" acima.
         </div>
       ) : (
-        <div className="divide-y">
-          {sorted.map((r) => (
-            <FaltaRow
-              key={r._key}
-              dataRowKey={r._key}
-              row={r}
-              onUpdate={(patch) => updateRow(r._key, patch)}
-              onRemove={() => removeRow(r._key)}
-            />
-          ))}
-        </div>
+        <FaltasTable
+          rows={sorted}
+          onUpdate={updateRow}
+          onRemove={removeRow}
+        />
       )}
       <CsvBuildReportPanel
         open={!!reportPreview}
@@ -254,72 +257,141 @@ export function FaltasReviewDialog({
   );
 }
 
-function FaltaRow({
-  row,
+function FaltasTable({
+  rows,
   onUpdate,
   onRemove,
-  dataRowKey,
 }: {
-  row: Row;
-  onUpdate: (patch: Partial<Row>) => void;
-  onRemove: () => void;
-  dataRowKey?: string;
+  rows: Row[];
+  onUpdate: (key: string, patch: Partial<Row>) => void;
+  onRemove: (key: string) => void;
 }) {
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+
+  function formatDate(iso: string): string {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso || "—";
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  }
+
   return (
-    <div className="p-2 space-y-1.5 transition-shadow" data-row-key={dataRowKey}>
-      <div className="flex items-center gap-1.5">
-        <span className="text-[11px] text-muted-foreground w-[40px]">De</span>
-        <Input
-          type="date"
-          value={row.data_inicio}
-          onChange={(e) => onUpdate({ data_inicio: e.target.value })}
-          className="h-7 text-[11px] font-mono w-[140px]"
-        />
-        <span className="text-[11px] text-muted-foreground">até</span>
-        <Input
-          type="date"
-          value={row.data_fim}
-          onChange={(e) => onUpdate({ data_fim: e.target.value })}
-          className="h-7 text-[11px] font-mono w-[140px]"
-        />
-        <label className="flex items-center gap-1 text-[11px] ml-2">
-          <Checkbox
-            checked={row.justificada}
-            onCheckedChange={(v) => onUpdate({ justificada: Boolean(v) })}
-          />
-          <span>Justificada</span>
-        </label>
-        <label className="flex items-center gap-1 text-[11px]">
-          <Checkbox
-            checked={row.reiniciar_periodo_aquisitivo}
-            onCheckedChange={(v) =>
-              onUpdate({ reiniciar_periodo_aquisitivo: Boolean(v) })
-            }
-          />
-          <span>Reinicia período</span>
-        </label>
-        <div className="flex-1" />
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-          onClick={onRemove}
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </div>
-      <Textarea
-        rows={2}
-        placeholder="Justificativa (opcional, máx 200 chars)"
-        value={row.justificativa ?? ""}
-        onChange={(e) =>
-          onUpdate({
-            justificativa: e.target.value || null,
-          })
-        }
-        className="text-[11px] resize-none"
-        maxLength={200}
-      />
-    </div>
+    <Table>
+      <TableHeader className="bg-muted/30 sticky top-0">
+        <TableRow>
+          <TableHead className="text-[10px] w-[140px]">Período</TableHead>
+          <TableHead className="text-[10px]">Tipo</TableHead>
+          <TableHead className="text-[10px] w-[80px] text-center">Reinicia?</TableHead>
+          <TableHead className="text-[10px] w-[80px]"></TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((r) => {
+          const isEditing = editandoId === r._key;
+          const iniOk = /^\d{4}-\d{2}-\d{2}$/.test(r.data_inicio);
+          const fimOk = /^\d{4}-\d{2}-\d{2}$/.test(r.data_fim);
+          const dateInvalid = (!iniOk || !fimOk || r.data_inicio > r.data_fim);
+
+          return isEditing ? (
+            <TableRow key={r._key} className="bg-muted/40" data-row-key={r._key}>
+              <TableCell colSpan={4} className="p-3">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-muted-foreground w-[24px]">De:</span>
+                    <Input
+                      type="date"
+                      value={r.data_inicio}
+                      onChange={(e) => onUpdate(r._key, { data_inicio: e.target.value })}
+                      className={`h-7 text-[11px] font-mono w-[150px] ${dateInvalid ? "border-rose-400" : ""}`}
+                    />
+                    <span className="text-[11px] text-muted-foreground">até</span>
+                    <Input
+                      type="date"
+                      value={r.data_fim}
+                      onChange={(e) => onUpdate(r._key, { data_fim: e.target.value })}
+                      className={`h-7 text-[11px] font-mono w-[150px] ${dateInvalid ? "border-rose-400" : ""}`}
+                    />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-1.5 text-[11px]">
+                      <Checkbox
+                        checked={r.justificada}
+                        onCheckedChange={(v) => onUpdate(r._key, { justificada: Boolean(v) })}
+                      />
+                      Justificada
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[11px]">
+                      <Checkbox
+                        checked={r.reiniciar_periodo_aquisitivo}
+                        onCheckedChange={(v) => onUpdate(r._key, { reiniciar_periodo_aquisitivo: Boolean(v) })}
+                      />
+                      Reinicia período aquisitivo
+                    </label>
+                  </div>
+                  <Textarea
+                    rows={2}
+                    placeholder="Justificativa (opcional, máx 200 chars)"
+                    value={r.justificativa ?? ""}
+                    onChange={(e) => onUpdate(r._key, { justificativa: e.target.value || null })}
+                    className="text-[11px] resize-none"
+                    maxLength={200}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs text-destructive hover:text-destructive"
+                      onClick={() => { onRemove(r._key); setEditandoId(null); }}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" /> Excluir
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs"
+                      onClick={() => setEditandoId(null)}
+                    >
+                      Fechar
+                    </Button>
+                  </div>
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : (
+            <TableRow
+              key={r._key}
+              className={`text-xs ${dateInvalid ? "bg-rose-50/50 dark:bg-rose-950/10" : ""}`}
+              data-row-key={r._key}
+            >
+              <TableCell className="py-1.5 font-mono text-[11px]">
+                {formatDate(r.data_inicio)}
+                {r.data_inicio !== r.data_fim && <> – {formatDate(r.data_fim)}</>}
+              </TableCell>
+              <TableCell className="py-1.5">
+                {r.justificada ? (
+                  <Badge variant="outline" className="text-[10px] font-normal">
+                    {r.justificativa || "Justificada"}
+                  </Badge>
+                ) : (
+                  <span className="text-muted-foreground text-[11px]">Injustificada</span>
+                )}
+              </TableCell>
+              <TableCell className="py-1.5 text-center text-[11px]">
+                {r.reiniciar_periodo_aquisitivo ? "Sim" : "Não"}
+              </TableCell>
+              <TableCell className="py-1.5 text-right">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[11px] px-2"
+                  onClick={() => setEditandoId(r._key)}
+                >
+                  <Pencil className="h-3 w-3 mr-1" /> Editar
+                </Button>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }

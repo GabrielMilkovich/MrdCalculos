@@ -53,7 +53,6 @@ import {
   Search,
   FolderUp,
   Clock,
-  Percent,
   Sparkles,
   ShieldCheck,
 } from "lucide-react";
@@ -75,6 +74,36 @@ import {
 } from "@/components/ui/alert-dialog";
 import { logger } from "@/lib/logger";
 import { OcrProviderBadge } from "./data-extraction/OcrProviderBadge";
+import { StatusDocumento, type StatusDoc } from "./data-extraction/StatusDocumento";
+
+function mapPipelineToStatusDoc(pipelineStatus: string, isProcessing: boolean): StatusDoc {
+  if (isProcessing) return "processando";
+  switch (pipelineStatus) {
+    case "downloading":
+    case "ocr_pending":
+    case "ocr":
+    case "ocr_running":
+    case "chunking":
+    case "chunk_pending":
+    case "embedding":
+    case "processing":
+    case "extracting":
+    case "queued":
+      return "processando";
+    case "ocr_done":
+    case "embedded_partial":
+      return "conferir";
+    case "embedded":
+    case "extracted":
+    case "completed":
+      return "conferido";
+    case "failed":
+    case "ocr_failed":
+      return "erro";
+    default:
+      return "conferir";
+  }
+}
 
 interface Document {
   id: string;
@@ -938,7 +967,7 @@ export function DocumentsManager({
                   <TableHead>Tipo</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-center">Páginas</TableHead>
-                  <TableHead className="text-center">Qualidade da leitura</TableHead>
+                  <TableHead className="text-center">Leitura</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -991,14 +1020,7 @@ export function DocumentsManager({
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <Badge variant="outline" className={`${status.bgColor} ${status.color} border-0`}>
-                            {isProcessing ? (
-                              <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                            ) : (
-                              <StatusIcon className={`h-3 w-3 mr-1 ${status.icon === Loader2 ? 'animate-spin' : ''}`} />
-                            )}
-                            {isProcessing ? "Processando..." : status.label}
-                          </Badge>
+                          <StatusDocumento status={mapPipelineToStatusDoc(effectiveStatus, isProcessing)} />
                           {doc.ocr_provider && (
                             <OcrProviderBadge
                               ocrProvider={doc.ocr_provider}
@@ -1017,9 +1039,32 @@ export function DocumentsManager({
                           </div>
                         )}
                         {doc.error_message && (
-                          <p className="text-xs text-destructive mt-1 truncate max-w-[200px]" title={doc.error_message}>
-                            Não foi possível processar este arquivo.
-                          </p>
+                          <div className="mt-1 space-y-1">
+                            <p className="text-xs text-destructive truncate max-w-[200px]" title={doc.error_message}>
+                              Não foi possível ler este arquivo
+                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 px-1.5 text-[10px]"
+                                onClick={() => reprocessV6(doc.id)}
+                                disabled={processingDocId === doc.id}
+                              >
+                                Tentar novamente
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-5 px-1.5 text-[10px]"
+                                onClick={() => {
+                                  deleteDocument(doc.id, doc.storage_path);
+                                }}
+                              >
+                                Substituir arquivo
+                              </Button>
+                            </div>
+                          </div>
                         )}
                       </TableCell>
                       <TableCell className="text-center">
@@ -1031,15 +1076,13 @@ export function DocumentsManager({
                       </TableCell>
                       <TableCell className="text-center">
                         {doc.ocr_confidence ? (
-                          <div className="flex items-center justify-center gap-1">
-                            <Percent className="h-3 w-3 text-muted-foreground" />
-                            <span className={`font-medium ${
-                              doc.ocr_confidence >= 0.9 ? "text-green-600" :
-                              doc.ocr_confidence >= 0.7 ? "text-yellow-600" : "text-destructive"
-                            }`}>
-                              {Math.round(doc.ocr_confidence * 100)}
-                            </span>
-                          </div>
+                          <span className={`text-xs font-medium ${
+                            doc.ocr_confidence >= 0.86 ? "text-emerald-700" :
+                            doc.ocr_confidence >= 0.60 ? "text-amber-700" : "text-rose-700"
+                          }`}>
+                            {doc.ocr_confidence >= 0.86 ? "OK" :
+                             doc.ocr_confidence >= 0.60 ? "Conferir" : "Refazer"}
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}

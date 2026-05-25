@@ -59,7 +59,6 @@ export function ConfidenceBadge({ score }: Props) {
             <Badge variant="outline" className={`gap-1 text-[10px] ${styles.tone}`}>
               {styles.icon}
               <span>{styles.label}</span>
-              <span className="font-mono opacity-70">{score.score}/100</span>
             </Badge>
           </TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-md">
