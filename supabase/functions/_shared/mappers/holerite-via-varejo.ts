@@ -17,7 +17,7 @@
  *
  * Calibrado com texto REAL produzido pelo `extrairGeometrico` (unpdf) em
  * produção — não fixture sintética. Dados coletados via instrumentação
- * R3 do `process-document-mistral` v15.
+ * R3 do `process-document-ocr` v15.
  */
 
 import type { CelulaTabular, DocumentoTabular, TabelaDetectada } from '../documento-tabular.ts';

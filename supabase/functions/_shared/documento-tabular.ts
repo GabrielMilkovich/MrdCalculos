@@ -6,7 +6,7 @@
  * documento com metadados e tabelas posicionadas.
  *
  * Construído A PARTIR DE TEXTO NATIVO + COORDENADAS extraídas do PDF
- * (pdfjs-dist em Deno). NÃO depende de OCR Mistral — é justamente o que
+ * (pdfjs-dist em Deno). NÃO depende de OCR Claude — é justamente o que
  * a v6 introduz: parar de descartar a informação espacial que o PDF do
  * PJe já tem embutida.
  */
@@ -18,7 +18,7 @@ export interface DocumentoTabular {
   paginas: PaginaTabular[];
   /** Texto livre concatenado (mappers que preferem regex sobre texto plano). */
   textoCompleto: string;
-  /** Provider que extraiu: 'pdfjs_geometric' | 'pdftotext' | 'mistral_ocr'. */
+  /** Provider que extraiu: 'pdfjs_geometric' | 'pdftotext' | 'claude-vision'. */
   extractor: string;
   /** Metadados de qualidade. */
   qualidade: {

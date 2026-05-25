@@ -4,9 +4,9 @@
 // Pipeline V6 compartilhado: extrator geométrico (pdfjs/unpdf) → escolha
 // de mapper → mapeamento → telemetria estruturada.
 //
-// Extraído de `process-document-mistral/index.ts` em 2026-05-20 para que
+// Extraído de `process-document-ocr/index.ts` em 2026-05-20 para que
 // `ocr-document/index.ts` (e qualquer outra edge function que decida
-// processar PDFs no futuro) possa tentar V6 antes de cair pro Mistral OCR.
+// processar PDFs no futuro) possa tentar V6 antes de cair pro Claude Vision.
 //
 // CONTRATO: este módulo NÃO faz side-effects — devolve a tentativa pra o
 // caller decidir o que fazer (gravar success no banco, gravar metadata
@@ -16,10 +16,10 @@
 //   - Diagnóstico via 4 queries em xhvlhrgfoeahgofhljbs (2026-05-20) mostrou
 //     que 42/46 docs nos últimos 90 dias pularam V6 porque o frontend
 //     chama `ocr-document` em 7 callsites e só 1 callsite (`process-
-//     document-mistral`) tentava V6. Esse arquivo permite plugar V6 em
+//     document-claude`) tentava V6. Esse arquivo permite plugar V6 em
 //     todos os callers sem duplicar código.
 //   - O comportamento aqui é IDÊNTICO ao que vivia em
-//     `process-document-mistral/index.ts:66-188` antes da extração.
+//     `process-document-ocr/index.ts:66-188` antes da extração.
 //     Qualquer alteração de comportamento deve ser feita aqui (centralizada)
 //     e propagada por testes em produção via re-upload de PDFs.
 

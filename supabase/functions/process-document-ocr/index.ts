@@ -1,5 +1,5 @@
 // =====================================================
-// EDGE FUNCTION: PIPELINE COMPLETO PÓS-UPLOAD (V6 + Mistral fallback)
+// EDGE FUNCTION: PIPELINE COMPLETO PÓS-UPLOAD (V6 + Claude fallback)
 // =====================================================
 // Chamado pelo DocumentsManager do frontend após cada upload.
 // Orquestra:
@@ -9,12 +9,12 @@
 //      para chunk-and-embed (R2 — embeddings continuam gerados).
 //      Quando falha: registra outcome estruturado em metadata e segue para
 //      o caminho V5.
-//   1. ocr-document  → Mistral OCR (apenas se V6 não conseguiu).
+//   1. ocr-document  → Claude OCR (apenas se V6 não conseguiu).
 //   2. chunk-and-embed → divide texto em chunks + gera embeddings OpenAI.
 //
 // IDEMPOTÊNCIA (R1): se o doc já tem `parsed_by != null` (V6 já rodou
 // numa execução anterior — ex: reprocess-v6, ou retry da própria função),
-// pulamos V6 + Mistral e vamos direto para chunk-and-embed (se necessário).
+// pulamos V6 + Claude e vamos direto para chunk-and-embed (se necessário).
 //
 // LOG ESTRUTURADO (R3): metadata.v6_outcome assume 5+ valores discretos
 // pra alimentar o painel de telemetria sem arqueologia.
@@ -22,7 +22,7 @@
 // Mudanças vs versão anterior:
 //   - V6 plugado ao fluxo real (antes era só process-document-start, que
 //     nenhum cliente chamava — era código zumbi).
-//   - Mistral só roda quando V6 falha (PDF escaneado, mapper genérico, etc.).
+//   - Claude só roda quando V6 falha (PDF escaneado, mapper genérico, etc.).
 //   - chunk-and-embed continua disparado em ambos os caminhos (R2).
 // =====================================================
 
@@ -54,7 +54,7 @@ serve(async (req) => {
 
     // ===== R1: Idempotência =====
     // Buscar o documento ANTES de qualquer processamento. Se V6 já rodou
-    // numa chamada anterior (parsed_by != null), pulamos V6 + Mistral
+    // numa chamada anterior (parsed_by != null), pulamos V6 + Claude
     // e vamos direto para chunk-and-embed (se ainda não tiver embeddings).
     const { data: doc, error: docErr } = await supabase
       .from("documents")
@@ -69,7 +69,7 @@ serve(async (req) => {
 
     if (doc.parsed_by) {
       // V6 já consolidou em chamada anterior. Apenas garante chunk-and-embed.
-      console.log(`[pipeline] doc ${document_id}: idempotência — parsed_by=${doc.parsed_by}, skip V6+Mistral`);
+      console.log(`[pipeline] doc ${document_id}: idempotência — parsed_by=${doc.parsed_by}, skip V6+Claude`);
       const textoExistente = (doc.ocr_text as string | null) ?? "";
       if (textoExistente.length >= 20) {
         const { data: chunkData, error: chunkError } = await supabase.functions.invoke(
@@ -88,15 +88,15 @@ serve(async (req) => {
           message: `Documento já processado por V6 (${doc.parsed_by}) — pipeline pulado.`,
         });
       }
-      // Sem texto — cai pra Mistral mesmo (defesa: V6 deveria ter populado ocr_text).
+      // Sem texto — cai pra Claude mesmo (defesa: V6 deveria ter populado ocr_text).
     }
 
-    // ===== G0: Tenta caminho V6 antes do Mistral =====
+    // ===== G0: Tenta caminho V6 antes do Claude =====
     let v6: V6Tentativa | null = null;
     if (doc.mime_type === "application/pdf") {
       const { data: signed } = await supabase.storage
         .from("juriscalculo-documents")
-        .createSignedUrl(doc.storage_path, 1800); // 30min — Mistral OCR pode demorar
+        .createSignedUrl(doc.storage_path, 1800); // 30min — Claude OCR pode demorar
       if (signed?.signedUrl) {
         v6 = await tentarV6(doc, signed.signedUrl, supabase);
         console.log(
@@ -124,7 +124,7 @@ serve(async (req) => {
             .eq("id", document_id);
 
           // R2: embeddings continuam gerados, mas com texto LIMPO do extrator
-          // (nada de markdown sujo do Mistral). Custo OpenAI menor + qualidade
+          // (nada de markdown sujo do Claude). Custo OpenAI menor + qualidade
           // de RAG maior.
           const { data: chunkData, error: chunkError } = await supabase.functions.invoke(
             "chunk-and-embed",
@@ -157,7 +157,7 @@ serve(async (req) => {
               quality_reason: v6.qualidadeRazao,
             },
             chunking: chunkData,
-            message: `V6 extraiu via ${v6.mapper} (${v6.pageCount} pg) — sem Mistral. ${chunkData?.chunks_created ?? "?"} chunks gerados.`,
+            message: `V6 extraiu via ${v6.mapper} (${v6.pageCount} pg) — sem Claude. ${chunkData?.chunks_created ?? "?"} chunks gerados.`,
           });
         }
 
@@ -182,8 +182,8 @@ serve(async (req) => {
         .eq("id", document_id);
     }
 
-    // ===== Caminho V5: OCR Mistral + chunk-and-embed (mesmo de antes) =====
-    console.log(`[pipeline] doc ${document_id}: caminho V5 (Mistral) — V6 outcome=${v6?.outcome ?? "skipped"}`);
+    // ===== Caminho V5: OCR Claude + chunk-and-embed (mesmo de antes) =====
+    console.log(`[pipeline] doc ${document_id}: caminho V5 (Claude) — V6 outcome=${v6?.outcome ?? "skipped"}`);
     const { data: ocrData, error: ocrError } = await supabase.functions.invoke(
       "ocr-document",
       {
@@ -211,7 +211,7 @@ serve(async (req) => {
       },
     );
     if (chunkError) {
-      console.warn(`[pipeline] chunking falhou (OCR Mistral preservado):`, chunkError);
+      console.warn(`[pipeline] chunking falhou (OCR Claude preservado):`, chunkError);
       return jsonResponse({
         success: true,
         partial: true,
@@ -220,7 +220,7 @@ serve(async (req) => {
         v6: v6 ?? { outcome: "skipped" },
         ocr: ocrData,
         chunking_error: chunkError.message || String(chunkError),
-        message: "OCR Mistral concluído, chunking falhou. Rode chunk-and-embed novamente.",
+        message: "OCR Claude concluído, chunking falhou. Rode chunk-and-embed novamente.",
       });
     }
 

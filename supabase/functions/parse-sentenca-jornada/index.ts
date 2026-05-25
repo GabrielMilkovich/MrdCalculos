@@ -8,9 +8,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 //
 // SECRETS NECESSARIOS no Supabase:
 //   - OPENAI_API_KEY  (Settings -> Edge Functions -> Secrets)
-//   - MISTRAL_API_KEY (apenas para ocr-document/process-document-mistral)
+//   - ANTHROPIC_API_KEY (apenas para ocr-document/process-document-ocr)
 // Configurar via dashboard https://supabase.com/dashboard ou CLI:
-//   supabase secrets set OPENAI_API_KEY=sk-... MISTRAL_API_KEY=...
+//   supabase secrets set OPENAI_API_KEY=sk-... ANTHROPIC_API_KEY=...
 // =====================================================
 
 const corsHeaders = {

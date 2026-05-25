@@ -15,7 +15,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=<anon-key>
 ### Edge Functions (Supabase Dashboard > Settings > Edge Functions > Secrets)
 ```
 OPENAI_API_KEY=sk-...           # extração RAG, embeddings, ai-audit
-MISTRAL_API_KEY=...             # OCR (ocr-document, process-document-mistral)
+ANTHROPIC_API_KEY=...             # OCR (ocr-document, process-document-ocr)
 SUPABASE_SERVICE_ROLE_KEY=...   # automatic
 SUPABASE_URL=...                # automatic
 ```
@@ -28,7 +28,7 @@ SUPABASE_URL=...                # automatic
 
 **CHECKLIST de deploy inicial:**
 - [ ] `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` configurados
-- [ ] `OPENAI_API_KEY` e `MISTRAL_API_KEY` no Dashboard Edge Functions
+- [ ] `OPENAI_API_KEY` e `ANTHROPIC_API_KEY` no Dashboard Edge Functions
 - [ ] Migrations aplicadas (`npx supabase db push`)
 - [ ] Tipos sincronizados (`npx supabase gen types typescript`)
 - [ ] Smoke teste de OCR + extração + cálculo
@@ -54,7 +54,7 @@ npx supabase functions logs ocr-document --tail
 ```
 
 **Sintoma comum:** retorno 500 silencioso → quase sempre é secret faltando.
-Verificar `OPENAI_API_KEY` / `MISTRAL_API_KEY` no Dashboard.
+Verificar `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` no Dashboard.
 
 ---
 

@@ -2,7 +2,7 @@
 // EDGE FUNCTION: INICIAR PROCESSAMENTO DE DOCUMENTO
 // =====================================================
 // V6: tenta extrator geométrico (texto nativo + coordenadas) antes de
-// agendar OCR Mistral. Quando sucesso:
+// agendar OCR Claude. Quando sucesso:
 //   - Grava resultado serializado em `parsed` (jsonb dedicada).
 //   - Grava slug do mapper em `parsed_by` (text).
 //   - Grava 'pdfjs_geometric' em `ocr_provider`.
@@ -10,7 +10,7 @@
 //   - Marca status='ocr_done' (V5 já não roda — client lê parsed).
 //
 // Falha v6 (mapper null, score baixo, exceção) → fluxo V5 continua:
-// agenda OCR Mistral, parser regex roda no client.
+// agenda OCR Claude, parser regex roda no client.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -80,8 +80,8 @@ function serializarParaParsed(resultado: any): Record<string, unknown> {
 /**
  * Caminho v6 REAL — grava em colunas dedicadas (parsed, parsed_by, ocr_provider).
  *
- * Sucesso: client lê `parsed` direto e pula o parser regex V5 + Mistral.
- * Falha:   pipeline V5 segue (Mistral OCR + regex).
+ * Sucesso: client lê `parsed` direto e pula o parser regex V5 + Claude.
+ * Falha:   pipeline V5 segue (Claude Vision + regex).
  */
 async function tentarCaminhoV6(
   // deno-lint-ignore no-explicit-any
@@ -255,7 +255,7 @@ serve(async (req) => {
       .eq("id", document_id);
 
     // V6 — caminho real. Quando sucesso, grava parsed + parsed_by + ocr_provider
-    // + ocr_text. Pipeline V5 (Mistral) é PULADO pelo client (vê parsed != null).
+    // + ocr_text. Pipeline V5 (Claude) é PULADO pelo client (vê parsed != null).
     let v6Resultado = { tentado: false, sucesso: false, mapper: undefined as string | undefined };
     if (PDF_MIME_TYPES.includes(mimeType)) {
       v6Resultado = await tentarCaminhoV6(
@@ -269,7 +269,7 @@ serve(async (req) => {
     return jsonResponse({
       success: true,
       document_id,
-      // V6 sucesso já marcou status='ocr_done'; senão segue para Mistral
+      // V6 sucesso já marcou status='ocr_done'; senão segue para Claude
       status: v6Resultado.sucesso ? "ocr_done" : newStatus,
       process_type: processType,
       mime_type: mimeType,
@@ -277,7 +277,7 @@ serve(async (req) => {
       v6_success: v6Resultado.sucesso,
       v6_mapper: v6Resultado.mapper,
       message: v6Resultado.sucesso
-        ? `V6 extraiu via ${v6Resultado.mapper} — pipeline pronto, sem Mistral.`
+        ? `V6 extraiu via ${v6Resultado.mapper} — pipeline pronto, sem Claude.`
         : `Processing started. Type: ${processType}. Call ocr-document to continue.`,
     });
   } catch (error) {

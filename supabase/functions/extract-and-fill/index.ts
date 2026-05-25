@@ -1,6 +1,6 @@
 // =====================================================
 // EDGE FUNCTION: EXTRACT-AND-FILL
-// OCR via Mistral API + Extração Estruturada via OpenAI
+// OCR via Claude API + Extração Estruturada via OpenAI
 // Auto-Preenchimento PJe-Calc
 // =====================================================
 // IMPROVEMENTS v2:
@@ -13,7 +13,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { ocrBytes } from "../_shared/mistral-ocr.ts";
+import { ocrBytes } from "../_shared/claude-vision-ocr.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -954,35 +954,26 @@ PARA CARTÃO DE PONTO:
 O campo texto_ocr_completo DEVE conter o texto integral do documento.`;
 
 // =====================================================
-// STAGE 1: Mistral OCR
+// STAGE 1: Claude Vision OCR
 // =====================================================
 
-async function mistralOcrPdfFromBytes(
+async function claudeOcrPdfFromBytes(
   pdfBytes: Uint8Array,
-  mistralApiKey: string,
+  anthropicApiKey: string,
   filename: string = "document.pdf"
 ): Promise<string> {
-  // Pipeline Mistral OCR (padrão comprovado em produção n8n):
-  //   1. POST /v1/files purpose=ocr  → file_id
-  //   2. GET  /v1/files/{id}/url      → signed URL do Mistral (expiry=1h)
-  //   3. POST /v1/ocr document_url    → pages markdown
-  //   4. DELETE /v1/files/{id}        (cleanup async)
-  //
-  // NÃO passa document_url apontando para Supabase — Mistral teria de baixar
-  // da Supabase a cada call, somando latência de TLS+download remoto.
   if (pdfBytes.byteLength === 0) throw new Error("PDF vazio");
-  if (pdfBytes.byteLength > 50 * 1024 * 1024) {
-    throw new Error(`PDF muito grande: ${(pdfBytes.byteLength / 1024 / 1024).toFixed(1)}MB (limite Mistral: 50MB)`);
+  if (pdfBytes.byteLength > 30 * 1024 * 1024) {
+    throw new Error(`PDF muito grande: ${(pdfBytes.byteLength / 1024 / 1024).toFixed(1)}MB (limite: 30MB)`);
   }
 
   const result = await ocrBytes(pdfBytes, filename, {
-    apiKey: mistralApiKey,
-    model: "mistral-ocr-latest",
+    apiKey: anthropicApiKey,
     timeoutMs: 180_000,
     maxRetries: 3,
     retryBaseMs: 1500,
   });
-  console.log(`[OCR] Mistral retornou ${result.pages.length} páginas`);
+  console.log(`[OCR] Claude retornou ${result.pages.length} páginas`);
 
   const fullText = result.pages
     .map((p) => p.markdown || "")
@@ -993,49 +984,52 @@ async function mistralOcrPdfFromBytes(
   return fullText;
 }
 
-async function mistralOcrImage(
+async function claudeOcrImage(
   base64Data: string,
   mimeType: string,
-  mistralApiKey: string
+  anthropicApiKey: string
 ): Promise<string> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    console.log(`[OCR] Mistral chat attempt ${attempt} (image)`);
+    console.log(`[OCR] Claude vision attempt ${attempt} (image)`);
     try {
-      const response = await fetch("https://api.mistral.ai/v1/chat/completions", {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${mistralApiKey}`,
+          "x-api-key": anthropicApiKey,
+          "anthropic-version": "2023-06-01",
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "mistral-small-latest",
+          model: "claude-sonnet-4-6-20250514",
+          max_tokens: 16000,
           messages: [{
             role: "user",
             content: [
+              { type: "image", source: { type: "base64", media_type: mimeType, data: base64Data } },
               { type: "text", text: "Extraia TODO o texto deste documento trabalhista brasileiro. Preserve a formatação de tabelas, valores monetários e datas exatamente como aparecem. Inclua TODAS as linhas, colunas e dados sem omitir nada. Retorne apenas o texto extraído, sem comentários." },
-              { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Data}` } },
             ],
           }],
-          max_tokens: 16000,
-          temperature: 0,
         }),
       });
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error(`[OCR] Mistral ${response.status}:`, errText.substring(0, 200));
+        console.error(`[OCR] Claude ${response.status}:`, errText.substring(0, 200));
         if (response.status === 429) { await delay(RETRY_DELAY_MS * attempt * 3); continue; }
-        lastError = new Error(`Mistral OCR ${response.status}`);
+        lastError = new Error(`Claude OCR ${response.status}`);
         if (response.status >= 500) { await delay(RETRY_DELAY_MS * attempt); continue; }
         break;
       }
 
       const data = await response.json();
-      const text = data.choices?.[0]?.message?.content || "";
+      const text = (data.content || [])
+        .filter((b: { type: string }) => b.type === "text")
+        .map((b: { text: string }) => b.text)
+        .join("\n");
       if (text.length > 50) {
-        console.log(`[OCR] Mistral success: ${text.length} chars`);
+        console.log(`[OCR] Claude success: ${text.length} chars`);
         return text;
       }
       lastError = new Error("OCR returned too little text");
@@ -1045,7 +1039,7 @@ async function mistralOcrImage(
       await delay(RETRY_DELAY_MS * attempt);
     }
   }
-  throw new Error(`Mistral OCR failed: ${lastError?.message}`);
+  throw new Error(`Claude OCR failed: ${lastError?.message}`);
 }
 
 // =====================================================
@@ -1058,7 +1052,7 @@ async function extractStructured(
   fileName?: string | null,
 ): Promise<any> {
   // Separação de responsabilidades:
-  //   - Mistral OCR: apenas OCR (PDF → texto)
+  //   - Claude Vision: apenas OCR (PDF → texto)
   //   - OpenAI Chat: extração estruturada via function calling
   //
   // Cascata: gpt-4o-mini (rápido ~3-5s, custo baixo) → gpt-4o (fallback).
@@ -1904,7 +1898,7 @@ async function processDocumentInBackground(
   document_id: string,
   _fileUrl: string,
   doc: any,
-  _MISTRAL_API_KEY: string,
+  _ANTHROPIC_API_KEY: string,
   OPENAI_API_KEY: string,
   supabase: any,
   ocrTextOverride?: string,
@@ -2168,11 +2162,11 @@ serve(async (req) => {
       );
     };
 
-    const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
-    if (!MISTRAL_API_KEY) {
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) {
       return bail400({
-        error: "MISTRAL_API_KEY não configurada no Supabase",
-        hint: "Adicione a secret MISTRAL_API_KEY (usada para OCR) em Edge Functions → Secrets.",
+        error: "ANTHROPIC_API_KEY não configurada no Supabase",
+        hint: "Adicione a secret ANTHROPIC_API_KEY (usada para OCR via Claude Vision) em Edge Functions → Secrets.",
       });
     }
 
@@ -2205,7 +2199,7 @@ serve(async (req) => {
       for (const bucket of ["juriscalculo-documents", "case-documents"]) {
         const { data: signed } = await supabase.storage
           .from(bucket)
-          .createSignedUrl(doc.storage_path, 1800); // 30min para processamento longo (Mistral + extração)
+          .createSignedUrl(doc.storage_path, 1800); // 30min para processamento longo (Claude + extração)
         if (signed?.signedUrl) {
           fileUrl = signed.signedUrl;
           break;
@@ -2232,13 +2226,13 @@ serve(async (req) => {
     // SÍNCRONO (commit pós-OCR-rewrite): EdgeRuntime.waitUntil mata tasks
     // de background silenciosamente quando o pool de isolates é reciclado,
     // deixando docs em status='extracting' indefinidamente. Roda inline.
-    // Mistral + OpenAI typical 15-60s; edge timeout 150s tem folga.
+    // Claude + OpenAI typical 15-60s; edge timeout 150s tem folga.
     try {
       const result = await processDocumentInBackground(
         document_id!,
         fileUrl,
         doc,
-        MISTRAL_API_KEY,
+        ANTHROPIC_API_KEY,
         OPENAI_API_KEY,
         supabase,
         ocr_text_override,
