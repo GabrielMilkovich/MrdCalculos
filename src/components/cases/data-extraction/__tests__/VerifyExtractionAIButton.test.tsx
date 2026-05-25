@@ -68,8 +68,8 @@ describe("VerifyExtractionAIButton — smoke", () => {
       />,
     );
 
-    // 1. Click no botão "Verificar com IA" (abre popover)
-    fireEvent.click(screen.getByRole("button", { name: /Verificar com IA/i }));
+    // 1. Click no botão "Sugestões da IA" (abre popover)
+    fireEvent.click(screen.getByRole("button", { name: /Sugestões da IA/i }));
 
     // 2. Click no "Iniciar análise" dentro do popover
     const iniciarBtn = await screen.findByRole("button", {

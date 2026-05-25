@@ -297,12 +297,7 @@ export function VerifyExtractionAIButton({
             : tooltipForaFaixa}
         >
           <Sparkles className="h-3.5 w-3.5" />
-          Verificar com IA
-          {dentroDaFaixa && (
-            <Badge variant="secondary" className="h-4 px-1 text-[10px] ml-1">
-              {score}/100
-            </Badge>
-          )}
+          Sugestões da IA
         </Button>
       </PopoverTrigger>
       <PopoverContent

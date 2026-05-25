@@ -13,7 +13,7 @@
  * Confirmação: 1 download = 1 ZIP com 2 CSVs (ferias + faltas) + LEIA-ME.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, ClipboardX, Download, FileText, Loader2 } from "lucide-react";
+import { Calendar, ClipboardX, Download, FileText, Loader2, MoreHorizontal } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -37,12 +37,19 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { CsvBuildReportPanel } from "./CsvBuildReportPanel";
+import { DetalhesTecnicos } from "./DetalhesTecnicos";
 import { FeriasReviewDialog } from "./FeriasReviewDialog";
 import { FaltasReviewDialog } from "./FaltasReviewDialog";
 import {
   type AIInteractionResult,
 } from "./VerifyExtractionAIButton";
 import { VerifyParityForenseButton } from "./VerifyParityForenseButton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { validarCtps } from "@/features/data-extraction/validators/ctps-validator";
 import {
@@ -210,19 +217,32 @@ export function CtpsReviewDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="w-[96vw] max-w-[1100px] max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader className="space-y-1">
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Conferir carteira de trabalho
-              <VerifyParityForenseButton
-                documentId={documentId}
-                builder="ctps"
-                parsed={{ ferias: feriasParsed, faltas: faltasParsed }}
-                pdfDisponivel={!!documentId}
-              />
-            </DialogTitle>
+            <div className="flex items-start justify-between gap-2">
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Conferir carteira de trabalho
+              </DialogTitle>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild className="p-0">
+                    <VerifyParityForenseButton
+                      documentId={documentId}
+                      builder="ctps"
+                      parsed={{ ferias: feriasParsed, faltas: faltasParsed }}
+                      pdfDisponivel={!!documentId}
+                    />
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <DialogDescription className="text-xs">
-              Este documento contém <strong>férias</strong> e <strong>faltas</strong>.
-              Revise cada aba separadamente antes de confirmar.
+              Dados encontrados: <strong>{feriasParsed.ferias.length}</strong> período(s) de férias e <strong>{faltasParsed.faltas.length}</strong> registro(s) de faltas.
+              Revise cada aba antes de confirmar.
             </DialogDescription>
           </DialogHeader>
 
@@ -282,38 +302,52 @@ export function CtpsReviewDialog({
 
             <TabsContent value="ferias" className="flex-1 min-h-0 mt-3 space-y-2">
               <SecaoResumo
-                titulo="Férias encontradas"
+                titulo="Férias"
                 qtd={feriasParsed.ferias.length}
                 etiqueta="período(s)"
                 onEditar={() => setFeriasOpen(true)}
                 vazio={
                   feriasParsed.ferias.length === 0
-                    ? "Nenhum período de férias foi encontrado. Se este documento contém férias, adicione manualmente."
+                    ? "Nenhum período de férias detectado neste documento. Se houver férias registradas, adicione manualmente."
                     : null
                 }
               />
-              {feriasParsed.warnings.length > 0 && (
-                <ListaAvisos itens={feriasParsed.warnings} />
-              )}
             </TabsContent>
 
             <TabsContent value="faltas" className="flex-1 min-h-0 mt-3 space-y-2">
               <SecaoResumo
-                titulo="Faltas encontradas"
+                titulo="Faltas"
                 qtd={faltasParsed.faltas.length}
                 etiqueta="registro(s)"
                 onEditar={() => setFaltasOpen(true)}
                 vazio={
                   faltasParsed.faltas.length === 0
-                    ? "Nenhuma falta foi encontrada. Se este documento contém faltas, adicione manualmente."
+                    ? "Nenhuma falta detectada neste documento. Se houver faltas registradas, adicione manualmente."
                     : null
                 }
               />
-              {faltasParsed.warnings.length > 0 && (
-                <ListaAvisos itens={faltasParsed.warnings} />
-              )}
             </TabsContent>
           </Tabs>
+
+          <DetalhesTecnicos
+            items={[
+              { label: "Confiança (férias)", value: `${confidenceFerias.score}/100` },
+              { label: "Confiança (faltas)", value: `${confidenceFaltas.score}/100` },
+              ...(feriasParsed.warnings.length > 0 ? [{ label: "Observações férias", value: feriasParsed.warnings.length }] : []),
+              ...(faltasParsed.warnings.length > 0 ? [{ label: "Observações faltas", value: faltasParsed.warnings.length }] : []),
+            ]}
+          >
+            {(feriasParsed.warnings.length > 0 || faltasParsed.warnings.length > 0) && (
+              <div className="text-xs space-y-1">
+                {feriasParsed.warnings.map((w, i) => (
+                  <p key={`f-${i}`} className="text-muted-foreground">· {w}</p>
+                ))}
+                {faltasParsed.warnings.map((w, i) => (
+                  <p key={`a-${i}`} className="text-muted-foreground">· {w}</p>
+                ))}
+              </div>
+            )}
+          </DetalhesTecnicos>
 
           <DialogFooter className="pt-2 border-t gap-2">
             <Button

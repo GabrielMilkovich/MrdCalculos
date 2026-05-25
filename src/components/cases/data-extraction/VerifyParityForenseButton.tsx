@@ -92,7 +92,7 @@ export function VerifyParityForenseButton({
               ) : (
                 <Sparkles className="h-3 w-3" />
               )}
-              {hook.estado === 'running' ? 'Analisando...' : 'Paridade IA'}
+              {hook.estado === 'running' ? 'Analisando...' : 'Conferir com IA'}
             </Button>
           </TooltipTrigger>
           {!pdfDisponivel && (
