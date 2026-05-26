@@ -347,7 +347,7 @@ export function DocumentOcrValidation({
     }
   }, [selected, editedText, dirty, loadDocs, onValidated]);
 
-  const validatedCount = docs.filter((d) => d.ocr_validated).length;
+  const validatedCount = docs.filter((d) => d.ocr_validated || (d.ocr_text && d.ocr_text.length > 20)).length;
   const ocrReadyCount = docs.filter((d) => d.ocr_text && (d.ocr_text.length >= 20)).length;
   const allValidated = docs.length > 0 && validatedCount === docs.length;
 
@@ -431,7 +431,7 @@ export function DocumentOcrValidation({
                       {doc.page_count ? ` · ${doc.page_count} pg` : ""}
                     </div>
                   </div>
-                  {(showExtractionTypeSelector || showExtractionTypeBadges) && doc.ocr_validated && (
+                  {(showExtractionTypeSelector || showExtractionTypeBadges) && hasOcr && (
                     <div onClick={(e) => e.stopPropagation()} className="flex-shrink-0">
                       {showExtractionTypeBadges ? (
                         <ExtractionTypeBadgeAndSelect
@@ -463,12 +463,10 @@ export function DocumentOcrValidation({
                       )}
                     </div>
                   )}
-                  {doc.ocr_validated ? (
+                  {doc.ocr_validated || hasOcr ? (
                     <Badge variant="default" className="gap-1 bg-green-600 text-[10px]">
                       <CheckCircle2 className="h-3 w-3" /> Conferido
                     </Badge>
-                  ) : hasOcr ? (
-                    <Badge variant="secondary" className="text-[10px]">Conferir</Badge>
                   ) : doc.status === "ocr_running" ? (
                     <Badge variant="outline" className="gap-1 text-[10px]">
                       <Loader2 className="h-3 w-3 animate-spin" /> Processando...
@@ -572,14 +570,17 @@ export function DocumentOcrValidation({
                 {selected.ocr_text ? "Tentar novamente" : "Processar documento"}
               </Button>
               <div className="flex-1" />
-              <Button
-                size="sm"
-                onClick={confirmOcr}
-                disabled={savingId === selected.id || editedText.trim().length < 20}
-              >
-                <CheckCircle2 className="h-4 w-4 mr-1" />
-                Confirmar leitura
-              </Button>
+              {!selected.ocr_validated && selected.ocr_text && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={confirmOcr}
+                  disabled={savingId === selected.id || editedText.trim().length < 20}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                  Confirmar leitura
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
