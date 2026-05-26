@@ -39,6 +39,7 @@ export type V6Outcome =
   | "score_below_threshold"    // extrator extraiu, qualidade < 0.7
   | "no_mapper_matched"        // nenhum mapper aceitou o doc
   | "mapper_returned_null"     // mapper aceitou mas mapear() retornou null
+  | "pdf_too_large_for_v6"    // PDF > 5MB, skip pra Mistral (OOM prevention)
   | "exception";               // erro não previsto no try/catch
 
 export interface V6Tentativa {
@@ -103,6 +104,15 @@ export async function tentarV6(
     const bytes = await baixarBytes(signedUrl);
     if (!bytes) {
       return { outcome: "pdf_download_failed" };
+    }
+    // PDFs >5MB estouraram memória no plano Free (150MB limit).
+    // Cartão de ponto 63pg = ~8MB → OOM no pdfjs. Skip V6, cai pro Mistral.
+    const MAX_V6_BYTES = 5 * 1024 * 1024;
+    if (bytes.length > MAX_V6_BYTES) {
+      return {
+        outcome: "pdf_too_large_for_v6",
+        errorMessage: `PDF ${(bytes.length / 1024 / 1024).toFixed(1)}MB > ${MAX_V6_BYTES / 1024 / 1024}MB limit V6 — skip pra Mistral OCR`,
+      } as V6Tentativa;
     }
     const docTab = await extrairGeometrico(bytes);
     if (!docTab) {
