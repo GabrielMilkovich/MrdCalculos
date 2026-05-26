@@ -19,7 +19,8 @@ export type TipoDocumentoMapper =
   | 'holerite'
   | 'recibo_ferias'
   | 'registro_faltas'
-  | 'ctps';
+  | 'ctps'
+  | 'ficha_financeira';
 
 export interface DeteccaoMapper {
   /** True quando o mapper se aplica ao documento. */
