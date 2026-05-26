@@ -44,13 +44,7 @@ export type CategoriaSlug =
   | 'minimo_garantido'
   | 'salario_familia';
 
-export type GozoPeriodo = {
-  inicio: string; // dd/MM/yyyy
-  fim: string;
-  dobra: boolean;
-};
-
-export type SituacaoFerias = 'G' | 'GP' | 'NG' | 'I' | 'P';
+export type { GozoPeriodo, SituacaoFerias } from '@/lib/ctps/core';
 
 /** Nível de confiança da auto-detecção de tipo de extração. */
 export type ConfiancaAuto = 'alta' | 'media' | 'baixa';
