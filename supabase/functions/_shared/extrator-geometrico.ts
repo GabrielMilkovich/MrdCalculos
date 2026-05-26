@@ -244,9 +244,15 @@ export async function extrairGeometrico(
     return null;
   }
 
-  let doc: { numPages: number; getPage: (n: number) => Promise<unknown> };
+  // deno-lint-ignore no-explicit-any
+  let doc: any;
   try {
-    doc = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise;
+    doc = await pdfjs.getDocument({
+      data: bytes,
+      disableWorker: true,
+      useSystemFonts: true,
+      isEvalSupported: false,
+    }).promise;
   } catch {
     return null;
   }
@@ -255,7 +261,7 @@ export async function extrairGeometrico(
   for (let i = 1; i <= doc.numPages; i++) {
     // deno-lint-ignore no-explicit-any
     const pagina = (await doc.getPage(i)) as any;
-    const content = await pagina.getTextContent();
+    const content = await pagina.getTextContent({ includeMarkedContent: false, disableNormalization: true });
     const viewport = pagina.getViewport({ scale: 1.0 });
 
     // deno-lint-ignore no-explicit-any
@@ -276,7 +282,11 @@ export async function extrairGeometrico(
     const textoPlano = linhas.map((l) => linhaParaTextoPlano(l)).join('\n');
 
     paginas.push({ numero: i, textos, tabelas, textoPlano });
+    // deno-lint-ignore no-explicit-any
+    (pagina as any).cleanup?.();
   }
+
+  try { await doc.destroy?.(); } catch { /* ignore */ }
 
   const textoCompleto = paginas
     .map((p) => p.textoPlano)
