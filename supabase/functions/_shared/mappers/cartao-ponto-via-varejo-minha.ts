@@ -51,7 +51,9 @@ import type {
   MarcacaoDominio,
   OcorrenciaDominio,
   ParseCartaoPontoResultDominio,
+  TipoAlertaApuracao,
 } from '../tipos-dominio.ts';
+import { detectarAlertas as detectarAlertasFn } from '../heuristicas/alertas-apuracao.ts';
 
 const PARSER_VERSION = 'cartao-ponto-via-varejo-minha-mapper-v1-2026-05-22';
 
@@ -359,9 +361,9 @@ function processarTabela(
       eventos: [],
       observacao,
     };
+    const alertasDetectados = detectarAlertasFn(apuracao.marcacoes, [observacao, resultadoTxt, ajustesTxt]);
+    if (alertasDetectados.length > 0) apuracao.alertas = alertasDetectados;
 
-    // Dedup interno: mesma data pode aparecer em múltiplas tabelas (PDFs
-    // que dividem mês entre páginas). Prevalece quem tem mais batidas reais.
     const existente = apuracoesPorData.get(dataIso);
     if (!existente) {
       apuracoesPorData.set(dataIso, apuracao);
@@ -536,16 +538,18 @@ function processarTextoPlanoFallback(
     if (!sobrescrever) continue;
     const ehNovo = existente === undefined;
 
-    apuracoesPorData.set(dataIso, {
+    const apFallback: ApuracaoDominio = {
       data: dataIso,
       dia_semana: diaSemana,
       ocorrencia,
       marcacoes: marcacoes.slice(0, 6),
       eventos: [],
       observacao,
-    });
+    };
+    const alertasFb = detectarAlertasFn(apFallback.marcacoes, [observacao, resto]);
+    if (alertasFb.length > 0) apFallback.alertas = alertasFb;
+    apuracoesPorData.set(dataIso, apFallback);
 
-    // Só incrementa competência se for data NOVA (não substituição)
     if (ehNovo) {
       const k = `${mm}/${yyyy}`;
       competencias.set(k, (competencias.get(k) ?? 0) + 1);
@@ -602,7 +606,19 @@ function mapear(doc: DocumentoTabular): ParseCartaoPontoResultDominio | null {
     warnings,
     unparsed_lines: [],
     parser_version: PARSER_VERSION,
+    alertas_summary: agregarAlertasMinha(apuracoes),
   };
+}
+
+function agregarAlertasMinha(apuracoes: ApuracaoDominio[]) {
+  let total = 0;
+  const porTipo: Record<TipoAlertaApuracao, number> = { BATIDAS_IMPARES: 0, RELOGIO_QUEBRADO: 0 };
+  for (const a of apuracoes) {
+    if (!a.alertas || a.alertas.length === 0) continue;
+    total++;
+    for (const al of a.alertas) porTipo[al.tipo]++;
+  }
+  return total === 0 ? undefined : { total_apuracoes_com_alerta: total, por_tipo: porTipo };
 }
 
 export const mapperCartaoViaVarejoMinha: Mapper<ParseCartaoPontoResultDominio> = {

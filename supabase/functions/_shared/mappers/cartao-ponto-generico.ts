@@ -19,6 +19,8 @@ import type {
   ParseCartaoPontoResultDominio,
 } from '../tipos-dominio.ts';
 import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
+import { detectarAlertas as detectarAlertasFn } from '../heuristicas/alertas-apuracao.ts';
+import type { TipoAlertaApuracao } from '../tipos-dominio.ts';
 
 const PARSER_VERSION = 'cartao-ponto-generico-mapper-v7-2026-05-20';
 
@@ -162,14 +164,17 @@ export const mapperCartaoGenerico: Mapper<ParseCartaoPontoResultDominio> = {
       if (marcacoes.length === 0 && ocorrencia === 'NORMAL') continue;
 
       const dataIso = `${yyyy}-${mm}-${dd}`;
-      apuracoes.push({
+      const apGen: ApuracaoDominio = {
         data: dataIso,
         dia_semana: diaSemana,
         ocorrencia,
         marcacoes,
         eventos: [],
         observacao: null,
-      });
+      };
+      const alertasGen = detectarAlertasFn(apGen.marcacoes, [linha]);
+      if (alertasGen.length > 0) apGen.alertas = alertasGen;
+      apuracoes.push(apGen);
       const k = `${mm}/${yyyy}`;
       competencias.set(k, (competencias.get(k) ?? 0) + 1);
     }
@@ -201,6 +206,16 @@ export const mapperCartaoGenerico: Mapper<ParseCartaoPontoResultDominio> = {
       warnings,
       unparsed_lines: [],
       parser_version: PARSER_VERSION,
+      alertas_summary: (() => {
+        let total = 0;
+        const porTipo: Record<TipoAlertaApuracao, number> = { BATIDAS_IMPARES: 0, RELOGIO_QUEBRADO: 0 };
+        for (const a of final) {
+          if (!a.alertas || a.alertas.length === 0) continue;
+          total++;
+          for (const al of a.alertas) porTipo[al.tipo]++;
+        }
+        return total === 0 ? undefined : { total_apuracoes_com_alerta: total, por_tipo: porTipo };
+      })(),
     };
   },
 };

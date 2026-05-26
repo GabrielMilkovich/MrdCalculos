@@ -35,6 +35,15 @@ export interface EventoDominio {
   raw: string;
 }
 
+export type TipoAlertaApuracao = 'BATIDAS_IMPARES' | 'RELOGIO_QUEBRADO';
+
+export interface AlertaApuracao {
+  tipo: TipoAlertaApuracao;
+  severidade: 'warning' | 'info';
+  mensagem: string;
+  detalhes?: Record<string, unknown>;
+}
+
 export interface ApuracaoDominio {
   data: string;
   dia_semana: string | null;
@@ -43,6 +52,7 @@ export interface ApuracaoDominio {
   eventos: EventoDominio[];
   observacao: string | null;
   ocr_line?: number;
+  alertas?: AlertaApuracao[];
 }
 
 /**

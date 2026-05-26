@@ -23,6 +23,8 @@ import type {
   ReconciliacaoPeriodo,
 } from '../tipos-dominio.ts';
 import { detectarColunaDupla } from '../heuristicas/coluna-dupla.ts';
+import { detectarAlertas as detectarAlertasFn } from '../heuristicas/alertas-apuracao.ts';
+import type { TipoAlertaApuracao } from '../tipos-dominio.ts';
 
 const RE_DATA_BR = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}\b/;
 
@@ -611,14 +613,17 @@ function processarBloco(
     if (tipoInfo.tipo === 'feriado') ocorrencia = 'FERIADO';
     if (tipoInfo.tipo === 'dsr') ocorrencia = 'DSR';
 
-    apuracoes.push({
+    const apuracao: ApuracaoDominio = {
       data: isoFromUtc(data),
       dia_semana: tipoInfo.diaSemana,
       ocorrencia,
       marcacoes: marcacoes.slice(0, 6),
       eventos: [],
       observacao: null,
-    });
+    };
+    const alertasDetectados = detectarAlertasFn(apuracao.marcacoes, [trechoAposLabel]);
+    if (alertasDetectados.length > 0) apuracao.alertas = alertasDetectados;
+    apuracoes.push(apuracao);
   }
   return apuracoes;
 }
@@ -979,6 +984,18 @@ export const mapperCartaoViaVarejo: Mapper<ParseCartaoPontoResultDominio> = {
         }));
       })(),
       dias_classificados_descartados: diasDescartados.length > 0 ? diasDescartados : undefined,
+      alertas_summary: agregarAlertas(final),
     };
   },
 };
+
+function agregarAlertas(apuracoes: ApuracaoDominio[]) {
+  let total = 0;
+  const porTipo: Record<TipoAlertaApuracao, number> = { BATIDAS_IMPARES: 0, RELOGIO_QUEBRADO: 0 };
+  for (const a of apuracoes) {
+    if (!a.alertas || a.alertas.length === 0) continue;
+    total++;
+    for (const al of a.alertas) porTipo[al.tipo]++;
+  }
+  return total === 0 ? undefined : { total_apuracoes_com_alerta: total, por_tipo: porTipo };
+}
