@@ -5,8 +5,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./tests/setup.ts'],
     include: [
+      'src/lib/pjecalc/__tests__/golden-pjc-cases.test.ts',
       'src/lib/pjecalc/__tests__/independent-parity-analysis.test.ts',
     ],
   },

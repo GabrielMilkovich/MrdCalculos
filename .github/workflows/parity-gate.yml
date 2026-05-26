@@ -23,7 +23,7 @@ jobs:
       - run: npm ci
 
       - name: Rodar testes de paridade golden
-        run: npx vitest run src/lib/pjecalc/__tests__/golden-pjc-cases.test.ts --reporter=verbose
+        run: npx vitest run src/lib/pjecalc/__tests__/golden-pjc-cases.test.ts --reporter=verbose --config vitest.parity.config.ts
         env:
           PARITY_STRICT: 'true'
 
