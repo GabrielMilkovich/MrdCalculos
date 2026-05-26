@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { ValidationBanner } from './ValidationBanner';
@@ -191,7 +191,6 @@ export function FichaFinanceiraPreviewDialog({
           )}
 
           <ScrollArea className="flex-1 min-h-0 border rounded-md">
-            <div className="overflow-x-auto">
               <table className="w-full text-xs whitespace-nowrap">
                 <thead className="sticky top-0 bg-background z-10 border-b">
                   <tr>
@@ -289,7 +288,7 @@ export function FichaFinanceiraPreviewDialog({
                   )}
                 </tbody>
               </table>
-            </div>
+            <ScrollBar orientation="horizontal" />
           </ScrollArea>
 
           {categoriasComValor.length > 0 && (
