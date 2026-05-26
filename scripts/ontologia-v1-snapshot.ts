@@ -285,7 +285,7 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
   {
     texto_canonico: 'Com. Serv. Garantia',
     categoria: 'COMISSAO_SERVICOS',
-    sinonimos: ['Comissão Serviços Garantia', 'Com Serv Garantia'],
+    sinonimos: ['Comissão Serviços Garantia', 'Com Serv Garantia', 'COM. GARANTIA', 'Com Garantia'],
   },
   {
     texto_canonico: 'Com. Serv. Técnicos',
@@ -341,6 +341,8 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
     categoria: 'COMISSAO_SERVICOS',
     sinonimos: [
       'Camapanha',
+      'Campanha Servicos',
+      'CAMPANHA SERVICOS',
       'Campanha Geral',
       'Campanha Categorias',
       'Campanha Retira',
@@ -587,7 +589,7 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
   {
     texto_canonico: 'Média Férias',
     categoria: 'DESCONSIDERAR',
-    sinonimos: ['Media Ferias', 'Méd. Férias'],
+    sinonimos: ['Media Ferias', 'Méd. Férias', 'Media Férias'],
   },
   {
     texto_canonico: 'Salário Maternidade / Paternidade',
@@ -701,5 +703,105 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
       'Súmula 60 TST estabelece que adicional noturno integra base de DSR. ' +
       'Decisão deliberada do escritório de seguir interpretação restritiva. ' +
       'Não alterar sem reaprovação jurídica.',
+  },
+
+  // =========================================================================
+  // FICHA FINANCEIRA — Rubricas adicionadas em 2026-05-26 (Sprint Paridade FF)
+  // Origem: PDF Ficha Financeira 2016 ROQUE GUERREIRO Via Varejo
+  // =========================================================================
+  {
+    texto_canonico: 'Participação Lucros',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['Part. Lucros', 'PLR', 'Participacao Lucros'],
+    observacao_juridica: 'PLR não integra remuneração (Lei 10.101/2000 art. 3º).',
+  },
+  {
+    texto_canonico: 'Adiant. 13Sal',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['Adiantamento 13 Salário', 'Adiant 13Sal', 'Adiant. 13 Salário'],
+  },
+  {
+    texto_canonico: '13Salário 1a Parcela',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['13 Salário Primeira Parcela', '13o Salário 1a Parcela', '13Salario 1a Parcela'],
+  },
+  {
+    texto_canonico: '1/3 Adic Const Fer',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['1/3 Adic. Const. Férias', 'Um Terço Adicional Constitucional Férias', '1/3 Adic Const Ferias'],
+  },
+  {
+    texto_canonico: 'Mínimo Garantido - C',
+    categoria: 'MINIMO_GARANTIDO',
+    sinonimos: ['Mínimo Garantido Comissionado', 'Min Garantido C', 'Mínimo Garantido - Comissionista'],
+  },
+  {
+    texto_canonico: 'Insuf Saldo no Mês',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['Insuficiência Saldo Mês', 'Insuf. Saldo no Mês', 'Insuf Saldo Mes'],
+    observacao_juridica: 'Insuficiência de saldo é ajuste contábil interno — não integra remuneração.',
+  },
+  {
+    texto_canonico: 'Desc. Insuf Saldo',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['Desconto Insuficiência Saldo', 'Desc Insuf Saldo', 'Desc. Insuf. Saldo'],
+  },
+  {
+    texto_canonico: 'Diferença Média Férias',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['Dif. Média Férias', 'Diferença Média Féri', 'Dif Media Ferias'],
+  },
+  {
+    texto_canonico: 'Adiant Quinzenal',
+    categoria: 'COMISSAO_PRODUTOS',
+    sinonimos: ['Adiantamento Quinzenal', 'Adto Quinzenal', 'Adiant. Quinzenal'],
+    observacao_juridica: 'Adiantamento quinzenal = parcela de comissão antecipada; integra base.',
+  },
+  {
+    texto_canonico: 'AD.SABADO COM.25%',
+    categoria: 'COMISSAO_PRODUTOS',
+    sinonimos: ['Ad. Sábado Com. 25%', 'Adicional Sábado Comissão 25%', 'Ad Sabado Com 25'],
+  },
+  {
+    texto_canonico: '1/3 FERIAS PAGAS',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['1/3 Férias Pagas', 'Terço Férias Pagas'],
+  },
+  {
+    texto_canonico: 'Horas Extras Com 75%',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['HE Com 75%', 'Horas Extras Com 75', 'HORAS EXTRAS Com 75%'],
+    observacao_juridica: 'Horas extras desconsideradas conforme planilha do escritório.',
+  },
+  {
+    texto_canonico: 'Horas Extras Com 70%',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['HE Com 70%', 'Horas Extras Com - 7', 'Horas Extras Com 70'],
+  },
+  {
+    texto_canonico: 'ADIANTAMENTO',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['Adiantamento'],
+    observacao_juridica: 'Adiantamento puro (não-quinzenal); ajuste interno.',
+  },
+  {
+    texto_canonico: 'PLR Variavel',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['PLR Variável', 'PLR Var.'],
+  },
+  {
+    texto_canonico: 'Ajuste de Liquido',
+    categoria: 'COMISSAO_PRODUTOS',
+    sinonimos: ['Aj. de Líquido', 'Ajuste Líquido', 'Aj Liquido'],
+  },
+  {
+    texto_canonico: 'ANTECIP.PREMIO ESTIM',
+    categoria: 'PREMIO',
+    sinonimos: ['Antecip. Prêmio Estímulo', 'Antecip Premio Estim', 'Antecip. Premio Estimulo'],
+  },
+  {
+    texto_canonico: 'Media de Férias',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['Média de Férias', 'Med. Férias', 'Media de Ferias'],
   },
 ];

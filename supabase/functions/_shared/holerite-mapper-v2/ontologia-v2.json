@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "generated_at": "2026-05-23T09:59:19.970Z",
+  "generated_at": "2026-05-26T14:58:25.156Z",
   "source": "scripts/gen-ontologia-v2-from-snapshot.ts a partir de scripts/ontologia-v1-snapshot.ts + scripts/ontologia-v2-overrides.json",
   "categorias": {
     "MINIMO_GARANTIDO": {
@@ -55,6 +55,39 @@
   },
   "rubricas": [
     {
+      "alias_original": "1/3 Adic Const Fer",
+      "normalized_key": "1 3 adic const fer",
+      "aliases": [
+        "1 3 adic const fer",
+        "1 3 adic const ferias",
+        "um terco adicional constitucional ferias"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "1/3 FERIAS PAGAS",
+      "normalized_key": "1 3 ferias pagas",
+      "aliases": [
+        "1 3 ferias pagas",
+        "terco ferias pagas"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
       "alias_original": "13° de Abono Pago",
       "normalized_key": "13 de abono pago",
       "aliases": [
@@ -80,6 +113,23 @@
         "13 ferias pagas",
         "13o de ferias pagas",
         "decimo de ferias pagas"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "13Salário 1a Parcela",
+      "normalized_key": "13salario 1a parcela",
+      "aliases": [
+        "13 salario primeira parcela",
+        "13o salario 1a parcela",
+        "13salario 1a parcela"
       ],
       "categoria": "DESCONSIDERADAS",
       "tipo_pjecalc": "DESCONSIDERAR",
@@ -140,6 +190,73 @@
       "source": "seed_v2"
     },
     {
+      "alias_original": "AD.SABADO COM.25%",
+      "normalized_key": "ad sabado com 25",
+      "aliases": [
+        "ad sabado com 25",
+        "adicional sabado comissao 25"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Adiant. 13Sal",
+      "normalized_key": "adiant 13sal",
+      "aliases": [
+        "adiant 13 salario",
+        "adiant 13sal",
+        "adiantamento 13 salario"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Adiant Quinzenal",
+      "normalized_key": "adiant quinzenal",
+      "aliases": [
+        "adiant quinzenal",
+        "adiantamento quinzenal",
+        "adto quinzenal"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2",
+      "observacao_juridica": "Adiantamento quinzenal = parcela de comissão antecipada; integra base."
+    },
+    {
+      "alias_original": "ADIANTAMENTO",
+      "normalized_key": "adiantamento",
+      "aliases": [
+        "adiantamento"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2",
+      "observacao_juridica": "Adiantamento puro (não-quinzenal); ajuste interno."
+    },
+    {
       "alias_original": "adiantamento em folha (EMP)",
       "normalized_key": "adiantamento em folha emp",
       "aliases": [
@@ -193,6 +310,24 @@
       "observacao_juridica": "Classificado como DESCONSIDERAR conforme planilha do escritório. Súmula 60 TST estabelece que adicional noturno integra base de DSR. Decisão deliberada do escritório de seguir interpretação restritiva. Não alterar sem reaprovação jurídica."
     },
     {
+      "alias_original": "Ajuste de Liquido",
+      "normalized_key": "ajuste de liquido",
+      "aliases": [
+        "aj de liquido",
+        "aj liquido",
+        "ajuste de liquido",
+        "ajuste liquido"
+      ],
+      "categoria": "COMISSOES_PRODUTOS",
+      "tipo_pjecalc": "COMISSAO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
       "alias_original": "Ajuste Líquido",
       "normalized_key": "ajuste liquido",
       "aliases": [
@@ -242,6 +377,22 @@
       "base_13": false,
       "base_ferias": false,
       "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "ANTECIP.PREMIO ESTIM",
+      "normalized_key": "antecip premio estim",
+      "aliases": [
+        "antecip premio estim",
+        "antecip premio estimulo"
+      ],
+      "categoria": "PREMIOS",
+      "tipo_pjecalc": "PREMIO",
+      "base_dsr": true,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
       "confidence": 1,
       "source": "seed_v2"
     },
@@ -324,6 +475,7 @@
         "campanha geral",
         "campanha retira",
         "campanha serv fin",
+        "campanha servicos",
         "campanha via"
       ],
       "categoria": "COMISSOES_SERVICOS",
@@ -469,6 +621,7 @@
       "alias_original": "Com. Serv. Garantia",
       "normalized_key": "com serv garantia",
       "aliases": [
+        "com garantia",
         "com serv garantia",
         "comissao servicos garantia"
       ],
@@ -600,7 +753,6 @@
       "alias_original": "Comissão Garantida",
       "normalized_key": "comissao garantida",
       "aliases": [
-        "com garantia",
         "com garantida",
         "comissao garantida"
       ],
@@ -750,6 +902,22 @@
         "compl he garatido",
         "compl hora extra garantido",
         "complemento he garantido"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Desc. Insuf Saldo",
+      "normalized_key": "desc insuf saldo",
+      "aliases": [
+        "desc insuf saldo",
+        "desconto insuficiencia saldo"
       ],
       "categoria": "DESCONSIDERADAS",
       "tipo_pjecalc": "DESCONSIDERAR",
@@ -930,6 +1098,23 @@
       "source": "seed_v2"
     },
     {
+      "alias_original": "Diferença Média Férias",
+      "normalized_key": "diferenca media ferias",
+      "aliases": [
+        "dif media ferias",
+        "diferenca media feri",
+        "diferenca media ferias"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
       "alias_original": "DSR (Comissão)",
       "normalized_key": "dsr comissao",
       "aliases": [
@@ -1065,6 +1250,40 @@
       "source": "seed_v2"
     },
     {
+      "alias_original": "Horas Extras Com 70%",
+      "normalized_key": "horas extras com 70",
+      "aliases": [
+        "he com 70",
+        "horas extras com 7",
+        "horas extras com 70"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Horas Extras Com 75%",
+      "normalized_key": "horas extras com 75",
+      "aliases": [
+        "he com 75",
+        "horas extras com 75"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2",
+      "observacao_juridica": "Horas extras desconsideradas conforme planilha do escritório."
+    },
+    {
       "alias_original": "Horas Justificadas / TRN",
       "normalized_key": "horas justificadas trn",
       "aliases": [
@@ -1098,6 +1317,24 @@
       "confidence": 1,
       "source": "seed_v2",
       "observacao_juridica": "Classificado como DESCONSIDERAR conforme planilha do escritório. Súmula 60 TST estabelece que adicional noturno integra base de DSR — por analogia, horas noturnas trabalhadas seguem o mesmo princípio. Decisão deliberada do escritório de seguir interpretação restritiva. Não alterar sem reaprovação jurídica."
+    },
+    {
+      "alias_original": "Insuf Saldo no Mês",
+      "normalized_key": "insuf saldo no mes",
+      "aliases": [
+        "insuf saldo mes",
+        "insuf saldo no mes",
+        "insuficiencia saldo mes"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2",
+      "observacao_juridica": "Insuficiência de saldo é ajuste contábil interno — não integra remuneração."
     },
     {
       "alias_original": "Int. Ad. Not. No Dsr",
@@ -1168,6 +1405,22 @@
       "source": "seed_v2"
     },
     {
+      "alias_original": "Media de Férias",
+      "normalized_key": "media de ferias",
+      "aliases": [
+        "med ferias",
+        "media de ferias"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
       "alias_original": "Média Férias",
       "normalized_key": "media ferias",
       "aliases": [
@@ -1197,6 +1450,58 @@
       "base_13": true,
       "base_ferias": true,
       "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Mínimo Garantido - C",
+      "normalized_key": "minimo garantido c",
+      "aliases": [
+        "min garantido c",
+        "minimo garantido c",
+        "minimo garantido comissionado",
+        "minimo garantido comissionista"
+      ],
+      "categoria": "MINIMO_GARANTIDO",
+      "tipo_pjecalc": "SALARIO",
+      "base_dsr": false,
+      "base_13": true,
+      "base_ferias": true,
+      "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Participação Lucros",
+      "normalized_key": "participacao lucros",
+      "aliases": [
+        "part lucros",
+        "participacao lucros",
+        "plr"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2",
+      "observacao_juridica": "PLR não integra remuneração (Lei 10.101/2000 art. 3º)."
+    },
+    {
+      "alias_original": "PLR Variavel",
+      "normalized_key": "plr variavel",
+      "aliases": [
+        "plr var",
+        "plr variavel"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
       "confidence": 1,
       "source": "seed_v2"
     },

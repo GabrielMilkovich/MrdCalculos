@@ -1,19 +1,102 @@
 // supabase/functions/_shared/parsers/ficha-financeira-deterministic.ts
 //
 // Parser determinístico para Ficha Financeira em formato ADP (Via Varejo,
-// Magazine Luiza, Casas Bahia, etc). Dois paths:
+// Magazine Luiza, Casas Bahia, etc). V3 — cutoff posicional + ontologia V2.
+//
+// Regra do escritório MRD:
+//   Incluir todas as rubricas desde a primeira até 0833 Desc. Insuf Saldo
+//   (inclusive). Depois, ignorar tudo (DESC, BASE, ENCAR, OUTRO, PROV).
+//   Classificar cada rubrica pela ontologia V2 (sync-mode seed).
+//
+// Dois paths de extração:
 //   1. Markdown table com `|` (output do extrator geométrico pdfjs V6)
-//   2. Texto-layout com colunas de largura fixa (output Mistral OCR / pdftotext -layout)
-//
-// Vantagens sobre path LLM:
-//   - Determinístico (mesmo input → mesmo output)
-//   - Zero custo (sem API call)
-//   - Rápido (~10ms vs ~15s Claude)
-//   - Códigos numéricos 4 dígitos são mais confiáveis que nomes OCR
-//
-// Retorna null quando não reconhece layout → caller cai no Claude fallback.
+//   2. Texto-layout com colunas de largura fixa (output Mistral OCR / pdftotext)
 
-// Meses aceitos no header da tabela (com variações OCR comuns)
+// ── Ontologia V2 (classificação por nome de rubrica) ──
+// Importa o seed JSON diretamente — funciona em Deno E Node/vitest.
+// deno-lint-ignore no-explicit-any
+let SEED_INDEX: Map<string, { categoria: string; tipo_pjecalc: string; base_dsr: boolean; base_13: boolean; base_ferias: boolean; incluido: boolean; observacao_juridica?: string }> | null = null;
+
+function getSeedIndex(): typeof SEED_INDEX {
+  if (SEED_INDEX) return SEED_INDEX;
+  // Lazy-load pra evitar problemas de import circular no Deno edge
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  let seed: { rubricas: Array<{ normalized_key: string; aliases: string[]; categoria: string; tipo_pjecalc: string; base_dsr: boolean; base_13: boolean; base_ferias: boolean; incluido: boolean; observacao_juridica?: string }> };
+  try {
+    // deno-lint-ignore no-explicit-any
+    seed = (globalThis as any).__ontologia_v2_seed;
+    if (!seed) {
+      // Fallback: load JSON inline (for vitest/Node)
+      seed = require('../holerite-mapper-v2/ontologia-v2.json');
+    }
+  } catch {
+    try {
+      seed = require('../holerite-mapper-v2/ontologia-v2.json');
+    } catch {
+      return null;
+    }
+  }
+  const m = new Map<string, typeof SEED_INDEX extends Map<string, infer V> | null ? V : never>();
+  for (const r of seed.rubricas) {
+    const entry = {
+      categoria: r.categoria,
+      tipo_pjecalc: r.tipo_pjecalc,
+      base_dsr: r.base_dsr,
+      base_13: r.base_13,
+      base_ferias: r.base_ferias,
+      incluido: r.incluido,
+      observacao_juridica: r.observacao_juridica,
+    };
+    m.set(r.normalized_key, entry);
+    for (const a of r.aliases) {
+      if (!m.has(a)) m.set(a, entry);
+    }
+  }
+  SEED_INDEX = m;
+  return m;
+}
+
+function normalizeForSeed(s: string): string {
+  return s.toLowerCase().trim()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function classificarPorOntologia(denominacao: string): {
+  categoria: string;
+  tipo_pjecalc: string;
+  base_dsr: boolean;
+  base_13: boolean;
+  base_ferias: boolean;
+  divergencia_juridica: boolean;
+} {
+  const index = getSeedIndex();
+  const key = normalizeForSeed(denominacao);
+  const hit = index?.get(key);
+  if (hit) {
+    return {
+      categoria: hit.categoria,
+      tipo_pjecalc: hit.tipo_pjecalc,
+      base_dsr: hit.base_dsr,
+      base_13: hit.base_13,
+      base_ferias: hit.base_ferias,
+      divergencia_juridica: !!hit.observacao_juridica,
+    };
+  }
+  return {
+    categoria: 'NAO_CLASSIFICADO',
+    tipo_pjecalc: 'INDEFINIDO',
+    base_dsr: false,
+    base_13: false,
+    base_ferias: false,
+    divergencia_juridica: false,
+  };
+}
+
+// ── Meses ──
+
 const MESES_HEADER: Record<string, string> = {
   janeiro: '01', fevereiro: '02', 'março': '03', marco: '03',
   abril: '04', maio: '05', junho: '06', julho: '07',
@@ -23,95 +106,6 @@ const MESES_HEADER: Record<string, string> = {
   jul: '07', ago: '08', set: '09', out: '10', nov: '11', dez: '12',
 };
 
-// Classificações ADP com tolerância OCR (PGTO → PETO/PGTO/PAGO)
-const CLASSIFICACAO_PGTO = new Set([
-  'pgto', 'peto', 'pago', 'pqto', 'pglo', 'pgfo',
-]);
-const CLASSIFICACAO_DESC = new Set([
-  'desc', 'deso', 'desd', 'decs',
-]);
-const CLASSIFICACAO_IGNORAR = new Set([
-  'base', 'info', 'encar', 'outro', 'prov',
-  'babe', 'inpo', 'encap', 'outpo', 'prov',
-]);
-
-// Blocklist de códigos numéricos (provisões, bases, encargos, totalizadores)
-const CODIGOS_BLOCKLIST = new Set<string>();
-for (let i = 5000; i < 5200; i++) CODIGOS_BLOCKLIST.add(String(i).padStart(4, '0'));
-for (let i = 6000; i < 7000; i++) CODIGOS_BLOCKLIST.add(String(i).padStart(4, '0'));
-for (let i = 8000; i < 8200; i++) CODIGOS_BLOCKLIST.add(String(i).padStart(4, '0'));
-for (let i = 9900; i < 10000; i++) CODIGOS_BLOCKLIST.add(String(i).padStart(4, '0'));
-['0509', '0517', '0521', '0525'].forEach(c => CODIGOS_BLOCKLIST.add(c));
-
-// Código → categoria PJe-Calc (baseado na planilha do escritório + auditoria)
-const CODE_TO_CATEGORY: Record<string, string> = {
-  '0040': 'outros',        // Participação Lucros
-  '0501': 'dsr',           // DSR (Comissão)
-  '0502': 'dsr',           // DSR (H. Extra)
-  '0510': 'outros',        // Abono (13o)
-  '0511': 'salario_base',  // Salário Base/Receita
-  '0590': 'outros',        // 1/3 Adic. Const. Férias
-  '0591': 'outros',        // 1/3 Adic. Const. Férias
-  '0620': 'comissao',      // Comissões
-  '0712': 'salario_base',  // Mínimo Garantido
-  '0832': 'outros',        // Insuf. Saldo no Mês
-  '2750': 'outros',        // Média de Férias
-  '2751': 'outros',        // Média de Férias
-  '2752': 'outros',        // Média de Férias
-  '2823': 'outros',        // Abono (pessoal)
-  '3290': 'premio',        // Prêmio Antecipado
-  '3317': 'comissao',      // Ad. Sábado Com. 25%
-  '3348': 'salario_base',  // Horas Justificadas / TRN
-  '3351': 'comissao',      // Com. Garantia
-  '3368': 'salario_base',  // TRN Treinamento
-  '3391': 'comissao',      // Com. Seguros
-  '3393': 'comissao',      // Com. Seguros Vida
-  '3415': 'outros',        // 1/3 Férias Pagas
-  '3453': 'comissao',      // Comissão Frete
-  '4013': 'hora_extra',    // Horas Extras Com 75%
-  '4016': 'hora_extra',    // Horas Extras Com 70%
-  '4096': 'comissao',      // Comissão Montagem
-  '4101': 'premio',        // Prêmio Meta
-  '4131': 'premio',        // Prêmio Metal
-  '4183': 'adicional_noturno', // Ad. Noturno
-  '4325': 'outros',        // Outros
-  '7035': 'outros',        // Ajuste de Líquido
-  '7076': 'outros',        // PLR Variável
-  '7680': 'comissao',      // Comissão Eletrônicos
-  '8441': 'premio',        // Antecip. Prêmio Estím.
-  '8489': 'comissao',      // Campanha Serviços
-};
-
-interface RubricaExtraida {
-  codigo: string;
-  denominacao: string;
-  classificacao: string;
-  categoria: string;
-  valores_mensais: Array<{ competencia: string; valor: number }>;
-}
-
-interface ResultadoParse {
-  ano: number;
-  empregado: string;
-  empresa: string;
-  rubricas: RubricaExtraida[];
-  resumo_mensal: Array<{ competencia: string; total_vencimentos: number }>;
-  _meta: {
-    parser: string;
-    linhas_processadas: number;
-    linhas_filtradas: number;
-    meses_detectados: string[];
-  };
-}
-
-function parseBR(s: string): number {
-  if (!s) return 0;
-  const cleaned = s.trim().replace(/\./g, '').replace(',', '.');
-  const n = parseFloat(cleaned);
-  return isNaN(n) ? 0 : n;
-}
-
-// Meses completos para matching no header de texto-layout (posição por offset)
 const MESES_FULL: Array<{ pattern: RegExp; mm: string }> = [
   { pattern: /janeiro/i, mm: '01' },
   { pattern: /fevereiro/i, mm: '02' },
@@ -129,6 +123,51 @@ const MESES_FULL: Array<{ pattern: RegExp; mm: string }> = [
   { pattern: /\b13[ºo°]?\b/i, mm: '13' },
   { pattern: /\btotal\b/i, mm: 'total' },
 ];
+
+// ── Cutoff sentinel ──
+
+function ehLinhaCutoff(codigo: string, denominacao: string): boolean {
+  if (codigo === '0833') return true;
+  return /^desc\.?\s*insuf\.?\s*saldo\b/i.test(denominacao.toLowerCase().trim());
+}
+
+// ── Tipos ──
+
+interface RubricaExtraida {
+  codigo: string;
+  denominacao: string;
+  classificacao: string;
+  categoria: string;
+  tipo_pjecalc: string;
+  base_dsr: boolean;
+  base_13: boolean;
+  base_ferias: boolean;
+  divergencia_juridica: boolean;
+  valores_mensais: Array<{ competencia: string; valor: number }>;
+}
+
+interface ResultadoParse {
+  ano: number;
+  empregado: string;
+  empresa: string;
+  rubricas: RubricaExtraida[];
+  resumo_mensal: Array<{ competencia: string; total_vencimentos: number }>;
+  _meta: {
+    parser: string;
+    linhas_processadas: number;
+    linhas_filtradas: number;
+    meses_detectados: string[];
+  };
+}
+
+// ── Helpers ──
+
+function parseBR(s: string): number {
+  if (!s) return 0;
+  const cleaned = s.trim().replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? 0 : n;
+}
 
 interface ColumnSpan {
   mm: string;
@@ -228,20 +267,11 @@ function buildResumo(rubricas: RubricaExtraida[]): Array<{ competencia: string; 
     }));
 }
 
-function filterAndClassify(
-  codigo: string,
-  classificacao: string,
-): { keep: boolean; filtered: boolean } {
-  const clasLower = classificacao.toLowerCase();
-  if (!CLASSIFICACAO_PGTO.has(clasLower)) {
-    const filtered = CLASSIFICACAO_DESC.has(clasLower) || CLASSIFICACAO_IGNORAR.has(clasLower);
-    return { keep: false, filtered };
-  }
-  if (CODIGOS_BLOCKLIST.has(codigo)) {
-    return { keep: false, filtered: true };
-  }
-  return { keep: true, filtered: false };
+function classificarRubrica(denominacao: string): Pick<RubricaExtraida, 'categoria' | 'tipo_pjecalc' | 'base_dsr' | 'base_13' | 'base_ferias' | 'divergencia_juridica'> {
+  return classificarPorOntologia(denominacao);
 }
+
+// ── Path 1: Markdown table ──
 
 function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse | null {
   const { ano, empregado, empresa } = extractMetadata(texto);
@@ -273,8 +303,11 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
   const rubricas: RubricaExtraida[] = [];
   let linhasProcessadas = 0;
   let linhasFiltradas = 0;
+  let cutoffAlcancado = false;
 
   for (let i = headerIdx + 1; i < lines.length; i++) {
+    if (cutoffAlcancado) { linhasFiltradas++; continue; }
+
     const raw = lines[i];
     if (/^\s*\|?\s*---/.test(raw)) continue;
 
@@ -291,12 +324,6 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
 
     linhasProcessadas++;
 
-    const { keep, filtered } = filterAndClassify(codigo, classificacao);
-    if (!keep) {
-      if (filtered) linhasFiltradas++;
-      continue;
-    }
-
     const valores: Array<{ competencia: string; valor: number }> = [];
     for (let m = 0; m < mesesDetectados.length; m++) {
       const cellIdx = m + 2;
@@ -310,10 +337,18 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
       }
     }
 
-    if (valores.length === 0) continue;
+    if (valores.length === 0 && !ehLinhaCutoff(codigo, denominacao)) continue;
 
-    const categoria = CODE_TO_CATEGORY[codigo] || 'outros';
-    rubricas.push({ codigo, denominacao, classificacao: 'PGTO', categoria, valores_mensais: valores });
+    const cls = classificarRubrica(denominacao);
+    rubricas.push({
+      codigo, denominacao, classificacao,
+      ...cls,
+      valores_mensais: valores,
+    });
+
+    if (ehLinhaCutoff(codigo, denominacao)) {
+      cutoffAlcancado = true;
+    }
   }
 
   if (rubricas.length === 0) return null;
@@ -322,13 +357,15 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
     ano, empregado, empresa, rubricas,
     resumo_mensal: buildResumo(rubricas),
     _meta: {
-      parser: 'ficha-financeira-deterministic-v1',
+      parser: 'ficha-financeira-deterministic-v3-cutoff-ontologia-v2',
       linhas_processadas: linhasProcessadas,
       linhas_filtradas: linhasFiltradas,
       meses_detectados: mesesDetectados.filter(m => m !== 'total'),
     },
   };
 }
+
+// ── Path 2: Text-layout ──
 
 function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | null {
   const { ano, empregado, empresa } = extractMetadata(texto);
@@ -355,12 +392,15 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
   const rubricas = new Map<string, RubricaExtraida>();
   let linhasProcessadas = 0;
   let linhasFiltradas = 0;
+  const cutoffCodigos = new Set<string>();
 
   for (const { headerIdx, columns } of pageHeaders) {
     let dataStart = headerIdx + 1;
     if (dataStart < allLines.length && separatorRegex.test(allLines[dataStart])) {
       dataStart++;
     }
+
+    let cutoffAlcancado = false;
 
     for (let i = dataStart; i < allLines.length; i++) {
       const raw = allLines[i];
@@ -372,6 +412,8 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
       if (/Ano\s+Compet/i.test(raw)) break;
       if (/^\s*\d{4}\s+Total\s/i.test(raw)) continue;
 
+      if (cutoffAlcancado) { linhasFiltradas++; continue; }
+
       const m = raw.match(rubricaLineRegex);
       if (!m) continue;
 
@@ -381,17 +423,10 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
       const clasMatch = restAfterCode.match(/\s+(PGTO|DESC|BASE|ENCAR|OUTRO|PROV|INFO|PETO|PAGO|PQTO|PGLO|PGFO|DESO|DESD|DECS|BABE|INPO|ENCAP|OUTPO)\s/i);
       if (!clasMatch) continue;
 
-      const clasEndInRest = clasMatch.index! + clasMatch[0].length;
       const denominacao = restAfterCode.substring(0, clasMatch.index!).trim();
       const classificacao = clasMatch[1].trim().toUpperCase();
 
       linhasProcessadas++;
-
-      const { keep, filtered } = filterAndClassify(codigo, classificacao);
-      if (!keep) {
-        if (filtered) linhasFiltradas++;
-        continue;
-      }
 
       const codeStartInLine = raw.indexOf(codigo);
       const clasStartInLine = raw.indexOf(clasMatch[1], codeStartInLine + 4);
@@ -412,9 +447,13 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
         }
       }
 
-      if (valores.length === 0) continue;
+      // Cutoff check: rubrica entra, mas marca o fim
+      const isCutoff = ehLinhaCutoff(codigo, denominacao);
+      if (isCutoff) cutoffCodigos.add(codigo);
 
-      const categoria = CODE_TO_CATEGORY[codigo] || 'nao_catalogado';
+      if (valores.length === 0 && !isCutoff) continue;
+
+      const cls = classificarRubrica(denominacao);
 
       const existing = rubricas.get(codigo);
       if (existing) {
@@ -426,9 +465,14 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
         }
       } else {
         rubricas.set(codigo, {
-          codigo, denominacao, classificacao: 'PGTO', categoria,
+          codigo, denominacao, classificacao,
+          ...cls,
           valores_mensais: [...valores],
         });
+      }
+
+      if (isCutoff) {
+        cutoffAlcancado = true;
       }
     }
   }
@@ -452,7 +496,7 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
     rubricas: rubricasArr,
     resumo_mensal: buildResumo(rubricasArr),
     _meta: {
-      parser: 'ficha-financeira-deterministic-v2-textlayout',
+      parser: 'ficha-financeira-deterministic-v3-cutoff-ontologia-v2',
       linhas_processadas: linhasProcessadas,
       linhas_filtradas: linhasFiltradas,
       meses_detectados: [...allMeses].sort(),
@@ -460,12 +504,8 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
   };
 }
 
-/**
- * Tenta parse determinístico da Ficha Financeira.
- * Path 1: markdown table com | (extrator geométrico V6).
- * Path 2: texto-layout com colunas de largura fixa (Mistral OCR / pdftotext).
- * Retorna null se não reconhecer nenhum layout — caller cai no Claude fallback.
- */
+// ── Entry point ──
+
 export function parseFichaFinanceiraDeterministico(
   texto: string,
 ): ResultadoParse | null {
@@ -477,13 +517,11 @@ export function parseFichaFinanceiraDeterministico(
 
   const allLines = texto.split(/\r?\n/);
 
-  // Path 1: markdown table (pipe-separated)
   if (texto.includes('|')) {
     const mdResult = parseMarkdownTable(texto, allLines);
     if (mdResult && mdResult.rubricas.length >= 3) return mdResult;
   }
 
-  // Path 2: texto-layout (fixed-width columns, no pipes in data)
   const hasTextLayoutLines = /^\s+\d{4}\s+\w/m.test(texto);
   if (hasTextLayoutLines) {
     const tlResult = parseTextLayout(texto, allLines);

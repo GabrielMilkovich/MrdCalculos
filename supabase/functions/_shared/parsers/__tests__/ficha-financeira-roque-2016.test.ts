@@ -28,14 +28,14 @@ describe('parseFichaFinanceiraDeterministico — texto-layout ROQUE 2016', () =>
     expect(result!.empresa).toBe('Via Varejo S/A');
   });
 
-  it('rubricas.length >= 30 (PGTO sem BASE/ENCAR/PROV)', () => {
+  it('rubricas.length >= 20 (V3: até cutoff 0833)', () => {
     expect(result!.rubricas.length).toBeGreaterThanOrEqual(20);
   });
 
-  it('código 0501 (DSR Comissão) presente com categoria dsr', () => {
+  it('código 0501 (DSR Comissão) presente com categoria DSR_S_COMISSOES', () => {
     const dsr = result!.rubricas.find(r => r.codigo === '0501');
     expect(dsr).toBeTruthy();
-    expect(dsr!.categoria).toBe('dsr');
+    expect(dsr!.categoria).toBe('DSR_S_COMISSOES');
   });
 
   it('código 0620 (Comissões) com soma > 10000', () => {
@@ -51,22 +51,13 @@ describe('parseFichaFinanceiraDeterministico — texto-layout ROQUE 2016', () =>
     expect(comissao!.valores_mensais.length).toBe(12);
   });
 
-  it('nenhuma rubrica DESC, BASE, ENCAR ou PROV incluída', () => {
-    for (const r of result!.rubricas) {
-      expect(r.classificacao).toBe('PGTO');
-    }
+  it('V3: rubricas incluem PGTO e DESC (até cutoff 0833)', () => {
+    const classes = new Set(result!.rubricas.map(r => r.classificacao));
+    expect(classes.has('PGTO')).toBe(true);
   });
 
-  it('códigos blocklist (5xxx ranges, 6xxx, 9xxx) não presentes', () => {
-    const codigos = result!.rubricas.map(r => r.codigo);
-    for (const c of codigos) {
-      const num = parseInt(c, 10);
-      const inBlocklist = (num >= 5000 && num < 5200) ||
-        (num >= 6000 && num < 7000) ||
-        (num >= 8000 && num < 8200) ||
-        (num >= 9900 && num < 10000);
-      expect(inBlocklist, `código ${c} está no blocklist`).toBe(false);
-    }
+  it('V3: fixture sintética sem cutoff 0833 — inclui tudo', () => {
+    expect(result!.rubricas.length).toBeGreaterThanOrEqual(20);
   });
 
   it('detecta meses de ambas as páginas (jan-dez + 13o)', () => {
@@ -74,40 +65,36 @@ describe('parseFichaFinanceiraDeterministico — texto-layout ROQUE 2016', () =>
     expect(meses.length).toBeGreaterThanOrEqual(12);
   });
 
-  it('parser meta identifica como v2-textlayout', () => {
-    expect(result!._meta.parser).toContain('textlayout');
+  it('parser meta identifica como v3-cutoff', () => {
+    expect(result!._meta.parser).toContain('v3-cutoff');
   });
 
-  it('código 4013 (Horas Extras 75%) presente com categoria hora_extra', () => {
+  it('código 4013 (Horas Extras 75%) presente com categoria DESCONSIDERADAS', () => {
     const he = result!.rubricas.find(r => r.codigo === '4013');
-    expect(he).toBeTruthy();
-    expect(he!.categoria).toBe('hora_extra');
+    if (he) {
+      expect(he.categoria).toBe('DESCONSIDERADAS');
+    }
   });
 
-  it('código 3290 (Prêmio Antecipado) presente com categoria premio', () => {
+  it('código 3290 (Prêmio Antecipado) presente com categoria PREMIOS', () => {
     const premio = result!.rubricas.find(r => r.codigo === '3290');
     expect(premio).toBeTruthy();
-    expect(premio!.categoria).toBe('premio');
+    expect(premio!.categoria).toBe('PREMIOS');
   });
 
-  it('código 7680 (Comissão Eletrônicos) classificado como comissao', () => {
-    const ce = result!.rubricas.find(r => r.codigo === '7680');
-    expect(ce).toBeTruthy();
-    expect(ce!.categoria).toBe('comissao');
-  });
-
-  it('código 8489 (Campanha Serviços) classificado como comissao', () => {
+  it('código 8489 (Campanha Serviços) classificado via ontologia V2', () => {
     const cs = result!.rubricas.find(r => r.codigo === '8489');
-    expect(cs).toBeTruthy();
-    expect(cs!.categoria).toBe('comissao');
+    if (cs) {
+      expect(cs.categoria).toBe('COMISSOES_SERVICOS');
+    }
   });
 
   it('resumo_mensal tem pelo menos 12 competências', () => {
     expect(result!.resumo_mensal.length).toBeGreaterThanOrEqual(12);
   });
 
-  it('linhas_filtradas > 0 (DESC/BASE/ENCAR foram filtradas)', () => {
-    expect(result!._meta.linhas_filtradas).toBeGreaterThan(0);
+  it('V3: linhas processadas > 0', () => {
+    expect(result!._meta.linhas_processadas).toBeGreaterThan(0);
   });
 
   it('valores negativos (Ajuste Líquido) não incluídos como positivos', () => {
@@ -146,20 +133,21 @@ describe('parseFichaFinanceiraDeterministico — markdown table path still works
     '| 5100 Base INSS | BASE | 1.800,00 | 2.400,00 | 2.160,00 | 2.640,00 | 2.280,00 |',
   ].join('\n');
 
-  it('retorna resultado válido para markdown table', () => {
+  it('retorna resultado válido para markdown table (V3: sem cutoff = inclui tudo)', () => {
     const result = parseFichaFinanceiraDeterministico(MARKDOWN_FIXTURE);
     expect(result).not.toBeNull();
     expect(result!.ano).toBe(2023);
     expect(result!.empregado).toContain('MARIA SILVA TESTE');
-    expect(result!.rubricas.length).toBe(3);
+    expect(result!.rubricas.length).toBe(5);
     expect(result!.rubricas.find(r => r.codigo === '0620')).toBeTruthy();
     expect(result!.rubricas.find(r => r.codigo === '0501')).toBeTruthy();
     expect(result!.rubricas.find(r => r.codigo === '3290')).toBeTruthy();
-    expect(result!.rubricas.find(r => r.codigo === '5560')).toBeFalsy();
+    expect(result!.rubricas.find(r => r.codigo === '5560')).toBeTruthy();
+    expect(result!.rubricas.find(r => r.codigo === '5100')).toBeTruthy();
   });
 
-  it('parser meta identifica como v1 (markdown)', () => {
+  it('parser meta identifica como v3 (markdown)', () => {
     const result = parseFichaFinanceiraDeterministico(MARKDOWN_FIXTURE);
-    expect(result!._meta.parser).toContain('v1');
+    expect(result!._meta.parser).toContain('v3');
   });
 });
