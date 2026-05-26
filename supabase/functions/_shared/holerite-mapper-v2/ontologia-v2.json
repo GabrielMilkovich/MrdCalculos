@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "generated_at": "2026-05-26T14:54:48.213Z",
+  "generated_at": "2026-05-26T14:58:25.156Z",
   "source": "scripts/gen-ontologia-v2-from-snapshot.ts a partir de scripts/ontologia-v1-snapshot.ts + scripts/ontologia-v2-overrides.json",
   "categorias": {
     "MINIMO_GARANTIDO": {
@@ -621,6 +621,7 @@
       "alias_original": "Com. Serv. Garantia",
       "normalized_key": "com serv garantia",
       "aliases": [
+        "com garantia",
         "com serv garantia",
         "comissao servicos garantia"
       ],
@@ -752,7 +753,6 @@
       "alias_original": "Comissão Garantida",
       "normalized_key": "comissao garantida",
       "aliases": [
-        "com garantia",
         "com garantida",
         "comissao garantida"
       ],

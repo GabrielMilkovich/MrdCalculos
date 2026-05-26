@@ -36,13 +36,7 @@
         "razao": "V1 fuzzy 0.87 pegava — sinônimos V1 incluem 'Antecipação Vale Transporte Admissão' (forma extensa) mas não 'Antec Vale Transporte Admissão' (Antec curto + transporte extenso)"
       }
     ],
-    "comissao garantida": [
-      {
-        "alias": "com garantia",
-        "fonte": "string real em prod (Supabase MRDCALCC, doc 1)",
-        "razao": "V1 fuzzy 0.92 pegava — mudança de gênero (garantida→garantia) não coberta por sinônimos"
-      }
-    ],
+    "comissao garantida": [],
     "dsr s media hora noturna": [
       {
         "alias": "dsr s media horas noturnas",

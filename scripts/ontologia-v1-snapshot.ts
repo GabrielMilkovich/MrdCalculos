@@ -285,7 +285,7 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
   {
     texto_canonico: 'Com. Serv. Garantia',
     categoria: 'COMISSAO_SERVICOS',
-    sinonimos: ['Comissão Serviços Garantia', 'Com Serv Garantia'],
+    sinonimos: ['Comissão Serviços Garantia', 'Com Serv Garantia', 'COM. GARANTIA', 'Com Garantia'],
   },
   {
     texto_canonico: 'Com. Serv. Técnicos',
