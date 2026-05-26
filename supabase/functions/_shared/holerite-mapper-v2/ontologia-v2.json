@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "generated_at": "2026-05-26T14:58:25.156Z",
+  "generated_at": "2026-05-26T16:35:23.836Z",
   "source": "scripts/gen-ontologia-v2-from-snapshot.ts a partir de scripts/ontologia-v1-snapshot.ts + scripts/ontologia-v2-overrides.json",
   "categorias": {
     "MINIMO_GARANTIDO": {
@@ -113,6 +113,23 @@
         "13 ferias pagas",
         "13o de ferias pagas",
         "decimo de ferias pagas"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "13º Salário - Média",
+      "normalized_key": "13 salario media",
+      "aliases": [
+        "13 sal media",
+        "13 salario media",
+        "13o salario media"
       ],
       "categoria": "DESCONSIDERADAS",
       "tipo_pjecalc": "DESCONSIDERAR",
@@ -913,6 +930,24 @@
       "source": "seed_v2"
     },
     {
+      "alias_original": "Desc. 13º Salário 1ª",
+      "normalized_key": "desc 13 salario 1",
+      "aliases": [
+        "desc 13 salario 1",
+        "desc 13 salario 1 parcela",
+        "desc 13 salario 1a",
+        "desconto 13 salario primeira"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
       "alias_original": "Desc. Insuf Saldo",
       "normalized_key": "desc insuf saldo",
       "aliases": [
@@ -1027,6 +1062,24 @@
       "base_13": true,
       "base_ferias": true,
       "incluido": true,
+      "confidence": 1,
+      "source": "seed_v2"
+    },
+    {
+      "alias_original": "Dif. de Médias 13º Sal",
+      "normalized_key": "dif de medias 13 sal",
+      "aliases": [
+        "dif de medias 13 s",
+        "dif de medias 13 sal",
+        "dif medias 13 sal",
+        "diferenca de medias 13 salario"
+      ],
+      "categoria": "DESCONSIDERADAS",
+      "tipo_pjecalc": "DESCONSIDERAR",
+      "base_dsr": false,
+      "base_13": false,
+      "base_ferias": false,
+      "incluido": false,
       "confidence": 1,
       "source": "seed_v2"
     },

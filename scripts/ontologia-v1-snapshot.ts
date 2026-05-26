@@ -804,4 +804,19 @@ export const ONTOLOGIA: readonly RubricaCanonica[] = [
     categoria: 'DESCONSIDERAR',
     sinonimos: ['Média de Férias', 'Med. Férias', 'Media de Ferias'],
   },
+  {
+    texto_canonico: '13º Salário - Média',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['13 Salário Média', '13o Salário Média', '13º Sal Média'],
+  },
+  {
+    texto_canonico: 'Dif. de Médias 13º Sal',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['Diferença de Médias 13 Salário', 'Dif Médias 13 Sal', 'Dif. de Médias 13º S'],
+  },
+  {
+    texto_canonico: 'Desc. 13º Salário 1ª',
+    categoria: 'DESCONSIDERAR',
+    sinonimos: ['Desconto 13 Salário Primeira', 'Desc 13 Salário 1a', 'Desc. 13º Salário 1ª Parcela'],
+  },
 ];
