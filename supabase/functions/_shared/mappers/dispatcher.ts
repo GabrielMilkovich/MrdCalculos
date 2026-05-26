@@ -27,7 +27,6 @@ import { mapperHoleriteGenerico } from './holerite-generico.ts';
 import { mapperReciboFerias } from './recibo-ferias.ts';
 import { mapperRegistroFaltas } from './registro-faltas.ts';
 import { mapperCtps } from './ctps.ts';
-import { mapperFichaFinanceiraViaVarejo } from './ficha-financeira-via-varejo.ts';
 import { mesclarResultadosCartaoPonto } from './merge-cartao-ponto.ts';
 
 const TODOS_MAPPERS: Array<Mapper<unknown>> = [
@@ -39,7 +38,6 @@ const TODOS_MAPPERS: Array<Mapper<unknown>> = [
   mapperReciboFerias,
   mapperRegistroFaltas,
   mapperCtps,
-  mapperFichaFinanceiraViaVarejo,
 ];
 
 export interface DispatchResult {
