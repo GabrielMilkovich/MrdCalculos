@@ -2,8 +2,8 @@ import { encodeBase64 } from "jsr:@std/encoding@1/base64";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { checkRateLimit } from "../_shared/rate-limit.ts";
 import { parseFichaFinanceiraDeterministico } from "../_shared/parsers/ficha-financeira-deterministic.ts";
-import { enriquecerViaCatalogo } from "../_shared/enrichment/enrich-from-catalogo.ts";
 import { validarFichaFinanceira } from "../_shared/validators/ficha-financeira-validator.ts";
+import { extrairGeometrico, linhaParaTextoPlano } from "../_shared/extrator-geometrico.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -251,28 +251,52 @@ Deno.serve(async (req) => {
       );
     }
 
-    // FAST PATH: parser determinístico pra layouts conhecidos (ADP/Via Varejo).
-    // Sem chamada LLM — rápido, grátis, determinístico. Funciona sobre output
-    // do extrator geométrico pdfjs (tabela markdown com | separadores).
-    // Se layout não reconhecido → retorna null → cai no Claude fallback abaixo.
-    if (texto_documento && tipo_documento !== "contracheque") {
-      const deterministico = parseFichaFinanceiraDeterministico(texto_documento);
+    // V4 PIPELINE: pdfjs_geometric > texto_documento > Claude fallback.
+    let textoLimpo: string | null = null;
+    let ocr_provider = "unknown";
+
+    // 1. Tenta pdfjs_geometric (texto nativo, zero OCR, grátis)
+    if (storage_path) {
+      try {
+        const { data: signedData } = await supabase.storage
+          .from(storage_bucket || "case-documents")
+          .createSignedUrl(storage_path, 300);
+        if (signedData?.signedUrl) {
+          const resp = await fetch(signedData.signedUrl);
+          if (resp.ok) {
+            const bytes = new Uint8Array(await resp.arrayBuffer());
+            const docTabular = await extrairGeometrico(bytes);
+            if (docTabular && docTabular.textoCompleto.length > 200) {
+              textoLimpo = docTabular.textoCompleto;
+              ocr_provider = "pdfjs_geometric";
+              console.log(`[parse-ficha] pdfjs_geometric OK: ${textoLimpo.length} chars`);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[parse-ficha] pdfjs_geometric falhou:", err);
+      }
+    }
+
+    // 2. Fallback: texto_documento do caller
+    if (!textoLimpo && texto_documento) {
+      textoLimpo = texto_documento;
+      ocr_provider = "caller_provided";
+      console.warn("[parse-ficha] usando texto_documento do caller (pode estar OCR-corrompido)");
+    }
+
+    // 3. Parser determinístico V4
+    if (textoLimpo && tipo_documento !== "contracheque") {
+      const deterministico = parseFichaFinanceiraDeterministico(textoLimpo);
       if (deterministico && deterministico.rubricas.length >= 3) {
         console.log(
-          `[parse-ficha] DETERMINISTIC: ${deterministico.rubricas.length} rubricas ` +
-            `extraídas, ${deterministico._meta.linhas_filtradas} filtradas, ` +
-            `parser=${deterministico._meta.parser}`,
+          `[parse-ficha] DETERMINISTIC V4: ${deterministico.rubricas.length} rubricas, ` +
+            `ocr=${ocr_provider}, parser=${deterministico._meta.parser}`,
         );
 
         const empregador = deterministico.empresa
           ? detectarEmpregadorSlug(deterministico.empresa)
           : "GENERICO";
-
-        const enriquecimento = await enriquecerViaCatalogo(
-          supabase,
-          deterministico.rubricas,
-          empregador,
-        );
 
         const totaisPorMes: Record<string, number> = {};
         for (const r of deterministico.resumo_mensal) {
@@ -280,23 +304,14 @@ Deno.serve(async (req) => {
         }
 
         const validacao = validarFichaFinanceira(
-          enriquecimento.rubricas,
+          deterministico.rubricas,
           totaisPorMes,
-        );
-
-        console.log(
-          `[parse-ficha] ENRICH: ${enriquecimento.resumo.enriquecidas_catalogo}/${enriquecimento.resumo.total_rubricas} via catálogo, ` +
-            `${enriquecimento.resumo.nao_encontradas} sem match. ` +
-            `VALIDATE: ${validacao.ok ? "OK" : "FALHOU"} ` +
-            `(${validacao.resumo.competencias_ok} ok, ${validacao.resumo.competencias_fora} fora, ` +
-            `pior delta ${validacao.resumo.pior_delta_pct.toFixed(2)}%)`,
         );
 
         return new Response(
           JSON.stringify({
             ...deterministico,
-            rubricas: enriquecimento.rubricas,
-            enriquecimento: enriquecimento.resumo,
+            ocr_provider,
             validacao,
             _meta: {
               ...deterministico._meta,
@@ -466,34 +481,24 @@ Deno.serve(async (req) => {
         ? detectarEmpregadorSlug(extracted.empresa)
         : "GENERICO";
 
-      const enrichResult = await enriquecerViaCatalogo(
-        supabase,
-        (extracted.rubricas || []).map((r) => ({
-          ...r,
-          classificacao: r.classificacao || "PGTO",
-        })),
-        empregadorFallback,
-      );
-
       const totaisFallback: Record<string, number> = {};
       for (const r of extracted.resumo_mensal || []) {
         totaisFallback[r.competencia] = r.total_vencimentos;
       }
       const validacaoFallback = validarFichaFinanceira(
-        enrichResult.rubricas,
+        extracted.rubricas || [],
         totaisFallback,
       );
 
       console.log(
-        `[parse-ficha] ENRICH (Claude): ${enrichResult.resumo.enriquecidas_catalogo}/${enrichResult.resumo.total_rubricas} via catálogo. ` +
+        `[parse-ficha] Claude fallback: ${extracted.rubricas?.length ?? 0} rubricas. ` +
           `VALIDATE: ${validacaoFallback.ok ? "OK" : "FALHOU"}`,
       );
 
       return new Response(
         JSON.stringify({
           ...extracted,
-          rubricas: enrichResult.rubricas,
-          enriquecimento: enrichResult.resumo,
+          ocr_provider: "claude_fallback",
           validacao: validacaoFallback,
           _meta: {
             model: MODEL,
