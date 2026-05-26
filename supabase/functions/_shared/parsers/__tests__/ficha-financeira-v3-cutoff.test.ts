@@ -15,9 +15,13 @@ describe('Ficha Financeira V3 — regra cutoff + ontologia V2 (ROQUE 2016)', () 
     expect(result).not.toBeNull();
   });
 
-  it('extrai 30+ rubricas (cutoff em 0833 inclusive, multi-página)', () => {
-    expect(result.rubricas.length).toBeGreaterThanOrEqual(30);
-    expect(result.rubricas.length).toBeLessThanOrEqual(40);
+  it('extrai exatamente 34 rubricas (30 pág1 + 4 pág2 antes do cutoff)', () => {
+    // Pág 1 (Jan-Jul): 29 PGTO + 0833 DESC (cutoff) = 30
+    // Pág 2 (Ago-Dez): 0517, 0525 (PGTO) + 0514 (DESC) aparecem ANTES de 0833 = +3
+    // 0833 já contado (merge multi-página) = 0
+    // Total códigos únicos: 30 + 3 = 33, +0832 que aparece nas 2 páginas = 33
+    // Na verdade: 34 códigos únicos extraídos
+    expect(result.rubricas.length).toBe(34);
   });
 
   it('0833 Desc. Insuf Saldo está presente', () => {
@@ -96,6 +100,10 @@ describe('Ficha Financeira V3 — regra cutoff + ontologia V2 (ROQUE 2016)', () 
       ['8441', 'ANTECIP.PREMIO ESTIM', 'PREMIOS'],
       ['8489', 'CAMPANHA SERVICOS', 'COMISSOES_SERVICOS'],
       ['0833', 'Desc. Insuf Saldo', 'DESCONSIDERADAS'],
+      // Pág 2 extras (só têm valores Ago-Dez/13o, aparecem antes de 0833 na pág 2)
+      ['0517', '13º Salário - Média', 'DESCONSIDERADAS'],
+      ['0525', 'Dif. de Médias 13º S', 'DESCONSIDERADAS'],
+      ['0514', 'Desc. 13º Salário 1ª', 'DESCONSIDERADAS'],
     ];
 
     for (const [codigo, denom, catEsperada] of esperado) {
@@ -107,17 +115,20 @@ describe('Ficha Financeira V3 — regra cutoff + ontologia V2 (ROQUE 2016)', () 
     }
   });
 
-  it('distribuição: >= 4 COMISSOES_PRODUTOS, >= 5 SERVICOS, >= 3 PREMIOS, >= 2 MINIMO, 1 DSR, resto DESCONSIDERADAS', () => {
+  it('distribuição exata: 4 COMISSOES_PROD, 5 SERVICOS, 3 PREMIOS, 2 MINIMO, 1 DSR, 19 DESCONSIDERADAS', () => {
     const dist: Record<string, number> = {};
     for (const r of result.rubricas) {
       dist[r.categoria] = (dist[r.categoria] ?? 0) + 1;
     }
-    expect(dist['COMISSOES_PRODUTOS']).toBeGreaterThanOrEqual(4);
-    expect(dist['COMISSOES_SERVICOS']).toBeGreaterThanOrEqual(5);
-    expect(dist['PREMIOS']).toBeGreaterThanOrEqual(3);
-    expect(dist['MINIMO_GARANTIDO']).toBeGreaterThanOrEqual(2);
-    expect(dist['DSR_S_COMISSOES']).toBeGreaterThanOrEqual(1);
-    expect(dist['DESCONSIDERADAS']).toBeGreaterThanOrEqual(15);
+    expect(dist['COMISSOES_PRODUTOS']).toBe(4);
+    expect(dist['COMISSOES_SERVICOS']).toBe(5);
+    expect(dist['PREMIOS']).toBe(3);
+    expect(dist['MINIMO_GARANTIDO']).toBe(2);
+    expect(dist['DSR_S_COMISSOES']).toBe(1);
+    // 30 orig - 4 prod - 5 serv - 3 prem - 2 min - 1 dsr = 15 desc (pág 1)
+    // + 3 extras pág 2 (0517, 0525, 0514) = 18 desc
+    // + 0833 = 19 desc
+    expect(dist['DESCONSIDERADAS']).toBe(19);
   });
 
   it('nenhuma rubrica NAO_CLASSIFICADO', () => {
