@@ -68,6 +68,42 @@ const RE_REINICIA = /\breinicia\s+(?:o\s+)?per[íi]odo\s+aquisitivo\b/i;
 const RE_BLOCO_FERIAS_HEADER = /\b(?:hist[óo]rico\s+de\s+f[ée]rias|f[ée]rias\s+gozadas|registro\s+de\s+f[ée]rias|per[íi]odos?\s+de\s+f[ée]rias)\b/i;
 const RE_FIM_BLOCO_FERIAS = /\b(?:afastamentos?|registro\s+de\s+falt|hist[óo]rico\s+de\s+cargo|hist[óo]rico\s+de\s+lota[çc][ãa]o|contribui[çc][ãa]o\s+sindical|hist[óo]rico\s+salarial|anota[çc][oõ]es\s+gerais)\b/i;
 
+type SecaoCTPS = 'fora' | 'afastamentos' | 'afastamentos_outros';
+
+const RE_HEADER_AFASTAMENTOS_OUTROS = /^\s*AFASTAMENTOS\s+OUTROS\s*$/i;
+const RE_HEADER_AFASTAMENTOS = /^\s*AFASTAMENTOS\s*$/i;
+
+const RE_HEADER_OUTRA_SECAO = /^\s*(?:HIST[ÓO]RICO\s+(?:DE\s+)?(?:F[ÉE]RIAS|LOTA[ÇC][ÃA]O|CARGO|SALARIAL|DE\s+CARGO)|FUN[ÇC][ÕO]ES\s+EXERCIDAS|INFORMA[ÇC][ÕO]ES\s+SINDICAIS|ANOTA[ÇC][ÕO]ES\s+GERAIS|REGISTRO\s+DE\s+FALT|DADOS\s+(?:PESSOAIS|DE\s+EMPREGADO)|LOCAL\s+DE\s+TRABALHO|ENDERE[ÇC]O\s+RESIDENCIAL|DEPENDENTES|FUN[ÇC][ÃA]O\s+ATUAL|Data:\.{2,})/i;
+
+const RE_EVENTO_CONTRATUAL = /\b(?:demiss[ãa]o|rescis[ãa]o(?:\s+(?:com\s+)?(?:justa\s+causa|por\s+\w+))?|aviso\s+pr[eé]vio|t[eé]rmino\s+(?:de\s+)?contrato|in[ií]cio\s+(?:de\s+)?contrato|admiss[ãa]o)\b/i;
+
+function identificarLinhasDeAfastamento(
+  lines: string[],
+): Map<number, SecaoCTPS> {
+  const map = new Map<number, SecaoCTPS>();
+  let secao: SecaoCTPS = 'fora';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (RE_HEADER_AFASTAMENTOS_OUTROS.test(line)) {
+      secao = 'afastamentos_outros';
+      continue;
+    }
+    if (RE_HEADER_AFASTAMENTOS.test(line)) {
+      secao = 'afastamentos';
+      continue;
+    }
+    if (secao !== 'fora' && RE_HEADER_OUTRA_SECAO.test(line)) {
+      secao = 'fora';
+      continue;
+    }
+    if (secao !== 'fora') {
+      map.set(i, secao);
+    }
+  }
+  return map;
+}
+
 const MAX_JUSTIFICATIVA_LEN = 200;
 
 function computarDuracaoDias(inicio: string, fim: string): number {
@@ -131,8 +167,6 @@ export function parseFaltas(ocrText: string): ParseFaltasResult {
   const warnings: string[] = [];
   const unparsed: Array<{ linha: number; conteudo: string }> = [];
 
-  // CTPS fix: exclui linhas do bloco "HISTÓRICO DE FÉRIAS" pra não gerar
-  // faltas falsas a partir de períodos aquisitivos.
   const linhasDeFerias = identificarLinhasDeFerias(lines);
   if (linhasDeFerias.size > 0) {
     warnings.push(
@@ -141,10 +175,26 @@ export function parseFaltas(ocrText: string): ParseFaltasResult {
     );
   }
 
+  const linhasDeAfastamento = identificarLinhasDeAfastamento(lines);
+  const modoCtpsEstruturada = linhasDeAfastamento.size > 0;
+  if (modoCtpsEstruturada) {
+    warnings.push(
+      `CTPS estruturada detectada — parser aplicará detecção de seção ` +
+        `(${linhasDeAfastamento.size} linhas dentro de AFASTAMENTOS/OUTROS).`,
+    );
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (line.length === 0) continue;
     if (linhasDeFerias.has(i)) continue;
+
+    const secaoLinha = linhasDeAfastamento.get(i);
+    if (modoCtpsEstruturada && !secaoLinha) continue;
+
+    if (secaoLinha === 'afastamentos' && RE_EVENTO_CONTRATUAL.test(line)) {
+      continue;
+    }
 
     const isFaltaLine = RE_LINHA_FALTA.test(line);
     const intervaloMatch = line.match(RE_INTERVALO_DATA);
@@ -220,7 +270,12 @@ export function parseFaltas(ocrText: string): ParseFaltasResult {
     const justMatch = line.match(RE_JUSTIFICATIVA);
     if (justMatch) {
       const idx = line.toLowerCase().indexOf(justMatch[1].toLowerCase());
-      justificativa = line.slice(idx, idx + MAX_JUSTIFICATIVA_LEN).trim();
+      let texto = line.slice(idx, idx + MAX_JUSTIFICATIVA_LEN);
+      const proxData = texto.search(/\s+\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}/);
+      if (proxData !== -1) texto = texto.slice(0, proxData);
+      const blocoEspacos = texto.search(/\s{4,}/);
+      if (blocoEspacos !== -1) texto = texto.slice(0, blocoEspacos);
+      justificativa = texto.trim();
     }
 
     const duracao = computarDuracaoDias(dataInicio, dataFim);
