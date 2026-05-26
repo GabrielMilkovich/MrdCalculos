@@ -16,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { ValidationBanner } from './ValidationBanner';
 import { ClassificacaoCellEditor } from './ClassificacaoCellEditor';
