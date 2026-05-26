@@ -1,47 +1,27 @@
 import JSZip from 'jszip';
 import Decimal from 'decimal.js';
-import type { CategoriaSlug, IncidenciaFlags, LinhaHistoricoSalarial } from '../../types';
+import type { IncidenciaFlags, LinhaHistoricoSalarial } from '../../types';
 import { buildHistoricoSalarialCSVWithReport } from '../csv-historico';
 import { formatNumeroBR } from '../format-br';
 import { sanitizeText } from '../sanitize';
 import type { BuildReport } from '../validation';
-import { emptyReport } from '../validation';
 import type { RubricaEditavel } from '../../../../components/cases/data-extraction/hooks/useFichaFinanceiraReview';
-import type { FichaCategoriaSlug } from '../../../../components/cases/data-extraction/ficha-financeira-types';
+import {
+  classificarRubrica,
+  ORDEM_GRUPOS_CSV,
+  type GrupoExportCSV,
+  type ClassificacaoResultado,
+} from './grupos-planilha-dsr';
 
 Decimal.set({ precision: 20 });
 
-type CategoriaMeta = {
-  nome_pjecalc: string;
-  default_flags: IncidenciaFlags;
-};
-
-const CATEGORIAS_NOMES: Record<string, CategoriaMeta> = {
-  salario_fixo: { nome_pjecalc: 'Salário Fixo', default_flags: bothInOn() },
-  comissao: { nome_pjecalc: 'Comissões', default_flags: bothInOn() },
-  dsr: { nome_pjecalc: 'DSR', default_flags: bothInOn() },
-  premiacao: { nome_pjecalc: 'Premiações', default_flags: bothInOn() },
-  minimo_garantido: { nome_pjecalc: 'Mínimo Garantido', default_flags: bothInOn() },
-  salario_familia: { nome_pjecalc: 'Salário-família', default_flags: indenizatoria() },
-};
-
-function bothInOn(): IncidenciaFlags {
+function flagsPadrao(): IncidenciaFlags {
   return {
     incide_fgts: true,
     fgts_recolhido: false,
     incide_inss: true,
     inss_recolhido: false,
     natureza_indenizatoria: false,
-  };
-}
-
-function indenizatoria(): IncidenciaFlags {
-  return {
-    incide_fgts: false,
-    fgts_recolhido: false,
-    incide_inss: false,
-    inss_recolhido: false,
-    natureza_indenizatoria: true,
   };
 }
 
@@ -68,28 +48,27 @@ export interface FichaFinanceiraZipInput {
       pior_delta_pct: number;
     };
   };
-  parserMeta?: {
-    fonte: 'deterministic' | 'claude';
-    duration_ms?: number;
-  };
+  parserMeta?: { fonte: 'deterministic' | 'claude'; duration_ms?: number };
 }
 
 export interface FichaFinanceiraZipResult {
   blob: Blob;
   filename: string;
   resumo: {
-    categorias: Array<{
-      slug: string;
+    grupos: Array<{
+      slug: GrupoExportCSV;
       nome_pjecalc: string;
       total: Decimal;
       meses: number;
     }>;
     rubricas_incluidas: number;
-    rubricas_ignoradas: number;
+    rubricas_desconsideradas: number;
+    rubricas_excluidas_pelo_operador: number;
     competencias_validacao_ok: number;
     competencias_validacao_fora: number;
+    classificacoes_baixa_confianca: number;
   };
-  reports: Array<{ categoria: string; report: BuildReport }>;
+  reports: Array<{ grupo: GrupoExportCSV; report: BuildReport }>;
 }
 
 function competenciaParserParaCsv(comp: string): string {
@@ -98,81 +77,115 @@ function competenciaParserParaCsv(comp: string): string {
   return comp;
 }
 
+function ordemCompetencia(comp: string): number {
+  const parts = comp.split('/');
+  if (parts.length !== 2) return 0;
+  const m = parseInt(parts[0], 10);
+  const y = parseInt(parts[1], 10);
+  if (isNaN(m) || isNaN(y)) return 0;
+  return y * 12 + m;
+}
+
+type RubricaClassificada = RubricaEditavel & {
+  grupo_export: GrupoExportCSV;
+  classificacao_planilha: ClassificacaoResultado;
+};
+
 export async function buildFichaFinanceiraZip(
   input: FichaFinanceiraZipInput,
 ): Promise<FichaFinanceiraZipResult> {
   const zip = new JSZip();
-  const reports: Array<{ categoria: string; report: BuildReport }> = [];
-  const resumoCategorias: FichaFinanceiraZipResult['resumo']['categorias'] = [];
+  const reports: Array<{ grupo: GrupoExportCSV; report: BuildReport }> = [];
+  const resumoGrupos: FichaFinanceiraZipResult['resumo']['grupos'] = [];
 
-  const rubricasIncluidas = input.rubricas.filter(
-    (r) => r.incluida && r.categoria_atual !== 'ignorar',
-  );
+  // Classifica cada rubrica em UM grupo da planilha.
+  // Override do operador (incluida=false ou categoria_atual=='ignorar')
+  // sobrescreve pra 'desconsiderado'.
+  const classificadas: RubricaClassificada[] = input.rubricas.map((r) => {
+    const overrideExclusao = !r.incluida || r.categoria_atual === 'ignorar';
+    const classificacao = overrideExclusao
+      ? {
+          grupo: 'desconsiderado' as GrupoExportCSV,
+          confianca: 'alta' as const,
+          metodo: 'codigo' as const,
+          motivo: 'Excluído pelo operador na UI de revisão.',
+        }
+      : classificarRubrica(r.codigo, r.denominacao);
+    return { ...r, grupo_export: classificacao.grupo, classificacao_planilha: classificacao };
+  });
 
-  const porCategoria = new Map<string, RubricaEditavel[]>();
-  for (const r of rubricasIncluidas) {
-    const slug = r.categoria_atual;
-    if (!porCategoria.has(slug)) porCategoria.set(slug, []);
-    porCategoria.get(slug)!.push(r);
-  }
+  const excluidasOperador = classificadas.filter(
+    (r) => !r.incluida || r.categoria_atual === 'ignorar',
+  ).length;
+  const baixaConfianca = classificadas.filter(
+    (r) =>
+      r.classificacao_planilha.confianca === 'baixa' &&
+      r.grupo_export !== 'desconsiderado',
+  ).length;
 
-  for (const [slug, rubricasCat] of porCategoria.entries()) {
+  for (const { slug, prefixo, nome_pjecalc } of ORDEM_GRUPOS_CSV) {
+    const rubricasGrupo = classificadas.filter((r) => r.grupo_export === slug);
+    if (rubricasGrupo.length === 0) continue;
+
     const linhasMap = new Map<string, Decimal>();
-    for (const r of rubricasCat) {
+    for (const r of rubricasGrupo) {
       for (const v of r.valores_mensais) {
         const compBR = competenciaParserParaCsv(v.competencia);
         const atual = linhasMap.get(compBR) ?? new Decimal(0);
         linhasMap.set(compBR, atual.plus(new Decimal(v.valor)));
       }
     }
+    if (linhasMap.size === 0) continue;
 
     const linhas: LinhaHistoricoSalarial[] = [...linhasMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => ordemCompetencia(a) - ordemCompetencia(b))
       .map(([competencia, valor]) => ({ competencia, valor }));
 
-    const meta = CATEGORIAS_NOMES[slug];
-    const flags: IncidenciaFlags = meta
-      ? meta.default_flags
-      : derivarFlags(rubricasCat);
-
-    const { csv, report } = buildHistoricoSalarialCSVWithReport(linhas, flags);
-    zip.file(`historico_salarial_${slug}.csv`, csv);
+    const { csv, report } = buildHistoricoSalarialCSVWithReport(linhas, flagsPadrao());
+    zip.file(`${prefixo}_${slug}.csv`, csv);
 
     const total = linhas.reduce((acc, l) => {
       const v = l.valor instanceof Decimal ? l.valor : new Decimal(l.valor);
       return acc.plus(v);
     }, new Decimal(0));
 
-    resumoCategorias.push({
-      slug,
-      nome_pjecalc: meta?.nome_pjecalc ?? slug,
-      total,
-      meses: linhas.length,
-    });
-    reports.push({ categoria: slug, report });
+    resumoGrupos.push({ slug, nome_pjecalc, total, meses: linhas.length });
+    reports.push({ grupo: slug, report });
   }
 
-  zip.file('auditoria_completa.csv', buildAuditoriaCSV(input.rubricas));
+  zip.file('auditoria_completa.csv', buildAuditoriaCSV(classificadas));
+
+  const desconsideradas = classificadas.filter(
+    (r) =>
+      r.grupo_export === 'desconsiderado' &&
+      r.incluida &&
+      r.categoria_atual !== 'ignorar',
+  );
+  if (desconsideradas.length > 0) {
+    zip.file('auditoria_desconsideradas.csv', buildDesconsideradasCSV(desconsideradas));
+  }
+
   zip.file('resumo_validacao.txt', buildResumoValidacao(input.validacao));
 
   const metadata = {
-    versao_exporter: '1.0.0',
+    versao_exporter: '2.0.0-planilha-dsr',
     gerado_em: new Date().toISOString(),
     ano: input.ano,
     empregador: input.empregador,
     empregado: input.empregado,
     parser_fonte: input.parserMeta?.fonte ?? 'unknown',
     parser_duration_ms: input.parserMeta?.duration_ms,
-    totais_por_categoria: resumoCategorias.map((c) => ({
-      slug: c.slug,
-      nome_pjecalc: c.nome_pjecalc,
-      total: c.total.toFixed(2),
-      meses: c.meses,
+    classificacao_taxonomia: 'planilha-comissao-dsr-mrd-v1',
+    totais_por_grupo: resumoGrupos.map((g) => ({
+      slug: g.slug,
+      nome_pjecalc: g.nome_pjecalc,
+      total: g.total.toFixed(2),
+      meses: g.meses,
     })),
-    validacao: {
-      ok: input.validacao.ok,
-      resumo: input.validacao.resumo,
-    },
+    contagem_desconsideradas: desconsideradas.length,
+    contagem_excluidas_pelo_operador: excluidasOperador,
+    contagem_classificacao_baixa_confianca: baixaConfianca,
+    validacao: { ok: input.validacao.ok, resumo: input.validacao.resumo },
   };
   zip.file('metadata.json', JSON.stringify(metadata, null, 2));
 
@@ -184,49 +197,49 @@ export async function buildFichaFinanceiraZip(
     blob,
     filename,
     resumo: {
-      categorias: resumoCategorias,
-      rubricas_incluidas: rubricasIncluidas.length,
-      rubricas_ignoradas: input.rubricas.length - rubricasIncluidas.length,
+      grupos: resumoGrupos,
+      rubricas_incluidas: classificadas.filter((r) => r.grupo_export !== 'desconsiderado').length,
+      rubricas_desconsideradas: desconsideradas.length,
+      rubricas_excluidas_pelo_operador: excluidasOperador,
       competencias_validacao_ok: input.validacao.resumo.competencias_ok,
       competencias_validacao_fora: input.validacao.resumo.competencias_fora,
+      classificacoes_baixa_confianca: baixaConfianca,
     },
     reports,
   };
 }
 
-function derivarFlags(rubricas: RubricaEditavel[]): IncidenciaFlags {
-  let fgts = false;
-  let inss = false;
-  let inden = false;
-  for (const r of rubricas) {
-    if (r.incide_fgts) fgts = true;
-    if (r.incide_inss) inss = true;
-    if (r.natureza_indenizatoria) inden = true;
-  }
-  return {
-    incide_fgts: fgts,
-    fgts_recolhido: false,
-    incide_inss: inss,
-    inss_recolhido: false,
-    natureza_indenizatoria: inden,
-  };
-}
-
-function buildAuditoriaCSV(rubricas: RubricaEditavel[]): string {
+function buildAuditoriaCSV(rubricas: RubricaClassificada[]): string {
   const HEADER =
-    'Codigo;Denominacao;Classe;Categoria;Origem;Total_Ano;Incluido;Modificado';
-  const rows = rubricas.map((r) => {
-    return [
+    'Codigo;Denominacao;Classe_Doc;Categoria_UI;Grupo_Export;Confianca;Metodo;Origem;Total_Ano;Incluido;Modificado';
+  const rows = rubricas.map((r) =>
+    [
       r.codigo,
       sanitizeText(r.denominacao, 100),
-      r.classificacao || '',
+      (r as unknown as { classificacao_doc?: string }).classificacao_doc ?? '',
       r.categoria_atual,
+      r.grupo_export,
+      r.classificacao_planilha.confianca,
+      r.classificacao_planilha.metodo,
       r.origem_enriquecimento,
       formatNumeroBR(r.total_ano),
       r.incluida ? 'S' : 'N',
       r.modificada_pelo_operador ? 'S' : 'N',
-    ].join(';');
-  });
+    ].join(';'),
+  );
+  return [HEADER, ...rows].join('\r\n') + '\r\n';
+}
+
+function buildDesconsideradasCSV(rubricas: RubricaClassificada[]): string {
+  const HEADER = 'Codigo;Denominacao;Motivo_Desconsiderado;Total_Ano';
+  const rows = rubricas.map((r) =>
+    [
+      r.codigo,
+      sanitizeText(r.denominacao, 100),
+      sanitizeText(r.classificacao_planilha.motivo, 200),
+      formatNumeroBR(r.total_ano),
+    ].join(';'),
+  );
   return [HEADER, ...rows].join('\r\n') + '\r\n';
 }
 

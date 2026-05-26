@@ -67,83 +67,99 @@ async function extractFiles(blob: Blob): Promise<Map<string, string>> {
   return files;
 }
 
-describe('buildFichaFinanceiraZip', () => {
-  it('ZIP contém os 4 tipos de arquivo esperados', async () => {
+describe('buildFichaFinanceiraZip (taxonomia planilha-dsr v2)', () => {
+  it('ZIP contém arquivos básicos + CSV do grupo da rubrica', async () => {
+    // Código 0620 (Comissões) → grupo comissao_produtos (prefixo 02)
     const result = await buildFichaFinanceiraZip(makeInput([makeRubrica()]));
     const files = await extractFiles(result.blob);
 
-    expect(files.has('historico_salarial_comissao.csv')).toBe(true);
+    expect(files.has('02_comissao_produtos.csv')).toBe(true);
     expect(files.has('auditoria_completa.csv')).toBe(true);
     expect(files.has('resumo_validacao.txt')).toBe(true);
     expect(files.has('metadata.json')).toBe(true);
   });
 
-  it('1 categoria 2 meses: CSV tem 2 linhas de dados + header', async () => {
+  it('1 grupo com 2 meses: CSV tem 2 linhas de dados + header', async () => {
     const result = await buildFichaFinanceiraZip(makeInput([makeRubrica()]));
     const files = await extractFiles(result.blob);
-    const csv = files.get('historico_salarial_comissao.csv')!;
+    const csv = files.get('02_comissao_produtos.csv')!;
     const linhas = csv.trim().split('\r\n');
     expect(linhas[0]).toContain('MES_ANO');
     expect(linhas.length).toBe(3);
   });
 
-  it('2 categorias geram 2 CSVs distintos', async () => {
+  it('Header oficial PJe-Calc Cidadão byte-a-byte', async () => {
+    const result = await buildFichaFinanceiraZip(makeInput([makeRubrica()]));
+    const files = await extractFiles(result.blob);
+    const csv = files.get('02_comissao_produtos.csv')!;
+    expect(csv.startsWith(
+      '"MES_ANO";"VALOR";"FGTS";"FGTS_REC.";"CONTRIBUICAO_SOCIAL";"CONTRIBUICAO_SOCIAL_REC."'
+    )).toBe(true);
+  });
+
+  it('2 grupos distintos geram 2 CSVs separados', async () => {
     const rubricas = [
-      makeRubrica({ codigo: '0620', categoria_atual: 'comissao' }),
-      makeRubrica({ codigo: '0501', categoria_atual: 'dsr', valores_mensais: [{ competencia: '2016-01', valor: 500 }], total_ano: new Decimal(500) }),
+      makeRubrica({ codigo: '0620' }), // → comissao_produtos
+      makeRubrica({
+        codigo: '0501',
+        denominacao: 'DSR (Comissão)',
+        valores_mensais: [{ competencia: '2016-01', valor: 500 }],
+        total_ano: new Decimal(500),
+      }), // → dsr_comissao
     ];
     const result = await buildFichaFinanceiraZip(makeInput(rubricas));
     const files = await extractFiles(result.blob);
 
-    expect(files.has('historico_salarial_comissao.csv')).toBe(true);
-    expect(files.has('historico_salarial_dsr.csv')).toBe(true);
-    expect(result.resumo.categorias).toHaveLength(2);
+    expect(files.has('02_comissao_produtos.csv')).toBe(true);
+    expect(files.has('03_dsr_comissao.csv')).toBe(true);
+    expect(result.resumo.grupos).toHaveLength(2);
   });
 
-  it('categoria ignorar não gera CSV', async () => {
+  it('código 5560 (INSS) → desconsiderado, NÃO gera CSV principal', async () => {
     const rubricas = [
-      makeRubrica({ codigo: '5560', categoria_atual: 'ignorar', incluida: false }),
+      makeRubrica({ codigo: '5560', denominacao: 'INSS', incluida: true }),
     ];
     const result = await buildFichaFinanceiraZip(makeInput(rubricas));
     const files = await extractFiles(result.blob);
 
-    const historicos = [...files.keys()].filter((k) => k.startsWith('historico_salarial_'));
-    expect(historicos).toHaveLength(0);
-    expect(result.resumo.rubricas_incluidas).toBe(0);
-    expect(result.resumo.rubricas_ignoradas).toBe(1);
+    const csvsPjc = [...files.keys()].filter((k) => /^\d{2}_/.test(k));
+    expect(csvsPjc).toHaveLength(0);
+    // Mas DEVE gerar auditoria_desconsideradas.csv
+    expect(files.has('auditoria_desconsideradas.csv')).toBe(true);
   });
 
-  it('rubrica incluida=false não entra no CSV', async () => {
+  it('rubrica incluida=false → desconsiderado, vai pra auditoria não pro CSV', async () => {
     const rubricas = [
       makeRubrica({ codigo: '0620', incluida: false }),
     ];
     const result = await buildFichaFinanceiraZip(makeInput(rubricas));
     const files = await extractFiles(result.blob);
 
-    const historicos = [...files.keys()].filter((k) => k.startsWith('historico_salarial_'));
-    expect(historicos).toHaveLength(0);
+    const csvsPjc = [...files.keys()].filter((k) => /^\d{2}_/.test(k));
+    expect(csvsPjc).toHaveLength(0);
+    expect(result.resumo.rubricas_excluidas_pelo_operador).toBe(1);
   });
 
-  it('2 rubricas mesma categoria + mesmo mês: valor consolidado', async () => {
+  it('2 rubricas no MESMO grupo + mesmo mês: valor consolidado', async () => {
+    // 0620 (comissão) + 3317 (adic. sábado com) ambos → comissao_produtos
     const rubricas = [
       makeRubrica({
         codigo: '0620',
-        categoria_atual: 'comissao',
         valores_mensais: [{ competencia: '2016-01', valor: 1000 }],
         total_ano: new Decimal(1000),
       }),
       makeRubrica({
-        codigo: '3393',
-        categoria_atual: 'comissao',
+        codigo: '3317',
+        denominacao: 'Adic. Sábado Com. 25%',
         valores_mensais: [{ competencia: '2016-01', valor: 500 }],
         total_ano: new Decimal(500),
       }),
     ];
     const result = await buildFichaFinanceiraZip(makeInput(rubricas));
     const files = await extractFiles(result.blob);
-    const csv = files.get('historico_salarial_comissao.csv')!;
+    const csv = files.get('02_comissao_produtos.csv')!;
     const linhas = csv.trim().split('\r\n');
-    expect(linhas).toHaveLength(2);
+    expect(linhas).toHaveLength(2); // header + 1 mês consolidado
     expect(csv).toContain('1500,00');
   });
 
@@ -156,13 +172,13 @@ describe('buildFichaFinanceiraZip', () => {
     ];
     const result = await buildFichaFinanceiraZip(makeInput(rubricas));
     const files = await extractFiles(result.blob);
-    const csv = files.get('historico_salarial_comissao.csv')!;
+    const csv = files.get('02_comissao_produtos.csv')!;
 
     expect(csv).toContain('03/2016');
     expect(csv).not.toContain('2016-03');
   });
 
-  it('Decimal precisão: 5234.67 não perde centavos', async () => {
+  it('Decimal precisão: 5234.67 não perde centavos, formato sem milhar', async () => {
     const rubricas = [
       makeRubrica({
         valores_mensais: [{ competencia: '2016-01', valor: 5234.67 }],
@@ -171,14 +187,16 @@ describe('buildFichaFinanceiraZip', () => {
     ];
     const result = await buildFichaFinanceiraZip(makeInput(rubricas));
     const files = await extractFiles(result.blob);
-    const csv = files.get('historico_salarial_comissao.csv')!;
-    expect(csv).toContain('5234,67');
+    const csv = files.get('02_comissao_produtos.csv')!;
+    // Valida formato oficial PJe-Calc: sem separador de milhar
+    expect(csv).toContain('"5234,67"');
+    expect(csv).not.toContain('"5.234,67"');
   });
 
-  it('auditoria_completa.csv contém TODAS as rubricas', async () => {
+  it('auditoria_completa.csv contém TODAS as rubricas (incluídas + excluídas)', async () => {
     const rubricas = [
       makeRubrica({ codigo: '0620', incluida: true }),
-      makeRubrica({ codigo: '5560', categoria_atual: 'ignorar', incluida: false, total_ano: new Decimal(100) }),
+      makeRubrica({ codigo: '5560', denominacao: 'INSS', categoria_atual: 'ignorar', incluida: false, total_ano: new Decimal(100) }),
     ];
     const result = await buildFichaFinanceiraZip(makeInput(rubricas));
     const files = await extractFiles(result.blob);
@@ -186,9 +204,10 @@ describe('buildFichaFinanceiraZip', () => {
 
     expect(auditoria).toContain('0620');
     expect(auditoria).toContain('5560');
-    expect(auditoria).toContain('Incluido');
+    expect(auditoria).toContain('Grupo_Export');
+    expect(auditoria).toContain('Confianca');
     const linhas = auditoria.trim().split('\r\n');
-    expect(linhas).toHaveLength(3);
+    expect(linhas).toHaveLength(3); // header + 2 rubricas
   });
 
   it('resumo_validacao.txt com ok=true começa com "Resultado: OK"', async () => {
@@ -223,21 +242,100 @@ describe('buildFichaFinanceiraZip', () => {
     expect(txt).toContain('16.67%');
   });
 
-  it('metadata.json é parsável e tem campos esperados', async () => {
+  it('metadata.json reflete nova taxonomia v2', async () => {
     const result = await buildFichaFinanceiraZip(makeInput([makeRubrica()]));
     const files = await extractFiles(result.blob);
     const meta = JSON.parse(files.get('metadata.json')!);
 
-    expect(meta.versao_exporter).toBe('1.0.0');
+    expect(meta.versao_exporter).toBe('2.0.0-planilha-dsr');
+    expect(meta.classificacao_taxonomia).toBe('planilha-comissao-dsr-mrd-v1');
     expect(meta.ano).toBe(2016);
     expect(meta.empregador).toBe('VIA_VAREJO');
     expect(meta.empregado).toBe('ROQUE GUERREIRO');
     expect(meta.validacao.ok).toBe(true);
-    expect(Array.isArray(meta.totais_por_categoria)).toBe(true);
+    expect(Array.isArray(meta.totais_por_grupo)).toBe(true);
+    expect(meta.totais_por_grupo[0].slug).toBe('comissao_produtos');
+    expect(meta.totais_por_grupo[0].nome_pjecalc).toBe('Comissões sobre Produtos');
   });
 
   it('filename segue padrão ficha_<emp>_<ano>.zip', async () => {
     const result = await buildFichaFinanceiraZip(makeInput([makeRubrica()]));
     expect(result.filename).toBe('ficha_via_varejo_2016.zip');
+  });
+
+  // ===== Testes específicos da taxonomia planilha-dsr =====
+
+  it('caso ROQUE 2016: 6 rubricas → 4 grupos (3 CSV pra import + auditoria_desconsideradas)', async () => {
+    const rubricas: RubricaEditavel[] = [
+      makeRubrica({
+        codigo: '0712',
+        denominacao: 'Mínimo Garantido',
+        valores_mensais: [{ competencia: '2016-01', valor: 1000 }],
+        total_ano: new Decimal(1000),
+      }), // → 01_minimo_garantido
+      makeRubrica({
+        codigo: '0620',
+        denominacao: 'Comissões',
+        valores_mensais: [{ competencia: '2016-01', valor: 1308.70 }],
+        total_ano: new Decimal(1308.70),
+      }), // → 02_comissao_produtos
+      makeRubrica({
+        codigo: '0501',
+        denominacao: 'DSR(Comissão)',
+        valores_mensais: [{ competencia: '2016-01', valor: 361.79 }],
+        total_ano: new Decimal(361.79),
+      }), // → 03_dsr_comissao
+      makeRubrica({
+        codigo: '3290',
+        denominacao: 'PREMIO ANTECIPADO',
+        valores_mensais: [{ competencia: '2016-01', valor: 178.97 }],
+        total_ano: new Decimal(178.97),
+      }), // → 05_premios
+      // Desconsiderados
+      makeRubrica({
+        codigo: '0040',
+        denominacao: 'Participação Lucros',
+        valores_mensais: [{ competencia: '2016-01', valor: 1600 }],
+        total_ano: new Decimal(1600),
+      }),
+      makeRubrica({
+        codigo: '2750',
+        denominacao: 'Media de Férias',
+        valores_mensais: [{ competencia: '2016-01', valor: 2333.73 }],
+        total_ano: new Decimal(2333.73),
+      }),
+    ];
+    const result = await buildFichaFinanceiraZip(makeInput(rubricas));
+    const files = await extractFiles(result.blob);
+
+    expect(files.has('01_minimo_garantido.csv')).toBe(true);
+    expect(files.has('02_comissao_produtos.csv')).toBe(true);
+    expect(files.has('03_dsr_comissao.csv')).toBe(true);
+    expect(files.has('05_premios.csv')).toBe(true);
+    expect(files.has('auditoria_desconsideradas.csv')).toBe(true);
+
+    // Não deve gerar CSV pra grupos vazios
+    expect(files.has('04_comissao_servicos.csv')).toBe(false);
+    expect(files.has('06_salario_substituicao.csv')).toBe(false);
+
+    // Auditoria desconsideradas tem PLR e Média Férias
+    const aud = files.get('auditoria_desconsideradas.csv')!;
+    expect(aud).toContain('0040');
+    expect(aud).toContain('2750');
+  });
+
+  it('classificação por nome (código novo) — fuzzy/substring funciona', async () => {
+    const rubricas = [
+      makeRubrica({
+        codigo: '9999', // não catalogado
+        denominacao: 'Premio Mensal',
+        valores_mensais: [{ competencia: '2016-01', valor: 100 }],
+        total_ano: new Decimal(100),
+      }),
+    ];
+    const result = await buildFichaFinanceiraZip(makeInput(rubricas));
+    const files = await extractFiles(result.blob);
+    // Premio Mensal está em PRÊMIOS na planilha → grupo 05
+    expect(files.has('05_premios.csv')).toBe(true);
   });
 });
