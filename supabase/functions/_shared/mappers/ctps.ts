@@ -21,11 +21,11 @@ const PARSER_VERSION = 'ctps-mapper-v8-2026-05-26';
 const RE_DATA_BR = /(\d{2})\/(\d{2})\/(\d{4})/;
 const RE_CNPJ = /\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/;
 const RE_MATRICULA =
-  /\b(?:matr[íi]cula|n[uú]mero\s+do\s+empregado|registro)[\s.]*:?\s*(\d{4,12})\b/i;
+  /\b(?:matr[íi]cula|n[uú]mero\s+do\s+empregado|registro)\s*:?\s*(\d{4,12})\b/i;
 const RE_ADMISSAO =
-  /\b(?:admiss[ãa]o|data\s+de\s+admiss[ãa]o|in[íi]cio\s+do\s+contrato)[\s.]*:?\s*(\d{2}\/\d{2}\/\d{4})/i;
+  /\b(?:admiss[ãa]o|data\s+de\s+admiss[ãa]o|in[íi]cio\s+do\s+contrato)\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i;
 const RE_DEMISSAO =
-  /\b(?:demiss[ãa]o|sa[íi]da|t[eé]rmino\s+do\s+contrato|data\s+(?:de\s+)?desligamento|rescis[ãa]o)[\s.]*:?\s*(\d{2}\/\d{2}\/\d{4})/i;
+  /\b(?:demiss[ãa]o|sa[íi]da|t[eé]rmino\s+do\s+contrato|data\s+(?:de\s+)?desligamento|rescis[ãa]o)\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i;
 const RE_DEMISSAO_PROJECAO =
   /\bdesligamento\s+com\s+proje[çc][ãa]o\s+aviso\s+pr[ée]vio\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i;
 const RE_CARGO =
