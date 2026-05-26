@@ -35,8 +35,9 @@ const RE_EMPREGADOR =
 
 // ── Regex: férias tabular ──
 
+// [C1 fix] Aceita: " a ", " - ", " – ", " até "; dias inteiros OU decimais; abono opcional
 const RE_CTPS_FERIAS_ROW =
-  /(\d{2}\/\d{2}\/\d{4})\s*a\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s*a\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{1,3})\s+(\d{1,3})/g;
+  /(\d{2}\/\d{2}\/\d{4})\s*(?:a|-|–|até)\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s*(?:a|-|–|até)\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{1,3})(?:[.,]\d{1,2})?(?:[ \t]+(\d{1,3})(?:[.,]\d{1,2})?)?/g;
 
 // ── Regex: faltas / afastamentos ──
 
@@ -89,11 +90,21 @@ type TipoAfastamento =
   | 'licenca_maternidade' | 'licenca_paternidade'
   | 'licenca_medica' | 'suspensao' | 'outros';
 
+// [C3 fix] Lei 11.770/2008 — Mat.-Extensão, Declaração em horas, acidente do trabalho
+const RE_MAT_EXTENSAO = /\bmat\.?\s*-?\s*extens|extens[ãa]o\s+(?:de\s+)?(?:licen[çc]a\s+)?maternidade|empresa\s+cidad/i;
+const RE_DECLARACAO_HORAS = /declara[çc][ãa]o\s+em\s+horas/i;
+const RE_ACIDENTE_TRABALHO = /acidente\s+(?:do\s+|de\s+)?trabalho|\bcat\b|comunica[çc][ãa]o\s+de\s+acidente/i;
+// [C6] Férias adiantadas registradas em AFASTAMENTOS OUTROS
+const RE_FERIAS_ADIANTADAS = /f[ée]rias\s+c\/?\s*adiant|f[ée]rias\s+adiantadas?|f[ée]rias\s+(?:em\s+)?goz/i;
+
 function classificarTipo(linha: string, duracao: number): TipoAfastamento {
   if (RE_SUSPENSAO.test(linha)) return 'suspensao';
+  if (RE_MAT_EXTENSAO.test(linha)) return 'licenca_maternidade';
   if (RE_MATERNIDADE.test(linha)) return 'licenca_maternidade';
   if (RE_PATERNIDADE.test(linha)) return 'licenca_paternidade';
   if (RE_AUX_DOENCA.test(linha)) return 'aux_doenca';
+  if (RE_DECLARACAO_HORAS.test(linha)) return 'outros';
+  if (RE_ACIDENTE_TRABALHO.test(linha)) return 'aux_doenca';
   if (duracao > 15) return 'aux_doenca';
   if (RE_LICENCA_MEDICA.test(linha)) return 'licenca_medica';
   if (RE_ATESTADO.test(linha)) return 'atestado';
@@ -117,8 +128,8 @@ function parseSecaoFerias(texto: string): FeriasDominio[] {
   let match;
   while ((match = re.exec(secao)) !== null) {
     const [, aqIni, , gozoIni, gozoFim, diasStr, abonoStr] = match;
-    const diasGozo = Number(diasStr);
-    const diasAbono = Number(abonoStr);
+    const diasGozo = Math.round(parseFloat(diasStr.replace(',', '.')));
+    const diasAbono = abonoStr ? Math.round(parseFloat(abonoStr.replace(',', '.'))) : 0;
     ferias.push({
       relativa: derivarRelativa(aqIni),
       prazo: diasGozo + diasAbono,
@@ -165,8 +176,10 @@ function parseSecaoFaltas(texto: string): FaltaDominio[] {
     if (linhasDeFerias.has(i)) continue;
     const line = lines[i];
 
-    const temAfastamento = /afastament|atestado|aux[íi]lio|doen[çc]a|suspens[ãa]o|licen[çc]a|falt|m[ée]dico/i.test(line);
+    // [C2 fix] Expanded keyword set + [C6] skip férias adiantadas
+    const temAfastamento = /afastament|atestad\w*|aux[ií]li[ao]|doen[çc]a|suspens\w*|licen[çc]a|falt\w*|m[ée]dico|declara[çc][ãa]o\s+em\s+horas|gala|nojo|paternidad\w*|maternidad\w*|acidente\s+(?:do\s+|de\s+)?trabalho|cipa/i.test(line);
     if (!temAfastamento) continue;
+    if (RE_FERIAS_ADIANTADAS.test(line)) continue;
 
     let dataInicio: string | null = null;
     let dataFim: string | null = null;
@@ -278,7 +291,23 @@ export const mapperCtps: Mapper<CtpsDominio> = {
   },
 
   mapear(doc: DocumentoTabular): CtpsDominio | null {
-    const t = doc.textoCompleto;
+    // [C4 fix] Normalize OCR degradado before parsing
+    const tRaw = doc.textoCompleto;
+    const t = /\b(Licenc?ga|Situag|Atualizag|Anotag|Fungao|Fun[c¢][aã]o|Rescisdo|CIPS|Alterag[ado]|Observag)/i.test(tRaw)
+      ? tRaw
+          .replace(/\bLicenc?ga\b/gi, 'Licença')
+          .replace(/\bSituag[acdoã]+o?\b/gi, 'Situação')
+          .replace(/\bAtualizag[oõ]+e?s\b/gi, 'Atualizações')
+          .replace(/\bAnotag[oõ]+e?s\b/gi, 'Anotações')
+          .replace(/\bFun[c¢]a?[oã]o?\b/gi, 'Função')
+          .replace(/\bFunga?o\b/gi, 'Função')
+          .replace(/\bRescisdo\b/gi, 'Rescisão')
+          .replace(/\bRescisao\b/gi, 'Rescisão')
+          .replace(/\bAlterag[acdoã]+o?\b/gi, 'Alteração')
+          .replace(/\bObservag[oõ]+e?s\b/gi, 'Observações')
+          .replace(/\bCIPS\b/g, 'CTPS')
+          .replace(/\bCTRS\b/g, 'CTPS')
+      : tRaw;
 
     const mAdm = t.match(RE_ADMISSAO);
     if (!mAdm) return null;
