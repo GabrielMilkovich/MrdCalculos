@@ -32,7 +32,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
-import { ocrBytes, runOcr, type MistralOcrOptions } from "../_shared/mistral-ocr.ts";
+import { ocrBytes, runOcr, type MistralOcrOptions } from "../_shared/claude-vision-ocr.ts";
 import { checkRateLimit } from "../_shared/rate-limit.ts";
 import { tentarV6, metadataV6, type V6Tentativa } from "../_shared/v6-pipeline.ts";
 
@@ -272,9 +272,9 @@ Deno.serve(async (req) => {
     const document_id: string | undefined = body?.document_id;
     if (!document_id) return jsonResponse({ error: "document_id obrigatório" }, 400);
 
-    const MISTRAL_API_KEY = Deno.env.get("MISTRAL_API_KEY");
+    const MISTRAL_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!MISTRAL_API_KEY) {
-      return jsonResponse({ error: "MISTRAL_API_KEY não configurado nas Edge Function Secrets." }, 500);
+      return jsonResponse({ error: "ANTHROPIC_API_KEY não configurado nas Edge Function Secrets." }, 500);
     }
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -644,7 +644,7 @@ Deno.serve(async (req) => {
           error_message: null,
           metadata: {
             ...(document.metadata || {}),
-            ocr_provider: "mistral-ocr",
+            ocr_provider: "claude-vision",
             ocr_completed_at: new Date().toISOString(),
             ocr_duration_ms: durationMs,
             ocr_doc_type: docType,
@@ -815,7 +815,7 @@ Deno.serve(async (req) => {
             metadata: {
               ...(document.metadata || {}),
               ocr_failed_at: new Date().toISOString(),
-              ocr_provider: "mistral-ocr",
+              ocr_provider: "claude-vision",
               ocr_error: msg.slice(0, 1000),
             },
           })
