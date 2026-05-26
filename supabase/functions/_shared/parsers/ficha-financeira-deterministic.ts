@@ -124,6 +124,53 @@ const MESES_FULL: Array<{ pattern: RegExp; mm: string }> = [
   { pattern: /\btotal\b/i, mm: 'total' },
 ];
 
+// ── Normalização de classificação ADP corrompida por OCR ──
+
+export function normalizarClassificacao(raw: string): string {
+  if (!raw) return '';
+  const c = raw.trim().toUpperCase();
+  if (['PGTO', 'DESC', 'BASE', 'ENCAR', 'OUTRO', 'PROV', 'INFO'].includes(c)) return c;
+  const len = c.length;
+  if (len === 4 && c[0] === 'P' && c[2] === 'T' && c[3] === 'O') return 'PGTO';
+  if (len === 4 && c[0] === 'P' && c[1] === 'R' && c[2] === 'O') return 'PROV';
+  if (len === 4 && c[0] === 'D' && c[1] === 'E' && c[2] === 'S') return 'DESC';
+  if (len === 4 && c[0] === 'B' && c[3] === 'E') return 'BASE';
+  if (len === 5 && c[0] === 'E' && c[1] === 'N' && c[2] === 'C') return 'ENCAR';
+  if (len === 5 && c[0] === 'O' && c[1] === 'U' && c[4] === 'O') return 'OUTRO';
+  if (len === 4 && c[0] === 'I' && c[1] === 'N' && c[3] === 'O') return 'INFO';
+  if (c === 'PAGO' || c === 'PGLO' || c === 'PGFO') return 'PGTO';
+  if (c === 'DECS') return 'DESC';
+  return c;
+}
+
+const CLASSIFICACOES_VALIDAS = new Set(['PGTO', 'DESC', 'BASE', 'ENCAR', 'OUTRO', 'PROV', 'INFO']);
+
+// ── Fallback por código de empregador ──
+
+interface EntradaCodigo { categoria: string; denominacao_canonica: string }
+let CODIGO_INDEX: Map<string, EntradaCodigo> | null = null;
+
+function getCodigoIndex(empregador: string): Map<string, EntradaCodigo> | null {
+  if (CODIGO_INDEX) return CODIGO_INDEX;
+  let codigos: Record<string, Record<string, { categoria: string; denominacao_canonica: string; aliases_codigo_ocr?: string[] }>>;
+  try {
+    codigos = require('../holerite-mapper-v2/codigos-empregador.json');
+  } catch {
+    return null;
+  }
+  const m = new Map<string, EntradaCodigo>();
+  const dados = codigos[empregador] ?? {};
+  for (const [codigo, info] of Object.entries(dados)) {
+    const entry: EntradaCodigo = { categoria: info.categoria, denominacao_canonica: info.denominacao_canonica };
+    m.set(codigo, entry);
+    for (const aliasOcr of info.aliases_codigo_ocr ?? []) {
+      if (!m.has(aliasOcr)) m.set(aliasOcr, entry);
+    }
+  }
+  CODIGO_INDEX = m;
+  return m;
+}
+
 // ── Cutoff sentinel ──
 
 function ehLinhaCutoff(codigo: string, denominacao: string): boolean {
@@ -143,6 +190,8 @@ interface RubricaExtraida {
   base_13: boolean;
   base_ferias: boolean;
   divergencia_juridica: boolean;
+  classificacao_via: 'ontologia_nome' | 'codigo_empregador' | 'nao_classificado';
+  denominacao_canonica?: string;
   valores_mensais: Array<{ competencia: string; valor: number }>;
 }
 
@@ -267,8 +316,30 @@ function buildResumo(rubricas: RubricaExtraida[]): Array<{ competencia: string; 
     }));
 }
 
-function classificarRubrica(denominacao: string): Pick<RubricaExtraida, 'categoria' | 'tipo_pjecalc' | 'base_dsr' | 'base_13' | 'base_ferias' | 'divergencia_juridica'> {
-  return classificarPorOntologia(denominacao);
+function classificarRubrica(
+  denominacao: string,
+  codigo: string,
+  empregadorSlug: string,
+): Pick<RubricaExtraida, 'categoria' | 'tipo_pjecalc' | 'base_dsr' | 'base_13' | 'base_ferias' | 'divergencia_juridica' | 'classificacao_via' | 'denominacao_canonica'> {
+  const byName = classificarPorOntologia(denominacao);
+  if (byName.categoria !== 'NAO_CLASSIFICADO') {
+    return { ...byName, classificacao_via: 'ontologia_nome' };
+  }
+  const codigoIndex = getCodigoIndex(empregadorSlug);
+  const byCode = codigoIndex?.get(codigo);
+  if (byCode) {
+    const canonical = classificarPorOntologia(byCode.denominacao_canonica);
+    if (canonical.categoria !== 'NAO_CLASSIFICADO') {
+      return { ...canonical, classificacao_via: 'codigo_empregador', denominacao_canonica: byCode.denominacao_canonica };
+    }
+  }
+  return {
+    categoria: 'NAO_CLASSIFICADO',
+    tipo_pjecalc: 'INDEFINIDO',
+    base_dsr: false, base_13: false, base_ferias: false,
+    divergencia_juridica: false,
+    classificacao_via: 'nao_classificado',
+  };
 }
 
 // ── Path 1: Markdown table ──
@@ -320,7 +391,9 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
 
     const codigo = codigoMatch[1];
     const denominacao = codigoMatch[2].trim();
-    const classificacao = cells.length > 1 ? cells[1].trim().toUpperCase() : '';
+    const classificacaoRaw = cells.length > 1 ? cells[1].trim().toUpperCase() : '';
+    const classificacao = normalizarClassificacao(classificacaoRaw);
+    if (classificacaoRaw && !CLASSIFICACOES_VALIDAS.has(classificacao)) continue;
 
     linhasProcessadas++;
 
@@ -339,7 +412,8 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
 
     if (valores.length === 0 && !ehLinhaCutoff(codigo, denominacao)) continue;
 
-    const cls = classificarRubrica(denominacao);
+    const empregadorSlug = empresa.toUpperCase().includes('VIA VAREJO') ? 'VIA_VAREJO' : 'GENERICO';
+    const cls = classificarRubrica(denominacao, codigo, empregadorSlug);
     rubricas.push({
       codigo, denominacao, classificacao,
       ...cls,
@@ -357,7 +431,7 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
     ano, empregado, empresa, rubricas,
     resumo_mensal: buildResumo(rubricas),
     _meta: {
-      parser: 'ficha-financeira-deterministic-v3-cutoff-ontologia-v2',
+      parser: 'ficha-financeira-deterministic-v4-pdfjs-ontologia-v2-classnorm',
       linhas_processadas: linhasProcessadas,
       linhas_filtradas: linhasFiltradas,
       meses_detectados: mesesDetectados.filter(m => m !== 'total'),
@@ -424,7 +498,7 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
       if (!clasMatch) continue;
 
       const denominacao = restAfterCode.substring(0, clasMatch.index!).trim();
-      const classificacao = clasMatch[1].trim().toUpperCase();
+      const classificacao = normalizarClassificacao(clasMatch[1]);
 
       linhasProcessadas++;
 
@@ -453,7 +527,8 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
 
       if (valores.length === 0 && !isCutoff) continue;
 
-      const cls = classificarRubrica(denominacao);
+      const empregadorSlug = empresa.toUpperCase().includes('VIA VAREJO') ? 'VIA_VAREJO' : 'GENERICO';
+      const cls = classificarRubrica(denominacao, codigo, empregadorSlug);
 
       const existing = rubricas.get(codigo);
       if (existing) {
@@ -496,7 +571,7 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
     rubricas: rubricasArr,
     resumo_mensal: buildResumo(rubricasArr),
     _meta: {
-      parser: 'ficha-financeira-deterministic-v3-cutoff-ontologia-v2',
+      parser: 'ficha-financeira-deterministic-v4-pdfjs-ontologia-v2-classnorm',
       linhas_processadas: linhasProcessadas,
       linhas_filtradas: linhasFiltradas,
       meses_detectados: [...allMeses].sort(),

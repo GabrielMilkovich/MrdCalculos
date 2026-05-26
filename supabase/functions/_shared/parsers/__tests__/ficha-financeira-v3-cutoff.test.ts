@@ -52,7 +52,7 @@ describe('Ficha Financeira V3 — regra cutoff + ontologia V2 (ROQUE 2016)', () 
   });
 
   it('parser V3 identificado na meta', () => {
-    expect(result._meta.parser).toContain('v3-cutoff');
+    expect(result._meta.parser).toContain('v4');
   });
 
   it('valores monetários: 0620 Jan = 1308.70', () => {

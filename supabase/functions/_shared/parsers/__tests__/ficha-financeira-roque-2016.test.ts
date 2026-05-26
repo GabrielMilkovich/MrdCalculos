@@ -65,8 +65,8 @@ describe('parseFichaFinanceiraDeterministico — texto-layout ROQUE 2016', () =>
     expect(meses.length).toBeGreaterThanOrEqual(12);
   });
 
-  it('parser meta identifica como v3-cutoff', () => {
-    expect(result!._meta.parser).toContain('v3-cutoff');
+  it('parser meta identifica como v4', () => {
+    expect(result!._meta.parser).toContain('v4');
   });
 
   it('código 4013 (Horas Extras 75%) presente com categoria DESCONSIDERADAS', () => {
@@ -146,8 +146,8 @@ describe('parseFichaFinanceiraDeterministico — markdown table path still works
     expect(result!.rubricas.find(r => r.codigo === '5100')).toBeTruthy();
   });
 
-  it('parser meta identifica como v3 (markdown)', () => {
+  it('parser meta identifica como v4', () => {
     const result = parseFichaFinanceiraDeterministico(MARKDOWN_FIXTURE);
-    expect(result!._meta.parser).toContain('v3');
+    expect(result!._meta.parser).toContain('v4');
   });
 });
