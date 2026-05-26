@@ -1,0 +1,109 @@
+   VIA VAREJO SA                              Ficha Financeira                              Página
+   33.041.260/0652-90                                                                          1
+   Ano Competência : 2016
+   Estabelecimento :         1363    VIA VAREJO S/A - PINHAIS - PR
+   Empregado       :      278823     ROQUE GUERREIRO TEIXEIRA
+                                                       Dt.Admissão : 24/11/2003
+                                                       Dt.Rescisão : 09/03/2021
+
+  Código Denominação          Clas.        Janeiro      Fevereiro          Março          Abril          Maio          Junho          Julho
+  ------ -------------------- ----- -------------- -------------- -------------- -------------- -------------- -------------- --------------
+    0040 Participação Lucros  PGTO                                                                         1.600,00
+    0501 DSR(Comissão)        PGTO          361,79          26,88         337,69         398,43         217,81         577,34         321,45
+    0502 DSR(H.Extra)         PGTO           42,12                        18,37
+    0510 Abono                PGTO
+    0511 Salário Receita      PGTO        1.245,00       1.245,00       1.245,00       1.245,00       1.245,00       1.245,00       1.245,00
+    0590 1/3 Adic. Const. Fér PGTO
+    0591 1/3 Adic. Const. Fér PGTO
+    0620 Comissões             PGTO       1.309,42         515,32       1.221,60       1.440,34         788,01       2.088,62       1.162,38
+    0712 Mínimo Garantido     PGTO                        729,68
+    0832 Insuf. Saldo no Mês  PGTO
+    2750 Média de Férias       PGTO
+    2751 Média de Férias       PGTO
+    2823 Abono                PGTO
+    3290 Prêmio Antecipado    PGTO          200,00                       350,00         150,00                        425,00
+    3317 Ad. Sábado Com. 25%  PGTO           58,23          15,40          47,12          62,30          28,50          81,75          44,92
+    3348 Horas Justificadas   PGTO
+    3351 Com. Garantia        PGTO                                       125,00
+    3368 TRN Treinamento      PGTO
+    3391 Com. Seguros         PGTO
+    3393 Com. Seguros Vida    PGTO          180,50                        95,20         210,40
+    3415 1/3 Férias Pagas     PGTO
+    3453 Comissão Frete       PGTO           75,30          42,10          88,40          63,20          51,80         112,50          78,60
+    4013 Horas Extras Com 75% PGTO          185,44                        80,85
+    4016 Horas Extras Com 70% PGTO
+    4096 Comissão Montagem    PGTO          142,80          98,50         165,30         128,40          85,20         195,60         110,40
+    4101 Prêmio Meta          PGTO                                                      300,00                        500,00
+    4131 Prêmio Metal         PGTO
+    4183 Ad. Noturno          PGTO
+    7035 Ajuste de Líquido    PGTO
+    7076 PLR Variável         PGTO
+    7680 Comissão Eletrônicos PGTO           95,40                       120,80          85,60                        145,20          72,30
+    8441 Antecip. Prêmio Estí PGTO                        150,00
+    8489 Campanha Serviços    PGTO          210,30                       175,40         120,50                        280,60         165,80
+    5560 INSS                 DESC          125,15          98,50         200,20         180,30         143,25         210,80         158,40
+    5500 IR Retido            DESC           17,44                        44,20          32,10                         85,30          28,50
+    5050 FGTS s/ Folha        BASE          268,90         210,35         310,50         282,40         235,60         385,20         295,30
+    5060 FGTS s/ 13o          BASE
+    5100 Base INSS            BASE        3.850,00       2.820,00       3.950,00       4.200,00       2.415,00       5.250,00       3.200,00
+    5200 Base IR              BASE        3.850,00       2.820,00       3.950,00       4.200,00       2.415,00       5.250,00       3.200,00
+    6010 Prov. Férias         ENCAR         320,83         235,00         329,17         350,00         201,25         437,50         266,67
+    6020 Prov. 13o            ENCAR         320,83         235,00         329,17         350,00         201,25         437,50         266,67
+    6100 FGTS Patronal        ENCAR         308,00         225,60         316,00         336,00         193,20         420,00         256,00
+    9900 Total Vencimentos              4.106,30       2.822,88       3.870,73       4.204,17       2.416,32       7.251,61       3.201,85
+    9910 Total Descontos                   142,59          98,50         244,40         212,40         143,25         296,10         186,90
+    9920 Líquido                          3.963,71       2.724,38       3.626,33       3.991,77       2.273,07       6.955,51       3.014,95
+
+   VIA VAREJO SA                              Ficha Financeira                              Página
+   33.041.260/0652-90                                                                          2
+   Ano Competência : 2016
+   Estabelecimento :         1363    VIA VAREJO S/A - PINHAIS - PR
+   Empregado       :      278823     ROQUE GUERREIRO TEIXEIRA
+
+  Código Denominação          Clas.         Agosto       Setembro        Outubro       Novembro       Dezembro     Dec.Terc.          Total
+  ------ -------------------- ----- -------------- -------------- -------------- -------------- -------------- -------------- --------------
+    0040 Participação Lucros  PGTO
+    0501 DSR(Comissão)        PGTO          289,34         445,12         312,67         198,45         521,30                      4.008,27
+    0502 DSR(H.Extra)         PGTO                                                                                                    60,49
+    0510 Abono                PGTO                                                                                      500,00       500,00
+    0511 Salário Receita      PGTO        1.245,00       1.245,00       1.245,00       1.245,00       1.245,00       1.245,00      14.940,00
+    0590 1/3 Adic. Const. Fér PGTO                                                                       415,00                      415,00
+    0591 1/3 Adic. Const. Fér PGTO
+    0620 Comissões             PGTO       1.046,85       1.610,50       1.130,80         718,20       1.886,25                    12.918,29
+    0712 Mínimo Garantido     PGTO                                                      526,80                                    1.256,48
+    0832 Insuf. Saldo no Mês  PGTO
+    2750 Média de Férias       PGTO                                                                       890,50                      890,50
+    2751 Média de Férias       PGTO
+    2823 Abono                PGTO
+    3290 Prêmio Antecipado    PGTO                        275,00                                        380,00                    1.780,00
+    3317 Ad. Sábado Com. 25%  PGTO           38,45          58,20          41,30          26,15          72,80                        574,12
+    3348 Horas Justificadas   PGTO
+    3351 Com. Garantia        PGTO                                                                                                    125,00
+    3368 TRN Treinamento      PGTO          185,00                                                                                    185,00
+    3391 Com. Seguros         PGTO
+    3393 Com. Seguros Vida    PGTO                        140,30                                        165,80                        792,20
+    3415 1/3 Férias Pagas     PGTO                                                                       415,00                      415,00
+    3453 Comissão Frete       PGTO           62,40          95,30          71,50          48,20         105,80                        894,10
+    4013 Horas Extras Com 75% PGTO                                                                                                    266,29
+    4016 Horas Extras Com 70% PGTO                         72,50                                                                       72,50
+    4096 Comissão Montagem    PGTO           92,30         148,70         105,60          72,50         168,40                      1.513,70
+    4101 Prêmio Meta          PGTO                                       250,00                                                    1.050,00
+    4131 Prêmio Metal         PGTO                                                                       200,00                      200,00
+    4183 Ad. Noturno          PGTO           45,20                                                                                     45,20
+    7035 Ajuste de Líquido    PGTO                                                       -12,50                                       -12,50
+    7076 PLR Variável         PGTO                                                                       850,00                      850,00
+    7680 Comissão Eletrônicos PGTO                        110,40          88,50                        130,20                        848,40
+    8441 Antecip. Prêmio Estí PGTO                                                                                                    150,00
+    8489 Campanha Serviços    PGTO          145,20         195,80         130,40          88,30         245,50                      1.757,80
+    5560 INSS                 DESC          145,20         198,30         165,40         118,50         215,60         110,25       1.869,55
+    5500 IR Retido            DESC                         52,40          18,20                         95,60                        373,74
+    5050 FGTS s/ Folha        BASE          260,40         345,20         280,60         225,80         395,40         180,50       3.675,75
+    5060 FGTS s/ 13o          BASE                                                                                    139,60         139,60
+    5100 Base INSS            BASE        3.150,00       4.200,00       3.375,00       2.910,00       5.080,00       1.745,00      44.945,00
+    5200 Base IR              BASE        3.150,00       4.200,00       3.375,00       2.910,00       5.080,00       1.745,00      44.945,00
+    6010 Prov. Férias         ENCAR         262,50         350,00         281,25         242,50         423,33         145,42       3.845,42
+    6020 Prov. 13o            ENCAR         262,50         350,00         281,25         242,50         423,33         145,42       3.845,42
+    6100 FGTS Patronal        ENCAR         252,00         336,00         270,00         232,80         406,40         139,60       3.595,60
+    9900 Total Vencimentos              3.149,74       4.196,82       3.375,77       2.911,10       7.301,05       1.745,00      50.553,33
+    9910 Total Descontos                   145,20         250,70         183,60         118,50         311,20         110,25       2.243,29
+    9920 Líquido                          3.004,54       3.946,12       3.192,17       2.792,60       6.989,85       1.634,75      48.310,04
