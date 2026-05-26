@@ -57,14 +57,15 @@ describe('parser contra PDF real ROQUE 2016 (anti-regressão bug offset coluna 1
     expect(soma).toBeCloseTo(16479.88, 0);
   });
 
-  it('extrai 30+ rubricas válidas PGTO', () => {
+  it('extrai 30+ rubricas (cutoff em 0833)', () => {
     expect(result!.rubricas.length).toBeGreaterThanOrEqual(30);
   });
 
-  it('nenhuma rubrica DESC, BASE, ENCAR ou PROV incluída', () => {
-    for (const r of result!.rubricas) {
-      expect(r.classificacao).toBe('PGTO');
-    }
+  it('V3: nenhuma rubrica BASE, ENCAR ou PROV (pós-cutoff)', () => {
+    const classes = new Set(result!.rubricas.map(r => r.classificacao));
+    expect(classes.has('BASE')).toBe(false);
+    expect(classes.has('ENCAR')).toBe(false);
+    expect(classes.has('PROV')).toBe(false);
   });
 
   it('detecta 12 meses + Dec.Terc (13)', () => {
