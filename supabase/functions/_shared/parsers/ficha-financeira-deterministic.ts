@@ -136,7 +136,42 @@ interface ColumnSpan {
   end: number;
 }
 
-function detectTextLayoutColumns(headerLine: string): ColumnSpan[] {
+function detectColumnsFromSeparators(line: string): Array<{ start: number; end: number }> {
+  const blocks: Array<{ start: number; end: number }> = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '-') {
+      const start = i;
+      while (i < line.length && line[i] === '-') i++;
+      blocks.push({ start, end: i });
+    } else {
+      i++;
+    }
+  }
+  return blocks.filter(b => b.end - b.start >= 4);
+}
+
+function detectTextLayoutColumns(headerLine: string, separatorLine: string | null): ColumnSpan[] {
+  if (separatorLine) {
+    const blocks = detectColumnsFromSeparators(separatorLine);
+    if (blocks.length >= 4) {
+      const monthBlocks: ColumnSpan[] = [];
+      for (const block of blocks) {
+        const headerSlice = headerLine.length >= block.end
+          ? headerLine.substring(block.start, block.end)
+          : headerLine.substring(block.start);
+        const sliceLower = headerSlice.toLowerCase();
+        for (const { pattern, mm } of MESES_FULL) {
+          if (pattern.test(sliceLower)) {
+            monthBlocks.push({ mm, start: block.start, end: block.end });
+            break;
+          }
+        }
+      }
+      if (monthBlocks.length >= 3) return monthBlocks;
+    }
+  }
+
   const cols: Array<{ mm: string; matchStart: number; matchEnd: number }> = [];
   for (const { pattern, mm } of MESES_FULL) {
     const m = headerLine.match(pattern);
@@ -147,10 +182,14 @@ function detectTextLayoutColumns(headerLine: string): ColumnSpan[] {
   cols.sort((a, b) => a.matchStart - b.matchStart);
   if (cols.length < 3) return [];
 
+  const estimatedWidth = cols.length >= 2
+    ? Math.floor(cols.slice(1).reduce((sum, c, idx) => sum + (c.matchStart - cols[idx].matchStart), 0) / (cols.length - 1))
+    : 14;
+
   const spans: ColumnSpan[] = [];
   for (let i = 0; i < cols.length; i++) {
     const start = i === 0
-      ? cols[i].matchStart
+      ? Math.max(0, cols[i].matchEnd - estimatedWidth)
       : Math.floor((cols[i - 1].matchEnd + cols[i].matchStart) / 2);
     const end = i === cols.length - 1
       ? headerLine.length
@@ -301,7 +340,10 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
   const pageHeaders: Array<{ headerIdx: number; columns: ColumnSpan[] }> = [];
   for (let i = 0; i < allLines.length; i++) {
     if (headerLineRegex.test(allLines[i])) {
-      const columns = detectTextLayoutColumns(allLines[i]);
+      const nextLine = i + 1 < allLines.length && separatorRegex.test(allLines[i + 1])
+        ? allLines[i + 1]
+        : null;
+      const columns = detectTextLayoutColumns(allLines[i], nextLine);
       if (columns.length >= 3) {
         pageHeaders.push({ headerIdx: i, columns });
       }
