@@ -6,7 +6,7 @@
  * essa estrutura sem conhecer detalhes do PDF.
  *
  * IMPORTANTE — runtime:
- *   - Deno (edge function): usa `pdfjs-dist` via npm: specifier.
+ *   - Deno (edge function): usa `pdfjs-dist` via esm.sh.
  *   - Browser/vitest: NÃO importa o pdfjs neste módulo. Os helpers
  *     puros (`clusterizarLinhas`, `detectarTabelas`) são exportados
  *     separadamente para serem testáveis em vitest com input sintético.
@@ -232,27 +232,22 @@ function montarTabela(
 export async function extrairGeometrico(
   bytes: Uint8Array,
 ): Promise<DocumentoTabular | null> {
-  // V6.2: unpdf é um wrapper que serve pdfjs com a dep canvas removida.
+  // V6.2: unpdf é um wrapper que serve pdfjs com a dep canvas removida —
+  // único caminho que esm.sh consegue resolver em Deno runtime.
   // Quando falhar (rede, módulo indisponível), pipeline cai pro V5.
   // deno-lint-ignore no-explicit-any
   let pdfjs: any;
   try {
     // deno-lint-ignore no-explicit-any
-    const unpdf = (await import('npm:unpdf@0.12.1')) as any;
+    const unpdf = (await import('https://esm.sh/unpdf@0.12.1')) as any;
     pdfjs = await unpdf.getResolvedPDFJS();
   } catch {
     return null;
   }
 
-  // deno-lint-ignore no-explicit-any
-  let doc: any;
+  let doc: { numPages: number; getPage: (n: number) => Promise<unknown> };
   try {
-    doc = await pdfjs.getDocument({
-      data: bytes,
-      disableWorker: true,
-      useSystemFonts: true,
-      isEvalSupported: false,
-    }).promise;
+    doc = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise;
   } catch {
     return null;
   }
@@ -261,7 +256,7 @@ export async function extrairGeometrico(
   for (let i = 1; i <= doc.numPages; i++) {
     // deno-lint-ignore no-explicit-any
     const pagina = (await doc.getPage(i)) as any;
-    const content = await pagina.getTextContent({ includeMarkedContent: false, disableNormalization: true });
+    const content = await pagina.getTextContent();
     const viewport = pagina.getViewport({ scale: 1.0 });
 
     // deno-lint-ignore no-explicit-any
@@ -282,11 +277,7 @@ export async function extrairGeometrico(
     const textoPlano = linhas.map((l) => linhaParaTextoPlano(l)).join('\n');
 
     paginas.push({ numero: i, textos, tabelas, textoPlano });
-    // deno-lint-ignore no-explicit-any
-    (pagina as any).cleanup?.();
   }
-
-  try { await doc.destroy?.(); } catch { /* ignore */ }
 
   const textoCompleto = paginas
     .map((p) => p.textoPlano)
