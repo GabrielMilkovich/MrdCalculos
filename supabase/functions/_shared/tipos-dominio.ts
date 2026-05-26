@@ -277,7 +277,23 @@ export interface CtpsDominio {
   matricula: string | null;
   admissao: string | null;
   demissao: string | null;
+  demissao_com_projecao_aviso: string | null;
   cargo: string | null;
   empregador: string | null;
   cnpj: string | null;
+  ferias: FeriasDominio[];
+  faltas: FaltaDominio[];
+  historico_salarial: CtpsHistoricoSalarialEntry[];
+  _meta: {
+    parser: string;
+    ferias_detectadas: number;
+    faltas_detectadas: number;
+  };
+}
+
+export interface CtpsHistoricoSalarialEntry {
+  data_inicio: string;
+  data_fim: string;
+  descricao: string;
+  valor: number;
 }
