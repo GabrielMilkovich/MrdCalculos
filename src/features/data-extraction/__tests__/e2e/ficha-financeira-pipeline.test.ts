@@ -165,17 +165,23 @@ describe('Pipeline e2e — caso ROQUE 2016 (mock)', () => {
     const files = await extractZipFiles(result.blob);
     expect(files.size).toBeGreaterThanOrEqual(4);
 
-    expect(files.has('historico_salarial_comissao.csv')).toBe(true);
-    expect(files.has('historico_salarial_dsr.csv')).toBe(true);
-    expect(files.has('historico_salarial_premiacao.csv')).toBe(true);
-    expect(files.has('historico_salarial_minimo_garantido.csv')).toBe(true);
+    // Taxonomia planilha-dsr v2: nomes ordenados com prefixo
+    expect(files.has('01_minimo_garantido.csv')).toBe(true);
+    expect(files.has('02_comissao_produtos.csv')).toBe(true);
+    expect(files.has('03_dsr_comissao.csv')).toBe(true);
+    expect(files.has('05_premios.csv')).toBe(true);
 
     expect(files.has('auditoria_completa.csv')).toBe(true);
+    // PLR/INSS/IR vêm com classe DESC ou natureza_indenizatoria=true e o teste
+    // marca incluida=false → vão pra excluidasOperador, NÃO pra auditoria_desconsideradas.
+    // (auditoria_desconsideradas é apenas pra rubricas onde o operador deixou
+    // incluida=true mas a planilha-dsr classificou como 'desconsiderado'.)
+    expect(result.resumo.rubricas_excluidas_pelo_operador).toBeGreaterThan(0);
     expect(files.has('resumo_validacao.txt')).toBe(true);
     expect(files.has('metadata.json')).toBe(true);
 
     expect(result.resumo.rubricas_incluidas).toBeGreaterThan(0);
-    expect(result.resumo.rubricas_ignoradas).toBeGreaterThan(0);
+    expect(result.resumo.rubricas_desconsideradas).toBeGreaterThanOrEqual(0);
   });
 
   it('CSV comissões: 6 meses, formato PJe-Calc correto', async () => {
@@ -219,7 +225,8 @@ describe('Pipeline e2e — caso ROQUE 2016 (mock)', () => {
     });
 
     const files = await extractZipFiles(result.blob);
-    const csv = files.get('historico_salarial_comissao.csv')!;
+    // Código 0620 (Comissões) → comissao_produtos (planilha)
+    const csv = files.get('02_comissao_produtos.csv')!;
     const linhas = csv.trim().split('\r\n');
 
     expect(linhas[0]).toContain('"MES_ANO"');
@@ -261,7 +268,11 @@ describe('Pipeline e2e — caso ROQUE 2016 (mock)', () => {
     });
 
     const files = await extractZipFiles(result.blob);
+    // Nova taxonomia: arquivos têm prefixo numérico. 'ignorar' não é mais grupo.
     expect(files.has('historico_salarial_ignorar.csv')).toBe(false);
+    // PLR, INSS, IR não geram CSVs de import — viram desconsiderados
+    expect([...files.keys()].some((k) => /^\d{2}_/.test(k) && k.includes('plr'))).toBe(false);
+    expect([...files.keys()].some((k) => /^\d{2}_/.test(k) && k.includes('desconto'))).toBe(false);
 
     const auditoria = files.get('auditoria_completa.csv')!;
     expect(auditoria).toContain('5560');
@@ -333,11 +344,17 @@ describe('Pipeline e2e — caso ROQUE 2016 (mock)', () => {
     expect(meta.ano).toBe(2016);
     expect(meta.empregador).toBe('VIA_VAREJO');
 
-    const comissao = meta.totais_por_categoria.find((c: { slug: string }) => c.slug === 'comissao');
-    expect(comissao).toBeTruthy();
-    expect(parseFloat(comissao.total)).toBeCloseTo(8406.99, 2);
+    // Taxonomia v2: totais_por_grupo (não mais totais_por_categoria)
+    const comissaoProdutos = meta.totais_por_grupo.find(
+      (g: { slug: string }) => g.slug === 'comissao_produtos',
+    );
+    expect(comissaoProdutos).toBeTruthy();
+    // ROQUE 2016: código 0620 (Comissões) = R$ 8.406,99 vai pra comissao_produtos
+    expect(parseFloat(comissaoProdutos.total)).toBeCloseTo(8406.99, 2);
 
-    const dsr = meta.totais_por_categoria.find((c: { slug: string }) => c.slug === 'dsr');
+    const dsr = meta.totais_por_grupo.find(
+      (g: { slug: string }) => g.slug === 'dsr_comissao',
+    );
     expect(dsr).toBeTruthy();
     expect(parseFloat(dsr.total)).toBeCloseTo(2214.57, 2);
   });
