@@ -140,8 +140,8 @@ export function FichaFinanceiraPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-[95vw] max-h-[90vh] !flex !flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="text-base">
             Ficha Financeira {parsed.ano}
             {parsed.empregado && ` — ${parsed.empregado}`}
@@ -190,7 +190,7 @@ export function FichaFinanceiraPreviewDialog({
             </div>
           )}
 
-          <ScrollArea className="flex-1 min-h-0 border rounded-md">
+          <ScrollArea className="min-h-0 flex-1 border rounded-md" style={{ maxHeight: 'calc(90vh - 260px)' }}>
               <table className="w-full text-xs whitespace-nowrap">
                 <thead className="sticky top-0 bg-background z-10 border-b">
                   <tr>
@@ -308,7 +308,7 @@ export function FichaFinanceiraPreviewDialog({
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="gap-2 sm:gap-0 shrink-0">
           {review.conflitos > 0 && (
             <span className="text-xs text-amber-600 mr-auto">
               {review.conflitos} {review.conflitos === 1 ? 'reclassificação' : 'reclassificações'} do
