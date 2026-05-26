@@ -1,0 +1,140 @@
+09/08/2024, 18:01                                                                       Programa de detalhe
+
+  VIA VAREJO SA                                               Ficha de Anotações e Atualizações da CTPS                                                          Página
+  33.041.260/0652-90                                                                                                                                                  1
+
+  LOCAL DE TRABALHO
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  Estabelecimento:VIA VAREJO SA                                                                                    Matriz/Filial..:Filial
+  CNPJ...........:33.041.260/0501-88                             Insc.Estadual..:0623376766834
+  Endereço.......:Padre Pedro Pinto                              Nº.............:6600                              Complemento....:
+  Bairro.........:Venda Nova                                     CEP............:31660000                          Telefone.......:011-42258761
+  Município......:Belo Horizonte                                 UF/PAIS........:MG Brasil
+
+  DADOS PESSOAIS
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  Nome...........:Rosicleia Pereira Chaves
+  Sexo...........:Feminino                                       Estado Civil...:Casado                             Estudante......:Não
+  Naturalidade...:Rio Pardo de Minas                             UF/PAIS........:MG Brasil                          Nascimento.....:08/04/1990
+  Identidade.....:16505020 SSP-MG                                CTPS...........:164355100040MG                     CPF............:10023339624
+  PIS/PASEP......:16538936807                                    1ºEmprego......:Não                                Tit.Eleitor....:181073260299-237-0001
+  Cart.Habil.....:-                                              Cert. Res......:                                   Grau Instrução.:Ensino Médio Completo
+  FILIAÇÃO:
+  Pai............:Manoel Teixeira Chaves                                          Mãe............:Jesuina Pereira Chaves
+
+  ENDEREÇO RESIDENCIAL
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  End(Rua,Av)....:Lago                                           No.............:661                               Complemento....:Casa 4
+  Bairro.........:São Marcos                                     CEP............:31920440                          Telefone.......:31-983549879
+  Município......:Belo Horizonte                                 UF/PAIS........:MG Brasil
+
+  DEPENDENTES
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  Nome                                               Parentesco Sexo       Nascimento IRRF Sal.Família
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯
+  MIGUEL PEREIRA APOLINARIO                          Filho(a)   Masculino 17/09/2013 Nao     Sim
+  VALENTINA PEREIRA APOLINARIO                       Filho(a)   Feminino   23/02/2016 Nao    Sim
+
+  DADOS DE EMPREGADO
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  Matrícula......:3508218                                        Admissão.........:06/06/2018                      Vínculo........:Trabalhador CLT
+  Registro no MTE:3508218                                        Data Opção FGTS..:06/06/2018
+  Banco FGTS.....:CEF                                            Agência FGTS.....:0466 - 104 Agencia 00466        Conta FGTS.................................:0
+  Observações....:Contrato em caráter de experiência por 45 dias, podendo este prazo ser prorrogado por mais 45 dias conforme contrato assinado.
+  Empresa: VIA VAREJO SA Data: Belo Horizonte, 06 de Junho de 2018.
+
+  Banco Pagto....:Santander                                      Agência Pagto....:1658 - Agencia 1658             Conta Pagto................................:71007345-9
+
+  FUNÇÃO ATUAL
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  Função.........:VENDEDOR INTERNO                               Cargo..........:VENDEDOR INTERNO                  Ingresso.......:06/06/2018
+  CBO............:5211-10                                        Tipo Sal.......:Mensal                            Sal.Tarefa.....:0,00
+  Situação.......:Ativo
+
+
+  HISTÓRICO SALARIAL
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  Data Vigência Data Histórica Motivo                           Sal.Tarefa      % Reajuste     Min. Grtd. Comissão
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  06/06/2018     06/06/2018     ADMISSÃO                                   0,00      0,000000                 0,00
+
+
+  FUNÇÕES EXERCIDAS
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  Data de Alteração Cargo                            Função                                       Motivo                              Q. Caixa Insal. Pericul.
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯
+        06/06/2018 9900 - VENDEDOR INTERNO           9900 - VENDEDOR INTERNO                                                          Não       Não    Não
+
+
+  HISTÓRICO DE LOTAÇÃO
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  Ingresso    Estabelecimento                                       CNPJ do Estabelecimento          Centro de Resultado
+  ¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯     ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯     ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  06/06/2018 486 - VIA VAREJO S/A - VENDA NOVA 4                    33.041.260/0501-88               0003-000 - LOJA EQ
+
+
+  AFASTAMENTOS OUTROS
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  Data Afastamento Situação do Afastamento              Retorno
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯
+  26/07/2019        Atestado Médico                     27/07/2019
+  29/07/2019        Atestado Médico                     30/07/2019
+  30/07/2019        Atestado Médico                     31/07/2019
+  31/07/2019        Atestado Médico                     02/08/2019
+  19/08/2019        Atestado Médico                     20/08/2019
+  26/02/2020        Atestado Médico                     27/02/2020
+  02/02/2021        Atestado Médico                     03/02/2021
+
+
+
+
+                                                             4174 / 021 / F / 2422200098 / * / 0 / 480 4174_rrpa_03_Menus_Consulta_Geral 09/08/2024 01:27:53
+
+
+
+
+https://www.adpweb.com.br/ssonns/login.asp                                                                                                                              1/2
+
+ Assinado eletronicamente por: SERGIO CARNEIRO ROSI - Juntado em: 21/08/2024 21:20:01 - 1fc3374
+09/08/2024, 18:01                                                                       Programa de detalhe
+
+  VIA VAREJO SA                                                 Ficha de Anotações e Atualizações da CTPS                                                        Página
+  33.041.260/0652-90                                                                                                                                                  2
+
+
+  HISTÓRICO DE FÉRIAS
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  Período Aquisitivo          Período de Gozo           Dias de Gozo Abono Observações
+  ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯     ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯   ¯¯¯¯¯¯¯¯¯¯¯¯ ¯¯¯¯¯ ¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+  06/06/2018 a 05/06/2019     02/12/2019 a 31/12/2019          30    0
+  06/06/2019 a 05/06/2020     10/09/2020 a 09/10/2020          30    0
+  06/06/2020 a 05/06/2021     07/06/2021 a 06/07/2021          30    0
+
+
+
+
+  Data:..../..../.....    --------------------------------------------------     --------------------------------------------------
+                                                                                 Repr. Legal:
+
+                                              Empregado                                              Empregador
+
+
+  Portarias MTE nº 3626/1991 e 41/2007
+
+
+
+
+                                                                4174 / 021 / F / 2422200098 / * / 0 / 480 4174_rrpa_03_Menus_Consulta_Geral 09/08/2024 01:27:53
+
+
+
+
+https://www.adpweb.com.br/ssonns/login.asp                                                                                                                              2/2
+
+
+
+                                                          Assinado eletronicamente por: SERGIO CARNEIRO ROSI - Juntado em: 21/08/2024 21:20:01 - 1fc3374
+                                                          https://pje.trt3.jus.br/pjekz/validacao/24082121193830000000199457403?instancia=1
+                                                          Número do processo: 0010765-52.2024.5.03.0140
+                                                          Número do documento: 24082121193830000000199457403
+
