@@ -283,7 +283,7 @@ export interface FaltaDominio {
   justificativa: string | null;
 }
 
-export interface CtpsDominio {
+export interface CtpsDominioLegacy {
   matricula: string | null;
   admissao: string | null;
   demissao: string | null;
@@ -300,6 +300,9 @@ export interface CtpsDominio {
     faltas_detectadas: number;
   };
 }
+
+/** @deprecated Use CtpsDominioV2 from src/domain/tipos-dominio.ts */
+export type CtpsDominio = CtpsDominioLegacy;
 
 export interface CtpsHistoricoSalarialEntry {
   data_inicio: string;

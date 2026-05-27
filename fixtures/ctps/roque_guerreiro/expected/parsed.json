@@ -1,0 +1,172 @@
+{
+  "_meta": {
+    "fixture": "roque_guerreiro",
+    "source_pdf": "fixtures/roque_guerreiro/ctps.pdf",
+    "source_emitter": "ADP-Web Via Varejo (versão 2021)",
+    "extraction_method": "pdftotext -layout (text-native)",
+    "ground_truth_built_by": "human review of PDF 2026-05-27"
+  },
+
+  "local_trabalho": {
+    "estabelecimento": "VIA VAREJO SA",
+    "matriz_filial": "Filial",
+    "cnpj": "33.041.260/0778-92",
+    "inscricao_estadual": "9061532703",
+    "endereco_rua": "Jacob Macanhan",
+    "endereco_numero": "449",
+    "endereco_complemento": "Salas 1 A 3",
+    "endereco_bairro": "Centro",
+    "endereco_cep": "83324510",
+    "endereco_telefone": "011-42258761",
+    "endereco_municipio": "Pinhais",
+    "endereco_uf": "PR",
+    "endereco_pais": "Brasil"
+  },
+
+  "dados_pessoais": {
+    "nome": "ROQUE GUERREIRO TEIXEIRA",
+    "sexo": "Masculino",
+    "estado_civil": "Casado",
+    "estudante": false,
+    "naturalidade": "Sapopema",
+    "naturalidade_uf": "PR",
+    "naturalidade_pais": "Brasil",
+    "nascimento": "20/07/1958",
+    "rg_numero": "22051555",
+    "rg_orgao": "SSP-PR",
+    "ctps_numero": "009144100598",
+    "ctps_uf": "PR",
+    "cpf": "35925701968",
+    "pis_pasep": "10581555438",
+    "primeiro_emprego": false,
+    "titulo_eleitor": "041670230604-0188-185",
+    "carteira_habilitacao": null,
+    "certificado_reservista": "150010273509",
+    "grau_instrucao": "Ensino Médio Completo",
+    "pai": "BRAULIO SOARES TEIXEIRA",
+    "mae": "MARIA EUFRAZIA G TEIXEIRA"
+  },
+
+  "endereco_residencial": {
+    "rua": "Ana Kozer",
+    "numero": "376",
+    "complemento": null,
+    "bairro": "Maria Antonieta",
+    "cep": "83331010",
+    "telefone": "41-36698102",
+    "municipio": "Pinhais",
+    "uf": "PR",
+    "pais": "Brasil"
+  },
+
+  "dependentes": [
+    {
+      "nome": "MARIA DILCE MATTOS GUERREIRO TEIXEIRA",
+      "parentesco": "Cônjuge",
+      "sexo": "Feminino",
+      "nascimento": "29/03/1964",
+      "irrf": true,
+      "salario_familia": false
+    }
+  ],
+
+  "dados_empregado": {
+    "matricula": "278823",
+    "admissao": "24/11/2003",
+    "vinculo": "Trabalhador CLT",
+    "registro_mte": "67517",
+    "data_opcao_fgts": "24/11/2003",
+    "banco_fgts": "CEF",
+    "agencia_fgts": "0466 - 104 Agencia 00466",
+    "conta_fgts": "0",
+    "observacoes_fgts": "Contrato em caráter de experiência por 45 dias, podendo este prazo ser prorrogado por mais 45 dias conforme contrato assinado. Empresa: VIA VAREJO SA Data: Pinhais, 24 de Novembro de 2003.",
+    "banco_pagamento": "Santander",
+    "agencia_pagamento": "1258 - Agencia 1258",
+    "conta_pagamento": "1002466-9",
+    "tipo_afastamento": "Demissão",
+    "data_desligamento": "09/03/2021",
+    "data_desligamento_com_projecao_aviso": "26/05/2021",
+    "observacoes_desligamento": "Aviso prévio indenizado de 78 dias.",
+    "dias_aviso_previo": 78
+  },
+
+  "funcao_atual": {
+    "funcao": "VENDEDOR INTERNO",
+    "cargo": "VENDEDOR INTERNO",
+    "ingresso": "01/01/2016",
+    "cbo": "5211-10",
+    "tipo_salario": "Mensal",
+    "salario_tarefa": 0.00,
+    "situacao": "Inativo"
+  },
+
+  "informacoes_sindicais": {
+    "sindicato": "SIND.EMPREGADOS COMERCIO DE CURITIBA",
+    "cnpj": "76586346000185",
+    "endereco_rua": "Rua Quinze de Novembro",
+    "endereco_numero": "1040",
+    "endereco_complemento": null
+  },
+
+  "historico_salarial": [],
+
+  "funcoes_exercidas": [
+    { "data_alteracao": "01/06/2009", "codigo_cargo": "403888", "cargo": "VENDEDOR INTERNO", "codigo_funcao": "403888", "funcao": "VENDEDOR INTERNO", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },
+    { "data_alteracao": "01/08/2009", "codigo_cargo": "403882", "cargo": "VENDEDOR DE MOVEIS", "codigo_funcao": "403882", "funcao": "VENDEDOR DE MOVEIS", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },
+    { "data_alteracao": "01/02/2010", "codigo_cargo": "403888", "cargo": "VENDEDOR INTERNO", "codigo_funcao": "403888", "funcao": "VENDEDOR INTERNO", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },
+    { "data_alteracao": "01/06/2010", "codigo_cargo": "403882", "cargo": "VENDEDOR DE MOVEIS", "codigo_funcao": "403882", "funcao": "VENDEDOR DE MOVEIS", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },
+    { "data_alteracao": "01/01/2016", "codigo_cargo": "9900", "cargo": "VENDEDOR INTERNO", "codigo_funcao": "9900", "funcao": "VENDEDOR INTERNO", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false }
+  ],
+
+  "historico_lotacao": [
+    { "ingresso": "01/01/2009", "codigo_estabelecimento": "363", "estabelecimento": "CASA BAHIA COMERCIAL LTDA - PI", "cnpj_estabelecimento": "59.291.534/0511-52", "centro_resultado": "3 - F.363 PINHAIS" },
+    { "ingresso": "01/03/2011", "codigo_estabelecimento": "363", "estabelecimento": "CASA BAHIA COMERCIAL LTDA - PI", "cnpj_estabelecimento": "59.291.534/0511-52", "centro_resultado": "995 - AFASTADOS-LEGAL" },
+    { "ingresso": "01/04/2011", "codigo_estabelecimento": "363", "estabelecimento": "CASA BAHIA COMERCIAL LTDA - PI", "cnpj_estabelecimento": "59.291.534/0511-52", "centro_resultado": "3 - F.363 PINHAIS" },
+    { "ingresso": "01/05/2011", "codigo_estabelecimento": "1363", "estabelecimento": "NOVA CASA BAHIA S/A - PINHAIS", "cnpj_estabelecimento": "10.757.237/0256-74", "centro_resultado": "3 - CB PINHAIS" },
+    { "ingresso": "01/01/2013", "codigo_estabelecimento": "1363", "estabelecimento": "VIA VAREJO S/A - PINHAIS - PR", "cnpj_estabelecimento": "33.041.260/0778-92", "centro_resultado": "3 - CB PINHAIS" },
+    { "ingresso": "01/01/2016", "codigo_estabelecimento": "1363", "estabelecimento": "VIA VAREJO S/A - PINHAIS - PR", "cnpj_estabelecimento": "33.041.260/0778-92", "centro_resultado": "0003-000 - LOJA EQ" }
+  ],
+
+  "afastamentos": [
+    { "data_inicio": "24/04/2020", "situacao": "Suspensão Contrato de Trabalho", "retorno": "24/05/2020", "categoria": "afastamento" },
+    { "data_inicio": "24/05/2020", "situacao": "Suspensão Contrato de Trabalho", "retorno": "23/06/2020", "categoria": "afastamento" },
+    { "data_inicio": "06/10/2020", "situacao": "Suspensão Contrato de Trabalho", "retorno": "05/11/2020", "categoria": "afastamento" },
+    { "data_inicio": "09/03/2021", "situacao": "Demissão", "retorno": null, "categoria": "desligamento" }
+  ],
+
+  "afastamentos_outros": [
+    { "data_inicio": "13/03/2009", "situacao": "Atestado Médico", "retorno": "27/03/2009", "categoria": "atestado_medico" },
+    { "data_inicio": "19/01/2011", "situacao": "Auxilio Doença", "retorno": "29/03/2011", "categoria": "auxilio_doenca" },
+    { "data_inicio": "15/03/2012", "situacao": "Atestado Médico", "retorno": "16/03/2012", "categoria": "atestado_medico" },
+    { "data_inicio": "07/05/2012", "situacao": "Auxilio Doença", "retorno": "12/06/2012", "categoria": "auxilio_doenca" },
+    { "data_inicio": "03/05/2013", "situacao": "Atestado Médico", "retorno": "17/05/2013", "categoria": "atestado_medico" },
+    { "data_inicio": "15/01/2014", "situacao": "Atestado Médico", "retorno": "16/01/2014", "categoria": "atestado_medico" },
+    { "data_inicio": "15/07/2014", "situacao": "Atestado Médico", "retorno": "16/07/2014", "categoria": "atestado_medico" },
+    { "data_inicio": "29/07/2014", "situacao": "Atestado Médico", "retorno": "30/07/2014", "categoria": "atestado_medico" },
+    { "data_inicio": "31/07/2014", "situacao": "Atestado Médico", "retorno": "03/08/2014", "categoria": "atestado_medico" },
+    { "data_inicio": "13/08/2014", "situacao": "Atestado Médico", "retorno": "14/08/2014", "categoria": "atestado_medico" },
+    { "data_inicio": "12/09/2018", "situacao": "Atestado Médico", "retorno": "13/09/2018", "categoria": "atestado_medico" },
+    { "data_inicio": "28/09/2019", "situacao": "Atestado Médico", "retorno": "29/09/2019", "categoria": "atestado_medico" }
+  ],
+
+  "historico_ferias": [
+    { "periodo_aquisitivo_inicio": "24/11/2003", "periodo_aquisitivo_fim": "22/11/2004", "periodo_gozo_inicio": "11/10/2004", "periodo_gozo_fim": "30/10/2004", "dias_gozo": 20, "abono_dias": 10, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "23/11/2004", "periodo_aquisitivo_fim": "22/11/2005", "periodo_gozo_inicio": "12/09/2005", "periodo_gozo_fim": "01/10/2005", "dias_gozo": 20, "abono_dias": 10, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "23/11/2005", "periodo_aquisitivo_fim": "22/11/2006", "periodo_gozo_inicio": "15/05/2006", "periodo_gozo_fim": "24/05/2006", "dias_gozo": 10, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "23/11/2005", "periodo_aquisitivo_fim": "22/11/2006", "periodo_gozo_inicio": "11/09/2006", "periodo_gozo_fim": "20/09/2006", "dias_gozo": 10, "abono_dias": 10, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "23/11/2006", "periodo_aquisitivo_fim": "23/11/2007", "periodo_gozo_inicio": "10/09/2007", "periodo_gozo_fim": "29/09/2007", "dias_gozo": 20, "abono_dias": 10, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "24/11/2007", "periodo_aquisitivo_fim": "22/11/2008", "periodo_gozo_inicio": "15/09/2008", "periodo_gozo_fim": "04/10/2008", "dias_gozo": 20, "abono_dias": 10, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "23/11/2008", "periodo_aquisitivo_fim": "22/11/2009", "periodo_gozo_inicio": "14/09/2009", "periodo_gozo_fim": "13/10/2009", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "23/11/2009", "periodo_aquisitivo_fim": "23/11/2010", "periodo_gozo_inicio": "04/10/2010", "periodo_gozo_fim": "02/11/2010", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "24/11/2010", "periodo_aquisitivo_fim": "24/11/2011", "periodo_gozo_inicio": "03/10/2011", "periodo_gozo_fim": "01/11/2011", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "25/11/2011", "periodo_aquisitivo_fim": "23/11/2012", "periodo_gozo_inicio": "01/09/2012", "periodo_gozo_fim": "30/09/2012", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "24/11/2012", "periodo_aquisitivo_fim": "23/11/2013", "periodo_gozo_inicio": "02/09/2013", "periodo_gozo_fim": "01/10/2013", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "24/11/2013", "periodo_aquisitivo_fim": "23/11/2014", "periodo_gozo_inicio": "12/01/2015", "periodo_gozo_fim": "10/02/2015", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "24/11/2014", "periodo_aquisitivo_fim": "23/11/2015", "periodo_gozo_inicio": "11/01/2016", "periodo_gozo_fim": "09/02/2016", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "24/11/2015", "periodo_aquisitivo_fim": "23/11/2016", "periodo_gozo_inicio": "09/01/2017", "periodo_gozo_fim": "07/02/2017", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "24/11/2016", "periodo_aquisitivo_fim": "23/11/2017", "periodo_gozo_inicio": "08/01/2018", "periodo_gozo_fim": "06/02/2018", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "24/11/2017", "periodo_aquisitivo_fim": "23/11/2018", "periodo_gozo_inicio": "01/04/2019", "periodo_gozo_fim": "30/04/2019", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "24/11/2018", "periodo_aquisitivo_fim": "23/11/2019", "periodo_gozo_inicio": "25/03/2020", "periodo_gozo_fim": "23/04/2020", "dias_gozo": 30, "abono_dias": 0, "observacoes": null },
+    { "periodo_aquisitivo_inicio": "24/11/2019", "periodo_aquisitivo_fim": "21/02/2021", "periodo_gozo_inicio": "23/06/2020", "periodo_gozo_fim": "02/07/2020", "dias_gozo": 10, "abono_dias": 0, "observacoes": null }
+  ]
+}
