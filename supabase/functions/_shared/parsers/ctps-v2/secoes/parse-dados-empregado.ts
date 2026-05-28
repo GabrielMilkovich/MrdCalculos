@@ -1,5 +1,5 @@
 import type { CtpsDadosEmpregado } from '../../../tipos-dominio.ts';
-import { extrairCamposKV, mergeCamposKV } from '../helpers.ts';
+import { extrairCamposKVConhecidos } from '../helpers.ts';
 
 /**
  * DADOS DE EMPREGADO tem 2 blocos separados por linha em branco:
@@ -14,6 +14,31 @@ import { extrairCamposKV, mergeCamposKV } from '../helpers.ts';
  * Linhas que não têm `:` (sem novos pares chave-valor) são continuação da
  * observação anterior.
  */
+
+const CHAVES_BLOCO1 = [
+  'Matrícula',
+  'Admissão',
+  'Vínculo',
+  'Registro no MTE',
+  'Data Opção FGTS',
+  'Banco FGTS',
+  'Agência FGTS',
+  'Conta FGTS',
+  'Observações',
+];
+
+const CHAVES_BLOCO2 = [
+  'Banco Pagto',
+  'Agência Pagto',
+  'Conta Pagto',
+  'Afastamento',
+  // "Data Desligamento com Projeção Aviso Prévio" PRIMEIRO (mais longa) pra
+  // ganhar do prefixo "Data Desligamento" via sort por length desc.
+  'Data Desligamento com Projeção Aviso Prévio',
+  'Data Desligamento',
+  'Observações',
+];
+
 export function parseDadosEmpregado(linhas: string[]): CtpsDadosEmpregado | null {
   if (linhas.length === 0) return null;
 
@@ -29,52 +54,25 @@ export function parseDadosEmpregado(linhas: string[]): CtpsDadosEmpregado | null
   const bloco1 = linhas.slice(0, idxBloco2);
   const bloco2 = linhas.slice(idxBloco2);
 
-  // Chaves esperadas do bloco 1 — qualquer KV detectado que NÃO esteja
-  // nesse set é tratado como continuação de observação (linhas tipo
-  // "Empresa: VIA VAREJO SA Data: Pinhais..." têm colons mas não são
-  // campos reais do dados_empregado).
-  const KEYS_BLOCO1 = new Set([
-    'matricula',
-    'admissao',
-    'vinculo',
-    'registro_no_mte',
-    'registro_mte',
-    'data_opcao_fgts',
-    'banco_fgts',
-    'agencia_fgts',
-    'conta_fgts',
-    'observacoes',
-  ]);
-  const KEYS_BLOCO2 = new Set([
-    'banco_pagto',
-    'agencia_pagto',
-    'conta_pagto',
-    'afastamento',
-    'data_desligamento',
-    'data_desligamento_com_projecao_aviso_previo',
-    'observacoes',
-  ]);
-
   const parseBloco = (
-    linhas: string[],
-    keysConhecidas: Set<string>,
+    linhasBloco: string[],
+    chavesConhecidas: readonly string[],
   ): { campos: Map<string, string>; observacoes: string | null } => {
     const campos = new Map<string, string>();
     let obsParts: string[] = [];
     let coletando = false;
 
-    for (const linha of linhas) {
-      const pares = extrairCamposKV(linha);
-      const temKeyConhecida = [...pares.keys()].some((k) => keysConhecidas.has(k));
+    for (const linha of linhasBloco) {
+      const pares = extrairCamposKVConhecidos(linha, chavesConhecidas);
 
-      if (pares.size > 0 && temKeyConhecida) {
+      if (pares.size > 0) {
         // Linha de campo real (potencialmente abrindo nova observação).
         if (coletando && !pares.has('observacoes')) coletando = false;
         for (const [k, v] of pares) {
           if (k === 'observacoes') {
             obsParts = [v];
             coletando = true;
-          } else if (keysConhecidas.has(k) && !campos.has(k)) {
+          } else if (!campos.has(k)) {
             campos.set(k, v);
           }
         }
@@ -87,11 +85,11 @@ export function parseDadosEmpregado(linhas: string[]): CtpsDadosEmpregado | null
     return { campos, observacoes: obsParts.join(' ').trim() || null };
   };
 
-  const r1 = parseBloco(bloco1, KEYS_BLOCO1);
+  const r1 = parseBloco(bloco1, CHAVES_BLOCO1);
   const c1 = r1.campos;
   const observacoesFgts = r1.observacoes;
 
-  const r2 = parseBloco(bloco2, KEYS_BLOCO2);
+  const r2 = parseBloco(bloco2, CHAVES_BLOCO2);
   const c2 = r2.campos;
   const observacoesDesligamento = r2.observacoes;
 

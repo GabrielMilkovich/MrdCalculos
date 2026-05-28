@@ -119,7 +119,7 @@ describe('CTPS v2 — Fase 5.1 generalização (Izabela ate_2021)', () => {
     expect(ctps!.historico_ferias).toHaveLength(0);
   });
 
-  it('informacoes_sindicais: null (seção ausente no PDF)', () => {
-    expect(ctps!.informacoes_sindicais).toBeNull();
+  it('informacoes_sindicais: [] (seção ausente no PDF)', () => {
+    expect(ctps!.informacoes_sindicais).toEqual([]);
   });
 });

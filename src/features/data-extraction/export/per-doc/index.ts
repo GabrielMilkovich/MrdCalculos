@@ -20,6 +20,7 @@ import { parseFichaAnotacoes } from '../../../../../supabase/functions/_shared/p
 import { pareceDegradado } from '../../../../../supabase/functions/_shared/parsers/ctps-v2/parece-degradado';
 import { adaptarFerias } from '../../parsers/ctps-v2/adapters/to-ferias-parseada';
 import { adaptarFaltas } from '../../parsers/ctps-v2/adapters/to-falta-parseada';
+import { extrairFeriasFaltasMistral } from '../../parsers/ctps-v2/mistral-ferias-faltas';
 import { buildCartaoPontoCSV } from './cartao-ponto-csv';
 import { buildCartaoPontoZip, buildCartaoPontoZipWithReport } from './cartao-ponto-zip';
 import { buildFeriasCSVBlob, buildFeriasCSVBlobWithReport } from './ferias-csv';
@@ -152,13 +153,27 @@ export async function generateExportForDocument(
   const v6Parsed = (doc as { parsed?: unknown }).parsed;
   const ocrProvider = (doc as { ocr_provider?: string | null }).ocr_provider;
 
-  // GUARD anti-race condition: docs processados pelo V6 (ocr_provider =
-  // pdfjs_geometric) precisam de `parsed` populado para export V6. Sem
-  // ele, o fallback regex sobre o texto pdfjs gera resultados ruins —
-  // cabeçalho/admissão viram falsas batidas, datas históricas anteriores
-  // ao período real aparecem como apurações. Bloqueia o export até o
-  // pipeline V6 escrever o JSONB, evitando ZIP/CSV silenciosamente incorreto.
-  if (ocrProvider === 'pdfjs_geometric' && (!v6Parsed || typeof v6Parsed !== 'object')) {
+  // F1.3 (PR-4): switch usa string crua porque a tabela `documents` pode
+  // ainda retornar tipos legados ('recibo_ferias', 'registro_faltas') em
+  // caches/réplicas que não refletiram a migration. Tratamos como fallback
+  // pra `ctps` (1 sprint) — depois disso o constraint do banco já recusa
+  // os legados e podemos remover.
+  const tipoRaw = doc.tipo_extracao as string | null | undefined;
+
+  // GUARD anti-race condition: docs processados pelo V6 (ocr_provider
+  // começando com `pdfjs_geometric` — cobre `pdfjs_geometric` clássico e
+  // variantes como `pdfjs_geometric_manual_v6`) precisam de `parsed`
+  // populado para export V6. Sem ele, o fallback regex sobre o texto pdfjs
+  // gera resultados ruins — cabeçalho/admissão viram falsas batidas, datas
+  // históricas anteriores ao período real aparecem como apurações. Bloqueia
+  // o export até o pipeline V6 escrever o JSONB, evitando ZIP/CSV
+  // silenciosamente incorreto.
+  //
+  // Exceção: CTPS V2 — o parser V2 roda sobre `ocr_text` (não sobre `parsed`
+  // JSONB), portanto `parsed=null` é o estado correto pós-extração geométrica.
+  // O guard não se aplica pra CTPS/recibo_ferias/registro_faltas.
+  const isCtpsTipo = tipoRaw === 'ctps' || tipoRaw === 'recibo_ferias' || tipoRaw === 'registro_faltas';
+  if (ocrProvider?.startsWith('pdfjs_geometric') && (!v6Parsed || typeof v6Parsed !== 'object') && !isCtpsTipo) {
     return {
       ok: false,
       error:
@@ -166,13 +181,6 @@ export async function generateExportForDocument(
         'Aguarde alguns segundos e tente novamente. Se persistir, rode "Reprocessar V6" na lista de documentos.',
     };
   }
-
-  // F1.3 (PR-4): switch usa string crua porque a tabela `documents` pode
-  // ainda retornar tipos legados ('recibo_ferias', 'registro_faltas') em
-  // caches/réplicas que não refletiram a migration. Tratamos como fallback
-  // pra `ctps` (1 sprint) — depois disso o constraint do banco já recusa
-  // os legados e podemos remover.
-  const tipoRaw = doc.tipo_extracao as string | null | undefined;
   switch (tipoRaw) {
     case 'holerite': {
       const parsed = parseHolerite(ocrText);
@@ -308,14 +316,15 @@ export async function generateExportForDocument(
     case 'ctps': {
       // CTPS — Carteira de Trabalho. Path V2 tenta primeiro pra Ficha de
       // Anotações ADP-Web/SAP (4 CSVs). Cai pro path legacy (2 CSVs) quando:
-      //   - ocr_provider != 'pdfjs_geometric' (OCR Mistral/degradado)
+      //   - ocr_provider não começa com 'pdfjs_geometric' (OCR Mistral/degradado)
       //   - parseFichaAnotacoes retorna null (layout não reconhecido)
       //   - pareceDegradado detecta seções vazias num doc que devia tê-las
       //
       // Defesa em profundidade: ocr_provider barra Mistral de cara,
       // pareceDegradado pega o caso raro de pdfjs_geometric que mesmo
-      // assim saiu mal.
-      const podeUsarV2 = ocrProvider === 'pdfjs_geometric';
+      // assim saiu mal. `startsWith` cobre variantes V6 (ex.: `pdfjs_geometric`,
+      // `pdfjs_geometric_manual_v6`).
+      const podeUsarV2 = ocrProvider?.startsWith('pdfjs_geometric') ?? false;
       let ctpsV2: import('@/domain/tipos-dominio').CtpsDominioV2 | undefined;
       let feriasParsed: ParseFeriasResult;
       let faltasParsed: ParseFaltasResult;
@@ -331,8 +340,10 @@ export async function generateExportForDocument(
           faltasParsed = parseFaltas(ocrText);
         }
       } else {
-        feriasParsed = parseFerias(ocrText);
-        faltasParsed = parseFaltas(ocrText);
+        // Texto Mistral — normaliza pipes e recorta seções para os parsers V2.
+        const mistral = extrairFeriasFaltasMistral(ocrText);
+        feriasParsed = mistral.feriasParsed;
+        faltasParsed = mistral.faltasParsed;
       }
 
       return {

@@ -1,0 +1,30 @@
+{
+  "_meta": {
+    "tipo": "ground_truth_parcial",
+    "nota": "Campos-chave verificados via PDF. NÃO é o shape completo de 50 campos — serve pra travar generalização do parser sem risco de erro de transcrição em massa. Entrada de teste é ocr_text_real_v6.txt (formato extrairGeometrico).",
+    "fonte_pdf": "CTPS_ate_2021.pdf (IZABELA C RANGEL DO AMARAL)",
+    "perfil": "layout enxuto — Ativo (sem demissão), sem afastamentos, sem férias, dependente filho"
+  },
+  "dados_pessoais": {
+    "nome": "IZABELA C RANGEL DO AMARAL",
+    "cpf": "97752827991",
+    "ctps_numero": "184636100030",
+    "ctps_uf": "PR"
+  },
+  "dados_empregado": {
+    "matricula": "4805879",
+    "admissao": "12/11/2020",
+    "data_desligamento": null
+  },
+  "funcao_atual": {
+    "situacao": "Ativo"
+  },
+  "dependentes_count": 1,
+  "dependente_1_parentesco": "Filho(a)",
+  "funcoes_exercidas_count": 1,
+  "historico_lotacao_count": 1,
+  "afastamentos_count": 0,
+  "afastamentos_outros_count": 1,
+  "historico_ferias_count": 0,
+  "historico_salarial_count": 1
+}

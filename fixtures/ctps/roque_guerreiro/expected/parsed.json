@@ -100,13 +100,15 @@
     "situacao": "Inativo"
   },
 
-  "informacoes_sindicais": {
-    "sindicato": "SIND.EMPREGADOS COMERCIO DE CURITIBA",
-    "cnpj": "76586346000185",
-    "endereco_rua": "Rua Quinze de Novembro",
-    "endereco_numero": "1040",
-    "endereco_complemento": null
-  },
+  "informacoes_sindicais": [
+    {
+      "sindicato": "SIND.EMPREGADOS COMERCIO DE CURITIBA",
+      "cnpj": "76586346000185",
+      "endereco_rua": "Rua Quinze de Novembro",
+      "endereco_numero": "1040",
+      "endereco_complemento": null
+    }
+  ],
 
   "historico_salarial": [
     { "data_vigencia": "01/01/2009", "data_historica": "01/01/2009", "motivo": "ADMISSÃO",                       "sal_tarefa": 0.0, "perc_reajuste": -100.0, "min_garantido": null, "comissao": 0.0 },

@@ -1,60 +1,40 @@
 import type { CtpsFuncaoExercida } from '../../../tipos-dominio.ts';
-import {
-  detectarColunasTabela,
-  extrairCelulas,
-  indiceLinhaSeparadorTabela,
-  parseBoolBR,
-} from '../helpers.ts';
+import { parseBoolBR } from '../helpers.ts';
 
 /**
- * FUNÇÕES EXERCIDAS: tabular com 7 colunas.
- *   Data de Alteração | Cargo | Função | Motivo | Q. Caixa | Insal. | Pericul.
+ * FUNÇÕES EXERCIDAS: 7 colunas tabulares
+ *   Data de Alteração | Cargo (cod-nome) | Função (cod-nome) | Motivo |
+ *   Q.Caixa | Insal. | Pericul.
  *
- * Cargo e Função vêm como "código - nome" (ex. "403888 - VENDEDOR INTERNO").
- * Splitamos em código + nome (cargo, codigo_cargo, funcao, codigo_funcao).
+ * Forma observada (extrairGeometrico, motivo vazio nos 3 fixtures):
+ *   01/01/2009 403882 - VENDEDOR DE MOVEIS 403882 - VENDEDOR DE MOVEIS Não Não Não
+ *
+ * Âncora forte = 3 booleans no final (Sim/Não/Nao). `.+?` lazy nos nomes
+ * cresce até as 3 booleans casarem. Motivo NÃO é capturado nesta versão —
+ * nos 3 fixtures reais sempre vem vazio; quando aparecer (futuro), inserir
+ * captura opcional entre função e booleans.
  */
+const BOOL = '(Sim|N[ãa]o|S|N)';
+const RE_LINHA = new RegExp(
+  `^\\s*(\\d{2}\\/\\d{2}\\/\\d{4})\\s+(\\d+)\\s*-\\s*(.+?)\\s+(\\d+)\\s*-\\s*(.+?)\\s+${BOOL}\\s+${BOOL}\\s+${BOOL}\\s*$`,
+);
+
 export function parseFuncoesExercidas(linhas: string[]): CtpsFuncaoExercida[] {
-  if (linhas.length === 0) return [];
-
-  const sepIdx = indiceLinhaSeparadorTabela(linhas);
-  if (sepIdx === -1) return [];
-
-  const colunas = detectarColunasTabela(linhas[sepIdx]);
-  if (colunas.length < 6) return [];
-
   const resultado: CtpsFuncaoExercida[] = [];
-  for (let i = sepIdx + 1; i < linhas.length; i++) {
-    const linha = linhas[i];
-    if (!linha.trim()) continue;
-    if (/^\s*¯/.test(linha)) continue;
-    const celulas = extrairCelulas(linha, colunas);
-    const dataAlt = celulas[0];
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dataAlt)) continue;
-
-    const cargoRaw = celulas[1] ?? '';
-    const funcaoRaw = celulas[2] ?? '';
-    const { codigo: codCargo, nome: nomeCargo } = splitCodigoNome(cargoRaw);
-    const { codigo: codFuncao, nome: nomeFuncao } = splitCodigoNome(funcaoRaw);
-
-    const motivo = (celulas[3] ?? '').trim();
-
+  for (const linha of linhas) {
+    const m = linha.match(RE_LINHA);
+    if (!m) continue;
     resultado.push({
-      data_alteracao: dataAlt,
-      codigo_cargo: codCargo,
-      cargo: nomeCargo,
-      codigo_funcao: codFuncao,
-      funcao: nomeFuncao,
-      motivo: motivo || null,
-      quebra_caixa: parseBoolBR(celulas[4]) ?? false,
-      insalubre: parseBoolBR(celulas[5]) ?? false,
-      periculoso: parseBoolBR(celulas[6]) ?? false,
+      data_alteracao: m[1],
+      codigo_cargo: m[2],
+      cargo: m[3].trim(),
+      codigo_funcao: m[4],
+      funcao: m[5].trim(),
+      motivo: null,
+      quebra_caixa: parseBoolBR(m[6]) ?? false,
+      insalubre: parseBoolBR(m[7]) ?? false,
+      periculoso: parseBoolBR(m[8]) ?? false,
     });
   }
   return resultado;
-}
-
-function splitCodigoNome(s: string): { codigo: string; nome: string } {
-  const m = s.match(/^(\d+)\s*-\s*(.+)$/);
-  if (m) return { codigo: m[1], nome: m[2].trim() };
-  return { codigo: '', nome: s.trim() };
 }

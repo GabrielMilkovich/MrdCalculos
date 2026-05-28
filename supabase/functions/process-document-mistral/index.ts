@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     const { data: doc, error: docErr } = await supabase
       .from("documents")
       .select(
-        "id, mime_type, storage_path, parsed_by, ocr_provider, ocr_text, metadata",
+        "id, mime_type, storage_path, parsed_by, ocr_provider, ocr_text, metadata, tipo_extracao",
       )
       .eq("id", document_id)
       .single();
@@ -157,6 +157,44 @@ Deno.serve(async (req) => {
             },
             chunking: chunkData,
             message: `V6 extraiu via ${v6.mapper} (${v6.pageCount} pg) — sem Mistral. ${chunkData?.chunks_created ?? "?"} chunks gerados.`,
+          });
+        }
+
+        // CTPS V2: extrator ok, sem mapper — grava texto geométrico e pula Mistral.
+        if (v6.outcome === "no_mapper_matched" && v6.textoCompleto && doc.tipo_extracao === "ctps") {
+          await supabase
+            .from("documents")
+            .update({
+              parsed: null,
+              parsed_by: "ctps-v2-text",
+              ocr_provider: "pdfjs_geometric",
+              ocr_text: v6.textoCompleto,
+              ocr_validated: true,
+              status: "ocr_done",
+              extracao_status: "done",
+              updated_at: new Date().toISOString(),
+              metadata: {
+                ...(doc.metadata ?? {}),
+                ...metadataV6(v6),
+                v6_ctps_text_only: true,
+              },
+            })
+            .eq("id", document_id);
+
+          const { data: chunkData, error: chunkError } = await supabase.functions.invoke(
+            "chunk-and-embed",
+            {
+              body: { document_id, extracted_text: v6.textoCompleto },
+              headers: { Authorization: authHeader },
+            },
+          );
+          return jsonResponse({
+            success: true,
+            document_id,
+            path: "v6_ctps_text_only",
+            v6: { outcome: "no_mapper_matched", score: v6.score, page_count: v6.pageCount },
+            chunking: chunkError ? { error: chunkError.message ?? String(chunkError) } : chunkData,
+            message: `CTPS: texto geométrico gravado (${v6.pageCount} pg) — parser V2 roda no cliente. Sem Mistral.`,
           });
         }
 
