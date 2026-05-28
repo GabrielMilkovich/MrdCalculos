@@ -12,7 +12,7 @@
 
 import type { DocumentoTabular } from '../documento-tabular.ts';
 import type { Mapper, DeteccaoMapper } from './index.ts';
-import type { CtpsDominio, FeriasDominio, FaltaDominio, CtpsHistoricoSalarialEntry } from '../tipos-dominio.ts';
+import type { CtpsDominioLegacy, FeriasDominio, FaltaDominio, CtpsHistoricoSalarialEntry } from '../tipos-dominio.ts';
 
 const PARSER_VERSION = 'ctps-mapper-v8-2026-05-26';
 
@@ -241,7 +241,7 @@ function parseSecaoHistoricoSalarial(texto: string): CtpsHistoricoSalarialEntry[
 
 // ── Mapper export ──
 
-export const mapperCtps: Mapper<CtpsDominio> = {
+export const mapperCtps: Mapper<CtpsDominioLegacy> = {
   slug: 'ctps_v1',
   nome: 'CTPS — Carteira de Trabalho (V6 composto)',
   tipoDocumento: 'ctps',
@@ -277,7 +277,7 @@ export const mapperCtps: Mapper<CtpsDominio> = {
     };
   },
 
-  mapear(doc: DocumentoTabular): CtpsDominio | null {
+  mapear(doc: DocumentoTabular): CtpsDominioLegacy | null {
     const t = doc.textoCompleto;
 
     const mAdm = t.match(RE_ADMISSAO);

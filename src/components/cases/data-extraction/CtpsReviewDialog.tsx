@@ -63,6 +63,14 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   feriasParsed: ParseFeriasResult;
   faltasParsed: ParseFaltasResult;
+  /**
+   * Quando presente (Ficha de Anotações ADP-Web/SAP processada via V2),
+   * o ZIP final contém 4 CSVs (dados_contratuais + historico_salarial
+   * + historico_ferias + registro_faltas). Quando ausente, builder legacy
+   * gera apenas 2 CSVs (ferias + faltas). UI de revisão é a mesma — os
+   * dados de tabs Férias/Faltas vêm do mesmo shape FeriasParseada/FaltaParseada.
+   */
+  ctpsV2?: import('@/domain/tipos-dominio').CtpsDominioV2;
   ocrText: string;
   baseFilename: string;
   filename: string;
@@ -74,6 +82,7 @@ export function CtpsReviewDialog({
   onOpenChange,
   feriasParsed,
   faltasParsed,
+  ctpsV2,
   ocrText,
   baseFilename,
   filename,
@@ -148,6 +157,7 @@ export function CtpsReviewDialog({
         ferias: feriasParsed,
         faltas: faltasParsed,
         baseFilename,
+        ctpsV2,
       });
       setReportPreview({ blob, report });
       setConfirmacaoOpen(false);

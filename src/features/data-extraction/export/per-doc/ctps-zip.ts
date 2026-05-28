@@ -22,11 +22,22 @@ import {
 import { emptyReport, type BuildReport } from '../validation';
 import type { ParseFeriasResult } from '../../parsers/ferias';
 import type { ParseFaltasResult } from '../../parsers/faltas';
+import type { CtpsDominioV2 } from '@/domain/tipos-dominio';
+import { gerarDadosContratuais } from '../ctps-v2/csv-dados-contratuais';
+import { gerarHistoricoSalarial } from '../ctps-v2/csv-historico-salarial';
+import { gerarRegistroFaltas } from '../ctps-v2/csv-registro-faltas';
+import { gerarHistoricoFerias } from '../ctps-v2/ferias-pjecalc-format';
 
 export interface CtpsExportInput {
   ferias: ParseFeriasResult;
   faltas: ParseFaltasResult;
   baseFilename: string;
+  /**
+   * Quando presente, o ZIP é gerado pelo exporter V2 (4 CSVs):
+   * dados_contratuais, historico_salarial, registro_faltas, historico_ferias.
+   * Quando ausente, builder legacy (2 CSVs: ferias + faltas).
+   */
+  ctpsV2?: CtpsDominioV2;
 }
 
 export async function buildCtpsZip(input: CtpsExportInput): Promise<Blob> {
@@ -41,6 +52,25 @@ export async function buildCtpsZip(input: CtpsExportInput): Promise<Blob> {
 export async function buildCtpsZipWithReport(
   input: CtpsExportInput,
 ): Promise<{ blob: Blob; report: BuildReport }> {
+  // Path V2: 4 CSVs (Ficha de Anotações ADP-Web/SAP completa).
+  if (input.ctpsV2) {
+    const zip = new JSZip();
+    zip.file(`${input.baseFilename}_dados_contratuais.csv`, gerarDadosContratuais(input.ctpsV2));
+    zip.file(`${input.baseFilename}_historico_ferias.csv`, gerarHistoricoFerias(input.ctpsV2));
+    zip.file(`${input.baseFilename}_historico_salarial.csv`, gerarHistoricoSalarial(input.ctpsV2));
+    zip.file(`${input.baseFilename}_registro_faltas.csv`, gerarRegistroFaltas(input.ctpsV2));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const report = emptyReport();
+    report.linhasGeradas =
+      1 + // dados_contratuais (totais)
+      input.ctpsV2.historico_ferias.length +
+      input.ctpsV2.historico_salarial.length +
+      input.ctpsV2.afastamentos_outros.length +
+      input.ctpsV2.afastamentos.filter((a) => a.retorno).length;
+    return { blob, report };
+  }
+
+  // Path legacy: 2 CSVs (ferias + faltas).
   const zip = new JSZip();
   const aggregate = emptyReport();
   const merge = (sub: BuildReport, prefixo: 'Férias' | 'Faltas'): void => {
