@@ -417,9 +417,9 @@ export interface CtpsHistoricoSalarialItem {
   data_vigencia: string;
   data_historica: string;
   motivo: string;
-  sal_tarefa: number;
-  perc_reajuste: number;
-  min_garantido: number;
+  sal_tarefa: number | null;
+  perc_reajuste: number | null;
+  min_garantido: number | null;
   comissao: number | null;
 }
 

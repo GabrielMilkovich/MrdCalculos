@@ -108,7 +108,11 @@
     "endereco_complemento": null
   },
 
-  "historico_salarial": [],
+  "historico_salarial": [
+    { "data_vigencia": "01/01/2009", "data_historica": "01/01/2009", "motivo": "ADMISSÃO",                       "sal_tarefa": 0.0, "perc_reajuste": -100.0, "min_garantido": null, "comissao": 0.0 },
+    { "data_vigencia": "08/07/2020", "data_historica": "08/07/2020", "motivo": "Redução Salarial COVID/19 25%",  "sal_tarefa": 0.0, "perc_reajuste": null,   "min_garantido": null, "comissao": 0.0 },
+    { "data_vigencia": "06/10/2020", "data_historica": "06/10/2020", "motivo": "Retorno Salarial COVID/19",      "sal_tarefa": 0.0, "perc_reajuste": null,   "min_garantido": null, "comissao": 0.0 }
+  ],
 
   "funcoes_exercidas": [
     { "data_alteracao": "01/06/2009", "codigo_cargo": "403888", "cargo": "VENDEDOR INTERNO", "codigo_funcao": "403888", "funcao": "VENDEDOR INTERNO", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },
