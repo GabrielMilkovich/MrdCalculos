@@ -20,6 +20,7 @@ import { parseFichaAnotacoes } from '../../../../../supabase/functions/_shared/p
 import { pareceDegradado } from '../../../../../supabase/functions/_shared/parsers/ctps-v2/parece-degradado';
 import { adaptarFerias } from '../../parsers/ctps-v2/adapters/to-ferias-parseada';
 import { adaptarFaltas } from '../../parsers/ctps-v2/adapters/to-falta-parseada';
+import { extrairFeriasFaltasMistral } from '../../parsers/ctps-v2/mistral-ferias-faltas';
 import { buildCartaoPontoCSV } from './cartao-ponto-csv';
 import { buildCartaoPontoZip, buildCartaoPontoZipWithReport } from './cartao-ponto-zip';
 import { buildFeriasCSVBlob, buildFeriasCSVBlobWithReport } from './ferias-csv';
@@ -339,8 +340,10 @@ export async function generateExportForDocument(
           faltasParsed = parseFaltas(ocrText);
         }
       } else {
-        feriasParsed = parseFerias(ocrText);
-        faltasParsed = parseFaltas(ocrText);
+        // Texto Mistral — normaliza pipes e recorta seções para os parsers V2.
+        const mistral = extrairFeriasFaltasMistral(ocrText);
+        feriasParsed = mistral.feriasParsed;
+        faltasParsed = mistral.faltasParsed;
       }
 
       return {
