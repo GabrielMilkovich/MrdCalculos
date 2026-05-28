@@ -80,25 +80,108 @@ export const CODIGO_PARA_GRUPO: Record<string, GrupoExportCSV> = {
   '4101': 'premios', // Prêmio Meta
   '8441': 'premios', // Antecip. Prêmio Estímulo
 
+  // COMISSÕES S/ PRODUTOS — códigos adicionais (fichas teste1/teste2 2016-2021)
+  '0710': 'comissao_produtos', // Dia do Comerciário
+  '3029': 'comissao_produtos', // Antec. Crédito Dif. de Comissões
+  '3155': 'comissao_produtos', // Dif. Comissão Mês Anterior
+  '3303': 'comissao_produtos', // Inventário
+  '4142': 'comissao_produtos', // Cred. Dif. Comissão
+  '4583': 'comissao_produtos', // Compl. Comissão Vendedor
+  '7680': 'comissao_produtos', // Comissões Produtos Online
+
+  // DSR S/ COMISSÕES — códigos adicionais
+  '3090': 'dsr_comissao', // DSR s/ Média Horas Noturnas (planilha: "DSR s/ Média Hora Notuma")
+  '3405': 'dsr_comissao', // R.S.R. s/ Comissão 200% (RSR para feriados trabalhados)
+  '7753': 'dsr_comissao', // R.S.R. Trabalhado s/ Comissão
+
+  // COMISSÕES S/ SERVIÇOS — códigos adicionais
+  '4533': 'comissao_servicos', // Campanha Categorias
+  '7663': 'comissao_servicos', // Comissão Venda Incentivo
+
+  // PRÊMIOS — códigos adicionais (prêmios antecipados e variações)
+  '2375': 'premios', // Antec. Prêmio Vend. Light
+  '2377': 'premios', // Antec. Prêmio Vendedor
+  '2477': 'premios', // Antec. Prêmio Superação
+  '2480': 'premios', // Antec. Prêmio Superação
+  '2481': 'premios', // Antec. Prêmio Sócio
+  '2496': 'premios', // Prêmio Antecipado Quinzenal
+  '3183': 'premios', // Antec. Premiação / Incentivo
+  '3423': 'premios', // Gratificação Feriado
+  '4178': 'premios', // Premiação / Incentivo
+  '4591': 'premios', // Antec. Prêmio Vendedor Incentivo
+
   // PODEM SER DESCONSIDERADOS (col 6) — segue planilha
   '0040': 'desconsiderado', // Participação Lucros
   '0502': 'desconsiderado', // DSR (H. Extra) — planilha lista explicitamente
   '0510': 'desconsiderado', // Adiantamento 13º Salário
   '0511': 'desconsiderado', // 13º Salário 1ª Parcela
+  '0514': 'desconsiderado', // Desc. 13º Salário 1ª Parcela (DESC)
+  '0515': 'desconsiderado', // Adiantamento de 13º (DESC)
+  '0517': 'desconsiderado', // 13º Salário - Média
+  '0518': 'desconsiderado', // Média 13º Sal. (Aviso Prévio)
+  '0521': 'desconsiderado', // Desc. Média 13º Salário (DESC)
+  '0525': 'desconsiderado', // Dif. de Médias 13º Salário
+  '0526': 'desconsiderado', // Devolução Média 13º Salário (DESC)
   '0590': 'desconsiderado', // 1/3 Adic Const Férias
   '0591': 'desconsiderado', // 1/3 Adic Const Férias
+  '0592': 'desconsiderado', // Difer. 1/3 Adic Const Fer
+  '0593': 'desconsiderado', // 1/3 Férias - Pgto Rescisão
+  '0594': 'desconsiderado', // 1/3 Férias - Pgto Rescisão
+  '0631': 'desconsiderado', // Média Aviso Prévio
+  '0654': 'desconsiderado', // Estabilidade – 13º Salário
+  '0655': 'desconsiderado', // Estabilidade – Férias
   '0832': 'desconsiderado', // Insuficiência Saldo no Mês
+  '0842': 'desconsiderado', // Licença por Atestado (Auxílio Doença)
+  '0872': 'desconsiderado', // 30% Ajuda Compensatória
+  '0873': 'desconsiderado', // Adicional Ajuda Compensatória
+  '0874': 'desconsiderado', // Estabilidade SC/Redução
+  '1101': 'desconsiderado', // Empréstimo Lei 10820
+  '1108': 'desconsiderado', // Empréstimo HSBC Bank (DESC)
+  '1800': 'desconsiderado', // Adicional Noturno 20%
+  '1921': 'desconsiderado', // 1/3 Const. Férias Indenizatória
+  '1922': 'desconsiderado', // 1/3 Const. F. Proporcional Ind.
+  '1923': 'desconsiderado', // 1/3 Const. Férias (Aviso)
+  '2412': 'desconsiderado', // Reemb. Mensalidade Unimed
+  '2462': 'desconsiderado', // Coparticipação Unimed FESP (DESC)
+  '2497': 'desconsiderado', // Prêmio Antecipado Quinzenal (DESC counterpart)
+  '2741': 'desconsiderado', // Média Abono de Férias
   '2750': 'desconsiderado', // Média de Férias
   '2751': 'desconsiderado', // Média Férias
   '2752': 'desconsiderado', // Diferença Média Férias
+  '2754': 'desconsiderado', // Média Adto. 13º Salário
+  '2755': 'desconsiderado', // Média Adto. 13º Salário
+  '2764': 'desconsiderado', // Média Adto. 13º Salário
+  '2773': 'desconsiderado', // Média Férias Indenizatória
+  '2774': 'desconsiderado', // Média Férias Indenizatória
+  '2776': 'desconsiderado', // Média Férias (Aviso Prévio)
   '2823': 'desconsiderado', // Adiantamento Quinzenal
+  '2882': 'desconsiderado', // Média 13º Salário Proporcional
+  '3019': 'desconsiderado', // Antec. Créd. Média Horas Extras
+  '3049': 'desconsiderado', // Reemb. Desc. Inss Contrib. Adic.
+  '3102': 'desconsiderado', // Abono Salarial Conv. Coletiva
   '3415': 'desconsiderado', // 1/3 Férias Pagas
-  '4013': 'desconsiderado', // Horas Extras 75% — não é DSR-comissão
+  '3514': 'desconsiderado', // Desconto Adto. Empregado (DESC)
+  '3623': 'desconsiderado', // Assist. Interodonto / Odonto (DESC)
+  '3768': 'desconsiderado', // Desc. Multicheque Rotativo (DESC)
+  '4001': 'desconsiderado', // Horas Extras 60%
+  '4003': 'desconsiderado', // Horas Extras 60%
+  '4004': 'desconsiderado', // Hora Extras Noturna
+  '4008': 'desconsiderado', // Horas Extras 65%
+  '4013': 'desconsiderado', // Horas Extras 75%
   '4016': 'desconsiderado', // Horas Extras 70%
+  '4024': 'desconsiderado', // Horas Extras 85%
+  '4027': 'desconsiderado', // Horas Extras 100%
+  '4028': 'desconsiderado', // Hora Extras Noturna
+  '4132': 'desconsiderado', // DSR s/ Média Horas Extras (= DSR H. Extra)
+  '4631': 'desconsiderado', // FGTS Art. 18 - Saldo (encargo patronal rescisório)
+  '4635': 'desconsiderado', // FGTS Art. 18 - 13º (encargo patronal rescisório)
+  '7037': 'desconsiderado', // Ajuste de Líquido Mês (DESC)
   '7076': 'desconsiderado', // PLR Variável
 
   // Descontos (classificação DESC) — todos descartados pra exportação
   '0833': 'desconsiderado', // Desc. Insuficiência Saldo
+  '2333': 'desconsiderado', // Mensalidade Retroativa Unimed (DESC)
+  '2339': 'desconsiderado', // Mensalidade Retroativa Unimed (DESC)
   '2824': 'desconsiderado', // Adiantamento Quinzenal (DESC)
   '3640': 'desconsiderado', // Prestação de Carnê
   '3669': 'desconsiderado', // Despesa Médica
@@ -189,9 +272,13 @@ export const NOMES_PLANILHA: Array<{ nome: string; grupo: GrupoExportCSV }> = [
   { nome: 'int premio no dsr', grupo: 'dsr_comissao' },
   { nome: 'integracao premio no dsr', grupo: 'dsr_comissao' },
   { nome: 'dsr s media hora noturna', grupo: 'dsr_comissao' },
+  { nome: 'dsr s media horas noturna', grupo: 'dsr_comissao' },
   { nome: 'rep rem s comissoes', grupo: 'dsr_comissao' },
   { nome: 'repouso remunerado s comissoes', grupo: 'dsr_comissao' },
   { nome: 'dsr premios', grupo: 'dsr_comissao' },
+  { nome: 'r s r com', grupo: 'dsr_comissao' },
+  { nome: 'rsr com', grupo: 'dsr_comissao' },
+  { nome: 'r s r trabalhado', grupo: 'dsr_comissao' },
 
   // COMISSÕES S/ SERVIÇOS
   { nome: 'com serv seguros', grupo: 'comissao_servicos' },
@@ -225,6 +312,10 @@ export const NOMES_PLANILHA: Array<{ nome: string; grupo: GrupoExportCSV }> = [
   { nome: 'comissoes servicos online', grupo: 'comissao_servicos' },
 
   // PRÊMIOS
+  { nome: 'antec premiacao', grupo: 'premios' },
+  { nome: 'premiacao incentivo', grupo: 'premios' },
+  { nome: 'gratific feriado', grupo: 'premios' },
+  { nome: 'gratificacao feriado', grupo: 'premios' },
   { nome: 'premio', grupo: 'premios' },
   { nome: 'premio mensal', grupo: 'premios' },
   { nome: 'premio meta', grupo: 'premios' },
