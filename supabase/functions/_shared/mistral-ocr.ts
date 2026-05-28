@@ -155,6 +155,12 @@ export async function uploadFile(
  * Usado quando a OCR API exige document_url em vez de file reference.
  *
  * IMPORTANTE: `expiry` na Mistral é em HORAS (não segundos). Range: 1..24.
+ *
+ * Retry para 404: o endpoint `/v1/files/{id}/url` é eventually-consistent —
+ * o `file_id` recém-criado leva até alguns segundos pra propagar nos índices
+ * internos. Sem retry, ~75% dos uploads em rajada falham (observado em 3 de 4
+ * fichas Joseli em 2026-05-28). Backoff curto (500ms, 1s, 2s, 4s) cobre a
+ * janela de propagação sem inflar latência do caminho feliz.
  */
 export async function getFileSignedUrl(
   fileId: string,
@@ -162,21 +168,38 @@ export async function getFileSignedUrl(
   expiryHours = 1,
 ): Promise<string> {
   const { apiKey, timeoutMs = 30_000 } = opts;
-  // Clamp entre 1 e 24h (limites da API Mistral).
   const clamped = Math.max(1, Math.min(24, Math.floor(expiryHours)));
-  const resp = await fetchWithTimeout(
-    `${MISTRAL_API}/v1/files/${fileId}/url?expiry=${clamped}`,
-    { headers: { Authorization: `Bearer ${apiKey}` } },
-    timeoutMs,
-  );
-  if (!resp.ok) {
+
+  let lastErr: MistralOcrError | null = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const resp = await fetchWithTimeout(
+      `${MISTRAL_API}/v1/files/${fileId}/url?expiry=${clamped}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+      timeoutMs,
+    );
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const url = data.url as string | undefined;
+      if (!url) throw new MistralOcrError("Sem url na resposta do Mistral");
+      return url;
+    }
+
     const t = await resp.text();
-    throw new MistralOcrError(`getFileSignedUrl ${resp.status}: ${t.slice(0, 200)}`, resp.status);
+    lastErr = new MistralOcrError(
+      `getFileSignedUrl ${resp.status}: ${t.slice(0, 200)}`,
+      resp.status,
+    );
+
+    // 404 = file_id ainda não propagou; 429/5xx = retriable.
+    const retriable = resp.status === 404 || resp.status === 429 || resp.status >= 500;
+    if (!retriable || attempt === 3) throw lastErr;
+
+    // 500ms, 1s, 2s, 4s — total ~7.5s no pior caso.
+    await delay(500 * Math.pow(2, attempt));
   }
-  const data = await resp.json();
-  const url = data.url as string | undefined;
-  if (!url) throw new MistralOcrError("Sem url na resposta do Mistral");
-  return url;
+
+  throw lastErr ?? new MistralOcrError("getFileSignedUrl falhou sem erro reportado");
 }
 
 /**
