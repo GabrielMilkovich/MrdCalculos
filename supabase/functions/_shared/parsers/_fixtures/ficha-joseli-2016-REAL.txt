@@ -1,0 +1,503 @@
+20/08/2021                                                                          Programa de detalhe                                            Fls.: 1
+
+   VIA VAREJO SA                                                         Ficha Financeira                                                      Página
+   33.041.260/0652-90                                                                                                                               1
+   Ano Competência : 2016
+   Estabelecimento :         1651    VIA VAREJO S/A - SHOP INDAIATUBA - SP
+   C.R.            :      0003-000         LOJA EQ
+   Empregado       :    1788485      JOSELI SILVA WANDERLEY
+                                                                       Dt.Admissão : 02/06/2011
+                                                                       Dt.Rescisão : 13/03/2020
+
+  Código Denominação          Clas.        Janeiro      Fevereiro          Março          Abril           Maio          Junho          Julho
+  ------ -------------------- ----- -------------- -------------- -------------- -------------- -------------- -------------- --------------
+    0040 Participação Lucros PGTO         1.600,00
+    0501 DSR(Comissão)        PGTO          382,06         463,50         321,56         499,28         441,26         533,00         101,47
+    0502 DSR (H.Extra)        PGTO                          25,27           0,30          28,93          54,41           0,19           0,60
+    0590 1/3 Adic Const Fer   PGTO                                                                                                  1.017,00
+    0591 1/3 Adic Const Fer   PGTO                                                                                                    949,20
+    0592 Difer 1/3 Adic Const PGTO                                                                                                      1,50
+    0620 Comissões            PGTO        1.348,73       1.577,16       1.517,87       1.484,59       1.203,85       1.344,23         639,44
+    0842 Licença por Atestado PGTO                         157,70                                        24,63                         15,97
+    1800 Adicional Noturno 20 PGTO           11,23           6,73           3,29           5,02           1,47           3,94           0,28
+    2750 Media de Férias      PGTO                                                                                                  3.051,01
+    2751 Media Férias         PGTO                                                                                                  2.847,61
+    2752 Diferença Média Féri PGTO                                                                                                      4,50
+    2823 Adiant Quinzenal     PGTO          624,39         609,35         614,62         591,84         688,04         679,86
+    3049 Reemb desc I Contr A PGTO                                                        38,65
+    3249 INT.AD.NOT.NO DSR    PGTO            2,58           1,38           0,50           0,90           0,34           0,88           0,05
+    3290 PREMIO ANTECIPADO    PGTO          311,16          96,64         151,42         386,57         596,99                        624,09
+    3303 INVENTARIO           PGTO                                                                       33,10
+    3391 COM. GARANTIA        PGTO          260,59         272,69         385,40         815,01         460,14         734,80         163,71
+    3392 COM.SERV TECNICOS    PGTO                           7,42           9,00          73,80          13,50          54,00           4,50
+    3393 COM.SEGUROS          PGTO           42,25          73,16          96,48         121,69         160,70          87,81          37,46
+    3405 R.S.R.COM.200%       PGTO                         122,92                        160,72         231,24
+    3423 GRATIFIC.-FERIADO    PGTO                          98,29                         85,89         242,40
+    3428 HORAS JUSTIFICADAS   PGTO                                         88,18
+    3453 COMISSAO FRETE       PGTO                           0,80           0,40           0,40           0,40                          0,50
+    4001 HORAS EXTRAS Com 60% PGTO                                          1,97           1,29           1,20           0,85           3,41
+    4027 Horas Extras Com - 1 PGTO                                                                        0,42
+    4096 COMISSAO MONTAGEM    PGTO                                          0,60           0,90
+    4325 ADIANTAMENTO         PGTO          578,00
+    4436 PR.ADIC(V.FINANC.)   PGTO           12,00
+    7076 PLR Variavel         PGTO                                                       101,04
+    8441 ANTECIP.PREMIO ESTIM PGTO          311,16          96,64         151,42         386,57         596,99                        624,09
+    8489 CAMPANHA SERVICOS    PGTO                                                                      605,00                        700,00
+    1108 Empréstimo HSBC Bank DESC          309,83         309,83         309,83         309,83         309,83         309,83         309,83
+    2824 Adiant Quinzenal     DESC          624,39         609,35         614,62         591,84         688,04         679,86
+    3640 PRESTACAO DE CARNE   DESC          468,61         316,71         415,40         438,12         291,89         512,18         512,18
+    3669 DESP.MED/HOSPIT.     DESC           69,57                                       157,51          18,58          32,41
+    3673 SEGVIDA INDIVIDUAL   DESC            5,99           5,99           5,99           5,99           5,99           5,99           5,99
+    3684 CONVENIO MEDICO      DESC          139,02
+    3720 PREMIO ANTECIPADO    DESC          311,16          96,64         151,42         386,57         596,99                        624,09
+    3721 CONV. ODONTOLOGICO   DESC           12,00          12,00          12,00          12,00          12,00          12,00          12,00
+    3728 DESC. MULTICHEQUE    DESC          113,00
+    3743 ADIANTAMENTO         DESC                         578,00
+    3768 DESC. MULTICHEQUE    DESC                          28,00                         15,00          10,00          43,00         100,00
+    3795 UNIMED FESP          DESC                          69,51          69,51          69,51          86,88          86,88          86,88
+    3796 UNIMED FESP - DEPEND DESC                          69,51          69,51          69,51          86,88          86,88          86,88
+    5500 IR Retido            DESC           51,74                         42,61          49,03         156,34          51,33          23,01
+    5560 INSS                 DESC          213,35         302,05         231,92         403,14         445,10         303,56         250,79
+    5580 INSS de Ferias       DESC                                                                                                    648,85
+    5616 Vale Alimentação     DESC           18,00          18,00
+    5760 Contrib Sindical     DESC                                         64,37
+    5860 Contrib Assistencial DESC           35,55          43,18          38,65          50,00          50,00          41,39          50,00
+    7103 Vale Alimentação - V DESC                                         18,00          18,00          18,00          18,00          18,00
+    7520 IR Ferias            DESC                                                                                                    341,47
+    9953 Líquido Férias       DESC                                                                                                  3.318,72
+    5501 Base IR              BASE                       3.444,13       3.861,49       4.461,68       5.530,21       4.417,88       3.437,79
+    5551 Base IR Part Lucros BASE                                                      1.701,04
+    5561 Base INSS            BASE        2.370,60       2.745,96       2.576,97       3.664,99       4.046,42       2.759,70       2.280,01
+    5581 Base INSS Ferias     BASE                                                                                                  5.898,62
+    7521 Base IR Ferias       BASE                                                                                                  6.849,43
+    8000 Salario Contribuicao BASE                       2.745,96       2.576,97       3.664,99       4.046,42       2.759,70       5.127,62
+    9900 Base Contribuição Si BASE                                      1.931,23
+    9921 Base FGTS            BASE        2.370,60       2.745,96       2.576,97       3.664,99       4.046,42       2.759,70       2.275,51
+    9926 Base FGTS Férias     BASE                                                                                                  2.852,11
+    8100 Inss Empregador      ENCAR                        549,19         515,39         733,00         809,28         551,94       1.025,52
+    8101 RAT                  ENCAR                         27,46          25,77          36,65          40,46          27,60          51,28
+    8102 Salario Educacao     ENCAR                         68,65          64,42          91,62         101,16          68,99         128,19
+    8103 Incra                ENCAR                          5,49           5,15           7,33           8,09           5,52          10,26
+    8106 Senac                ENCAR                         27,46          25,77          36,65          40,46          27,60          51,28
+    8107 Sesc                 ENCAR                         41,19          38,65          54,97          60,70          41,40          76,91
+    8108 Sebrae               ENCAR                         16,48          15,46          21,99          24,28          16,56          30,77
+    9920 FGTS                 ENCAR         189,64         219,68         206,15         293,19         323,71         220,77         182,04
+    9925 FGTS - Férias        ENCAR                                                                                                   228,16
+    0300 IR TOTAL DE FÉRIAS   OUTRO                                                                                                   176,62
+    0720 Minimo Comissionado OUTRO                       1.382,29       1.382,29       1.382,29       1.382,29       1.382,29       1.382,29
+    0819 Numero do Periodo de OUTRO                                                                                                     5,00
+    0930 FGTS Dif. Arredondam OUTRO                          0,01
+    3833 Provisao PLR Baixas OUTRO                                                       101,04
+    3865 Margem Multicheque   OUTRO                         80,27          88,95          95,41         100,83         101,11         101,24
+    3883 Base p/ Desconto Ben OUTRO                      2.903,66       2.576,97       3.664,99       3.466,05       2.759,70       2.540,68
+    3889 Unimed Fesp - C. Emp OUTRO                         69,50          69,50          69,50          86,88          86,88          86,88
+    3896 Auxiliar Medias Comi OUTRO                      3.210,84       3.557,98       3.816,26       4.033,10       4.044,32       4.049,46
+    3904 Co-Participação Vlr OUTRO                                                       157,51          18,58          32,41
+    3916 PROV PLR SALDO ANTE OUTRO                                        353,80         592,01         787,99       1.082,58       1.401,77
+    3917 PROV PLR VALOR MÊS OUTRO                          176,90         197,33         195,98         215,70         233,63         229,19
+    3918 PROV PLR BAIXAS PAR OUTRO                                                       101,04
+    3919 PROV PLR AJ NEGATIV OUTRO                                                                                       4,06          26,65
+
+
+
+                          4174 / 021 / F / 2123200768 / * / 0 / 480 4174_AAraujo_251_Menus_Documentos 20/08/2021 15:37:54
+
+
+
+
+https://www.adpweb.com.br/ssonns/login.asp                                                                                                              1/5
+
+
+                                Assinado eletronicamente por: RICARDO LOPES GODOY - 20/04/2022 14:31:42 - c7250bb
+                                https://pje.trt15.jus.br/primeirograu/Processo/ConsultaDocumento/listView.seam?nd=22042014285256000000174646942
+                                Número do processo: 0012003-73.2021.5.15.0077                                          ID. c7250bb - Pág. 1
+                                Número do documento: 22042014285256000000174646942
+20/08/2021                                                                          Programa de detalhe                                            Fls.: 2
+
+   VIA VAREJO SA                                                         Ficha Financeira                                                      Página
+   33.041.260/0652-90                                                                                                                               2
+   Ano Competência : 2016
+   Estabelecimento :         1651    VIA VAREJO S/A - SHOP INDAIATUBA - SP
+   C.R.            :      0003-000         LOJA EQ
+   Empregado       :    1788485      JOSELI SILVA WANDERLEY
+                                                                       Dt.Admissão : 02/06/2011
+                                                                       Dt.Rescisão : 13/03/2020
+
+  Código Denominação          Clas.        Janeiro      Fevereiro          Março          Abril           Maio          Junho          Julho
+  ------ -------------------- ----- -------------- -------------- -------------- -------------- -------------- -------------- --------------
+    3920 PROV PLR AJUSTE POS OUTRO                         176,90          40,88                         78,89          89,62
+    3921 PROV PLR SALDO ATUA OUTRO                         353,80         592,01         686,95       1.082,58       1.401,77       1.604,31
+    3964 Base Média Adto Quin OUTRO                      2.031,16       2.048,73       1.972,79       2.293,47       2.266,21       2.385,87
+    3971 Base Pensão Diferenc OUTRO                      2.197,67       1.810,93       2.686,58       3.383,01       2.079,84       2.291,48
+    3979 Aux Medias Comissão OUTRO                       1.605,42       1.778,99       1.908,13       2.016,55       2.022,16       2.024,73
+    3980 Vale Alimentação - C OUTRO                                        72,00          72,00          72,00          72,00          72,00
+    3984 Base p/ Desconto Ref OUTRO                          1,00           1,00           1,00           1,00           1,00           1,00
+    3998 Base Médias          OUTRO                      3.747,23       4.028,93       4.161,95       4.295,17       4.433,30       4.438,12
+    6112 Total Comissão - Fer OUTRO                                                                                                 5.903,12
+    6400 Prov.Férias-Acum. Mê PROV                                      2.595,23       3.133,55       3.397,36       3.883,84       4.407,02
+    6401 Prov.Férias INSS-Acu PROV                                        543,25         655,93         985,36         780,65         885,81
+    6402 Prov.Férias FGTS-Acu PROV                                        155,72         188,01         203,84         233,03         264,42
+    6403 Prov.Férias - Valor PROV                          288,36         313,36         308,85         323,65         339,00         339,54
+    6404 Prov.Férias INSS - V PROV                          60,36          65,59          62,08          65,05          68,14          68,25
+    6405 Prov.Férias FGTS - V PROV                          17,30          18,80          18,53          19,42          20,34          20,37
+    6406 Prov.Férias - Ajuste PROV                       2.306,87         224,96                        162,83         184,18           6,52
+    6407 Prov.Férias INSS - A PROV                         482,89          47,09         267,35                         37,02           1,31
+    6408 Prov.Férias FGTS - A PROV                         138,41          13,49                          9,77          11,05           0,40
+    6409 Prov.Férias - Baixas PROV                                                                                                  3.802,81
+    6410 Prov.Férias INSS - B PROV                                                                                                    764,36
+    6411 Prov.Férias FGTS - B PROV                                                                                                    228,17
+    6412 Prov.Férias - Saldo PROV                        2.595,23       3.133,55       3.397,36       3.883,84       4.407,02         950,27
+    6413 Prov.Férias INSS - S PROV                         543,25         655,93         985,36         780,65         885,81         191,01
+    6414 Prov.Férias FGTS - S PROV                         155,72         188,01         203,84         233,03         264,42          57,02
+    6415 Prov.Férias - Ajuste PROV                                                        45,04
+    6416 Prov.Férias INSS - A PROV                                                                      269,76
+    6417 Prov.Férias FGTS - A PROV                                                         2,70
+    6521 Prov. 13º Sal INSS - PROV                         105,35         176,29         233,43         321,16         417,42         477,73
+    6522 Prov. 13º Sal FGTS - PROV                          31,45          52,62          69,68          95,87         124,60         142,61
+    6523 Prov. 13º Sal - Acm. PROV                         393,10         657,78         871,03       1.198,36       1.557,53       1.782,57
+    6524 Prov. 13º Sal - Acm. PROV                                        393,10         657,78         871,03       1.198,36       1.557,53
+    6525 Prov. 13º Sal - Valo PROV                         196,55         219,26         217,76         239,67         259,59         254,65
+    6526 Prov. 13º Sal INSS - PROV                          52,68          58,76          58,36          64,23          69,57          68,25
+    6527 Prov. 13º Sal FGTS - PROV                          15,72          17,54          17,42          19,17          20,77          20,37
+    6528 Prov. 13º Sal INSS - PROV                                        105,35         176,29         233,43         321,16         417,42
+    6529 Prov. 13º Sal FGTS - PROV                                         31,45          52,62          69,68          95,87         124,60
+    6533 Prov. 13º Sal - Aj. PROV                          196,55          45,42                         87,66          99,58
+    6534 Prov. 13º Sal INSS - PROV                          52,67          12,18                         23,50          26,69
+    6535 Prov. 13º Sal FGTS - PROV                          15,73           3,63                          7,02           7,96
+    6536 Prov. 13º Sal - Aj. PROV                                                          4,51                                        29,61
+    6537 Prov. 13º Sal INSS - PROV                                                         1,22                                         7,94
+    6538 Prov. 13º Sal FGTS - PROV                                                         0,36                                         2,36
+    6601 Media Ferias Mes Seg OUTRO                                                                                                   203,40
+    6602 1/3 Ferias Mes Segui OUTRO                                                                                                    67,80
+    6603 INSS Férias Mes Segu OUTRO                                                                                                    22,37
+    6604 IR Férias Mes Seguin OUTRO                                                                                                    11,77
+    6609 Líquido de Férias Mê OUTRO                                                                                                   237,06
+    6900 Base Conversão Difer OUTRO                          8,78           9,14          11,35           8,36          10,09          11,64
+    7302 Margem Consignável   OUTRO                        618,40           8,52                        163,20         170,39         168,66
+    7321 Cod. Acordo Sindical OUTRO                        323,00         323,00         323,00         323,00         323,00         323,00
+    7359 Assistencia Médica ( OUTRO          54,00          55,00          56,00          57,00          58,00          59,00          60,00
+    7408 UNIMED FESP          OUTRO                         69,51          69,51          69,51          86,88          86,88          86,88
+    7418 UNIMED FESP - DEPEND OUTRO                         69,51          69,51          69,51          86,88          86,88          86,88
+    7424 Unimed Fesp - Custo OUTRO                          69,50          69,50          69,50          86,88          86,88          86,88
+    7457 Base Medias PLR      OUTRO                      2.235,43       2.235,43       3.796,85                                     2.536,21
+    7470 Atrasos ( Comissioni OUTRO                         52,68          58,31                         19,65
+    7812 Remuneração Mês Ante OUTRO                      2.878,39       2.576,67       3.636,06       4.016,64       2.759,51       9.884,50
+    7854 REMUNERAÇÃO MEDIAS V OUTRO       2.358,60       2.903,66       2.576,97       3.664,99       4.071,05       2.759,70       6.094,29
+    7948 Horas Excedentes BH OUTRO                                          5,10
+    8801 MULTICHEQUE – SALDO OUTRO                                                        10,00          30,00          30,00          15,00
+    8808 AUX PART. LUCROS OU OUTRO                                                       101,04
+    8828 Base Valor Ferias    OUTRO                                                                                                 3.796,81
+    8869 Nova base conv       OUTRO                                                                                     10,09           3,84
+    9950 Líquido Mensal       OUTRO         628,13         444,89         575,75       1.162,38       1.432,32         627,72         240,84
+    9952 Líquido Férias       OUTRO                                                                                                 3.555,78
+    9956 Líquido Participação OUTRO                                                      101,04
+    9958 Líquido Adiantamento OUTRO                        705,99         723,43         943,62       1.147,24         628,53         601,08
+
+          Dependentes                      Janeiro      Fevereiro          Março          Abril           Maio          Junho          Julho
+          ------------------------- -------------- -------------- -------------- -------------- -------------- -------------- --------------
+          Dependentes IRRF                    1,00           1,00           1,00           1,00           1,00           1,00           1,00
+          Deduções Depend. IRRF             189,59         189,59         189,59         189,59         189,59         189,59         189,59
+
+
+
+
+                          4174 / 021 / F / 2123200768 / * / 0 / 480 4174_AAraujo_251_Menus_Documentos 20/08/2021 15:37:54
+
+
+
+
+https://www.adpweb.com.br/ssonns/login.asp                                                                                                              2/5
+
+
+                                Assinado eletronicamente por: RICARDO LOPES GODOY - 20/04/2022 14:31:42 - c7250bb
+                                https://pje.trt15.jus.br/primeirograu/Processo/ConsultaDocumento/listView.seam?nd=22042014285256000000174646942
+                                Número do processo: 0012003-73.2021.5.15.0077                                          ID. c7250bb - Pág. 2
+                                Número do documento: 22042014285256000000174646942
+20/08/2021                                                                          Programa de detalhe                                            Fls.: 3
+
+   VIA VAREJO SA                                                         Ficha Financeira                                                      Página
+   33.041.260/0652-90                                                                                                                               3
+   Ano Competência : 2016
+   Estabelecimento :         1651    VIA VAREJO S/A - SHOP INDAIATUBA - SP
+   C.R.            :      0003-000         LOJA EQ
+   Empregado       :    1788485      JOSELI SILVA WANDERLEY
+                                                                       Dt.Admissão : 02/06/2011
+                                                                       Dt.Rescisão : 13/03/2020
+
+  Código Denominação          Clas.         Agosto       Setembro        Outubro       Novembro       Dezembro      Dec.Terc.          Total
+  ------ -------------------- ----- -------------- -------------- -------------- -------------- -------------- -------------- --------------
+    0040 Participação Lucros PGTO                                                                                                   1.600,00
+    0501 DSR(Comissão)        PGTO           42,44         460,11         461,02         746,76         588,86                      5.041,32
+    0502 DSR (H.Extra)        PGTO            0,02          29,45          29,24         134,24          16,63                        319,28
+    0517 13º Salário - Média PGTO                                                                                    3.192,74       3.192,74
+    0525 Dif. de Médias 13º S PGTO                                                                      136,67                        136,67
+    0590 1/3 Adic Const Fer   PGTO                                                                                                  1.017,00
+    0591 1/3 Adic Const Fer   PGTO           67,80                                                                                  1.017,00
+    0592 Difer 1/3 Adic Const PGTO            0,11                                                                                      1,61
+    0620 Comissões            PGTO          682,27         836,70       1.201,32       1.300,53       1.402,35                     14.539,04
+    0710 Dia do Comerciário   PGTO                                        171,79                                                      171,79
+    0712 Mínimo Garantido - C PGTO          186,72                                                                                    186,72
+    0832 Insuf Saldo no Mês   PGTO          805,68         938,21         430,81                                                    2.174,70
+    0842 Licença por Atestado PGTO                                                       107,68         106,38                        412,36
+    1800 Adicional Noturno 20 PGTO            0,18           1,41           1,83           5,59           4,29                         45,26
+    2750 Media de Férias      PGTO                                                                                                  3.051,01
+    2751 Media Férias         PGTO          203,40                                                                                  3.051,01
+    2752 Diferença Média Féri PGTO            0,32                                                                                      4,82
+    2764 MÉDIA ADTO. 13º SALÁ PGTO                                                     1.615,99                                     1.615,99
+    2823 Adiant Quinzenal     PGTO          832,70         547,03         421,68         353,29         650,50                      6.613,30
+    3019 Antec Créd Média H E PGTO          361,43                                                                                    361,43
+    3049 Reemb desc I Contr A PGTO                                                                                                     38,65
+    3090 DSR s/ Média Horas N PGTO                                                                        0,99                          0,99
+    3249 INT.AD.NOT.NO DSR    PGTO            0,01           0,45           0,43           2,10           0,99                         10,61
+    3275 H. EXTRA COM.100%    PGTO                                                                       67,08                         67,08
+    3290 PREMIO ANTECIPADO    PGTO           18,63                                       303,97         349,20                      2.838,67
+    3303 INVENTARIO           PGTO           41,80                                        36,73                                       111,63
+    3391 COM. GARANTIA        PGTO          274,96         481,71         504,39         564,95         736,87                      5.655,22
+    3392 COM.SERV TECNICOS    PGTO           13,50          56,17          64,11          39,44          15,67                        351,11
+    3393 COM.SEGUROS          PGTO           90,25          63,26         151,08         169,40         244,96                      1.338,50
+    3405 R.S.R.COM.200%       PGTO                          89,60         122,22         353,58                                     1.080,28
+    3423 GRATIFIC.-FERIADO    PGTO                          75,16          68,88         183,25                                       753,87
+    3428 HORAS JUSTIFICADAS   PGTO                                                        17,34                                       105,52
+    3453 COMISSAO FRETE       PGTO                                                                        0,50                          3,00
+    4001 HORAS EXTRAS Com 60% PGTO            0,31           1,77           1,62           4,38           4,98                         21,78
+    4027 Horas Extras Com - 1 PGTO                                                                                                      0,42
+    4028 Hora Extras Noturna PGTO                                                                         4,29                          4,29
+    4096 COMISSAO MONTAGEM    PGTO                                                                                                      1,50
+    4132 DSR s/ Média Horas E PGTO          361,43                                                                                    361,43
+    4325 ADIANTAMENTO         PGTO                                                                      106,42                        684,42
+    4436 PR.ADIC(V.FINANC.)   PGTO                                                                                                     12,00
+    7035 Ajuste de Liquido    PGTO          100,00         100,00         100,00                                                      300,00
+    7076 PLR Variavel         PGTO                                                                                                    101,04
+    8441 ANTECIP.PREMIO ESTIM PGTO           18,63                                       303,97         349,20                      2.838,67
+    8489 CAMPANHA SERVICOS    PGTO                                                                                                  1.305,00
+    8505 COM PLANOS OPERAD    PGTO                                                                       53,25                         53,25
+    0521 Desc. Média 13º Salá DESC                                                                                   1.615,99       1.615,99
+    0833 Desc. Insuf Saldo    DESC                         805,68         938,21         430,81                                     2.174,70
+    1108 Empréstimo HSBC Bank DESC          309,83         309,83         309,83         309,83         309,83                      3.717,96
+    2824 Adiant Quinzenal     DESC          832,70         547,03         421,68         353,29         650,50                      6.613,30
+    3514 Desconto Adto Empreg DESC          361,43                                                                                    361,43
+    3623 Assist. Inter Odonto DESC                                                        13,71          13,71                         27,42
+    3640 PRESTACAO DE CARNE   DESC          512,18         681,10         511,60         476,06         404,21                      5.540,24
+    3669 DESP.MED/HOSPIT.     DESC                         105,00         274,87         338,13          70,00                      1.066,07
+    3673 SEGVIDA INDIVIDUAL   DESC                           5,99           5,99           5,99           5,99                         65,89
+    3684 CONVENIO MEDICO      DESC                                                                                                    139,02
+    3720 PREMIO ANTECIPADO    DESC           18,63                                       303,97         349,20                      2.838,67
+    3721 CONV. ODONTOLOGICO   DESC           12,00          12,00          12,00          12,00          12,00                        144,00
+    3728 DESC. MULTICHEQUE    DESC                                                                                                    113,00
+    3743 ADIANTAMENTO         DESC                                                                                                    578,00
+    3768 DESC. MULTICHEQUE    DESC          100,25          48,00          94,00          62,00          15,00                        515,25
+    3795 UNIMED FESP          DESC           86,88          86,88          86,88          86,88          86,88                        903,57
+    3796 UNIMED FESP - DEPEND DESC           86,88          86,88          86,88          86,88          86,88                        903,57
+    5250 IR Retido 13Sal      DESC                                                                        9,12          56,10          65,22
+    5323 Diferença de Seguro DESC                            5,99                                                                       5,99
+    5500 IR Retido            DESC           13,08                                       105,65         140,32                        633,11
+    5560 INSS                 DESC          150,09         188,62         305,57         424,84         384,00                      3.603,03
+    5580 INSS de Ferias       DESC           22,37                                                                                    671,22
+    5616 Vale Alimentação     DESC                                                                                                     36,00
+    5760 Contrib Sindical     DESC                                                                                                     64,37
+    5860 Contrib Assistencial DESC           29,76          31,00          41,23          35,00          35,00                        480,76
+    7037 Ajuste de Líquido Me DESC                         100,00         100,00         100,00                                       300,00
+    7103 Vale Alimentação - V DESC           18,00          20,00          20,00          20,00          20,00                        188,00
+    7520 IR Ferias            DESC           11,77                                                                                    353,24
+    9953 Líquido Férias       DESC          237,06                                                                                  3.555,78
+    9960 INSS 13Salário       DESC                                                                       15,03         351,20         366,23
+    5251 Base IR 13Sal        BASE                                                                    2.773,59       2.651,95       5.425,54
+    5501 Base IR              BASE        2.599,85       2.239,09       3.453,32       5.216,60       5.721,95                     44.383,99
+    5551 Base IR Part Lucros BASE                                                                                                   1.701,04
+    5561 Base INSS            BASE        1.712,84       2.095,79       2.777,93       3.862,26       3.490,91                     34.384,38
+    5581 Base INSS Ferias     BASE          203,40                                                                                  6.102,02
+    7521 Base IR Ferias       BASE          236,19                                                                                  7.085,62
+    8000 Salario Contribuicao BASE        1.916,24       2.095,79       2.777,93       3.862,26       3.627,58       3.192,74      38.394,20
+    9900 Base Contribuição Si BASE                                                                                                  1.931,23
+    9921 Base FGTS            BASE        1.712,52       2.095,79       2.777,93       3.862,26       3.490,91                     34.379,56
+    9924 Base FGTS 13o.Sal.   BASE                                                     1.615,99       1.713,42                      3.329,41
+    9926 Base FGTS Férias     BASE          203,72                                                                                  3.055,83
+
+
+
+                          4174 / 021 / F / 2123200768 / * / 0 / 480 4174_AAraujo_251_Menus_Documentos 20/08/2021 15:37:54
+
+
+
+
+https://www.adpweb.com.br/ssonns/login.asp                                                                                                              3/5
+
+
+                                Assinado eletronicamente por: RICARDO LOPES GODOY - 20/04/2022 14:31:42 - c7250bb
+                                https://pje.trt15.jus.br/primeirograu/Processo/ConsultaDocumento/listView.seam?nd=22042014285256000000174646942
+                                Número do processo: 0012003-73.2021.5.15.0077                                          ID. c7250bb - Pág. 3
+                                Número do documento: 22042014285256000000174646942
+20/08/2021                                                                          Programa de detalhe                                            Fls.: 4
+
+   VIA VAREJO SA                                                         Ficha Financeira                                                      Página
+   33.041.260/0652-90                                                                                                                               4
+   Ano Competência : 2016
+   Estabelecimento :         1651    VIA VAREJO S/A - SHOP INDAIATUBA - SP
+   C.R.            :      0003-000         LOJA EQ
+   Empregado       :    1788485      JOSELI SILVA WANDERLEY
+                                                                       Dt.Admissão : 02/06/2011
+                                                                       Dt.Rescisão : 13/03/2020
+
+  Código Denominação          Clas.         Agosto       Setembro        Outubro       Novembro       Dezembro      Dec.Terc.          Total
+  ------ -------------------- ----- -------------- -------------- -------------- -------------- -------------- -------------- --------------
+    9961 Base INSS 13Salário BASE                                                                     3.329,41       3.192,74       6.522,15
+    8100 Inss Empregador      ENCAR         383,25         419,16         555,59         772,45         725,52         638,55       7.678,84
+    8101 RAT                  ENCAR          19,16          20,96          27,78          38,62          36,28          31,93         383,95
+    8102 Salario Educacao     ENCAR          47,91          52,39          69,45          96,56          90,69          79,82         959,85
+    8103 Incra                ENCAR           3,83           4,19           5,56           7,72           7,26           6,39          76,79
+    8106 Senac                ENCAR          19,16          20,96          27,78          38,62          36,28          31,93         383,95
+    8107 Sesc                 ENCAR          28,74          31,44          41,67          57,93          54,41          47,89         575,90
+    8108 Sebrae               ENCAR          11,50          12,57          16,67          23,17          21,77          19,16         230,38
+    9920 FGTS                 ENCAR         137,00         167,66         222,23         308,99         279,27                      2.750,33
+    9923 FGTS - 13o. Salário ENCAR                                                       129,27         137,07                        266,34
+    9925 FGTS - Férias        ENCAR          16,29                                                                                    244,45
+    0300 IR TOTAL DE FÉRIAS   OUTRO                                                                                                   176,62
+    0509 Total de 13º Salário OUTRO                                                                   3.329,41                      3.329,41
+    0720 Minimo Comissionado OUTRO        1.382,29       1.382,29       1.382,29       1.515,26       1.515,26                     15.471,13
+    0819 Numero do Periodo de OUTRO                                                                                                     5,00
+    0930 FGTS Dif. Arredondam OUTRO                                                                                                     0,01
+    0937 FGTS Dif. Ajuste Rem OUTRO                                                        0,01                                         0,01
+    3833 Provisao PLR Baixas OUTRO                                                                                                    101,04
+    3865 Margem Multicheque   OUTRO          94,52          88,82          84,06          79,26          81,23                        995,70
+    3883 Base p/ Desconto Ben OUTRO       1.418,89       2.095,79       2.777,93       3.969,94       3.543,05                     31.717,65
+    3889 Unimed Fesp - C. Emp OUTRO          86,88          86,88          86,88          86,88          86,88                        903,54
+    3896 Auxiliar Medias Comi OUTRO       3.780,80       3.552,96       3.362,32       3.170,50       3.249,08                     39.827,62
+    3904 Co-Participação Vlr OUTRO                         105,00         578,00          35,00          70,00                        996,50
+    3905 Co-Participação Sald OUTRO                                       303,13                                                      303,13
+    3916 PROV PLR SALDO ANTE OUTRO        1.604,31       2.207,07       2.338,84       2.538,56       2.666,37                     15.573,30
+    3917 PROV PLR VALOR MÊS OUTRO           275,89         259,88         253,85         242,40         249,71                      2.530,46
+    3918 PROV PLR BAIXAS PAR OUTRO                                                                                                    101,04
+    3919 PROV PLR AJ NEGATIV OUTRO                         128,11          54,13         114,59                                       327,54
+    3920 PROV PLR AJUSTE POS OUTRO          326,87                                                       80,39                        793,55
+    3921 PROV PLR SALDO ATUA OUTRO        2.207,07       2.338,84       2.538,56       2.666,37       2.996,47                     18.468,73
+    3964 Base Média Adto Quin OUTRO       2.973,93       1.823,44       1.405,61       1.177,63       2.168,33                     22.547,17
+    3971 Base Pensão Diferenc OUTRO         879,82       1.548,76       2.356,25       3.616,65       2.946,79                     25.797,78
+    3979 Aux Medias Comissão OUTRO        1.890,40       1.776,48       1.681,16       1.585,25       1.624,54                     19.913,81
+    3980 Vale Alimentação - C OUTRO          72,00          80,00          80,00          80,00          80,00                        752,00
+    3984 Base p/ Desconto Ref OUTRO           1,00           1,00           1,00           1,00           1,00                         11,00
+    3998 Base Médias          OUTRO       5.060,73       4.847,24       4.767,05       4.614,26       4.708,00                     49.101,98
+    4636 FGTS - Antec. de 13º OUTRO                                                                                    129,27         129,27
+    4643 Base FGTS Adto. 13º OUTRO                                                     1.615,99                                     1.615,99
+    4646 Base FGTS Dec. Terc. OUTRO                                                                                  1.576,75       1.576,75
+    4647 Base FGTS Adiantamen OUTRO                                                    1.615,99                                     1.615,99
+    6112 Total Comissão - Fer OUTRO         203,72                                                                                  6.106,84
+    6318 Total Comissão - Adt OUTRO                                                    3.231,97       3.329,41                      6.561,38
+    6323 Valor Dif Med. 13 Sa OUTRO                                                                     136,67                        136,67
+    6400 Prov.Férias-Acum. Mê PROV          950,27       1.226,15       1.539,98       1.880,42       2.154,65                     25.168,47
+    6401 Prov.Férias INSS-Acu PROV          191,01         246,45         309,54         377,96         433,08                      5.409,04
+    6402 Prov.Férias FGTS-Acu PROV           57,02          73,57          92,40         112,83         129,28                      1.510,12
+    6403 Prov.Férias - Valor PROV           408,72         384,99         376,08         359,11         354,75                      3.796,41
+    6404 Prov.Férias INSS - V PROV           82,15          77,38          75,59          72,18          71,30                        768,07
+    6405 Prov.Férias FGTS - V PROV           24,52          23,10          22,57          21,55          21,28                        227,78
+    6406 Prov.Férias - Ajuste PROV          138,79                                                                                  3.024,15
+    6407 Prov.Férias INSS - A PROV           27,89                                                                                    863,55
+    6408 Prov.Férias FGTS - A PROV            8,33                                                                                    181,45
+    6409 Prov.Férias - Baixas PROV          271,63                                                                                  4.074,44
+    6410 Prov.Férias INSS - B PROV           54,60                                                                                    818,96
+    6411 Prov.Férias FGTS - B PROV           16,30                                                                                    244,47
+    6412 Prov.Férias - Saldo PROV         1.226,15       1.539,98       1.880,42       2.154,65       2.483,24                     27.651,71
+    6413 Prov.Férias INSS - S PROV          246,45         309,54         377,96         433,08         499,13                      5.908,17
+    6414 Prov.Férias FGTS - S PROV           73,57          92,40         112,83         129,28         148,99                      1.659,11
+    6415 Prov.Férias - Ajuste PROV                          71,16          35,64          84,88          26,16                        262,88
+    6416 Prov.Férias INSS - A PROV                          14,29           7,17          17,06           5,25                        313,53
+    6417 Prov.Férias FGTS - A PROV                           4,27           2,14           5,10           1,57                         15,78
+    6521 Prov. 13º Sal INSS - PROV          657,22         696,46         755,93         793,99                                     4.634,98
+    6522 Prov. 13º Sal FGTS - PROV          196,18         207,90         225,65         237,01                                     1.383,57
+    6523 Prov. 13º Sal - Acm. PROV        2.452,30       2.598,71       2.820,63       2.962,64                                    17.294,65
+    6524 Prov. 13º Sal - Acm. PROV        1.782,57       2.452,30       2.598,71       2.820,63       2.962,64                     17.294,65
+    6525 Prov. 13º Sal - Valo PROV          306,54         288,75         282,06         269,33         277,45                      2.811,61
+    6526 Prov. 13º Sal INSS - PROV           82,15          77,38          75,59          72,18          74,36                        753,51
+    6527 Prov. 13º Sal FGTS - PROV           24,52          23,10          22,57          21,55          22,20                        224,93
+    6528 Prov. 13º Sal INSS - PROV          477,73         657,22         696,46         755,93         793,99                      4.634,98
+    6529 Prov. 13º Sal FGTS - PROV          142,61         196,18         207,90         225,65         237,01                      1.383,57
+    6530 Prov. 13º Sal - Baix PROV                                                                    3.329,41                      3.329,41
+    6531 Prov. 13º Sal INSS - PROV                                                                      892,28                        892,28
+    6532 Prov. 13º Sal FGTS - PROV                                                                      266,34                        266,34
+    6533 Prov. 13º Sal - Aj. PROV           363,19                                                       89,32                        881,72
+    6534 Prov. 13º Sal INSS - PROV           97,34                                                       23,93                        236,31
+    6535 Prov. 13º Sal FGTS - PROV           29,05                                                        7,13                         70,52
+    6536 Prov. 13º Sal - Aj. PROV                          142,34          60,14         127,32                                       363,92
+    6537 Prov. 13º Sal INSS - PROV                          38,14          16,12          34,12                                        97,54
+    6538 Prov. 13º Sal FGTS - PROV                          11,38           4,82          10,19                                        29,11
+    6601 Media Ferias Mes Seg OUTRO                                                                                                   203,40
+    6602 1/3 Ferias Mes Segui OUTRO                                                                                                    67,80
+    6603 INSS Férias Mes Segu OUTRO                                                                                                    22,37
+    6604 IR Férias Mes Seguin OUTRO                                                                                                    11,77
+    6609 Líquido de Férias Mê OUTRO                                                                                                   237,06
+    6621 Média 13. Salario - OUTRO                                                                                   3.192,74       3.192,74
+    6900 Base Conversão Difer OUTRO          13,59           6,54           8,73          19,10          13,83           6,89         128,04
+
+
+
+                          4174 / 021 / F / 2123200768 / * / 0 / 480 4174_AAraujo_251_Menus_Documentos 20/08/2021 15:37:54
+
+
+
+
+https://www.adpweb.com.br/ssonns/login.asp                                                                                                              4/5
+
+
+                                Assinado eletronicamente por: RICARDO LOPES GODOY - 20/04/2022 14:31:42 - c7250bb
+                                https://pje.trt15.jus.br/primeirograu/Processo/ConsultaDocumento/listView.seam?nd=22042014285256000000174646942
+                                Número do processo: 0012003-73.2021.5.15.0077                                          ID. c7250bb - Pág. 4
+                                Número do documento: 22042014285256000000174646942
+20/08/2021                                                                          Programa de detalhe                                            Fls.: 5
+
+   VIA VAREJO SA                                                         Ficha Financeira                                                      Página
+   33.041.260/0652-90                                                                                                                               5
+   Ano Competência : 2016
+   Estabelecimento :         1651    VIA VAREJO S/A - SHOP INDAIATUBA - SP
+   C.R.            :      0003-000         LOJA EQ
+   Empregado       :    1788485      JOSELI SILVA WANDERLEY
+                                                                       Dt.Admissão : 02/06/2011
+                                                                       Dt.Rescisão : 13/03/2020
+
+  Código Denominação          Clas.         Agosto       Setembro        Outubro       Novembro       Dezembro      Dec.Terc.          Total
+  ------ -------------------- ----- -------------- -------------- -------------- -------------- -------------- -------------- --------------
+    7302 Margem Consignável   OUTRO         254,59           0,01           0,01           0,01         197,34                      1.581,13
+    7321 Cod. Acordo Sindical OUTRO         323,00         323,00         323,00         323,00         323,00                      3.553,00
+    7359 Assistencia Médica ( OUTRO          61,00          62,00          63,00          64,00          65,00                        714,00
+    7408 UNIMED FESP          OUTRO          86,88          86,88          86,88          86,88          86,88                        903,57
+    7418 UNIMED FESP - DEPEND OUTRO          86,88          86,88          86,88          86,88          86,88                        903,57
+    7424 Unimed Fesp - Custo OUTRO           86,88          86,88          86,88          86,88          86,88                        903,54
+    7457 Base Medias PLR      OUTRO       2.307,29       2.206,48       2.063,92       1.843,53       1.595,13                     20.820,27
+    7470 Atrasos ( Comissioni OUTRO                          8,76          37,89           0,26                                       177,55
+    7812 Remuneração Mês Ante OUTRO       2.254,90       2.066,34       2.066,34       2.748,69       3.969,94                     38.857,98
+    7854 REMUNERAÇÃO MEDIAS V OUTRO       1.622,72       2.095,79       2.748,26       3.835,70       3.579,67                     38.311,40
+    7856 BASE MEDIA ADIPAR    OUTRO          13,89                                                                                     13,89
+    7948 Horas Excedentes BH OUTRO                                                                                                      5,10
+    8801 MULTICHEQUE – SALDO OUTRO           20,00          94,00          23,00                         23,00                        245,00
+    8808 AUX PART. LUCROS OU OUTRO                                                                                                    101,04
+    8828 Base Valor Ferias    OUTRO         271,20                                                                                  4.068,01
+    8869 Nova base conv       OUTRO          11,15           6,54           8,73          23,65          13,83                         77,83
+    8897 SEGURO DE VIDA TOKIO OUTRO                                         5,99           5,99           5,99                         17,97
+    8946 REMUNERAÇÃO MEDIAS V OUTRO                                                                   3.579,67                      3.579,67
+    9949 Líquido de Adiantame OUTRO         361,43                                                                                    361,43
+    9950 Líquido Mensal       OUTRO         100,00         100,00         100,00         850,98       1.373,03                      7.636,04
+    9952 Líquido Férias       OUTRO                                                                                                 3.555,78
+    9955 LÍQUIDO ADIANTAMENTO OUTRO                                                    1.615,99                                     1.615,99
+    9956 Líquido Participação OUTRO                                                                                                   101,04
+    9957 Líquido 13. Sálario OUTRO                                                                                   1.169,45       1.169,45
+    9958 Líquido Adiantamento OUTRO         838,25         547,03         421,68         611,18         859,38                      8.027,41
+
+          Dependentes                       Agosto       Setembro       Oututbro       Novembro       Dezembro      Dec.Terc.          Total
+          ------------------------- -------------- -------------- -------------- -------------- -------------- -------------- --------------
+          Dependentes IRRF                    1,00           1,00           1,00           1,00           1,00           1,00
+          Deduções Depend. IRRF             189,59         189,59         189,59         189,59         189,59         189,59       2.464,67
+
+
+
+
+                          4174 / 021 / F / 2123200768 / * / 0 / 480 4174_AAraujo_251_Menus_Documentos 20/08/2021 15:37:54
+
+
+
+
+https://www.adpweb.com.br/ssonns/login.asp                                                                                                              5/5
+
+
+                                Assinado eletronicamente por: RICARDO LOPES GODOY - 20/04/2022 14:31:42 - c7250bb
+                                https://pje.trt15.jus.br/primeirograu/Processo/ConsultaDocumento/listView.seam?nd=22042014285256000000174646942
+                                Número do processo: 0012003-73.2021.5.15.0077                                          ID. c7250bb - Pág. 5
+                                Número do documento: 22042014285256000000174646942
+

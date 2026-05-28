@@ -133,17 +133,18 @@ describe('parseFichaFinanceiraDeterministico — markdown table path still works
     '| 5100 Base INSS | BASE | 1.800,00 | 2.400,00 | 2.160,00 | 2.640,00 | 2.280,00 |',
   ].join('\n');
 
-  it('retorna resultado válido para markdown table (V3: sem cutoff = inclui tudo)', () => {
+  it('retorna resultado válido para markdown table (BASE excluída do output)', () => {
     const result = parseFichaFinanceiraDeterministico(MARKDOWN_FIXTURE);
     expect(result).not.toBeNull();
     expect(result!.ano).toBe(2023);
     expect(result!.empregado).toContain('MARIA SILVA TESTE');
-    expect(result!.rubricas.length).toBe(5);
+    // BASE rows are filtered — only PGTO/DESC rows appear
+    expect(result!.rubricas.length).toBe(4);
     expect(result!.rubricas.find(r => r.codigo === '0620')).toBeTruthy();
     expect(result!.rubricas.find(r => r.codigo === '0501')).toBeTruthy();
     expect(result!.rubricas.find(r => r.codigo === '3290')).toBeTruthy();
     expect(result!.rubricas.find(r => r.codigo === '5560')).toBeTruthy();
-    expect(result!.rubricas.find(r => r.codigo === '5100')).toBeTruthy();
+    expect(result!.rubricas.find(r => r.codigo === '5100')).toBeFalsy(); // BASE — filtered
   });
 
   it('parser meta identifica como v4', () => {

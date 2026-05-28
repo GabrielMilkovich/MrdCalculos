@@ -394,6 +394,7 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
     const classificacaoRaw = cells.length > 1 ? cells[1].trim().toUpperCase() : '';
     const classificacao = normalizarClassificacao(classificacaoRaw);
     if (classificacaoRaw && !CLASSIFICACOES_VALIDAS.has(classificacao)) continue;
+    if (['BASE', 'ENCAR', 'OUTRO', 'PROV', 'INFO'].includes(classificacao)) continue;
 
     linhasProcessadas++;
 
@@ -494,11 +495,20 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
       const codigo = m[1];
       const restAfterCode = m[2];
 
-      const clasMatch = restAfterCode.match(/\s+(PGTO|DESC|BASE|ENCAR|OUTRO|PROV|INFO|PETO|PAGO|PQTO|PGLO|PGFO|DESO|DESD|DECS|BABE|INPO|ENCAP|OUTPO)\s/i);
+      // Use the LAST match so that classification keywords embedded in the denomination
+      // (e.g. "Reemb desc I Contr A PGTO") don't shadow the actual classification field.
+      const clasMatches = [...restAfterCode.matchAll(/\s+(PGTO|DESC|BASE|ENCAR|OUTRO|PROV|INFO|PETO|PAGO|PQTO|PGLO|PGFO|DESO|DESD|DECS|BABE|INPO|ENCAP|OUTPO)\s/gi)];
+      const clasMatch = clasMatches.at(-1);
       if (!clasMatch) continue;
 
       const denominacao = restAfterCode.substring(0, clasMatch.index!).trim();
       const classificacao = normalizarClassificacao(clasMatch[1]);
+
+      // Bases de cálculo, encargos patronais, provisões e informações auxiliares
+      // nunca são exportáveis. Filtrar aqui evita que seções OUTRO/PROV do ADP
+      // (páginas 2, 4, 5 em fichas multi-página Joseli/Izabela) poluam o output
+      // após o cutoff ter sido resetado pelo próximo cabeçalho de seção.
+      if (['BASE', 'ENCAR', 'OUTRO', 'PROV', 'INFO'].includes(classificacao)) continue;
 
       linhasProcessadas++;
 
