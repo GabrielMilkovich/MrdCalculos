@@ -58,10 +58,10 @@ function makeParsed(rubricas: RubricaEnriquecida[]): FichaFinanceiraParsed {
 }
 
 describe('useFichaFinanceiraReview', () => {
-  it('auto-classifica rubricas catalogadas', () => {
+  it('auto-classifica rubricas catalogadas via grupos da planilha', () => {
     const parsed = makeParsed([
-      makeRubrica({ codigo: '0620', categoria_catalogo: 'comissao' }),
-      makeRubrica({ codigo: '0501', categoria_catalogo: 'dsr_comissao' }),
+      makeRubrica({ codigo: '0620', denominacao: 'Comissões', categoria_catalogo: 'comissao' }),
+      makeRubrica({ codigo: '0501', denominacao: 'DSR(Comissão)', categoria_catalogo: 'dsr_comissao' }),
     ]);
 
     const { result } = renderHook(() => useFichaFinanceiraReview(parsed));
@@ -69,8 +69,10 @@ describe('useFichaFinanceiraReview', () => {
     expect(result.current.rubricasNaoClassificadas).toBe(0);
     expect(result.current.conflitos).toBe(0);
     expect(result.current.podeConfirmar).toBe(true);
-    expect(result.current.rubricas[0].categoria_atual).toBe('comissao');
-    expect(result.current.rubricas[1].categoria_atual).toBe('dsr');
+    // 0620 está mapeado em CODIGO_PARA_GRUPO como comissao_produtos
+    expect(result.current.rubricas[0].categoria_atual).toBe('comissao_produtos');
+    // 0501 está mapeado como dsr_comissao
+    expect(result.current.rubricas[1].categoria_atual).toBe('dsr_comissao');
   });
 
   it('marca nao_encontrado como nao_classificada', () => {
@@ -110,25 +112,26 @@ describe('useFichaFinanceiraReview', () => {
     expect(result.current.rubricasNaoClassificadas).toBe(1);
 
     act(() => {
-      result.current.setCategoria('9999', 'premiacao');
+      result.current.setCategoria('9999', 'premios');
     });
 
     expect(result.current.rubricasNaoClassificadas).toBe(0);
     expect(result.current.podeConfirmar).toBe(true);
-    expect(result.current.rubricas[0].categoria_atual).toBe('premiacao');
+    expect(result.current.rubricas[0].categoria_atual).toBe('premios');
     expect(result.current.rubricas[0].modificada_pelo_operador).toBe(true);
   });
 
   it('reclassificar rubrica catalogada conta como conflito', () => {
     const parsed = makeParsed([
-      makeRubrica({ codigo: '0620', categoria_catalogo: 'comissao' }),
+      makeRubrica({ codigo: '0620', denominacao: 'Comissões', categoria_catalogo: 'comissao' }),
     ]);
 
     const { result } = renderHook(() => useFichaFinanceiraReview(parsed));
     expect(result.current.conflitos).toBe(0);
 
     act(() => {
-      result.current.setCategoria('0620', 'salario_fixo');
+      // 0620 → comissao_produtos por default; mudar pra premios = conflito
+      result.current.setCategoria('0620', 'premios');
     });
 
     expect(result.current.conflitos).toBe(1);
@@ -138,6 +141,7 @@ describe('useFichaFinanceiraReview', () => {
     const parsed = makeParsed([
       makeRubrica({
         codigo: '0620',
+        denominacao: 'Comissões',
         categoria_catalogo: 'comissao',
         valores_mensais: [{ competencia: '2016-01', valor: 1000 }],
       }),
@@ -145,14 +149,14 @@ describe('useFichaFinanceiraReview', () => {
 
     const { result } = renderHook(() => useFichaFinanceiraReview(parsed));
 
-    const comissaoBefore = result.current.totaisPorCategoria.get('comissao');
+    const comissaoBefore = result.current.totaisPorCategoria.get('comissao_produtos');
     expect(comissaoBefore?.toNumber()).toBe(1000);
 
     act(() => {
       result.current.toggleIncluida('0620');
     });
 
-    const comissaoAfter = result.current.totaisPorCategoria.get('comissao');
+    const comissaoAfter = result.current.totaisPorCategoria.get('comissao_produtos');
     expect(comissaoAfter).toBeUndefined();
     expect(result.current.rubricas[0].incluida).toBe(false);
   });
@@ -161,6 +165,7 @@ describe('useFichaFinanceiraReview', () => {
     const parsed = makeParsed([
       makeRubrica({
         codigo: '0620',
+        denominacao: 'Comissões',
         categoria_catalogo: 'comissao',
         valores_mensais: [
           { competencia: '2016-01', valor: 1234.56 },
@@ -170,12 +175,12 @@ describe('useFichaFinanceiraReview', () => {
     ]);
 
     const { result } = renderHook(() => useFichaFinanceiraReview(parsed));
-    const total = result.current.totaisPorCategoria.get('comissao');
+    const total = result.current.totaisPorCategoria.get('comissao_produtos');
     expect(total).toBeInstanceOf(Decimal);
     expect(total?.toFixed(2)).toBe('9124.68');
   });
 
-  it('DESC rubricas são auto-classificadas como ignorar', () => {
+  it('DESC rubricas são auto-classificadas como desconsiderado', () => {
     const parsed = makeParsed([
       makeRubrica({
         codigo: '5560',
@@ -187,7 +192,7 @@ describe('useFichaFinanceiraReview', () => {
 
     const { result } = renderHook(() => useFichaFinanceiraReview(parsed));
 
-    expect(result.current.rubricas[0].categoria_atual).toBe('ignorar');
+    expect(result.current.rubricas[0].categoria_atual).toBe('desconsiderado');
     expect(result.current.rubricas[0].incluida).toBe(false);
   });
 
@@ -210,13 +215,13 @@ describe('useFichaFinanceiraReview', () => {
 
   it('setCategoria com justificativa é preservada', () => {
     const parsed = makeParsed([
-      makeRubrica({ codigo: '0620', categoria_catalogo: 'comissao' }),
+      makeRubrica({ codigo: '0620', denominacao: 'Comissões', categoria_catalogo: 'comissao' }),
     ]);
 
     const { result } = renderHook(() => useFichaFinanceiraReview(parsed));
 
     act(() => {
-      result.current.setCategoria('0620', 'premiacao', 'Reclassificado por advogado');
+      result.current.setCategoria('0620', 'premios', 'Reclassificado por advogado');
     });
 
     expect(result.current.rubricas[0].justificativa).toBe('Reclassificado por advogado');

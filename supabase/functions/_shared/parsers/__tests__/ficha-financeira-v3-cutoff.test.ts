@@ -10,27 +10,31 @@ const fixture = readFileSync(
 
 const result = parseFichaFinanceiraDeterministico(fixture)!;
 
-describe('Ficha Financeira V3 — regra cutoff + ontologia V2 (ROQUE 2016)', () => {
+describe('Ficha Financeira — regra do escritório (corte no 1º DESC, ROQUE 2016)', () => {
   it('parser retorna não-null', () => {
     expect(result).not.toBeNull();
   });
 
-  it('extrai exatamente 34 rubricas (30 pág1 + 4 pág2 antes do cutoff)', () => {
-    // Pág 1 (Jan-Jul): 29 PGTO + 0833 DESC (cutoff) = 30
-    // Pág 2 (Ago-Dez): 0517, 0525 (PGTO) + 0514 (DESC) aparecem ANTES de 0833 = +3
-    // 0833 já contado (merge multi-página) = 0
-    // Total códigos únicos: 30 + 3 = 33, +0832 que aparece nas 2 páginas = 33
-    // Na verdade: 34 códigos únicos extraídos
-    expect(result.rubricas.length).toBe(34);
+  it('extrai exatamente 32 rubricas (todas PGTO, corte no 1º DESC de cada seção)', () => {
+    // Nova regra: a captura para no primeiro código com classificação DESC.
+    // Roque tem 2 seções (Jan-Jul / Ago-Dez+13o). PGTO únicos pré-DESC = 32.
+    expect(result.rubricas.length).toBe(32);
   });
 
-  it('0833 Desc. Insuf Saldo está presente', () => {
-    const r0833 = result.rubricas.find(x => x.codigo === '0833');
-    expect(r0833).toBeDefined();
-    expect(r0833!.denominacao).toMatch(/Desc\.?\s*Insuf\s*Saldo/i);
+  it('nenhum DESC no output (regra do escritório)', () => {
+    const naoPgto = result.rubricas.filter(r => r.classificacao !== 'PGTO');
+    expect(naoPgto).toHaveLength(0);
   });
 
-  it('nenhuma rubrica pós-cutoff (2824, 3640, BASE, ENCAR, PROV)', () => {
+  it('0833 Desc. Insuf Saldo NÃO entra (é DESC, encerra captura)', () => {
+    expect(result.rubricas.find(x => x.codigo === '0833')).toBeUndefined();
+  });
+
+  it('0514 Desc. 13º Salário NÃO entra (DESC)', () => {
+    expect(result.rubricas.find(x => x.codigo === '0514')).toBeUndefined();
+  });
+
+  it('nenhuma rubrica de desconto/base/encar/prov (2824, 3640, 5501, 9920, 6400)', () => {
     const codigos = result.rubricas.map(x => x.codigo);
     expect(codigos).not.toContain('2824');
     expect(codigos).not.toContain('3640');
@@ -44,11 +48,6 @@ describe('Ficha Financeira V3 — regra cutoff + ontologia V2 (ROQUE 2016)', () 
     const codigos = result.rubricas.map(x => x.codigo);
     expect(codigos).toContain('8441');
     expect(codigos).toContain('8489');
-  });
-
-  it('0833 Desc. Insuf Saldo (DESC) entra (V2 excluía DESC)', () => {
-    const codigos = result.rubricas.map(x => x.codigo);
-    expect(codigos).toContain('0833');
   });
 
   it('parser V3 identificado na meta', () => {
@@ -99,11 +98,9 @@ describe('Ficha Financeira V3 — regra cutoff + ontologia V2 (ROQUE 2016)', () 
       ['7076', 'PLR Variavel', 'DESCONSIDERADAS'],
       ['8441', 'ANTECIP.PREMIO ESTIM', 'PREMIOS'],
       ['8489', 'CAMPANHA SERVICOS', 'COMISSOES_SERVICOS'],
-      ['0833', 'Desc. Insuf Saldo', 'DESCONSIDERADAS'],
-      // Pág 2 extras (só têm valores Ago-Dez/13o, aparecem antes de 0833 na pág 2)
+      // Pág 2 extras PGTO (só têm valores Ago-Dez/13o)
       ['0517', '13º Salário - Média', 'DESCONSIDERADAS'],
       ['0525', 'Dif. de Médias 13º S', 'DESCONSIDERADAS'],
-      ['0514', 'Desc. 13º Salário 1ª', 'DESCONSIDERADAS'],
     ];
 
     for (const [codigo, denom, catEsperada] of esperado) {
@@ -115,7 +112,7 @@ describe('Ficha Financeira V3 — regra cutoff + ontologia V2 (ROQUE 2016)', () 
     }
   });
 
-  it('distribuição exata: 4 COMISSOES_PROD, 5 SERVICOS, 3 PREMIOS, 2 MINIMO, 1 DSR, 19 DESCONSIDERADAS', () => {
+  it('distribuição: 4 COMISSOES_PROD, 5 SERVICOS, 3 PREMIOS, 2 MINIMO, 1 DSR, 17 DESCONSIDERADAS', () => {
     const dist: Record<string, number> = {};
     for (const r of result.rubricas) {
       dist[r.categoria] = (dist[r.categoria] ?? 0) + 1;
@@ -125,10 +122,8 @@ describe('Ficha Financeira V3 — regra cutoff + ontologia V2 (ROQUE 2016)', () 
     expect(dist['PREMIOS']).toBe(3);
     expect(dist['MINIMO_GARANTIDO']).toBe(2);
     expect(dist['DSR_S_COMISSOES']).toBe(1);
-    // 30 orig - 4 prod - 5 serv - 3 prem - 2 min - 1 dsr = 15 desc (pág 1)
-    // + 3 extras pág 2 (0517, 0525, 0514) = 18 desc
-    // + 0833 = 19 desc
-    expect(dist['DESCONSIDERADAS']).toBe(19);
+    // 32 total - 4 prod - 5 serv - 3 prem - 2 min - 1 dsr = 17 desconsideradas
+    expect(dist['DESCONSIDERADAS']).toBe(17);
   });
 
   it('nenhuma rubrica NAO_CLASSIFICADO', () => {

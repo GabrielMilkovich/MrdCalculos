@@ -1,19 +1,21 @@
 // Tests for the Joseli ADP ficha financeira fixtures (2016 and 2019).
 //
-// These fichas have 5 sections (vs. Roque's 2):
-//   Section 1: Jan-Jul  PGTO/DESC
-//   Section 2: Jan-Jul  OUTRO/PROV   ← filtered by BASE/ENCAR/OUTRO/PROV filter
-//   Section 3: Aug-Dec  PGTO/DESC    ← cutoff at 0833
-//   Section 4: Aug-Dec  BASE/ENCAR   ← filtered
-//   Section 5: Aug-Dec  OUTRO/PROV   ← filtered
+// Nova regra do escritório (28/05/2026): a captura para no PRIMEIRO código
+// com classificação DESC dentro de cada seção. Só PGTO entra no output —
+// descontos nunca compõem histórico salarial pro PJe-Calc.
 //
-// Key invariants tested:
-//  - Correct rubrica count (not 186 / not inflated by filtered sections)
-//  - 0833 sentinel IS in output (per spec: "inclusive")
-//  - Post-cutoff codes that appear ONLY after 0833 are excluded
-//  - Codes in both section 1 and after-0833 in section 3 have only Jan-Jul values
-//  - New group-mapping codes (3090 → dsr, 3405 → dsr, 3423 → premios, 0710 → comissao_produtos)
-//  - 3049 "Reemb desc I Contr A" is correctly PGTO (not mis-classified as DESC due to "desc" in name)
+// Estas fichas têm 5 seções ADP:
+//   Section 1: Jan-Jul  PGTO → DESC (corte)
+//   Section 2: Jan-Jul  OUTRO/PROV   ← filtrado por BASE/ENCAR/OUTRO/PROV
+//   Section 3: Aug-Dec  PGTO → DESC (corte)
+//   Section 4: Aug-Dec  BASE/ENCAR   ← filtrado
+//   Section 5: Aug-Dec  OUTRO/PROV   ← filtrado
+//
+// Invariantes testados:
+//  - Nenhum DESC, BASE, ENCAR, OUTRO, PROV, INFO aparece no output
+//  - Total de PGTO correto (não inflado por seções de aux)
+//  - Códigos novos da planilha presentes (3090, 3405, 3423, etc)
+//  - 3049 "Reemb desc I Contr A" é PGTO mesmo com "desc" no nome
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'fs';
@@ -26,7 +28,7 @@ const FIXTURE_DIR = join(__dirname, '../_fixtures');
 // 2016
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Ficha Financeira — Joseli 2016 (5 seções ADP)', () => {
+describe('Ficha Financeira — Joseli 2016 (5 seções ADP, corte no 1º DESC)', () => {
   let result: ReturnType<typeof parseFichaFinanceiraDeterministico>;
 
   beforeAll(() => {
@@ -46,14 +48,17 @@ describe('Ficha Financeira — Joseli 2016 (5 seções ADP)', () => {
     expect(result!.empregado).toContain('JOSELI SILVA WANDERLEY');
   });
 
-  it('total de 69 rubricas (45 PGTO + 24 DESC) — seções BASE/ENCAR/OUTRO/PROV filtradas', () => {
-    expect(result!.rubricas.length).toBe(69);
+  it('total de 45 rubricas (todas PGTO) — DESC encerra cada seção', () => {
+    expect(result!.rubricas.length).toBe(45);
   });
 
-  it('0833 Desc. Insuf Saldo está presente (sentinel incluído per spec)', () => {
-    const r = result!.rubricas.find(r => r.codigo === '0833');
-    expect(r).toBeDefined();
-    expect(r!.classificacao).toBe('DESC');
+  it('nenhum DESC no output (regra do escritório)', () => {
+    const naoPgto = result!.rubricas.filter(r => r.classificacao !== 'PGTO');
+    expect(naoPgto).toHaveLength(0);
+  });
+
+  it('0833 Desc. Insuf Saldo NÃO aparece (DESC encerra captura)', () => {
+    expect(result!.rubricas.find(r => r.codigo === '0833')).toBeUndefined();
   });
 
   it('3049 classificado como PGTO (não DESC) — "desc" no nome não polui a classificação', () => {
@@ -74,29 +79,11 @@ describe('Ficha Financeira — Joseli 2016 (5 seções ADP)', () => {
     expect(result!.rubricas.find(r => r.codigo === '3423')).toBeDefined(); // GRATIFIC.-FERIADO
   });
 
-  it('0521 presente (aparece ANTES de 0833 na seção Aug-Dec)', () => {
-    expect(result!.rubricas.find(r => r.codigo === '0521')).toBeDefined();
-  });
-
-  it('códigos que aparecem APENAS após 0833 na seção Aug-Dec estão ausentes', () => {
-    // These codes only exist after 0833 in section 3 — should be excluded
-    const postCutoff = ['3514', '5250', '5323', '7037', '9960', '3623'];
-    for (const code of postCutoff) {
-      expect(result!.rubricas.find(r => r.codigo === code), `código ${code} não deve estar no output`).toBeUndefined();
+  it('todos os DESCs estão ausentes (1108, 2824, 3640, 5560, etc)', () => {
+    const descs = ['0521', '0833', '1108', '2824', '3640', '3669', '3673', '5500', '5560', '5580'];
+    for (const code of descs) {
+      expect(result!.rubricas.find(r => r.codigo === code), `${code} (DESC) não pode aparecer`).toBeUndefined();
     }
-  });
-
-  it('5560 INSS tem apenas valores Jan-Jul (Aug-Dec bloqueados pelo cutoff)', () => {
-    const r5560 = result!.rubricas.find(r => r.codigo === '5560');
-    expect(r5560).toBeDefined();
-    const competencias = r5560!.valores_mensais.map(v => v.competencia);
-    // Only months 01-07 should be present
-    for (const comp of competencias) {
-      const mes = comp.split('-')[1];
-      expect(Number(mes), `mês ${comp} não deveria estar em 5560`).toBeLessThanOrEqual(7);
-    }
-    // At least some Jan-Jul months should be present
-    expect(competencias.length).toBeGreaterThan(0);
   });
 
   it('seções BASE/ENCAR/OUTRO/PROV não poluem o output (ex: 8100, 9920, 6400, 0720)', () => {
@@ -111,7 +98,7 @@ describe('Ficha Financeira — Joseli 2016 (5 seções ADP)', () => {
 // 2019
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Ficha Financeira — Joseli 2019 (5 seções ADP)', () => {
+describe('Ficha Financeira — Joseli 2019 (5 seções ADP, corte no 1º DESC)', () => {
   let result: ReturnType<typeof parseFichaFinanceiraDeterministico>;
 
   beforeAll(() => {
@@ -131,13 +118,17 @@ describe('Ficha Financeira — Joseli 2019 (5 seções ADP)', () => {
     expect(result!.empregado).toContain('JOSELI SILVA WANDERLEY');
   });
 
-  it('total de 85 rubricas — seções BASE/ENCAR/OUTRO/PROV filtradas', () => {
-    expect(result!.rubricas.length).toBe(85);
+  it('total de 57 rubricas (todas PGTO)', () => {
+    expect(result!.rubricas.length).toBe(57);
   });
 
-  it('0833 Desc. Insuf Saldo está presente', () => {
-    const r = result!.rubricas.find(r => r.codigo === '0833');
-    expect(r).toBeDefined();
+  it('nenhum DESC no output', () => {
+    const naoPgto = result!.rubricas.filter(r => r.classificacao !== 'PGTO');
+    expect(naoPgto).toHaveLength(0);
+  });
+
+  it('0833 Desc. Insuf Saldo NÃO aparece (DESC encerra captura)', () => {
+    expect(result!.rubricas.find(r => r.codigo === '0833')).toBeUndefined();
   });
 
   it('novos códigos 2019 presentes: 3155, 4583, 7753, 4533, 7663, 4591', () => {

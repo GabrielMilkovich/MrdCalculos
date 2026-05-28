@@ -83,7 +83,7 @@ export function FichaFinanceiraPreviewDialog({
 
   const categoriasComValor = useMemo(() => {
     const entries = [...review.totaisPorCategoria.entries()]
-      .filter(([cat]) => cat !== 'ignorar')
+      .filter(([cat]) => cat !== 'desconsiderado')
       .sort((a, b) => b[1].cmp(a[1]));
     return entries;
   }, [review.totaisPorCategoria]);
@@ -155,7 +155,7 @@ export function FichaFinanceiraPreviewDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3 flex-1 min-h-0">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between shrink-0">
             <ValidationBanner validacao={parsed.validacao} />
             <div className="flex items-center gap-2">
               {pdfUrl && (
@@ -180,7 +180,7 @@ export function FichaFinanceiraPreviewDialog({
           </div>
 
           {review.rubricasNaoClassificadas > 0 && (
-            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 shrink-0">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>
                 {review.rubricasNaoClassificadas}{' '}
@@ -190,7 +190,7 @@ export function FichaFinanceiraPreviewDialog({
             </div>
           )}
 
-          <ScrollArea className="min-h-0 flex-1 border rounded-md" style={{ maxHeight: 'calc(90vh - 260px)' }}>
+          <ScrollArea className="min-h-0 flex-1 border rounded-md">
               <table className="w-full text-xs whitespace-nowrap">
                 <thead className="sticky top-0 bg-background z-10 border-b">
                   <tr>
@@ -292,7 +292,7 @@ export function FichaFinanceiraPreviewDialog({
           </ScrollArea>
 
           {categoriasComValor.length > 0 && (
-            <div className="text-xs space-y-1">
+            <div className="text-xs space-y-1 shrink-0">
               <div className="font-medium text-muted-foreground">Total por categoria:</div>
               <div className="flex flex-wrap gap-x-4 gap-y-1">
                 {categoriasComValor.map(([cat, val]) => (

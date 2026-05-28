@@ -51,9 +51,10 @@ describe('parseFichaFinanceiraDeterministico — texto-layout ROQUE 2016', () =>
     expect(comissao!.valores_mensais.length).toBe(12);
   });
 
-  it('V3: rubricas incluem PGTO e DESC (até cutoff 0833)', () => {
+  it('regra do escritório: output só contém PGTO (DESC encerra a seção)', () => {
     const classes = new Set(result!.rubricas.map(r => r.classificacao));
     expect(classes.has('PGTO')).toBe(true);
+    expect(classes.has('DESC')).toBe(false);
   });
 
   it('V3: fixture sintética sem cutoff 0833 — inclui tudo', () => {
@@ -133,17 +134,18 @@ describe('parseFichaFinanceiraDeterministico — markdown table path still works
     '| 5100 Base INSS | BASE | 1.800,00 | 2.400,00 | 2.160,00 | 2.640,00 | 2.280,00 |',
   ].join('\n');
 
-  it('retorna resultado válido para markdown table (BASE excluída do output)', () => {
+  it('retorna resultado válido para markdown table (regra: para no 1º DESC, BASE filtrado)', () => {
     const result = parseFichaFinanceiraDeterministico(MARKDOWN_FIXTURE);
     expect(result).not.toBeNull();
     expect(result!.ano).toBe(2023);
     expect(result!.empregado).toContain('MARIA SILVA TESTE');
-    // BASE rows are filtered — only PGTO/DESC rows appear
-    expect(result!.rubricas.length).toBe(4);
+    // Nova regra: parser entrega apenas PGTO até o 1º DESC.
+    // 5560 (DESC) encerra a seção; 5100 (BASE) filtrado.
+    expect(result!.rubricas.length).toBe(3);
     expect(result!.rubricas.find(r => r.codigo === '0620')).toBeTruthy();
     expect(result!.rubricas.find(r => r.codigo === '0501')).toBeTruthy();
     expect(result!.rubricas.find(r => r.codigo === '3290')).toBeTruthy();
-    expect(result!.rubricas.find(r => r.codigo === '5560')).toBeTruthy();
+    expect(result!.rubricas.find(r => r.codigo === '5560')).toBeFalsy(); // DESC — encerra
     expect(result!.rubricas.find(r => r.codigo === '5100')).toBeFalsy(); // BASE — filtered
   });
 

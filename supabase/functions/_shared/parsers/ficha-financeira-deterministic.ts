@@ -396,6 +396,15 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
     if (classificacaoRaw && !CLASSIFICACOES_VALIDAS.has(classificacao)) continue;
     if (['BASE', 'ENCAR', 'OUTRO', 'PROV', 'INFO'].includes(classificacao)) continue;
 
+    // Regra do escritório: ao encontrar o primeiro código DESC dentro de uma
+    // seção, encerra a captura desta seção (nenhuma linha posterior entra).
+    // PJe-Calc só consome proventos (PGTO) — descontos nunca compõem
+    // histórico salarial. Próximo cabeçalho reseta cutoffAlcancado.
+    if (classificacao === 'DESC') {
+      cutoffAlcancado = true;
+      continue;
+    }
+
     linhasProcessadas++;
 
     const valores: Array<{ competencia: string; valor: number }> = [];
@@ -411,7 +420,7 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
       }
     }
 
-    if (valores.length === 0 && !ehLinhaCutoff(codigo, denominacao)) continue;
+    if (valores.length === 0) continue;
 
     const empregadorSlug = empresa.toUpperCase().includes('VIA VAREJO') ? 'VIA_VAREJO' : 'GENERICO';
     const cls = classificarRubrica(denominacao, codigo, empregadorSlug);
@@ -420,10 +429,6 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
       ...cls,
       valores_mensais: valores,
     });
-
-    if (ehLinhaCutoff(codigo, denominacao)) {
-      cutoffAlcancado = true;
-    }
   }
 
   if (rubricas.length === 0) return null;
@@ -510,6 +515,14 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
       // após o cutoff ter sido resetado pelo próximo cabeçalho de seção.
       if (['BASE', 'ENCAR', 'OUTRO', 'PROV', 'INFO'].includes(classificacao)) continue;
 
+      // Regra do escritório: primeiro código DESC encerra a captura da seção
+      // (proventos antes de descontos). Próximo cabeçalho ADP reseta o cutoff
+      // — múltiplas seções com seus próprios blocos de DESC funcionam.
+      if (classificacao === 'DESC') {
+        cutoffAlcancado = true;
+        continue;
+      }
+
       linhasProcessadas++;
 
       const codeStartInLine = raw.indexOf(codigo);
@@ -531,11 +544,7 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
         }
       }
 
-      // Cutoff check: rubrica entra, mas marca o fim
-      const isCutoff = ehLinhaCutoff(codigo, denominacao);
-      if (isCutoff) cutoffCodigos.add(codigo);
-
-      if (valores.length === 0 && !isCutoff) continue;
+      if (valores.length === 0) continue;
 
       const empregadorSlug = empresa.toUpperCase().includes('VIA VAREJO') ? 'VIA_VAREJO' : 'GENERICO';
       const cls = classificarRubrica(denominacao, codigo, empregadorSlug);
@@ -554,10 +563,6 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
           ...cls,
           valores_mensais: [...valores],
         });
-      }
-
-      if (isCutoff) {
-        cutoffAlcancado = true;
       }
     }
   }
