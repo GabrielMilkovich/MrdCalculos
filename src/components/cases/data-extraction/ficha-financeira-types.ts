@@ -1,4 +1,5 @@
 import type { RubricaEnriquecida } from '@/features/data-extraction/enrichment/enrich-ficha-financeira';
+import type { GrupoExportCSV } from '@/features/data-extraction/export/per-doc/grupos-planilha-dsr';
 
 export interface FichaFinanceiraParsed {
   ano: number;
@@ -44,58 +45,69 @@ export interface FichaFinanceiraParsed {
   };
 }
 
-export type FichaCategoriaSlug =
-  | 'salario_fixo'
-  | 'comissao'
-  | 'dsr'
-  | 'premiacao'
-  | 'minimo_garantido'
-  | 'salario_familia'
-  | 'ignorar';
+// Categoria da UI espelha exatamente os 7 grupos da planilha do escritório
+// (definidos em features/.../grupos-planilha-dsr.ts). Reusamos o tipo para
+// garantir que o que o operador edita aqui é o mesmo grupo que vai pro CSV
+// no momento da exportação.
+export type FichaCategoriaSlug = GrupoExportCSV;
 
+// Mapa de categorias do parser/catálogo (categoria_pje em snake_case) para
+// os grupos da planilha. Fonte de verdade: planilha "Planilha_Comissão_DSR".
+// Cobre as principais saídas dos parsers ADP / ontologia V2.
 export const CATEGORIA_PJE_TO_SLUG: Record<string, FichaCategoriaSlug> = {
-  salario_base: 'salario_fixo',
+  // Mínimo Garantido (col 1)
   minimo_garantido: 'minimo_garantido',
-  comissao: 'comissao',
-  comissao_garantia: 'comissao',
-  comissao_seguros: 'comissao',
-  comissao_frete: 'comissao',
-  comissao_montagem: 'comissao',
-  dsr_comissao: 'dsr',
-  dsr_he: 'dsr',
-  premio: 'premiacao',
-  premio_meta: 'premiacao',
-  premio_estimulo: 'premiacao',
-  horas_extras_75: 'salario_fixo',
-  horas_extras_70: 'salario_fixo',
-  adicional_sabado: 'salario_fixo',
-  adicional_noturno: 'salario_fixo',
-  horas_justificadas: 'salario_fixo',
-  insuf_saldo: 'salario_fixo',
-  adto_quinzenal: 'salario_fixo',
-  adiantamento: 'salario_fixo',
-  campanha: 'premiacao',
-  desconto: 'ignorar',
-  desconto_ir: 'ignorar',
-  desconto_inss: 'ignorar',
-  base: 'ignorar',
-  totalizador: 'ignorar',
-  ajuste: 'ignorar',
-  plr: 'ignorar',
-  decimo_terceiro: 'salario_fixo',
-  decimo_terceiro_adto: 'salario_fixo',
-  ferias_terco: 'salario_fixo',
-  ferias_media: 'salario_fixo',
+  horas_justificadas: 'minimo_garantido',
+  // Comissões s/ Produtos (col 2)
+  comissao: 'comissao_produtos',
+  comissoes: 'comissao_produtos',
+  adto_quinzenal: 'comissao_produtos',
+  adiantamento: 'comissao_produtos',
+  ajuste: 'comissao_produtos',
+  // DSR s/ Comissões (col 3)
+  dsr_comissao: 'dsr_comissao',
+  // Comissões s/ Serviços (col 4)
+  comissao_servicos: 'comissao_servicos',
+  comissao_garantia: 'comissao_servicos',
+  comissao_seguros: 'comissao_servicos',
+  comissao_frete: 'comissao_servicos',
+  comissao_montagem: 'comissao_servicos',
+  campanha: 'comissao_servicos',
+  // Prêmios (col 5)
+  premio: 'premios',
+  premio_meta: 'premios',
+  premio_estimulo: 'premios',
+  // Salário Substituição (col 6)
+  salario_substituicao: 'salario_substituicao',
+  // Desconsiderados (col 7) — descontos, encargos, bases, médias, 13º, férias, PLR, etc.
+  salario_base: 'desconsiderado',
+  salario_familia: 'desconsiderado',
+  horas_extras_75: 'desconsiderado',
+  horas_extras_70: 'desconsiderado',
+  adicional_sabado: 'desconsiderado',
+  adicional_noturno: 'desconsiderado',
+  insuf_saldo: 'desconsiderado',
+  desconto: 'desconsiderado',
+  desconto_ir: 'desconsiderado',
+  desconto_inss: 'desconsiderado',
+  dsr_he: 'desconsiderado',
+  base: 'desconsiderado',
+  totalizador: 'desconsiderado',
+  plr: 'desconsiderado',
+  decimo_terceiro: 'desconsiderado',
+  decimo_terceiro_adto: 'desconsiderado',
+  ferias_terco: 'desconsiderado',
+  ferias_media: 'desconsiderado',
 };
 
 export const CATEGORIA_LABELS: Record<FichaCategoriaSlug, string> = {
-  salario_fixo: 'Salário Fixo',
-  comissao: 'Comissões',
-  dsr: 'DSR',
-  premiacao: 'Premiações',
   minimo_garantido: 'Mínimo Garantido',
-  salario_familia: 'Salário-família',
-  ignorar: 'Ignorar',
+  comissao_produtos: 'Comissões s/ Produtos',
+  dsr_comissao: 'DSR s/ Comissões',
+  comissao_servicos: 'Comissões s/ Serviços',
+  premios: 'Prêmios',
+  salario_substituicao: 'Salário Substituição',
+  desconsiderado: 'Desconsiderado',
 };
 
 export function mapCategoriaPjeToSlug(categoriaPje: string | null): FichaCategoriaSlug | null {

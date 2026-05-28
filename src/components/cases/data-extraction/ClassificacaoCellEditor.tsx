@@ -33,14 +33,16 @@ interface Props {
   onChange: (novaCategoria: FichaCategoriaSlug, justificativa?: string) => void;
 }
 
+// Ordem reflete a planilha do escritório (col 1 → col 7).
+// Os 6 primeiros são incluídos no CSV; o último (desconsiderado) é separado.
 const OPCOES: FichaCategoriaSlug[] = [
-  'salario_fixo',
-  'comissao',
-  'dsr',
-  'premiacao',
   'minimo_garantido',
-  'salario_familia',
-  'ignorar',
+  'comissao_produtos',
+  'dsr_comissao',
+  'comissao_servicos',
+  'premios',
+  'salario_substituicao',
+  'desconsiderado',
 ];
 
 export function ClassificacaoCellEditor({
@@ -91,8 +93,8 @@ export function ClassificacaoCellEditor({
             </SelectItem>
           ))}
           <SelectSeparator />
-          <SelectItem value="ignorar" className="text-xs text-muted-foreground">
-            {CATEGORIA_LABELS.ignorar}
+          <SelectItem value="desconsiderado" className="text-xs text-muted-foreground">
+            {CATEGORIA_LABELS.desconsiderado}
           </SelectItem>
         </SelectContent>
       </Select>

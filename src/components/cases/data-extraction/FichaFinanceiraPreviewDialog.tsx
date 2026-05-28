@@ -83,7 +83,7 @@ export function FichaFinanceiraPreviewDialog({
 
   const categoriasComValor = useMemo(() => {
     const entries = [...review.totaisPorCategoria.entries()]
-      .filter(([cat]) => cat !== 'ignorar')
+      .filter(([cat]) => cat !== 'desconsiderado')
       .sort((a, b) => b[1].cmp(a[1]));
     return entries;
   }, [review.totaisPorCategoria]);

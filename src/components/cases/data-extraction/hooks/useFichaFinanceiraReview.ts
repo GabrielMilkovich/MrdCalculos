@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import Decimal from 'decimal.js';
 import { supabase } from '@/integrations/supabase/client';
 import type { RubricaEnriquecida } from '@/features/data-extraction/enrichment/enrich-ficha-financeira';
+import { classificarRubrica } from '@/features/data-extraction/export/per-doc/grupos-planilha-dsr';
 import {
   type FichaFinanceiraParsed,
   type FichaCategoriaSlug,
@@ -18,15 +19,15 @@ export interface RubricaEditavel extends RubricaEnriquecida {
   total_ano: Decimal;
 }
 
+// Deriva a categoria inicial usando a cascata definitiva do `classificarRubrica`
+// (código direto → nome exato → substring → fuzzy → fallback desconsiderado).
+// Esta é a MESMA função que será chamada no momento de exportar o ZIP, então
+// o que o operador vê na UI é exatamente o que vai pro CSV final. DESC e
+// outras classificações não-PGTO nunca chegam aqui (parser já filtrou), mas
+// se chegarem (catálogo histórico), forçamos `desconsiderado`.
 function derivarCategoriaInicial(r: RubricaEnriquecida): FichaCategoriaSlug {
-  const mapped = r.categoria_catalogo
-    ? CATEGORIA_PJE_TO_SLUG[r.categoria_catalogo]
-    : r.categoria
-      ? CATEGORIA_PJE_TO_SLUG[r.categoria]
-      : null;
-  if (mapped) return mapped;
-  if (r.classificacao?.toUpperCase() !== 'PGTO') return 'ignorar';
-  return 'salario_fixo';
+  if (r.classificacao?.toUpperCase() !== 'PGTO') return 'desconsiderado';
+  return classificarRubrica(r.codigo, r.denominacao).grupo;
 }
 
 function buildEditavel(r: RubricaEnriquecida): RubricaEditavel {
@@ -38,7 +39,7 @@ function buildEditavel(r: RubricaEnriquecida): RubricaEditavel {
   return {
     ...r,
     categoria_atual: cat,
-    incluida: cat !== 'ignorar',
+    incluida: cat !== 'desconsiderado',
     modificada_pelo_operador: false,
     total_ano: total,
   };
@@ -52,14 +53,16 @@ function isNaoClassificada(r: RubricaEditavel): boolean {
   );
 }
 
+// Mapeamento reverso slug→categoria_pje pro endpoint de catálogo. O banco usa
+// vocabulário antigo do PJe-Calc; convertemos só na hora de persistir.
 const SLUG_TO_CATEGORIA_PJE: Record<FichaCategoriaSlug, string> = {
-  salario_fixo: 'salario_base',
-  comissao: 'comissao',
-  dsr: 'dsr_comissao',
-  premiacao: 'premio',
   minimo_garantido: 'minimo_garantido',
-  salario_familia: 'salario_familia',
-  ignorar: 'desconto',
+  comissao_produtos: 'comissao',
+  dsr_comissao: 'dsr_comissao',
+  comissao_servicos: 'comissao_servicos',
+  premios: 'premio',
+  salario_substituicao: 'salario_substituicao',
+  desconsiderado: 'desconto',
 };
 
 export interface SalvarResult {
@@ -81,7 +84,7 @@ export function useFichaFinanceiraReview(parsed: FichaFinanceiraParsed) {
             ? {
                 ...r,
                 categoria_atual: novaCategoria,
-                incluida: novaCategoria !== 'ignorar',
+                incluida: novaCategoria !== 'desconsiderado',
                 modificada_pelo_operador: true,
                 justificativa,
               }
