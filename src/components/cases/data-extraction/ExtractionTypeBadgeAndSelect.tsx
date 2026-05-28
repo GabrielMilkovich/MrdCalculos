@@ -109,6 +109,7 @@ export function ExtractionTypeBadgeAndSelect({
   const [ctpsState, setCtpsState] = useState<{
     feriasParsed: ParseFeriasResult;
     faltasParsed: ParseFaltasResult;
+    ctpsV2?: import('@/domain/tipos-dominio').CtpsDominioV2;
     documentId: string;
     ocrText: string;
     baseFilename: string;
@@ -191,6 +192,7 @@ export function ExtractionTypeBadgeAndSelect({
           setCtpsState({
             feriasParsed: result.feriasParsed,
             faltasParsed: result.faltasParsed,
+            ctpsV2: result.ctpsV2,
             documentId: result.document_id,
             ocrText: result.ocr_text,
             baseFilename: result.baseFilename,
@@ -354,6 +356,7 @@ export function ExtractionTypeBadgeAndSelect({
           onOpenChange={(o) => !o && setCtpsState(null)}
           feriasParsed={ctpsState.feriasParsed}
           faltasParsed={ctpsState.faltasParsed}
+          ctpsV2={ctpsState.ctpsV2}
           documentId={ctpsState.documentId}
           ocrText={ctpsState.ocrText}
           baseFilename={ctpsState.baseFilename}

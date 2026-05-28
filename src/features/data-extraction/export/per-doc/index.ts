@@ -16,6 +16,10 @@ import type { HoleriteParseResult } from '../../parsers/holerite/types';
 import { parseCartaoPonto, type ParseCartaoPontoResult } from '../../parsers/cartao-ponto';
 import { parseFerias, type ParseFeriasResult } from '../../parsers/ferias';
 import { parseFaltas, type ParseFaltasResult } from '../../parsers/faltas';
+import { parseFichaAnotacoes } from '../../../../../supabase/functions/_shared/parsers/ctps-v2/parser';
+import { pareceDegradado } from '../../../../../supabase/functions/_shared/parsers/ctps-v2/parece-degradado';
+import { adaptarFerias } from '../../parsers/ctps-v2/adapters/to-ferias-parseada';
+import { adaptarFaltas } from '../../parsers/ctps-v2/adapters/to-falta-parseada';
 import { buildCartaoPontoCSV } from './cartao-ponto-csv';
 import { buildCartaoPontoZip, buildCartaoPontoZipWithReport } from './cartao-ponto-zip';
 import { buildFeriasCSVBlob, buildFeriasCSVBlobWithReport } from './ferias-csv';
@@ -97,6 +101,15 @@ export type ExportResult =
       feriasParsed: ParseFeriasResult;
       /** Resultado do parser de faltas sobre o MESMO OCR. */
       faltasParsed: ParseFaltasResult;
+      /**
+       * Resultado V2 da Ficha de Anotações ADP-Web/SAP — quando presente,
+       * o ZIP é gerado pelo exporter V2 (4 CSVs). Quando ausente, usa o
+       * builder legacy (2 CSVs: ferias + faltas).
+       *
+       * Populado quando `ocr_provider === 'pdfjs_geometric'` E
+       * `parseFichaAnotacoes` produz resultado não-degradado.
+       */
+      ctpsV2?: import('@/domain/tipos-dominio').CtpsDominioV2;
       document_id: string;
       ocr_text: string;
       /** Nome base SEM extensão — o ZIP final será baseFilename + ".zip". */
@@ -293,18 +306,41 @@ export async function generateExportForDocument(
     case 'recibo_ferias':
     case 'registro_faltas':
     case 'ctps': {
-      // CTPS — Carteira de Trabalho. O MESMO OCR alimenta os 2 parsers.
-      // Se um deles não achar nada (ex: CTPS sem férias registradas),
-      // o resultado fica vazio e só o outro CSV vai pro ZIP — o builder
-      // omite arquivos com 0 linhas (header-only fica como sinal de que
-      // o parser tentou e não achou nada).
-      const feriasParsed = parseFerias(ocrText);
-      const faltasParsed = parseFaltas(ocrText);
+      // CTPS — Carteira de Trabalho. Path V2 tenta primeiro pra Ficha de
+      // Anotações ADP-Web/SAP (4 CSVs). Cai pro path legacy (2 CSVs) quando:
+      //   - ocr_provider != 'pdfjs_geometric' (OCR Mistral/degradado)
+      //   - parseFichaAnotacoes retorna null (layout não reconhecido)
+      //   - pareceDegradado detecta seções vazias num doc que devia tê-las
+      //
+      // Defesa em profundidade: ocr_provider barra Mistral de cara,
+      // pareceDegradado pega o caso raro de pdfjs_geometric que mesmo
+      // assim saiu mal.
+      const podeUsarV2 = ocrProvider === 'pdfjs_geometric';
+      let ctpsV2: import('@/domain/tipos-dominio').CtpsDominioV2 | undefined;
+      let feriasParsed: ParseFeriasResult;
+      let faltasParsed: ParseFaltasResult;
+
+      if (podeUsarV2) {
+        const v2 = parseFichaAnotacoes(ocrText);
+        if (v2 && !pareceDegradado(ocrText, v2)) {
+          ctpsV2 = v2;
+          feriasParsed = adaptarFerias(v2);
+          faltasParsed = adaptarFaltas(v2);
+        } else {
+          feriasParsed = parseFerias(ocrText);
+          faltasParsed = parseFaltas(ocrText);
+        }
+      } else {
+        feriasParsed = parseFerias(ocrText);
+        faltasParsed = parseFaltas(ocrText);
+      }
+
       return {
         ok: true,
         kind: 'ctps-review',
         feriasParsed,
         faltasParsed,
+        ctpsV2,
         document_id: documentId,
         ocr_text: ocrText,
         baseFilename: baseName,
