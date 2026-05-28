@@ -152,6 +152,13 @@ export async function generateExportForDocument(
   const v6Parsed = (doc as { parsed?: unknown }).parsed;
   const ocrProvider = (doc as { ocr_provider?: string | null }).ocr_provider;
 
+  // F1.3 (PR-4): switch usa string crua porque a tabela `documents` pode
+  // ainda retornar tipos legados ('recibo_ferias', 'registro_faltas') em
+  // caches/réplicas que não refletiram a migration. Tratamos como fallback
+  // pra `ctps` (1 sprint) — depois disso o constraint do banco já recusa
+  // os legados e podemos remover.
+  const tipoRaw = doc.tipo_extracao as string | null | undefined;
+
   // GUARD anti-race condition: docs processados pelo V6 (ocr_provider
   // começando com `pdfjs_geometric` — cobre `pdfjs_geometric` clássico e
   // variantes como `pdfjs_geometric_manual_v6`) precisam de `parsed`
@@ -160,7 +167,12 @@ export async function generateExportForDocument(
   // históricas anteriores ao período real aparecem como apurações. Bloqueia
   // o export até o pipeline V6 escrever o JSONB, evitando ZIP/CSV
   // silenciosamente incorreto.
-  if (ocrProvider?.startsWith('pdfjs_geometric') && (!v6Parsed || typeof v6Parsed !== 'object')) {
+  //
+  // Exceção: CTPS V2 — o parser V2 roda sobre `ocr_text` (não sobre `parsed`
+  // JSONB), portanto `parsed=null` é o estado correto pós-extração geométrica.
+  // O guard não se aplica pra CTPS/recibo_ferias/registro_faltas.
+  const isCtpsTipo = tipoRaw === 'ctps' || tipoRaw === 'recibo_ferias' || tipoRaw === 'registro_faltas';
+  if (ocrProvider?.startsWith('pdfjs_geometric') && (!v6Parsed || typeof v6Parsed !== 'object') && !isCtpsTipo) {
     return {
       ok: false,
       error:
@@ -168,13 +180,6 @@ export async function generateExportForDocument(
         'Aguarde alguns segundos e tente novamente. Se persistir, rode "Reprocessar V6" na lista de documentos.',
     };
   }
-
-  // F1.3 (PR-4): switch usa string crua porque a tabela `documents` pode
-  // ainda retornar tipos legados ('recibo_ferias', 'registro_faltas') em
-  // caches/réplicas que não refletiram a migration. Tratamos como fallback
-  // pra `ctps` (1 sprint) — depois disso o constraint do banco já recusa
-  // os legados e podemos remover.
-  const tipoRaw = doc.tipo_extracao as string | null | undefined;
   switch (tipoRaw) {
     case 'holerite': {
       const parsed = parseHolerite(ocrText);

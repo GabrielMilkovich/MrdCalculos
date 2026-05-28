@@ -199,6 +199,56 @@ async function processarDoc(
   await prewarmOntologiaIfNeeded(docTab, supabase);
   const dispatch = escolherEMapear(docTab);
   if (dispatch.kind === "no_mapper_matched") {
+    // CTPS V2: extrator geométrico produziu texto de qualidade mas não existe
+    // mapper pra CTPS no dispatcher (o parser V2 roda no cliente). Grava o
+    // texto geométrico como `ocr_provider='pdfjs_geometric'` pra o export
+    // `per-doc/index.ts` acionar o parser V2 client-side.
+    if (doc.tipo_extracao === "ctps") {
+      await supabase
+        .from("documents")
+        .update({
+          parsed: null,
+          parsed_by: "ctps-v2-text",
+          ocr_provider: "pdfjs_geometric",
+          ocr_text: docTab.textoCompleto,
+          ocr_validated: true,
+          status: "ocr_done",
+          extracao_status: "done",
+          updated_at: new Date().toISOString(),
+          metadata: {
+            ...(doc.metadata ?? {}),
+            v6_attempted_at: new Date().toISOString(),
+            v6_outcome: "ctps_text_only",
+            v6_score: docTab.qualidade.score,
+            v6_quality_reason: docTab.qualidade.razao,
+            v6_page_count: docTab.numeroPaginas,
+            v6_text_full_length: docTab.textoCompleto.length,
+            v6_reprocessed_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", doc.id);
+
+      const chunkResult = await disparaChunkAndEmbed(
+        supabase,
+        doc.id,
+        docTab.textoCompleto,
+        authHeader,
+      );
+
+      return {
+        id: doc.id,
+        sucesso: true,
+        outcome: "success",
+        mapper: "ctps-v2-text",
+        score: docTab.qualidade.score,
+        pageCount: docTab.numeroPaginas,
+        razao: `score ${docTab.qualidade.score.toFixed(2)} · texto geométrico CTPS V2` +
+          (chunkResult.ok
+            ? ` · ${chunkResult.chunks_created ?? "?"} chunks RAG`
+            : ` · chunk-and-embed falhou (${chunkResult.error ?? "?"}) — re-rodar`),
+      };
+    }
+
     return {
       id: doc.id,
       sucesso: false,
@@ -355,7 +405,7 @@ Deno.serve(async (req) => {
     if (documentId) {
       const { data, error } = await supabase
         .from("documents")
-        .select("id, storage_path, mime_type, metadata, cases!inner(criado_por)")
+        .select("id, storage_path, mime_type, metadata, tipo_extracao, cases!inner(criado_por)")
         .eq("id", documentId);
       if (error) return jsonResponse({ error: error.message }, 500);
       docs = data ?? [];
@@ -375,7 +425,7 @@ Deno.serve(async (req) => {
       // Backfill cross-user: ignora filtro por criado_por.
       const { data, error } = await supabase
         .from("documents")
-        .select("id, storage_path, mime_type, metadata, cases!inner(criado_por)")
+        .select("id, storage_path, mime_type, metadata, tipo_extracao, cases!inner(criado_por)")
         .is("parsed", null)
         .eq("mime_type", "application/pdf")
         .limit(limit);
@@ -384,7 +434,7 @@ Deno.serve(async (req) => {
     } else {
       const { data, error } = await supabase
         .from("documents")
-        .select("id, storage_path, mime_type, metadata, cases!inner(criado_por)")
+        .select("id, storage_path, mime_type, metadata, tipo_extracao, cases!inner(criado_por)")
         .is("parsed", null)
         .eq("mime_type", "application/pdf")
         .eq("cases.criado_por", user.id)

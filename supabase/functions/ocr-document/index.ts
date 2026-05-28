@@ -472,6 +472,39 @@ Deno.serve(async (req) => {
         });
       }
 
+      // CTPS V2: extrator ok, sem mapper — grava texto geométrico e pula Mistral.
+      if (v6.outcome === "no_mapper_matched" && v6.textoCompleto && document.tipo_extracao === "ctps") {
+        await supabase
+          .from("documents")
+          .update({
+            parsed: null,
+            parsed_by: "ctps-v2-text",
+            ocr_provider: "pdfjs_geometric",
+            ocr_text: v6.textoCompleto,
+            ocr_validated: true,
+            status: "ocr_done",
+            extracao_status: "done",
+            updated_at: new Date().toISOString(),
+            metadata: {
+              ...(document.metadata ?? {}),
+              ...metadataV6(v6),
+              v6_ctps_text_only: true,
+            },
+          })
+          .eq("id", document_id);
+        console.log(
+          `[ocr-document] doc ${document_id} CTPS: texto geométrico gravado (${v6.pageCount} pg) — Mistral pulado`,
+        );
+        return jsonResponse({
+          success: true,
+          provider: "pdfjs_geometric",
+          mapper: "ctps-v2-text",
+          score: v6.score,
+          pages: v6.pageCount,
+          message: `CTPS processado via extração geométrica — parser V2 roda no cliente.`,
+        });
+      }
+
       // V6 falhou: grava só telemetria + cai pro Mistral abaixo. Telemetria
       // gravada SEMPRE — resolve bug histórico de `metadata.v6_*` null em
       // 91% dos rows. Status NÃO muda (Mistral cuida disso adiante).

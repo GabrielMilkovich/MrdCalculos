@@ -155,6 +155,9 @@ export async function tentarV6(
         pageCount: docTab.numeroPaginas,
         textPreview,
         textFullLength,
+        // Exposto pra callers que podem usar o texto sem mapper (ex: CTPS V2,
+        // cujo parser roda no cliente a partir do ocr_text geométrico).
+        textoCompleto: docTab.textoCompleto,
       };
     }
     if (dispatch.kind === "mapper_returned_null") {
