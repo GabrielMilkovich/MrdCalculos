@@ -115,6 +115,9 @@
   ],
 
   "funcoes_exercidas": [
+    { "data_alteracao": "01/01/2009", "codigo_cargo": "403882", "cargo": "VENDEDOR DE MOVEIS", "codigo_funcao": "403882", "funcao": "VENDEDOR DE MOVEIS", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },
+    { "data_alteracao": "01/03/2009", "codigo_cargo": "403888", "cargo": "VENDEDOR INTERNO", "codigo_funcao": "403888", "funcao": "VENDEDOR INTERNO", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },
+    { "data_alteracao": "01/05/2009", "codigo_cargo": "403882", "cargo": "VENDEDOR DE MOVEIS", "codigo_funcao": "403882", "funcao": "VENDEDOR DE MOVEIS", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },
     { "data_alteracao": "01/06/2009", "codigo_cargo": "403888", "cargo": "VENDEDOR INTERNO", "codigo_funcao": "403888", "funcao": "VENDEDOR INTERNO", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },
     { "data_alteracao": "01/08/2009", "codigo_cargo": "403882", "cargo": "VENDEDOR DE MOVEIS", "codigo_funcao": "403882", "funcao": "VENDEDOR DE MOVEIS", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },
     { "data_alteracao": "01/02/2010", "codigo_cargo": "403888", "cargo": "VENDEDOR INTERNO", "codigo_funcao": "403888", "funcao": "VENDEDOR INTERNO", "motivo": null, "quebra_caixa": false, "insalubre": false, "periculoso": false },

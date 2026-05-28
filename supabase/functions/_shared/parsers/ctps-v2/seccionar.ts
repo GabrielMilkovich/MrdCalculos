@@ -47,9 +47,12 @@ const HEADERS: Array<{ regex: RegExp; nome: NomeSecao }> = [
   { regex: /^\s*HIST[ÓO]RICO\s+DE\s+F[ÉE]RIAS\s*$/i, nome: 'HISTORICO_FERIAS' },
 ];
 
-// Linha de separador (¯¯¯¯¯...) — descartada porque não traz informação
-// útil pros parsers de seção (eles redetectam colunas a partir do header).
-const LINHA_SEPARADOR = /^\s*¯{20,}/;
+// Separador DECORATIVO: um único bloco contínuo de ¯ (sem gaps internos),
+// aparece logo depois do nome da seção. Descartado.
+// Separador de COLUNAS: vários blocos de ¯ separados por espaços
+// (ex: `¯¯¯¯¯ ¯¯¯¯ ¯¯¯¯`). PRESERVADO — parsers tabulares usam pra detectar
+// posições de coluna.
+const LINHA_SEPARADOR_DECORATIVO = /^\s*¯+\s*$/;
 
 // Rodapé ADP-Web / PJe: URL, assinatura eletrônica, número de processo,
 // identificador interno "NNNN / NNN / L / ..." (auditoria SAP/ADP),
@@ -81,7 +84,7 @@ const LINHA_CABECALHO_PAGINA = new RegExp(
 );
 
 function ehLinhaDescartavel(linha: string): boolean {
-  if (LINHA_SEPARADOR.test(linha)) return true;
+  if (LINHA_SEPARADOR_DECORATIVO.test(linha)) return true;
   if (LINHA_RODAPE.test(linha)) return true;
   if (LINHA_CABECALHO_PAGINA.test(linha)) return true;
   return false;
