@@ -58,6 +58,8 @@ export const CODIGO_PARA_GRUPO: Record<string, GrupoExportCSV> = {
   // MÍNIMO GARANTIDO (col 1 da planilha)
   '0712': 'minimo_garantido', // Mínimo Garantido — Comissionista
   '3368': 'minimo_garantido', // Horas Justificadas / TRN
+  '3302': 'salario_substituicao', // Salário Substituição
+  '3428': 'minimo_garantido', // Horas Justificadas (variante sem TRN — planilha B4)
 
   // COMISSÕES S/ PRODUTOS (col 2)
   '0620': 'comissao_produtos', // Comissões
@@ -95,8 +97,15 @@ export const CODIGO_PARA_GRUPO: Record<string, GrupoExportCSV> = {
   '7753': 'dsr_comissao', // R.S.R. Trabalhado s/ Comissão
 
   // COMISSÕES S/ SERVIÇOS — códigos adicionais
+  '2361': 'comissao_servicos', // Campanha Serv Fin (planilha E16 "Campanha Serviços")
+  '3351': 'comissao_produtos', // Comissão Garantida (planilha C12 — confirmado escritório 2026-05-28)
+  '3392': 'comissao_servicos', // COM.SERV TECNICOS (planilha E5)
+  '4107': 'comissao_servicos', // COM VENDA EXPRESSA (planilha E13)
   '4533': 'comissao_servicos', // Campanha Categorias
+  '4544': 'comissao_servicos', // COM. CART PRESENTE (planilha E17 "Campanha Cartão")
+  '7653': 'comissao_servicos', // Campanha Cartão CB
   '7663': 'comissao_servicos', // Comissão Venda Incentivo
+  '8505': 'comissao_servicos', // COM PLANOS OPERAD (planilha E9)
 
   // PRÊMIOS — códigos adicionais (prêmios antecipados e variações)
   '2375': 'premios', // Antec. Prêmio Vend. Light
@@ -105,9 +114,13 @@ export const CODIGO_PARA_GRUPO: Record<string, GrupoExportCSV> = {
   '2480': 'premios', // Antec. Prêmio Superação
   '2481': 'premios', // Antec. Prêmio Sócio
   '2496': 'premios', // Prêmio Antecipado Quinzenal
+  '2354': 'premios', // Premio Loja (planilha F col Prêmios)
   '3183': 'premios', // Antec. Premiação / Incentivo
+  '3343': 'premios', // GRATIFICACAO (planilha F14)
   '3423': 'premios', // Gratificação Feriado
+  '4131': 'premios', // Prêmio Metal (planilha F col Prêmios)
   '4178': 'premios', // Premiação / Incentivo
+  '4436': 'premios', // PR.ADIC(V.FINANC.) = PR. Adc. (planilha F17)
   '4591': 'premios', // Antec. Prêmio Vendedor Incentivo
 
   // PODEM SER DESCONSIDERADOS (col 6) — segue planilha
@@ -173,6 +186,7 @@ export const CODIGO_PARA_GRUPO: Record<string, GrupoExportCSV> = {
   '4027': 'desconsiderado', // Horas Extras 100%
   '4028': 'desconsiderado', // Hora Extras Noturna
   '4132': 'desconsiderado', // DSR s/ Média Horas Extras (= DSR H. Extra)
+  '4183': 'desconsiderado', // Ad. Noturno = Adicional Noturno (planilha G29)
   '4631': 'desconsiderado', // FGTS Art. 18 - Saldo (encargo patronal rescisório)
   '4635': 'desconsiderado', // FGTS Art. 18 - 13º (encargo patronal rescisório)
   '7037': 'desconsiderado', // Ajuste de Líquido Mês (DESC)
@@ -180,6 +194,23 @@ export const CODIGO_PARA_GRUPO: Record<string, GrupoExportCSV> = {
 
   // Descontos (classificação DESC) — todos descartados pra exportação
   '0833': 'desconsiderado', // Desc. Insuficiência Saldo
+  '2393': 'desconsiderado', // Academia Gympass (DESC)
+  '3249': 'desconsiderado', // INT.AD.NOT.NO DSR (planilha G18 — integração noturno no DSR)
+  '3275': 'desconsiderado', // H. EXTRA COM.100%
+  '3728': 'desconsiderado', // DESC. MULTICHEQUE (DESC)
+  '5250': 'desconsiderado', // IR Retido 13Sal (DESC)
+  '5251': 'desconsiderado', // Base IR 13Sal (BASE — filtrado antes, mas por precaução)
+  '5252': 'desconsiderado', // Devolução de IRRF 13 (DESC)
+  '5323': 'desconsiderado', // Diferença de Seguro (DESC)
+  '5762': 'desconsiderado', // Mensalidade Sindical (DESC)
+  '5860': 'desconsiderado', // Contrib Assistencial (DESC)
+  '7197': 'desconsiderado', // Desc Multicheque Parc. (DESC)
+  '7621': 'desconsiderado', // IR Férias (variante OCR)
+  '8382': 'desconsiderado', // Provisionamento Férias (encargo patronal)
+  '8383': 'desconsiderado', // Restituição Provisionamento
+  '8384': 'desconsiderado', // Provisionamento Férias (encargo patronal)
+  '9960': 'desconsiderado', // INSS 13 Salário (DESC)
+  '9964': 'desconsiderado', // Devolução INSS 13o (DESC)
   '2333': 'desconsiderado', // Mensalidade Retroativa Unimed (DESC)
   '2339': 'desconsiderado', // Mensalidade Retroativa Unimed (DESC)
   '2824': 'desconsiderado', // Adiantamento Quinzenal (DESC)
