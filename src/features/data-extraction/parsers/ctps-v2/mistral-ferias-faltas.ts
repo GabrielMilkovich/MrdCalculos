@@ -7,7 +7,12 @@ import type { ParseFeriasResult } from '../ferias';
 import type { ParseFaltasResult } from '../faltas';
 
 function normalizarMistral(texto: string): string[] {
-  return texto.split('\n').map(l => l.replace(/\|/g, ' ').replace(/\s+/g, ' ').trim());
+  return texto.split('\n').map(l =>
+    l.replace(/\|/g, ' ')
+     .replace(/^#+\s*/, '')  // markdown heading (#, ##, ...) presente em alguns formatos ADP
+     .replace(/\s+/g, ' ')
+     .trim()
+  );
 }
 
 function recortar(linhas: string[], reIni: RegExp, reFim: RegExp): string[] {
@@ -17,6 +22,21 @@ function recortar(linhas: string[], reIni: RegExp, reFim: RegExp): string[] {
   j = j < 0 ? linhas.length : i + 1 + j;
   return linhas.slice(i + 1, j);
 }
+
+// Âncoras robustas para variações do Mistral OCR:
+//
+//   RE_FERIAS_HEADER:
+//     - [ÓO]  → HISTÓRICO com ou sem acento
+//     - [FP]  → OCR às vezes lê "F" como "P" → "PERIAS" em vez de "FÉRIAS"
+//     - [EÉ]  → cobre FÉRIAS (acento) e FERIAS / PERIAS (sem acento)
+//
+//   RE_AFASTAMENTOS_QUALQUER:
+//     - \b após AFASTAMENTOS casa com qualquer variante:
+//       "AFASTAMENTOS" exato, "AFASTAMENTOS OUTROS", "AFASTAMENTOS OUTRAS",
+//       "AFASTAMENTOS USTAIS" (header corrompido do Roque)
+//     - sem \b, exigiria linha vazia após a palavra
+const RE_FERIAS_HEADER = /^HIST[ÓO]RICO\s+DE\s+[FP][EÉ]RIAS$/i;
+const RE_AFASTAMENTOS_QUALQUER = /^AFASTAMENTOS\b/i;
 
 /**
  * Extrai férias e faltas de texto Mistral OCR (CTPS ADP-Web/SAP).
@@ -36,10 +56,10 @@ export function extrairFeriasFaltasMistral(ocrText: string): {
   const linhas = normalizarMistral(ocrText);
 
   const feriasRaw = parseHistoricoFerias(
-    recortar(linhas, /^HIST[ÓO]RICO DE F[ÉE]RIAS$/i, /^Data:/i),
+    recortar(linhas, RE_FERIAS_HEADER, /^Data:/i),
   );
   const faltasRaw = parseAfastamentos(
-    recortar(linhas, /^AFASTAMENTOS$/i, /^HIST[ÓO]RICO DE F[ÉE]RIAS$/i),
+    recortar(linhas, RE_AFASTAMENTOS_QUALQUER, RE_FERIAS_HEADER),
     'outros',
   );
 
@@ -57,3 +77,4 @@ export function extrairFeriasFaltasMistral(ocrText: string): {
     faltasParsed: adaptarFaltas(syntheticCtps),
   };
 }
+
