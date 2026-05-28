@@ -55,6 +55,7 @@ import {
   Clock,
   Sparkles,
   ShieldCheck,
+  RefreshCw,
 } from "lucide-react";
 import {
   Tooltip,
@@ -199,6 +200,8 @@ export function DocumentsManager({
   const [batchCurrentIndex, setBatchCurrentIndex] = useState(0);
   const [batchResults, setBatchResults] = useState<Record<string, "pending" | "processing" | "done" | "error">>({});
   const batchAbortRef = useRef(false);
+  const [isReprocessingAll, setIsReprocessingAll] = useState(false);
+  const [reprocessAllProgress, setReprocessAllProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
 
   // Filtrar documentos
   const filteredDocuments = documents.filter(doc => {
@@ -442,6 +445,41 @@ export function DocumentsManager({
       setProcessingDocId(null);
     }
   }, [onDocumentsChange]);
+
+  // Reprocessa TODOS os PDFs do caso com o pipeline V6 — útil quando o parser
+  // foi atualizado e queremos reaproveitar o OCR já feito sem subir os arquivos
+  // de novo. Executa sequencialmente pra não estourar memória nas Edge Functions.
+  const reprocessAllV6 = useCallback(async () => {
+    const pdfDocs = documents.filter(d => d.mime_type === "application/pdf");
+    if (pdfDocs.length === 0) {
+      toast.info("Nenhum PDF para reprocessar.");
+      return;
+    }
+    setIsReprocessingAll(true);
+    setReprocessAllProgress({ current: 0, total: pdfDocs.length });
+    let ok = 0;
+    let fail = 0;
+    for (let i = 0; i < pdfDocs.length; i++) {
+      setReprocessAllProgress({ current: i + 1, total: pdfDocs.length });
+      setProcessingDocId(pdfDocs[i].id);
+      try {
+        const { data, error } = await supabase.functions.invoke("reprocess-v6", {
+          body: { document_id: pdfDocs[i].id },
+        });
+        if (error) throw error;
+        if (data?.resultados?.[0]?.sucesso) ok++;
+        else fail++;
+      } catch (err) {
+        logger.error("Reprocess V6 (all) error", err);
+        fail++;
+      }
+    }
+    setProcessingDocId(null);
+    setIsReprocessingAll(false);
+    onDocumentsChange();
+    if (fail === 0) toast.success(`${ok} documento(s) reprocessado(s) com sucesso.`);
+    else toast.warning(`Reprocessamento concluído: ${ok} sucesso(s), ${fail} falha(s).`);
+  }, [documents, onDocumentsChange]);
 
   // Extrair dados e preencher automaticamente os campos do cálculo
   // extractAndFill legado removido — fluxo agora é único: botão FileCheck2
@@ -919,13 +957,30 @@ export function DocumentsManager({
               </SelectContent>
             </Select>
             {stats.pending > 0 && (
-              <Button onClick={processAllPending} variant="default" className="gap-2" disabled={isBatchProcessing}>
+              <Button onClick={processAllPending} variant="default" className="gap-2" disabled={isBatchProcessing || isReprocessingAll}>
                 {isBatchProcessing ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Sparkles className="h-4 w-4" />
                 )}
                 {isBatchProcessing ? "Processando..." : `Processar todos (${stats.pending})`}
+              </Button>
+            )}
+            {documents.some(d => d.mime_type === "application/pdf") && (
+              <Button
+                onClick={reprocessAllV6}
+                variant="outline"
+                className="gap-2"
+                disabled={isBatchProcessing || isReprocessingAll}
+              >
+                {isReprocessingAll ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                {isReprocessingAll
+                  ? `Reprocessando ${reprocessAllProgress.current}/${reprocessAllProgress.total}...`
+                  : "Reprocessar todos"}
               </Button>
             )}
           </div>
@@ -1078,31 +1133,6 @@ export function DocumentsManager({
                               <TooltipContent>Ver documento</TooltipContent>
                             </Tooltip>
                           )}
-                          {/* V6: reprocessar com extrator geométrico — só quando
-                              o doc é PDF e ainda não foi processado por V6. */}
-                          {doc.mime_type === "application/pdf" && !doc.parsed_by && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-violet-600 dark:text-violet-300"
-                                  onClick={() => reprocessV6(doc.id)}
-                                  disabled={processingDocId === doc.id}
-                                >
-                                  {processingDocId === doc.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Sparkles className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                Tentar processar novamente
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
-
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
