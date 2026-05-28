@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "tipo": "ground_truth_parcial",
+    "nota": "Campos-chave verificados via PDF + contagem precisa por seção no texto V6. Entrada de teste é ocr_text_real_v6.txt (formato extrairGeometrico).",
+    "fonte_pdf": "CTPS.pdf (JOSELI SILVA WANDERLEY)",
+    "perfil": "rico — Inativo (demissão), 17 afastamentos-outros, 8 férias, 3 lotações, DOIS sindicatos",
+    "achado_critico": "DOIS sindicatos (SIND EMPR COMERCIO DE SALVADOR + SEC ITU). O schema informacoes_sindicais é objeto único — com 2 sindicatos, ou perde dado ou precisa virar array. Decisão pendente no brief."
+  },
+  "dados_pessoais": {
+    "nome": "JOSELI SILVA WANDERLEY",
+    "cpf": "30654695881",
+    "ctps_numero": "001755700242",
+    "ctps_uf": "SP"
+  },
+  "dados_empregado": {
+    "matricula": "1788485",
+    "admissao": "02/06/2011",
+    "data_desligamento": "13/03/2020",
+    "data_desligamento_com_projecao_aviso": "06/05/2020"
+  },
+  "funcao_atual": {
+    "situacao": "Inativo"
+  },
+  "dependentes_count": 1,
+  "sindicatos_count": 2,
+  "sindicato_1_nome": "SIND EMPR COMERCIO DE SALVADOR",
+  "sindicato_1_cnpj": "15239478000146",
+  "sindicato_2_nome": "SEC ITU(SALTO/P.FELIZ/BOITUVA)",
+  "sindicato_2_cnpj": "66841982000152",
+  "funcoes_exercidas_count": 5,
+  "historico_lotacao_count": 3,
+  "afastamentos_count": 1,
+  "afastamentos_outros_count": 17,
+  "historico_ferias_count": 8,
+  "historico_salarial_count": 1
+}
