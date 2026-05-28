@@ -17,7 +17,7 @@ export async function extrairTextoLayout(pdfBytes: Uint8Array): Promise<string> 
     const viewport = page.getViewport({ scale: 1.0 });
 
     const items: TextItem[] = (content.items as any[])
-      .filter((it) => "str" in it && it.str.trim().length > 0)
+      .filter((it) => "str" in it && it.str.length > 0 && (it.width ?? 0) > 0)
       .map((it) => ({
         texto: it.str,
         x: it.transform[4],
