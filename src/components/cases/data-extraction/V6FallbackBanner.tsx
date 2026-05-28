@@ -97,10 +97,11 @@ export function V6FallbackBanner({ documentId }: Props) {
 
   // Estados que NÃO renderizam banner:
   //   - Loading (silencioso pra evitar piscar)
-  //   - V6 sucesso (ocr_provider === 'pdfjs_geometric')
+  //   - V6 sucesso (ocr_provider começa com 'pdfjs_geometric' — cobre as
+  //     variantes clássica e `_manual_v6`)
   //   - Sem documentId
   if (loading || !documentId || !status) return null;
-  if (status.ocr_provider === "pdfjs_geometric") return null;
+  if (status.ocr_provider?.startsWith("pdfjs_geometric")) return null;
 
   const motivoLegivel =
     status.v6_outcome && MENSAGENS_OUTCOME[status.v6_outcome]

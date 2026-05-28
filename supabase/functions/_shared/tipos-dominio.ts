@@ -405,7 +405,7 @@ export interface CtpsFuncaoAtual {
   situacao: "Ativo" | "Inativo" | null;
 }
 
-export interface CtpsInformacoesSindicais {
+export interface CtpsInformacaoSindical {
   sindicato: string;
   cnpj: string;
   endereco_rua: string | null;
@@ -467,7 +467,7 @@ export interface CtpsDominioV2 {
   dependentes: CtpsDependente[];
   dados_empregado: CtpsDadosEmpregado;
   funcao_atual: CtpsFuncaoAtual;
-  informacoes_sindicais: CtpsInformacoesSindicais | null;
+  informacoes_sindicais: CtpsInformacaoSindical[];
   historico_salarial: CtpsHistoricoSalarialItem[];
   funcoes_exercidas: CtpsFuncaoExercida[];
   historico_lotacao: CtpsLotacao[];

@@ -160,6 +160,84 @@ export function mergeCamposKV(linhas: string[]): Map<string, string> {
 }
 
 /**
+ * Variante WHITELIST de `extrairCamposKV`. Recebe a lista de chaves esperadas
+ * da seção e marca posições onde cada uma aparece, separadas por 0+ dots e ":".
+ * Valor de cada chave = trecho até a próxima chave conhecida ou fim de linha.
+ *
+ * Robusto a texto em formato `extrairGeometrico` (1 espaço entre campos) e a
+ * `pdftotext -layout` (multi-espaço alinhado em colunas). Necessário porque o
+ * `extrairCamposKV` genérico não consegue distinguir "VAREJO SA Matriz/Filial..:"
+ * (valor + chave) de uma chave composta sem âncora de espaço duplo.
+ *
+ * Caso a mesma chave apareça 2+ vezes na seção (pouco comum), só o primeiro
+ * valor é mantido.
+ */
+export function extrairCamposKVConhecidos(
+  linha: string,
+  chavesConhecidas: readonly string[],
+): Map<string, string> {
+  type Hit = { start: number; valueStart: number; key: string };
+
+  // Ordena chaves por comprimento desc — chaves longas (ex.: "Data Desligamento
+  // com Projeção Aviso Prévio") devem ser detectadas antes das curtas que são
+  // prefixo delas (ex.: "Data Desligamento").
+  const chavesOrdenadas = [...chavesConhecidas].sort((a, b) => b.length - a.length);
+
+  const hits: Hit[] = [];
+  for (const chave of chavesOrdenadas) {
+    const escaped = chave.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|\\s)(${escaped})\\.{0,}:`, 'g');
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(linha)) !== null) {
+      const prefixoLen = m[1].length;
+      const start = m.index + prefixoLen;
+      hits.push({
+        start,
+        valueStart: m.index + m[0].length,
+        key: normalizarChave(chave),
+      });
+    }
+  }
+
+  // Ordena por posição; descarta hits sobrepostos (preferindo o que foi
+  // adicionado primeiro = chave mais longa, pois ordenamos desc por length).
+  hits.sort((a, b) => a.start - b.start);
+  const filtered: Hit[] = [];
+  for (const h of hits) {
+    const last = filtered[filtered.length - 1];
+    if (!last || h.start >= last.valueStart) {
+      filtered.push(h);
+    }
+  }
+
+  const resultado = new Map<string, string>();
+  for (let i = 0; i < filtered.length; i++) {
+    const fim = filtered[i + 1]?.start ?? linha.length;
+    const valor = linha.substring(filtered[i].valueStart, fim).trim();
+    if (!resultado.has(filtered[i].key)) {
+      resultado.set(filtered[i].key, valor);
+    }
+  }
+  return resultado;
+}
+
+/**
+ * Aplica `extrairCamposKVConhecidos` a múltiplas linhas e merge num Map único.
+ */
+export function mergeCamposKVConhecidos(
+  linhas: string[],
+  chavesConhecidas: readonly string[],
+): Map<string, string> {
+  const merged = new Map<string, string>();
+  for (const linha of linhas) {
+    for (const [k, v] of extrairCamposKVConhecidos(linha, chavesConhecidas)) {
+      if (!merged.has(k)) merged.set(k, v);
+    }
+  }
+  return merged;
+}
+
+/**
  * Converte "Sim"/"Não"/"S"/"N" pra boolean.
  * Vazio/desconhecido → null.
  */

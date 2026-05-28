@@ -1,9 +1,30 @@
 import type { CtpsDadosPessoais } from '../../../tipos-dominio.ts';
-import { mergeCamposKV, parseBoolBR } from '../helpers.ts';
+import { mergeCamposKVConhecidos, parseBoolBR } from '../helpers.ts';
+
+const CHAVES_DADOS_PESSOAIS = [
+  'Nome',
+  'Sexo',
+  'Estado Civil',
+  'Estudante',
+  'Naturalidade',
+  'UF/PAIS',
+  'Nascimento',
+  'Identidade',
+  'CTPS',
+  'CPF',
+  'PIS/PASEP',
+  '1ºEmprego',
+  'Tit.Eleitor',
+  'Cart.Habil',
+  'Cert. Res',
+  'Grau Instrução',
+  'Pai',
+  'Mãe',
+];
 
 export function parseDadosPessoais(linhas: string[]): CtpsDadosPessoais | null {
   if (linhas.length === 0) return null;
-  const c = mergeCamposKV(linhas);
+  const c = mergeCamposKVConhecidos(linhas, CHAVES_DADOS_PESSOAIS);
   if (!c.has('nome') || !c.has('cpf')) return null;
 
   // Identidade: "22051555 SSP-PR" → rg_numero + rg_orgao (último token)

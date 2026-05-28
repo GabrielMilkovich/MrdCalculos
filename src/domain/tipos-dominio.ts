@@ -13,7 +13,7 @@ export type {
   CtpsDependente,
   CtpsDadosEmpregado,
   CtpsFuncaoAtual,
-  CtpsInformacoesSindicais,
+  CtpsInformacaoSindical,
   CtpsHistoricoSalarialItem,
   CtpsFuncaoExercida,
   CtpsLotacao,

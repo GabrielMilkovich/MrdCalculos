@@ -1,65 +1,38 @@
 import type { CtpsHistoricoSalarialItem } from '../../../tipos-dominio.ts';
-import {
-  detectarColunasTabela,
-  extrairCelulas,
-  indiceLinhaSeparadorTabela,
-  parseNumeroBROuNull,
-} from '../helpers.ts';
+import { parseNumeroBROuNull } from '../helpers.ts';
 
 /**
- * HISTÓRICO SALARIAL: tabular com 7 colunas.
+ * HISTÓRICO SALARIAL: parser por regex linha-a-linha. Robusto ao formato
+ * `extrairGeometrico` (1 espaço entre tokens) — o parser column-based antigo
+ * dependia de posições fixas do `pdftotext -layout` e zerava no texto real.
+ *
  *   Data Vigência | Data Histórica | Motivo | Sal.Tarefa | % Reajuste | Min. Grtd. | Comissão
  *
- * Valores numéricos usam `parseNumeroBROuNull` — vazio e "?" viram null
- * (decisão de fielidade ao documento; engine decide o que significa).
+ * Forma observada (Roque/Izabela/Joseli):
+ *   01/01/2009 01/01/2009 ADMISSÃO 0,00 -100,000000 0,00
+ *   08/07/2020 08/07/2020 Redução Salarial COVID/19 25% 0,00 ? 0,00
+ *
+ * Layout numérico: 3 tokens (sal_tarefa, perc_reajuste, comissao). `min_garantido`
+ * vem como null sempre nesta amostra — formato com 4 numéricos (comissionista
+ * com mínimo garantido) ainda não foi observado em texto real V6; quando
+ * aparecer, adicionar regex 4-num com fallback pra 3-num.
  */
+const RE_LINHA =
+  /^\s*(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+(-?[\d.,]+|\?)\s+(-?[\d.,]+|\?)\s+(-?[\d.,]+|\?)\s*$/;
+
 export function parseHistoricoSalarial(linhas: string[]): CtpsHistoricoSalarialItem[] {
-  if (linhas.length === 0) return [];
-
-  // Encontra primeiro separador (¯ depois do cabeçalho de colunas).
-  const sepIdx = indiceLinhaSeparadorTabela(linhas);
-  if (sepIdx === -1) return [];
-
-  const colunas = detectarColunasTabela(linhas[sepIdx]);
-  if (colunas.length < 6) return [];
-
-  // OBSERVAÇÃO: o separador ¯¯¯¯ desta tabela tem 6 blocos visuais, mas
-  // a tabela TEM 7 colunas — o último bloco cobre `Min. Grtd.` E `Comissão`
-  // juntos (renderização condensada). Pra resolver: se a última célula
-  // tiver 2 números separados por whitespace, primeiro = min, segundo = com.
-  // Se 1 número, é comissao (min fica null — caso comissionista típico).
   const resultado: CtpsHistoricoSalarialItem[] = [];
-  for (let i = sepIdx + 1; i < linhas.length; i++) {
-    const linha = linhas[i];
-    if (!linha.trim()) continue;
-    if (/^\s*¯/.test(linha)) continue;
-    const celulas = extrairCelulas(linha, colunas);
-    const dataVig = celulas[0];
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dataVig)) continue;
-
-    const ultimaCelula = (celulas[5] ?? '').trim();
-    const numerosUltima = ultimaCelula.split(/\s+/).filter((t) => t.length > 0);
-    let minGarantido: number | null;
-    let comissao: number | null;
-    if (numerosUltima.length >= 2) {
-      minGarantido = parseNumeroBROuNull(numerosUltima[0]);
-      comissao = parseNumeroBROuNull(numerosUltima[1]);
-    } else if (numerosUltima.length === 1) {
-      minGarantido = null;
-      comissao = parseNumeroBROuNull(numerosUltima[0]);
-    } else {
-      minGarantido = null;
-      comissao = null;
-    }
-
+  for (const linha of linhas) {
+    const m = linha.match(RE_LINHA);
+    if (!m) continue;
     resultado.push({
-      data_vigencia: dataVig,
-      data_historica: celulas[1] ?? '',
-      motivo: (celulas[2] ?? '').trim(),
-      sal_tarefa: parseNumeroBROuNull(celulas[3]),
-      perc_reajuste: parseNumeroBROuNull(celulas[4]),
-      min_garantido: minGarantido,
-      comissao,
+      data_vigencia: m[1],
+      data_historica: m[2],
+      motivo: m[3].trim(),
+      sal_tarefa: parseNumeroBROuNull(m[4]),
+      perc_reajuste: parseNumeroBROuNull(m[5]),
+      min_garantido: null,
+      comissao: parseNumeroBROuNull(m[6]),
     });
   }
   return resultado;

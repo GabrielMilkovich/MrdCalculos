@@ -1,9 +1,19 @@
 import type { CtpsFuncaoAtual } from '../../../tipos-dominio.ts';
-import { mergeCamposKV, parseNumeroBR } from '../helpers.ts';
+import { mergeCamposKVConhecidos, parseNumeroBR } from '../helpers.ts';
+
+const CHAVES_FUNCAO_ATUAL = [
+  'Função',
+  'Cargo',
+  'Ingresso',
+  'CBO',
+  'Tipo Sal',
+  'Sal.Tarefa',
+  'Situação',
+];
 
 export function parseFuncaoAtual(linhas: string[]): CtpsFuncaoAtual | null {
   if (linhas.length === 0) return null;
-  const c = mergeCamposKV(linhas);
+  const c = mergeCamposKVConhecidos(linhas, CHAVES_FUNCAO_ATUAL);
   if (!c.has('funcao') && !c.has('cargo')) return null;
 
   return {

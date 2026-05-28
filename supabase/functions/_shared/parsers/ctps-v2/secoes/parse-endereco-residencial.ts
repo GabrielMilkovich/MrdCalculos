@@ -1,9 +1,22 @@
 import type { CtpsEnderecoResidencial } from '../../../tipos-dominio.ts';
-import { mergeCamposKV } from '../helpers.ts';
+import { mergeCamposKVConhecidos } from '../helpers.ts';
+
+const CHAVES_ENDERECO_RESIDENCIAL = [
+  'End(Rua,Av)',
+  'Endereço',
+  'No',
+  'Nº',
+  'Complemento',
+  'Bairro',
+  'CEP',
+  'Telefone',
+  'Município',
+  'UF/PAIS',
+];
 
 export function parseEnderecoResidencial(linhas: string[]): CtpsEnderecoResidencial | null {
   if (linhas.length === 0) return null;
-  const c = mergeCamposKV(linhas);
+  const c = mergeCamposKVConhecidos(linhas, CHAVES_ENDERECO_RESIDENCIAL);
   if (!c.has('end_rua_av') && !c.has('endereco')) return null;
 
   const ufPais = (c.get('uf_pais') ?? '').trim();

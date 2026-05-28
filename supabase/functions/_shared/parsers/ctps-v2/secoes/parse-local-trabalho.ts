@@ -1,9 +1,25 @@
 import type { CtpsLocalTrabalho } from '../../../tipos-dominio.ts';
-import { mergeCamposKV } from '../helpers.ts';
+import { mergeCamposKVConhecidos } from '../helpers.ts';
+
+const CHAVES_LOCAL_TRABALHO = [
+  'Estabelecimento',
+  'Matriz/Filial',
+  'CNPJ',
+  'Insc.Estadual',
+  'Endereço',
+  'Nº',
+  'No',
+  'Complemento',
+  'Bairro',
+  'CEP',
+  'Telefone',
+  'Município',
+  'UF/PAIS',
+];
 
 export function parseLocalTrabalho(linhas: string[]): CtpsLocalTrabalho | null {
   if (linhas.length === 0) return null;
-  const c = mergeCamposKV(linhas);
+  const c = mergeCamposKVConhecidos(linhas, CHAVES_LOCAL_TRABALHO);
   if (!c.has('estabelecimento') || !c.has('cnpj')) return null;
 
   // UF/PAIS vem como "PR Brasil" — divide no primeiro espaço.
@@ -16,7 +32,7 @@ export function parseLocalTrabalho(linhas: string[]): CtpsLocalTrabalho | null {
     cnpj: c.get('cnpj') ?? '',
     inscricao_estadual: c.get('insc_estadual') || null,
     endereco_rua: c.get('endereco') ?? '',
-    endereco_numero: c.get('n') ?? '',
+    endereco_numero: c.get('n') ?? c.get('no') ?? '',
     endereco_complemento: c.get('complemento') || null,
     endereco_bairro: c.get('bairro') ?? '',
     endereco_cep: (c.get('cep') ?? '').replace(/\D/g, ''),

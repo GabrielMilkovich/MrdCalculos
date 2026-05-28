@@ -112,15 +112,18 @@ export function gerarDadosContratuais(ctps: CtpsDominioV2): string {
   push(linhas, 'FUNCAO_ATUAL', 'salario_tarefa', numBR(fa.salario_tarefa));
   push(linhas, 'FUNCAO_ATUAL', 'situacao', fa.situacao);
 
-  // INFORMACOES_SINDICAIS
-  if (ctps.informacoes_sindicais) {
-    const is = ctps.informacoes_sindicais;
-    push(linhas, 'INFORMACOES_SINDICAIS', 'sindicato', is.sindicato);
-    push(linhas, 'INFORMACOES_SINDICAIS', 'cnpj', is.cnpj);
-    push(linhas, 'INFORMACOES_SINDICAIS', 'endereco_rua', is.endereco_rua);
-    push(linhas, 'INFORMACOES_SINDICAIS', 'endereco_numero', is.endereco_numero);
-    push(linhas, 'INFORMACOES_SINDICAIS', 'endereco_complemento', is.endereco_complemento);
-  }
+  // INFORMACOES_SINDICAIS — array (1+ sindicatos). Index sufixado quando > 1
+  // pra evitar colisão de chave no CSV.
+  const sindicais = ctps.informacoes_sindicais;
+  const sufixo = (i: number) => (sindicais.length > 1 ? `_${i + 1}` : '');
+  sindicais.forEach((is, i) => {
+    const s = sufixo(i);
+    push(linhas, 'INFORMACOES_SINDICAIS', `sindicato${s}`, is.sindicato);
+    push(linhas, 'INFORMACOES_SINDICAIS', `cnpj${s}`, is.cnpj);
+    push(linhas, 'INFORMACOES_SINDICAIS', `endereco_rua${s}`, is.endereco_rua);
+    push(linhas, 'INFORMACOES_SINDICAIS', `endereco_numero${s}`, is.endereco_numero);
+    push(linhas, 'INFORMACOES_SINDICAIS', `endereco_complemento${s}`, is.endereco_complemento);
+  });
 
   // Totais das seções tabulares
   push(linhas, 'FUNCOES_EXERCIDAS', 'total', String(ctps.funcoes_exercidas.length));

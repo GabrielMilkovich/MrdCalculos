@@ -1,45 +1,30 @@
 import type { CtpsLotacao } from '../../../tipos-dominio.ts';
-import {
-  detectarColunasTabela,
-  extrairCelulas,
-  indiceLinhaSeparadorTabela,
-} from '../helpers.ts';
 
 /**
- * HISTÓRICO DE LOTAÇÃO: tabular com 4 colunas.
- *   Ingresso | Estabelecimento | CNPJ do Estabelecimento | Centro de Resultado
+ * HISTÓRICO DE LOTAÇÃO: 4 colunas tabulares
+ *   Ingresso | Estabelecimento (cod - nome) | CNPJ | Centro de Resultado
  *
- * Estabelecimento vem como "código - nome" (ex. "363 - CASA BAHIA...").
+ * Forma observada (extrairGeometrico):
+ *   01/01/2009 363 - CASA BAHIA COMERCIAL LTDA - PI 59.291.534/0511-52 3 - F.363 PINHAIS
+ *
+ * Âncora forte = CNPJ formatado (NN.NNN.NNN/NNNN-NN). `.+?` lazy
+ * absorve o nome do estabelecimento mesmo que ele contenha " - " (ex.:
+ * "CASA BAHIA COMERCIAL LTDA - PI").
  */
+const RE_LINHA =
+  /^\s*(\d{2}\/\d{2}\/\d{4})\s+(\d+)\s*-\s*(.+?)\s+(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\s+(.+)$/;
+
 export function parseHistoricoLotacao(linhas: string[]): CtpsLotacao[] {
-  if (linhas.length === 0) return [];
-
-  const sepIdx = indiceLinhaSeparadorTabela(linhas);
-  if (sepIdx === -1) return [];
-
-  const colunas = detectarColunasTabela(linhas[sepIdx]);
-  if (colunas.length < 4) return [];
-
   const resultado: CtpsLotacao[] = [];
-  for (let i = sepIdx + 1; i < linhas.length; i++) {
-    const linha = linhas[i];
-    if (!linha.trim()) continue;
-    if (/^\s*¯/.test(linha)) continue;
-    const celulas = extrairCelulas(linha, colunas);
-    const ingresso = celulas[0];
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(ingresso)) continue;
-
-    const estabRaw = celulas[1] ?? '';
-    const m = estabRaw.match(/^(\d+)\s*-\s*(.+)$/);
-    const codigo = m ? m[1] : '';
-    const nome = m ? m[2].trim() : estabRaw.trim();
-
+  for (const linha of linhas) {
+    const m = linha.match(RE_LINHA);
+    if (!m) continue;
     resultado.push({
-      ingresso,
-      codigo_estabelecimento: codigo,
-      estabelecimento: nome,
-      cnpj_estabelecimento: (celulas[2] ?? '').trim(),
-      centro_resultado: (celulas[3] ?? '').trim(),
+      ingresso: m[1],
+      codigo_estabelecimento: m[2],
+      estabelecimento: m[3].trim(),
+      cnpj_estabelecimento: m[4],
+      centro_resultado: m[5].trim(),
     });
   }
   return resultado;
