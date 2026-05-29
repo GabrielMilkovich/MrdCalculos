@@ -293,8 +293,8 @@ describe('buildFichaFinanceiraZip (taxonomia planilha-dsr v2)', () => {
       }), // → 05_premios
       // Desconsiderados
       makeRubrica({
-        codigo: '0040',
-        denominacao: 'Participação Lucros',
+        codigo: '0510',
+        denominacao: 'Adiant. 13Sal',
         valores_mensais: [{ competencia: '2016-01', valor: 1600 }],
         total_ano: new Decimal(1600),
       }),
@@ -318,9 +318,9 @@ describe('buildFichaFinanceiraZip (taxonomia planilha-dsr v2)', () => {
     expect(files.has('04_comissao_servicos.csv')).toBe(false);
     expect(files.has('06_salario_substituicao.csv')).toBe(false);
 
-    // Auditoria desconsideradas tem PLR e Média Férias
+    // Auditoria desconsideradas contém Adto 13º e Média Férias
     const aud = files.get('auditoria_desconsideradas.csv')!;
-    expect(aud).toContain('0040');
+    expect(aud).toContain('0510');
     expect(aud).toContain('2750');
   });
 

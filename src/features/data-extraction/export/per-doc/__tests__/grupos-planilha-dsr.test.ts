@@ -23,7 +23,7 @@ describe('grupos-planilha-dsr.classificarRubrica', () => {
       ['3290', 'Prêmio Antecipado', 'premios'],
       ['4101', 'Prêmio Meta', 'premios'],
       ['8441', 'Antecip. Prêmio Estímulo', 'premios'],
-      ['0040', 'Participação Lucros', 'desconsiderado'],
+      ['0040', 'Participação Lucros', 'premios'],
       ['0502', 'DSR (H. Extra)', 'desconsiderado'],
       ['2750', 'Média de Férias', 'desconsiderado'],
       ['5560', 'INSS', 'desconsiderado'],
@@ -90,7 +90,7 @@ describe('grupos-planilha-dsr.classificarRubrica', () => {
     // Esses são os códigos extraídos do PDF Ficha Financeira 2016.pdf
     // pelo parser determinístico (validado anteriormente).
     const casosRoque: Array<{ codigo: string; deno: string; grupo: string }> = [
-      { codigo: '0040', deno: 'Participação Lucros', grupo: 'desconsiderado' },
+      { codigo: '0040', deno: 'Participação Lucros', grupo: 'premios' },
       { codigo: '0501', deno: 'DSR(Comissão)', grupo: 'dsr_comissao' },
       { codigo: '0502', deno: 'DSR (H.Extra)', grupo: 'desconsiderado' },
       { codigo: '0510', deno: 'Adiant. 13Sal', grupo: 'desconsiderado' },
@@ -121,14 +121,16 @@ describe('grupos-planilha-dsr.classificarRubrica', () => {
         const r = classificarRubrica(c.codigo, c.deno);
         dist[r.grupo] = (dist[r.grupo] ?? 0) + 1;
       }
-      // 3 prêmios, 1 mínimo garantido, 1 dsr, 1 comissão produtos,
-      // 5 comissão serviços, 6 desconsiderados (PLR + 13o + férias + DSR-HE)
-      expect(dist.premios).toBe(3);
+      // 4 prêmios (0040 PLR agora entra como prêmio), 1 mínimo garantido,
+      // 1 dsr, 1 comissão produtos, 5 comissão serviços, 5 desconsiderados
+      // (PLR saiu de desconsiderados ficaram: 0502 DSR-HE + 0510/0511 13º +
+      // 0590 1/3 férias + 2750 média férias).
+      expect(dist.premios).toBe(4);
       expect(dist.minimo_garantido).toBe(1);
       expect(dist.dsr_comissao).toBe(1);
       expect(dist.comissao_produtos).toBe(1);
       expect(dist.comissao_servicos).toBe(5);
-      expect(dist.desconsiderado).toBe(6);
+      expect(dist.desconsiderado).toBe(5);
     });
   });
 });

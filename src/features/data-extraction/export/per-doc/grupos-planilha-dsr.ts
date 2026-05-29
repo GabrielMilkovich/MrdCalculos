@@ -84,10 +84,8 @@ export const CODIGO_PARA_GRUPO: Record<string, GrupoExportCSV> = {
 
   // COMISSÕES S/ PRODUTOS — códigos adicionais (fichas teste1/teste2 2016-2021)
   '0710': 'comissao_produtos', // Dia do Comerciário
-  '3029': 'comissao_produtos', // Antec. Crédito Dif. de Comissões
   '3155': 'comissao_produtos', // Dif. Comissão Mês Anterior
   '3303': 'comissao_produtos', // Inventário
-  '4142': 'comissao_produtos', // Cred. Dif. Comissão
   '4583': 'comissao_produtos', // Compl. Comissão Vendedor
   '7680': 'comissao_produtos', // Comissões Produtos Online
 
@@ -108,6 +106,7 @@ export const CODIGO_PARA_GRUPO: Record<string, GrupoExportCSV> = {
   '8505': 'comissao_servicos', // COM PLANOS OPERAD (planilha E9)
 
   // PRÊMIOS — códigos adicionais (prêmios antecipados e variações)
+  '0040': 'premios', // Participação Lucros (PLR) — decisão escritório 2026-05-29
   '2375': 'premios', // Antec. Prêmio Vend. Light
   '2377': 'premios', // Antec. Prêmio Vendedor
   '2477': 'premios', // Antec. Prêmio Superação
@@ -124,7 +123,6 @@ export const CODIGO_PARA_GRUPO: Record<string, GrupoExportCSV> = {
   '4591': 'premios', // Antec. Prêmio Vendedor Incentivo
 
   // PODEM SER DESCONSIDERADOS (col 6) — segue planilha
-  '0040': 'desconsiderado', // Participação Lucros
   '0502': 'desconsiderado', // DSR (H. Extra) — planilha lista explicitamente
   '0510': 'desconsiderado', // Adiantamento 13º Salário
   '0511': 'desconsiderado', // 13º Salário 1ª Parcela
@@ -242,6 +240,19 @@ export const CODIGO_PARA_GRUPO: Record<string, GrupoExportCSV> = {
   '9921': 'desconsiderado', // Base FGTS
   '9926': 'desconsiderado', // Base FGTS Férias
   '9953': 'desconsiderado', // Líquido Férias (totalizador)
+
+  // Auditoria 2026-05-29 — códigos NAO_CLASSIFICADO recorrentes nas
+  // 10 fichas teste1/teste2 (Joseli + outro colaborador, 2016-2021).
+  // Decisões aprovadas pelo escritório em sessão de validação.
+  '2437': 'desconsiderado', // Antecip. Mensalidade Unimed
+  '2740': 'desconsiderado', // Media de Abono
+  '3029': 'desconsiderado', // Antec. Crédito Dif. — mudou de comissao_produtos
+  '3276': 'desconsiderado', // RSR COM.TRAB.100% (RSR sobre HE)
+  '4142': 'desconsiderado', // Cred. Dif. Comissão — mudou de comissao_produtos
+  '4529': 'comissao_servicos', // Campanha APP
+  '3315': 'minimo_garantido', // FOLGA REMUNERADA (substitui jornada)
+  '4780': 'desconsiderado', // 1/3 Ad Const Abono
+  '4781': 'desconsiderado', // 1/3 Ad Const Abono
 };
 
 /**
