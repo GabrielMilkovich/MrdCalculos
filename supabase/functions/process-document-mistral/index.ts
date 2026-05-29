@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     const { data: doc, error: docErr } = await supabase
       .from("documents")
       .select(
-        "id, mime_type, storage_path, parsed_by, ocr_provider, ocr_text, metadata, tipo_extracao",
+        "id, mime_type, storage_path, parsed_by, ocr_provider, ocr_text, metadata, tipo_extracao, file_name",
       )
       .eq("id", document_id)
       .single();
@@ -332,7 +332,20 @@ Deno.serve(async (req) => {
     // Política do escritório (2026-05-29): esses tipos têm parsers
     // determinísticos próprios. Se chegamos aqui é porque V6 falhou ao
     // extrair texto. Cair pro Mistral corromperia os dados.
-    if (doc.tipo_extracao === "ficha_financeira" || doc.tipo_extracao === "ctps") {
+    //
+    // FIX 2026-05-29 (PR #137): rede de segurança via NOME do arquivo.
+    const fileNameLower = (doc.file_name ?? "").toLowerCase();
+    const eFichaPorNome = /ficha[\s_-]*financeira/i.test(fileNameLower);
+    const eCtpsPorNome = /\bctps\b|carteira[\s_-]*de[\s_-]*trabalho/i.test(fileNameLower);
+    if (eFichaPorNome && !doc.tipo_extracao) doc.tipo_extracao = "ficha_financeira";
+    else if (eCtpsPorNome && !doc.tipo_extracao) doc.tipo_extracao = "ctps";
+
+    if (
+      doc.tipo_extracao === "ficha_financeira" ||
+      doc.tipo_extracao === "ctps" ||
+      eFichaPorNome ||
+      eCtpsPorNome
+    ) {
       const motivo = v6?.outcome ?? "v6_skipped";
       const errorMsg =
         doc.tipo_extracao === "ficha_financeira"
