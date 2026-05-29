@@ -102,7 +102,7 @@ export async function buildFichaFinanceiraZip(
   // Override do operador (incluida=false ou categoria_atual=='ignorar')
   // sobrescreve pra 'desconsiderado'.
   const classificadas: RubricaClassificada[] = input.rubricas.map((r) => {
-    const overrideExclusao = !r.incluida || r.categoria_atual === 'ignorar';
+    const overrideExclusao = !r.incluida || r.categoria_atual === 'desconsiderado';
     const classificacao = overrideExclusao
       ? {
           grupo: 'desconsiderado' as GrupoExportCSV,
@@ -115,7 +115,7 @@ export async function buildFichaFinanceiraZip(
   });
 
   const excluidasOperador = classificadas.filter(
-    (r) => !r.incluida || r.categoria_atual === 'ignorar',
+    (r) => !r.incluida || r.categoria_atual === 'desconsiderado',
   ).length;
   const baixaConfianca = classificadas.filter(
     (r) =>
