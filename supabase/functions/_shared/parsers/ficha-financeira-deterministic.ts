@@ -288,8 +288,39 @@ function detectTextLayoutColumns(headerLine: string, separatorLine: string | nul
 }
 
 function extractMetadata(texto: string): { ano: number; empregado: string; empresa: string } {
+  // Detecção do ano com cascata de fallbacks. Fix 2026-05-29 (auditoria externa):
+  //   1. "Ano Competência : YYYY" — fonte primária no header ADP
+  //   2. "Ano Compet" sem dois pontos ou com OCR ruim
+  //   3. Anos detectados nas linhas de cabeçalho ("Janeiro ... Total YYYY")
+  //   4. Maior ano que aparece em valores ou linhas (frequência alta)
+  //   5. SE TUDO FALHAR: retorna 0 (caller decide tratar como inválido) —
+  //      NUNCA assumir new Date().getFullYear(), porque doc de 2021 saía
+  //      como 2026 quando OCR corrompia o header.
+  let ano = 0;
   const anoMatch = texto.match(/Ano\s+Compet[eê]ncia\s*:\s*(\d{4})/i);
-  const ano = anoMatch ? parseInt(anoMatch[1], 10) : new Date().getFullYear();
+  if (anoMatch) {
+    ano = parseInt(anoMatch[1], 10);
+  } else {
+    const anoFallback = texto.match(/\bAno\s+Compet[a-zA-Zêéà]*\s*:?\s*(\d{4})/i);
+    if (anoFallback) {
+      ano = parseInt(anoFallback[1], 10);
+    } else {
+      // Procura anos plausíveis (entre 2000 e ano atual + 1) na primeira
+      // 1000 chars do texto (header). Pega o mais frequente.
+      const head = texto.slice(0, 1000);
+      const candidatos = head.match(/\b(20\d{2})\b/g) ?? [];
+      const freq: Record<string, number> = {};
+      const maxAno = new Date().getFullYear() + 1;
+      for (const c of candidatos) {
+        const n = parseInt(c, 10);
+        if (n >= 2000 && n <= maxAno) freq[c] = (freq[c] ?? 0) + 1;
+      }
+      const top = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+      if (top) ano = parseInt(top[0], 10);
+    }
+  }
+  // Sanity check: rejeita anos absurdos. 0 sinaliza "não detectado".
+  if (ano < 2000 || ano > new Date().getFullYear() + 1) ano = 0;
 
   const empMatch = texto.match(/(?:Empregado|Depreado|Funcionário)\s*:\s*(\d+)\s+([^\n|]+)/i);
   const empregado = empMatch ? empMatch[2].trim() : '';
