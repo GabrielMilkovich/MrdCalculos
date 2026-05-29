@@ -668,12 +668,22 @@ Deno.serve(async (req) => {
         document.tipo_extracao === "ficha_financeira"
           ? `Não foi possível extrair texto desta Ficha Financeira via pdfjs (V6 outcome=${motivo}). Mistral OCR está desabilitado para este tipo de documento — o OCR de visão corrompe códigos de rubrica. Suba uma versão com texto nativo (PDF gerado pelo ADP, não escaneado).`
           : `Não foi possível extrair texto desta CTPS via pdfjs (V6 outcome=${motivo}). Mistral OCR está desabilitado para este tipo de documento. Suba uma versão com texto nativo.`;
-      await supabase
+      // BUG FIX (2026-05-29): antes gravava `ocr_error` — coluna INEXISTENTE
+      // em `documents`. O PostgREST rejeitava o UPDATE inteiro (erro não
+      // checado), então o status NUNCA virava 'ocr_failed': o documento ficava
+      // preso em 'ocr_running' até o cron `recover_stale_ocr_documents`
+      // marcá-lo como falho 3min depois com a mensagem genérica "OCR travado".
+      // As colunas corretas são `error_message` (lida pela UI) e
+      // `extracao_error` (par de `extracao_status`). Também fechamos
+      // `processing_completed_at` para o cron de stale jamais reprocessar.
+      const { error: updErr } = await supabase
         .from("documents")
         .update({
           status: "ocr_failed",
           extracao_status: "failed",
-          ocr_error: errorMsg,
+          error_message: errorMsg,
+          extracao_error: errorMsg,
+          processing_completed_at: new Date().toISOString(),
           metadata: {
             ...(document.metadata ?? {}),
             ...metadataV6(v6 ?? { outcome: "skipped" } as V6Tentativa),
@@ -683,6 +693,12 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq("id", document_id);
+      if (updErr) {
+        console.error(
+          `[ocr-document] doc ${document_id}: FALHA ao gravar ocr_failed:`,
+          updErr,
+        );
+      }
       console.log(
         `[ocr-document] doc ${document_id}: Mistral BLOQUEADO (tipo=${document.tipo_extracao}, motivo=${motivo})`,
       );

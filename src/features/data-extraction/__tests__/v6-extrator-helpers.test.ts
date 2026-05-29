@@ -15,6 +15,7 @@ import {
   clusterizarLinhas,
   linhaParaTextoPlano,
   detectarTabelas,
+  calcularScoreQualidade,
 } from "../../../../supabase/functions/_shared/extrator-geometrico";
 import type { TextoPosicionado } from "../../../../supabase/functions/_shared/documento-tabular";
 
@@ -125,5 +126,54 @@ describe("v6 extrator — detectarTabelas", () => {
     const tabelas = detectarTabelas(linhas);
     // Não conseguiu 3+ linhas alinhadas, retorna []
     expect(tabelas.length === 0 || tabelas[0].linhas.length < 3).toBe(true);
+  });
+});
+
+describe("v6 extrator — calcularScoreQualidade (fix Fichas Via Varejo)", () => {
+  // Regressão do incidente 2026-05-29: Fichas Financeiras ADP (Via Varejo)
+  // são text-native PERFEITAS mas usam blocos enormes de espaço para alinhar
+  // colunas de largura fixa. A fórmula antiga media alnum/total (espaço
+  // contava como "lixo") → score ~0.66 < 0.70 → docs reprovados e marcados
+  // ocr_failed. A fórmula correta mede alnum/não-branco.
+
+  // Reconstrução fiel de algumas linhas reais (pdf-parse) da ficha da Joseli:
+  // cabeçalho ADP + tabela com colunas alinhadas por espaço.
+  const fichaADP = [
+    " Ano Competência : 2016                                                            ",
+    " Estabelecimento :        1651     VIA VAREJO S/A - SHOP INDAIATUBA - SP ",
+    "Código Denominação          Clas.        Janeiro      Fevereiro          Março          Abril           Maio          Junho          Julho",
+    "------ -------------------- ----- -------------- -------------- -------------- -------------- -------------- -------------- --------------",
+    "  0501 DSR(Comissão)        PGTO          382,06         463,50         321,56         499,28         441,26         533,00         101,47",
+    "  0620 Comissões            PGTO        1.348,73       1.577,16       1.517,87       1.484,59       1.203,85       1.344,23         639,44",
+    "  3391 COM. GARANTIA        PGTO          260,59         272,69         385,40         815,01         460,14         734,80         163,71",
+  ].join("\n");
+
+  it("texto ADP denso em espaço pontua ACIMA do limiar (0.70)", () => {
+    const { score } = calcularScoreQualidade(fichaADP, 5);
+    // Antes do fix dava ~0.66. Agora deve passar folgado.
+    expect(score).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it("razão reporta densidade sobre os não-brancos", () => {
+    const { razao } = calcularScoreQualidade(fichaADP, 5);
+    expect(razao).toMatch(/não-brancos/);
+  });
+
+  it("texto limpo sem espaço extra continua com score alto", () => {
+    const limpo = "Salario base 1.234,56 Comissoes 789,01 DSR 45,67 ".repeat(40);
+    const { score } = calcularScoreQualidade(limpo, 1);
+    expect(score).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it("lixo de OCR (símbolos de controle / placeholders) derruba o score", () => {
+    // Maioria não-alfanumérica E não-branca → baixa densidade real.
+    const lixo = ("��� [???] §¶©®™ ".repeat(50)).replace(/ /g, "");
+    const { score } = calcularScoreQualidade(lixo, 1);
+    expect(score).toBeLessThan(0.7);
+  });
+
+  it("score sempre dentro de [0.2, 0.95]", () => {
+    expect(calcularScoreQualidade("", 1).score).toBeGreaterThanOrEqual(0.2);
+    expect(calcularScoreQualidade("a".repeat(100000), 1).score).toBeLessThanOrEqual(0.95);
   });
 });

@@ -17,6 +17,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { extrairGeometrico } from "../_shared/extrator-geometrico.ts";
+import type { DocumentoTabular } from "../_shared/documento-tabular.ts";
 import { escolherEMapear, prewarmOntologiaIfNeeded } from "../_shared/mappers/dispatcher.ts";
 import { sanitizePII } from "../_shared/sanitize-pii.ts";
 import { parseFichaFinanceiraDeterministico } from "../_shared/parsers/ficha-financeira-deterministic.ts";
@@ -148,6 +149,90 @@ async function disparaChunkAndEmbed(
   }
 }
 
+/**
+ * Fallback determinístico de Ficha Financeira sobre texto cru extraído.
+ *
+ * O parser `parseFichaFinanceiraDeterministico` é robusto e opera direto no
+ * texto (regex), independente do score de qualidade ou do detector do mapper
+ * Via Varejo (que tem regex estrita e às vezes nega). Por isso é seguro
+ * tentá-lo SEMPRE que houver texto de ficha — inclusive quando o score ficou
+ * abaixo do limiar (fichas ADP são densas em espaço de alinhamento) ou quando
+ * nenhum mapper casou.
+ *
+ * Retorna o resultado de sucesso, ou `null` quando não é ficha / o parser não
+ * encontrou rubricas (o caller decide o próximo passo).
+ */
+async function tentarFichaFallback(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  // deno-lint-ignore no-explicit-any
+  doc: any,
+  docTab: DocumentoTabular,
+  authHeader: string,
+): Promise<ProcessamentoResult | null> {
+  const ehFicha =
+    doc.tipo_extracao === "ficha_financeira" ||
+    /ficha\s*financeira/i.test(docTab.textoCompleto.slice(0, 5000));
+  if (!ehFicha) return null;
+  try {
+    const parseResult = parseFichaFinanceiraDeterministico(docTab.textoCompleto);
+    if (!parseResult || parseResult.rubricas.length === 0) return null;
+    const dominio = mapperFichaFinanceiraViaVarejo.mapear({
+      textoCompleto: docTab.textoCompleto,
+    } as Parameters<typeof mapperFichaFinanceiraViaVarejo.mapear>[0]);
+    if (!dominio) return null;
+    await supabase
+      .from("documents")
+      .update({
+        parsed: dominio,
+        parsed_by: "ficha-financeira-fallback-determinist",
+        ocr_provider: "pdfjs_geometric",
+        ocr_text: docTab.textoCompleto,
+        ocr_validated: true,
+        ocr_confidence: docTab.qualidade.score,
+        status: "ocr_done",
+        extracao_status: "done",
+        error_message: null,
+        processing_completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        metadata: {
+          ...(doc.metadata ?? {}),
+          v6_attempted_at: new Date().toISOString(),
+          v6_outcome: "ficha_financeira_fallback",
+          v6_score: docTab.qualidade.score,
+          v6_page_count: docTab.numeroPaginas,
+          v6_reprocessed_at: new Date().toISOString(),
+          v6_fallback_ficha_financeira: true,
+        },
+      })
+      .eq("id", doc.id);
+    const chunkResult = await disparaChunkAndEmbed(
+      supabase,
+      doc.id,
+      docTab.textoCompleto,
+      authHeader,
+    );
+    return {
+      id: doc.id,
+      sucesso: true,
+      outcome: "success",
+      mapper: "ficha-financeira-fallback-determinist",
+      score: docTab.qualidade.score,
+      pageCount: docTab.numeroPaginas,
+      razao: `${parseResult.rubricas.length} rubricas · parser determinístico` +
+        (chunkResult.ok
+          ? ` · ${chunkResult.chunks_created ?? "?"} chunks RAG`
+          : ` · chunk-and-embed falhou`),
+    };
+  } catch (err) {
+    console.error(
+      `[reprocess-v6] ${doc.id} ficha_financeira fallback exception:`,
+      err,
+    );
+    return null;
+  }
+}
+
 async function processarDoc(
   // deno-lint-ignore no-explicit-any
   supabase: any,
@@ -182,6 +267,11 @@ async function processarDoc(
   const textPreview = sanitizePII(docTab.textoCompleto.slice(0, 4000));
   const textFullLength = docTab.textoCompleto.length;
   if (docTab.qualidade.score < 0.7) {
+    // Defesa: fichas ADP são densas em espaço de alinhamento e podem pontuar
+    // abaixo do limiar mesmo com texto nativo perfeito. O parser
+    // determinístico não depende do score — tenta antes de desistir.
+    const fb = await tentarFichaFallback(supabase, doc, docTab, authHeader);
+    if (fb) return fb;
     return {
       id: doc.id,
       sucesso: false,
@@ -216,66 +306,8 @@ async function processarDoc(
   if (dispatch.kind === "no_mapper_matched") {
     // Ficha Financeira fallback: parser determinístico no texto cru. Cobre
     // o caso onde o detector do mapper Via Varejo nega mas o parser funciona.
-    if (doc.tipo_extracao === "ficha_financeira") {
-      try {
-        const parseResult = parseFichaFinanceiraDeterministico(docTab.textoCompleto);
-        if (parseResult && parseResult.rubricas.length > 0) {
-          const dominio = mapperFichaFinanceiraViaVarejo.mapear({
-            textoCompleto: docTab.textoCompleto,
-          } as Parameters<typeof mapperFichaFinanceiraViaVarejo.mapear>[0]);
-          if (dominio) {
-            await supabase
-              .from("documents")
-              .update({
-                parsed: dominio,
-                parsed_by: "ficha-financeira-fallback-determinist",
-                ocr_provider: "pdfjs_geometric",
-                ocr_text: docTab.textoCompleto,
-                ocr_validated: true,
-                ocr_confidence: docTab.qualidade.score,
-                status: "ocr_done",
-                extracao_status: "done",
-                updated_at: new Date().toISOString(),
-                metadata: {
-                  ...(doc.metadata ?? {}),
-                  v6_attempted_at: new Date().toISOString(),
-                  v6_outcome: "ficha_financeira_fallback",
-                  v6_score: docTab.qualidade.score,
-                  v6_page_count: docTab.numeroPaginas,
-                  v6_reprocessed_at: new Date().toISOString(),
-                  v6_fallback_ficha_financeira: true,
-                },
-              })
-              .eq("id", doc.id);
-
-            const chunkResult = await disparaChunkAndEmbed(
-              supabase,
-              doc.id,
-              docTab.textoCompleto,
-              authHeader,
-            );
-
-            return {
-              id: doc.id,
-              sucesso: true,
-              outcome: "success",
-              mapper: "ficha-financeira-fallback-determinist",
-              score: docTab.qualidade.score,
-              pageCount: docTab.numeroPaginas,
-              razao: `${parseResult.rubricas.length} rubricas · parser determinístico` +
-                (chunkResult.ok
-                  ? ` · ${chunkResult.chunks_created ?? "?"} chunks RAG`
-                  : ` · chunk-and-embed falhou`),
-            };
-          }
-        }
-      } catch (err) {
-        console.error(
-          `[reprocess-v6] ${doc.id} ficha_financeira fallback exception:`,
-          err,
-        );
-      }
-    }
+    const fb = await tentarFichaFallback(supabase, doc, docTab, authHeader);
+    if (fb) return fb;
 
     // CTPS V2: extrator geométrico produziu texto de qualidade mas não existe
     // mapper pra CTPS no dispatcher (o parser V2 roda no cliente). Grava o

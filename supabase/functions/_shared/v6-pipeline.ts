@@ -134,6 +134,12 @@ export async function tentarV6(
         textPreview,
         textFullLength,
         pageCount: docTab.numeroPaginas,
+        // Defesa: expõe o texto extraído mesmo abaixo do limiar. Parsers
+        // determinísticos (ficha financeira / CTPS) operam sobre texto cru e
+        // não dependem do score — sem isto, o fallback no ocr-document que
+        // LISTA `score_below_threshold` virava código morto (textoCompleto
+        // undefined) e fichas legítimas iam pro caminho de erro.
+        textoCompleto: docTab.textoCompleto,
       };
     }
     // Sprint 3: escolherEMapear encapsula merge de PDFs híbridos de
@@ -168,6 +174,9 @@ export async function tentarV6(
         pageCount: docTab.numeroPaginas,
         textPreview,
         textFullLength,
+        // Defesa: idem score_below_threshold — fallback determinístico de
+        // ficha financeira precisa do texto cru.
+        textoCompleto: docTab.textoCompleto,
       };
     }
     return {
