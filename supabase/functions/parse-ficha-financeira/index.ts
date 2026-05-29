@@ -251,14 +251,36 @@ Deno.serve(async (req) => {
       );
     }
 
-    // V4 PIPELINE: pdfjs_geometric > texto_documento > Claude fallback.
+    // V5 PIPELINE (2026-05-29): banco_pdfjs > pdfjs_geometric > 422.
     let textoLimpo: string | null = null;
     let ocr_provider = "unknown";
 
-    // 1. Tenta pdfjs_geometric (texto nativo, zero OCR, grátis)
+    // 0. Se temos document_id (passado pelo caller ou inferido pelo storage_path),
+    // consulta o banco pra ver se ocr-document JÁ extraiu via pdfjs_geometric
+    // com sucesso. Se sim, usa esse texto — evita rodar pdfjs duas vezes e
+    // contorna falhas intermitentes do unpdf em runtime edge.
+    if (storage_path) {
+      try {
+        const { data: docRow } = await supabase
+          .from("documents")
+          .select("ocr_text, ocr_provider, parsed_by, tipo_extracao")
+          .eq("storage_path", storage_path)
+          .limit(1)
+          .maybeSingle();
+        if (docRow?.ocr_provider === "pdfjs_geometric" && docRow.ocr_text && docRow.ocr_text.length > 200) {
+          textoLimpo = docRow.ocr_text;
+          ocr_provider = "banco_pdfjs_geometric";
+          console.log(`[parse-ficha] usando ocr_text do banco (ocr-document v6 já extraiu via pdfjs): ${textoLimpo.length} chars`);
+        }
+      } catch (err) {
+        console.warn("[parse-ficha] erro consultando banco:", err);
+      }
+    }
+
+    // 1. Tenta pdfjs_geometric local (texto nativo, zero OCR, grátis)
     // Bug fix (2026-05-29): bucket default era "case-documents" mas em
     // produção os PDFs estão em "juriscalculo-documents". Tenta ambos.
-    if (storage_path) {
+    if (!textoLimpo && storage_path) {
       const bucketsParaTentar = storage_bucket
         ? [storage_bucket]
         : ["juriscalculo-documents", "case-documents"];
