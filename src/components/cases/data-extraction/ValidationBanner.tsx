@@ -10,6 +10,13 @@ interface Props {
 
 export function ValidationBanner({ validacao }: Props) {
   const [expanded, setExpanded] = useState(false);
+
+  // Fichas extraídas pelo pipeline V6 geométrico não trazem dados de
+  // validação (comparação total extraído vs total impresso no PDF). Sem
+  // esses dados não há banner a renderizar — degrada graciosamente em vez
+  // de quebrar a tela (TypeError: Cannot destructure property 'resumo').
+  if (!validacao) return null;
+
   const { resumo, competencias } = validacao;
 
   let variant: 'ok' | 'warn' | 'error';

@@ -30,7 +30,9 @@ export interface FichaFinanceiraZipInput {
   empregador: string;
   empregado: string;
   rubricas: RubricaEditavel[];
-  validacao: {
+  // Opcional: fichas V6 (mapper geométrico) não produzem validação. Ver
+  // FichaFinanceiraParsed.validacao em ficha-financeira-types.ts.
+  validacao?: {
     ok: boolean;
     competencias: Array<{
       competencia: string;
@@ -165,7 +167,9 @@ export async function buildFichaFinanceiraZip(
     zip.file('auditoria_desconsideradas.csv', buildDesconsideradasCSV(desconsideradas));
   }
 
-  zip.file('resumo_validacao.txt', buildResumoValidacao(input.validacao));
+  if (input.validacao) {
+    zip.file('resumo_validacao.txt', buildResumoValidacao(input.validacao));
+  }
 
   const metadata = {
     versao_exporter: '2.0.0-planilha-dsr',
@@ -185,7 +189,9 @@ export async function buildFichaFinanceiraZip(
     contagem_desconsideradas: desconsideradas.length,
     contagem_excluidas_pelo_operador: excluidasOperador,
     contagem_classificacao_baixa_confianca: baixaConfianca,
-    validacao: { ok: input.validacao.ok, resumo: input.validacao.resumo },
+    validacao: input.validacao
+      ? { ok: input.validacao.ok, resumo: input.validacao.resumo }
+      : null,
   };
   zip.file('metadata.json', JSON.stringify(metadata, null, 2));
 
@@ -201,8 +207,8 @@ export async function buildFichaFinanceiraZip(
       rubricas_incluidas: classificadas.filter((r) => r.grupo_export !== 'desconsiderado').length,
       rubricas_desconsideradas: desconsideradas.length,
       rubricas_excluidas_pelo_operador: excluidasOperador,
-      competencias_validacao_ok: input.validacao.resumo.competencias_ok,
-      competencias_validacao_fora: input.validacao.resumo.competencias_fora,
+      competencias_validacao_ok: input.validacao?.resumo.competencias_ok ?? 0,
+      competencias_validacao_fora: input.validacao?.resumo.competencias_fora ?? 0,
       classificacoes_baixa_confianca: baixaConfianca,
     },
     reports,
