@@ -791,6 +791,22 @@ export function CartaoPontoReviewDialog({
           </Button>
         </div>
       </div>
+      {(() => {
+        // Banner de alerta global: conta dias com batida ímpar.
+        const diasImpar = sorted.filter((r) => temBatidaImpar(r.marcacoes));
+        if (diasImpar.length === 0) return null;
+        return (
+          <div className="mx-2 mb-2 flex items-center gap-2 rounded-md border-2 border-red-500 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-xs text-red-800 dark:text-red-200">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+            <span className="font-semibold">
+              {diasImpar.length} dia(s) com batida ímpar
+            </span>
+            <span className="text-red-700/80 dark:text-red-300/80">
+              — PJe-Calc exige número par de batidas por dia. Corrija antes de exportar.
+            </span>
+          </div>
+        );
+      })()}
       {sorted.length === 0 ? (
         <div className="p-6 text-xs text-muted-foreground text-center">
           Nenhuma apuração — clique em "Dia" para adicionar manualmente.
@@ -830,13 +846,18 @@ export function CartaoPontoReviewDialog({
               // FASE 3 — destaque rose intenso pra apurações REVISAR_OCR
               // (têm prioridade sobre htDisc/corte; são as mais críticas).
               const precisaRevisar = r.observacao?.startsWith("REVISAR_OCR") ?? false;
-              const cls = precisaRevisar
-                ? "bg-rose-100 dark:bg-rose-950/30 border-l-4 border-l-rose-500"
-                : htDisc
-                  ? "bg-rose-50 dark:bg-rose-950/15"
-                  : corteExc
-                    ? "bg-amber-50 dark:bg-amber-950/10"
-                    : "";
+              // Batida ímpar (PJe-Calc rejeita): destaque vermelho com border
+              // esquerda grossa — prioridade máxima visual junto com REVISAR_OCR.
+              const impar = temBatidaImpar(r.marcacoes);
+              const cls = impar
+                ? "bg-red-100 dark:bg-red-950/40 border-l-4 border-l-red-600"
+                : precisaRevisar
+                  ? "bg-rose-100 dark:bg-rose-950/30 border-l-4 border-l-rose-500"
+                  : htDisc
+                    ? "bg-rose-50 dark:bg-rose-950/15"
+                    : corteExc
+                      ? "bg-amber-50 dark:bg-amber-950/10"
+                      : "";
               return (
               <TableRow
                 key={r._key}
@@ -855,11 +876,20 @@ export function CartaoPontoReviewDialog({
                   className="p-1.5"
                   onClick={() => scrollOcrToLine(r.ocr_line)}
                   title={
-                    r.ocr_line
-                      ? `Clique para ver a linha ${r.ocr_line} no OCR`
-                      : undefined
+                    impar
+                      ? `Batida ímpar: ${totalBatidas(r.marcacoes)} batida(s) — PJe-Calc exige par`
+                      : r.ocr_line
+                        ? `Clique para ver a linha ${r.ocr_line} no OCR`
+                        : undefined
                   }
                 >
+                  <div className="flex items-center gap-1">
+                    {impar && (
+                      <AlertTriangle
+                        className="h-3.5 w-3.5 shrink-0 text-red-600"
+                        aria-label="Batida ímpar"
+                      />
+                    )}
                   <Input
                     type="date"
                     value={r.data}
@@ -891,6 +921,7 @@ export function CartaoPontoReviewDialog({
                     }}
                     className={`h-9 text-[13px] font-mono ${r.ocr_line ? "cursor-pointer" : ""}`}
                   />
+                  </div>
                 </TableCell>
                 <TableCell className="p-1.5">
                   <Select
@@ -917,15 +948,21 @@ export function CartaoPontoReviewDialog({
                   // PJe-Calc rejeita dias com nº ímpar de batidas. Destacamos
                   // todos os inputs do dia em vermelho pra deixar visível —
                   // operador precisa completar o par ou apagar a batida solta.
+                  // Usamos !important (`!border-...`) pra vencer o `border-input`
+                  // base do componente Input do shadcn.
                   const impar = temBatidaImpar(r.marcacoes);
                   const tooltipImpar = impar
                     ? `${totalBatidas(r.marcacoes)} batida(s) neste dia — PJe-Calc exige número par. Complete o par ou remova a batida sozinha.`
                     : "";
                   const classeImpar = impar
-                    ? "border-red-500 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
+                    ? "!border-2 !border-red-500 !bg-red-100 dark:!bg-red-950/40 !text-red-700 dark:!text-red-300 !font-semibold"
                     : "";
                   return Array.from({ length: MAX_PARES }).map((_, idx) => (
-                    <TableCell key={`pair-${idx}`} className="p-1" colSpan={2}>
+                    <TableCell
+                      key={`pair-${idx}`}
+                      className={`p-1 ${impar ? "bg-red-50/50 dark:bg-red-950/10" : ""}`}
+                      colSpan={2}
+                    >
                       <div className="flex gap-1">
                         <Input
                           placeholder={idx === 0 ? "08:00" : ""}
