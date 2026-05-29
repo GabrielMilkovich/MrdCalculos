@@ -106,6 +106,27 @@ Deno.serve(async (req) => {
             (v6.score !== undefined ? ` score=${v6.score.toFixed(2)}` : ""),
         );
 
+        // BUG FIX (2026-05-29): docs novos chegam sem tipo_extracao definido —
+        // o auto-detect só roda DEPOIS do Mistral. Isso fazia ficha_financeira
+        // escapar dos fallbacks/bloqueio. Detecta tipo agora via texto V6.
+        if (
+          v6.textoCompleto &&
+          (!doc.tipo_extracao ||
+            doc.tipo_extracao === "outros" ||
+            doc.tipo_extracao === "outro")
+        ) {
+          const t = v6.textoCompleto.toLowerCase().slice(0, 5000);
+          let tipoInferido: string | null = null;
+          if (/ficha\s*financeira/.test(t)) tipoInferido = "ficha_financeira";
+          else if (/ctps|carteira\s*de\s*trabalho/.test(t)) tipoInferido = "ctps";
+          if (tipoInferido) {
+            console.log(
+              `[pipeline] doc ${document_id}: tipo_extracao inferido do V6: "${tipoInferido}" (era "${doc.tipo_extracao ?? "null"}")`,
+            );
+            doc.tipo_extracao = tipoInferido;
+          }
+        }
+
         if (v6.outcome === "success" && v6.parsedJson && v6.textoCompleto) {
           // Grava resultado V6 + popula ocr_text com texto geométrico (que
           // alimenta chunk-and-embed depois — R2).

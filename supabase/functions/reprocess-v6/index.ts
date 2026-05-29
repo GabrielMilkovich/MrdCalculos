@@ -19,6 +19,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { extrairGeometrico } from "../_shared/extrator-geometrico.ts";
 import { escolherEMapear, prewarmOntologiaIfNeeded } from "../_shared/mappers/dispatcher.ts";
 import { sanitizePII } from "../_shared/sanitize-pii.ts";
+import { parseFichaFinanceiraDeterministico } from "../_shared/parsers/ficha-financeira-deterministic.ts";
+import { mapperFichaFinanceiraViaVarejo } from "../_shared/mappers/ficha-financeira-via-varejo.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -197,8 +199,84 @@ async function processarDoc(
   // Sprint 3c (2026-05-23): prewarm da ontologia V2 antes do mapper sync.
   // No-op se mapper escolhido não declara `requiresOntologiaPrewarm`.
   await prewarmOntologiaIfNeeded(docTab, supabase);
+  // BUG FIX (2026-05-29): inferir tipo_extracao do texto se vier vazio.
+  // Sem isso, os fallbacks abaixo (CTPS/ficha_financeira) nunca casam quando
+  // o documento foi uploadado sem tipo definido.
+  if (
+    !doc.tipo_extracao ||
+    doc.tipo_extracao === "outros" ||
+    doc.tipo_extracao === "outro"
+  ) {
+    const t = docTab.textoCompleto.toLowerCase().slice(0, 5000);
+    if (/ficha\s*financeira/.test(t)) doc.tipo_extracao = "ficha_financeira";
+    else if (/ctps|carteira\s*de\s*trabalho/.test(t)) doc.tipo_extracao = "ctps";
+  }
+
   const dispatch = escolherEMapear(docTab);
   if (dispatch.kind === "no_mapper_matched") {
+    // Ficha Financeira fallback: parser determinístico no texto cru. Cobre
+    // o caso onde o detector do mapper Via Varejo nega mas o parser funciona.
+    if (doc.tipo_extracao === "ficha_financeira") {
+      try {
+        const parseResult = parseFichaFinanceiraDeterministico(docTab.textoCompleto);
+        if (parseResult && parseResult.rubricas.length > 0) {
+          const dominio = mapperFichaFinanceiraViaVarejo.mapear({
+            textoCompleto: docTab.textoCompleto,
+          } as Parameters<typeof mapperFichaFinanceiraViaVarejo.mapear>[0]);
+          if (dominio) {
+            await supabase
+              .from("documents")
+              .update({
+                parsed: dominio,
+                parsed_by: "ficha-financeira-fallback-determinist",
+                ocr_provider: "pdfjs_geometric",
+                ocr_text: docTab.textoCompleto,
+                ocr_validated: true,
+                ocr_confidence: docTab.qualidade.score,
+                status: "ocr_done",
+                extracao_status: "done",
+                updated_at: new Date().toISOString(),
+                metadata: {
+                  ...(doc.metadata ?? {}),
+                  v6_attempted_at: new Date().toISOString(),
+                  v6_outcome: "ficha_financeira_fallback",
+                  v6_score: docTab.qualidade.score,
+                  v6_page_count: docTab.numeroPaginas,
+                  v6_reprocessed_at: new Date().toISOString(),
+                  v6_fallback_ficha_financeira: true,
+                },
+              })
+              .eq("id", doc.id);
+
+            const chunkResult = await disparaChunkAndEmbed(
+              supabase,
+              doc.id,
+              docTab.textoCompleto,
+              authHeader,
+            );
+
+            return {
+              id: doc.id,
+              sucesso: true,
+              outcome: "success",
+              mapper: "ficha-financeira-fallback-determinist",
+              score: docTab.qualidade.score,
+              pageCount: docTab.numeroPaginas,
+              razao: `${parseResult.rubricas.length} rubricas · parser determinístico` +
+                (chunkResult.ok
+                  ? ` · ${chunkResult.chunks_created ?? "?"} chunks RAG`
+                  : ` · chunk-and-embed falhou`),
+            };
+          }
+        }
+      } catch (err) {
+        console.error(
+          `[reprocess-v6] ${doc.id} ficha_financeira fallback exception:`,
+          err,
+        );
+      }
+    }
+
     // CTPS V2: extrator geométrico produziu texto de qualidade mas não existe
     // mapper pra CTPS no dispatcher (o parser V2 roda no cliente). Grava o
     // texto geométrico como `ocr_provider='pdfjs_geometric'` pra o export
