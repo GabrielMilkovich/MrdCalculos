@@ -112,6 +112,24 @@ function paresPreenchidos(marcs: Marcacao[]): number {
   return marcs.filter((m) => m.e || m.s).length;
 }
 
+/**
+ * PJe-Calc só aceita dias com nº PAR de batidas (entrada/saída em pares).
+ * Conta total de batidas preenchidas (E + S não vazios) — ímpar = inválido.
+ * Ex: 4 batidas (E,S,E,S) = ok; 3 batidas (E,S,E) ou (E,_,E,S) = ímpar = erro.
+ */
+function totalBatidas(marcs: Marcacao[]): number {
+  let n = 0;
+  for (const m of marcs) {
+    if (m.e) n++;
+    if (m.s) n++;
+  }
+  return n;
+}
+
+function temBatidaImpar(marcs: Marcacao[]): boolean {
+  return totalBatidas(marcs) % 2 === 1;
+}
+
 export function CartaoPontoReviewDialog({
   open,
   onOpenChange,
@@ -895,74 +913,90 @@ export function CartaoPontoReviewDialog({
                     </SelectContent>
                   </Select>
                 </TableCell>
-                {Array.from({ length: MAX_PARES }).map((_, idx) => (
-                  <TableCell key={`pair-${idx}`} className="p-1" colSpan={2}>
-                    <div className="flex gap-1">
-                      <Input
-                        placeholder={idx === 0 ? "08:00" : ""}
-                        value={r.marcacoes[idx]?.e ?? ""}
-                        onChange={(e) =>
-                          updateMarcacao(
-                            r._key,
-                            idx,
-                            "e",
-                            applyHoraMask(e.target.value),
-                          )
-                        }
-                        onBlur={(e) =>
-                          updateMarcacao(
-                            r._key,
-                            idx,
-                            "e",
-                            normalizeHoraOnBlur(e.target.value),
-                          )
-                        }
-                        title={
-                          r.marcacoes[idx]?.e_inserida
-                            ? "Batida inserida manualmente (asterisco no OCR)"
-                            : ""
-                        }
-                        className={`h-9 text-[13px] font-mono w-[60px] px-1.5 ${
-                          r.marcacoes[idx]?.e_inserida
-                            ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
-                            : ""
-                        }`}
-
-                      />
-                      <Input
-                        placeholder={idx === 0 ? "12:00" : ""}
-                        value={r.marcacoes[idx]?.s ?? ""}
-                        onChange={(e) =>
-                          updateMarcacao(
-                            r._key,
-                            idx,
-                            "s",
-                            applyHoraMask(e.target.value),
-                          )
-                        }
-                        onBlur={(e) =>
-                          updateMarcacao(
-                            r._key,
-                            idx,
-                            "s",
-                            normalizeHoraOnBlur(e.target.value),
-                          )
-                        }
-                        title={
-                          r.marcacoes[idx]?.s_inserida
-                            ? "Batida inserida manualmente (asterisco no OCR)"
-                            : ""
-                        }
-                        className={`h-9 text-[13px] font-mono w-[60px] px-1.5 ${
-                          r.marcacoes[idx]?.s_inserida
-                            ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
-                            : ""
-                        }`}
-                        
-                      />
-                    </div>
-                  </TableCell>
-                ))}
+                {(() => {
+                  // PJe-Calc rejeita dias com nº ímpar de batidas. Destacamos
+                  // todos os inputs do dia em vermelho pra deixar visível —
+                  // operador precisa completar o par ou apagar a batida solta.
+                  const impar = temBatidaImpar(r.marcacoes);
+                  const tooltipImpar = impar
+                    ? `${totalBatidas(r.marcacoes)} batida(s) neste dia — PJe-Calc exige número par. Complete o par ou remova a batida sozinha.`
+                    : "";
+                  const classeImpar = impar
+                    ? "border-red-500 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
+                    : "";
+                  return Array.from({ length: MAX_PARES }).map((_, idx) => (
+                    <TableCell key={`pair-${idx}`} className="p-1" colSpan={2}>
+                      <div className="flex gap-1">
+                        <Input
+                          placeholder={idx === 0 ? "08:00" : ""}
+                          value={r.marcacoes[idx]?.e ?? ""}
+                          onChange={(e) =>
+                            updateMarcacao(
+                              r._key,
+                              idx,
+                              "e",
+                              applyHoraMask(e.target.value),
+                            )
+                          }
+                          onBlur={(e) =>
+                            updateMarcacao(
+                              r._key,
+                              idx,
+                              "e",
+                              normalizeHoraOnBlur(e.target.value),
+                            )
+                          }
+                          title={
+                            tooltipImpar ||
+                            (r.marcacoes[idx]?.e_inserida
+                              ? "Batida inserida manualmente (asterisco no OCR)"
+                              : "")
+                          }
+                          className={`h-9 text-[13px] font-mono w-[60px] px-1.5 ${
+                            impar
+                              ? classeImpar
+                              : r.marcacoes[idx]?.e_inserida
+                                ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
+                                : ""
+                          }`}
+                        />
+                        <Input
+                          placeholder={idx === 0 ? "12:00" : ""}
+                          value={r.marcacoes[idx]?.s ?? ""}
+                          onChange={(e) =>
+                            updateMarcacao(
+                              r._key,
+                              idx,
+                              "s",
+                              applyHoraMask(e.target.value),
+                            )
+                          }
+                          onBlur={(e) =>
+                            updateMarcacao(
+                              r._key,
+                              idx,
+                              "s",
+                              normalizeHoraOnBlur(e.target.value),
+                            )
+                          }
+                          title={
+                            tooltipImpar ||
+                            (r.marcacoes[idx]?.s_inserida
+                              ? "Batida inserida manualmente (asterisco no OCR)"
+                              : "")
+                          }
+                          className={`h-9 text-[13px] font-mono w-[60px] px-1.5 ${
+                            impar
+                              ? classeImpar
+                              : r.marcacoes[idx]?.s_inserida
+                                ? "border-amber-400 bg-amber-50 dark:bg-amber-950/20"
+                                : ""
+                          }`}
+                        />
+                      </div>
+                    </TableCell>
+                  ));
+                })()}
                 <TableCell className="p-1">
                   <EventosBadges eventos={r.eventos ?? []} />
                 </TableCell>
