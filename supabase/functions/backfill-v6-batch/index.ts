@@ -105,14 +105,29 @@ Deno.serve(async (req) => {
         : null;
     const sinceIso = sinceIsoFromMode(mode);
 
-    // Seleciona docs sem `parsed`, filtrados por janela e cursor.
+    // target='ficha_financeira_mistral_legacy' (2026-05-29): força reprocesso
+    // de fichas financeiras que foram processadas pelo Mistral antes do
+    // bloqueio (PRs #123-128). Filtra docs COM parsed (oposto do default)
+    // mas com ocr_provider='mistral-ocr' OU parsed_by indicando OCR antigo.
+    const targetFichaMistralLegacy = body.target === "ficha_financeira_mistral_legacy";
+
     let q = supabase
       .from("documents")
-      .select("id, created_at, mime_type, metadata")
-      .is("parsed", null)
+      .select("id, created_at, mime_type, metadata, ocr_provider, parsed_by, tipo_extracao")
       .eq("mime_type", "application/pdf")
       .order("created_at", { ascending: false })
       .limit(limit);
+
+    if (targetFichaMistralLegacy) {
+      // Fichas financeiras processadas com Mistral velho — precisa reprocessar
+      // com parser determinístico. NÃO filtra por parsed IS NULL (oposto do default).
+      q = q.eq("tipo_extracao", "ficha_financeira").or(
+        "ocr_provider.eq.mistral-ocr,parsed_by.ilike.%mistral%,parsed_by.ilike.%claude%",
+      );
+    } else {
+      // Seleciona docs sem `parsed` — comportamento padrão.
+      q = q.is("parsed", null);
+    }
     if (sinceIso) q = q.gte("created_at", sinceIso);
     if (beforeIsoIn) q = q.lte("created_at", beforeIsoIn);
 
@@ -149,6 +164,9 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             document_id: d.id,
             admin_mode: true,
+            // Quando target=ficha_financeira_mistral_legacy, o doc tem
+            // `parsed` populado mas precisa ser sobrescrito.
+            force_reprocess: targetFichaMistralLegacy,
           }),
         });
         const json = await resp.json().catch(() => ({}));

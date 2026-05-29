@@ -68,7 +68,23 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `documento não encontrado: ${docErr?.message ?? "?"}` }, 404);
     }
 
-    if (doc.parsed_by) {
+    // EXCEÇÃO (2026-05-29): ficha_financeira processada antes pelo Mistral
+    // precisa ser reprocessada agora pelo parser determinístico (Mistral
+    // corrompia códigos). Verifica ocr_provider + parsed_by.
+    const forceReprocess = body?.force === true;
+    const fichaFinanceiraComMistralVelho =
+      doc.tipo_extracao === "ficha_financeira" &&
+      (doc.ocr_provider === "mistral-ocr" ||
+        doc.parsed_by?.includes("mistral") ||
+        doc.parsed_by?.includes("claude"));
+
+    if (fichaFinanceiraComMistralVelho) {
+      console.log(
+        `[pipeline] doc ${document_id}: ficha_financeira com parsed_by=${doc.parsed_by} (Mistral velho) — invalidando cache e re-processando`,
+      );
+    }
+
+    if (doc.parsed_by && !forceReprocess && !fichaFinanceiraComMistralVelho) {
       // V6 já consolidou em chamada anterior. Apenas garante chunk-and-embed.
       console.log(`[pipeline] doc ${document_id}: idempotência — parsed_by=${doc.parsed_by}, skip V6+Mistral`);
       const textoExistente = (doc.ocr_text as string | null) ?? "";
