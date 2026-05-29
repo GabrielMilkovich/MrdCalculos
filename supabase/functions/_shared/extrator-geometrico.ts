@@ -229,27 +229,97 @@ function montarTabela(
  * esm.sh — funciona em Deno serverless). Se falhar, devolvemos null e
  * o pipeline cai pro V5 (Mistral OCR + parser regex).
  */
+/**
+ * Fallback robusto via pdf-parse (puro JS, sem worker, sem dep esm.sh).
+ * Quando unpdf falha, esse caminho mantém o pipeline determinístico ativo.
+ * Não preserva coordenadas — só textoCompleto + textoPlano por página.
+ * Suficiente pra parseFichaFinanceiraDeterministico (que regex sobre texto).
+ */
+async function extrairViaPdfParse(bytes: Uint8Array): Promise<DocumentoTabular | null> {
+  try {
+    // deno-lint-ignore no-explicit-any
+    const pdfParse = (await import("npm:pdf-parse@1.1.1")).default as any;
+    const result = await pdfParse(bytes);
+    if (!result || !result.text || result.text.length < 200) {
+      console.warn(`[extrair-geometrico] pdf-parse retornou texto curto: ${result?.text?.length ?? 0}`);
+      return null;
+    }
+    const numPages = result.numpages ?? 1;
+    const textoCompleto = result.text;
+    const usefulChars = textoCompleto.replace(/\s+/g, "").length;
+    if (usefulChars < 200) return null;
+
+    const alnum = (textoCompleto.match(/[a-zA-Z0-9À-ÿ]/g) || []).length;
+    const totalChars = textoCompleto.length;
+    const alnumRatio = totalChars > 0 ? alnum / totalChars : 0;
+    const charsPerPage = usefulChars / Math.max(1, numPages);
+    let score = 0.4 + alnumRatio * 0.5;
+    if (charsPerPage >= 500) score += 0.05;
+    if (charsPerPage >= 1500) score += 0.05;
+    score = Math.max(0.2, Math.min(0.95, score));
+
+    console.log(`[extrair-geometrico] pdf-parse OK: ${numPages} páginas, ${usefulChars} chars úteis`);
+
+    return {
+      numeroPaginas: numPages,
+      paginas: [{
+        numero: 1,
+        textos: [],
+        tabelas: [],
+        textoPlano: textoCompleto,
+      }],
+      textoCompleto,
+      extractor: "pdfjs_geometric",
+      qualidade: {
+        score: +score.toFixed(2),
+        razao: `${usefulChars} chars via pdf-parse (alnum=${(alnumRatio * 100).toFixed(0)}%)`,
+      },
+    };
+  } catch (err) {
+    console.error(`[extrair-geometrico] pdf-parse exception: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
+
 export async function extrairGeometrico(
   bytes: Uint8Array,
 ): Promise<DocumentoTabular | null> {
-  // V6.2: unpdf é um wrapper que serve pdfjs com a dep canvas removida —
-  // único caminho que esm.sh consegue resolver em Deno runtime.
-  // Quando falhar (rede, módulo indisponível), pipeline cai pro V5.
+  // V6.3 (2026-05-29): cascata de fontes pra evitar falha silenciosa.
+  // 1. unpdf via múltiplas URLs (preserva coordenadas)
+  // 2. pdf-parse via npm: (sem coordenadas mas robusto)
+  // 3. null (caller decide tratar)
   // deno-lint-ignore no-explicit-any
   let pdfjs: any;
-  try {
-    // deno-lint-ignore no-explicit-any
-    const unpdf = (await import('https://esm.sh/unpdf@0.12.1')) as any;
-    pdfjs = await unpdf.getResolvedPDFJS();
-  } catch {
-    return null;
+  const fontes: Array<{ nome: string; url: string }> = [
+    { nome: "npm:unpdf@0.12.1", url: "npm:unpdf@0.12.1" },
+    { nome: "esm.sh@0.12.1", url: "https://esm.sh/unpdf@0.12.1" },
+    { nome: "esm.sh@latest", url: "https://esm.sh/unpdf" },
+  ];
+
+  for (const f of fontes) {
+    try {
+      // deno-lint-ignore no-explicit-any
+      const unpdf = (await import(f.url)) as any;
+      pdfjs = await unpdf.getResolvedPDFJS();
+      console.log(`[extrair-geometrico] unpdf carregado via ${f.nome}`);
+      break;
+    } catch (err) {
+      console.warn(`[extrair-geometrico] falha em ${f.nome}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  if (!pdfjs) {
+    console.warn("[extrair-geometrico] unpdf indisponível — tentando pdf-parse");
+    return await extrairViaPdfParse(bytes);
   }
 
   let doc: { numPages: number; getPage: (n: number) => Promise<unknown> };
   try {
     doc = await pdfjs.getDocument({ data: bytes, disableWorker: true }).promise;
-  } catch {
-    return null;
+    console.log(`[extrair-geometrico] PDF carregado via unpdf: ${doc.numPages} páginas, ${bytes.length} bytes`);
+  } catch (err) {
+    console.error(`[extrair-geometrico] getDocument falhou: ${err instanceof Error ? err.message : String(err)} — tentando pdf-parse`);
+    return await extrairViaPdfParse(bytes);
   }
 
   const paginas: PaginaTabular[] = [];
@@ -284,7 +354,10 @@ export async function extrairGeometrico(
     .join('\n\n--- PÁGINA SEPARADOR ---\n\n');
   const usefulChars = textoCompleto.replace(/\s+/g, '').length;
 
-  if (usefulChars < 200) return null;
+  if (usefulChars < 200) {
+    console.warn(`[extrair-geometrico] unpdf retornou texto insuficiente (${usefulChars} chars) — tentando pdf-parse`);
+    return await extrairViaPdfParse(bytes);
+  }
 
   // AUDIT #23: score deixa de ser binário (0.7 / 0.95) e passa a refletir
   // a qualidade real do texto extraído. Sinais usados:
