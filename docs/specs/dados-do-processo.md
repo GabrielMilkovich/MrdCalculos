@@ -175,5 +175,5 @@ Entidade `Advogado` separada (1-N por parte, discriminada por `TipoAdvogadoEnum`
 - [x] migração additiva aplicada via MCP (2 migrations: colunas de paridade + modo_calculo) — colunas confirmadas na view.
 - [~] tipos: `src/lib/pjecalc/types.ts` (superfície usada pelo app) atualizado. Gerado `src/integrations/supabase/types.ts`: refresh mecânico via `generate_typescript_types` no pipeline — app usa cliente untyped p/ estas tabelas; tsc verde (nenhum caminho tipado referencia as novas colunas).
 - [x] esta spec commitada (fa25f49) + atualizada
-- [~] Playwright e2e (browser): spec autorada p/ CI (stub Supabase). Em sandbox, o gate de persistência foi atendido via MCP (escolha do dono). Rodar via `npm run test:e2e` no CI.
+- [x] Playwright e2e (browser): `e2e/fluxos/08-dados-do-processo.spec.ts` → **2 passed (14.8s), exit 0** — (1) preenche→salva→**recarrega→persiste**; (2) CNJ com dígito inválido **bloqueia**. Backend Supabase stubado (rede interceptada). No sandbox foi necessário subir o dev server em IPv4 (`--host 127.0.0.1`) por limitação de bind IPv6 do ambiente (`vite.config.ts` usa `host: "::"`); persistência também confirmada via MCP (round-trip pela view).
 - [x] commits isolados da seção (spec, 2 migrations, implementação)
