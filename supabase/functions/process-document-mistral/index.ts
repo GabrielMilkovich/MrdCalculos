@@ -356,7 +356,13 @@ Deno.serve(async (req) => {
         .update({
           status: "ocr_failed",
           extracao_status: "failed",
-          ocr_error: errorMsg,
+          // BUG FIX (2026-05-29): `ocr_error` não existe em `documents` — o
+          // UPDATE inteiro era rejeitado pelo PostgREST e o doc ficava preso
+          // em 'ocr_running' até o cron de stale. Colunas corretas:
+          // `error_message` (UI) + `extracao_error`. Ver ocr-document/index.ts.
+          error_message: errorMsg,
+          extracao_error: errorMsg,
+          processing_completed_at: new Date().toISOString(),
           metadata: {
             ...(doc.metadata ?? {}),
             ...metadataV6(v6 ?? { outcome: "skipped" } as V6Tentativa),

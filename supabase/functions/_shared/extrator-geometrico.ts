@@ -213,6 +213,52 @@ function montarTabela(
   return { bbox, headers, linhas: linhasDados };
 }
 
+/**
+ * Calcula o score de qualidade (0.2..0.95) do texto extraído. PURO (sem
+ * pdfjs) — exportado para teste em vitest e reaproveitado pelos dois
+ * caminhos de extração (unpdf + pdf-parse).
+ *
+ * AUDIT 2026-05-29 (fix Fichas Financeiras Via Varejo): a densidade
+ * alfanumérica passa a ser medida sobre os caracteres NÃO-brancos, não
+ * sobre o total. Relatórios tabulares ADP (Via Varejo / Casa Bahia / ADP
+ * "Programa de detalhe") usam grandes blocos de espaço para alinhar colunas
+ * de largura fixa — espaço em branco é ALINHAMENTO, não lixo de OCR.
+ *
+ * Medir `alnum / total` penalizava texto nativo PERFEITO: as fichas têm
+ * ~33% de alfanuméricos sobre o total (o resto é espaço de alinhamento),
+ * resultando em score ~0.66 < 0.70 e reprovando documentos legítimos —
+ * eles caíam no caminho "Mistral bloqueado" e morriam em `ocr_failed`.
+ * Medir `alnum / não-branco` reflete a qualidade real (~85% → ~0.92).
+ * Lixo de OCR (símbolos de controle, �, placeholders) continua derrubando
+ * o score porque NÃO é alfanumérico nem espaço.
+ */
+export function calcularScoreQualidade(
+  textoCompleto: string,
+  numPaginas: number,
+  fonte: 'pdfjs' | 'pdf-parse' = 'pdfjs',
+): { score: number; razao: string } {
+  const nonWhitespace = textoCompleto.replace(/\s+/g, '').length;
+  const alnum = (textoCompleto.match(/[a-zA-Z0-9À-ÿ]/g) || []).length;
+  const alnumRatio = nonWhitespace > 0 ? alnum / nonWhitespace : 0;
+  const charsPerPage = nonWhitespace / Math.max(1, numPaginas);
+  const placeholderCount =
+    (textoCompleto.match(/\[\?\?\?\]|\[ilegível\]|\?{3,}|�+/gi) || []).length;
+
+  let score = 0.4 + alnumRatio * 0.5;
+  if (charsPerPage >= 500) score += 0.05;
+  if (charsPerPage >= 1500) score += 0.05;
+  score -= Math.min(0.4, placeholderCount * 0.03);
+  score = Math.max(0.2, Math.min(0.95, score));
+
+  const sufixo = fonte === 'pdf-parse' ? ' via pdf-parse' : '';
+  return {
+    score: +score.toFixed(2),
+    razao:
+      `${nonWhitespace} chars úteis${sufixo} em ${numPaginas} páginas ` +
+      `(alnum=${(alnumRatio * 100).toFixed(0)}% dos não-brancos, placeholders=${placeholderCount})`,
+  };
+}
+
 // =====================================================
 // Função principal — só roda em Deno (edge function)
 // =====================================================
@@ -249,16 +295,9 @@ async function extrairViaPdfParse(bytes: Uint8Array): Promise<DocumentoTabular |
     const usefulChars = textoCompleto.replace(/\s+/g, "").length;
     if (usefulChars < 200) return null;
 
-    const alnum = (textoCompleto.match(/[a-zA-Z0-9À-ÿ]/g) || []).length;
-    const totalChars = textoCompleto.length;
-    const alnumRatio = totalChars > 0 ? alnum / totalChars : 0;
-    const charsPerPage = usefulChars / Math.max(1, numPages);
-    let score = 0.4 + alnumRatio * 0.5;
-    if (charsPerPage >= 500) score += 0.05;
-    if (charsPerPage >= 1500) score += 0.05;
-    score = Math.max(0.2, Math.min(0.95, score));
+    const qualidade = calcularScoreQualidade(textoCompleto, numPages, "pdf-parse");
 
-    console.log(`[extrair-geometrico] pdf-parse OK: ${numPages} páginas, ${usefulChars} chars úteis`);
+    console.log(`[extrair-geometrico] pdf-parse OK: ${numPages} páginas, ${usefulChars} chars úteis, score=${qualidade.score}`);
 
     return {
       numeroPaginas: numPages,
@@ -270,10 +309,7 @@ async function extrairViaPdfParse(bytes: Uint8Array): Promise<DocumentoTabular |
       }],
       textoCompleto,
       extractor: "pdfjs_geometric",
-      qualidade: {
-        score: +score.toFixed(2),
-        razao: `${usefulChars} chars via pdf-parse (alnum=${(alnumRatio * 100).toFixed(0)}%)`,
-      },
+      qualidade,
     };
   } catch (err) {
     console.error(`[extrair-geometrico] pdf-parse exception: ${err instanceof Error ? err.message : String(err)}`);
@@ -359,34 +395,16 @@ export async function extrairGeometrico(
     return await extrairViaPdfParse(bytes);
   }
 
-  // AUDIT #23: score deixa de ser binário (0.7 / 0.95) e passa a refletir
-  // a qualidade real do texto extraído. Sinais usados:
-  //   - chars úteis por página (densidade — PDF nativo costuma ter >1500/pág)
-  //   - taxa de caracteres alfanuméricos (vs lixo / símbolos de controle)
-  //   - presença de placeholders de OCR ruim (raros aqui mas possíveis)
-  // Resultado: 0.2..0.95, com 0.7 mantido como limiar "aceitável" pelo
-  // pipeline downstream (process-document-mistral).
-  const alnum = (textoCompleto.match(/[a-zA-Z0-9À-ÿ]/g) || []).length;
-  const totalChars = textoCompleto.length;
-  const alnumRatio = totalChars > 0 ? alnum / totalChars : 0;
-  const charsPerPage = usefulChars / Math.max(1, doc.numPages);
-  const placeholderCount =
-    (textoCompleto.match(/\[\?\?\?\]|\[ilegível\]|\?{3,}|�+/gi) || []).length;
-
-  let score = 0.4 + alnumRatio * 0.5;
-  if (charsPerPage >= 500) score += 0.05;
-  if (charsPerPage >= 1500) score += 0.05;
-  score -= Math.min(0.4, placeholderCount * 0.03);
-  score = Math.max(0.2, Math.min(0.95, score));
+  // AUDIT #23 + 2026-05-29: score reflete a qualidade real do texto extraído
+  // (densidade alfanumérica sobre caracteres NÃO-brancos + chars/página +
+  // penalização de placeholders). Ver `calcularScoreQualidade`.
+  const qualidade = calcularScoreQualidade(textoCompleto, doc.numPages);
 
   return {
     numeroPaginas: doc.numPages,
     paginas,
     textoCompleto,
     extractor: 'pdfjs_geometric',
-    qualidade: {
-      score: +score.toFixed(2),
-      razao: `${usefulChars} chars úteis em ${doc.numPages} páginas (alnum=${(alnumRatio * 100).toFixed(0)}%, placeholders=${placeholderCount})`,
-    },
+    qualidade,
   };
 }
