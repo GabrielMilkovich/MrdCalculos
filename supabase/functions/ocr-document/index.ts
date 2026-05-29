@@ -441,6 +441,26 @@ Deno.serve(async (req) => {
           (v6.score !== undefined ? ` score=${v6.score.toFixed(2)}` : ""),
       );
 
+      // BUG FIX (2026-05-29): se o documento foi uploadado SEM tipo_extracao
+      // definido (caso default ao subir doc novo), o tipo só é auto-detectado
+      // DEPOIS do Mistral rodar. Isso fazia ficha_financeira escapar do
+      // bloqueio. Fix: se temos texto do V6 e tipo está vazio/"outros",
+      // detecta o tipo agora a partir do texto extraído.
+      if (
+        v6.textoCompleto &&
+        (!document.tipo_extracao ||
+          document.tipo_extracao === "outros" ||
+          document.tipo_extracao === "outro")
+      ) {
+        const tipoInferido = detectDocType(v6.textoCompleto);
+        if (tipoInferido && tipoInferido !== "outro") {
+          console.log(
+            `[ocr-document] doc ${document_id}: tipo_extracao inferido do V6: "${tipoInferido}" (era "${document.tipo_extracao ?? "null"}")`,
+          );
+          document.tipo_extracao = tipoInferido;
+        }
+      }
+
       // V6 success: persiste resultado completo + retorna SEM chamar Mistral.
       // Update único (não 2-step) pra evitar race com consumers que leem
       // entre os writes. Mesmo padrão de columns que process-document-mistral
