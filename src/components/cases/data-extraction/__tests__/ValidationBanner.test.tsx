@@ -4,9 +4,9 @@ import { render, screen } from '@testing-library/react';
 import { ValidationBanner } from '../ValidationBanner';
 import type { FichaFinanceiraParsed } from '../ficha-financeira-types';
 
-function makeValidacao(
-  overrides: Partial<FichaFinanceiraParsed['validacao']> = {},
-): FichaFinanceiraParsed['validacao'] {
+type Validacao = NonNullable<FichaFinanceiraParsed['validacao']>;
+
+function makeValidacao(overrides: Partial<Validacao> = {}): Validacao {
   return {
     ok: true,
     competencias: [],
@@ -97,5 +97,15 @@ describe('ValidationBanner', () => {
       />,
     );
     expect(screen.getByText(/1 mês fora/)).toBeTruthy();
+  });
+
+  // Regressão (2026-05-29): fichas extraídas pelo pipeline V6 geométrico
+  // (mapper Via Varejo / fallback determinístico) não trazem bloco de
+  // validação. O banner deve degradar para nada em vez de quebrar a tela
+  // com "Cannot destructure property 'resumo' of 'validacao' as it is
+  // undefined" (crash que travava /casos/:id após reprocessar fichas).
+  it('não quebra quando validacao é undefined (ficha V6) — renderiza nada', () => {
+    const { container } = render(<ValidationBanner validacao={undefined} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

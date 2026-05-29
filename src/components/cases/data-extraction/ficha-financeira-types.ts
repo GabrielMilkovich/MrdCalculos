@@ -14,7 +14,11 @@ export interface FichaFinanceiraParsed {
     nao_encontradas: number;
     codigos_nao_encontrados: string[];
   };
-  validacao: {
+  // Opcional: fichas extraídas pelo pipeline V6 geométrico (mapper Via
+  // Varejo / fallback determinístico) NÃO trazem bloco de validação — só o
+  // caminho `parse-ficha-financeira` (que compara total extraído vs total
+  // impresso no PDF) o produz. Consumidores DEVEM tratar ausência.
+  validacao?: {
     ok: boolean;
     competencias: Array<{
       competencia: string;
