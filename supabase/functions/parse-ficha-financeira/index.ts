@@ -279,6 +279,20 @@ Deno.serve(async (req) => {
     }
 
     // 2. Fallback: texto_documento do caller
+    // BLOQUEIO ADICIONAL (2026-05-29): texto_documento do caller geralmente
+    // é o `ocr_text` gravado pelo OCR antigo (Claude/Mistral) e pode estar
+    // corrompido (0501 DSR → 0001 CSM). Se chegou aqui é porque pdfjs falhou.
+    // Quando o caller é o frontend de ficha financeira, NÃO usamos esse
+    // texto como input — preferimos retornar 422 do que produzir dados ruins.
+    if (!textoLimpo && texto_documento && tipo_documento === "ficha_financeira") {
+      return new Response(
+        JSON.stringify({
+          error: "pdfjs_geometric falhou ao extrair texto deste PDF. NÃO usamos `texto_documento` do caller para ficha_financeira porque pode estar OCR-corrompido (Claude/Mistral histórico). Suba uma versão do PDF com texto nativo.",
+          policy: "deny_caller_text_for_ficha_financeira",
+        }),
+        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     if (!textoLimpo && texto_documento) {
       textoLimpo = texto_documento;
       ocr_provider = "caller_provided";
