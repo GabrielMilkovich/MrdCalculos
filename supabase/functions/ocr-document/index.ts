@@ -328,14 +328,21 @@ Deno.serve(async (req) => {
     // re-invocações ficam cached. Evita reprocessar PDF de 63 pgs (30-60s)
     // quando operador re-clica OCR. Padrão espelha process-document-mistral.
     //
-    // Não retorna o resultado completo (parsed jsonb pode ser grande) — só
-    // o sinal de "já feito + qual provider". Consumers que precisam do
-    // resultado leem da tabela direto.
+    // EXCEÇÃO (2026-05-29): se o doc é ficha_financeira E foi processado
+    // anteriormente pelo Mistral (ocr_provider='mistral-ocr'), IGNORAMOS o
+    // cache e reprocessamos com o parser determinístico. Política do
+    // escritório porque Mistral corrompia códigos. Pull operador velho
+    // precisa do reset automático sem ter que ir no admin.
     //
-    // Pra forçar reprocessamento (admin), usar reprocess-v6 (que tem auth
-    // separada). Não há gate aqui pra "force_reprocess" deliberadamente —
-    // operador comum não deve reprocessar à toa.
-    if (document.parsed_by) {
+    // Caller pode forçar reprocessamento passando `force: true` no body.
+    const forceReprocess = body?.force === true;
+    const fichaFinanceiraComMistralVelho =
+      document.tipo_extracao === "ficha_financeira" &&
+      (document.ocr_provider === "mistral-ocr" ||
+        document.parsed_by?.includes("mistral") ||
+        document.parsed_by?.includes("claude"));
+
+    if (document.parsed_by && !forceReprocess && !fichaFinanceiraComMistralVelho) {
       console.log(
         `[ocr-document] doc ${document_id}: idempotência — parsed_by=${document.parsed_by}, ocr_provider=${document.ocr_provider}, skip V6+Mistral`,
       );
@@ -346,6 +353,12 @@ Deno.serve(async (req) => {
         parsed_by: document.parsed_by,
         message: `Documento já processado (${document.parsed_by}) — re-OCR pulado.`,
       });
+    }
+
+    if (fichaFinanceiraComMistralVelho) {
+      console.log(
+        `[ocr-document] doc ${document_id}: ficha_financeira com parsed_by=${document.parsed_by} (Mistral velho) — invalidando cache e re-processando com parser determinístico`,
+      );
     }
 
     // Idempotência: se já está processando, não duplica.
