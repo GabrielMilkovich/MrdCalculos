@@ -140,7 +140,7 @@ export function FichaFinanceiraPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] max-h-[90vh] !flex !flex-col overflow-hidden">
+      <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] !flex !flex-col !gap-3 overflow-hidden p-4 sm:p-6">
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-base">
             Ficha Financeira {parsed.ano}
@@ -154,7 +154,7 @@ export function FichaFinanceiraPreviewDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3 flex-1 min-h-0">
+        <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-hidden">
           <div className="flex items-center justify-between shrink-0">
             <ValidationBanner validacao={parsed.validacao} />
             <div className="flex items-center gap-2">
