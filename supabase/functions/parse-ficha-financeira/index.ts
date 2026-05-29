@@ -323,8 +323,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    // FALLBACK: Claude Sonnet + PDF source pra layouts não reconhecidos
-    // ou quando parser determinístico encontra < 3 rubricas (suspeito).
+    // BLOQUEIO DEFINITIVO (2026-05-29): Claude API estava corrompendo
+    // códigos/nomes (0501 DSR → 0001 CSM, JOSELI WANDERLEY → MANDEPLET,
+    // Rescisão → Resolvido). Política do escritório: fichas financeiras
+    // SÓ saem do parser determinístico (pdfjs + grupos-planilha).
+    //
+    // Se o parser determinístico não conseguir 3+ rubricas, retornamos
+    // erro 422 explícito — operador precisa subir versão com texto nativo.
+    // ANTES caía no Claude Sonnet que produzia ZIP com 63% de captura.
+    return new Response(
+      JSON.stringify({
+        error: "Parser determinístico não conseguiu extrair rubricas suficientes (>= 3) deste PDF. Mistral/Claude/IA estão DESABILITADOS para Ficha Financeira porque corrompem códigos. Suba uma versão do PDF com texto nativo (gerado pelo ADP/sistema RH, não escaneado/foto).",
+        policy: "ia_disabled_for_ficha_financeira",
+        rubricas_determinist_encontradas: textoLimpo
+          ? (parseFichaFinanceiraDeterministico(textoLimpo)?.rubricas.length ?? 0)
+          : 0,
+        ocr_provider,
+      }),
+      { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+
+    // CÓDIGO LEGADO ABAIXO (mantido por enquanto pra rollback emergencial).
+    // Bloqueio acima impede execução. Pra desabilitar: remover o return e
+    // este comentário.
+    // eslint-disable-next-line no-unreachable
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) {
       return new Response(
