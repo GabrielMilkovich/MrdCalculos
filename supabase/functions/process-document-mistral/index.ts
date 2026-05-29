@@ -36,6 +36,8 @@ import {
   metadataV6,
   type V6Tentativa,
 } from "../_shared/v6-pipeline.ts";
+import { parseFichaFinanceiraDeterministico } from "../_shared/parsers/ficha-financeira-deterministic.ts";
+import { mapperFichaFinanceiraViaVarejo } from "../_shared/mappers/ficha-financeira-via-varejo.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -196,6 +198,76 @@ Deno.serve(async (req) => {
             chunking: chunkError ? { error: chunkError.message ?? String(chunkError) } : chunkData,
             message: `CTPS: texto geométrico gravado (${v6.pageCount} pg) — parser V2 roda no cliente. Sem Mistral.`,
           });
+        }
+
+        // Ficha Financeira — fallback dedicado (espelha ocr-document/index.ts).
+        // Quando o pdfjs extrai texto mas o detector do mapper Via Varejo
+        // não bate (regex /Código/i pode falhar em PDFs com header levemente
+        // diferente), o parser determinístico ainda funciona no texto bruto.
+        // Sem este fallback, ficha_financeira cai pro Mistral OCR — que
+        // corrompe códigos (0501→0001, DSR→CEP) e perde páginas.
+        const fichaFinanceiraComTexto =
+          (v6.outcome === "no_mapper_matched" ||
+            v6.outcome === "mapper_returned_null" ||
+            v6.outcome === "score_below_threshold") &&
+          v6.textoCompleto &&
+          doc.tipo_extracao === "ficha_financeira";
+
+        if (fichaFinanceiraComTexto) {
+          try {
+            const parseResult = parseFichaFinanceiraDeterministico(v6.textoCompleto);
+            if (parseResult && parseResult.rubricas.length > 0) {
+              const dominio = mapperFichaFinanceiraViaVarejo.mapear({
+                textoCompleto: v6.textoCompleto,
+              } as Parameters<typeof mapperFichaFinanceiraViaVarejo.mapear>[0]);
+              if (dominio) {
+                await supabase
+                  .from("documents")
+                  .update({
+                    status: "ocr_done",
+                    extracao_status: "done",
+                    ocr_provider: "pdfjs_geometric",
+                    parsed: dominio,
+                    parsed_by: "ficha-financeira-fallback-determinist",
+                    ocr_text: v6.textoCompleto,
+                    ocr_validated: true,
+                    ocr_confidence: v6.score ?? 0.75,
+                    metadata: {
+                      ...(doc.metadata ?? {}),
+                      ...metadataV6(v6),
+                      v6_fallback_ficha_financeira: true,
+                      v6_fallback_motivo: v6.outcome,
+                    },
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", document_id);
+
+                const { data: chunkData, error: chunkError } = await supabase.functions.invoke(
+                  "chunk-and-embed",
+                  {
+                    body: { document_id, extracted_text: v6.textoCompleto },
+                    headers: { Authorization: authHeader },
+                  },
+                );
+                console.log(
+                  `[pipeline] doc ${document_id} ficha_financeira: fallback determinístico (${parseResult.rubricas.length} rubricas) — Mistral pulado`,
+                );
+                return jsonResponse({
+                  success: true,
+                  document_id,
+                  path: "v6_ficha_financeira_fallback",
+                  v6: { outcome: v6.outcome, page_count: v6.pageCount },
+                  chunking: chunkError ? { error: chunkError.message ?? String(chunkError) } : chunkData,
+                  message: `Ficha Financeira: parser determinístico (${parseResult.rubricas.length} rubricas, ${v6.pageCount} pg) — sem Mistral.`,
+                });
+              }
+            }
+          } catch (err) {
+            console.error(
+              `[pipeline] doc ${document_id} ficha_financeira fallback exception:`,
+              err,
+            );
+          }
         }
 
         // V6 NÃO conseguiu — registra outcome estruturado e segue pro V5.
