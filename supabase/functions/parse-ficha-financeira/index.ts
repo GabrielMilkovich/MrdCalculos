@@ -256,25 +256,45 @@ Deno.serve(async (req) => {
     let ocr_provider = "unknown";
 
     // 1. Tenta pdfjs_geometric (texto nativo, zero OCR, grátis)
+    // Bug fix (2026-05-29): bucket default era "case-documents" mas em
+    // produção os PDFs estão em "juriscalculo-documents". Tenta ambos.
     if (storage_path) {
-      try {
-        const { data: signedData } = await supabase.storage
-          .from(storage_bucket || "case-documents")
-          .createSignedUrl(storage_path, 300);
-        if (signedData?.signedUrl) {
-          const resp = await fetch(signedData.signedUrl);
-          if (resp.ok) {
-            const bytes = new Uint8Array(await resp.arrayBuffer());
-            const docTabular = await extrairGeometrico(bytes);
-            if (docTabular && docTabular.textoCompleto.length > 200) {
-              textoLimpo = docTabular.textoCompleto;
-              ocr_provider = "pdfjs_geometric";
-              console.log(`[parse-ficha] pdfjs_geometric OK: ${textoLimpo.length} chars`);
-            }
+      const bucketsParaTentar = storage_bucket
+        ? [storage_bucket]
+        : ["juriscalculo-documents", "case-documents"];
+
+      for (const bucketName of bucketsParaTentar) {
+        try {
+          const { data: signedData, error: signErr } = await supabase.storage
+            .from(bucketName)
+            .createSignedUrl(storage_path, 300);
+          if (signErr || !signedData?.signedUrl) {
+            console.log(`[parse-ficha] bucket ${bucketName}: signed url falhou (${signErr?.message ?? "no url"})`);
+            continue;
           }
+          const resp = await fetch(signedData.signedUrl);
+          if (!resp.ok) {
+            console.log(`[parse-ficha] bucket ${bucketName}: download HTTP ${resp.status}`);
+            continue;
+          }
+          const bytes = new Uint8Array(await resp.arrayBuffer());
+          console.log(`[parse-ficha] bucket ${bucketName}: ${bytes.length} bytes baixados, tentando extrairGeometrico...`);
+          const docTabular = await extrairGeometrico(bytes);
+          if (!docTabular) {
+            console.warn(`[parse-ficha] extrairGeometrico retornou null para bucket ${bucketName}`);
+            continue;
+          }
+          if (docTabular.textoCompleto.length <= 200) {
+            console.warn(`[parse-ficha] extrairGeometrico retornou texto curto: ${docTabular.textoCompleto.length} chars`);
+            continue;
+          }
+          textoLimpo = docTabular.textoCompleto;
+          ocr_provider = "pdfjs_geometric";
+          console.log(`[parse-ficha] pdfjs_geometric OK via bucket ${bucketName}: ${textoLimpo.length} chars`);
+          break;
+        } catch (err) {
+          console.warn(`[parse-ficha] pdfjs_geometric falhou bucket ${bucketName}:`, err);
         }
-      } catch (err) {
-        console.warn("[parse-ficha] pdfjs_geometric falhou:", err);
       }
     }
 
@@ -384,7 +404,7 @@ Deno.serve(async (req) => {
       pdfBase64 = await baixarPdfBase64(
         supabase,
         storage_path,
-        storage_bucket || "case-documents",
+        storage_bucket || "juriscalculo-documents",
       );
       if (pdfBase64) {
         console.log(
