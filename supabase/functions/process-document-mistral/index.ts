@@ -291,6 +291,47 @@ Deno.serve(async (req) => {
         .eq("id", document_id);
     }
 
+    // BLOQUEIO EXPLÍCITO: ficha_financeira e CTPS NÃO usam Mistral OCR.
+    // Política do escritório (2026-05-29): esses tipos têm parsers
+    // determinísticos próprios. Se chegamos aqui é porque V6 falhou ao
+    // extrair texto. Cair pro Mistral corromperia os dados.
+    if (doc.tipo_extracao === "ficha_financeira" || doc.tipo_extracao === "ctps") {
+      const motivo = v6?.outcome ?? "v6_skipped";
+      const errorMsg =
+        doc.tipo_extracao === "ficha_financeira"
+          ? `Não foi possível extrair texto desta Ficha Financeira via pdfjs (V6 outcome=${motivo}). Mistral OCR está desabilitado para este tipo — o OCR de visão corrompe códigos de rubrica. Suba uma versão com texto nativo (PDF gerado pelo ADP, não escaneado).`
+          : `Não foi possível extrair texto desta CTPS via pdfjs (V6 outcome=${motivo}). Mistral OCR está desabilitado para este tipo. Suba uma versão com texto nativo.`;
+      await supabase
+        .from("documents")
+        .update({
+          status: "ocr_failed",
+          extracao_status: "failed",
+          ocr_error: errorMsg,
+          metadata: {
+            ...(doc.metadata ?? {}),
+            ...metadataV6(v6 ?? { outcome: "skipped" } as V6Tentativa),
+            mistral_bloqueado_por_politica: true,
+            mistral_bloqueado_motivo: motivo,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", document_id);
+      console.log(
+        `[pipeline] doc ${document_id}: Mistral BLOQUEADO (tipo=${doc.tipo_extracao}, motivo=${motivo})`,
+      );
+      return jsonResponse(
+        {
+          success: false,
+          document_id,
+          path: "mistral_blocked_by_policy",
+          error: errorMsg,
+          tipo: doc.tipo_extracao,
+          v6_outcome: motivo,
+        },
+        422,
+      );
+    }
+
     // ===== Caminho V5: OCR Mistral + chunk-and-embed (mesmo de antes) =====
     console.log(`[pipeline] doc ${document_id}: caminho V5 (Mistral) — V6 outcome=${v6?.outcome ?? "skipped"}`);
     const { data: ocrData, error: ocrError } = await supabase.functions.invoke(

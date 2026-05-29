@@ -600,6 +600,52 @@ Deno.serve(async (req) => {
       `[ocr-document] doc ${document_id}: caminho Mistral — V6 outcome=${v6?.outcome ?? "skipped"}`,
     );
 
+    // BLOQUEIO EXPLÍCITO: ficha_financeira e CTPS NÃO usam Mistral OCR.
+    // Política do escritório (2026-05-29): esses dois tipos têm parsers
+    // determinísticos próprios (parseFichaFinanceiraDeterministico + parser
+    // CTPS V2 no cliente). Se chegamos aqui é porque o V6 falhou ao extrair
+    // texto via pdfjs (PDF escaneado/corrompido/>5MB). Cair pro Mistral
+    // corromperia códigos e nomes — preferimos erro claro pro operador
+    // saber que precisa subir uma versão melhor do PDF.
+    if (
+      document.tipo_extracao === "ficha_financeira" ||
+      document.tipo_extracao === "ctps"
+    ) {
+      const motivo = v6?.outcome ?? "v6_skipped";
+      const errorMsg =
+        document.tipo_extracao === "ficha_financeira"
+          ? `Não foi possível extrair texto desta Ficha Financeira via pdfjs (V6 outcome=${motivo}). Mistral OCR está desabilitado para este tipo de documento — o OCR de visão corrompe códigos de rubrica. Suba uma versão com texto nativo (PDF gerado pelo ADP, não escaneado).`
+          : `Não foi possível extrair texto desta CTPS via pdfjs (V6 outcome=${motivo}). Mistral OCR está desabilitado para este tipo de documento. Suba uma versão com texto nativo.`;
+      await supabase
+        .from("documents")
+        .update({
+          status: "ocr_failed",
+          extracao_status: "failed",
+          ocr_error: errorMsg,
+          metadata: {
+            ...(document.metadata ?? {}),
+            ...metadataV6(v6 ?? { outcome: "skipped" } as V6Tentativa),
+            mistral_bloqueado_por_politica: true,
+            mistral_bloqueado_motivo: motivo,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", document_id);
+      console.log(
+        `[ocr-document] doc ${document_id}: Mistral BLOQUEADO (tipo=${document.tipo_extracao}, motivo=${motivo})`,
+      );
+      return jsonResponse(
+        {
+          success: false,
+          error: errorMsg,
+          tipo: document.tipo_extracao,
+          v6_outcome: motivo,
+          policy: "mistral_disabled_for_type",
+        },
+        422,
+      );
+    }
+
     // Inicializa contadores de chunks pro Mistral (status já está
     // 'ocr_running' do lock anti-race acima — não re-escreve pra evitar
     // perder o processing_started_at que outras consultas usam pra calcular
