@@ -470,6 +470,18 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
   if (pageHeaders.length === 0) return null;
 
   const rubricas = new Map<string, RubricaExtraida>();
+  // Candidatos a órfãos rescisórios: rubricas que apareceram numa seção com
+  // valor SÓ na coluna Total (nenhum mês individual da seção). Pode ser
+  // verba rescisória legítima OU repetição do anual em fichas completas.
+  // No final, filtramos por: códigos que NÃO entraram em `rubricas` (ou seja,
+  // que NUNCA tiveram valor mensal em nenhuma seção) — esses são os reais
+  // órfãos rescisórios.
+  const candidatosOrfaos = new Map<string, {
+    codigo: string;
+    denominacao: string;
+    classificacao: string;
+    valor_total: number;
+  }>();
   let linhasProcessadas = 0;
   let linhasFiltradas = 0;
   const cutoffCodigos = new Set<string>();
@@ -530,18 +542,43 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
       const clasEndInLine = clasStartInLine + clasMatch[1].length;
 
       const valores: Array<{ competencia: string; valor: number }> = [];
+      let valorTotalIsolado = 0;
       for (const col of columns) {
-        if (col.mm === 'total') continue;
         const effectiveStart = Math.max(col.start, clasEndInLine);
         if (effectiveStart >= raw.length) continue;
         const slice = raw.substring(effectiveStart, Math.min(col.end, raw.length)).trim();
         if (!slice) continue;
 
         const valor = parseBR(slice);
-        if (valor > 0) {
+        if (valor <= 0) continue;
+
+        if (col.mm === 'total') {
+          // Captura o Total separadamente — usado só pra detectar verbas
+          // rescisórias órfãs (valor em Total sem corresp. em mês individual).
+          // ADP consolida pagamentos rescisórios na coluna Total da seção
+          // Ago-Dez em rescisões antecipadas.
+          valorTotalIsolado = valor;
+        } else {
           const comp = col.mm === '13' ? `${ano}-13` : `${ano}-${col.mm}`;
           valores.push({ competencia: comp, valor });
         }
+      }
+
+      // Valor SÓ na coluna Total nesta seção (nenhum mês individual):
+      // candidato a órfão rescisório. Filtragem final depois do loop.
+      if (valores.length === 0 && valorTotalIsolado > 0) {
+        const ja = candidatosOrfaos.get(codigo);
+        if (ja) {
+          ja.valor_total = Math.max(ja.valor_total, valorTotalIsolado);
+        } else {
+          candidatosOrfaos.set(codigo, {
+            codigo,
+            denominacao,
+            classificacao,
+            valor_total: valorTotalIsolado,
+          });
+        }
+        continue;
       }
 
       if (valores.length === 0) continue;
@@ -590,6 +627,13 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
       linhas_processadas: linhasProcessadas,
       linhas_filtradas: linhasFiltradas,
       meses_detectados: [...allMeses].sort(),
+      // Filtra candidatos: só são órfãos REAIS aqueles cujo código NUNCA
+      // teve valor mensal em nenhuma seção (não está em `rubricas`).
+      // Códigos com valor mensal em alguma seção + total em outra são apenas
+      // a coluna Total agregando o anual (não é verba órfã).
+      rubricas_totais_orfaos: [...candidatosOrfaos.values()].filter(
+        o => !rubricas.has(o.codigo),
+      ),
     },
   };
 }
