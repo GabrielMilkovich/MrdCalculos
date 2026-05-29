@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { ValidationBanner } from './ValidationBanner';
@@ -124,7 +123,7 @@ export function FichaFinanceiraPreviewDialog({
       triggerBlobDownload(result.blob, result.filename);
       toast({
         title: `ZIP baixado: ${result.filename}`,
-        description: `${result.resumo.categorias.length} categorias, ${result.resumo.rubricas_incluidas} rubricas`,
+        description: `${result.resumo.grupos.length} grupos, ${result.resumo.rubricas_incluidas} rubricas`,
       });
       onOpenChange(false);
     } catch (e) {
@@ -190,7 +189,7 @@ export function FichaFinanceiraPreviewDialog({
             </div>
           )}
 
-          <ScrollArea className="min-h-0 flex-1 border rounded-md">
+          <div className="flex-1 min-h-0 overflow-auto border rounded-md">
               <table className="w-full text-xs whitespace-nowrap">
                 <thead className="sticky top-0 bg-background z-10 border-b">
                   <tr>
@@ -288,8 +287,7 @@ export function FichaFinanceiraPreviewDialog({
                   )}
                 </tbody>
               </table>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
+          </div>
 
           {categoriasComValor.length > 0 && (
             <div className="text-xs space-y-1 shrink-0">
