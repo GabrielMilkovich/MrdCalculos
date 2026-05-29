@@ -35,6 +35,8 @@ import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 import { ocrBytes, runOcr, type MistralOcrOptions } from "../_shared/mistral-ocr.ts";
 import { checkRateLimit } from "../_shared/rate-limit.ts";
 import { tentarV6, metadataV6, type V6Tentativa } from "../_shared/v6-pipeline.ts";
+import { parseFichaFinanceiraDeterministico } from "../_shared/parsers/ficha-financeira-deterministic.ts";
+import { mapperFichaFinanceiraViaVarejo } from "../_shared/mappers/ficha-financeira-via-varejo.ts";
 
 // Audit-fix S3 — limite GLOBAL por usuário (Mistral API é paga).
 // 100 chamadas/h é folgado para uso real (~3 docs/min sustained) e segura
@@ -503,6 +505,73 @@ Deno.serve(async (req) => {
           pages: v6.pageCount,
           message: `CTPS processado via extração geométrica — parser V2 roda no cliente.`,
         });
+      }
+
+      // Ficha Financeira — fallback dedicado pra evitar Mistral OCR.
+      // Quando o pdfjs extrai texto (qualquer outcome com textoCompleto),
+      // tentamos o parser determinístico direto. Motivo: o detector do
+      // mapper Via Varejo tem regex estrita (/Código/i) que falha quando
+      // o pdfjs separa caracteres ou usa abreviações. O parser em si é
+      // robusto — funciona em texto extraído mesmo sem bater detector.
+      //
+      // Cenários cobertos:
+      //  - no_mapper_matched: detector negou, parser ainda funciona
+      //  - mapper_returned_null: detector ok, mapper falhou no extra-work
+      //  - score_below_threshold: pdfjs achou qualidade baixa mas texto existe
+      const fichaFinanceiraComTexto =
+        document.tipo_extracao === "ficha_financeira" &&
+        (v6.outcome === "no_mapper_matched" ||
+          v6.outcome === "mapper_returned_null" ||
+          v6.outcome === "score_below_threshold") &&
+        v6.textoCompleto;
+
+      if (fichaFinanceiraComTexto) {
+        try {
+          const parseResult = parseFichaFinanceiraDeterministico(v6.textoCompleto);
+          if (parseResult && parseResult.rubricas.length > 0) {
+            // Reusa o serializer do mapper pra padronizar estrutura parsed.
+            const dominio = mapperFichaFinanceiraViaVarejo.mapear({
+              textoCompleto: v6.textoCompleto,
+            } as Parameters<typeof mapperFichaFinanceiraViaVarejo.mapear>[0]);
+            if (dominio) {
+              await supabase
+                .from("documents")
+                .update({
+                  status: "ocr_done",
+                  extracao_status: "done",
+                  ocr_provider: "pdfjs_geometric",
+                  parsed: dominio,
+                  parsed_by: "ficha-financeira-fallback-determinist",
+                  ocr_text: v6.textoCompleto,
+                  ocr_validated: true,
+                  ocr_confidence: v6.score ?? 0.75,
+                  metadata: {
+                    ...(document.metadata ?? {}),
+                    ...metadataV6(v6),
+                    v6_fallback_ficha_financeira: true,
+                    v6_fallback_motivo: v6.outcome,
+                  },
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", document_id);
+              console.log(
+                `[ocr-document] doc ${document_id} ficha_financeira: fallback determinístico (${parseResult.rubricas.length} rubricas) — Mistral pulado`,
+              );
+              return jsonResponse({
+                success: true,
+                provider: "pdfjs_geometric",
+                mapper: "ficha-financeira-fallback-determinist",
+                pages: v6.pageCount,
+                message: `Ficha Financeira processada via parser determinístico (fallback após ${v6.outcome}).`,
+              });
+            }
+          }
+        } catch (err) {
+          console.error(
+            `[ocr-document] doc ${document_id} ficha_financeira fallback exception:`,
+            err,
+          );
+        }
       }
 
       // V6 falhou: grava só telemetria + cai pro Mistral abaixo. Telemetria
