@@ -91,6 +91,21 @@ export interface PjecalcDadosProcessoRow {
   data_citacao: string | null;
   /** P0-1: Coluna real em pjecalc_calculos — 'assisted_from_pjc' | 'independent' */
   modo_calculo: 'assisted_from_pjc' | 'independent' | null;
+  // ── Paridade PJe-Calc (Seção 1) — colunas REAIS de pjecalc_calculos
+  //    expostas pela view. Os campos-alias acima (numero_processo,
+  //    reclamada_*) são legados/fictícios mantidos p/ retrocompat; preferir
+  //    estes nas novas leituras. Ver docs/specs/dados-do-processo.md §4.
+  processo_cnj: string | null;
+  tribunal: string | null;
+  tipo_calculo: string | null;
+  valor_causa: number | null;
+  data_autuacao: string | null;
+  reclamado_nome: string | null;
+  reclamado_cnpj: string | null;
+  reclamante_doc_tipo: string | null;
+  reclamante_pis_nit: string | null;
+  reclamante_pis_nit_tipo: string | null;
+  reclamado_doc_tipo: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -106,6 +121,18 @@ export interface PjecalcDadosProcessoInsert {
   data_citacao?: string | null;
   /** P0-1: Definir explicitamente o modo do cálculo */
   modo_calculo?: 'assisted_from_pjc' | 'independent';
+  // Paridade PJe-Calc (Seção 1) — colunas reais de pjecalc_calculos
+  processo_cnj?: string | null;
+  tribunal?: string | null;
+  tipo_calculo?: string | null;
+  valor_causa?: number | null;
+  data_autuacao?: string | null;
+  reclamado_nome?: string | null;
+  reclamado_cnpj?: string | null;
+  reclamante_doc_tipo?: string | null;
+  reclamante_pis_nit?: string | null;
+  reclamante_pis_nit_tipo?: string | null;
+  reclamado_doc_tipo?: string | null;
 }
 
 // =====================================================

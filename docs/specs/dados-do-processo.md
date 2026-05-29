@@ -166,12 +166,14 @@ Entidade `Advogado` separada (1-N por parte, discriminada por `TipoAdvogadoEnum`
 
 ---
 
-## 7. Definition of Done desta seção (a preencher com output real)
-- [ ] `tsc --noEmit` exit 0
-- [ ] `vitest run` (testes da seção) verde — inclui teste que **reproduz** o bug 4.2 e prova o fix
-- [ ] persistência verificada (save → re-leitura) via Supabase real (MCP)
-- [ ] eslint limpo nos arquivos da seção
-- [ ] ≥1 teste provando cada campo no input do engine (§5)
-- [ ] migração additiva aplicada via MCP + tipos regenerados
-- [ ] esta spec commitada
-- [ ] commit isolado da seção
+## 7. Definition of Done desta seção (output real — 2026-05-29)
+- [x] `tsc --noEmit` → **exit 0**
+- [x] `vitest run` suíte completa → **3186 passed | 45 skipped | 0 failed** (exit 0); testes da seção: `dados-processo-schema.test.ts` (15) + `dados-processo-adapter.test.ts` (6) = **21 verdes**. Inclui teste que reproduz o bug 4.2 (`toPjecalcCalculosPayload` só gera colunas reais).
+- [x] persistência verificada via **Supabase real (MCP)**: insert nas colunas de paridade → re-leitura **pela view `pjecalc_dados_processo`** (mesma que o serviço usa) retornou todos os campos (tipo_calculo, valor_causa=1234.56, processo_cnj, data_autuacao, reclamante_pis_nit, modo_calculo) → linha de teste removida (prod limpo).
+- [x] eslint limpo nos arquivos da seção (exit 0)
+- [x] ≥1 teste provando cada campo no input do engine (§5) — `dados-processo-adapter.test.ts` cobre data_citacao, modo_calculo, valor_causa→valor_da_causa; regressão validada contra os 22 PJCs reais (`parity-pjcs-novos-independent` verde).
+- [x] migração additiva aplicada via MCP (2 migrations: colunas de paridade + modo_calculo) — colunas confirmadas na view.
+- [~] tipos: `src/lib/pjecalc/types.ts` (superfície usada pelo app) atualizado. Gerado `src/integrations/supabase/types.ts`: refresh mecânico via `generate_typescript_types` no pipeline — app usa cliente untyped p/ estas tabelas; tsc verde (nenhum caminho tipado referencia as novas colunas).
+- [x] esta spec commitada (fa25f49) + atualizada
+- [~] Playwright e2e (browser): spec autorada p/ CI (stub Supabase). Em sandbox, o gate de persistência foi atendido via MCP (escolha do dono). Rodar via `npm run test:e2e` no CI.
+- [x] commits isolados da seção (spec, 2 migrations, implementação)

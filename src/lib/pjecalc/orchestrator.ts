@@ -26,6 +26,7 @@ import {
   type ConfidenceReport,
 } from './canonical';
 import { PjeCalcEngineV3 } from './engine-v3';
+import { applyDadosProcessoToEngineParams } from './dados-processo-adapter';
 import type {
   PjeParametros,
   PjeHistoricoSalarial,
@@ -1603,15 +1604,11 @@ export async function executarLiquidacao(
     });
   }
 
-  // Propagar data_citacao e modo_calculo de dadosProcesso → engine params
-  // (a VIEW pjecalc_parametros não expõe esses campos; eles vivem em pjecalc_dados_processo)
+  // Propagar data_citacao, modo_calculo e valor_causa de dadosProcesso → engine params
+  // (a VIEW pjecalc_parametros não expõe esses campos; vivem em pjecalc_calculos).
+  // Adapter testável: ./dados-processo-adapter (Seção 1 — paridade).
   const dadosProcesso = caseData.dadosProcesso as PjecalcDadosProcessoRow | null;
-  if (dadosProcesso?.data_citacao) {
-    engineParams.data_citacao = dadosProcesso.data_citacao;
-  }
-  // modo_calculo agora tem coluna real — sem necessidade de cast
-  const modoCalculo = dadosProcesso?.modo_calculo ?? 'independent';
-  engineParams.modo_calculo = modoCalculo;
+  applyDadosProcessoToEngineParams(engineParams, dadosProcesso);
 
   // FIX UX: Quando data_citacao não for informada, não bloqueia — tenta fallback a partir de
   // data_ajuizamento + 60 dias; se também não houver ajuizamento, segue sem split IPCA-E/SELIC.
