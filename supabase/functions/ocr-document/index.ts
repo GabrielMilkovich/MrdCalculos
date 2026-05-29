@@ -640,9 +640,28 @@ Deno.serve(async (req) => {
     // texto via pdfjs (PDF escaneado/corrompido/>5MB). Cair pro Mistral
     // corromperia códigos e nomes — preferimos erro claro pro operador
     // saber que precisa subir uma versão melhor do PDF.
+    //
+    // FIX 2026-05-29 (PR #137): inferência adicional via NOME do arquivo
+    // como rede de segurança final. Mesmo se tipo_extracao está null e V6
+    // não conseguiu texto pra inferir, o nome do arquivo costuma indicar
+    // o tipo. Ex: "Ficha Financeira 2016.pdf" → bloqueia. "CTPS_xxx.pdf"
+    // → bloqueia.
+    const fileNameLower = (document.file_name ?? "").toLowerCase();
+    const eFichaPorNome = /ficha[\s_-]*financeira/i.test(fileNameLower);
+    const eCtpsPorNome = /\bctps\b|carteira[\s_-]*de[\s_-]*trabalho/i.test(fileNameLower);
+    if (eFichaPorNome && !document.tipo_extracao) {
+      document.tipo_extracao = "ficha_financeira";
+      console.log(`[ocr-document] doc ${document_id}: tipo_extracao inferido do FILENAME "${document.file_name}" → ficha_financeira`);
+    } else if (eCtpsPorNome && !document.tipo_extracao) {
+      document.tipo_extracao = "ctps";
+      console.log(`[ocr-document] doc ${document_id}: tipo_extracao inferido do FILENAME "${document.file_name}" → ctps`);
+    }
+
     if (
       document.tipo_extracao === "ficha_financeira" ||
-      document.tipo_extracao === "ctps"
+      document.tipo_extracao === "ctps" ||
+      eFichaPorNome ||
+      eCtpsPorNome
     ) {
       const motivo = v6?.outcome ?? "v6_skipped";
       const errorMsg =
