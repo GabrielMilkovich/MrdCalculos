@@ -36,6 +36,7 @@ import type {
   PjecalcMultasConfigRow,
   CompletionInput,
 } from './types';
+import { mapCalculoRowToParametros } from './parametros-adapter';
 
 // =====================================================
 // HELPER: typed query wrapper (avoids `as any` everywhere)
@@ -51,6 +52,17 @@ function fromView(name: string): any {
 // =====================================================
 
 export async function getParametros(caseId: string): Promise<PjecalcParametrosRow | null> {
+  // Seção 2 — canonicalizar params em pjecalc_calculos (tabela onde o form grava).
+  // O engine lia de pjecalc_parametros (sem sync) → edições não chegavam ao cálculo.
+  // Ver docs/specs/parametros-gerais.md §2.
+  const { data: calc, error: calcErr } = await fromView('pjecalc_calculos')
+    .select('*')
+    .eq('case_id', caseId)
+    .maybeSingle();
+  if (calcErr) throw calcErr;
+  if (calc) return mapCalculoRowToParametros(calc as Record<string, unknown>);
+
+  // Fallback legado: linhas antigas só em pjecalc_parametros.
   const { data, error } = await fromView('pjecalc_parametros')
     .select('*')
     .eq('case_id', caseId)

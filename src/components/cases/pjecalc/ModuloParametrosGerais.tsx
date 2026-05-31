@@ -13,8 +13,15 @@ import { toast } from "sonner";
 import { Save, Loader2 } from "lucide-react";
 import Decimal from "decimal.js";
 import { IBGECombobox } from "./IBGECombobox";
+import { parametrosGeraisSchema, PONTOS_FACULTATIVOS } from "./parametros-gerais-schema";
 
 Decimal.set({ precision: 20 });
+
+const PONTO_FACULTATIVO_LABEL: Record<string, string> = {
+  sexta_santa: "Sexta-feira Santa",
+  carnaval: "Carnaval",
+  corpus_christi: "Corpus Christi",
+};
 
 const CNJ_REGEX = /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/;
 const TRTS = Array.from({ length: 24 }, (_, i) => `TRT${String(i + 1).padStart(2, "0")}`);
@@ -67,6 +74,12 @@ type FormState = {
   data_prescricao_quinquenal: string;
   considera_feriado_estadual: boolean;
   considera_feriado_municipal: boolean;
+  // Paridade PJe-Calc (Calculo.java) — Seção 2
+  limitar_avos_periodo: boolean;
+  zerar_valor_negativo: boolean;
+  prazo_aviso_previo: string;
+  tipo_mes: string;
+  pontos_facultativos: string[];
   dia_fechamento_mes: string;
   percentual_he_50: string;
   percentual_he_100: string;
@@ -109,6 +122,11 @@ const defaults: FormState = {
   data_prescricao_quinquenal: "",
   considera_feriado_estadual: true,
   considera_feriado_municipal: false,
+  limitar_avos_periodo: false,
+  zerar_valor_negativo: false,
+  prazo_aviso_previo: "nao_apurar",
+  tipo_mes: "comercial",
+  pontos_facultativos: [],
   dia_fechamento_mes: "31",
   percentual_he_50: "50",
   percentual_he_100: "100",
@@ -176,6 +194,11 @@ export function ModuloParametrosGerais({ caseId }: Props) {
       data_prescricao_quinquenal: (d.data_prescricao_quinquenal as string) ?? "",
       considera_feriado_estadual: (d.considera_feriado_estadual as boolean) ?? defaults.considera_feriado_estadual,
       considera_feriado_municipal: (d.considera_feriado_municipal as boolean) ?? defaults.considera_feriado_municipal,
+      limitar_avos_periodo: (d.limitar_avos_periodo_calculo as boolean) ?? defaults.limitar_avos_periodo,
+      zerar_valor_negativo: (d.zera_valor_negativo as boolean) ?? defaults.zerar_valor_negativo,
+      prazo_aviso_previo: (d.prazo_aviso_previo as string) ?? defaults.prazo_aviso_previo,
+      tipo_mes: (d.tipo_mes as string) ?? defaults.tipo_mes,
+      pontos_facultativos: Array.isArray(d.pontos_facultativos) ? (d.pontos_facultativos as string[]) : defaults.pontos_facultativos,
       dia_fechamento_mes: d.dia_fechamento_mes?.toString() ?? defaults.dia_fechamento_mes,
       percentual_he_50: d.percentual_he_50?.toString() ?? defaults.percentual_he_50,
       percentual_he_100: d.percentual_he_100?.toString() ?? defaults.percentual_he_100,
@@ -207,6 +230,39 @@ export function ModuloParametrosGerais({ caseId }: Props) {
       // Validar CNJ se preenchido
       if (form.cnj_numero_processo && !CNJ_REGEX.test(form.cnj_numero_processo)) {
         toast.error("Número CNJ inválido. Formato: NNNNNNN-NN.NNNN.N.NN.NNNN");
+        setSaving(false);
+        return;
+      }
+      // Validação de paridade (Calculo.java): obrigatórios + ordenação de datas
+      // + aviso prévio informado. Bloqueia o save se inválido.
+      const parsed = parametrosGeraisSchema.safeParse({
+        estado: form.uf,
+        municipio: form.municipio_ibge,
+        data_admissao: form.data_admissao,
+        data_demissao: form.data_demissao,
+        data_ajuizamento: form.data_ajuizamento,
+        data_inicial: form.data_inicio_calculo,
+        data_final: form.data_fim_calculo,
+        prescricao_quinquenal: form.prescricao_quinquenal,
+        prescricao_fgts: form.prescricao_fgts,
+        regime_trabalho: ({ INTEGRAL: "tempo_integral", PARCIAL: "tempo_parcial", INTERMITENTE: "intermitente" } as Record<string, string>)[form.regime_contrato] ?? "tempo_integral",
+        carga_horaria_padrao: form.divisor_horas,
+        maior_remuneracao: form.valor_maior_remuneracao,
+        ultima_remuneracao: form.valor_ultima_remuneracao,
+        prazo_aviso_previo: form.prazo_aviso_previo,
+        prazo_aviso_dias: form.aviso_previo_dias,
+        projetar_aviso_indenizado: form.projetar_aviso_indenizado,
+        limitar_avos_periodo: form.limitar_avos_periodo,
+        zerar_valor_negativo: form.zerar_valor_negativo,
+        sabado_dia_util: form.sabado_dia_util,
+        considerar_feriado_estadual: form.considera_feriado_estadual,
+        considerar_feriado_municipal: form.considera_feriado_municipal,
+        tipo_mes: form.tipo_mes,
+        pontos_facultativos: form.pontos_facultativos,
+        comentarios: form.observacoes,
+      });
+      if (!parsed.success) {
+        toast.error(parsed.error.issues[0]?.message ?? "Parâmetros inválidos.");
         setSaving(false);
         return;
       }
@@ -262,6 +318,12 @@ export function ModuloParametrosGerais({ caseId }: Props) {
         data_prescricao_quinquenal: toDateOrNull(form.data_prescricao_quinquenal),
         considera_feriado_estadual: form.considera_feriado_estadual,
         considera_feriado_municipal: form.considera_feriado_municipal,
+        // Paridade PJe-Calc — colunas lidas pelo engine via parametros-adapter
+        limitar_avos_periodo_calculo: form.limitar_avos_periodo,
+        zera_valor_negativo: form.zerar_valor_negativo,
+        prazo_aviso_previo: form.prazo_aviso_previo,
+        tipo_mes: form.tipo_mes,
+        pontos_facultativos: form.pontos_facultativos,
         dia_fechamento_mes: toIntOrNull(form.dia_fechamento_mes),
         percentual_he_50: toNumOrNull(form.percentual_he_50),
         percentual_he_100: toNumOrNull(form.percentual_he_100),
@@ -510,6 +572,58 @@ export function ModuloParametrosGerais({ caseId }: Props) {
           </div>
           <label className="flex items-center gap-2 text-xs"><Checkbox checked={form.considera_feriado_estadual} onCheckedChange={(v) => setForm((p) => ({ ...p, considera_feriado_estadual: !!v }))} /> Considera feriado estadual</label>
           <label className="flex items-center gap-2 text-xs"><Checkbox checked={form.considera_feriado_municipal} onCheckedChange={(v) => setForm((p) => ({ ...p, considera_feriado_municipal: !!v }))} /> Considera feriado municipal</label>
+          <label className="flex items-center gap-2 text-xs"><Checkbox checked={form.limitar_avos_periodo} onCheckedChange={(v) => setForm((p) => ({ ...p, limitar_avos_periodo: !!v }))} /> Limitar avos ao período do cálculo</label>
+          <label className="flex items-center gap-2 text-xs"><Checkbox checked={form.zerar_valor_negativo} onCheckedChange={(v) => setForm((p) => ({ ...p, zerar_valor_negativo: !!v }))} /> Zerar valor negativo</label>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">Aviso Prévio, Mês e Pontos Facultativos (paridade PJe-Calc)</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs">Apuração Prazo Aviso Prévio</Label>
+              <Select value={form.prazo_aviso_previo} onValueChange={(v) => setForm((p) => ({ ...p, prazo_aviso_previo: v }))}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nao_apurar">Não apurar</SelectItem>
+                  <SelectItem value="calculado">Calculado</SelectItem>
+                  <SelectItem value="informado">Informado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Tipo de Mês (Art. 64 CLT)</Label>
+              <Select value={form.tipo_mes} onValueChange={(v) => setForm((p) => ({ ...p, tipo_mes: v }))}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="comercial">Comercial (30 dias)</SelectItem>
+                  <SelectItem value="civil">Civil (dias reais)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Pontos Facultativos (considerar como feriado)</Label>
+            <div className="flex flex-wrap gap-3 pt-1">
+              {PONTOS_FACULTATIVOS.map((pf) => (
+                <label key={pf} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                  <Checkbox
+                    checked={form.pontos_facultativos.includes(pf)}
+                    onCheckedChange={(v) =>
+                      setForm((p) => ({
+                        ...p,
+                        pontos_facultativos: v
+                          ? [...p.pontos_facultativos, pf]
+                          : p.pontos_facultativos.filter((x) => x !== pf),
+                      }))
+                    }
+                  />
+                  {PONTO_FACULTATIVO_LABEL[pf]}
+                </label>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

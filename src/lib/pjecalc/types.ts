@@ -42,6 +42,7 @@ export interface PjecalcParametrosRow {
   tipo_mes: 'civil' | 'comercial' | null;
   jornada_semanal: number | null;
   comentarios: string | null;
+  pontos_facultativos?: string[] | null;
   created_at: string;
   updated_at: string;
 }
