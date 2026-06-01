@@ -195,6 +195,11 @@ export interface VerbaInput {
   verba_principal_id: InputFieldMeta<string | null>;
   depende_jornada: InputFieldMeta<boolean>;
   depende_historico: InputFieldMeta<boolean>;
+  /** FASE 2 fix: verba com ocorrências precomputadas (PJC import) já tem os
+   *  valores derivados de jornada calculados — não precisa de cartão de ponto.
+   *  Usado pelo validador para não bloquear (E_VERBA_JORNADA_MISSING) casos
+   *  importados cujo cartão nunca é persistido pelo `pjc-persist`. */
+  tem_ocorrencias_precomputadas?: boolean;
 }
 
 // =====================================================

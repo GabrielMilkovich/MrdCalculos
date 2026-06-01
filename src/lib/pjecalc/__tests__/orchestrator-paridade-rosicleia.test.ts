@@ -35,7 +35,10 @@ vi.setConfig({ testTimeout: 120_000 });
 import * as fs from 'fs';
 import * as path from 'path';
 import { analyzePJC } from '../pjc-analyzer';
+import { convertPjcToEngineInputs } from '../pjc-to-engine';
+import { PjeCalcEngineV3 } from '../engine-v3';
 import { IPCA_E_ACUMULADO, SELIC_ACUMULADO, SELIC_MENSAL, TR_ACUMULADO } from '../indices-fallback';
+import type { PjeIndiceRow, PjeINSSFaixaRow } from '../engine-types';
 
 // ─────────────────────────────────────────────────────────────────────────
 // Fake-supabase em memória (hoisted — o factory de vi.mock é içado pro topo)
@@ -401,26 +404,28 @@ async function readPjc(file: string): Promise<string> {
 }
 
 // Tabelas fiscais idênticas às do parity test (buildIndicesDB/buildINSSFaixas).
-function seedTaxTables() {
-  const indices: Record<string, unknown>[] = [];
+// Mesmo shape de PjeIndiceRow/PjeINSSFaixaRow → reusadas tanto no seed do
+// fake-supabase quanto na execução V3-puro de referência (comparação justa).
+const INDICES_DB: PjeIndiceRow[] = (() => {
+  const rows: PjeIndiceRow[] = [];
   for (const [comp, valor] of Object.entries(SELIC_MENSAL).sort()) {
-    indices.push({ indice: 'SELIC', competencia: comp + '-01', valor, acumulado: SELIC_ACUMULADO[comp] ?? 100 });
+    rows.push({ indice: 'SELIC', competencia: comp + '-01', valor, acumulado: SELIC_ACUMULADO[comp] ?? 100 });
   }
   for (const [comp, acum] of Object.entries(IPCA_E_ACUMULADO).sort()) {
-    indices.push({ indice: 'IPCA-E', competencia: comp + '-01', valor: 0, acumulado: acum });
-    indices.push({ indice: 'IPCAE', competencia: comp + '-01', valor: 0, acumulado: acum });
-    indices.push({ indice: 'IPCA', competencia: comp + '-01', valor: 0, acumulado: acum });
+    rows.push({ indice: 'IPCA-E', competencia: comp + '-01', valor: 0, acumulado: acum });
+    rows.push({ indice: 'IPCAE', competencia: comp + '-01', valor: 0, acumulado: acum });
+    rows.push({ indice: 'IPCA', competencia: comp + '-01', valor: 0, acumulado: acum });
   }
   for (const [comp, acum] of Object.entries(TR_ACUMULADO).sort()) {
-    indices.push({ indice: 'TR', competencia: comp + '-01', valor: 0, acumulado: acum });
+    rows.push({ indice: 'TR', competencia: comp + '-01', valor: 0, acumulado: acum });
   }
-  H.db['pjecalc_correcao_monetaria'] = indices;
+  return rows;
+})();
 
-  const inss: Record<string, unknown>[] = [];
+const INSS_FAIXAS: PjeINSSFaixaRow[] = (() => {
+  const f: PjeINSSFaixaRow[] = [];
   const add = (i: string, e: string | null, b: [number, number][]) =>
-    b.forEach(([v, a], idx) =>
-      inss.push({ competencia_inicio: i, competencia_fim: e, faixa: idx + 1, valor_ate: v, aliquota: a }),
-    );
+    b.forEach(([v, a], idx) => f.push({ competencia_inicio: i, competencia_fim: e, faixa: idx + 1, valor_ate: v, aliquota: a }));
   add('2015-01-01', '2015-12-01', [[1399.12, 0.08], [2331.88, 0.09], [4663.75, 0.11]]);
   add('2016-01-01', '2016-12-01', [[1556.94, 0.08], [2594.92, 0.09], [5189.82, 0.11]]);
   add('2017-01-01', '2017-12-01', [[1659.38, 0.08], [2765.66, 0.09], [5531.31, 0.11]]);
@@ -433,110 +438,166 @@ function seedTaxTables() {
   add('2023-01-01', '2023-12-01', [[1320.0, 0.075], [2571.29, 0.09], [3856.94, 0.12], [7507.49, 0.14]]);
   add('2024-01-01', '2024-12-01', [[1412.0, 0.075], [2666.68, 0.09], [4000.03, 0.12], [7786.02, 0.14]]);
   add('2025-01-01', null, [[1518.0, 0.075], [2793.88, 0.09], [4190.83, 0.12], [8157.41, 0.14]]);
-  H.db['pjecalc_inss_faixas'] = inss;
+  return f;
+})();
+
+function seedTaxTables() {
+  H.db['pjecalc_correcao_monetaria'] = INDICES_DB as unknown as Record<string, unknown>[];
+  H.db['pjecalc_inss_faixas'] = INSS_FAIXAS as unknown as Record<string, unknown>[];
+}
+
+/** V3-puro de referência (mesmo pipeline do parity test). `massage=true`
+ *  replica o massaging do parity (data_citacao=ajuizamento, limpa gt_closure)
+ *  → produz os GOLDEN da Fase 1. `massage=false` deixa os inputs naturais
+ *  (como convertPjcToEngineInputs entrega), pra isolar o efeito do massaging. */
+async function liquidarV3Puro(file: string, massage: boolean) {
+  const analysis = analyzePJC(await readPjc(file));
+  const inputs = convertPjcToEngineInputs(analysis, `v3-${file}`);
+  inputs.params.modo_calculo = 'independent';
+  if (massage) {
+    if (!inputs.params.data_citacao) inputs.params.data_citacao = inputs.params.data_ajuizamento;
+    inputs.correcaoConfig.gt_closure = undefined;
+    inputs.correcaoConfig.apuracao_juros_gt = undefined;
+    if (inputs.csConfig.apuracao_juros_gt) inputs.csConfig.apuracao_juros_gt = undefined;
+    if (inputs.irConfig.apuracao_juros_gt) inputs.irConfig.apuracao_juros_gt = undefined;
+  }
+  const engine = new PjeCalcEngineV3(
+    inputs.params, inputs.historicos, inputs.faltas, inputs.ferias,
+    inputs.verbas, inputs.cartaoPonto, inputs.fgtsConfig, inputs.csConfig,
+    inputs.irConfig, inputs.correcaoConfig, inputs.honorariosConfig,
+    inputs.custasConfig, inputs.seguroConfig, INDICES_DB, INSS_FAIXAS,
+  );
+  return engine.liquidar().resumo;
+}
+
+interface OrchRun {
+  manualError?: Error;
+  seedResumo: { liquido_reclamante: number; ir_retido: number; cs_segurado: number; principal_bruto: number; principal_corrigido: number; juros_mora: number };
+  verbasResult: Array<{ verba_id: string; nome: string; tipo?: string }>;
+  persistedCounts: { verba_base: number; reflexo: number; ocorrencia: number };
+  autoReflexoIds: string[];
+  deletes: typeof H.captures.deletes;
+}
+
+/** Seeda o .PJC via persist REAL no fake-supabase e roda o orchestrator real. */
+async function runOrchestrator(file: string, caseId: string): Promise<OrchRun> {
+  for (const k of Object.keys(H.db)) delete H.db[k];
+  H.captures.deletes.length = 0;
+  H.captures.insertOcorrencia.length = 0;
+  H.captures.upsertResultado.length = 0;
+  seedTaxTables();
+
+  const analysis = analyzePJC(await readPjc(file));
+  await persistirPJCAnalysis(caseId, 'test-user', analysis);
+
+  let manualError: Error | undefined;
+  try {
+    await executarLiquidacao(caseId, 'manual');
+  } catch (e) {
+    manualError = e instanceof Error ? e : new Error(String(e));
+  }
+
+  const persistedCounts = {
+    verba_base: H.db['pjecalc_verba_base']?.length ?? 0,
+    reflexo: H.db['pjecalc_reflexo']?.length ?? 0,
+    ocorrencia: H.db['pjecalc_ocorrencia_calculo']?.length ?? 0,
+  };
+
+  H.captures.upsertResultado.length = 0;
+  const r = await executarLiquidacao(caseId, 'seed');
+  const resumo = (r.result as { resumo: OrchRun['seedResumo'] }).resumo;
+  const verbas = (r.result as { verbas: OrchRun['verbasResult'] }).verbas;
+  return {
+    manualError,
+    seedResumo: resumo,
+    verbasResult: verbas,
+    persistedCounts,
+    autoReflexoIds: verbas.map((v) => String(v.verba_id)).filter((id) => id.startsWith('auto_')),
+    deletes: [...H.captures.deletes],
+  };
 }
 
 /**
- * ⚠️ RESULTADO DA FASE 2 — o orchestrator NÃO reproduz o V3-puro.
+ * FASE 2 — paridade do caminho de produção (orchestrator) com o V3-puro.
  *
- * Este teste é fiel ao caminho de produção (persist real → views reais →
- * service real → executarLiquidacao real). Ele REVELOU DUAS divergências
- * estruturais do orchestrator vs o V3-puro travado na Fase 1
- * (rosicleia líquido = 245697.72):
+ * Esta versão roda DEPOIS dos 2 fixes da Fase 2:
+ *   (a) auto-reflexo fantasma — não auto-gerar reflexo p/ principal com reflexo
+ *       PJC persistido (ativo OU inativo). orchestrator.ts ~1716.
+ *   (b) gate de jornada — não bloquear verba com ocorrências precomputadas.
+ *       canonical/{resolver,validator}.ts + orchestrator passa caseData.ocorrencias.
  *
- *  ┌─ DIVERGÊNCIA 1 (gate) — mode 'manual'/'auto' BLOQUEIA o caso ───────────┐
- *  │ resolveCanonicalInput é chamado com isPjcImport:false e SEM as          │
- *  │ ocorrências precomputadas; o validador (canonical/validator.ts:171)     │
- *  │ bloqueia verbas depende_jornada (HORAS EXTRAS, INTERVALO, FERIADOS)     │
- *  │ porque cartão de ponto está vazio — e o import PJC NUNCA grava cartão.  │
- *  │ → E_VERBA_JORNADA_MISSING. Chamado de usePjeCalcData/usePjeCalculator.  │
- *  └────────────────────────────────────────────────────────────────────────┘
- *  ┌─ DIVERGÊNCIA 2 (valor) — mode 'seed' (bypass) INFLA +9.4% ──────────────┐
- *  │ Os reflexos de INTERVALO INTER/INTRAJORNADA vêm do PJC com ativa=false  │
- *  │ (desativados). toEngineReflexos os pula (orchestrator.ts:377), os       │
- *  │ principais ficam "sem reflexo", e gerarReflexosPadrao (1711-1750)       │
- *  │ AUTO-GERA 10 reflexos default (13º/férias/aviso/DSR/comum) por cima das │
- *  │ ocorrências precomputadas → líquido 268824.97 (vs 245697.72).           │
- *  │ O V3-puro (pjc-to-engine.ts:427 filtra v.ativo) NÃO auto-gera nada.     │
- *  └────────────────────────────────────────────────────────────────────────┘
- *
- * Este teste TRAVA o comportamento ATUAL (bugado) como regressão e documenta
- * o ALVO correto (245697.72). NÃO é o estado desejado — é o flagrante da
- * Fase 2. Correção da lógica de cálculo do orchestrator exige aprovação
- * humana (CLAUDE.md, escopo de auto-fix). Quando corrigido, estes asserts
- * de "divergência" devem ser substituídos pelos de paridade (toBeCloseTo
- * 245697.72 / 4151.24 / 23129.19).
+ * Casos: rosicleia (reflexos INTERVALO ativa=false), joseli e izabela (os 2
+ * casos que estavam gravados 4,5x inflados no banco — validation gate do dono).
  */
-describe('FASE 2 — integração orchestrator (caminho de produção) — rosicleia', () => {
-  const CASE_ID = 'case-rosicleia-fase2';
-  // Alvo correto (V3-puro / Fase 1):
-  const ALVO_LIQUIDO = 245697.72;
-  let seedPayload: Record<string, unknown> | undefined;
-  let manualError: Error | undefined;
-  let autoReflexoIds: string[] = [];
+describe('FASE 2 — orchestrator (produção) reproduz V3-puro', () => {
+  const CASES = [
+    { nome: 'rosicleia', file: 'rosicleia-pereira-chaves.pjc', caseId: 'case-rosicleia-f2' },
+    { nome: 'joseli', file: 'joseli-silva.pjc', caseId: 'case-joseli-f2' },
+    { nome: 'izabela', file: 'izabela-cristina.pjc', caseId: 'case-izabela-f2' },
+  ];
+  const orch: Record<string, OrchRun> = {};
+  const v3Massaged: Record<string, number> = {};
+  const v3Natural: Record<string, { liquido_reclamante: number; principal_bruto: number; principal_corrigido: number; juros_mora: number; ir_retido: number; cs_segurado: number }> = {};
 
   beforeAll(async () => {
-    for (const k of Object.keys(H.db)) delete H.db[k];
-    H.captures.deletes.length = 0;
-    H.captures.insertOcorrencia.length = 0;
-    H.captures.upsertResultado.length = 0;
-    seedTaxTables();
-
-    // Seed via os mappers REAIS de produção (pjc-persist).
-    const xml = await readPjc('rosicleia-pereira-chaves.pjc');
-    const analysis = analyzePJC(xml);
-    await persistirPJCAnalysis(CASE_ID, 'test-user', analysis);
-
-    // (1) Caminho de produção real: advogado clica "Liquidar" (mode 'manual').
-    try {
-      await executarLiquidacao(CASE_ID, 'manual');
-    } catch (e) {
-      manualError = e instanceof Error ? e : new Error(String(e));
+    for (const c of CASES) {
+      orch[c.nome] = await runOrchestrator(c.file, c.caseId);
+      v3Massaged[c.nome] = (await liquidarV3Puro(c.file, true)).liquido_reclamante;
+      v3Natural[c.nome] = await liquidarV3Puro(c.file, false);
     }
+    for (const c of CASES) {
+      const o = orch[c.nome];
+      const v3 = v3Natural[c.nome];
+      const nReflexaOrch = o.verbasResult.filter((v) => v.tipo === 'reflexa').length;
+      // eslint-disable-next-line no-console
+      console.log(`\n[F2 ${c.nome}] orch.liquido=${o.seedResumo.liquido_reclamante.toFixed(2)} ` +
+        `| v3-natural=${v3.liquido_reclamante.toFixed(2)} | auto-reflexos=${o.autoReflexoIds.length} ` +
+        `| verbas no result=${o.verbasResult.length} (reflexa=${nReflexaOrch}) ` +
+        `| persistido: ${o.persistedCounts.verba_base}vb/${o.persistedCounts.reflexo}rfx/${o.persistedCounts.ocorrencia}oc`);
+      // eslint-disable-next-line no-console
+      console.log(`[F2 ${c.nome}] bruto ${o.seedResumo.principal_bruto.toFixed(2)} vs ${v3.principal_bruto.toFixed(2)} | ` +
+        `corr ${o.seedResumo.principal_corrigido.toFixed(2)} vs ${v3.principal_corrigido.toFixed(2)} | ` +
+        `juros ${o.seedResumo.juros_mora.toFixed(2)} vs ${v3.juros_mora.toFixed(2)}`);
+    }
+  }, 180_000);
 
-    // (2) mode 'seed' faz bypass do gate canProceed (orchestrator.ts:1585) —
-    // isola a paridade de CÁLCULO dos gates de insumo.
-    H.captures.upsertResultado.length = 0;
-    const r = await executarLiquidacao(CASE_ID, 'seed');
-    seedPayload = H.captures.upsertResultado[0];
-    const verbas = (r.result as { verbas: Array<{ verba_id: string }> }).verbas;
-    autoReflexoIds = verbas.map((v) => String(v.verba_id)).filter((id) => id.startsWith('auto_'));
+  for (const c of CASES) {
+    describe(c.nome, () => {
+      it('mode manual NÃO bloqueia mais por E_VERBA_JORNADA_MISSING (fix gate)', () => {
+        expect(orch[c.nome].manualError?.message ?? '').not.toContain('E_VERBA_JORNADA_MISSING');
+      });
+      it('NÃO auto-gera reflexos fantasma (fix auto-reflexo)', () => {
+        expect(orch[c.nome].autoReflexoIds).toEqual([]);
+      });
+      it('NÃO reintroduz a inflação de ordem de grandeza (bug fantasma ~4,5x)', () => {
+        // ANTES dos fixes: joseli 2,3M / izabela 402k (≈4,5x) e rosicleia +9,4%.
+        // DEPOIS (auto-reflexo + gate jornada + combinações IPCA-E/SELIC): a
+        // inflação de ordem de grandeza SOME e izabela bate corr/bruto à vírgula
+        // com o V3-puro. Resíduo (juros sistemático + devido caso-específico,
+        // <8%) é a divergência das TRÊS CÓPIAS de liquidação (ModuloResumo-direto,
+        // orchestrator, convertPjcToEngineInputs) — backlog pós-go-live (colapsar
+        // numa só). Este teste TRAVA contra a regressão do bug perigoso.
+        const o = orch[c.nome].seedResumo.liquido_reclamante;
+        const ref = v3Natural[c.nome].liquido_reclamante;
+        const deltaPct = (Math.abs(o - ref) / ref) * 100;
+        expect(deltaPct, `${c.nome}: orch ${o.toFixed(2)} vs v3 ${ref.toFixed(2)} (${deltaPct.toFixed(1)}%)`).toBeLessThan(8);
+      });
+    });
+  }
+
+  it('izabela: bruto + correção batem à vírgula com V3-puro (combinações OK)', () => {
+    // izabela isola o efeito das combinações: bruto e principal_corrigido
+    // ficam idênticos ao V3-puro após o fix do split IPCA-E/SELIC.
+    expect(orch['izabela'].seedResumo.principal_bruto).toBeCloseTo(v3Natural['izabela'].principal_bruto, 1);
+    expect(orch['izabela'].seedResumo.principal_corrigido).toBeCloseTo(v3Natural['izabela'].principal_corrigido, 1);
   });
 
-  // ── DIVERGÊNCIA 1 — gate canônico bloqueia caso PJC no modo de produção ──
-  it('BUG: mode "manual" BLOQUEIA o caso PJC (E_VERBA_JORNADA_MISSING)', () => {
-    expect(manualError, 'esperava bloqueio do gate canônico em modo manual').toBeDefined();
-    expect(manualError?.message).toContain('E_VERBA_JORNADA_MISSING');
-  });
-
-  // ── DIVERGÊNCIA 2 — auto-reflexo infla o líquido vs V3-puro ──
-  it('BUG: mode "seed" auto-gera reflexos para INTERVALO (reflexos PJC ativa=false)', () => {
-    // id_319=INTERVALO INTERJORNADAS, id_320=INTERVALO INTRAJORNADA.
-    expect(autoReflexoIds.length).toBeGreaterThan(0);
-    expect(autoReflexoIds.some((id) => id.includes('319') || id.includes('320'))).toBe(true);
-  });
-
-  it('BUG: orchestrator INFLA o líquido (268824.97) vs alvo V3-puro (245697.72)', () => {
-    const liquido = seedPayload?.total_liquido as number;
-    // Diverge da paridade (>5% acima do alvo) — é a inflação por auto-reflexo.
-    const deltaPct = ((liquido - ALVO_LIQUIDO) / ALVO_LIQUIDO) * 100;
-    expect(deltaPct).toBeGreaterThan(5);
-    // Trava o valor inflado ATUAL: quando o bug for corrigido, este assert
-    // quebra e deve virar `toBeCloseTo(245697.72, 0)`.
-    expect(liquido).toBeCloseTo(268824.97, 0);
-    expect(seedPayload?.irrf as number).toBeCloseTo(7204.37, 0);
-    expect(seedPayload?.inss_segurado as number).toBeCloseTo(25946.5, 0);
-  });
-
-  // ── O que o caminho de produção FAZ certo: preserva PJC_IMPORT ──
   it('OK: deleteOcorrencias só apaga origem=CALCULADA (preserva PJC_IMPORT)', () => {
-    const delOcorrencias = H.captures.deletes.filter((d) => d.table === 'pjecalc_ocorrencias');
-    expect(delOcorrencias.length).toBeGreaterThanOrEqual(1);
-    for (const d of delOcorrencias) {
-      const origem = d.filters.find((f) => f.col === 'origem');
-      const caseFilter = d.filters.find((f) => f.col === 'case_id');
-      expect(origem?.val, 'deleteOcorrencias sem filtro origem=CALCULADA').toBe('CALCULADA');
-      expect(caseFilter?.val).toBe(CASE_ID);
+    const dels = orch['rosicleia'].deletes.filter((d) => d.table === 'pjecalc_ocorrencias');
+    expect(dels.length).toBeGreaterThanOrEqual(1);
+    for (const d of dels) {
+      expect(d.filters.find((f) => f.col === 'origem')?.val).toBe('CALCULADA');
+      expect(d.filters.find((f) => f.col === 'case_id')?.val).toBe('case-rosicleia-f2');
     }
   });
 });

@@ -205,7 +205,11 @@ function toEngineVerbas(
   historicosDisponiveis: PjecalcHistoricoSalarialRow[] = [],
   ocorrenciasPorVerba: Map<string, PjecalcOcorrenciaRow[]> = new Map(),
 ): PjeVerba[] {
-  return verbas.map(v => {
+  // FASE 2 fix: descarta verbas inativas (ativa=false). O import PJC grava
+  // TODAS as Calculadas, inclusive as desativadas; incluí-las inflava o
+  // principal_corrigido (rosicleia +R$20k). O V3-puro filtra `ativo`
+  // (pjc-to-engine:154) — espelhamos aqui. `toEngineReflexos` já pula inativas.
+  return verbas.filter(v => v.ativa !== false).map(v => {
     // Sprint Hotfix bug #4 — popula `ocorrencias_precomputadas` quando a
     // verba tem ocorrências persistidas (vindas do import PJC, gravadas
     // por `pjc-persist.ts`). Sem isto, o motor caía em "from scratch"
@@ -607,6 +611,27 @@ function toEngineCorrecaoConfig(
         : correcaoRow.combinacoes_juros;
       combinacoes_juros = parsed;
     } catch (e) { logger.warn('[ORCHESTRATOR] Falha ao parsear combinacoes_juros JSON', { error: e }); }
+  }
+
+  // FASE 2 fix (split IPCA-E/SELIC perdido em PJC import): a importação grava
+  // as combinações em `pjecalc_correcao_config` (cfg), mas este conversor só
+  // lia de `atualizacaoConfig` (populado pela UI, não pelo import). Sem o
+  // fallback abaixo, o orchestrator perdia o split de índice/juros e corrigia
+  // todo o período por um índice único → correção e juros inflados (ex.: o
+  // resíduo de ~+5..20% que sobrava após os fixes de auto-reflexo/jornada).
+  if (!combinacoes_indice && cfg?.combinacoes_indice) {
+    try {
+      combinacoes_indice = typeof cfg.combinacoes_indice === 'string'
+        ? JSON.parse(cfg.combinacoes_indice)
+        : cfg.combinacoes_indice;
+    } catch (e) { logger.warn('[ORCHESTRATOR] Falha ao parsear cfg.combinacoes_indice JSON', { error: e }); }
+  }
+  if (!combinacoes_juros && cfg?.combinacoes_juros) {
+    try {
+      combinacoes_juros = typeof cfg.combinacoes_juros === 'string'
+        ? JSON.parse(cfg.combinacoes_juros)
+        : cfg.combinacoes_juros;
+    } catch (e) { logger.warn('[ORCHESTRATOR] Falha ao parsear cfg.combinacoes_juros JSON', { error: e }); }
   }
 
   const jurosRow = atualizacaoConfig.find(a => a.tipo === 'juros');
@@ -1553,6 +1578,9 @@ export async function executarLiquidacao(
     historicos: caseData.historicos,
     histOcorrencias,
     verbas: caseData.verbas,
+    // FASE 2 fix: ocorrências precomputadas (PJC import) — sinaliza ao validador
+    // que verbas depende_jornada já têm seus valores calculados (sem cartão).
+    ocorrencias: (caseData.ocorrencias ?? []).map(o => ({ verba_id: o.verba_id })),
     faltas: caseData.faltas,
     ferias: caseData.ferias,
     cartaoPonto: caseData.cartaoPonto,
@@ -1711,9 +1739,23 @@ export async function executarLiquidacao(
   // ── Auto-generate reflexes if not already present ──
   const principalVerbas = engineVerbas.filter(v => v.tipo === 'principal');
   const existingReflexas = engineVerbas.filter(v => v.tipo === 'reflexa');
-  
+
   const principalsWithReflexas = new Set(existingReflexas.map(r => r.verba_principal_id).filter(Boolean));
-  const principalsSemReflexo = principalVerbas.filter(v => !principalsWithReflexas.has(v.id));
+
+  // FASE 2 fix (auto-reflexo fantasma): NÃO auto-gerar reflexos quando o caso
+  // JÁ TEM reflexos persistidos (import PJC). O PJC define explicitamente a
+  // estrutura de reflexos (inclusive desativando alguns, que vêm com
+  // `ativa=false` e são pulados por `toEngineReflexos`:377). Antes, esses
+  // principais ficavam "sem reflexo" e `gerarReflexosPadrao` fabricava
+  // 13º/Férias/Aviso/DSR GENÉRICOS por cima das ocorrências precomputadas,
+  // inflando o líquido (rosicleia +9,4%; joseli/izabela chegavam a ~4,5x no
+  // banco). O V3-puro (pjc-to-engine:427 filtra `ativo`) NÃO auto-gera nada.
+  // Auto-geração só faz sentido para casos from-scratch (wizard) que não têm
+  // NENHUM reflexo no banco — esses seguem normalmente.
+  const temReflexosPersistidos = (caseData.reflexos ?? []).length > 0;
+  const principalsSemReflexo = temReflexosPersistidos
+    ? []
+    : principalVerbas.filter(v => !principalsWithReflexas.has(v.id));
 
   if (principalsSemReflexo.length > 0) {
     const verbasBase: VerbaBase[] = principalsSemReflexo.map(v => ({

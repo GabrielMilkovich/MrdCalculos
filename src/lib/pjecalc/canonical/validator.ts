@@ -167,8 +167,12 @@ export function validateCanonicalInput(input: CanonicalCaseInput): InputValidati
     });
   }
   for (const v of input.verbas) {
-    // Verba depends on jornada but no timecard
-    if (v.depende_jornada.value && input.jornada.cartao_ponto.length === 0) {
+    // Verba depends on jornada but no timecard.
+    // FASE 2 fix: verbas com ocorrências precomputadas (PJC import) já têm os
+    // valores derivados de jornada calculados — o cartão de ponto nunca é
+    // persistido pelo import PJC, e exigi-lo bloqueava indevidamente o cálculo
+    // de qualquer caso PJC com HORAS EXTRAS / INTERVALO / FERIADOS LABORADOS.
+    if (v.depende_jornada.value && input.jornada.cartao_ponto.length === 0 && !v.tem_ocorrencias_precomputadas) {
       findings.push({
         code: 'E_VERBA_JORNADA_MISSING',
         severity: 'blocker',

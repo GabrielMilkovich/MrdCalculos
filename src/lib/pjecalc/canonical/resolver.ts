@@ -56,6 +56,10 @@ export interface ResolverSources {
   historicos: PjecalcHistoricoSalarialRow[];
   histOcorrencias: { id: string; historico_id: string; competencia: string; valor: number; tipo: string }[];
   verbas: PjecalcVerbaRow[];
+  /** FASE 2 fix: ocorrências precomputadas (PJC import) — verba_id COALESCE
+   *  de verba_base_id/reflexo_id. Usado para marcar verbas que já têm valores
+   *  derivados de jornada, evitando bloqueio E_VERBA_JORNADA_MISSING. */
+  ocorrencias?: { verba_id: string | null }[];
   faltas: PjecalcFaltaRow[];
   ferias: PjecalcFeriasRow[];
   cartaoPonto: PjecalcCartaoPontoRow[];
@@ -203,6 +207,13 @@ export function resolveCanonicalInput(sources: ResolverSources): CanonicalCaseIn
   }));
 
   // ── VERBAS ──
+  // FASE 2 fix: verbas com ocorrências precomputadas (PJC import) já têm os
+  // valores derivados de jornada — não devem ser bloqueadas por cartão ausente.
+  const verbasComPrecomputado = new Set(
+    (sources.ocorrencias ?? [])
+      .map(o => o.verba_id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0),
+  );
   const verbas: VerbaInput[] = sources.verbas.map(v => {
     const canonical = findCanonicalRubric(v.nome);
     let bcHistoricos: string[] = [];
@@ -233,6 +244,7 @@ export function resolveCanonicalInput(sources: ResolverSources): CanonicalCaseIn
       verba_principal_id: resolveString(v.verba_principal_id, false, false, src),
       depende_jornada: resolved(canonical?.depende_jornada ?? false, canonical ? 'database' : 'default_audited'),
       depende_historico: resolved(canonical?.depende_historico ?? true, canonical ? 'database' : 'default_audited'),
+      tem_ocorrencias_precomputadas: verbasComPrecomputado.has(v.id),
     };
   });
 
