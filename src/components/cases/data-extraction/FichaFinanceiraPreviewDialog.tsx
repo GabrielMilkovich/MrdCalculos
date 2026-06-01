@@ -1,8 +1,15 @@
-import { useState, useMemo } from 'react';
-import { Download, ExternalLink, Loader2, AlertTriangle } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Download, ExternalLink, Loader2, AlertTriangle, Calendar } from 'lucide-react';
 import Decimal from 'decimal.js';
 import { buildFichaFinanceiraZip } from '@/features/data-extraction/export/per-doc/ficha-financeira-zip';
-import { triggerBlobDownload } from '@/features/data-extraction';
+import { generateExportForDocument, triggerBlobDownload } from '@/features/data-extraction';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { VerifyParityForenseButton } from './VerifyParityForenseButton';
 import { useDocumentPdfUrl } from './hooks/useDocumentPdfUrl';
 import {
@@ -57,14 +64,45 @@ function mesLabel(comp: string): string {
 
 export function FichaFinanceiraPreviewDialog({
   documentId,
-  parsed,
+  parsed: parsedInicial,
   open,
   onOpenChange,
   filename,
 }: Props) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [parsed, setParsed] = useState<FichaFinanceiraParsed>(parsedInicial);
+  const [trocandoAno, setTrocandoAno] = useState(false);
   const pdfUrl = useDocumentPdfUrl(documentId, open);
+
+  // Reset quando o doc muda
+  useEffect(() => { setParsed(parsedInicial); }, [parsedInicial]);
+
+  const anosDisponiveis = parsed._meta?.anos_disponiveis ?? [];
+  const anoAtual = parsed._meta?.ano_processado ?? parsed.ano;
+  const ehMultiAno = anosDisponiveis.length > 1;
+
+  async function trocarAno(novoAno: number) {
+    if (novoAno === anoAtual) return;
+    setTrocandoAno(true);
+    try {
+      const result = await generateExportForDocument(documentId, novoAno);
+      if (!result.ok) {
+        toast({
+          title: `Não foi possível carregar ${novoAno}`,
+          description: result.error,
+          variant: 'destructive',
+        });
+        return;
+      }
+      if (result.kind === 'ficha-financeira-review') {
+        setParsed(result.parsed as FichaFinanceiraParsed);
+        toast({ title: `Trocado para ${novoAno}` });
+      }
+    } finally {
+      setTrocandoAno(false);
+    }
+  }
 
   const review = useFichaFinanceiraReview(parsed);
 
@@ -141,15 +179,45 @@ export function FichaFinanceiraPreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] !flex !flex-col !gap-3 overflow-hidden p-4 sm:p-6">
         <DialogHeader className="shrink-0">
-          <DialogTitle className="text-base">
-            Ficha Financeira {parsed.ano}
-            {parsed.empregado && ` — ${parsed.empregado}`}
-            {parsed.empresa && ` / ${parsed.empresa}`}
+          <DialogTitle className="text-base flex items-center gap-3 flex-wrap">
+            <span>
+              Ficha Financeira {parsed.ano}
+              {parsed.empregado && ` — ${parsed.empregado}`}
+              {parsed.empresa && ` / ${parsed.empresa}`}
+            </span>
+            {ehMultiAno && (
+              <div className="flex items-center gap-1.5 text-xs font-normal">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">Ano:</span>
+                <Select
+                  value={String(anoAtual)}
+                  onValueChange={(v) => trocarAno(parseInt(v, 10))}
+                  disabled={trocandoAno || saving}
+                >
+                  <SelectTrigger className="h-7 w-[100px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {anosDisponiveis.map((a) => (
+                      <SelectItem key={a} value={String(a)} className="text-xs">
+                        {a}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {trocandoAno && <Loader2 className="h-3 w-3 animate-spin" />}
+              </div>
+            )}
           </DialogTitle>
           <DialogDescription className="text-xs">
             {parsed._meta?.parser ?? parsed._meta?.model ?? 'parser desconhecido'} ·{' '}
             {review.rubricas.length} rubricas ·{' '}
             {review.mesesOrdenados.length} meses
+            {ehMultiAno && (
+              <span className="ml-2 text-amber-600">
+                · PDF tem {anosDisponiveis.length} fichas anuais ({anosDisponiveis.join(', ')})
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 

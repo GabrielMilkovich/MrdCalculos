@@ -242,6 +242,7 @@ Deno.serve(async (req) => {
       ano_referencia,
       storage_path,
       storage_bucket,
+      ano_alvo, // PR #143+ — quando PDF tem múltiplas fichas anuais, filtra só esse ano
     } = body;
 
     if (!texto_documento && !storage_path) {
@@ -341,9 +342,10 @@ Deno.serve(async (req) => {
       console.warn("[parse-ficha] usando texto_documento do caller (pode estar OCR-corrompido)");
     }
 
-    // 3. Parser determinístico V4
+    // 3. Parser determinístico V4 — passa ano_alvo quando caller especifica
     if (textoLimpo && tipo_documento !== "contracheque") {
-      const deterministico = parseFichaFinanceiraDeterministico(textoLimpo);
+      const anoAlvoNum = typeof ano_alvo === "number" ? ano_alvo : undefined;
+      const deterministico = parseFichaFinanceiraDeterministico(textoLimpo, anoAlvoNum);
       if (deterministico && deterministico.rubricas.length >= 3) {
         console.log(
           `[parse-ficha] DETERMINISTIC V4: ${deterministico.rubricas.length} rubricas, ` +
@@ -392,7 +394,7 @@ Deno.serve(async (req) => {
         error: "Parser determinístico não conseguiu extrair rubricas suficientes (>= 3) deste PDF. Mistral/Claude/IA estão DESABILITADOS para Ficha Financeira porque corrompem códigos. Suba uma versão do PDF com texto nativo (gerado pelo ADP/sistema RH, não escaneado/foto).",
         policy: "ia_disabled_for_ficha_financeira",
         rubricas_determinist_encontradas: textoLimpo
-          ? (parseFichaFinanceiraDeterministico(textoLimpo)?.rubricas.length ?? 0)
+          ? (parseFichaFinanceiraDeterministico(textoLimpo, typeof ano_alvo === "number" ? ano_alvo : undefined)?.rubricas.length ?? 0)
           : 0,
         ocr_provider,
       }),

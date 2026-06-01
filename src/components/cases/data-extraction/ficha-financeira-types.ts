@@ -46,6 +46,11 @@ export interface FichaFinanceiraParsed {
     linhas_processadas?: number;
     linhas_filtradas?: number;
     meses_detectados?: string[];
+    // Multi-ano: PDFs ADP podem conter múltiplas fichas anuais juntas.
+    // anos_disponiveis lista todos detectados; ano_processado é qual foi extraído.
+    // Quando length > 1, UI mostra select pro operador escolher.
+    anos_disponiveis?: number[];
+    ano_processado?: number;
   };
 }
 
