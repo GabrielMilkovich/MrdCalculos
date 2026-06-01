@@ -376,6 +376,20 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         }
       }
 
+      // FASE 2 fix (mesmo do orchestrator:toEngineCorrecaoConfig): a importação
+      // PJC grava combinacoes_indice/_juros em pjecalc_correcao_config, NÃO em
+      // pjecalc_atualizacao_config (que só a UI popula). Sem este fallback o
+      // ModuloResumo-direto perdia o split IPCA-E/SELIC em casos importados e
+      // corrigia tudo por um índice único → correção/juros inflados.
+      const ciRaw = correcaoDataLocal.combinacoes_indice;
+      if ((!combinacoesIndice || combinacoesIndice.length === 0) && ciRaw) {
+        try { combinacoesIndice = typeof ciRaw === 'string' ? JSON.parse(ciRaw) : (ciRaw as unknown[]); } catch { /* ignore */ }
+      }
+      const cjRaw = correcaoDataLocal.combinacoes_juros;
+      if ((!combinacoesJuros || combinacoesJuros.length === 0) && cjRaw) {
+        try { combinacoesJuros = typeof cjRaw === 'string' ? JSON.parse(cjRaw) : (cjRaw as unknown[]); } catch { /* ignore */ }
+      }
+
       const correcaoConfigLocal = {
         indice: correcaoDataLocal.indice || 'IPCA-E', epoca: correcaoDataLocal.epoca || 'mensal',
         data_fixa: correcaoDataLocal.data_fixa,
