@@ -12,6 +12,7 @@ import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import Decimal from "decimal.js";
+import { pagamentoSchema, detectarPagamentoDuplicado } from "./pagamento-schema";
 
 Decimal.set({ precision: 20 });
 
@@ -121,8 +122,24 @@ export function ModuloPagamentos({ caseId }: Props) {
   };
 
   const savePag = async () => {
-    if (!editing.valor.trim()) {
-      toast.error("Informe o valor do pagamento.");
+    // Validação de paridade (Pagamento.validar): valor>0; data obrigatória e
+    // não futura (MSG0128); sem data duplicada (MSG0138).
+    const parsed = pagamentoSchema.safeParse({
+      valor: editing.valor,
+      data_pagamento: editing.data_pagamento,
+      competencia: editing.competencia,
+      tipo: editing.tipo,
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Pagamento inválido.");
+      return;
+    }
+    const dup = detectarPagamentoDuplicado(
+      { id: editing.id, data_pagamento: editing.data_pagamento },
+      (pagamentos as Array<{ id: string; data_pagamento: string | null }>).map((p) => ({ id: p.id, data_pagamento: p.data_pagamento })),
+    );
+    if (dup) {
+      toast.error("Já existe um pagamento com esta data (registro duplicado).");
       return;
     }
     setSaving(true);
