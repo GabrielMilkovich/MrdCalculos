@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Save, Loader2 } from "lucide-react";
 import * as svc from "@/lib/pjecalc/service";
+import { irConfigSchema } from "./ir-config-schema";
 
 interface Props { caseId: string; }
 
@@ -36,32 +37,78 @@ export function ModuloIR({ caseId }: Props) {
   useEffect(() => {
     if (data) {
       const d = data as unknown as Record<string, unknown>;
+      // Leitura espelha a gravação: regime_caixa/art_12a_rra são colunas reais;
+      // RRA (meses/parcelas) + incidir_principal vêm de `extras` jsonb. Fallback
+      // a chaves top-level mantém retrocompat com linhas legadas.
+      const ex = (typeof d.extras === "object" && d.extras !== null ? d.extras : {}) as Record<string, unknown>;
       setForm({
         apurar: (d.apurar as boolean) ?? true,
         incidir_sobre_juros: (d.incidir_sobre_juros as boolean) ?? false,
         cobrar_reclamado: (d.cobrar_reclamado as boolean) ?? false,
         tributacao_exclusiva_13: (d.tributacao_exclusiva_13 as boolean) ?? false,
         tributacao_separada_ferias: (d.tributacao_separada_ferias as boolean) ?? false,
-        aplicar_regime_caixa: (d.aplicar_regime_caixa as boolean) ?? false,
+        aplicar_regime_caixa: (d.regime_caixa as boolean) ?? (d.aplicar_regime_caixa as boolean) ?? false,
         deduzir_cs: (d.deduzir_cs as boolean) ?? true,
         deduzir_prev_privada: (d.deduzir_prev_privada as boolean) ?? true,
         deduzir_pensao: (d.deduzir_pensao as boolean) ?? true,
         deduzir_honorarios: (d.deduzir_honorarios as boolean) ?? true,
         aposentado_65: (d.aposentado_65 as boolean) ?? false,
         dependentes: (d.dependentes as number) ?? 0,
-        apurar_rra: (d.apurar_rra as boolean) ?? false,
-        rra_meses: (d.rra_meses as number) ?? 0,
-        rra_numero_parcelas: (d.rra_numero_parcelas as number) ?? 0,
-        incidir_sobre_principal_tributavel: (d.incidir_sobre_principal_tributavel as boolean) ?? true,
-        incidir_sobre_principal_nao_tributavel: (d.incidir_sobre_principal_nao_tributavel as boolean) ?? false,
+        apurar_rra: (ex.apurar_rra as boolean) ?? (d.art_12a_rra as boolean) ?? false,
+        rra_meses: (ex.rra_meses as number) ?? 0,
+        rra_numero_parcelas: (ex.rra_numero_parcelas as number) ?? 0,
+        incidir_sobre_principal_tributavel: (ex.incidir_sobre_principal_tributavel as boolean) ?? true,
+        incidir_sobre_principal_nao_tributavel: (ex.incidir_sobre_principal_nao_tributavel as boolean) ?? false,
       });
     }
   }, [data]);
 
   const save = async () => {
+    // Validação de paridade (Irpf.validarQuantidadeDependentes): possui
+    // dependentes ⇒ qty ≥ 1 (MSG0004); RRA habilitado ⇒ meses/parcelas ≥ 1.
+    const parsed = irConfigSchema.safeParse({
+      apurar: form.apurar,
+      possui_dependentes: form.dependentes > 0,
+      dependentes: form.dependentes,
+      apurar_rra: form.apurar_rra,
+      rra_meses: form.rra_meses,
+      rra_numero_parcelas: form.rra_numero_parcelas,
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Configuração inválida.");
+      return;
+    }
     setSaving(true);
     try {
-      await svc.upsertIrConfig({ case_id: caseId, ...form } as Record<string, unknown>);
+      // 🐞 Fix do drift de nomes: as colunas REAIS são `regime_caixa` e
+      // `art_12a_rra`; RRA (meses/parcelas) e incidir_principal NÃO são colunas
+      // → vão para `extras` jsonb (de onde o orchestrator lê). Antes o form
+      // escrevia `aplicar_regime_caixa`/`apurar_rra`/`rra_meses` como colunas
+      // inexistentes → o save inteiro falhava (PGRST 42703).
+      const extras = {
+        apurar_rra: form.apurar_rra,
+        rra_meses: form.rra_meses,
+        rra_numero_parcelas: form.rra_numero_parcelas,
+        incidir_sobre_principal_tributavel: form.incidir_sobre_principal_tributavel,
+        incidir_sobre_principal_nao_tributavel: form.incidir_sobre_principal_nao_tributavel,
+      };
+      await svc.upsertIrConfig({
+        case_id: caseId,
+        apurar: form.apurar,
+        incidir_sobre_juros: form.incidir_sobre_juros,
+        cobrar_reclamado: form.cobrar_reclamado,
+        tributacao_exclusiva_13: form.tributacao_exclusiva_13,
+        tributacao_separada_ferias: form.tributacao_separada_ferias,
+        deduzir_cs: form.deduzir_cs,
+        deduzir_prev_privada: form.deduzir_prev_privada,
+        deduzir_pensao: form.deduzir_pensao,
+        deduzir_honorarios: form.deduzir_honorarios,
+        aposentado_65: form.aposentado_65,
+        dependentes: form.dependentes,
+        regime_caixa: form.aplicar_regime_caixa,
+        art_12a_rra: form.apurar_rra,
+        extras,
+      } as Record<string, unknown>);
       qc.invalidateQueries({ queryKey: ["pjecalc_ir_config", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_case_data", caseId] });
       toast.success("IR configurado!");

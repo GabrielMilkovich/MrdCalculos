@@ -544,8 +544,15 @@ function toEngineIrConfig(cfg: PjecalcIrConfigRow | null): PjeIRConfig {
   // RRA Lei 7.713/88 art. 12-A — sub-flags vindas da UI ModuloIR.
   // Quando ausentes na linha (view legacy), permanecem undefined → engine
   // mantém auto-detect (NM cardinalidade > 1 dispara art_12a_rra).
-  const cfgExt = (cfg ?? {}) as unknown as Record<string, unknown>;
-  const apurarRra = cfgExt.apurar_rra as boolean | undefined;
+  const cfgRow = (cfg ?? {}) as unknown as Record<string, unknown>;
+  // Seção 16: as sub-flags RRA vivem em `extras` jsonb (o ModuloIR grava lá);
+  // antes liam-se como chaves top-level inexistentes → RRA nunca chegava ao
+  // engine. Fallback p/ top-level mantém retrocompat com linhas legadas.
+  const cfgExt = {
+    ...(typeof cfgRow.extras === 'object' && cfgRow.extras !== null ? (cfgRow.extras as Record<string, unknown>) : {}),
+    ...cfgRow,
+  };
+  const apurarRra = (cfgExt.apurar_rra ?? cfgRow.art_12a_rra) as boolean | undefined;
   const rraMesesRaw = cfgExt.rra_meses as number | undefined;
   const rraParcelasRaw = cfgExt.rra_numero_parcelas as number | undefined;
   return {
