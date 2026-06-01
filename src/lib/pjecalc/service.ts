@@ -1126,6 +1126,9 @@ export interface AdvogadoRow {
   oab: string;
   oab_uf: string;
   cpf?: string | null;
+  // Paridade PJe-Calc (Advogado.java) — documento fiscal genérico
+  tipo_documento?: 'CPF' | 'CNPJ' | 'CEI' | null;
+  numero_documento?: string | null;
   email?: string | null;
   telefone?: string | null;
   representa: 'RECLAMANTE' | 'RECLAMADO' | 'AMBOS';
