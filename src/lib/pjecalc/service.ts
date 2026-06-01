@@ -1219,6 +1219,11 @@ export async function insertValeTransporteLinha(payload: Omit<ValeTransporteLinh
   if (error) throw error;
 }
 
+export async function updateValeTransporteLinha(id: string, updates: Partial<Omit<ValeTransporteLinhaRow, 'id'>>): Promise<void> {
+  const { error } = await fromView('pjecalc_vale_transporte_linhas').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
 export async function deleteValeTransporteLinha(id: string): Promise<void> {
   const { error } = await fromView('pjecalc_vale_transporte_linhas').delete().eq('id', id);
   if (error) throw error;

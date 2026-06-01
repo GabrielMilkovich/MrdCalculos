@@ -9,7 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Save, Loader2, Plus, Trash2, Bus } from "lucide-react";
+import Decimal from "decimal.js";
 import * as svc from "@/lib/pjecalc/service";
+import { vtConfigSchema, vtLinhaSchema, clampDescontoVT } from "./vale-transporte-schema";
+
+Decimal.set({ precision: 20 });
 
 interface Props { caseId: string; }
 
@@ -41,13 +45,20 @@ export function ModuloValeTransporte({ caseId }: Props) {
   }, [config]);
 
   const handleSave = async () => {
+    // Valida config (desconto 0–6%, paridade Math.min) via schema.
+    const pct = clampDescontoVT(new Decimal(descontoPct.replace(",", ".") || "6").toNumber());
+    const parsed = vtConfigSchema.safeParse({ apurar, desconto_empregado_pct: pct });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Configuração inválida.");
+      return;
+    }
     setSaving(true);
     try {
       await svc.upsertValeTransporteConfig({
         id: config?.id,
         calculo_id: caseId,
         apurar,
-        desconto_empregado_pct: Math.min(6, parseFloat(descontoPct) || 6),
+        desconto_empregado_pct: pct,
         observacoes: observacoes || null,
       });
       qc.invalidateQueries({ queryKey: ["pjecalc_vt_config", caseId] });
@@ -85,6 +96,39 @@ export function ModuloValeTransporte({ caseId }: Props) {
     toast.success("Linha removida");
   };
 
+  /**
+   * Persiste a edição de um campo da linha (corrige bug: antes os inputs eram
+   * display-only, sem onChange/onBlur, e não havia updateValeTransporteLinha).
+   * Valida via vtLinhaSchema antes de salvar.
+   */
+  const handleUpdateLinha = async (
+    linha: svc.ValeTransporteLinhaRow,
+    field: "descricao" | "tipo" | "valor_passagem" | "quantidade_dia",
+    raw: string,
+  ) => {
+    const novoValor =
+      field === "valor_passagem"
+        ? new Decimal(raw.replace(",", ".") || "0").toNumber()
+        : field === "quantidade_dia"
+          ? parseInt(raw, 10) || 0
+          : raw;
+    const merged = {
+      descricao: linha.descricao,
+      tipo: linha.tipo,
+      valor_passagem: linha.valor_passagem,
+      quantidade_dia: linha.quantidade_dia,
+      [field]: novoValor,
+    };
+    const parsed = vtLinhaSchema.safeParse(merged);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Linha inválida.");
+      qc.invalidateQueries({ queryKey: ["pjecalc_vt_linhas"] }); // reverte input
+      return;
+    }
+    await svc.updateValeTransporteLinha(linha.id, { [field]: novoValor });
+    qc.invalidateQueries({ queryKey: ["pjecalc_vt_linhas"] });
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -119,8 +163,9 @@ export function ModuloValeTransporte({ caseId }: Props) {
                 <div className="space-y-2">
                   {linhas.map((l: svc.ValeTransporteLinhaRow) => (
                     <div key={l.id} className="flex items-center gap-2 p-2 rounded border bg-muted/20">
-                      <Input className="h-7 text-xs flex-1" defaultValue={l.descricao} placeholder="Descrição" />
-                      <Select defaultValue={l.tipo}>
+                      <Input className="h-7 text-xs flex-1" defaultValue={l.descricao} placeholder="Descrição"
+                        onBlur={e => e.target.value !== l.descricao && handleUpdateLinha(l, "descricao", e.target.value)} />
+                      <Select defaultValue={l.tipo} onValueChange={v => handleUpdateLinha(l, "tipo", v)}>
                         <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="URBANO">Urbano</SelectItem>
@@ -128,8 +173,10 @@ export function ModuloValeTransporte({ caseId }: Props) {
                           <SelectItem value="INTERESTADUAL">Interestadual</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Input type="number" className="h-7 text-xs w-20" defaultValue={l.valor_passagem} placeholder="Valor" />
-                      <Input type="number" className="h-7 text-xs w-16" defaultValue={l.quantidade_dia} placeholder="Qtd" />
+                      <Input type="number" className="h-7 text-xs w-20" defaultValue={l.valor_passagem} placeholder="Valor"
+                        onBlur={e => handleUpdateLinha(l, "valor_passagem", e.target.value)} />
+                      <Input type="number" className="h-7 text-xs w-16" defaultValue={l.quantidade_dia} placeholder="Qtd"
+                        onBlur={e => handleUpdateLinha(l, "quantidade_dia", e.target.value)} />
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDeleteLinha(l.id)}>
                         <Trash2 className="h-3 w-3 text-destructive" />
                       </Button>
