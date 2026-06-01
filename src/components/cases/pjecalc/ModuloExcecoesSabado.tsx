@@ -11,6 +11,7 @@ import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { ExperimentalBanner } from "./ExperimentalBanner";
+import { excecaoSabadoSchema, detectarOverlapExcecaoSabado } from "./excecao-sabado-schema";
 
 // =====================================================
 // MÓDULO EXCEÇÕES DE SÁBADO — ExcecaoDoSabado.java
@@ -67,8 +68,25 @@ export function ModuloExcecoesSabado({ caseId }: Props) {
   };
 
   const saveExc = async () => {
-    if (!editing.data_inicio || !editing.data_fim) {
-      toast.error("Informe data inicial e final.");
+    // Validação de paridade (ExcecaoDoSabadoDoCalculo + Calculo.adicionar):
+    // required + término≥início + sem overlap (MSG0024).
+    const parsed = excecaoSabadoSchema.safeParse({
+      data_inicio: editing.data_inicio,
+      data_fim: editing.data_fim,
+      sabado_dia_util: editing.sabado_dia_util,
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Exceção inválida.");
+      return;
+    }
+    const conflito = detectarOverlapExcecaoSabado(
+      { id: editing.id, data_inicio: editing.data_inicio, data_fim: editing.data_fim },
+      (excecoes as Array<{ id: string; data_inicio: string; data_fim: string }>).map((e) => ({
+        id: e.id, data_inicio: e.data_inicio, data_fim: e.data_fim,
+      })),
+    );
+    if (conflito) {
+      toast.error("Período coincide com outra exceção já cadastrada (datas coincidentes).");
       return;
     }
     setSaving(true);
