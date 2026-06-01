@@ -333,6 +333,27 @@ const H = vi.hoisted(() => {
             return { data: ps, error: null };
           }
           if (this.table === 'pjecalc_liquidacao_resultado') {
+            // Fiel ao PostgREST/Postgres: rejeita coluna inexistente na VIEW
+            // (PGRST204 / SQL 42703). O mock flat-table ANTIGO aceitava qualquer
+            // chave → false-green: não pegou o payload stale do orchestrator
+            // (inss_segurado/irrf/inss_patronal — colunas da tabela dropada).
+            // Allow-list = colunas REAIS da view (lidas do banco em prod, Addendum 1).
+            const VIEW_COLS = new Set([
+              'id', 'calculo_id', 'case_id', 'total_bruto', 'total_pago', 'total_diferenca',
+              'total_correcao', 'total_juros', 'total_liquido_antes_descontos', 'total_liquido',
+              'desconto_inss_reclamante', 'desconto_ir', 'desconto_inss_reclamado', 'honorarios',
+              'custas', 'multa_477', 'multa_467', 'fgts_depositar', 'fgts_multa_40', 'total_reclamante',
+              'total_reclamado', 'engine_version', 'calculado_em', 'data_liquidacao', 'hash_resultado',
+              'resumo_verbas', 'resultado', 'created_at',
+            ]);
+            const psV = Array.isArray(this.payload) ? (this.payload as Row[]) : [this.payload as Row];
+            for (const p of psV) {
+              for (const k of Object.keys(p)) {
+                if (!VIEW_COLS.has(k)) {
+                  return { data: null, error: { code: 'PGRST204', message: `Could not find the '${k}' column of 'pjecalc_liquidacao_resultado' in the schema cache` } };
+                }
+              }
+            }
             captures.upsertResultado.push(this.payload as Row);
           }
           const ps = Array.isArray(this.payload) ? (this.payload as Row[]) : [this.payload as Row];
@@ -384,7 +405,7 @@ vi.mock('@/lib/logger', () => ({
 // Imports que carregam o supabase mockado DEPOIS do vi.mock.
 import { persistirPJCAnalysis } from '../pjc-persist';
 import { executarLiquidacao } from '../orchestrator';
-import { getResultado } from '../service';
+import { getResultado, upsertResultado } from '../service';
 
 const CORPUS_DIR = path.resolve(__dirname, '../../../../public/reports');
 
@@ -671,4 +692,22 @@ describe('FASE 2 Addendum 1 — botão Liquidar → orchestrator (round-trip per
       expect(rt[c.nome].ocorrencias).toBeGreaterThan(0);
     });
   }
+
+  it('REGRESSÃO: payload com coluna fantasma (inss_segurado) é REJEITADO como em prod', async () => {
+    // O bug que o mock flat-table escondeu (Addendum 1): o orchestrator mandava
+    // inss_segurado/irrf/inss_patronal — colunas da tabela antiga dropada. Em
+    // prod isso é 42703/PGRST204 e upsertResultado lança. Este teste PROVA que o
+    // harness agora reproduz isso (senão volta a ser false-green). Validado tb
+    // contra o banco real (tx+rollback).
+    let threw = false;
+    let msg = '';
+    try {
+      await upsertResultado({ case_id: 'qualquer', inss_segurado: 1 } as unknown as Parameters<typeof upsertResultado>[0]);
+    } catch (e) {
+      threw = true;
+      msg = (e as { message?: string }).message ?? String(e);
+    }
+    expect(threw, 'upsertResultado deveria lançar com coluna inexistente').toBe(true);
+    expect(msg).toMatch(/inss_segurado/);
+  });
 });

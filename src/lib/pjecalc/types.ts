@@ -435,9 +435,11 @@ export interface PjecalcLiquidacaoResultadoRow {
   case_id: string;
   total_bruto: number;
   total_liquido: number;
-  inss_segurado: number;
-  irrf: number;
-  inss_patronal: number;
+  // Nomes REAIS da view (a tabela antiga `inss_segurado`/`irrf`/`inss_patronal`
+  // foi dropada — ver Insert abaixo). Quem lia esses nomes recebia undefined.
+  desconto_inss_reclamante: number;
+  desconto_ir: number;
+  desconto_inss_reclamado: number;
   honorarios: number;
   custas: number;
   fgts_depositar: number;
@@ -455,9 +457,15 @@ export interface PjecalcLiquidacaoResultadoInsert {
   case_id: string;
   total_bruto?: number;
   total_liquido?: number;
-  inss_segurado?: number;
-  irrf?: number;
-  inss_patronal?: number;
+  // Colunas REAIS da VIEW pjecalc_liquidacao_resultado (sobre pjecalc_resultado).
+  // ANTES: `inss_segurado`/`irrf`/`inss_patronal` — nomes da TABELA ANTIGA,
+  // dropada na migration 20260304124329. A view nunca teve essas colunas, então
+  // o .insert do upsertResultado dava 42703/PGRST204 e NENHUM resultado era
+  // persistido pelo orchestrator (0 registros 3.x no banco). Validado contra o
+  // banco real, tx+rollback (FASE 2 Addendum 1).
+  desconto_inss_reclamante?: number;
+  desconto_ir?: number;
+  desconto_inss_reclamado?: number;
   honorarios?: number;
   custas?: number;
   fgts_depositar?: number;

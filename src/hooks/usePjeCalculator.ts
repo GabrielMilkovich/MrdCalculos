@@ -317,9 +317,11 @@ export function usePjeCalculator(caseId: string | undefined) {
     ? {
         total_bruto: pjeData.resultado.total_bruto,
         total_liquido: pjeData.resultado.total_liquido,
-        inss_segurado: pjeData.resultado.inss_segurado,
-        irrf: pjeData.resultado.irrf,
-        inss_patronal: pjeData.resultado.inss_patronal,
+        // Lê os nomes REAIS da view (`desconto_*`); antes lia `inss_segurado`
+        // etc. (tabela antiga) → undefined. Mantém as chaves do shape de display.
+        inss_segurado: pjeData.resultado.desconto_inss_reclamante,
+        irrf: pjeData.resultado.desconto_ir,
+        inss_patronal: pjeData.resultado.desconto_inss_reclamado,
         honorarios: pjeData.resultado.honorarios,
         custas: pjeData.resultado.custas,
         fgts_depositar: pjeData.resultado.fgts_depositar,

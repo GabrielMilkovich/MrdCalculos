@@ -1940,9 +1940,12 @@ export async function executarLiquidacao(
     case_id: caseId,
     total_bruto: result.resumo.principal_bruto,
     total_liquido: result.resumo.liquido_reclamante,
-    inss_segurado: result.resumo.cs_segurado,
-    irrf: result.resumo.ir_retido,
-    inss_patronal: result.resumo.cs_empregador,
+    // Nomes REAIS da view (`desconto_*`). Antes `inss_segurado`/`irrf`/
+    // `inss_patronal` (tabela antiga dropada) → .insert dava 42703 e o
+    // orchestrator NUNCA persistia. Validado contra o banco real (Addendum 1).
+    desconto_inss_reclamante: result.resumo.cs_segurado,
+    desconto_ir: result.resumo.ir_retido,
+    desconto_inss_reclamado: result.resumo.cs_empregador,
     honorarios: result.resumo.honorarios_sucumbenciais + result.resumo.honorarios_contratuais,
     custas: result.resumo.custas,
     fgts_depositar: result.fgts.total_depositos,

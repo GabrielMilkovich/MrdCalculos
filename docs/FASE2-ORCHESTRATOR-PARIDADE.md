@@ -114,21 +114,51 @@ para revelar os bugs sob teste. Motivo de NÃO escolher a via A (portar reflexos
 seria manter 3 cópias sincronizadas à mão — o whack-a-mole que causou esta
 classe inteira de bug.
 
-#### A fiação persist→display: o risco virou o oposto
+#### A fiação persist→display — CORREÇÃO de um claim errado meu (verificado no banco)
 
-Investigado o risco que o dono nomeou (mudança de tabela de persistência).
-Achado: existem DUAS tabelas distintas, **sem trigger de sync** entre elas:
+Eu havia afirmado "duas tabelas separadas, sem sync, o botão antigo gravava em
+tabela morta". **ERRADO** — li o `CREATE TABLE` ANTIGO e não vi que ele foi
+dropado e recriado como VIEW depois. O dono pegou; verifiquei contra o banco
+real (projeto MRDCALCC):
 
-| tabela | coluna | quem escreve | quem lê |
-|---|---|---|---|
-| `pjecalc_liquidacao_resultado` | `resultado` JSONB | orchestrator (`upsertResultado`) | **o display** (`svc.getResultado`) — ModuloResumo, ModuloAtualizacao, ModuloCustas, WizardCalculo |
-| `pjecalc_resultado` | `resumo_verbas` JSONB | **botão antigo** (inline) | *ninguém no display* |
+- `pjecalc_liquidacao_resultado` é **VIEW** (`relkind=v`) sobre a TABELA
+  `pjecalc_resultado` (`relkind=r`), com `resumo_verbas AS resultado`. O botão
+  antigo gravava `resumo_verbas` na tabela → o display LIA via a view. **Era
+  visível.** Não havia "tabela morta".
 
-Ou seja: o botão antigo gravava numa tabela que **o display não lê**. O
-orchestrator (já usado em produção por `usePjeCalculator`, `usePjeCalcData`,
-`intelligent-liquidation`) grava exatamente onde o display lê. **Delegar ALINHA
-o botão com a fonte real do display** — o swap corrige a fiação, não a quebra.
-O risco do dono era, na verdade, um bug latente pré-existente.
+##### O bug REAL (que o mock flat-table escondeu — false-green)
+
+O `upsertResultado` do orchestrator (`orchestrator.ts:1939`) mandava
+`inss_segurado` / `irrf` / `inss_patronal` — nomes da TABELA ANTIGA (dropada na
+migration `20260304124329`). A view tem `desconto_inss_reclamante` /
+`desconto_ir` / `desconto_inss_reclamado`. Os tipos hand-written em `types.ts`
+estavam **stale** (nomes antigos) → o tsc "validava" o payload errado.
+
+Verificado contra o banco real (tx + rollback, nada commitado):
+- `INSERT` com colunas antigas → `ERROR 42703: column "inss_segurado" does not
+  exist` (PostgREST: PGRST204) → `upsertResultado` lança → `executarLiquidacao`
+  lança → o botão delegado **quebra ao salvar**.
+- `INSERT` com `desconto_*` → **sucesso**, e o JSONB volta: `readback=95.5`.
+- Corroboração empírica: **0 registros `engine_version` 3.x** em
+  `pjecalc_resultado` (só 2 de `2.1.0`, do botão antigo). O orchestrator NUNCA
+  persistiu — confirma que o `.insert` sempre errou.
+
+Ou seja: o swap (Addendum 1, opção 2) tinha roteado o botão para um caminho cujo
+**persist estava quebrado**, e meu round-trip deu **false-green** porque o mock
+flat-table aceita qualquer chave. Exatamente o padrão da sessão: mock que aceita
+tudo = caminho não-testado disfarçado de testado.
+
+##### Fix (validado no banco real)
+
+`inss_segurado`→`desconto_inss_reclamante`, `irrf`→`desconto_ir`,
+`inss_patronal`→`desconto_inss_reclamado`, em 3 lugares: tipos `Insert`+`Row`
+(`types.ts`), payload do orchestrator (`orchestrator.ts:1939`), e o leitor de
+colunas escalares (`usePjeCalculator.ts:320`). O harness do teste passou a
+**rejeitar coluna inexistente** (allow-list = colunas reais da view) + teste de
+regressão que prova a rejeição — senão volta a ser false-green.
+
+`insertOcorrencia` (Grade) NÃO tem o bug: `pjecalc_ocorrencias` é view com
+trigger `INSTEAD OF INSERT` (1300 CALCULADA + 828 PJC_IMPORT no banco). Verificado.
 
 #### Teste
 
