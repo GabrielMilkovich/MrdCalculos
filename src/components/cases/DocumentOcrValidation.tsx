@@ -92,6 +92,11 @@ interface Props {
   /** Quando true, mostra botão "Baixar CSV/ZIP" em cada doc com OCR validado.
    *  Usado pelo modo data_extraction (v4). */
   showDownloadButton?: boolean;
+  /** Quando true, oculta o passo de "Confirmar leitura" por documento E o card
+   *  de rodapé com gate "Confira X documento(s) restante(s)". Usado no modo
+   *  data_extraction onde o avanço é noop — confirmação manual é burocracia
+   *  inútil que prende o operador quando um doc dá erro (2026-06-01). */
+  hideValidationGate?: boolean;
 }
 
 async function getFreshSignedUrl(storagePath: string): Promise<string | null> {
@@ -131,6 +136,7 @@ export function DocumentOcrValidation({
   advanceLabel,
   canAdvance,
   advanceBlockedReason,
+  hideValidationGate,
 }: Props) {
   const queryClient = useQueryClient();
   const [docs, setDocs] = useState<DocRow[]>([]);
@@ -570,7 +576,7 @@ export function DocumentOcrValidation({
                 {selected.ocr_text ? "Tentar novamente" : "Processar documento"}
               </Button>
               <div className="flex-1" />
-              {!selected.ocr_validated && selected.ocr_text && (
+              {!hideValidationGate && !selected.ocr_validated && selected.ocr_text && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -586,8 +592,10 @@ export function DocumentOcrValidation({
         </Card>
       )}
 
-      {/* Rodapé: avanço (default "Seguir para Cálculo", customizável via props) */}
-      {(() => {
+      {/* Rodapé: avanço (default "Seguir para Cálculo", customizável via props).
+          Quando hideValidationGate=true, o card inteiro é omitido — modo
+          data_extraction tem avanço noop, então o gate é só burocracia. */}
+      {!hideValidationGate && (() => {
         const canGoNext = canAdvance ? canAdvance(docs) : allValidated;
         // Se canAdvance retornou false mas allValidated é true, usar
         // advanceBlockedReason; senão fallback pra texto padrão de OCR.
