@@ -175,17 +175,23 @@ export interface PjecalcFeriasRow {
   periodo_aquisitivo_fim: string | null;
   periodo_concessivo_inicio: string | null;
   periodo_concessivo_fim: string | null;
-  gozo_inicio: string | null;
-  gozo_fim: string | null;
-  dias: number;
-  abono: boolean;
-  dias_abono: number;
-  dobra: boolean;
   situacao: string;
-  gozo2_inicio: string | null;
-  gozo2_fim: string | null;
-  gozo3_inicio: string | null;
-  gozo3_fim: string | null;
+  // ── Colunas REAIS de pjecalc_ferias (Seção 6 — antes o type usava aliases
+  //    fictícios `dias`/`dias_abono`/`dobra`/`gozo_inicio` que NÃO existem na
+  //    tabela; o engine caía nos defaults). Ver docs/specs/ferias.md §2.
+  prazo_dias: number;
+  dobra_geral: boolean;
+  abono: boolean;
+  abono_dias: number;
+  gozo_1_inicio: string | null;
+  gozo_1_fim: string | null;
+  gozo_1_dobra: boolean | null;
+  gozo_2_inicio: string | null;
+  gozo_2_fim: string | null;
+  gozo_2_dobra: boolean | null;
+  gozo_3_inicio: string | null;
+  gozo_3_fim: string | null;
+  gozo_3_dobra: boolean | null;
   observacoes: string | null;
   created_at: string;
 }
@@ -196,17 +202,21 @@ export interface PjecalcFeriasInsert {
   periodo_aquisitivo_fim?: string;
   periodo_concessivo_inicio?: string;
   periodo_concessivo_fim?: string;
-  gozo_inicio?: string;
-  gozo_fim?: string;
-  dias?: number;
-  abono?: boolean;
-  dias_abono?: number;
-  dobra?: boolean;
   situacao?: string;
-  gozo2_inicio?: string | null;
-  gozo2_fim?: string | null;
-  gozo3_inicio?: string | null;
-  gozo3_fim?: string | null;
+  // Colunas REAIS de pjecalc_ferias (Seção 6) — preferir estas.
+  prazo_dias?: number;
+  dobra_geral?: boolean;
+  abono?: boolean;
+  abono_dias?: number;
+  gozo_1_inicio?: string | null;
+  gozo_1_fim?: string | null;
+  gozo_1_dobra?: boolean;
+  gozo_2_inicio?: string | null;
+  gozo_2_fim?: string | null;
+  gozo_2_dobra?: boolean;
+  gozo_3_inicio?: string | null;
+  gozo_3_fim?: string | null;
+  gozo_3_dobra?: boolean;
   observacoes?: string;
 }
 

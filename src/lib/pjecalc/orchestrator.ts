@@ -28,6 +28,7 @@ import {
 import { PjeCalcEngineV3 } from './engine-v3';
 import { applyDadosProcessoToEngineParams } from './dados-processo-adapter';
 import { mapFaltasToEngine } from './faltas-engine-map';
+import { mapFeriasToEngine } from './ferias-engine-map';
 import type {
   PjeParametros,
   PjeHistoricoSalarial,
@@ -137,20 +138,7 @@ function toEngineFaltas(faltas: PjecalcFaltaRow[]): PjeFalta[] {
 }
 
 function toEngineFerias(ferias: PjecalcFeriasRow[]): PjeFerias[] {
-  return ferias.map(f => ({
-    id: f.id,
-    relativas: '',
-    periodo_aquisitivo_inicio: f.periodo_aquisitivo_inicio || '',
-    periodo_aquisitivo_fim: f.periodo_aquisitivo_fim || '',
-    periodo_concessivo_inicio: f.periodo_concessivo_inicio || '',
-    periodo_concessivo_fim: f.periodo_concessivo_fim || '',
-    prazo_dias: f.dias || 30,
-    situacao: (f.situacao as 'gozadas' | 'indenizadas' | 'perdidas' | 'gozadas_parcialmente') || 'gozadas',
-    dobra: f.dobra ?? false,
-    abono: f.abono ?? false,
-    abono_dias: f.dias_abono || 0,
-    periodos_gozo: f.gozo_inicio ? [{ inicio: f.gozo_inicio, fim: f.gozo_fim || f.gozo_inicio, dias: f.dias || 30 }] : [],
-  }));
+  return mapFeriasToEngine(ferias);
 }
 
 // Normalise DB enum values to engine enum values (case-insensitive)

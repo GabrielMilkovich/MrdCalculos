@@ -668,7 +668,7 @@ export default function PjeCalcPage() {
                 <CardContent className="p-3 space-y-2">
                   <div className="flex items-center gap-3 flex-wrap">
                     <div className="text-[10px] font-mono text-muted-foreground">{f.periodo_aquisitivo_inicio} a {f.periodo_aquisitivo_fim}</div>
-                    <Input type="number" defaultValue={f.dias} className="h-7 text-xs w-16 text-center" onBlur={e => calc.updateFerias.mutate({ id: f.id, updates: { dias: parseInt(e.target.value) || 30 } })} />
+                    <Input type="number" defaultValue={f.prazo_dias} className="h-7 text-xs w-16 text-center" onBlur={e => calc.updateFerias.mutate({ id: f.id, updates: { prazo_dias: parseInt(e.target.value) || 30 } })} />
                     <Select defaultValue={f.situacao} onValueChange={v => calc.updateFerias.mutate({ id: f.id, updates: { situacao: v } })}>
                       <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -678,7 +678,7 @@ export default function PjeCalcPage() {
                         <SelectItem value="gozadas_parcialmente">Goz. Parcial</SelectItem>
                       </SelectContent>
                     </Select>
-                    <div className="flex items-center gap-1"><Checkbox defaultChecked={f.dobra} onCheckedChange={v => calc.updateFerias.mutate({ id: f.id, updates: { dobra: !!v } })} /><Label className="text-[10px]">Dobra</Label></div>
+                    <div className="flex items-center gap-1"><Checkbox defaultChecked={f.dobra_geral} onCheckedChange={v => calc.updateFerias.mutate({ id: f.id, updates: { dobra_geral: !!v } })} /><Label className="text-[10px]">Dobra</Label></div>
                     <div className="flex items-center gap-1"><Checkbox defaultChecked={f.abono} onCheckedChange={v => calc.updateFerias.mutate({ id: f.id, updates: { abono: !!v } })} /><Label className="text-[10px]">Abono</Label></div>
                     <Button variant="ghost" size="sm" className="h-6 text-[10px] ml-auto" onClick={() => setExpandedFeriasId(isExpanded ? null : f.id)}>
                       {periodos.length > 0 ? `${periodos.length} período(s)` : 'Fracionar'} <ChevronRight className={cn("h-3 w-3 ml-1 transition-transform", isExpanded && "rotate-90")} />
