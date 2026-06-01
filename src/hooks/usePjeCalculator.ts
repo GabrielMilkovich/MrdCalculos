@@ -180,7 +180,7 @@ export function usePjeCalculator(caseId: string | undefined) {
   });
 
   const updateFerias = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<PjecalcFeriasInsert & { periodos_gozo?: unknown[]; prazo_dias?: number; relativas?: string }> }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<PjecalcFeriasInsert & { periodos_gozo?: unknown[]; prazo_dias?: number; dobra_geral?: boolean; relativas?: string }> }) => {
       await svc.updateFerias(id, updates);
     },
     onSuccess: invalidate,
