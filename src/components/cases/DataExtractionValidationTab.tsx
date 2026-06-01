@@ -30,6 +30,7 @@ export function DataExtractionValidationTab({ caseId, mode }: Props) {
       caseId={caseId}
       showExtractionTypeBadges
       showDownloadButton
+      hideValidationGate
       onGoToCalculo={async () => {
         /* noop — não há mais "avançar" */
       }}
