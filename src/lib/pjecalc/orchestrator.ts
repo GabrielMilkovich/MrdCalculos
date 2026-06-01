@@ -383,9 +383,21 @@ function toEngineReflexos(
   const out: PjeVerba[] = [];
   for (const r of reflexos) {
     if (r.ativa === false) continue;
-    if (r.base_verba_ids.length === 0) {
+
+    // Ocorrências precomputadas do reflexo (PJC já trouxe valores por
+    // competência — caso dos reflexos sobre verbas Informadas).
+    const ocs = ocorrenciasPorVerba.get(r.id) ?? [];
+
+    // RC2b: um reflexo é processável por DOIS caminhos — link de base
+    // (cálculo from-scratch sobre a verba principal) OU ocorrências próprias
+    // precomputadas. O guard antigo descartava TODO reflexo sem base link,
+    // inclusive os que têm ocorrências próprias (ex: RSR/13º/aviso/férias
+    // SOBRE SALÁRIO SUBSTITUIÇÃO — base_verbas vazio no PJC, mas com
+    // ocorrências calculadas). O V3-puro usa essas ocorrências direto
+    // (pjc-to-engine). Só ignora quando NÃO há base NEM ocorrências.
+    if (r.base_verba_ids.length === 0 && ocs.length === 0) {
       logger.warn(
-        `[ORCHESTRATOR] Reflexo "${r.nome}" (id=${r.id}) sem verba_principal_id (zero links em pjecalc_reflexo_base_verba) — ignorado.`,
+        `[ORCHESTRATOR] Reflexo "${r.nome}" (id=${r.id}) sem base link e sem ocorrências precomputadas — ignorado.`,
       );
       continue;
     }
@@ -412,7 +424,6 @@ function toEngineReflexos(
     const gerarReflexa: 'devido' | 'diferenca' = r.gerar_reflexo ? 'devido' : 'diferenca';
     const gerarPrincipal: 'devido' | 'diferenca' = r.gerar_principal ? 'devido' : 'diferenca';
 
-    const ocs = ocorrenciasPorVerba.get(r.id) ?? [];
     const ocorrenciasPrecomputadas = ocs.length > 0
       ? ocs.map(o => ({
           competencia: typeof o.competencia === 'string'
