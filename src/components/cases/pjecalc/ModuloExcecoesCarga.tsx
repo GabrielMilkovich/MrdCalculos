@@ -10,6 +10,7 @@ import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { ExperimentalBanner } from "./ExperimentalBanner";
+import { excecaoCargaSchema, detectarOverlapExcecaoCarga } from "./excecao-carga-schema";
 
 // =====================================================
 // MÓDULO EXCEÇÕES DE CARGA HORÁRIA — ExcecaoDaCargaHoraria.java
@@ -65,12 +66,26 @@ export function ModuloExcecoesCarga({ caseId }: Props) {
   };
 
   const saveExc = async () => {
-    if (!editing.periodo_inicio || !editing.periodo_fim) {
-      toast.error("Informe o período (início e fim).");
+    // Validação de paridade (ExcecaoDaCargaHorariaDoCalculo + Calculo.adicionar):
+    // required + término≥início + carga≥0 + sem overlap (MSG0024).
+    const cargaNum = Number(editing.carga_horaria_mensal.replace(",", "."));
+    const parsed = excecaoCargaSchema.safeParse({
+      periodo_inicio: editing.periodo_inicio,
+      periodo_fim: editing.periodo_fim,
+      carga_horaria_mensal: cargaNum,
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Exceção inválida.");
       return;
     }
-    if (!editing.carga_horaria_mensal.trim()) {
-      toast.error("Informe a carga horária mensal.");
+    const conflito = detectarOverlapExcecaoCarga(
+      { id: editing.id, periodo_inicio: editing.periodo_inicio, periodo_fim: editing.periodo_fim },
+      (excecoes as Array<{ id: string; periodo_inicio: string; periodo_fim: string }>).map((e) => ({
+        id: e.id, periodo_inicio: e.periodo_inicio, periodo_fim: e.periodo_fim,
+      })),
+    );
+    if (conflito) {
+      toast.error("Período coincide com outra exceção já cadastrada (datas coincidentes).");
       return;
     }
     setSaving(true);
@@ -79,7 +94,7 @@ export function ModuloExcecoesCarga({ caseId }: Props) {
         case_id: caseId,
         periodo_inicio: editing.periodo_inicio,
         periodo_fim: editing.periodo_fim,
-        carga_horaria_mensal: Number(editing.carga_horaria_mensal.replace(",", ".")),
+        carga_horaria_mensal: cargaNum,
       };
       if (editing.id) {
         const { error } = await fromUntyped("pjecalc_excecoes_carga")
