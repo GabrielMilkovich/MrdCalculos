@@ -384,6 +384,7 @@ vi.mock('@/lib/logger', () => ({
 // Imports que carregam o supabase mockado DEPOIS do vi.mock.
 import { persistirPJCAnalysis } from '../pjc-persist';
 import { executarLiquidacao } from '../orchestrator';
+import { executarLiquidacaoResumoCore } from '../modulo-resumo-liquidacao';
 
 const CORPUS_DIR = path.resolve(__dirname, '../../../../public/reports');
 
@@ -598,6 +599,74 @@ describe('FASE 2 — orchestrator (produção) reproduz V3-puro', () => {
     for (const d of dels) {
       expect(d.filters.find((f) => f.col === 'origem')?.val).toBe('CALCULADA');
       expect(d.filters.find((f) => f.col === 'case_id')?.val).toBe('case-rosicleia-f2');
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// FASE 2 Addendum 1 — paridade do ModuloResumo-direto (botão Liquidar)
+// ─────────────────────────────────────────────────────────────────────────
+async function runModuloResumo(file: string, caseId: string) {
+  for (const k of Object.keys(H.db)) delete H.db[k];
+  H.captures.deletes.length = 0;
+  H.captures.insertOcorrencia.length = 0;
+  H.captures.upsertResultado.length = 0;
+  seedTaxTables();
+  const analysis = analyzePJC(await readPjc(file));
+  await persistirPJCAnalysis(caseId, 'test-user', analysis);
+  return executarLiquidacaoResumoCore(caseId);
+}
+
+/**
+ * Addendum 1 (dono): testar o ModuloResumo-direto (botão Liquidar da aba
+ * Resumo — o caminho que o advogado MAIS clica). Revelou que NÃO estava limpo:
+ *
+ *  - combinações IPCA-E/SELIC lidas só de atualizacao_config → CORRIGIDO.
+ *  - verbas inativas não filtradas → CORRIGIDO (modulo-resumo-liquidacao.ts).
+ *  - Grade de ocorrências consultada por `case_id` numa tabela que só tem
+ *    `calculo_id` (coluna inexistente → vazio → engine FROM SCRATCH, inflando
+ *    até +120%) → CORRIGIDO.
+ *  - **ABERTO (arquitetural):** ModuloResumo lê só `getVerbas` (verba_base);
+ *    os reflexos do PJC vivem em `pjecalc_reflexo` e NUNCA são carregados (o
+ *    orchestrator foi corrigido p/ ler — Sprint Hotfix #5 — o ModuloResumo
+ *    não). Resultado: sub-conta ~30% (sem 13º/férias/aviso/DSR). Fechar isso
+ *    = portar a máquina de reflexos do orchestrator (3ª cópia) OU delegar a um
+ *    núcleo comum (colapso). Decisão do dono.
+ *
+ * Este teste DOCUMENTA o estado atual (não-GOLDEN) — quando os reflexos forem
+ * carregados, `reflexas.length` vira >0 e troca-se por asserts de paridade.
+ */
+describe('FASE 2 Addendum 1 — ModuloResumo-direto (botão Liquidar)', () => {
+  const CASOS = [
+    { nome: 'rosicleia', file: 'rosicleia-pereira-chaves.pjc' },
+    { nome: 'tiago-jose', file: 'tiago-jose.pjc' },
+    { nome: 'leide-santana', file: 'leide-santana.pjc' },
+    { nome: 'francisco-pablo', file: 'francisco-pablo.pjc' },
+  ];
+  const mr: Record<string, { liquido: number; v3: number; reflexas: number }> = {};
+  beforeAll(async () => {
+    for (const c of CASOS) {
+      const core = await runModuloResumo(c.file, `case-mr-${c.nome}`);
+      const v3 = await liquidarV3Puro(c.file, false);
+      const reflexas = (core.result?.verbas ?? []).filter((v) => v.tipo === 'reflexa').length;
+      mr[c.nome] = { liquido: core.result?.resumo?.liquido_reclamante ?? NaN, v3: v3.liquido_reclamante, reflexas };
+      // eslint-disable-next-line no-console
+      console.log(`[MR ${c.nome}] liquido=${mr[c.nome].liquido.toFixed(2)} v3=${v3.liquido_reclamante.toFixed(2)} reflexas=${reflexas}`);
+    }
+  }, 180_000);
+
+  for (const c of CASOS) {
+    it(`${c.nome}: roda sem bloquear (pré-validação OK)`, () => {
+      expect(Number.isFinite(mr[c.nome].liquido)).toBe(true);
+    });
+  }
+
+  it('DOCUMENTA BUG ABERTO: ModuloResumo não carrega reflexos do PJC (sub-conta)', () => {
+    // Os reflexos do PJC (pjecalc_reflexo) não são lidos pelo ModuloResumo →
+    // zero verbas reflexa no resultado → líquido sub-contado vs V3-puro.
+    for (const c of CASOS) {
+      expect(mr[c.nome].reflexas, `${c.nome} deveria ter 0 reflexa (bug aberto)`).toBe(0);
+      expect(mr[c.nome].liquido).toBeLessThan(mr[c.nome].v3);
     }
   });
 });

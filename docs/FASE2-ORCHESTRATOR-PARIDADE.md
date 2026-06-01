@@ -81,8 +81,40 @@ de colapso das cópias. **Não foi "ajustado" para o teste passar** — o teste
 trava contra a regressão do bug perigoso (ordem de grandeza) e documenta o
 resíduo explicitamente.
 
-## Pendências de teste (Addendum do dono)
+## Addendum 1 (dono) — ModuloResumo-direto: o caminho mais clicado estava QUEBRADO
 
-- [ ] **ModuloResumo-direto sem teste de paridade.** É o caminho que o advogado
-  mais clica e está sem cobertura. Extrair a lógica de `executarLiquidacao`
-  local (`ModuloResumo.tsx:118`) para uma função pura testável e rodar paridade.
+O botão "Liquidar" da aba Resumo (`ModuloResumo.tsx`) era a 3ª cópia, sem teste.
+A suposição "provavelmente já dá número certo" estava **errada**. Extraída a
+lógica para `src/lib/pjecalc/modulo-resumo-liquidacao.ts` (núcleo testável; o
+componente agora delega) e medida contra o V3-puro nos golden:
+
+| bug | efeito | status |
+|---|---|---|
+| combinações IPCA-E/SELIC lidas só de `atualizacao_config` | correção/juros inflados | **corrigido** |
+| verbas inativas não filtradas | principal inflado | **corrigido** (espelha V3-puro) |
+| Grade lida por `case_id` (tabela só tem `calculo_id` → vazio → FROM SCRATCH) | inflação até **+120%** (leide-santana 424k vs 193k) | **corrigido** (busca por `calculo_id`) |
+| **reflexos do PJC nunca carregados** (lê só `getVerbas`/verba_base; reflexos vivem em `pjecalc_reflexo`) | **sub-conta ~30%** (sem 13º/férias/aviso/DSR) | **ABERTO (arquitetural)** |
+
+Estado pós-3-fixes (medido): ainda **−19% a −29%** vs V3-puro porque os reflexos
+do PJC não são lidos:
+
+| caso | ModuloResumo | V3-puro |
+|---|---:|---:|
+| rosicleia | 180.693 | 245.698 |
+| tiago-jose | 232.404 | 327.643 |
+| leide-santana | 140.170 | 192.678 |
+| francisco-pablo | 137.788 | 170.908 |
+
+### Decisão pendente (dono): como fechar o ModuloResumo
+
+Fechar p/ GOLDEN exige carregar+converter os reflexos do PJC. Duas vias:
+- **A — portar a máquina de reflexos do orchestrator** (`getReflexos` +
+  `toEngineReflexos` + supressão de auto-reflexo) para o núcleo do ModuloResumo.
+  Funciona, mas é uma **3ª cópia** da mesma lógica (whack-a-mole).
+- **B — delegar** o núcleo do ModuloResumo a um core compartilhado (ou ao
+  próprio orchestrator já corrigido). É o **início do colapso das 3 cópias** —
+  o fix de raiz, antecipado só para o caminho mais clicado.
+
+Teste atual (`orchestrator-paridade-rosicleia.test.ts` → "ModuloResumo-direto")
+DOCUMENTA o bug aberto (asserta `reflexas.length === 0` + sub-conta). Quando
+fechado, troca-se pelos asserts de paridade GOLDEN.
