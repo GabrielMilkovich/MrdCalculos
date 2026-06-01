@@ -663,6 +663,12 @@ function toEngineCorrecaoConfig(
     }
   }
 
+  // RC1 fix: PjecalcCorrecaoConfigRow é tipo hand-written stale (não tem
+  // base_de_juros_das_verbas). A coluna existe no banco e é gravada pelo
+  // pjc-persist. Cast via `unknown` porque o Row tipado não sobrepõe
+  // Record<string, unknown> (TS2352); null é tratado pelo optional-chaining.
+  const cfgExtra = cfg as unknown as Record<string, unknown>;
+
   return {
     indice: cfg?.indice || 'IPCA-E',
     epoca: (cfg?.epoca as 'mensal' | 'fixo') || 'mensal',
@@ -675,6 +681,11 @@ function toEngineCorrecaoConfig(
     combinacoes_indice,
     combinacoes_juros,
     juros_apos_deducao_cs: jurosAposCS,
+    // RC1 (juros sistemático +16..22%): sem este campo o engine usa default
+    // 'DIFERENCA' (engine-v3:1693) e aplica juros sobre o valor integral. O PJC
+    // traz 'VERBA_INSS' → engine reduz a base por (1 − taxa_INSS). Prova: izabela
+    // juros 22055.63→18932.52 (Δ exato vs V3-puro com o campo).
+    base_de_juros_das_verbas: cfgExtra?.base_de_juros_das_verbas as string | undefined,
   };
 }
 
