@@ -478,14 +478,41 @@ function parseMarkdownTable(texto: string, allLines: string[]): ResultadoParse |
 
 // ── Path 2: Text-layout ──
 
-function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | null {
+function parseTextLayout(texto: string, allLines: string[], anoAlvo?: number): ResultadoParse | null {
   const { ano, empregado, empresa } = extractMetadata(texto);
 
   const headerLineRegex = /^[ \t]*C[oó]digo\s+Denomina[cç][aã]o\s+Clas/i;
   const separatorRegex = /^[ \t]*-{4,}/;
   const rubricaLineRegex = /^[ \t]+(\d{4})\s+(.+)/;
+  // Regex para detectar "Ano Competência : YYYY" — fix multi-ano (2026-05-29).
+  // PDFs ADP podem conter VÁRIAS fichas anuais no mesmo arquivo. Cada seção
+  // tem seu próprio "Ano Competência : YYYY" no header. Sem detectar isso,
+  // parser somava valores de TODOS os anos como se fossem do primeiro ano.
+  const anoCompetRegex = /Ano\s+Compet[eê]ncia\s*:\s*(\d{4})/i;
 
-  const pageHeaders: Array<{ headerIdx: number; columns: ColumnSpan[] }> = [];
+  // Indexa todos os "Ano Competência : YYYY" — usado pra inferir o ano de
+  // cada bloco (cabeçalho Código Denominação).
+  const anosNoArquivo: Array<{ idx: number; ano: number }> = [];
+  for (let i = 0; i < allLines.length; i++) {
+    const m = allLines[i].match(anoCompetRegex);
+    if (m) {
+      const a = parseInt(m[1], 10);
+      if (a >= 2000 && a <= new Date().getFullYear() + 1) {
+        anosNoArquivo.push({ idx: i, ano: a });
+      }
+    }
+  }
+  // Para cada header de tabela, encontra o "Ano Competência" mais recente ANTES.
+  function anoDoHeader(headerIdx: number): number {
+    let melhor = ano;
+    for (const a of anosNoArquivo) {
+      if (a.idx < headerIdx) melhor = a.ano;
+      else break;
+    }
+    return melhor;
+  }
+
+  const pageHeaders: Array<{ headerIdx: number; columns: ColumnSpan[]; anoDoBloco: number }> = [];
   for (let i = 0; i < allLines.length; i++) {
     if (headerLineRegex.test(allLines[i])) {
       const nextLine = i + 1 < allLines.length && separatorRegex.test(allLines[i + 1])
@@ -493,12 +520,30 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
         : null;
       const columns = detectTextLayoutColumns(allLines[i], nextLine);
       if (columns.length >= 3) {
-        pageHeaders.push({ headerIdx: i, columns });
+        pageHeaders.push({ headerIdx: i, columns, anoDoBloco: anoDoHeader(i) });
       }
     }
   }
 
   if (pageHeaders.length === 0) return null;
+
+  // Filtragem por ano: se caller passou anoAlvo, usa ele.
+  // Senão, usa o PRIMEIRO ano detectado no arquivo (evita somatório
+  // duplicado em PDFs multi-ano sem precisar quebrar a API).
+  // Anos únicos detectados nas seções:
+  const anosDetectados = [...new Set(pageHeaders.map(h => h.anoDoBloco))].sort();
+  const anoFiltro = anoAlvo ?? (anosDetectados.length > 0 ? anosDetectados[0] : ano);
+
+  const headersFiltrados = pageHeaders.filter(h => h.anoDoBloco === anoFiltro);
+
+  if (headersFiltrados.length === 0) {
+    console.warn(`[parser-ficha] ano alvo ${anoFiltro} não encontrado entre [${anosDetectados.join(',')}]`);
+    return null;
+  }
+
+  if (anosDetectados.length > 1) {
+    console.log(`[parser-ficha] PDF multi-ano detectado: anos=[${anosDetectados.join(',')}], processando apenas ${anoFiltro}`);
+  }
 
   const rubricas = new Map<string, RubricaExtraida>();
   // Candidatos a órfãos rescisórios: rubricas que apareceram numa seção com
@@ -517,7 +562,7 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
   let linhasFiltradas = 0;
   const cutoffCodigos = new Set<string>();
 
-  for (const { headerIdx, columns } of pageHeaders) {
+  for (const { headerIdx, columns, anoDoBloco } of headersFiltrados) {
     let dataStart = headerIdx + 1;
     if (dataStart < allLines.length && separatorRegex.test(allLines[dataStart])) {
       dataStart++;
@@ -590,7 +635,10 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
           // Ago-Dez em rescisões antecipadas.
           valorTotalIsolado = valor;
         } else {
-          const comp = col.mm === '13' ? `${ano}-13` : `${ano}-${col.mm}`;
+          // Fix multi-ano: usa anoDoBloco (ano da seção atual) em vez do
+          // ano global. PDFs com múltiplos anos no mesmo arquivo agora
+          // atribuem valores ao ano correto de cada bloco.
+          const comp = col.mm === '13' ? `${anoDoBloco}-13` : `${anoDoBloco}-${col.mm}`;
           valores.push({ competencia: comp, valor });
         }
       }
@@ -643,14 +691,15 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
   }
 
   const allMeses = new Set<string>();
-  for (const { columns } of pageHeaders) {
+  for (const { columns } of headersFiltrados) {
     for (const c of columns) {
       if (c.mm !== 'total') allMeses.add(c.mm);
     }
   }
 
   return {
-    ano, empregado, empresa,
+    ano: anoFiltro,
+    empregado, empresa,
     rubricas: rubricasArr,
     resumo_mensal: buildResumo(rubricasArr),
     _meta: {
@@ -671,8 +720,18 @@ function parseTextLayout(texto: string, allLines: string[]): ResultadoParse | nu
 
 // ── Entry point ──
 
+/**
+ * Entry point do parser determinístico.
+ *
+ * @param texto Texto extraído do PDF (via pdfjs/pdf-parse).
+ * @param anoAlvo Opcional. Quando o PDF contém múltiplas fichas anuais
+ *   (caso comum em Via Varejo), filtra somente as seções daquele ano.
+ *   Sem o filtro, o parser somava valores de TODOS os anos como se
+ *   fossem do primeiro ano detectado (bug 2026-05-29).
+ */
 export function parseFichaFinanceiraDeterministico(
   texto: string,
+  anoAlvo?: number,
 ): ResultadoParse | null {
   if (!texto || texto.length < 200) return null;
 
@@ -689,7 +748,7 @@ export function parseFichaFinanceiraDeterministico(
 
   const hasTextLayoutLines = /^\s+\d{4}\s+\w/m.test(texto);
   if (hasTextLayoutLines) {
-    const tlResult = parseTextLayout(texto, allLines);
+    const tlResult = parseTextLayout(texto, allLines, anoAlvo);
     if (tlResult && tlResult.rubricas.length >= 3) return tlResult;
   }
 
