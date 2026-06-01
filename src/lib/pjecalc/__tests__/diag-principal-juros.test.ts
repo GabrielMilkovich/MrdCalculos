@@ -516,6 +516,70 @@ describe('DIAGNÓSTICO — principal + juros divergence', () => {
         console.log(`    → ${confirma4 ? '✓ CONFIRMADA (orch infla mais meses)' : '✗ NÃO confirma'}`);
       }
 
+      // VERIFICAÇÃO DE HIPÓTESE 5 (resíduo −1.5% de correção — 4º efeito):
+      // bruto idêntico mas corrigido diverge. Compara, por competência, a
+      // `diferenca` e o `indice_correcao` recalculado pelo engine em cada path.
+      // Se indice_correcao difere por competência → viés de cálculo de índice.
+      // Se a diferença está na distribuição de competências → outra causa.
+      if (c.nome === 'rosicleia') {
+        const VERBA_ALVO = 'PRÊMIO ESTÍMULO';
+        const ov = orchVerbas.find(v => v.nome === VERBA_ALVO);
+        const vv = v3.verbas.find(v => v.nome === VERBA_ALVO);
+        const orchByComp = new Map((ov?.ocorrencias ?? []).map(o => [o.competencia, o]));
+        const v3ByComp = new Map((vv?.ocorrencias ?? []).map(o => [o.competencia, o]));
+        const comps = [...new Set([...orchByComp.keys(), ...v3ByComp.keys()])].sort();
+        // eslint-disable-next-line no-console
+        console.log(`\n  [hipótese 5] termo-a-termo correção "${VERBA_ALVO}" (orch ${ov?.ocorrencias?.length}oc vs v3 ${vv?.ocorrencias?.length}oc):`);
+        // eslint-disable-next-line no-console
+        console.log(`    comp     | orch.dif   orch.idx   orch.corr | v3.dif    v3.idx    v3.corr  | Δidx`);
+        let primeirosDivergentes = 0;
+        for (const comp of comps) {
+          const o = orchByComp.get(comp);
+          const v = v3ByComp.get(comp);
+          const oIdx = o?.indice_correcao ?? 0;
+          const vIdx = v?.indice_correcao ?? 0;
+          const deltaIdx = Math.abs(oIdx - vIdx);
+          // imprime só os 8 primeiros divergentes + os 3 primeiros sempre
+          const divergiu = deltaIdx > 1e-6 || Math.abs((o?.diferenca ?? 0) - (v?.diferenca ?? 0)) > 0.01;
+          if (divergiu && primeirosDivergentes < 8) {
+            primeirosDivergentes++;
+            // eslint-disable-next-line no-console
+            console.log(`    ${comp} | ${(o?.diferenca ?? 0).toFixed(2).padStart(9)} ${oIdx.toFixed(6).padStart(9)} ${(o?.valor_corrigido ?? 0).toFixed(2).padStart(9)} | ${(v?.diferenca ?? 0).toFixed(2).padStart(9)} ${vIdx.toFixed(6).padStart(9)} ${(v?.valor_corrigido ?? 0).toFixed(2).padStart(9)} | ${deltaIdx.toFixed(6)} ${divergiu ? '←' : ''}`);
+          }
+        }
+        const orchTotalIdx = (ov?.ocorrencias ?? []).reduce((s, o) => s + o.indice_correcao, 0);
+        const v3TotalIdx = (vv?.ocorrencias ?? []).reduce((s, o) => s + o.indice_correcao, 0);
+        // eslint-disable-next-line no-console
+        console.log(`    Σindice_correcao: orch=${orchTotalIdx.toFixed(4)} v3=${v3TotalIdx.toFixed(4)} | total_corrigido orch=${ov?.total_corrigido?.toFixed(2)} v3=${vv?.total_corrigido?.toFixed(2)}`);
+        // eslint-disable-next-line no-console
+        console.log(`    competências divergentes em índice/dif: ${primeirosDivergentes}${primeirosDivergentes >= 8 ? '+ (truncado)' : ''}`);
+      }
+
+      // VERIFICAÇÃO DE HIPÓTESE 6 (ignorar_taxa_negativa — root cause do 4º efeito):
+      // engine-v3:480 → setIgnorarTaxaNegativa(cfg.ignorar_taxa_negativa ?? false).
+      // toEngineCorrecaoConfig (orchestrator) NÃO repassa esse campo → engine usa
+      // false → aplica taxas negativas (deflação IPCA-E) → índice acumulado MENOR.
+      // V3-puro passa o valor do PJC (true) → clampa negativas a 0 → índice MAIOR.
+      // Teste: rodar V3-puro com ignorar_taxa_negativa=false (simula orchestrator).
+      {
+        // eslint-disable-next-line no-console
+        console.log(`\n  [hipótese 6] ignorar_taxa_negativa do PJC: ${v3.correcaoConfig.ignorar_taxa_negativa} | combinar_indice: ${v3.correcaoConfig.combinar_indice}`);
+        const analysis6 = analyzePJC(await readPjc(c.file));
+        const inputs6 = convertPjcToEngineInputs(analysis6, `h6-${c.nome}`);
+        inputs6.params.modo_calculo = 'independent';
+        inputs6.correcaoConfig.ignorar_taxa_negativa = false; // simula orchestrator (?? false)
+        const eng6 = new PjeCalcEngineV3(
+          inputs6.params, inputs6.historicos, inputs6.faltas, inputs6.ferias,
+          inputs6.verbas, inputs6.cartaoPonto, inputs6.fgtsConfig, inputs6.csConfig,
+          inputs6.irConfig, inputs6.correcaoConfig, inputs6.honorariosConfig,
+          inputs6.custasConfig, inputs6.seguroConfig, INDICES_DB, INSS_FAIXAS,
+        );
+        const r6 = eng6.liquidar().resumo;
+        const confirma6 = Math.abs(r6.principal_corrigido - orchResumo.principal_corrigido) / orchResumo.principal_corrigido < 0.005;
+        // eslint-disable-next-line no-console
+        console.log(`  [hipótese 6] V3 com ignorar_taxa_negativa=false → corr=${r6.principal_corrigido.toFixed(2)} juros=${r6.juros_mora.toFixed(2)} vs orch corr=${orchResumo.principal_corrigido.toFixed(2)} juros=${orchResumo.juros_mora.toFixed(2)} → ${confirma6 ? '✓ CONFIRMADA' : '✗ NÃO confirma'}`);
+      }
+
       // ─── VERBA-BY-VERBA COMPARISON (top divergências de juros) ───────────
       const orchByNome = new Map(orchVerbas.map((v) => [v.nome, v]));
       const v3ByNome = new Map(v3.verbas.map((v) => [v.nome, v]));

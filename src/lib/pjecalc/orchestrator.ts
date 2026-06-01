@@ -668,10 +668,11 @@ function toEngineCorrecaoConfig(
     }
   }
 
-  // RC1 fix: PjecalcCorrecaoConfigRow é tipo hand-written stale (não tem
-  // base_de_juros_das_verbas). A coluna existe no banco e é gravada pelo
-  // pjc-persist. Cast via `unknown` porque o Row tipado não sobrepõe
-  // Record<string, unknown> (TS2352); null é tratado pelo optional-chaining.
+  // RC1/RC4 fix: PjecalcCorrecaoConfigRow é tipo hand-written stale (não tem
+  // base_de_juros_das_verbas nem ignorar_taxa_negativa). As colunas existem no
+  // banco e são gravadas pelo pjc-persist (mesmo upsert atômico). Cast via
+  // `unknown` porque o Row tipado não sobrepõe Record<string, unknown>
+  // (TS2352); null é tratado pelo optional-chaining abaixo.
   const cfgExtra = cfg as unknown as Record<string, unknown>;
 
   return {
@@ -691,6 +692,13 @@ function toEngineCorrecaoConfig(
     // traz 'VERBA_INSS' → engine reduz a base por (1 − taxa_INSS). Prova: izabela
     // juros 22055.63→18932.52 (Δ exato vs V3-puro com o campo).
     base_de_juros_das_verbas: cfgExtra?.base_de_juros_das_verbas as string | undefined,
+    // RC4 (4º efeito — viés de correção em contratos longos): sem este campo o
+    // engine usa `?? false` (engine-v3:480) e aplica taxas negativas (deflação
+    // IPCA-E) → índice acumulado MENOR. O PJC traz `true` (clampa negativas a 0).
+    // Prova: rosicleia corr 225467.82→228583.27 (Δ exato vs V3-puro com a flag).
+    ignorar_taxa_negativa: typeof cfgExtra?.ignorar_taxa_negativa === 'boolean'
+      ? (cfgExtra.ignorar_taxa_negativa as boolean)
+      : undefined,
   };
 }
 
