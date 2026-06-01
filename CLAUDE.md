@@ -63,8 +63,12 @@
 !npx supabase gen types typescript --local > src/types/supabase.ts
 
 # Build
-!npx tsc --noEmit            # checa tipos sem buildar
+!npm run typecheck           # check de tipo REAL (tsconfig.app.json)
 !npm run build               # build completo
+
+# ⚠️ NÃO use `npx tsc --noEmit` para checar tipos: o tsconfig.json RAIZ tem
+# `files: []` + `references`, então em modo não-build ele compila ZERO arquivos
+# (sai "0 erros" enganoso). O gate de tipo é `npm run typecheck`. Ver "Gate de tipos".
 
 # Supabase local
 !npx supabase start
@@ -262,6 +266,19 @@ Quando o Claude GitHub App (ou qualquer agente automatizado) corrigir falhas de 
 - Desabilitar testes ou marcar como `.skip`
 
 ### Loop de execução obrigatório
-1. `npx tsc --noEmit` — zero erros de tipo
+1. `npm run typecheck` — NÃO pode AUMENTAR a contagem de erros vs a base (ver "Gate de tipos")
 2. `npx vitest run` — todos os testes passando (exceto calibração `.skip`)
 3. Se algum falhar após o fix: **pare e reporte**, não tente workaround
+
+### Gate de tipos (IMPORTANTE — 2026-06 Addendum 2)
+- O check de tipo do projeto é **`npm run typecheck`** (`tsc -p tsconfig.app.json`).
+  **NUNCA** confie em `npx tsc --noEmit`: o `tsconfig.json` raiz tem `files: []` +
+  `references` → compila ZERO arquivos (sai "0 erros" mesmo com o código quebrado).
+  `vite build` usa esbuild → também não type-checa. Foi esse ponto cego que deixou
+  bugs de coluna-fantasma (ex.: `upsertResultado` com `inss_segurado`, férias com
+  `dias`/`dobra`) chegarem em caminho vivo.
+- **Baseline atual: ~627 erros reais** (tipos hand-written em `lib/pjecalc/types.ts`
+  driftados do schema). É backlog conhecido. O CI roda o typecheck **non-blocking**.
+- **Regra de ouro:** um PR **não pode AUMENTAR** a contagem vs a base. Mede com
+  `npm run typecheck 2>&1 | grep -c "error TS"` antes e depois. Quando o baseline
+  zerar (ver plano de derivar tipos do schema), o gate vira **blocking** em 0.

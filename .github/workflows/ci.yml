@@ -17,7 +17,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm install
-      - run: npx tsc --noEmit
+      # ATENÇÃO: `tsc --noEmit` no tsconfig.json RAIZ é VÁCUO (files:[] + references
+      # → compila 0 arquivos). O check de tipo REAL é `npm run typecheck`
+      # (tsconfig.app.json). Non-blocking por ora: há ~627 erros pré-existentes de
+      # tipos hand-written stale (ver CLAUDE.md "Gate de tipos"). Regra: um PR NÃO
+      # pode AUMENTAR a contagem vs a base. Vira blocking quando o baseline zerar.
+      - name: Type check (real, non-blocking)
+        run: |
+          npm run typecheck 2>&1 | tee /tmp/tsc-ci.txt || true
+          echo "::warning::TS errors (tsconfig.app.json): $(grep -c 'error TS' /tmp/tsc-ci.txt || echo 0)"
+        continue-on-error: true
       - run: npm run lint
 
   test:

@@ -206,7 +206,24 @@ export function usePjeCalculator(caseId: string | undefined) {
 
       const adm = new Date(dataAdmissao);
       const dem = new Date(dataDemissao);
-      const periodos: PjecalcFeriasInsert[] = [];
+      // Addendum 2: campos REAIS de pjecalc_ferias (verificado no banco MRDCALCC):
+      // `prazo_dias` e `dobra_geral`. O payload antigo gravava `dias`/`dobra` —
+      // colunas INEXISTENTES → PGRST204 no insert (mesmo bug-classe do
+      // upsertResultado). O tipo hand-written PjecalcFeriasInsert ainda lista
+      // dias/dobra (stale; #141 corrige). Tipamos o payload pelos nomes reais e
+      // fazemos cast no boundary do insert — runtime-correto independente do
+      // estado do tipo hand-written.
+      type FeriasPeriodoInsert = {
+        case_id: string;
+        periodo_aquisitivo_inicio: string;
+        periodo_aquisitivo_fim: string;
+        periodo_concessivo_inicio: string;
+        periodo_concessivo_fim: string;
+        prazo_dias: number;
+        situacao: string;
+        dobra_geral: boolean;
+      };
+      const periodos: FeriasPeriodoInsert[] = [];
       let aqInicio = new Date(adm);
 
       while (aqInicio < dem) {
@@ -226,9 +243,9 @@ export function usePjeCalculator(caseId: string | undefined) {
           periodo_aquisitivo_fim: aqFim > dem ? dem.toISOString().slice(0, 10) : aqFim.toISOString().slice(0, 10),
           periodo_concessivo_inicio: concInicio.toISOString().slice(0, 10),
           periodo_concessivo_fim: concFim.toISOString().slice(0, 10),
-          dias: regimeTrabalho === 'tempo_integral' ? 30 : 18,
+          prazo_dias: regimeTrabalho === 'tempo_integral' ? 30 : 18,
           situacao,
-          dobra: situacao !== 'indenizadas' && concFim > dem,
+          dobra_geral: situacao !== 'indenizadas' && concFim > dem,
         });
 
         aqInicio = new Date(aqFim);
@@ -236,7 +253,9 @@ export function usePjeCalculator(caseId: string | undefined) {
       }
 
       if (periodos.length > 0) {
-        await svc.insertFeriasBatch(periodos);
+        // cast no boundary: insertFeriasBatch tipa por PjecalcFeriasInsert (stale
+        // p/ dias/dobra neste branch); o payload usa os campos reais da tabela.
+        await svc.insertFeriasBatch(periodos as unknown as PjecalcFeriasInsert[]);
       }
       registrarAuditLog(safeCaseId, 'Férias', 'criacao', { valorNovo: `${periodos.length} períodos` });
       return periodos.length;
