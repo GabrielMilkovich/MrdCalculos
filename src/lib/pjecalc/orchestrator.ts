@@ -227,7 +227,11 @@ function toEngineVerbas(
           base: Number(o.base_valor) || 0,
           divisor: Number(o.divisor_valor) || 1,
           multiplicador: Number(o.multiplicador_valor) || 1,
-          quantidade: Number(o.quantidade_valor) || 1,
+          // RC3 fix: `|| 1` convertia quantidade=0 (meses sem evento) em 1,
+          // inflando verbas de evento esparso (ex: FERIADOS LABORADOS).
+          // `?? 1` preserva 0 explícito; null/undefined caem no default 1.
+          // divisor/multiplicador mantêm `|| 1`: zero nesses é erro de dado.
+          quantidade: Number(o.quantidade_valor ?? 1),
           // Banco grava dobra como NUMERIC(4,2) (1 ou 2). Motor espera boolean.
           dobra: Number(o.dobra) >= 2,
           devido: Number(o.devido) || 0,
@@ -417,7 +421,8 @@ function toEngineReflexos(
           base: Number(o.base_valor) || 0,
           divisor: Number(o.divisor_valor) || 1,
           multiplicador: Number(o.multiplicador_valor) || 1,
-          quantidade: Number(o.quantidade_valor) || 1,
+          // RC3 fix (reflexo): mesmo bug do path de verbas — ver acima.
+          quantidade: Number(o.quantidade_valor ?? 1),
           dobra: Number(o.dobra) >= 2,
           devido: Number(o.devido) || 0,
           pago: Number(o.pago) || 0,
