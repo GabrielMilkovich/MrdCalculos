@@ -162,7 +162,13 @@ export async function persistirPJCAnalysis(
   let verbas_inseridas = 0;
   const verbaIdMap = new Map<string, string>(); // pjc_id → db_id
 
-  const calculadas = analysis.verbas.filter(v => v.tipo === 'Calculada');
+  // RC2 fix: inclui Informada (antes só Calculada). Sem isso, verbas Informadas
+  // (ex: SALÁRIO SUBSTITUIÇÃO do joseli, total_devido=16333.24) nunca chegavam
+  // ao banco → orchestrator via 0 (e seus reflexos órfãos por base ausente).
+  // Persiste com valor='informado' + ocorrências normalizadas (base=devido,
+  // div/mult/qty=1, abaixo) — espelha o caminho-oráculo pjc-to-engine:540-575,
+  // garantindo paridade verba-a-verba no path orchestrator.
+  const calculadas = analysis.verbas.filter(v => v.tipo === 'Calculada' || v.tipo === 'Informada');
   for (const v of calculadas) {
     const { data: vbRow, error: vbErr } = await supabase
       .from('pjecalc_verba_base')
@@ -173,6 +179,10 @@ export async function persistirPJCAnalysis(
         caracteristica: v.caracteristica || 'COMUM',
         periodicidade: v.ocorrencia_pagamento || 'MENSAL',
         tipo_variacao: v.variacao || 'VARIAVEL',
+        // Informada: marca valor='informado' (default da coluna é 'calculado').
+        // O cálculo em si vem das ocorrências normalizadas; esta flag mantém o
+        // display/semântica alinhados ao V3-puro (toEngineVerbas:314 lê → PjeVerba.valor).
+        valor: v.tipo === 'Informada' ? 'informado' : 'calculado',
         multiplicador: v.formula.multiplicador.valor,
         divisor: v.formula.divisor.valor,
         periodo_inicio: v.periodo_inicio || null,
@@ -261,17 +271,22 @@ export async function persistirPJCAnalysis(
     const ocorrencias = v.ocorrencias_all || [];
     if (ocorrencias.length === 0) continue;
 
+    // RC2: Informada normaliza base=devido, div/mult/qty=1 (espelha
+    // pjc-to-engine:540-553). O motor recalcula devido from-scratch via
+    // base×mult×qty/div = devido×1×1/1 = devido, idêntico ao V3-puro. Sem a
+    // normalização, base/mult/div vêm como no XML (frequentemente 0) → devido 0.
+    const isInformada = v.tipo === 'Informada';
     const ocRows = ocorrencias.map((oc: OcorrenciaAnalysis) => ({
       calculo_id: calculoId,
-      verba_base_id: v.tipo === 'Calculada' ? dbId : null,
+      verba_base_id: (v.tipo === 'Calculada' || isInformada) ? dbId : null,
       reflexo_id: v.tipo === 'Reflexo' ? dbId : null,
       tipo: v.nome,
       nome: v.nome,
       competencia: oc.competencia || '2020-01-01',
-      base_valor: oc.base,
-      multiplicador: oc.multiplicador,
-      divisor: oc.divisor,
-      quantidade: oc.quantidade,
+      base_valor: isInformada ? oc.devido : oc.base,
+      multiplicador: isInformada ? 1 : oc.multiplicador,
+      divisor: isInformada ? 1 : oc.divisor,
+      quantidade: isInformada ? 1 : oc.quantidade,
       dobra: oc.dobra ? 2 : 1,
       devido: oc.devido,
       pago: oc.pago,
