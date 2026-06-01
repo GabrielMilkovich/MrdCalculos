@@ -79,10 +79,17 @@ const RE_PERIODO_GLOBAL =
 // volta com 11/01 mesmo quando o texto dizia 11/02 (período "11/01 A
 // 15/02" tem dois candidatos válidos pro dia 11). A solução é usar
 // `dataPontoToUtc(dd, mm, yyyy)` direto quando o pdfjs nos deu tudo.
+// 2026-06-01: pdf-parse (fallback do extrator-geometrico quando unpdf falha)
+// concatena tokens sem espaço — "02QUI10:0314:02..." em vez de "02 QUI 10:03".
+// Trocamos `\s+` por `\s*` e o `\b` final por lookahead `(?=[\s\d:]|$)` para
+// aceitar ambos formatos (pdf-parse concatenado e pdftotext espaçado).
+// Caso JOSELI SILVA WANDERLEY (Via Varejo layout antigo 2011): mapper retornava
+// null porque NENHUMA linha casava `RE_LINHA_DIA_OCR`. Restrição `0[1-9]|[12]\d|3[01]`
+// no dia previne falsos positivos com CPFs longos e dia 00/32+.
 const RE_LINHA_DIA_PDFJS =
-  /(?:^|\s)(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\s+(SEG|TER|QUA|QUI|SEX|SAB|DOM|D\.?S\.?R\.?|FERIADO|FER\.?\s*DESC\.?)\b/i;
+  /(?:^|[\s\n])(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})\s*(SEG|TER|QUA|QUI|SEX|SAB|DOM|D\.?S\.?R\.?|FERIADO|FER\.?\s*DESC\.?)(?=[\s\d:]|$)/i;
 const RE_LINHA_DIA_OCR =
-  /(?:^|\s)(\d{1,2})\s+(SEG|TER|QUA|QUI|SEX|SAB|DOM|D\.?S\.?R\.?|FERIADO|FER\.?\s*DESC\.?)\b/i;
+  /(?:^|[\s\n])(0[1-9]|[12]\d|3[01])\s*(SEG|TER|QUA|QUI|SEX|SAB|DOM|D\.?S\.?R\.?|FERIADO|FER\.?\s*DESC\.?)(?=[\s\d:]|$)/i;
 const RE_HORA = /\b(\d{1,2}):(\d{2})\b/g;
 
 const MARCADORES_FIM = [
