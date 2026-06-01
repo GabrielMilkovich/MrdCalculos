@@ -397,6 +397,22 @@ describe('DIAGNÓSTICO — principal + juros divergence', () => {
       // eslint-disable-next-line no-console
       console.log(`  liquido: orch=${orchResumo.liquido_reclamante.toFixed(2)} v3=${v3.resumo.liquido_reclamante.toFixed(2)}`);
 
+      // ─── DECOMPOSIÇÃO DO LÍQUIDO (deduções downstream) ───────────────────
+      // Com bruto+correção+juros idênticos, qualquer Δ no líquido é dedução.
+      // Isola qual componente (INSS/IR/FGTS/honorários/multas) diverge.
+      const oR = orchResumo as unknown as Record<string, number>;
+      const vR = v3.resumo as unknown as Record<string, number>;
+      const compsLiquido = ['cs_segurado', 'ir_retido', 'fgts_total', 'honorarios_sucumbenciais', 'multa_523', 'multa_467', 'seguro_desemprego'];
+      // eslint-disable-next-line no-console
+      console.log(`  [líquido decomposição] orch=${orchResumo.liquido_reclamante.toFixed(2)} v3=${v3.resumo.liquido_reclamante.toFixed(2)} Δ=${(orchResumo.liquido_reclamante - v3.resumo.liquido_reclamante).toFixed(2)}`);
+      for (const k of compsLiquido) {
+        const o = oR[k] ?? 0; const v = vR[k] ?? 0;
+        if (Math.abs(o - v) > 0.01) {
+          // eslint-disable-next-line no-console
+          console.log(`    ${k.padEnd(24)} orch=${o.toFixed(2).padStart(12)} v3=${v.toFixed(2).padStart(12)} Δ=${(o - v).toFixed(2).padStart(12)}`);
+        }
+      }
+
       // ─── CORRECAO CONFIG COMPARISON ──────────────────────────────────────
       // eslint-disable-next-line no-console
       console.log(`\n  [correcaoConfig] v3-puro (from PJC XML):`);
