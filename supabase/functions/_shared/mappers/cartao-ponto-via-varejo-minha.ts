@@ -103,8 +103,13 @@ const RE_DESCONSIDERADO = /\b(\d{1,2}):(\d{2})\s*[-–]\s*Desconsiderado/gi;
 // Sprint 3 Fase 4: linha-dia no texto-plano da página
 // (fallback quando detectarTabelas falha em algumas páginas).
 // Exemplo: "16/07/2021 - Sex 10:35* 12:00* 13:00* 19:00* Horas Trabalhadas: 07:25"
+// IMPORTANTE: usa `(?=\s|\d|$)` em vez de `\b` porque pdf-parse (fallback do
+// PR #138) cola data + batidas sem espaço: "26/12/2024 - Qui10:33". O `\b`
+// falhava aí porque 'i' e '1' são ambos word chars (sem boundary entre).
+// Sem essa correção, parser perdia ~236 linhas de batidas em PDFs Casas
+// Bahia "ESPELHO DE PONTO" extraídos via pdf-parse (caso JOSE FRANCISCO).
 const RE_LINHA_DIA_PLANA =
-  /^\s*(\d{2})\/(\d{2})\/(\d{4})\s*[-–]\s*(Dom|Seg|Ter|Qua|Qui|Sex|S[áa]b)\b\s*(.+)?$/i;
+  /^\s*(\d{2})\/(\d{2})\/(\d{4})\s*[-–]\s*(Dom|Seg|Ter|Qua|Qui|Sex|S[áa]b)(?=\s|\d|[-–]|$)\s*(.+)?$/i;
 
 // Palavras-chave que marcam INÍCIO do campo RESULTADO em texto plano.
 // Tudo APÓS a primeira ocorrência é descartado pra extração de batidas
