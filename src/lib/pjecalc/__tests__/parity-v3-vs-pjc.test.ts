@@ -258,3 +258,69 @@ describe('Paridade V3 — Engine Core vs PJC reais', () => {
     }
   });
 });
+
+/**
+ * GOLDEN LOCK — trava de regressão de valor (FASE 1 da missão de produtização).
+ *
+ * O agregado acima (`Paridade V3`) só protege contra colapso de paridade
+ * (<500% por caso, ≥50% em APROV≤5%). NÃO trava drift de valor: o engine
+ * poderia mudar o líquido de um caso em R$ 5.000 e o agregado continuaria
+ * verde. Este bloco fixa o valor EXATO que o engine produz HOJE (medido em
+ * 2026-06-01 rodando este mesmo pipeline) para os 4 golden cases, mais a
+ * banda de paridade vs o gabarito do PJe-Calc.
+ *
+ * Qualquer mudança nas Fases 2-4 (orchestrator, validações, módulos) que
+ * mova esses números quebra aqui — que é o objetivo: a rede de segurança
+ * vem antes do refactor. Se um valor mudar legitimamente, atualize-o aqui
+ * COM justificativa no commit — nunca "ajuste pra passar" silenciosamente.
+ */
+async function liquidarGolden(file: string): Promise<{ resumo: ReturnType<PjeCalcEngineV3['liquidar']>['resumo']; pjc_liquido: number }> {
+  const xml = await readPjc(file);
+  const analysis = analyzePJC(xml);
+  const inputs = convertPjcToEngineInputs(analysis, `golden-${file}`);
+  inputs.params.modo_calculo = 'independent';
+  if (!inputs.params.data_citacao) inputs.params.data_citacao = inputs.params.data_ajuizamento;
+  inputs.correcaoConfig.gt_closure = undefined;
+  inputs.correcaoConfig.apuracao_juros_gt = undefined;
+  if (inputs.csConfig.apuracao_juros_gt) inputs.csConfig.apuracao_juros_gt = undefined;
+  if (inputs.irConfig.apuracao_juros_gt) inputs.irConfig.apuracao_juros_gt = undefined;
+  const engine = new PjeCalcEngineV3(
+    inputs.params, inputs.historicos, inputs.faltas, inputs.ferias,
+    inputs.verbas, inputs.cartaoPonto, inputs.fgtsConfig, inputs.csConfig,
+    inputs.irConfig, inputs.correcaoConfig, inputs.honorariosConfig,
+    inputs.custasConfig, inputs.seguroConfig, INDICES, FAIXAS,
+  );
+  return { resumo: engine.liquidar().resumo, pjc_liquido: analysis.resultado.liquido_exequente };
+}
+
+interface GoldenCase {
+  file: string;
+  liquido: number;   // valor EXATO medido no engine atual
+  ir: number;        // resumo.ir_retido (RRA art_12a)
+  cs: number;        // resumo.cs_segurado (INSS retido reclamante)
+  gabarito: number;  // líquido do PJe-Calc (analysis.resultado.liquido_exequente)
+}
+
+// Valores medidos em 2026-06-01 — pipeline readPjc → analyzePJC →
+// convertPjcToEngineInputs → PjeCalcEngineV3 → liquidar(), modo independent.
+const GOLDEN: GoldenCase[] = [
+  { file: 'rosicleia-pereira-chaves.pjc', liquido: 245697.72, ir: 4151.24, cs: 23129.19, gabarito: 247215.95 },
+  { file: 'tiago-jose.pjc', liquido: 327643.32, ir: 30946.96, cs: 35310.07, gabarito: 320938.56 },
+  { file: 'leide-santana.pjc', liquido: 192677.70, ir: 0.00, cs: 16256.81, gabarito: 190652.72 },
+  { file: 'francisco-pablo.pjc', liquido: 170908.23, ir: 1551.58, cs: 13398.63, gabarito: 166619.02 },
+];
+
+describe('GOLDEN LOCK — regressão de valor', () => {
+  for (const g of GOLDEN) {
+    it(`${g.file} — líquido/IR/INSS travados + banda ≤5% vs PJe-Calc`, async () => {
+      const { resumo } = await liquidarGolden(g.file);
+      // Trava o valor EXATO atual (catch de qualquer drift no engine).
+      expect(resumo.liquido_reclamante, `líquido drift em ${g.file}`).toBeCloseTo(g.liquido, 2);
+      expect(resumo.ir_retido, `IR drift em ${g.file}`).toBeCloseTo(g.ir, 2);
+      expect(resumo.cs_segurado, `INSS-segurado drift em ${g.file}`).toBeCloseTo(g.cs, 2);
+      // Banda de paridade vs PJe-Calc (gabarito real do escritório).
+      const deltaPct = Math.abs((resumo.liquido_reclamante - g.gabarito) / g.gabarito) * 100;
+      expect(deltaPct, `paridade ${g.file}: delta ${deltaPct.toFixed(2)}% > 5%`).toBeLessThanOrEqual(5);
+    });
+  }
+});
