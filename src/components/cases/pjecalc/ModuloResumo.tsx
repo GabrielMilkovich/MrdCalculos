@@ -18,7 +18,7 @@ import { calcularCompletude } from "@/lib/pjecalc/completude";
 import * as svc from "@/lib/pjecalc/service";
 import { parseDobraFromDb } from "@/lib/pjecalc/parse-dobra-from-db";
 import { PjeCalcEngineV3 } from "@/lib/pjecalc/engine-v3";
-import { executarLiquidacaoResumoCore } from "@/lib/pjecalc/modulo-resumo-liquidacao";
+import { executarLiquidacao as executarLiquidacaoOrchestrator } from "@/lib/pjecalc/orchestrator";
 // Engine unification (P-prod): UI manual deve carregar os mesmos 4 DBs
 // históricos que o orchestrator usa, para evitar fallbacks hardcoded em
 // casos PRE_ADC58 longos. Ver docs sobre divergência de inputs UI vs
@@ -125,128 +125,28 @@ export function ModuloResumo({ caseId, onBeforeLiquidar }: Props) {
         await onBeforeLiquidar();
       }
 
-      // FASE 2 Addendum 1: nucleo de liquidacao extraido para funcao testavel
-      // (lib/pjecalc/modulo-resumo-liquidacao.ts). Testa o caminho que o
-      // advogado mais clica (paridade GOLDEN vs V3-puro). UI + persistencia
-      // continuam aqui no componente.
-      const core = await executarLiquidacaoResumoCore(caseId);
-      setValidacao(core.preValidation);
+      // FASE 2 Addendum 1 (decisão do dono — opção 2): o botão Liquidar delega
+      // ao orchestrator, eliminando a lógica de cálculo divergente que vivia
+      // inline aqui (a "3ª cópia"). O orchestrator carrega os reflexos do PJC
+      // (pjecalc_reflexo) — que esta tela ignorava, sub-contando ~30% — e
+      // persiste em pjecalc_liquidacao_resultado, exatamente de onde o display
+      // lê (svc.getResultado, queryKey ["pjecalc_liquidacao", caseId]). Também
+      // grava as ocorrências CALCULADA (preservando PJC_IMPORT) — a Grade não
+      // some. Ver docs/FASE2-ORCHESTRATOR-PARIDADE.md (Addendum 1).
+      const orch = await executarLiquidacaoOrchestrator(caseId, 'manual');
 
-      if (!core.preValidation.valido) {
-        toast.error(`Liquidacao bloqueada: ${core.preValidation.erros} erro(s) critico(s) encontrado(s)`);
-        return;
-      }
-
-      if (core.preValidation.alertas > 0) {
-        toast.warning(`${core.preValidation.alertas} alerta(s) encontrado(s) — liquidacao prosseguindo`);
-      }
-
-      const result = core.result!;
-
-      // Get calculo_id from pjecalc_calculos (real table)
-      const { data: calculoRow } = await supabase
-        .from("pjecalc_calculos")
-        .select("id")
-        .eq("case_id", caseId)
-        .maybeSingle();
-      
-      if (!calculoRow) throw new Error("Cálculo não encontrado. Execute 'Sincronizar Dados' primeiro.");
-      const calculoId = (calculoRow as { id: string }).id;
-
-      // Delete previous resultado if exists
-      await fromUntyped("pjecalc_resultado").delete().eq("calculo_id", calculoId);
-
-      // Persist resultado to REAL table (pjecalc_resultado)
-      const { error: resError } = await fromUntyped("pjecalc_resultado").insert({
-        calculo_id: calculoId,
-        total_bruto: result.resumo.principal_bruto,
-        total_diferenca: result.resumo.principal_bruto,
-        total_correcao: result.resumo.principal_corrigido - result.resumo.principal_bruto,
-        total_juros: result.resumo.juros_mora,
-        total_liquido_antes_descontos: result.resumo.principal_corrigido + result.resumo.juros_mora,
-        desconto_inss_reclamante: result.contribuicao_social.total_segurado,
-        desconto_ir: result.imposto_renda.imposto_devido,
-        desconto_inss_reclamado: result.contribuicao_social.total_empregador,
-        honorarios: result.resumo.honorarios_sucumbenciais + result.resumo.honorarios_contratuais,
-        custas: result.resumo.custas,
-        fgts_depositar: result.fgts.total_depositos,
-        fgts_multa_40: result.fgts.multa_valor,
-        total_reclamante: result.resumo.liquido_reclamante,
-        total_reclamado: result.resumo.total_reclamada,
-        engine_version: '2.1.0',
-        // pjecalc_resultado.resumo_verbas é JSONB; o engine retorna estrutura
-        // tipada via PjeCalcEngineV3.liquidar(). Usamos `unknown` para passar
-        // ao banco sem perder a tipagem do `result` em uso local acima.
-        resumo_verbas: result as unknown,
-      });
-      if (resError) {
-        logger.error("ModuloResumo persistir resultado falhou", { error: String(resError) });
-        toast.error("Erro ao salvar resultado no banco de dados. O cálculo foi executado mas pode não ter sido salvo.");
-      }
-
-      // ── Persistir ocorrências calculadas na tabela REAL (pjecalc_ocorrencia_calculo) ──
-      type OcRow = {
-        calculo_id: string;
-        verba_base_id: string;
-        tipo: string;
-        nome: string;
-        competencia: string;
-        base_valor: number;
-        divisor: number;
-        multiplicador: number;
-        quantidade: number;
-        dobra: number;
-        devido: number;
-        pago: number;
-        diferenca: number;
-        correcao: number;
-        juros: number;
-        total: number;
-        origem: string;
-        ativa: boolean;
-      };
-      const ocRows: OcRow[] = [];
-      for (const vr of result.verbas) {
-        for (const oc of vr.ocorrencias) {
-          ocRows.push({
-            calculo_id: calculoId,
-            verba_base_id: vr.verba_id,
-            tipo: vr.tipo || 'principal',
-            nome: vr.nome,
-            competencia: oc.competencia + '-01', // date format
-            base_valor: oc.base,
-            divisor: oc.divisor,
-            multiplicador: oc.multiplicador,
-            quantidade: oc.quantidade,
-            dobra: oc.dobra,
-            devido: oc.devido,
-            pago: oc.pago,
-            diferenca: oc.diferenca,
-            correcao: oc.valor_corrigido - oc.diferenca,
-            juros: oc.juros,
-            total: oc.valor_final,
-            origem: 'CALCULADA',
-            ativa: true,
-          });
-        }
-      }
-      if (ocRows.length > 0) {
-        // Delete existing CALCULADA rows
-        await fromUntyped("pjecalc_ocorrencia_calculo")
-          .delete()
-          .eq("calculo_id", calculoId)
-          .eq("origem", "CALCULADA");
-        // Insert in batches of 500
-        for (let i = 0; i < ocRows.length; i += 500) {
-          const { error: ocErr } = await fromUntyped("pjecalc_ocorrencia_calculo").insert(ocRows.slice(i, i + 500));
-          if (ocErr) {
-            logger.error("ModuloResumo persistir ocorrencias falhou", { error: String(ocErr) });
-            toast.warning("Algumas ocorrências podem não ter sido salvas. Tente recalcular.");
-          }
+      // Validação: o engine embute o resultado da validação em result.validacao;
+      // o orchestrator não pré-bloqueia (alinha o manual ao automático). Mostra
+      // a validação pós-liquidação e avisa se houver erros a revisar.
+      if (orch.result.validacao) {
+        setValidacao(orch.result.validacao);
+        if (!orch.result.validacao.valido) {
+          toast.warning(`Liquidação executada com ${orch.result.validacao.erros} erro(s) de validação — revise antes de fechar`);
         }
       }
 
       qc.invalidateQueries({ queryKey: ["pjecalc_liquidacao", caseId] });
+      qc.invalidateQueries({ queryKey: ["pjecalc_ocorrencias", caseId] });
       toast.success("Liquidação executada com sucesso!");
     } catch (e) {
       toast.error("Erro: " + (e as Error).message);

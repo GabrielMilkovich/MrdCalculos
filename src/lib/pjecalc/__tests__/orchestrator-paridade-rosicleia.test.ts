@@ -384,7 +384,7 @@ vi.mock('@/lib/logger', () => ({
 // Imports que carregam o supabase mockado DEPOIS do vi.mock.
 import { persistirPJCAnalysis } from '../pjc-persist';
 import { executarLiquidacao } from '../orchestrator';
-import { executarLiquidacaoResumoCore } from '../modulo-resumo-liquidacao';
+import { getResultado } from '../service';
 
 const CORPUS_DIR = path.resolve(__dirname, '../../../../public/reports');
 
@@ -604,69 +604,71 @@ describe('FASE 2 — orchestrator (produção) reproduz V3-puro', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// FASE 2 Addendum 1 — paridade do ModuloResumo-direto (botão Liquidar)
+// FASE 2 Addendum 1 — botão Liquidar do ModuloResumo delega ao orchestrator
 // ─────────────────────────────────────────────────────────────────────────
-async function runModuloResumo(file: string, caseId: string) {
-  for (const k of Object.keys(H.db)) delete H.db[k];
-  H.captures.deletes.length = 0;
-  H.captures.insertOcorrencia.length = 0;
-  H.captures.upsertResultado.length = 0;
-  seedTaxTables();
-  const analysis = analyzePJC(await readPjc(file));
-  await persistirPJCAnalysis(caseId, 'test-user', analysis);
-  return executarLiquidacaoResumoCore(caseId);
-}
-
 /**
- * Addendum 1 (dono): testar o ModuloResumo-direto (botão Liquidar da aba
- * Resumo — o caminho que o advogado MAIS clica). Revelou que NÃO estava limpo:
+ * Decisão do dono (opção 2): o botão "Liquidar" da aba Resumo agora chama o
+ * `executarLiquidacao` do orchestrator, eliminando a 3ª cópia divergente que
+ * vivia inline no ModuloResumo (que ignorava reflexos do PJC → sub-contava
+ * ~30%; lia a Grade por case_id numa tabela só com calculo_id; não filtrava
+ * verba inativa; perdia o split IPCA-E/SELIC). Tudo isso some ao delegar.
  *
- *  - combinações IPCA-E/SELIC lidas só de atualizacao_config → CORRIGIDO.
- *  - verbas inativas não filtradas → CORRIGIDO (modulo-resumo-liquidacao.ts).
- *  - Grade de ocorrências consultada por `case_id` numa tabela que só tem
- *    `calculo_id` (coluna inexistente → vazio → engine FROM SCRATCH, inflando
- *    até +120%) → CORRIGIDO.
- *  - **ABERTO (arquitetural):** ModuloResumo lê só `getVerbas` (verba_base);
- *    os reflexos do PJC vivem em `pjecalc_reflexo` e NUNCA são carregados (o
- *    orchestrator foi corrigido p/ ler — Sprint Hotfix #5 — o ModuloResumo
- *    não). Resultado: sub-conta ~30% (sem 13º/férias/aviso/DSR). Fechar isso
- *    = portar a máquina de reflexos do orchestrator (3ª cópia) OU delegar a um
- *    núcleo comum (colapso). Decisão do dono.
- *
- * Este teste DOCUMENTA o estado atual (não-GOLDEN) — quando os reflexos forem
- * carregados, `reflexas.length` vira >0 e troca-se por asserts de paridade.
+ * GATE do dono:
+ *  1. Cálculo: o número do botão == o do orchestrator (POR CONSTRUÇÃO — o botão
+ *     CHAMA o orchestrator). A paridade orchestrator↔V3-puro é coberta pelo
+ *     describe acima (joseli/izabela sem inflação de ordem de grandeza).
+ *  2. Persist→display (o risco real): o orchestrator grava via upsertResultado
+ *     em `pjecalc_liquidacao_resultado`; o display lê via `svc.getResultado` da
+ *     MESMA view (queryKey ["pjecalc_liquidacao", caseId]). Este teste trava o
+ *     round-trip: o que o display lê == o que o orchestrator gravou; e a Grade
+ *     (ocorrências CALCULADA) não some.
  */
-describe('FASE 2 Addendum 1 — ModuloResumo-direto (botão Liquidar)', () => {
+describe('FASE 2 Addendum 1 — botão Liquidar → orchestrator (round-trip persist→display)', () => {
   const CASOS = [
-    { nome: 'rosicleia', file: 'rosicleia-pereira-chaves.pjc' },
-    { nome: 'tiago-jose', file: 'tiago-jose.pjc' },
-    { nome: 'leide-santana', file: 'leide-santana.pjc' },
-    { nome: 'francisco-pablo', file: 'francisco-pablo.pjc' },
+    { nome: 'joseli', file: 'joseli-silva.pjc', caseId: 'case-rt-joseli' },
+    { nome: 'izabela', file: 'izabela-cristina.pjc', caseId: 'case-rt-izabela' },
   ];
-  const mr: Record<string, { liquido: number; v3: number; reflexas: number }> = {};
+  const rt: Record<string, { orch: number; display: number; ocorrencias: number }> = {};
+
   beforeAll(async () => {
     for (const c of CASOS) {
-      const core = await runModuloResumo(c.file, `case-mr-${c.nome}`);
-      const v3 = await liquidarV3Puro(c.file, false);
-      const reflexas = (core.result?.verbas ?? []).filter((v) => v.tipo === 'reflexa').length;
-      mr[c.nome] = { liquido: core.result?.resumo?.liquido_reclamante ?? NaN, v3: v3.liquido_reclamante, reflexas };
+      for (const k of Object.keys(H.db)) delete H.db[k];
+      H.captures.deletes.length = 0;
+      H.captures.insertOcorrencia.length = 0;
+      H.captures.upsertResultado.length = 0;
+      seedTaxTables();
+      const analysis = analyzePJC(await readPjc(c.file));
+      await persistirPJCAnalysis(c.caseId, 'test-user', analysis);
+      // O botão chama mode 'manual'. `mode` no orchestrator afeta SÓ o gate de
+      // insumos (orchestrator.ts:1613, `mode !== 'seed'`) e a tag do fingerprint
+      // (1935) — NÃO altera os inputs, o cálculo nem a persistência. Aqui usamos
+      // 'seed' para pular o gate de "Faixas IR" (que o harness não seeda — V3-puro
+      // usa IR embutido; em produção a tabela está no banco e o 'manual' passa)
+      // mantendo número representativo (IR embutido → joseli ~488k, igual ao
+      // describe F2). O round-trip persist→display é IDÊNTICO nos dois modos.
+      const orch = await executarLiquidacao(c.caseId, 'seed');
+      // EXATAMENTE a leitura do display (useQuery → svc.getResultado):
+      const row = await getResultado(c.caseId);
+      const display = row
+        ? ((row as { resultado?: { resumo?: { liquido_reclamante?: number } } }).resultado?.resumo?.liquido_reclamante ?? NaN)
+        : NaN;
+      rt[c.nome] = {
+        orch: orch.result.resumo.liquido_reclamante,
+        display,
+        ocorrencias: H.captures.insertOcorrencia.length,
+      };
       // eslint-disable-next-line no-console
-      console.log(`[MR ${c.nome}] liquido=${mr[c.nome].liquido.toFixed(2)} v3=${v3.liquido_reclamante.toFixed(2)} reflexas=${reflexas}`);
+      console.log(`[RT ${c.nome}] orch=${rt[c.nome].orch.toFixed(2)} display=${Number.isFinite(display) ? display.toFixed(2) : 'N/A'} oc=${rt[c.nome].ocorrencias}`);
     }
-  }, 180_000);
+  }, 120_000);
 
   for (const c of CASOS) {
-    it(`${c.nome}: roda sem bloquear (pré-validação OK)`, () => {
-      expect(Number.isFinite(mr[c.nome].liquido)).toBe(true);
+    it(`${c.nome}: o display lê EXATAMENTE o que o orchestrator gravou`, () => {
+      expect(Number.isFinite(rt[c.nome].display), `${c.nome}: getResultado voltou vazio — display quebrado`).toBe(true);
+      expect(rt[c.nome].display).toBeCloseTo(rt[c.nome].orch, 2);
+    });
+    it(`${c.nome}: Grade não some (ocorrências CALCULADA gravadas)`, () => {
+      expect(rt[c.nome].ocorrencias).toBeGreaterThan(0);
     });
   }
-
-  it('DOCUMENTA BUG ABERTO: ModuloResumo não carrega reflexos do PJC (sub-conta)', () => {
-    // Os reflexos do PJC (pjecalc_reflexo) não são lidos pelo ModuloResumo →
-    // zero verbas reflexa no resultado → líquido sub-contado vs V3-puro.
-    for (const c of CASOS) {
-      expect(mr[c.nome].reflexas, `${c.nome} deveria ter 0 reflexa (bug aberto)`).toBe(0);
-      expect(mr[c.nome].liquido).toBeLessThan(mr[c.nome].v3);
-    }
-  });
 });

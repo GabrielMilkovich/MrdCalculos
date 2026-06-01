@@ -105,16 +105,52 @@ do PJC não são lidos:
 | leide-santana | 140.170 | 192.678 |
 | francisco-pablo | 137.788 | 170.908 |
 
-### Decisão pendente (dono): como fechar o ModuloResumo
+### Decisão do dono: opção 2 — delegar o botão ao orchestrator (IMPLEMENTADO)
 
-Fechar p/ GOLDEN exige carregar+converter os reflexos do PJC. Duas vias:
-- **A — portar a máquina de reflexos do orchestrator** (`getReflexos` +
-  `toEngineReflexos` + supressão de auto-reflexo) para o núcleo do ModuloResumo.
-  Funciona, mas é uma **3ª cópia** da mesma lógica (whack-a-mole).
-- **B — delegar** o núcleo do ModuloResumo a um core compartilhado (ou ao
-  próprio orchestrator já corrigido). É o **início do colapso das 3 cópias** —
-  o fix de raiz, antecipado só para o caminho mais clicado.
+O botão "Liquidar" do `ModuloResumo` agora chama `executarLiquidacao` do
+orchestrator (`ModuloResumo.tsx:136`), eliminando a 3ª cópia divergente. O
+núcleo extraído (`modulo-resumo-liquidacao.ts`) foi **removido** — serviu só
+para revelar os bugs sob teste. Motivo de NÃO escolher a via A (portar reflexos):
+seria manter 3 cópias sincronizadas à mão — o whack-a-mole que causou esta
+classe inteira de bug.
 
-Teste atual (`orchestrator-paridade-rosicleia.test.ts` → "ModuloResumo-direto")
-DOCUMENTA o bug aberto (asserta `reflexas.length === 0` + sub-conta). Quando
-fechado, troca-se pelos asserts de paridade GOLDEN.
+#### A fiação persist→display: o risco virou o oposto
+
+Investigado o risco que o dono nomeou (mudança de tabela de persistência).
+Achado: existem DUAS tabelas distintas, **sem trigger de sync** entre elas:
+
+| tabela | coluna | quem escreve | quem lê |
+|---|---|---|---|
+| `pjecalc_liquidacao_resultado` | `resultado` JSONB | orchestrator (`upsertResultado`) | **o display** (`svc.getResultado`) — ModuloResumo, ModuloAtualizacao, ModuloCustas, WizardCalculo |
+| `pjecalc_resultado` | `resumo_verbas` JSONB | **botão antigo** (inline) | *ninguém no display* |
+
+Ou seja: o botão antigo gravava numa tabela que **o display não lê**. O
+orchestrator (já usado em produção por `usePjeCalculator`, `usePjeCalcData`,
+`intelligent-liquidation`) grava exatamente onde o display lê. **Delegar ALINHA
+o botão com a fonte real do display** — o swap corrige a fiação, não a quebra.
+O risco do dono era, na verdade, um bug latente pré-existente.
+
+#### Teste
+
+`orchestrator-paridade-rosicleia.test.ts` →
+"botão Liquidar → orchestrator (round-trip persist→display)" trava o gate:
+- **Cálculo** (item 1): botão == orchestrator por construção; paridade
+  orchestrator↔V3-puro coberta pelo describe F2 (joseli 488k, izabela à vírgula).
+- **Persist→display** (item 2): `getResultado` lê EXATAMENTE o que
+  `upsertResultado` gravou (joseli 488117,06 == 488117,06) e a Grade
+  (ocorrências CALCULADA) não some (574/235 ocorrências).
+
+> Nota: `mode` no orchestrator afeta só o gate de insumos
+> (`orchestrator.ts:1613`) e a tag do fingerprint — não o cálculo nem a
+> persistência. O teste usa `seed` p/ pular o gate de "Faixas IR" (que o harness
+> não seeda; em produção a tabela existe e o `manual` passa), com número
+> representativo (IR embutido).
+
+### Backlog (prioridade ALTA — pós-go-live)
+
+1. **Resíduo de juros do orchestrator (−4,4% joseli).** O caminho de produção
+   ainda NÃO bate o gabarito à vírgula; o V3-puro é o único que bate. Enquanto
+   não convergir, "−4,4%" é dívida ativa.
+2. **Colapso final das 3 cópias numa só** (incluir o V3-puro). A opção 2
+   colapsou a pior (ModuloResumo) na do orchestrator — restam duas
+   (orchestrator + V3-puro). Unificar é o fix de raiz definitivo.
