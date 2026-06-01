@@ -6,6 +6,7 @@ import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
 import { PjeCalcGrid, type PjeCalcGridColumn } from "./PjeCalcGrid";
 import { useCalculoAtivo } from "./useCalculoAtivo";
+import { detectarOverlapFalta, periodosCoincidem } from "./falta-schema";
 
 interface Props {
   caseId: string;
@@ -80,6 +81,32 @@ export function ModuloFaltas({ caseId }: Props) {
     invalidate();
   };
 
+  /**
+   * Atualiza uma data com validação de paridade (Falta.validar):
+   * término ≥ inicial e sem sobreposição com outras faltas (MSG0024).
+   * Em caso de violação, reverte o input e avisa, sem persistir.
+   */
+  const updateDate = (
+    row: FaltaRow,
+    campo: "data_inicial" | "data_final",
+    novoValor: string,
+    inputEl: HTMLInputElement,
+  ) => {
+    const candidata = { ...row, [campo]: novoValor };
+    if (candidata.data_inicial && candidata.data_final && candidata.data_final < candidata.data_inicial) {
+      toast.error("Data final não pode ser anterior à data inicial.");
+      inputEl.value = row[campo];
+      return;
+    }
+    const conflito = detectarOverlapFalta(candidata, faltas);
+    if (conflito) {
+      toast.error("Período coincide com outra falta já registrada (datas coincidentes).");
+      inputEl.value = row[campo];
+      return;
+    }
+    updateField(row.id, { [campo]: novoValor });
+  };
+
   const removeFalta = async (row: FaltaRow) => {
     const { error } = await fromUntyped("pjecalc_faltas")
       .delete()
@@ -103,7 +130,7 @@ export function ModuloFaltas({ caseId }: Props) {
           className="h-7 text-[11px] font-mono px-1"
           onBlur={(e) =>
             e.target.value !== r.data_inicial &&
-            updateField(r.id, { data_inicial: e.target.value })
+            updateDate(r, "data_inicial", e.target.value, e.target)
           }
         />
       ),
@@ -119,7 +146,7 @@ export function ModuloFaltas({ caseId }: Props) {
           className="h-7 text-[11px] font-mono px-1"
           onBlur={(e) =>
             e.target.value !== r.data_final &&
-            updateField(r.id, { data_final: e.target.value })
+            updateDate(r, "data_final", e.target.value, e.target)
           }
         />
       ),

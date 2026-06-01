@@ -27,6 +27,7 @@ import {
 } from './canonical';
 import { PjeCalcEngineV3 } from './engine-v3';
 import { applyDadosProcessoToEngineParams } from './dados-processo-adapter';
+import { mapFaltasToEngine } from './faltas-engine-map';
 import type {
   PjeParametros,
   PjeHistoricoSalarial,
@@ -129,15 +130,10 @@ function toEngineParams(p: PjecalcParametrosRow): PjeParametros {
   };
 }
 
+// Mapper extraído p/ módulo puro (faltas-engine-map) — testável sem o
+// Supabase client que este orchestrator importa. Seção 5.
 function toEngineFaltas(faltas: PjecalcFaltaRow[]): PjeFalta[] {
-  return faltas.map(f => ({
-    id: f.id,
-    data_inicial: f.data_inicial || '',
-    data_final: f.data_final || '',
-    justificada: f.justificada ?? false,
-    justificativa: f.motivo || undefined,
-    reinicia: f.reiniciar_ferias ?? false,
-  }));
+  return mapFaltasToEngine(faltas);
 }
 
 function toEngineFerias(ferias: PjecalcFeriasRow[]): PjeFerias[] {
