@@ -160,6 +160,34 @@ regressão que prova a rejeição — senão volta a ser false-green.
 `insertOcorrencia` (Grade) NÃO tem o bug: `pjecalc_ocorrencias` é view com
 trigger `INSTEAD OF INSERT` (1300 CALCULADA + 828 PJC_IMPORT no banco). Verificado.
 
+##### Varredura de leitores + descoberta do tsc vácuo
+
+O dono questionou meu claim "só um leitor" (`usePjeCalculator`). Varredura completa
+contra o REAL type-check revelou que eram **3 arquivos**, não 1:
+`usePjeCalculator`, `domain-audit.ts` (FECHAMENTO_IRRF/CS_EMPREGADOR) e
+`domain-orchestrator.ts` (synthetic rows) — os 2 últimos liam `resultado.irrf` /
+`resultado.inss_patronal`, que a view nunca retornou → fechamento silenciosamente
+zerado. Todos corrigidos p/ `desconto_*`.
+
+**Descoberta de processo (grande):** `npx tsc --noEmit` (comando do CLAUDE.md) roda
+contra o `tsconfig.json` raiz, que tem `"files": []` + `references` → em modo
+não-build, **checa ZERO arquivos**. Todo "tsc 0 erros" desta sessão era **vácuo**.
+O check real é `tsc -p tsconfig.app.json` (o que o `vite build` usa via esbuild —
+que também NÃO type-checa). Resultado real: **629 erros pré-existentes** no `main`
+(supabase types stale, etc.). Foi o tsc vácuo que escondeu tanto o bug de coluna
+do `upsertResultado` quanto o erro de tipo do meu próprio fallback de combinações
+(o `Row` `PjecalcCorrecaoConfigRow` não declarava as colunas jsonb
+`combinacoes_indice/juros`, embora existam no banco — adicionadas + cast no
+fallback).
+
+**Impacto verificado (real tsc, branch vs main):** branch **627** vs main **629**
+→ zero erros novos introduzidos, 2 removidos (código inline do ModuloResumo que
+saiu). Diff de classes de erro novas: vazio.
+
+**Recomendação (backlog, fora deste escopo):** trocar o gate de tipo para
+`tsc -p tsconfig.app.json` (ou `tsc -b`) e atacar os 627 erros — enquanto o check
+for vácuo, regressões de tipo passam direto (foi o que aconteceu aqui).
+
 #### Teste
 
 `orchestrator-paridade-rosicleia.test.ts` →

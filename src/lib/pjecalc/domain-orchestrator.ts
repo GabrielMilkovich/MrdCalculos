@@ -639,14 +639,14 @@ function buildFinancialClosingItems(
   pushSynthetic(
     'FECHAMENTO_IRRF',
     'IRRF (dedução)',
-    -(resultado.irrf || 0),
+    -(resultado.desconto_ir || 0),
     'Dedução fiscal do fechamento final.',
   );
 
   pushSynthetic(
     'FECHAMENTO_CS_EMPREGADOR',
     'CS Empregador',
-    resultado.inss_patronal || 0,
+    resultado.desconto_inss_reclamado || 0,
     'Encargo patronal agregado ao total devido pela reclamada.',
   );
 

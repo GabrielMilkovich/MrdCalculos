@@ -655,6 +655,13 @@ export interface PjecalcCorrecaoConfigRow {
   multa_523_percentual: number;
   data_liquidacao: string | null;
   indice_correcao: string | null;
+  // Colunas jsonb reais (combinações de índice/juros por data — split
+  // IPCA-E/SELIC). O Insert as declara como string (JSON stringificado), mas a
+  // leitura via supabase-js volta o jsonb já parseado → `unknown` (o consumidor
+  // trata string|objeto). Faltavam no Row → o fallback do orchestrator que as
+  // lê (toEngineCorrecaoConfig) dava erro de tipo, mascarado pelo tsc vacuo.
+  combinacoes_indice?: unknown;
+  combinacoes_juros?: unknown;
   created_at: string;
 }
 

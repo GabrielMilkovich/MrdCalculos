@@ -531,8 +531,8 @@ function addClosingReferenceRows(
     map.set(`${code}::fechamento`, value);
   };
 
-  add("FECHAMENTO_IRRF", -(resultado.irrf || 0));
-  add("FECHAMENTO_CS_EMPREGADOR", resultado.inss_patronal || 0);
+  add("FECHAMENTO_IRRF", -(resultado.desconto_ir || 0));
+  add("FECHAMENTO_CS_EMPREGADOR", resultado.desconto_inss_reclamado || 0);
   add("FECHAMENTO_HONORARIOS", resultado.honorarios || 0);
   add("FECHAMENTO_CUSTAS", resultado.custas || 0);
   add("FECHAMENTO_FGTS", (resultado.fgts_depositar || 0) + (resultado.fgts_multa_40 || 0));

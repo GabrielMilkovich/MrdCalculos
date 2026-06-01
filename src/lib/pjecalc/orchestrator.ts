@@ -623,14 +623,14 @@ function toEngineCorrecaoConfig(
     try {
       combinacoes_indice = typeof cfg.combinacoes_indice === 'string'
         ? JSON.parse(cfg.combinacoes_indice)
-        : cfg.combinacoes_indice;
+        : (cfg.combinacoes_indice as PjeCorrecaoConfig['combinacoes_indice']);
     } catch (e) { logger.warn('[ORCHESTRATOR] Falha ao parsear cfg.combinacoes_indice JSON', { error: e }); }
   }
   if (!combinacoes_juros && cfg?.combinacoes_juros) {
     try {
       combinacoes_juros = typeof cfg.combinacoes_juros === 'string'
         ? JSON.parse(cfg.combinacoes_juros)
-        : cfg.combinacoes_juros;
+        : (cfg.combinacoes_juros as PjeCorrecaoConfig['combinacoes_juros']);
     } catch (e) { logger.warn('[ORCHESTRATOR] Falha ao parsear cfg.combinacoes_juros JSON', { error: e }); }
   }
 
