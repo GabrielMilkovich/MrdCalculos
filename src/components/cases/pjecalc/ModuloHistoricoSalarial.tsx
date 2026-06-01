@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { PjeCalcGrid, type PjeCalcGridColumn } from "./PjeCalcGrid";
 import { ImportadorFichaFinanceira } from "./ImportadorFichaFinanceira";
 import { useCalculoAtivo } from "./useCalculoAtivo";
+import { toMoneyNumber, isValidMoney } from "@/lib/pjecalc/money";
 
 interface Props {
   caseId: string;
@@ -284,7 +285,14 @@ export function ModuloHistoricoSalarial({ caseId }: Props) {
           defaultValue={r.valor}
           className="h-7 text-[11px] text-right font-mono px-1"
           onBlur={(e) => {
-            const v = parseFloat(e.target.value) || 0;
+            // CLAUDE.md: valores monetários via Decimal, nunca parseFloat.
+            const raw = e.target.value;
+            if (raw.trim() !== "" && !isValidMoney(raw)) {
+              toast.error("Valor inválido (deve ser ≥ 0).");
+              e.target.value = String(r.valor);
+              return;
+            }
+            const v = toMoneyNumber(raw, 0);
             if (v !== r.valor) {
               updateOcorrencia(r.ocorrenciaId, { valor: v });
             }
