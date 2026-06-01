@@ -126,8 +126,18 @@ export type ExportResult =
     }
   | { ok: false; error: string };
 
+/**
+ * Gera artefato de exportação para um documento.
+ *
+ * @param documentId UUID do documento.
+ * @param anoAlvo Opcional. Quando o PDF contém múltiplas fichas anuais
+ *   (caso comum em Via Varejo: "Fichas Financeiras - X.pdf" com 5+ anos),
+ *   filtra somente as seções desse ano. Sem ele, parse-ficha-financeira
+ *   pega o primeiro ano detectado.
+ */
 export async function generateExportForDocument(
   documentId: string,
+  anoAlvo?: number,
 ): Promise<ExportResult> {
   const { data: doc, error } = await supabase
     .from('documents')
@@ -384,6 +394,7 @@ export async function generateExportForDocument(
             tipo_documento: 'ficha_financeira',
             ano_referencia: new Date().getFullYear(),
             storage_path: storagePath ?? undefined,
+            ano_alvo: anoAlvo,
           },
         },
       );

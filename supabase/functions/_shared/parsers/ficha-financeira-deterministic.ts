@@ -206,6 +206,16 @@ interface ResultadoParse {
     linhas_processadas: number;
     linhas_filtradas: number;
     meses_detectados: string[];
+    // Multi-ano (PR #143+): lista todos os anos encontrados no PDF
+    // (alguns ADP têm múltiplas fichas anuais juntas) e qual foi processado.
+    anos_disponiveis?: number[];
+    ano_processado?: number;
+    rubricas_totais_orfaos?: Array<{
+      codigo: string;
+      denominacao: string;
+      classificacao: string;
+      valor_total: number;
+    }>;
   };
 }
 
@@ -714,6 +724,10 @@ function parseTextLayout(texto: string, allLines: string[], anoAlvo?: number): R
       rubricas_totais_orfaos: [...candidatosOrfaos.values()].filter(
         o => !rubricas.has(o.codigo),
       ),
+      // Multi-ano: lista todos os anos detectados no PDF e qual foi processado.
+      // Frontend usa pra mostrar seletor quando há múltiplas fichas no arquivo.
+      anos_disponiveis: anosDetectados,
+      ano_processado: anoFiltro,
     },
   };
 }
