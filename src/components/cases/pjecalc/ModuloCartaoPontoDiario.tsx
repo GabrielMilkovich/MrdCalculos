@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { PjeCalcGrid, type PjeCalcGridColumn } from "./PjeCalcGrid";
 import { useCalculoAtivo } from "./useCalculoAtivo";
+import { validarJornadaDia } from "./cartao-ponto-schema";
 
 /** Limite oficial PJE-Calc: 6 pares E/S por dia. */
 const MAX_PARES = 6;
@@ -351,6 +352,19 @@ export function ModuloCartaoPontoDiario({
     year: "numeric",
   });
 
+  /** Marcações do dia em ordem entrada_1..saida_6, com um campo sobrescrito. */
+  const marcacoesComOverride = (
+    r: PontoDia,
+    field: keyof PontoDia,
+    valor: string | null,
+  ): Array<string | null> => {
+    const campos: Array<keyof PontoDia> = [
+      "entrada_1", "saida_1", "entrada_2", "saida_2", "entrada_3", "saida_3",
+      "entrada_4", "saida_4", "entrada_5", "saida_5", "entrada_6", "saida_6",
+    ];
+    return campos.map((c) => (c === field ? valor : ((r[c] as string | null) ?? null)));
+  };
+
   /** Renderiza um input HH:MM enxuto para um campo entrada_X/saida_X. */
   const horaInput = (r: PontoDia, field: keyof PontoDia) => (
     <Input
@@ -368,9 +382,16 @@ export function ModuloCartaoPontoDiario({
           e.target.value = (r[field] as string | null) ?? "";
           return;
         }
-        if (normalized !== (r[field] as string | null)) {
-          updateField(r.id, field, normalized);
+        if (normalized === (r[field] as string | null)) return;
+        // Paridade PJe-Calc (OcorrenciaJornadaApuracaoCartao.validar): valida o
+        // dia inteiro — par completo, ordem/sobreposição (MSG0185), >2 dias (MSG0187).
+        const validacao = validarJornadaDia(marcacoesComOverride(r, field, normalized));
+        if (!validacao.ok) {
+          toast.error(validacao.erro ?? "Jornada inválida.");
+          e.target.value = (r[field] as string | null) ?? "";
+          return;
         }
+        updateField(r.id, field, normalized);
       }}
     />
   );
