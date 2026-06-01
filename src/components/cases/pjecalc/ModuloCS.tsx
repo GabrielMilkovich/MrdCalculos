@@ -14,6 +14,7 @@ import { GradeCSOcorrencias } from "./GradeCSOcorrencias";
 import { CNAE_ALIQUOTAS_COMUNS } from "@/lib/pjecalc/engine-constants";
 import type { PjeCNAEAliquotas } from "@/lib/pjecalc/engine-types";
 import * as svc from "@/lib/pjecalc/service";
+import { csConfigSchema, parseAliquota } from "./cs-config-schema";
 
 interface Props { caseId: string; }
 
@@ -87,19 +88,40 @@ export function ModuloCS({ caseId }: Props) {
   };
 
   const save = async () => {
+    // Validação de paridade (Inss.validar): alíquotas 0–100; segurado fixa
+    // obrigatória se tipo=fixa (MSG0003); período Simples término≥início.
+    const parsed = csConfigSchema.safeParse({
+      aliquota_segurado_tipo: form.aliquota_segurado_tipo,
+      aliquota_segurado_fixa: form.aliquota_segurado_fixa,
+      aliquota_empresa_fixa: form.aliquota_empresa_fixa,
+      aliquota_sat_fixa: form.aliquota_sat_fixa,
+      aliquota_terceiros_fixa: form.aliquota_terceiros_fixa,
+      simples_nacional: form.simples_nacional,
+      simples_inicio: form.simples_inicio,
+      simples_fim: form.simples_fim,
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Configuração inválida.");
+      return;
+    }
     setSaving(true);
     try {
       const periodos_simples = form.simples_nacional && form.simples_inicio && form.simples_fim
         ? [{ inicio: form.simples_inicio, fim: form.simples_fim }] : [];
+      // CLAUDE.md: alíquotas via Decimal, nunca parseFloat. Defaults preservados.
+      const aliqEmpresa = parseAliquota(form.aliquota_empresa_fixa);
+      const aliqSat = parseAliquota(form.aliquota_sat_fixa);
+      const aliqTerceiros = parseAliquota(form.aliquota_terceiros_fixa);
+      const aliqSegurado = parseAliquota(form.aliquota_segurado_fixa);
       await svc.upsertCsConfig({
         case_id: caseId, apurar_segurado: form.apurar_segurado, cobrar_reclamante: form.cobrar_reclamante,
         cs_sobre_salarios_pagos: form.cs_sobre_salarios_pagos, aliquota_segurado_tipo: form.aliquota_segurado_tipo,
-        aliquota_segurado_fixa: form.aliquota_segurado_fixa ? parseFloat(form.aliquota_segurado_fixa) : null,
+        aliquota_segurado_fixa: aliqSegurado ? aliqSegurado.toNumber() : null,
         limitar_teto: form.limitar_teto, apurar_empresa: form.apurar_empresa,
         apurar_sat: form.apurar_sat, apurar_terceiros: form.apurar_terceiros,
-        aliquota_empresa_fixa: parseFloat(form.aliquota_empresa_fixa) || 20,
-        aliquota_sat_fixa: parseFloat(form.aliquota_sat_fixa) || 2,
-        aliquota_terceiros_fixa: parseFloat(form.aliquota_terceiros_fixa) || 5.8,
+        aliquota_empresa_fixa: aliqEmpresa ? aliqEmpresa.toNumber() : 20,
+        aliquota_sat_fixa: aliqSat ? aliqSat.toNumber() : 2,
+        aliquota_terceiros_fixa: aliqTerceiros ? aliqTerceiros.toNumber() : 5.8,
         periodos_simples, cnae: form.cnae || null,
         contribuicao_sindical: form.contribuicao_sindical,
         contribuicao_sindical_pos2017: form.contribuicao_sindical_pos2017,
