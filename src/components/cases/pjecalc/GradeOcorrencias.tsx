@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import * as svc from "@/lib/pjecalc/service";
 import { toast } from "sonner";
 import { Calculator, Loader2, ArrowLeft, Trash2, RefreshCw, Edit3, Search, Filter, CheckSquare, Square } from "lucide-react";
+import { recomputeOcorrencia } from "./ocorrencia-schema";
+import { toMoneyNumber } from "@/lib/pjecalc/money";
 
 interface Props {
   caseId: string;
@@ -115,16 +117,21 @@ export function GradeOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, pe
   };
 
   const updateCell = useCallback(async (id: string, field: string, value: number | boolean) => {
+    // Validação de paridade: divisor ≥ 0,01 (OcorrenciaDeVerba @Min("0.01")).
+    if (field === 'divisor_valor' && typeof value === 'number' && value < 0.01) {
+      toast.error("Divisor deve ser ≥ 0,01.");
+      qc.invalidateQueries({ queryKey }); // reverte o input visual
+      return;
+    }
     const updates: Record<string, unknown> = { [field]: value, origem: 'INFORMADA', updated_at: new Date().toISOString() };
 
     const row = ocorrencias.find(o => o.id === id);
     if (row && typeof value === 'number') {
-      const newRow = { ...row, [field]: value };
-      const devido = (newRow.base_valor * newRow.multiplicador_valor / (newRow.divisor_valor || 30)) * newRow.quantidade_valor * newRow.dobra;
-      const diferenca = devido - newRow.pago;
-      updates.devido = Math.round(devido * 100) / 100;
-      updates.diferenca = Math.round(diferenca * 100) / 100;
-      updates.total = Math.round((diferenca + newRow.correcao + newRow.juros) * 100) / 100;
+      // CLAUDE.md: aritmética monetária via Decimal (recomputeOcorrencia), nunca number.
+      const { devido, diferenca, total } = recomputeOcorrencia({ ...row, [field]: value });
+      updates.devido = devido;
+      updates.diferenca = diferenca;
+      updates.total = total;
     }
 
     await svc.updateOcorrencia(id, updates);
@@ -138,7 +145,7 @@ export function GradeOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, pe
       if (batchCompInicio) (filtro as Record<string, unknown>).competencia_inicio = batchCompInicio;
       if (batchCompFim) (filtro as Record<string, unknown>).competencia_fim = batchCompFim;
       const changes: Record<string, unknown> = {};
-      changes[batchField] = parseFloat(batchValue) || 0;
+      changes[batchField] = toMoneyNumber(batchValue, 0); // Decimal, nunca parseFloat
 
       const { data, error } = await supabase.rpc('pjecalc_batch_update_ocorrencias', {
         p_calculo_id: caseId,
@@ -299,7 +306,7 @@ export function GradeOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, pe
                       <td key={field} className="p-1 text-center">
                         <Input type="number" step="0.01" defaultValue={o[field] || 0}
                           className="h-7 text-xs w-20 text-center mx-auto"
-                          onBlur={e => updateCell(o.id, field, parseFloat(e.target.value) || 0)}
+                          onBlur={e => updateCell(o.id, field, toMoneyNumber(e.target.value, 0))}
                           onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                         />
                       </td>
@@ -308,7 +315,7 @@ export function GradeOcorrencias({ caseId, verbaId, verbaNome, periodoInicio, pe
                     <td className="p-1 text-center">
                       <Input type="number" step="0.01" defaultValue={o.pago || 0}
                         className="h-7 text-xs w-20 text-center mx-auto"
-                        onBlur={e => updateCell(o.id, 'pago', parseFloat(e.target.value) || 0)}
+                        onBlur={e => updateCell(o.id, 'pago', toMoneyNumber(e.target.value, 0))}
                         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                       />
                     </td>
