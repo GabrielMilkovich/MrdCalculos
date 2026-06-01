@@ -459,11 +459,23 @@ Deno.serve(async (req) => {
       // DEPOIS do Mistral rodar. Isso fazia ficha_financeira escapar do
       // bloqueio. Fix: se temos texto do V6 e tipo está vazio/"outros",
       // detecta o tipo agora a partir do texto extraído.
+      // BUG FIX (2026-06-01): a whitelist abaixo cobria null/"outros"/"outro"
+      // mas NÃO o default real da coluna — `tipo_extracao DEFAULT 'nao_extrair'`
+      // (migration 20260430170000). Todo doc nasce 'nao_extrair'; se a
+      // auto-classificação não rodou (origem='manual'), ficava preso nesse
+      // default e a re-inferência via conteúdo NUNCA disparava. Consequência
+      // empírica no banco: 100% dos ocr_failed eram tipo_extracao='nao_extrair'
+      // (ficha/ctps que tinham texto nativo perfeito mas morriam no bloqueio
+      // por nunca serem roteadas ao parser determinístico). Incluir
+      // 'nao_extrair' fecha o buraco. Não persiste tipo_extracao no banco —
+      // só usa o tipo inferido pra rotear ESTA execução (a escolha do
+      // operador, se houver, permanece intacta na coluna).
       if (
         v6.textoCompleto &&
         (!document.tipo_extracao ||
           document.tipo_extracao === "outros" ||
-          document.tipo_extracao === "outro")
+          document.tipo_extracao === "outro" ||
+          document.tipo_extracao === "nao_extrair")
       ) {
         const tipoInferido = detectDocType(v6.textoCompleto);
         if (tipoInferido && tipoInferido !== "outro") {
@@ -508,7 +520,19 @@ Deno.serve(async (req) => {
       }
 
       // CTPS V2: extrator ok, sem mapper — grava texto geométrico e pula Mistral.
-      if (v6.outcome === "no_mapper_matched" && v6.textoCompleto && document.tipo_extracao === "ctps") {
+      // BUG FIX (2026-06-01): incluído `mapper_returned_null`. O mapper legacy
+      // (ctps.ts) DETECTA a CTPS (score≥0.4 → aplica=true) e tenta extrair, mas
+      // seu RE_ADMISSAO exige "Admissão: dd/mm/yyyy" contíguo — em PDF tabular o
+      // rótulo e a data ficam separados, então devolve null → outcome=
+      // mapper_returned_null (não no_mapper_matched). Antes, só no_mapper_matched
+      // salvava o texto pro parser V2; mapper_returned_null caía no bloqueio e
+      // virava ocr_failed, descartando texto nativo perfeito. Empiricamente,
+      // 100% das CTPS Via Varejo davam mapper_returned_null e morriam aqui.
+      if (
+        (v6.outcome === "no_mapper_matched" || v6.outcome === "mapper_returned_null") &&
+        v6.textoCompleto &&
+        document.tipo_extracao === "ctps"
+      ) {
         await supabase
           .from("documents")
           .update({
