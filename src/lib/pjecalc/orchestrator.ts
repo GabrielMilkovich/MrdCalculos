@@ -26,6 +26,9 @@ import {
   type ConfidenceReport,
 } from './canonical';
 import { PjeCalcEngineV3 } from './engine-v3';
+import { applyDadosProcessoToEngineParams } from './dados-processo-adapter';
+import { mapFaltasToEngine } from './faltas-engine-map';
+import { mapFeriasToEngine } from './ferias-engine-map';
 import type {
   PjeParametros,
   PjeHistoricoSalarial,
@@ -128,32 +131,14 @@ function toEngineParams(p: PjecalcParametrosRow): PjeParametros {
   };
 }
 
+// Mapper extraído p/ módulo puro (faltas-engine-map) — testável sem o
+// Supabase client que este orchestrator importa. Seção 5.
 function toEngineFaltas(faltas: PjecalcFaltaRow[]): PjeFalta[] {
-  return faltas.map(f => ({
-    id: f.id,
-    data_inicial: f.data_inicial || '',
-    data_final: f.data_final || '',
-    justificada: f.justificada ?? false,
-    justificativa: f.motivo || undefined,
-    reinicia: f.reiniciar_ferias ?? false,
-  }));
+  return mapFaltasToEngine(faltas);
 }
 
 function toEngineFerias(ferias: PjecalcFeriasRow[]): PjeFerias[] {
-  return ferias.map(f => ({
-    id: f.id,
-    relativas: '',
-    periodo_aquisitivo_inicio: f.periodo_aquisitivo_inicio || '',
-    periodo_aquisitivo_fim: f.periodo_aquisitivo_fim || '',
-    periodo_concessivo_inicio: f.periodo_concessivo_inicio || '',
-    periodo_concessivo_fim: f.periodo_concessivo_fim || '',
-    prazo_dias: f.dias || 30,
-    situacao: (f.situacao as 'gozadas' | 'indenizadas' | 'perdidas' | 'gozadas_parcialmente') || 'gozadas',
-    dobra: f.dobra ?? false,
-    abono: f.abono ?? false,
-    abono_dias: f.dias_abono || 0,
-    periodos_gozo: f.gozo_inicio ? [{ inicio: f.gozo_inicio, fim: f.gozo_fim || f.gozo_inicio, dias: f.dias || 30 }] : [],
-  }));
+  return mapFeriasToEngine(ferias);
 }
 
 // Normalise DB enum values to engine enum values (case-insensitive)
@@ -559,8 +544,15 @@ function toEngineIrConfig(cfg: PjecalcIrConfigRow | null): PjeIRConfig {
   // RRA Lei 7.713/88 art. 12-A — sub-flags vindas da UI ModuloIR.
   // Quando ausentes na linha (view legacy), permanecem undefined → engine
   // mantém auto-detect (NM cardinalidade > 1 dispara art_12a_rra).
-  const cfgExt = (cfg ?? {}) as unknown as Record<string, unknown>;
-  const apurarRra = cfgExt.apurar_rra as boolean | undefined;
+  const cfgRow = (cfg ?? {}) as unknown as Record<string, unknown>;
+  // Seção 16: as sub-flags RRA vivem em `extras` jsonb (o ModuloIR grava lá);
+  // antes liam-se como chaves top-level inexistentes → RRA nunca chegava ao
+  // engine. Fallback p/ top-level mantém retrocompat com linhas legadas.
+  const cfgExt = {
+    ...(typeof cfgRow.extras === 'object' && cfgRow.extras !== null ? (cfgRow.extras as Record<string, unknown>) : {}),
+    ...cfgRow,
+  };
+  const apurarRra = (cfgExt.apurar_rra ?? cfgRow.art_12a_rra) as boolean | undefined;
   const rraMesesRaw = cfgExt.rra_meses as number | undefined;
   const rraParcelasRaw = cfgExt.rra_numero_parcelas as number | undefined;
   return {
@@ -1603,15 +1595,11 @@ export async function executarLiquidacao(
     });
   }
 
-  // Propagar data_citacao e modo_calculo de dadosProcesso → engine params
-  // (a VIEW pjecalc_parametros não expõe esses campos; eles vivem em pjecalc_dados_processo)
+  // Propagar data_citacao, modo_calculo e valor_causa de dadosProcesso → engine params
+  // (a VIEW pjecalc_parametros não expõe esses campos; vivem em pjecalc_calculos).
+  // Adapter testável: ./dados-processo-adapter (Seção 1 — paridade).
   const dadosProcesso = caseData.dadosProcesso as PjecalcDadosProcessoRow | null;
-  if (dadosProcesso?.data_citacao) {
-    engineParams.data_citacao = dadosProcesso.data_citacao;
-  }
-  // modo_calculo agora tem coluna real — sem necessidade de cast
-  const modoCalculo = dadosProcesso?.modo_calculo ?? 'independent';
-  engineParams.modo_calculo = modoCalculo;
+  applyDadosProcessoToEngineParams(engineParams, dadosProcesso);
 
   // FIX UX: Quando data_citacao não for informada, não bloqueia — tenta fallback a partir de
   // data_ajuizamento + 60 dias; se também não houver ajuizamento, segue sem split IPCA-E/SELIC.

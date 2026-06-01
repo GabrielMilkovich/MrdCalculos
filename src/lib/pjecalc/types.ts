@@ -42,6 +42,7 @@ export interface PjecalcParametrosRow {
   tipo_mes: 'civil' | 'comercial' | null;
   jornada_semanal: number | null;
   comentarios: string | null;
+  pontos_facultativos?: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -91,6 +92,21 @@ export interface PjecalcDadosProcessoRow {
   data_citacao: string | null;
   /** P0-1: Coluna real em pjecalc_calculos — 'assisted_from_pjc' | 'independent' */
   modo_calculo: 'assisted_from_pjc' | 'independent' | null;
+  // ── Paridade PJe-Calc (Seção 1) — colunas REAIS de pjecalc_calculos
+  //    expostas pela view. Os campos-alias acima (numero_processo,
+  //    reclamada_*) são legados/fictícios mantidos p/ retrocompat; preferir
+  //    estes nas novas leituras. Ver docs/specs/dados-do-processo.md §4.
+  processo_cnj: string | null;
+  tribunal: string | null;
+  tipo_calculo: string | null;
+  valor_causa: number | null;
+  data_autuacao: string | null;
+  reclamado_nome: string | null;
+  reclamado_cnpj: string | null;
+  reclamante_doc_tipo: string | null;
+  reclamante_pis_nit: string | null;
+  reclamante_pis_nit_tipo: string | null;
+  reclamado_doc_tipo: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -106,6 +122,18 @@ export interface PjecalcDadosProcessoInsert {
   data_citacao?: string | null;
   /** P0-1: Definir explicitamente o modo do cálculo */
   modo_calculo?: 'assisted_from_pjc' | 'independent';
+  // Paridade PJe-Calc (Seção 1) — colunas reais de pjecalc_calculos
+  processo_cnj?: string | null;
+  tribunal?: string | null;
+  tipo_calculo?: string | null;
+  valor_causa?: number | null;
+  data_autuacao?: string | null;
+  reclamado_nome?: string | null;
+  reclamado_cnpj?: string | null;
+  reclamante_doc_tipo?: string | null;
+  reclamante_pis_nit?: string | null;
+  reclamante_pis_nit_tipo?: string | null;
+  reclamado_doc_tipo?: string | null;
 }
 
 // =====================================================
@@ -147,17 +175,23 @@ export interface PjecalcFeriasRow {
   periodo_aquisitivo_fim: string | null;
   periodo_concessivo_inicio: string | null;
   periodo_concessivo_fim: string | null;
-  gozo_inicio: string | null;
-  gozo_fim: string | null;
-  dias: number;
-  abono: boolean;
-  dias_abono: number;
-  dobra: boolean;
   situacao: string;
-  gozo2_inicio: string | null;
-  gozo2_fim: string | null;
-  gozo3_inicio: string | null;
-  gozo3_fim: string | null;
+  // ── Colunas REAIS de pjecalc_ferias (Seção 6 — antes o type usava aliases
+  //    fictícios `dias`/`dias_abono`/`dobra`/`gozo_inicio` que NÃO existem na
+  //    tabela; o engine caía nos defaults). Ver docs/specs/ferias.md §2.
+  prazo_dias: number;
+  dobra_geral: boolean;
+  abono: boolean;
+  abono_dias: number;
+  gozo_1_inicio: string | null;
+  gozo_1_fim: string | null;
+  gozo_1_dobra: boolean | null;
+  gozo_2_inicio: string | null;
+  gozo_2_fim: string | null;
+  gozo_2_dobra: boolean | null;
+  gozo_3_inicio: string | null;
+  gozo_3_fim: string | null;
+  gozo_3_dobra: boolean | null;
   observacoes: string | null;
   created_at: string;
 }
@@ -168,17 +202,21 @@ export interface PjecalcFeriasInsert {
   periodo_aquisitivo_fim?: string;
   periodo_concessivo_inicio?: string;
   periodo_concessivo_fim?: string;
-  gozo_inicio?: string;
-  gozo_fim?: string;
-  dias?: number;
-  abono?: boolean;
-  dias_abono?: number;
-  dobra?: boolean;
   situacao?: string;
-  gozo2_inicio?: string | null;
-  gozo2_fim?: string | null;
-  gozo3_inicio?: string | null;
-  gozo3_fim?: string | null;
+  // Colunas REAIS de pjecalc_ferias (Seção 6) — preferir estas.
+  prazo_dias?: number;
+  dobra_geral?: boolean;
+  abono?: boolean;
+  abono_dias?: number;
+  gozo_1_inicio?: string | null;
+  gozo_1_fim?: string | null;
+  gozo_1_dobra?: boolean;
+  gozo_2_inicio?: string | null;
+  gozo_2_fim?: string | null;
+  gozo_2_dobra?: boolean;
+  gozo_3_inicio?: string | null;
+  gozo_3_fim?: string | null;
+  gozo_3_dobra?: boolean;
   observacoes?: string;
 }
 

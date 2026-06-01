@@ -1,100 +1,108 @@
-import { useState, useEffect } from "react";
+/**
+ * Módulo "Dados do Processo" — paridade de input PJe-Calc Cidadão v2.15.1.
+ * Spec: docs/specs/dados-do-processo.md (campos/validações extraídos do Java).
+ *
+ * Stack-alvo: react-hook-form + zod + Decimal.js (valor da causa), shadcn/ui.
+ * Persistência: grava nas COLUNAS REAIS de `pjecalc_calculos` (corrige o bug
+ * histórico que gravava aliases inexistentes na view → save falhava), via
+ * upsert onConflict=case_id, mesmo padrão de ModuloParametrosGerais. user_id é
+ * incluído p/ satisfazer a RLS (user_id = auth.uid()) no INSERT.
+ */
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
+} from "@/components/ui/form";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { fromUntyped } from "@/lib/supabase-untyped";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-import { Save, Loader2, AlertTriangle, Search } from "lucide-react";
+import { Save, Loader2, Search } from "lucide-react";
+import {
+  formatarCPF, formatarCNPJ, formatarPIS, formatarProcessoCNJ,
+} from "@/lib/validadores";
+import {
+  dadosProcessoSchema, dadosProcessoDefaults, toPjecalcCalculosPayload,
+  TIPO_CALCULO, TIPO_DOC_FISCAL, TIPO_DOC_PREV,
+  type DadosProcessoForm, type TipoDocFiscal,
+} from "./dados-processo-schema";
 
 interface Props { caseId: string; }
+
+const TIPO_CALCULO_LABEL: Record<string, string> = {
+  ADVOGADO: "Advogado", CREDOR: "Credor", DEVEDOR: "Devedor", VARA: "Vara", GABINETE: "Gabinete",
+};
+
+/** Máscara do documento fiscal conforme o tipo selecionado. */
+function mascararDocFiscal(valor: string, tipo: TipoDocFiscal): string {
+  if (tipo === "CPF") return formatarCPF(valor);
+  if (tipo === "CNPJ") return formatarCNPJ(valor);
+  return valor.replace(/\D+/g, "").slice(0, 14); // CEI: só dígitos
+}
 
 export function ModuloDadosProcesso({ caseId }: Props) {
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [conflictModal, setConflictModal] = useState<{ field: string; label: string; valorManual: string; valorImportado: string } | null>(null);
-
-  const { data } = useQuery({
-    queryKey: ["pjecalc_dados_processo", caseId],
-    queryFn: async () => {
-      const { data } = await fromUntyped("pjecalc_dados_processo").select("*").eq("case_id", caseId).maybeSingle();
-      return data as unknown as Record<string, unknown> | null;
-    },
-  });
-
-  // Load params to detect date conflicts with imported data
-  const { data: paramsData } = useQuery({
-    queryKey: ["pjecalc_parametros_conflict", caseId],
-    queryFn: async () => {
-      const { data } = await fromUntyped("pjecalc_parametros").select("*").eq("case_id", caseId).maybeSingle();
-      return data as unknown as Record<string, unknown> | null;
-    },
-  });
-
-  const [citacaoEnabled, setCitacaoEnabled] = useState(false);
-
-  // Persist citação toggle state via modo_calculo field
-  useEffect(() => {
-    if (data) {
-      // Default is independent; only enable assisted when explicitly set
-      setCitacaoEnabled(data.modo_calculo === 'assisted_from_pjc');
-    }
-  }, [data]);
   const [buscandoCitacao, setBuscandoCitacao] = useState(false);
-  const [form, setForm] = useState({
-    numero_processo: '', vara: '', comarca: '', uf: 'SP', tipo_acao: 'trabalhista',
-    rito: 'ordinario', fase: 'conhecimento', data_distribuicao: '', data_citacao: '',
-    data_transito: '', juiz: '', reclamante_nome: '', reclamante_cpf: '',
-    reclamada_nome: '', reclamada_cnpj: '', objeto: '',
-    dia_fechamento_mes: '31', prazo_ferias_proporcional: '30',
-    inicio_ferias_coletivas: '', instancia: 'PRIMEIRA', tipo_calculo: 'LIQUIDACAO',
+
+  const form = useForm<DadosProcessoForm>({
+    resolver: zodResolver(dadosProcessoSchema),
+    defaultValues: dadosProcessoDefaults,
+  });
+
+  // Lê a linha real de pjecalc_calculos (flat + JSONB dados_processo legado).
+  const { data } = useQuery({
+    queryKey: ["pjecalc_calculos", caseId],
+    queryFn: async () => {
+      const { data, error } = await fromUntyped("pjecalc_calculos")
+        .select("*").eq("case_id", caseId).maybeSingle();
+      if (error) throw error;
+      return data as Record<string, unknown> | null;
+    },
   });
 
   useEffect(() => {
-    if (data) setForm(prev => ({ ...prev, ...Object.fromEntries(Object.entries(data).filter(([k, v]) => k in prev && v != null)) }));
-  }, [data]);
-
-  // Detect date conflicts when data loads from both sources
-  useEffect(() => {
-    if (!data || !paramsData) return;
-    const conflictFields = [
-      { field: 'data_citacao', dpField: 'data_citacao', paramField: 'data_ajuizamento', label: 'Data de Ajuizamento' },
-    ];
-    // Check if imported documento has a different date than manually entered params
-    if (data.data_citacao && paramsData.data_ajuizamento && data.data_citacao !== paramsData.data_ajuizamento) {
-      // Only show if both are non-empty and different
-      setConflictModal({
-        field: 'data_ajuizamento',
-        label: 'Data de Ajuizamento',
-        valorManual: paramsData.data_ajuizamento,
-        valorImportado: data.data_citacao,
-      });
-    }
-  }, [data, paramsData]);
-
-  const resolveConflict = async (useImported: boolean) => {
-    if (!conflictModal) return;
-    if (useImported) {
-      // Update params with imported value
-      await fromUntyped("pjecalc_parametros")
-        .update({ [conflictModal.field]: conflictModal.valorImportado })
-        .eq("case_id", caseId);
-      qc.invalidateQueries({ queryKey: ["pjecalc_parametros_conflict", caseId] });
-      toast.success(`${conflictModal.label} atualizada com o valor do documento importado.`);
-    } else {
-      toast.info(`Mantido o valor digitado manualmente para ${conflictModal.label}.`);
-    }
-    setConflictModal(null);
-  };
+    if (!data) return;
+    const d = data;
+    // Fallback p/ JSONB legado (ModuloParametrosGerais grava CNJ/valor/doc lá).
+    const jp = (d.dados_processo as Record<string, unknown> | null) ?? {};
+    const str = (v: unknown) => (v == null ? "" : String(v));
+    form.reset({
+      tipo_calculo: (TIPO_CALCULO as readonly string[]).includes(str(d.tipo_calculo))
+        ? (d.tipo_calculo as DadosProcessoForm["tipo_calculo"]) : "ADVOGADO",
+      processo_cnj: str(d.processo_cnj) || str(jp.cnj_numero_processo),
+      valor_causa: d.valor_causa != null ? String(d.valor_causa) : str(jp.cnj_valor_causa),
+      data_autuacao: str(d.data_autuacao),
+      tribunal: str(d.tribunal) || str(jp.cnj_tribunal),
+      vara: str(d.vara) || str(jp.cnj_vara),
+      reclamante_nome: str(d.reclamante_nome),
+      reclamante_doc_tipo: (TIPO_DOC_FISCAL as readonly string[]).includes(str(d.reclamante_doc_tipo))
+        ? (d.reclamante_doc_tipo as TipoDocFiscal) : "CPF",
+      reclamante_cpf: str(d.reclamante_cpf),
+      reclamante_pis_nit_tipo: (TIPO_DOC_PREV as readonly string[]).includes(str(d.reclamante_pis_nit_tipo))
+        ? (d.reclamante_pis_nit_tipo as DadosProcessoForm["reclamante_pis_nit_tipo"]) : "PIS",
+      reclamante_pis_nit: str(d.reclamante_pis_nit) || str(jp.cnj_doc_previdenciario),
+      reclamado_nome: str(d.reclamado_nome),
+      reclamado_doc_tipo: (TIPO_DOC_FISCAL as readonly string[]).includes(str(d.reclamado_doc_tipo))
+        ? (d.reclamado_doc_tipo as TipoDocFiscal) : "CNPJ",
+      reclamado_cnpj: str(d.reclamado_cnpj),
+      citacao_habilitada: d.modo_calculo === "assisted_from_pjc",
+      data_citacao: str(d.data_citacao),
+    });
+  }, [data, form]);
 
   const buscarCitacaoDatajud = async () => {
-    const numeroProcesso = form.numero_processo?.trim();
+    const numeroProcesso = form.getValues("processo_cnj")?.trim();
     if (!numeroProcesso) {
       toast.error("Informe o número do processo antes de buscar no Datajud.");
       return;
@@ -105,17 +113,14 @@ export function ModuloDadosProcesso({ caseId }: Props) {
         body: { numero_processo: numeroProcesso },
       });
       if (error) throw new Error(error.message);
-      if (fnData?.erro) {
-        toast.warning(`Datajud: ${fnData.erro}`);
-        return;
-      }
+      if (fnData?.erro) { toast.warning(`Datajud: ${fnData.erro}`); return; }
       if (fnData?.data_citacao) {
-        setForm(p => ({ ...p, data_citacao: fnData.data_citacao }));
-        setCitacaoEnabled(true);
+        form.setValue("data_citacao", fnData.data_citacao, { shouldValidate: true });
+        form.setValue("citacao_habilitada", true, { shouldValidate: true });
         toast.success(`Data de citação encontrada no Datajud: ${fnData.data_citacao}`);
         if (fnData.aviso) toast.warning(fnData.aviso);
       } else {
-        toast.warning(fnData?.aviso ?? "Data de citação não encontrada no Datajud para este processo.");
+        toast.warning(fnData?.aviso ?? "Data de citação não encontrada no Datajud.");
       }
     } catch (e) {
       toast.error(`Erro ao buscar no Datajud: ${(e as Error).message}`);
@@ -124,226 +129,233 @@ export function ModuloDadosProcesso({ caseId }: Props) {
     }
   };
 
-  const save = async () => {
+  const onSubmit = async (values: DadosProcessoForm) => {
     setSaving(true);
     try {
-      const payload = {
-        case_id: caseId,
-        ...form,
-        // Persist ADC 58 toggle: 'independent' means disabled, 'assisted_from_pjc' means enabled
-        modo_calculo: citacaoEnabled ? 'assisted_from_pjc' : 'independent',
-      };
-      if (data?.id) {
-        await fromUntyped("pjecalc_dados_processo").update(payload).eq("id", data.id);
-      } else {
-        await fromUntyped("pjecalc_dados_processo").insert(payload);
-      }
+      const { data: auth } = await supabase.auth.getUser();
+      const payload = toPjecalcCalculosPayload(values, caseId, auth.user?.id ?? null);
+      const { error } = await fromUntyped("pjecalc_calculos").upsert(payload, { onConflict: "case_id" });
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ["pjecalc_calculos", caseId] });
       qc.invalidateQueries({ queryKey: ["pjecalc_dados_processo", caseId] });
+      qc.invalidateQueries({ queryKey: ["calculo_ativo", caseId] });
       toast.success("Dados do processo salvos!");
-    } catch (e) { toast.error((e as Error).message); }
-    finally { setSaving(false); }
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const f = (key: string, label: string, type = "text", required = false) => (
-    <div>
-      <Label className="text-xs">
-        {label}
-        {required && <span className="text-destructive ml-0.5">*</span>}
-      </Label>
-      <Input
-        type={type}
-        value={(form as Record<string, string>)[key] || ''}
-        onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))}
-        className={cn("mt-1 h-8 text-xs", required && !(form as Record<string, string>)[key] && "border-destructive/50")}
-      />
-      {required && !(form as Record<string, string>)[key] && (
-        <p className="text-[10px] text-destructive mt-0.5">Obrigatório para liquidação</p>
-      )}
-    </div>
-  );
+  const citacaoHabilitada = form.watch("citacao_habilitada");
+  const reclamanteDocTipo = form.watch("reclamante_doc_tipo");
+  const reclamadoDocTipo = form.watch("reclamado_doc_tipo");
 
   return (
-    <div className="space-y-4">
-      {/* Date Conflict Modal */}
-      <Dialog open={!!conflictModal} onOpenChange={() => setConflictModal(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-yellow-500" />
-              Conflito de Datas Detectado
-            </DialogTitle>
-          </DialogHeader>
-          {conflictModal && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                A <strong>{conflictModal.label}</strong> do documento importado é diferente da digitada manualmente. Qual deve prevalecer?
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => resolveConflict(false)}>
-                  <CardContent className="p-4 text-center">
-                    <div className="text-[10px] text-muted-foreground mb-1">Digitado Manualmente</div>
-                    <div className="font-mono font-bold text-sm">{conflictModal.valorManual}</div>
-                    <Button variant="outline" size="sm" className="mt-2 w-full">Manter</Button>
-                  </CardContent>
-                </Card>
-                <Card className="cursor-pointer hover:border-primary transition-colors" onClick={() => resolveConflict(true)}>
-                  <CardContent className="p-4 text-center">
-                    <div className="text-[10px] text-muted-foreground mb-1">Documento Importado</div>
-                    <div className="font-mono font-bold text-sm">{conflictModal.valorImportado}</div>
-                    <Button variant="default" size="sm" className="mt-2 w-full">Usar Este</Button>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Dados do Processo</h2>
+          <Button type="submit" disabled={saving} size="sm">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />} Salvar
+          </Button>
+        </div>
 
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Dados do Processo</h2>
-        <Button onClick={save} disabled={saving} size="sm">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />} Salvar
-        </Button>
-      </div>
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Identificação</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {f("numero_processo", "Nº Processo")}
-          {f("vara", "Vara")}
-          {f("comarca", "Comarca")}
-          <div>
-            <Label className="text-xs">UF</Label>
-            <Select value={form.uf} onValueChange={v => setForm(p => ({ ...p, uf: v }))}>
-              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Rito</Label>
-            <Select value={form.rito} onValueChange={v => setForm(p => ({ ...p, rito: v }))}>
-              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ordinario">Ordinário</SelectItem>
-                <SelectItem value="sumarissimo">Sumaríssimo</SelectItem>
-                <SelectItem value="sumario">Sumário</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Fase</Label>
-            <Select value={form.fase} onValueChange={v => setForm(p => ({ ...p, fase: v }))}>
-              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="conhecimento">Conhecimento</SelectItem>
-                <SelectItem value="liquidacao">Liquidação</SelectItem>
-                <SelectItem value="execucao">Execução</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Datas Processuais</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-3 gap-4">
-          {f("data_distribuicao", "Distribuição", "date")}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <Label className="text-xs">
-                Citação (ADC 58)
-                {citacaoEnabled && <span className="text-destructive ml-0.5">*</span>}
-              </Label>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-muted-foreground">{citacaoEnabled ? "Ativo" : "Inativo"}</span>
-                <Switch checked={citacaoEnabled} onCheckedChange={setCitacaoEnabled} className="scale-75" />
-              </div>
+        {/* Header do Cálculo */}
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="text-sm">Cálculo</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <FormField control={form.control} name="tipo_calculo" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Tipo *</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    {TIPO_CALCULO.map((t) => <SelectItem key={t} value={t}>{TIPO_CALCULO_LABEL[t]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+          </CardContent>
+        </Card>
+
+        {/* Identificação do Processo */}
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="text-sm">Identificação do Processo</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <FormField control={form.control} name="processo_cnj" render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel className="text-xs">Nº do Processo (CNJ)</FormLabel>
+                <FormControl>
+                  <Input {...field} className="h-8 text-xs" placeholder="NNNNNNN-DD.AAAA.J.TR.OOOO"
+                    onChange={(e) => field.onChange(formatarProcessoCNJ(e.target.value))} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="valor_causa" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Valor da Causa (R$)</FormLabel>
+                <FormControl><Input {...field} inputMode="decimal" className="h-8 text-xs" placeholder="0,00" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="data_autuacao" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Autuado em</FormLabel>
+                <FormControl><Input {...field} type="date" className="h-8 text-xs" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="tribunal" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Tribunal</FormLabel>
+                <FormControl><Input {...field} className="h-8 text-xs" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="vara" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Vara / Órgão</FormLabel>
+                <FormControl><Input {...field} className="h-8 text-xs" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+          </CardContent>
+        </Card>
+
+        {/* Reclamante */}
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="text-sm">Reclamante</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <FormField control={form.control} name="reclamante_nome" render={({ field }) => (
+                <FormItem className="md:col-span-3">
+                  <FormLabel className="text-xs">Nome</FormLabel>
+                  <FormControl><Input {...field} className="h-8 text-xs" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="reclamante_doc_tipo" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">Documento Fiscal</FormLabel>
+                  <FormControl>
+                    <RadioGroup value={field.value} onValueChange={field.onChange} className="flex gap-3 pt-1">
+                      {TIPO_DOC_FISCAL.map((t) => (
+                        <label key={t} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                          <RadioGroupItem value={t} /> {t}
+                        </label>
+                      ))}
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="reclamante_cpf" render={({ field }) => (
+                <FormItem className="md:col-span-2">
+                  <FormLabel className="text-xs">Número</FormLabel>
+                  <FormControl>
+                    <Input {...field} className="h-8 text-xs"
+                      onChange={(e) => field.onChange(mascararDocFiscal(e.target.value, reclamanteDocTipo))} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
             </div>
-            <div className="flex gap-1.5">
-              <Input
-                type="date"
-                disabled={!citacaoEnabled}
-                value={form.data_citacao || ''}
-                onChange={e => setForm(p => ({ ...p, data_citacao: e.target.value }))}
-                className={cn("h-8 text-xs flex-1", !citacaoEnabled && "opacity-50", citacaoEnabled && !form.data_citacao && "border-destructive/50")}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 px-2 text-[10px] shrink-0"
-                disabled={!form.numero_processo || buscandoCitacao}
-                onClick={buscarCitacaoDatajud}
-                title="Buscar data de citação no Datajud (CNJ)"
-              >
-                {buscandoCitacao ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
-              </Button>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <FormField control={form.control} name="reclamante_pis_nit_tipo" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">Doc. Previdenciário</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>{TIPO_DOC_PREV.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="reclamante_pis_nit" render={({ field }) => (
+                <FormItem className="md:col-span-2">
+                  <FormLabel className="text-xs">Número</FormLabel>
+                  <FormControl>
+                    <Input {...field} className="h-8 text-xs"
+                      onChange={(e) => field.onChange(formatarPIS(e.target.value))} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
             </div>
-            {citacaoEnabled && !form.data_citacao && (
-              <p className="text-[10px] text-destructive mt-0.5">Obrigatório para liquidação</p>
-            )}
-            {!citacaoEnabled && (
-              <p className="text-[10px] text-muted-foreground mt-0.5">Citação desabilitada para este cálculo</p>
-            )}
-          </div>
-          {f("data_transito", "Trânsito em Julgado", "date")}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Partes</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
-          {f("reclamante_nome", "Reclamante")}
-          {f("reclamante_cpf", "CPF Reclamante")}
-          {f("reclamada_nome", "Reclamada")}
-          {f("reclamada_cnpj", "CNPJ Reclamada")}
-          {f("juiz", "Juiz")}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Configurações do Cálculo</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-3 gap-4">
-          <div>
-            <Label className="text-xs">Dia fechamento mês</Label>
-            <Input type="number" min={1} max={31} className="mt-1 h-8 text-xs" value={form.dia_fechamento_mes} onChange={e => setForm(p => ({ ...p, dia_fechamento_mes: e.target.value }))} />
-          </div>
-          <div>
-            <Label className="text-xs">Prazo férias proporcional (Art. 130)</Label>
-            <Select value={form.prazo_ferias_proporcional} onValueChange={v => setForm(p => ({ ...p, prazo_ferias_proporcional: v }))}>
-              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="30">30 dias (até 5 faltas)</SelectItem>
-                <SelectItem value="24">24 dias (6-14 faltas)</SelectItem>
-                <SelectItem value="18">18 dias (15-23 faltas)</SelectItem>
-                <SelectItem value="12">12 dias (24-32 faltas)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {f("inicio_ferias_coletivas", "Férias coletivas (início)", "date")}
-          <div>
-            <Label className="text-xs">Instância</Label>
-            <Select value={form.instancia} onValueChange={v => setForm(p => ({ ...p, instancia: v }))}>
-              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PRIMEIRA">1ª Instância</SelectItem>
-                <SelectItem value="SEGUNDA">2ª Instância</SelectItem>
-                <SelectItem value="TST">TST</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs">Tipo de cálculo</Label>
-            <Select value={form.tipo_calculo} onValueChange={v => setForm(p => ({ ...p, tipo_calculo: v }))}>
-              <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="LIQUIDACAO">Liquidação</SelectItem>
-                <SelectItem value="ATUALIZACAO">Atualização</SelectItem>
-                <SelectItem value="PRECATORIO">Precatório</SelectItem>
-                <SelectItem value="RPV">RPV</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+          </CardContent>
+        </Card>
+
+        {/* Reclamada */}
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="text-sm">Reclamada</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <FormField control={form.control} name="reclamado_nome" render={({ field }) => (
+              <FormItem className="md:col-span-3">
+                <FormLabel className="text-xs">Nome</FormLabel>
+                <FormControl><Input {...field} className="h-8 text-xs" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="reclamado_doc_tipo" render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Documento Fiscal</FormLabel>
+                <FormControl>
+                  <RadioGroup value={field.value} onValueChange={field.onChange} className="flex gap-3 pt-1">
+                    {TIPO_DOC_FISCAL.map((t) => (
+                      <label key={t} className="flex items-center gap-1.5 cursor-pointer text-xs">
+                        <RadioGroupItem value={t} /> {t}
+                      </label>
+                    ))}
+                  </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="reclamado_cnpj" render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel className="text-xs">Número</FormLabel>
+                <FormControl>
+                  <Input {...field} className="h-8 text-xs"
+                    onChange={(e) => field.onChange(mascararDocFiscal(e.target.value, reclamadoDocTipo))} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+          </CardContent>
+        </Card>
+
+        {/* Extensão MRD (fora da paridade PJe): Citação ADC 58 + Datajud */}
+        <Card>
+          <CardHeader className="pb-3"><CardTitle className="text-sm">Citação (ADC 58) — extensão MRD</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <FormField control={form.control} name="citacao_habilitada" render={({ field }) => (
+              <FormItem className="flex items-center gap-2 space-y-0">
+                <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                <Label className="text-xs">Habilitar citação</Label>
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="data_citacao" render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel className="text-xs">Data de Citação {citacaoHabilitada && <span className="text-destructive">*</span>}</FormLabel>
+                <div className="flex gap-1.5">
+                  <FormControl><Input {...field} type="date" disabled={!citacaoHabilitada} className="h-8 text-xs flex-1" /></FormControl>
+                  <Button type="button" variant="outline" size="sm" className="h-8 px-2 shrink-0"
+                    disabled={buscandoCitacao} onClick={buscarCitacaoDatajud} title="Buscar citação no Datajud (CNJ)">
+                    {buscandoCitacao ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+                  </Button>
+                </div>
+                <FormDescription className="text-[10px]">
+                  Define modo do cálculo: habilitada → assisted_from_pjc; desabilitada → independent.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )} />
+          </CardContent>
+        </Card>
+      </form>
+    </Form>
   );
 }

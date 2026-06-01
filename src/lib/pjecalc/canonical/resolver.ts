@@ -241,9 +241,11 @@ export function resolveCanonicalInput(sources: ResolverSources): CanonicalCaseIn
     id: f.id,
     periodo_aquisitivo_inicio: resolved(f.periodo_aquisitivo_inicio || '', src, { isRequired: true }),
     periodo_aquisitivo_fim: resolved(f.periodo_aquisitivo_fim || '', src, { isRequired: true }),
-    dias: resolveNum(f.dias, 30, src),
+    // Seção 6: ler colunas REAIS (prazo_dias/dobra_geral) — antes lia aliases
+    // fictícios (f.dias/f.dobra) que caíam em default. Ver docs/specs/ferias.md §2.
+    dias: resolveNum(f.prazo_dias, 30, src),
     situacao: resolved(f.situacao || 'GOZADAS', src),
-    dobra: resolveBool(f.dobra, false, src),
+    dobra: resolveBool(f.dobra_geral, false, src),
     abono: resolveBool(f.abono, false, src),
   }));
 

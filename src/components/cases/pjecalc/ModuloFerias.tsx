@@ -108,6 +108,33 @@ export function ModuloFerias({ caseId }: Props) {
     invalidate();
   };
 
+  /** Prazo: inteiro 0..30 (PrazoDeFeriasValidRule, MSG0004). */
+  const updatePrazo = (r: FeriasRow, raw: string, el: HTMLInputElement) => {
+    const n = parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 0 || n > 30) {
+      toast.error("Prazo deve ser um inteiro entre 0 e 30 dias.");
+      el.value = String(r.prazo_dias);
+      return;
+    }
+    updateField(r.id, { prazo_dias: n });
+  };
+
+  /** Dias de abono: se abono ligado, ≤ prazo/3 (DiasDeAbonoValidRule, MSG0175). */
+  const updateAbonoDias = (r: FeriasRow, raw: string, el: HTMLInputElement) => {
+    const n = parseInt(raw, 10) || 0;
+    if (n < 0) {
+      toast.error("Dias de abono não pode ser negativo.");
+      el.value = String(r.abono_dias ?? 0);
+      return;
+    }
+    if (r.abono && n > Math.floor(r.prazo_dias / 3)) {
+      toast.error("Dias de abono não podem exceder 1/3 do prazo.");
+      el.value = String(r.abono_dias ?? 0);
+      return;
+    }
+    updateField(r.id, { abono_dias: n });
+  };
+
   const removeFerias = async (r: FeriasRow) => {
     const { error } = await fromUntyped("pjecalc_ferias")
       .delete()
@@ -181,9 +208,7 @@ export function ModuloFerias({ caseId }: Props) {
           max={30}
           defaultValue={r.prazo_dias}
           className="h-7 text-[11px] text-center px-1"
-          onBlur={(e) =>
-            updateField(r.id, { prazo_dias: parseInt(e.target.value) || 0 })
-          }
+          onBlur={(e) => updatePrazo(r, e.target.value, e.target)}
         />
       ),
     },
@@ -227,9 +252,7 @@ export function ModuloFerias({ caseId }: Props) {
           max={10}
           defaultValue={r.abono_dias ?? 0}
           className="h-7 text-[11px] text-center px-1"
-          onBlur={(e) =>
-            updateField(r.id, { abono_dias: parseInt(e.target.value) || 0 })
-          }
+          onBlur={(e) => updateAbonoDias(r, e.target.value, e.target)}
         />
       ),
     },

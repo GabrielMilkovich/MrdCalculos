@@ -167,6 +167,30 @@ adição precisa de exceção explicitamente autorizada pelo dono.
 
 ---
 
+## Autonomia do agente — modo "tocar sozinho" (2026-05-29, dono autorizou)
+
+Política de pé que **sobrepõe** "dados persistidos = decisão compartilhada" para
+trabalho de feature/migração rotineiro. Em vez de perguntar a cada bifurcação,
+o agente **DECIDE, EXECUTA e REGISTRA** (na spec + no commit). O dono dirige pelo
+diff/PR, não por confirmação ao vivo.
+
+### ✅ DECIDIR e seguir sem perguntar (registrando)
+- Implementação, UI, naming, estrutura de testes — sempre.
+- Bifurcação de arquitetura/refactor: escolher a opção **contida/menor-risco** e seguir; documentar o porquê na spec.
+- **Migrations ADITIVAS e reversíveis** via MCP/SQL: `ADD COLUMN` nullable, `CREATE OR REPLACE VIEW`, índices, novas tabelas, `CHECK` novas. Inclui `DROP` de coluna/objeto **vazio criado na própria sessão** (corrigir o próprio erro).
+- Rodar `tsc`/`eslint`/`vitest`/Playwright e commitar por seção.
+
+### ⛔ PARAR e perguntar (hard-stops)
+- Migration **destrutiva com dados**: `DROP`/`ALTER TYPE`/rename de coluna **que tem dados**, `UPDATE`/`DELETE` em massa, mudança de RLS.
+- `push` para `main`, abrir PR, qualquer ação externa/pública.
+- Rebaixar gate (cobertura/paridade/score), marcar teste `.skip`, adicionar dependência nova.
+- Ambiguidade **cara** E confiança < ~80%.
+
+### Regra de ouro
+Toda decisão autônoma vira **registro auditável**: 1 linha na spec da seção + mensagem de commit. Sem output = não aconteceu.
+
+---
+
 ## Ontologia de Rubricas V2 (Sprint 3c, 2026-05-24)
 
 Sistema de classificação de rubricas trabalhistas com aprendizado contínuo.

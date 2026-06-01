@@ -19,6 +19,7 @@ import {
   FRACAO_MES_MODOS,
 } from "@/lib/pjecalc/rubricas-oficiais";
 import { CatalogoCombobox } from "./CatalogoCombobox";
+import { verbaSchema } from "./verba-schema";
 
 // =====================================================
 // MÓDULO VERBAS — CRUD de VerbaDeCalculo (PJe-Calc v2.15.1 / VerbaDeCalculo.java)
@@ -160,8 +161,22 @@ export function ModuloVerbasCadastro({ caseId }: Props) {
   };
 
   const saveVerba = async () => {
-    if (!editing.nome.trim()) {
-      toast.error("Informe o nome da verba.");
+    // Validação de paridade (VerbaDeCalculo/Calculada.validar): nome obrigatório;
+    // período fim≥início (MSG0008); divisor≠0; base histórico ⇒ histórico vinculado
+    // (MSG0003 "Histórico Salarial").
+    const parsed = verbaSchema.safeParse({
+      nome: editing.nome,
+      caracteristica: editing.caracteristica,
+      base_tabelada: editing.base_tabelada,
+      hist_salarial_nome: editing.hist_salarial_nome,
+      periodo_inicio: editing.periodo_inicio,
+      periodo_fim: editing.periodo_fim,
+      multiplicador: editing.multiplicador,
+      divisor: editing.divisor,
+      quantidade_valor: editing.quantidade_valor,
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Verba inválida.");
       return;
     }
     setSaving(true);
